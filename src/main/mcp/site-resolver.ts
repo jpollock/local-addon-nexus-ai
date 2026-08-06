@@ -1,4 +1,5 @@
 import { SiteDataAccessor, LocalSiteInfo } from './types';
+import { parseTarget } from '../../common/target';
 
 /**
  * Resolves a user-provided site reference (name, ID, or domain) to a site.
@@ -76,6 +77,65 @@ export function resolveRemoteGraphSite(db: any, name: unknown): RemoteGraphSiteR
 }
 
 /**
+ * Look a fully qualified target — `ssh:<alias>@<env>` or
+ * `wpe:<account>/<install>@<env>` — up in the graph, pinned to the source the
+ * prefix names.
+ *
+ * This exists because `nexus_list_sites` prints exactly that qualified string
+ * as the target an agent should reuse, while every graph lookup matched on the
+ * bare `name` column, so following the tool's own printed instructions
+ * produced "not found". `parseTarget` (`src/common/target.ts`) is the one
+ * canonical parser for this syntax and is reused rather than re-implemented.
+ *
+ * @returns `null` when `target` is NOT a qualified remote target (a bare name,
+ *   an `@local` target, or unparseable) — the caller should fall through to its
+ *   existing bare-name path. Otherwise the matching rows, which may be empty.
+ *
+ * `columns` is an internal constant supplied by this module's own callers, not
+ * caller-controlled input.
+ */
+export function queryQualifiedTarget(
+  db: any,
+  target: string,
+  columns = 'id, name, source',
+): any[] | null {
+  let parsed;
+  try {
+    parsed = parseTarget(target);
+  } catch {
+    // Not parseable as a target at all (e.g. a bare `ssh:alias` with no
+    // environment suffix). Leave it to the bare-name path.
+    return null;
+  }
+
+  let source: 'external' | 'wpe';
+  let name: string | undefined;
+  if (parsed.type === 'external') {
+    source = 'external';
+    name = parsed.alias;
+  } else if (parsed.type === 'wpe') {
+    source = 'wpe';
+    name = parsed.installName;
+  } else {
+    // type === 'local' — a bare name or `<name>@local`. Not our business.
+    return null;
+  }
+
+  // It IS a qualified remote target. From here we own the outcome: an empty
+  // result must be reported as "not found", never handed back to the bare-name
+  // path, which would try to match the whole `ssh:x@production` string.
+  if (!name || !db) return [];
+
+  try {
+    return (db.prepare(
+      `SELECT ${columns} FROM sites WHERE source = '${source}' AND is_active = 1 AND name = ?`,
+    ).all(name) ?? []) as any[];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Outcome of resolving a bare name against ALL three fleet sources
  * (local, wpe, external) in one call. Local is checked first, then the
  * graph, using resolveRemoteGraphSite's collision-decline logic.
@@ -96,6 +156,38 @@ export function resolveAnySite(
   siteData: SiteDataAccessor,
   graphService: { getDb?: () => any } | undefined,
 ): AnySiteResult {
+  // A caller may pass a bare name (the original, unchanged path below) or a
+  // fully qualified target — `ssh:<alias>@<env>` / `wpe:<account>/<install>@<env>`
+  // — which is exactly what nexus_list_sites prints for the agent to reuse.
+  const qualified = queryQualifiedTarget(graphService?.getDb?.(), query);
+  if (qualified !== null) {
+    // The prefix already pinned the source, so there is no cross-source
+    // collision to decline over: one row is an answer, not a coin toss.
+    if (qualified.length === 1) {
+      return {
+        kind: 'ok',
+        id: qualified[0].id,
+        name: qualified[0].name,
+        source: qualified[0].source as 'wpe' | 'external',
+      };
+    }
+    if (qualified.length > 1) {
+      // Two installs of the same name within one source (different accounts).
+      // The graph has no account *slug* to match parsed.account against, so
+      // decline rather than pick.
+      return { kind: 'ambiguous', matches: qualified.map((r: any) => `${r.source}:${r.name} (${r.id})`) };
+    }
+    return { kind: 'none' };
+  }
+
+  // `<name>@local` should resolve like the bare name it wraps.
+  try {
+    const parsed = parseTarget(query);
+    if (parsed.type === 'local' && parsed.siteName) query = parsed.siteName;
+  } catch {
+    // Unparseable — leave `query` exactly as given.
+  }
+
   const local = resolveSite(query, siteData);
   if (local) {
     return { kind: 'ok', id: local.id, name: local.name, source: 'local' };

@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { indexFreshnessWarning } from '../../../twin/twin-helpers';
+import { queryQualifiedTarget } from '../../site-resolver';
 
 function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
@@ -33,8 +34,14 @@ export const getSiteHealthHandler: McpToolHandler = {
     let siteName: string;
     let siteInfo: { domain: string; phpVersion?: string };
     let factorsToEvaluate: Array<'security' | 'performance' | 'maintenance' | 'activity' | 'stability'>;
+    // The identifier everything downstream must key off. `siteId` is the raw
+    // argument and may be a qualified target (`ssh:alias@production`), which is
+    // NOT a graph id — the plugin count, the score and the index-registry
+    // lookup all need the resolved row's real id.
+    let resolvedId: string;
 
     if (localSite) {
+      resolvedId = localSite.id;
       siteName = localSite.name;
       siteInfo = {
         domain: localSite.domain || '',
@@ -47,12 +54,29 @@ export const getSiteHealthHandler: McpToolHandler = {
     } else {
       const graphService = (services as any).graphService;
       const db = graphService?.getDb?.();
-      const row = db?.prepare('SELECT id, name, source, domain, php_version FROM sites WHERE id = ? AND is_active = 1').get(siteId) as
-        | { id: string; name: string; source: string; domain: string | null; php_version: string | null }
-        | undefined;
+      const COLUMNS = 'id, name, source, domain, php_version';
+
+      type GraphRow = { id: string; name: string; source: string; domain: string | null; php_version: string | null };
+      let row: GraphRow | undefined;
+
+      // A qualified target — `ssh:<alias>@<env>` / `wpe:<account>/<install>@<env>`
+      // — is what nexus_list_sites prints for the agent to reuse, but it is a
+      // *name*, not an id, so the raw `WHERE id = ?` lookup below can never
+      // match it. Unwrap it first. Returns null for a bare name/id, in which
+      // case the original lookup runs unchanged.
+      const qualified = queryQualifiedTarget(db, siteId, COLUMNS);
+      if (qualified !== null) {
+        // Exactly one row is the answer; zero or several is "not found" rather
+        // than a guess. The bare-id fallback must not run for a qualified
+        // target — `ssh:x@production` is not an id.
+        row = qualified.length === 1 ? (qualified[0] as GraphRow) : undefined;
+      } else {
+        row = db?.prepare(`SELECT ${COLUMNS} FROM sites WHERE id = ? AND is_active = 1`).get(siteId) as GraphRow | undefined;
+      }
 
       if (!row) return ok(`Site not found: ${siteId}`);
 
+      resolvedId = row.id;
       siteName = row.name;
       // C3: no default — a fabricated '8.0' would collect real security/
       // performance credit for a PHP version that was never actually observed.
@@ -73,7 +97,7 @@ export const getSiteHealthHandler: McpToolHandler = {
       return ok(`## Health Report: ${siteName}\n\nNot enough data to score this host yet — run \`nexus host refresh\` to collect plugin and PHP version data first.`);
     }
 
-    const breakdown = await calc.calculateScore(siteId, siteInfo, factorsToEvaluate);
+    const breakdown = await calc.calculateScore(resolvedId, siteInfo, factorsToEvaluate);
 
     const factorLabels: Record<string, { label: string; weight: string }> = {
       security: { label: 'Security', weight: '30%' },
@@ -110,7 +134,7 @@ export const getSiteHealthHandler: McpToolHandler = {
       }
     }
 
-    const indexEntry = services.indexRegistry.get?.(siteId) ?? null;
+    const indexEntry = services.indexRegistry.get?.(resolvedId) ?? null;
     const warning = indexEntry ? indexFreshnessWarning(indexEntry) : null;
     if (warning) lines.push(warning);
 

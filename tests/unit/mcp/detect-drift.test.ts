@@ -9,7 +9,12 @@ function makeServices(opts: {
     prepare: (sql: string) => ({
       all: (name?: string) => {
         if (name) {
-          return graphRows.filter((r) => r.name === name);
+          // The qualified-target query pins a source in the SQL text; the
+          // bare-name query does not. Honour whichever clause is present.
+          const sourceMatch = sql.match(/source = '(\w+)'/);
+          return graphRows.filter(
+            (r) => r.name === name && (!sourceMatch || r.source === sourceMatch[1]),
+          );
         }
         return graphRows;
       },
@@ -113,6 +118,45 @@ describe('detect_drift — remote resolution', () => {
     const services = makeServices();
 
     const result = await detectDriftHandler.execute({ baseline_site: 'nonexistent' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('not found');
+  });
+});
+
+/**
+ * Fix 3 — detect_drift rejected the qualified target string that
+ * nexus_list_sites tells the agent to use.
+ */
+describe('detect_drift — qualified target strings', () => {
+  const ROWS = [{ id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' }];
+  const ENTRIES = {
+    'ssh:hostinger-test': {
+      siteName: 'hostinger-test',
+      siteId: 'ssh:hostinger-test',
+      structure: { wpVersion: '6.5', phpVersion: '8.2', plugins: [], themes: [] },
+    },
+  };
+
+  it('accepts ssh:<alias>@production and produces the same report as the bare alias', async () => {
+    const qualified = await detectDriftHandler.execute(
+      { baseline_site: 'ssh:hostinger-test@production' },
+      makeServices({ graphRows: ROWS, entries: ENTRIES }),
+    );
+    const bare = await detectDriftHandler.execute(
+      { baseline_site: 'hostinger-test' },
+      makeServices({ graphRows: ROWS, entries: ENTRIES }),
+    );
+
+    expect(qualified.isError).toBeUndefined();
+    expect(qualified.content[0].text).toBe(bare.content[0].text);
+  });
+
+  it('errors cleanly (no throw) on an unknown qualified target', async () => {
+    const result = await detectDriftHandler.execute(
+      { baseline_site: 'ssh:doesnotexist@production' },
+      makeServices({ graphRows: ROWS, entries: ENTRIES }),
+    );
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('not found');

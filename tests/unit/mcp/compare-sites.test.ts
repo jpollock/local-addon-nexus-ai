@@ -9,7 +9,12 @@ function makeServices(opts: {
     prepare: (sql: string) => ({
       all: (name?: string) => {
         if (name) {
-          return graphRows.filter((r) => r.name === name);
+          // The qualified-target query pins a source in the SQL text; the
+          // bare-name query does not. Honour whichever clause is present.
+          const sourceMatch = sql.match(/source = '(\w+)'/);
+          return graphRows.filter(
+            (r) => r.name === name && (!sourceMatch || r.source === sourceMatch[1]),
+          );
         }
         return graphRows;
       },
@@ -76,6 +81,46 @@ describe('compare_sites — remote resolution', () => {
     const services = makeServices();
 
     const result = await compareSitesHandler.execute({ site_a: 'nonexistent', site_b: 'also-missing' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('not found');
+  });
+});
+
+/**
+ * Fix 3 — nexus_list_sites prints `— target: ssh:<alias>@production` and tells
+ * the agent to reuse that exact string. Before this fix compare_sites matched
+ * on the bare `name` column only and rejected it with "not found".
+ */
+describe('compare_sites — qualified target strings', () => {
+  const ROWS = [
+    { id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' },
+    { id: 'wpe-abc', name: 'myinstall', source: 'wpe' },
+  ];
+  const ENTRIES = {
+    'ssh:hostinger-test': { siteName: 'hostinger-test', structure: { wpVersion: '6.5', phpVersion: '8.2', plugins: [], themes: [] } },
+    'wpe-abc': { siteName: 'myinstall', structure: { wpVersion: '6.4', phpVersion: '8.1', plugins: [], themes: [] } },
+  };
+
+  it('accepts ssh:<alias>@production and produces the same report as the bare alias', async () => {
+    const qualified = await compareSitesHandler.execute(
+      { site_a: 'ssh:hostinger-test@production', site_b: 'wpe:acct/myinstall@production' },
+      makeServices({ graphRows: ROWS, entries: ENTRIES }),
+    );
+    const bare = await compareSitesHandler.execute(
+      { site_a: 'hostinger-test', site_b: 'myinstall' },
+      makeServices({ graphRows: ROWS, entries: ENTRIES }),
+    );
+
+    expect(qualified.isError).toBeUndefined();
+    expect(qualified.content[0].text).toBe(bare.content[0].text);
+  });
+
+  it('errors cleanly (no throw) on an unknown qualified target', async () => {
+    const result = await compareSitesHandler.execute(
+      { site_a: 'ssh:doesnotexist@production', site_b: 'hostinger-test' },
+      makeServices({ graphRows: ROWS, entries: ENTRIES }),
+    );
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('not found');

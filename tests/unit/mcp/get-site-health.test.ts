@@ -12,7 +12,18 @@ function makeServices(opts: {
       if (sql.includes('FROM plugins')) {
         return { get: jest.fn().mockReturnValue({ c: hasPlugins ? 1 : 0 }) };
       }
-      return { get: jest.fn().mockReturnValue(graphRow) };
+      // `.all(name)` is the qualified-target path (WHERE source=… AND name=?);
+      // `.get(id)` is the raw-graph-id path. Honour the source clause so a
+      // qualified `ssh:` target cannot accidentally match a `wpe` fixture row.
+      return {
+        get: jest.fn().mockReturnValue(graphRow),
+        all: jest.fn().mockImplementation((name: string) => {
+          if (!graphRow) return [];
+          const sourceMatch = sql.match(/source = '(\w+)'/);
+          if (sourceMatch && graphRow.source !== sourceMatch[1]) return [];
+          return graphRow.name === name ? [graphRow] : [];
+        }),
+      };
     }),
   };
   return {
@@ -106,6 +117,107 @@ describe('get_site_health — remote resolution', () => {
     const services = makeServices({ localSite: null, graphRow: null });
 
     const result = await getSiteHealthHandler.execute({ site_id: 'nowhere' }, services);
+
+    expect(getText(result)).toContain('not found');
+  });
+});
+
+/**
+ * Fix 3B — `nexus_list_sites` prints `— target: ssh:<alias>@production` and
+ * tells the agent to reuse exactly that string, but get_site_health matched
+ * `WHERE id = ?` against the raw argument, so the qualified form looked for a
+ * row whose *id* was the whole target string and always came back not found.
+ */
+describe('get_site_health — qualified target strings', () => {
+  const EXTERNAL_ROW = {
+    id: 'ssh:hostinger-test',
+    name: 'hostinger-test',
+    source: 'external',
+    domain: 'example.com',
+    php_version: '8.2',
+    is_active: 1,
+  };
+  const WPE_ROW = {
+    id: 'wpe-abc',
+    name: 'myinstall',
+    source: 'wpe',
+    domain: 'myinstall.wpengine.com',
+    php_version: '8.1',
+    is_active: 1,
+  };
+
+  function scoreMock() {
+    return jest.fn().mockResolvedValue({
+      overall: 75,
+      factors: { security: 80, performance: 70, maintenance: 0, activity: 0, stability: 0 },
+      issues: [],
+      recommendations: [],
+    });
+  }
+
+  it('resolves ssh:<alias>@production to the same result as the bare graph id', async () => {
+    const qualifiedScore = scoreMock();
+    const bareScore = scoreMock();
+
+    const qualified = await getSiteHealthHandler.execute(
+      { site_id: 'ssh:hostinger-test@production' },
+      makeServices({ graphRow: EXTERNAL_ROW, hasPlugins: true, calculateScore: qualifiedScore }),
+    );
+    const bare = await getSiteHealthHandler.execute(
+      { site_id: 'ssh:hostinger-test' },
+      makeServices({ graphRow: EXTERNAL_ROW, hasPlugins: true, calculateScore: bareScore }),
+    );
+
+    expect(getText(qualified)).not.toContain('not found');
+    expect(getText(qualified)).toBe(getText(bare));
+
+    // Critically: the score is computed against the REAL graph id, never the
+    // qualified target string.
+    expect(qualifiedScore).toHaveBeenCalledWith(
+      'ssh:hostinger-test',
+      expect.objectContaining({ phpVersion: '8.2' }),
+      ['security', 'performance'],
+    );
+  });
+
+  it('keys the index-registry lookup off the resolved id, not the qualified target', async () => {
+    const services = makeServices({ graphRow: EXTERNAL_ROW, hasPlugins: true, calculateScore: scoreMock() });
+
+    await getSiteHealthHandler.execute({ site_id: 'ssh:hostinger-test@production' }, services);
+
+    expect(services.indexRegistry.get).toHaveBeenCalledWith('ssh:hostinger-test');
+    expect(services.indexRegistry.get).not.toHaveBeenCalledWith('ssh:hostinger-test@production');
+  });
+
+  it('resolves wpe:<account>/<install>@<env> to the same result as the bare install id', async () => {
+    const qualifiedScore = scoreMock();
+
+    const qualified = await getSiteHealthHandler.execute(
+      { site_id: 'wpe:acct/myinstall@production' },
+      makeServices({ graphRow: WPE_ROW, calculateScore: qualifiedScore }),
+    );
+    const bare = await getSiteHealthHandler.execute(
+      { site_id: 'wpe-abc' },
+      makeServices({ graphRow: WPE_ROW, calculateScore: scoreMock() }),
+    );
+
+    expect(getText(qualified)).not.toContain('not found');
+    expect(getText(qualified)).toBe(getText(bare));
+    expect(qualifiedScore).toHaveBeenCalledWith('wpe-abc', expect.anything(), ['security', 'performance']);
+  });
+
+  it('returns "not found" — not a thrown exception — for an unknown qualified target', async () => {
+    const services = makeServices({ graphRow: EXTERNAL_ROW, hasPlugins: true });
+
+    const result = await getSiteHealthHandler.execute({ site_id: 'ssh:doesnotexist@production' }, services);
+
+    expect(getText(result)).toContain('not found');
+  });
+
+  it('does not let an ssh: target match a WPE row of the same name', async () => {
+    const services = makeServices({ graphRow: WPE_ROW, calculateScore: scoreMock() });
+
+    const result = await getSiteHealthHandler.execute({ site_id: 'ssh:myinstall@production' }, services);
 
     expect(getText(result)).toContain('not found');
   });

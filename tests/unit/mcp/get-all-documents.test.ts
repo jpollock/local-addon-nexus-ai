@@ -6,7 +6,17 @@ function makeServices(opts: {
   docs?: any[];
 } = {}) {
   const { localSite = null, graphRows = [], docs = [] } = opts;
-  const db = { prepare: () => ({ all: () => graphRows }) };
+  const db = {
+    prepare: (sql: string) => ({
+      all: (name?: string) => {
+        if (!name) return graphRows;
+        const sourceMatch = sql.match(/source = '(\w+)'/);
+        return graphRows.filter(
+          (r) => r.name === name && (!sourceMatch || r.source === sourceMatch[1]),
+        );
+      },
+    }),
+  };
   return {
     siteData: { getSite: jest.fn().mockReturnValue(localSite), getSites: jest.fn().mockReturnValue({}) },
     graphService: { getDb: jest.fn().mockReturnValue(db) },
@@ -47,5 +57,44 @@ describe('get_all_site_documents — remote resolution', () => {
     const result = await getAllDocumentsHandler.execute({ site: 'dupe' }, services);
 
     expect(result.isError).toBe(true);
+  });
+});
+
+/**
+ * Fix 3 — get_all_site_documents rejected the qualified target string that
+ * nexus_list_sites tells the agent to use.
+ */
+describe('get_all_site_documents — qualified target strings', () => {
+  const ROWS = [
+    { id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' },
+    { id: 'wpe-abc', name: 'myinstall', source: 'wpe' },
+  ];
+
+  it('accepts ssh:<alias>@production and asks for the same translated vector id', async () => {
+    const services = makeServices({ graphRows: ROWS, docs: [] });
+
+    const result = await getAllDocumentsHandler.execute({ site: 'ssh:hostinger-test@production' }, services);
+
+    expect(result.isError).toBeUndefined();
+    // Same id the bare alias produces — colon translated for the vector store.
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('ssh_hostinger-test');
+  });
+
+  it('accepts wpe:<account>/<install>@<env> and leaves the colon-free id untouched', async () => {
+    const services = makeServices({ graphRows: ROWS, docs: [] });
+
+    const result = await getAllDocumentsHandler.execute({ site: 'wpe:acct/myinstall@production' }, services);
+
+    expect(result.isError).toBeUndefined();
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('wpe-abc');
+  });
+
+  it('errors cleanly (no throw) on an unknown qualified target', async () => {
+    const services = makeServices({ graphRows: ROWS, docs: [] });
+
+    const result = await getAllDocumentsHandler.execute({ site: 'ssh:doesnotexist@production' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(services.vectorStore.getAllDocuments).not.toHaveBeenCalled();
   });
 });
