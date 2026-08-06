@@ -2191,6 +2191,12 @@ export const typeDefs = gql`
     removed: Boolean!
   }
 
+  type NexusHostRemoveSiteResult {
+    success: Boolean!
+    error: String
+    removed: Boolean!
+  }
+
   "Result of refreshing one external SSH host's metadata."
   type NexusHostRefreshResult {
     success: Boolean!
@@ -2220,8 +2226,10 @@ export const typeDefs = gql`
     nexusHostAdd(alias: String!, path: String, environment: String, site: String): NexusHostAddResult!
     "List registered external SSH hosts."
     nexusHostList: NexusHostListResult!
-    "Forget an external SSH host."
+    "Forget an external SSH host and every site registered under it."
     nexusHostRemove(alias: String!): NexusHostRemoveResult!
+    "Forget one site under a connection, leaving the connection and its other sites registered."
+    nexusHostRemoveSite(alias: String!, site: String!): NexusHostRemoveSiteResult!
     "Collect WordPress metadata from a registered external host now."
     nexusHostRefresh(alias: String!): NexusHostRefreshResult!
     "Content-index a registered external host now, for semantic search."

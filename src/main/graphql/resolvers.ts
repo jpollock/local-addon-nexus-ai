@@ -35,7 +35,7 @@ import { probeExternalHost } from '../external/probeExternalHost';
 import type { ProbeReport } from '../external/probeExternalHost';
 import { resolveTargetArgs } from '../transport/resolveTargetArgs';
 import {
-  externalSiteId, getExternalProfile, listExternalProfiles,
+  externalSiteId, listExternalProfiles,
   removeExternalProfile, upsertExternalProfile,
 } from '../external/externalSiteStore';
 import { createWpCliResolvers } from './resolvers/wp-cli';
@@ -5573,28 +5573,59 @@ export function createResolvers(context: ResolverContext) {
             const storage = (services as any).registryStorage;
             if (!storage) return { success: false, error: 'Storage not available', removed: false };
 
-            const profile = getExternalProfile(storage, alias);
             const removed = removeExternalProfile(storage, alias);
 
-            // Deactivate rather than delete: GraphService has no per-site delete,
-            // and its retention sweep already hard-deletes inactive sites and
-            // their content once they age out. A later re-add revives the row.
-            if (removed && profile) {
+            // Cascade to every site under this connection — one alias, one
+            // command, everything under it goes. Deactivate rather than
+            // delete: GraphService has no per-site delete, and the retention
+            // sweep already hard-deletes inactive sites once they age out.
+            if (removed) {
+              const db = (services as any).graphService?.getDb?.();
+              const sites = findExternalSites(db, alias, undefined, 'id, name');
               const now = Date.now();
-              await (services as any).graphService?.upsertSite({
-                id: externalSiteId(alias),
-                name: alias,
-                domain: alias,
-                source: 'external',
-                host: 'external',
-                environment: profile.environment,
-                is_active: false,
-                created_at: profile.firstSeenAt,
-                updated_at: now,
-              });
+              for (const site of sites) {
+                await (services as any).graphService?.upsertSite({
+                  id: site.id,
+                  name: site.name,
+                  domain: site.name,
+                  source: 'external',
+                  host: 'external',
+                  account_id: alias,
+                  is_active: false,
+                  created_at: now,
+                  updated_at: now,
+                });
+              }
             }
 
             return { success: true, error: null, removed };
+          } catch (e: any) {
+            return { success: false, error: e?.message ?? String(e), removed: false };
+          }
+        });
+      },
+
+      nexusHostRemoveSite: async (_p: ResolverParent, { alias, site }: { alias: string; site: string }) => {
+        return withQueue(async () => {
+          try {
+            const db = (services as any).graphService?.getDb?.();
+            const matches = findExternalSites(db, alias, site, 'id, name');
+            if (matches.length === 0) {
+              return { success: true, error: null, removed: false };
+            }
+            const now = Date.now();
+            await (services as any).graphService?.upsertSite({
+              id: matches[0].id,
+              name: matches[0].name,
+              domain: matches[0].name,
+              source: 'external',
+              host: 'external',
+              account_id: alias,
+              is_active: false,
+              created_at: now,
+              updated_at: now,
+            });
+            return { success: true, error: null, removed: true };
           } catch (e: any) {
             return { success: false, error: e?.message ?? String(e), removed: false };
           }

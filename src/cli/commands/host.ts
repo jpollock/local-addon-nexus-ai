@@ -446,6 +446,46 @@ hostCommand
   });
 
 // ============================================================================
+// host remove-site
+// ============================================================================
+
+hostCommand
+  .command('remove-site <alias/site>')
+  .description('Forget one site under a connection, leaving the connection and its other sites')
+  .option('-y, --yes', 'Skip the confirmation prompt')
+  .action(async (aliasSite: string, options) => {
+    const slash = aliasSite.indexOf('/');
+    if (slash === -1) {
+      console.error(`✗ Expected <alias>/<site>, got: ${aliasSite}`);
+      process.exit(1);
+    }
+    const alias = aliasSite.slice(0, slash);
+    const site = aliasSite.slice(slash + 1);
+
+    try {
+      if (!options.yes && !(await confirm(`Remove ${alias}/${site} from the fleet?`))) {
+        console.log('Cancelled.');
+        process.exit(0);
+      }
+
+      const client = getClient();
+      const result = await client.mutate<{ nexusHostRemoveSite: any }>(`
+        mutation($alias: String!, $site: String!) {
+          nexusHostRemoveSite(alias: $alias, site: $site) { success error removed }
+        }
+      `, { alias, site });
+
+      const { success, error, removed } = result.nexusHostRemoveSite;
+      if (!success) { console.error(`✗ ${error}`); process.exit(1); }
+      if (!removed) { console.error(`✗ ${alias}/${site} is not registered.`); process.exit(1); }
+      console.log(`✓ Removed ${alias}/${site}.`);
+    } catch (e: any) {
+      console.error(`✗ ${e.message}`);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
 // host refresh
 // ============================================================================
 

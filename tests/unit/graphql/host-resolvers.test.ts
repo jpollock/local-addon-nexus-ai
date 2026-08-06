@@ -80,25 +80,10 @@ describe('nexusHostProbe', () => {
   });
 });
 
-describe('nexusHostRemove', () => {
-  it('clears the profile and deactivates the site row', async () => {
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const m = createResolvers(c.context).Mutation as any;
-    await m.nexusHostAdd(null, { alias: 'h1' });
-    const r = await m.nexusHostRemove(null, { alias: 'h1' });
-    expect(r.removed).toBe(true);
-    expect(profiles(c.store)).toEqual({});
-    expect(c.upserted.at(-1).is_active).toBe(false);
-  });
-
-  it('reports removed:false for an unknown alias and writes no row', async () => {
-    const c = ctx();
-    const r = await (createResolvers(c.context).Mutation as any).nexusHostRemove(null, { alias: 'nope' });
-    expect(r.removed).toBe(false);
-    expect(c.upserted).toHaveLength(0);
-  });
-});
+// `nexusHostRemove`/`nexusHostRemoveSite` coverage lives in
+// tests/unit/graphql/host-remove.test.ts (Task 9: removal now cascades to
+// every site under a connection, and needs a `graphService.getDb()` fixture
+// to exercise `findExternalSites` — this file's `ctx()` doesn't provide one).
 
 describe('nexusHostList', () => {
   it('returns the registered hosts', async () => {
