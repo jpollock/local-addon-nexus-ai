@@ -185,8 +185,12 @@ export async function probeExternalHost(alias: string, opts: ProbeOptions = {}):
   if (!wpPath) {
     // Bounded: fixed roots, fixed depth. `2>/dev/null` swallows unreadable and
     // nonexistent roots, so the exit code is meaningless here — judge by output.
+    // -L: follow symlinks, including a symlinked $HOME itself (confirmed live
+    // on a real SiteGround connection, whose home directory is a symlink).
+    // Without it `find` treats the symlink as an unreadable leaf and finds
+    // nothing, even though the real WordPress root is a few levels through it.
     const find =
-      `find ${SEARCH_ROOTS.join(' ')} -maxdepth ${SEARCH_MAXDEPTH} -name wp-config.php -type f 2>/dev/null | head -20`;
+      `find -L ${SEARCH_ROOTS.join(' ')} -maxdepth ${SEARCH_MAXDEPTH} -name wp-config.php -type f 2>/dev/null | head -20`;
     const found = await run(find, DISCOVERY_TIMEOUT_MS);
     const roots = Array.from(new Set(
       found.stdout.split('\n')

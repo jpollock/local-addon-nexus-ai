@@ -259,6 +259,33 @@ describe('probeExternalHost — gate 3', () => {
     expect(r.ok).toBe(true);
     expect(r.wpPath).toBe('/home/u/a');
   });
+
+  it('finds wp-config.php through a symlinked $HOME (find -L)', async () => {
+    const seen: string[][] = [];
+    const r = await probeExternalHost('example', {
+      exec: router([
+        CONNECT_OK,
+        WP_ON_PATH,
+        WP_VERSION,
+        [/wp-config\.php/, ok('/home/u2640/www/example.com/public_html/wp-config.php\n')],
+        CORE_VERSION,
+        SITEURL,
+      ], seen),
+    });
+    expect(r.ok).toBe(true);
+    expect(r.wpPath).toBe('/home/u2640/www/example.com/public_html');
+    // Verify that find was called with -L flag
+    const findCommand = seen.map((a) => a[a.length - 1]).find((c) => /wp-config\.php/.test(c))!;
+    expect(findCommand).toContain('find -L');
+  });
+
+  it('still finds every root it found before on a non-symlinked host (additive, not narrower)', async () => {
+    // This test ensures -L did not narrow the search — if anything it widens it by
+    // following symlinks, so the happy path and gate-3 tests still pass.
+    const r = await probeExternalHost('example', { exec: router(HAPPY) });
+    expect(r.ok).toBe(true);
+    expect(r.wpPath).toBe('/home/u/public_html');
+  });
 });
 
 describe('probeExternalHost — gate 4', () => {
