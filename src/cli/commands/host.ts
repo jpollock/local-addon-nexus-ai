@@ -89,6 +89,30 @@ function suggestSiteSlug(domain: string | undefined, alias: string): string {
   return domain.split('.')[0] || alias;
 }
 
+/**
+ * Make every site slug in a batch unique by appending -2, -3, ... to any
+ * collision. Two different domains can share a first label
+ * (shop.example.com / shop.example.net both suggest "shop"), and two
+ * candidates with no discoverable siteUrl both fall back to the bare alias —
+ * without this, the second nexusHostAdd call silently overwrites the first
+ * (same `ssh:<alias>/<slug>` id) while the CLI still reports success for both.
+ */
+function dedupeSiteSlugs<T extends { site: string }>(
+  items: T[],
+): { items: T[]; renamed: Array<{ from: string; to: string }> } {
+  const seen = new Map<string, number>();
+  const renamed: Array<{ from: string; to: string }> = [];
+  const out = items.map((item) => {
+    const count = seen.get(item.site) ?? 0;
+    seen.set(item.site, count + 1);
+    if (count === 0) return item;
+    const to = `${item.site}-${count + 1}`;
+    renamed.push({ from: item.site, to });
+    return { ...item, site: to };
+  });
+  return { items: out, renamed };
+}
+
 // ============================================================================
 // host test
 // ============================================================================
@@ -136,15 +160,15 @@ hostCommand
   .command('add <alias>')
   .description('Probe an SSH host and add it to the fleet')
   .option('--path <dir>', 'WordPress root (skips discovery)')
-  // Environment is resolved per site, here in the CLI, before nexusHostAdd is
-  // called: a connection can hold several sites and each is labelled
-  // independently. Omitted defaults to production for every site registered
-  // in this run — there is no "leave this site's existing label alone"
-  // behavior for `add` any more (registering a site with the same id again
-  // will relabel it if --env is passed).
-  .option('--env <environment>', 'production | staging | development (defaults to production)')
+  // Environment is resolved per site, on the resolver, not here: a connection
+  // can hold several independently-labelled sites, and an already-registered
+  // site keeps its own label when --env is omitted (nexusHostAdd looks it up).
+  // Passing --env explicitly is a deliberate override and applies to every
+  // site registered in *this* run.
+  .option('--env <environment>', "production | staging | development (omit to keep a site's existing label, or 'production' for a new one)")
   .option('--site <name>', 'Site slug to register under (only meaningful with --path; overrides the domain-derived slug)')
-  .option('-y, --yes', 'Skip the confirmation prompt')
+  .option('-y, --yes', 'Skip the confirmation prompt (only meaningful for a single discovered site)')
+  .option('--all', 'When multiple sites are found, register every one without prompting')
   .option('--json', 'Output as JSON')
   .action(async (alias, options) => {
     try {
@@ -153,10 +177,22 @@ hostCommand
       // is no zero-round-trip path any more: the CLI always probes once,
       // unqualified, to find out which case it's in before deciding whether to
       // register directly or prompt over a candidate list. `--json` suppresses
-      // the interactive chatter and per-candidate prompting (like `--yes`) and
-      // emits a single JSON summary at the end instead of the human-readable
-      // lines, so scripts keep the scriptable contract the old shortcut gave them.
+      // the interactive chatter and per-candidate prompting and emits a single
+      // JSON summary at the end instead of the human-readable lines, so
+      // scripts keep a scriptable contract.
       const quiet = !!options.json;
+
+      // One consistent envelope on every --json branch: {registered, sites, error}.
+      // `sites` is always an array (possibly empty); `error` is always a string
+      // or null. Before this, a failed probe, a refused multi-site batch, a
+      // zero-selection run and a successful registration each printed a
+      // differently-shaped object — `jq .registered` returned `null` on the
+      // success path.
+      const emit = (payload: {
+        registered: boolean;
+        sites: Array<{ site: string; registered: boolean; environment: string | null; error: string | null }>;
+        error: string | null;
+      }) => console.log(JSON.stringify(payload, null, 2));
 
       if (!quiet) console.log(`\nProbing ${alias}...`);
       const probe = await client.mutate<{ nexusHostProbe: any }>(`
@@ -167,20 +203,23 @@ hostCommand
 
       const pr = probe.nexusHostProbe;
       if (!pr.success) {
-        if (quiet) { console.log(JSON.stringify({ error: pr.error }, null, 2)); process.exit(1); }
-        console.error(`✗ ${pr.error}`);
+        if (quiet) emit({ registered: false, sites: [], error: pr.error });
+        else console.error(`✗ ${pr.error}`);
         process.exit(1);
         return;
       }
       if (!pr.report) {
         const msg = `${alias}: probe returned no report.`;
-        if (quiet) { console.log(JSON.stringify({ error: msg }, null, 2)); process.exit(1); }
-        console.error(`✗ ${msg}`);
+        if (quiet) emit({ registered: false, sites: [], error: msg });
+        else console.error(`✗ ${msg}`);
         process.exit(1);
         return;
       }
 
-      let selections: Array<{ path: string; site: string; environment: string }>;
+      // `environment` stays null unless the caller passed --env: the resolver,
+      // not the CLI, decides the fallback (an existing site's own label, or
+      // 'production' for a genuinely new one) — see nexusHostAdd.
+      let selections: Array<{ path: string; site: string; environment: string | null }>;
 
       if (pr.report.ok) {
         // Zero-ambiguity case: one root, register it directly. An explicit
@@ -189,10 +228,26 @@ hostCommand
         const slug = options.site || suggestSiteSlug(
           pr.report.siteUrl ? new URL(pr.report.siteUrl).hostname : undefined, alias,
         );
-        selections = [{ path: pr.report.wpPath, site: slug, environment: options.env ?? 'production' }];
+        selections = [{ path: pr.report.wpPath, site: slug, environment: options.env ?? null }];
       } else if (pr.report.failure?.kind === 'multiple-wordpress') {
         const candidates: string[] = pr.report.candidates ?? [];
         if (!quiet) console.log(`\nFound ${candidates.length} WordPress installations on '${alias}':`);
+
+        // A shared/multi-tenant host can have installs the caller doesn't own
+        // or intend to manage — each becomes subject to the refresh/content-
+        // index schedulers' SSH traffic once registered. `-y`/`--json` alone
+        // (no TTY to prompt per-site) must not silently expand scope to
+        // "every WordPress install found here"; `--all` is the explicit,
+        // named opt-in for that.
+        if (candidates.length > 1 && !options.all && (options.yes || quiet)) {
+          const msg = `${candidates.length} WordPress installations found on '${alias}'. `
+            + 'Re-run with --all to register every one, --path <dir> to register just one, '
+            + 'or without --yes/--json to choose interactively.';
+          if (quiet) emit({ registered: false, sites: [], error: msg });
+          else console.error(`✗ ${msg}`);
+          process.exit(1);
+          return;
+        }
 
         // Probe each candidate individually to get its domain — reusing the
         // same single-path probe, not new discovery logic.
@@ -207,9 +262,9 @@ hostCommand
           withDomains.push({ path, domain: r?.siteUrl ? new URL(r.siteUrl).hostname : undefined });
         }
 
-        if (options.yes || quiet) {
+        if (options.all || quiet) {
           selections = withDomains.map((c) => ({
-            path: c.path, site: suggestSiteSlug(c.domain, alias), environment: options.env ?? 'production',
+            path: c.path, site: suggestSiteSlug(c.domain, alias), environment: options.env ?? null,
           }));
         } else {
           selections = [];
@@ -220,9 +275,10 @@ hostCommand
               const answer = (await prompt(
                 rl, `  [${c.domain ?? c.path}] register as '${suggested}'? [Y/n/name] `,
               )).trim();
-              if (answer.toLowerCase() === 'n') continue;
-              const site = answer && answer.toLowerCase() !== 'y' ? answer : suggested;
-              selections.push({ path: c.path, site, environment: options.env ?? 'production' });
+              const lower = answer.toLowerCase();
+              if (lower === 'n' || lower === 'no') continue;
+              const site = (answer && lower !== 'y' && lower !== 'yes') ? answer : suggested;
+              selections.push({ path: c.path, site, environment: options.env ?? null });
             }
           } finally {
             rl.close();
@@ -230,8 +286,15 @@ hostCommand
         }
 
         if (selections.length === 0) {
+          // Make "registered with zero sites" true rather than aspirational:
+          // an unqualified nexusHostAdd re-probes, lands on the same
+          // multiple-wordpress branch, and persists the connection profile
+          // there without registering any site.
+          const zero = await client.mutate<{ nexusHostAdd: any }>(`
+            mutation($alias: String!) { nexusHostAdd(alias: $alias) { success error registered } }
+          `, { alias });
           if (quiet) {
-            console.log(JSON.stringify({ registered: false, sites: [] }, null, 2));
+            emit({ registered: false, sites: [], error: zero.nexusHostAdd?.error ?? null });
             return;
           }
           console.log('\nNo sites selected. Connection registered with zero sites.');
@@ -239,14 +302,23 @@ hostCommand
           return;
         }
       } else {
-        if (quiet) {
-          console.log(JSON.stringify({ error: pr.report.failure ?? 'probe failed', report: pr.report }, null, 2));
-          process.exit(1);
-          return;
-        }
-        printFailure(pr.report);
+        const msg = pr.report.failure
+          ? `${pr.report.failure.kind}: ${pr.report.failure.detail ?? ''}`.trim()
+          : `${alias}: the probe reported a failure but returned no diagnosis.`;
+        if (quiet) emit({ registered: false, sites: [], error: msg });
+        else printFailure(pr.report);
         process.exit(1);
         return;
+      }
+
+      // One dedup pass covers both branches (a no-op for the single-root
+      // case) — one place responsible for id uniqueness rather than two.
+      const deduped = dedupeSiteSlugs(selections);
+      selections = deduped.items;
+      if (!quiet) {
+        for (const r of deduped.renamed) {
+          console.log(`  Note: '${r.from}' was already used in this batch — registering this one as '${r.to}' instead.`);
+        }
       }
 
       let anyFailed = false;
@@ -261,7 +333,10 @@ hostCommand
         `, { alias, path: sel.path, environment: sel.environment, site: sel.site });
 
         const { success, error, registered, environment } = result.nexusHostAdd;
-        results.push({ site: sel.site, registered: !!(success && registered), environment, error });
+        results.push({
+          site: sel.site, registered: !!(success && registered),
+          environment: environment ?? null, error: error ?? null,
+        });
         if (!success || !registered) {
           anyFailed = true;
           if (!quiet) console.error(`✗ ${sel.site}: ${error ?? 'registration failed'}`);
@@ -274,7 +349,11 @@ hostCommand
       }
 
       if (quiet) {
-        console.log(JSON.stringify(results, null, 2));
+        emit({
+          registered: results.length > 0 && !anyFailed,
+          sites: results,
+          error: anyFailed ? 'one or more sites failed to register' : null,
+        });
       } else {
         console.log('');
       }

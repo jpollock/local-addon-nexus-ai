@@ -44,7 +44,7 @@ import { collectExternalHostData } from '../startup/collectExternalHostData';
 import { writeExternalHostData } from '../startup/writeExternalHostData';
 import { ExternalContentIndexService } from '../events/ExternalContentIndexService';
 import { vectorSiteId } from '../vector-store/vectorSiteId';
-import { resolveRemoteGraphSite } from '../mcp/site-resolver';
+import { resolveRemoteGraphSite, findExternalSites } from '../mcp/site-resolver';
 import { ensureContentIndexedAtColumn } from '../startup/ExternalContentIndexScheduler';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
@@ -5472,7 +5472,9 @@ export function createResolvers(context: ResolverContext) {
               };
             }
 
-            const validEnv = (environment ?? 'production') as 'production' | 'staging' | 'development';
+            // Used only for the early-return branches below, where no site row
+            // is written and there is nothing site-specific to preserve.
+            const requestedEnv = (environment ?? 'production') as 'production' | 'staging' | 'development';
             const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
 
             if (!report.ok) {
@@ -5493,7 +5495,7 @@ export function createResolvers(context: ResolverContext) {
               }
               return {
                 success: true, registered: false, report: toHostReport(report),
-                environment: validEnv, error: null,
+                environment: requestedEnv, error: null,
               };
             }
 
@@ -5512,6 +5514,18 @@ export function createResolvers(context: ResolverContext) {
             // Auto-suggest a slug from the domain's first label when none was
             // given — the single-site case, which stays zero-ceremony.
             const siteSlug = site ?? domain.split('.')[0] ?? alias;
+
+            // The site-level equivalent of the connection-level "leave an
+            // already-registered host's label alone" fallback this plan's
+            // earlier connection-scoped model had: environment now lives per
+            // site, so the lookup is keyed on (alias, siteSlug), not alias
+            // alone. Omitting `environment` must never silently downgrade (or
+            // loosen) a site that already has a label — only a genuinely new
+            // site falls back to 'production'.
+            const db = (services as any).graphService?.getDb?.();
+            const existingSite = db ? findExternalSites(db, alias, siteSlug)[0] : undefined;
+            const validEnv = (environment ?? existingSite?.environment ?? 'production') as
+              'production' | 'staging' | 'development';
 
             await (services as any).graphService?.upsertSite({
               id: externalSiteId(alias, siteSlug),

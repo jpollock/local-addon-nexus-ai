@@ -49,9 +49,31 @@ function multipleWordpressReport(over: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * `nexusHostAdd`'s C1 fix (per-site environment preservation) reads the
+ * existing site row back via `findExternalSites(db, alias, site)`, which
+ * issues real SQL against `graphService.getDb()`. A fixture that only logs
+ * `upsertSite` calls (the pre-fix-round shape) can't answer that query, so
+ * this fake `db` mirrors the two shapes `findExternalSites` actually prepares
+ * — scoped-by-site and connection-wide — over the same `upserted` array,
+ * and `upsertSite` itself now upserts by id (replace-in-place) rather than
+ * just logging, so a second call against the same site sees the first's row.
+ */
 function ctx() {
   const store: Record<string, any> = {};
   const upserted: any[] = [];
+  const db = {
+    prepare: (sql: string) => ({
+      all: (...args: any[]) => {
+        if (sql.includes('account_id=? AND name=?')) {
+          const [aliasArg, siteArg] = args;
+          return upserted.filter((s) => s.is_active !== false && s.account_id === aliasArg && s.name === siteArg);
+        }
+        const [aliasArg] = args;
+        return upserted.filter((s) => s.is_active !== false && s.account_id === aliasArg);
+      },
+    }),
+  };
   return {
     upserted,
     store,
@@ -61,7 +83,14 @@ function ctx() {
           get: (k: string) => store[k],
           set: (k: string, v: unknown) => { store[k] = v; },
         },
-        graphService: { upsertSite: async (s: any) => { upserted.push(s); } },
+        graphService: {
+          upsertSite: async (s: any) => {
+            const idx = upserted.findIndex((r) => r.id === s.id);
+            if (idx >= 0) upserted[idx] = { ...upserted[idx], ...s };
+            else upserted.push(s);
+          },
+          getDb: () => db,
+        },
         logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
       },
       registry: {},
@@ -187,5 +216,73 @@ describe('nexusHostAdd — connection persists even when multiple sites are foun
     expect(c.upserted[1]).toEqual(expect.objectContaining({ id: 'ssh:multi-host/site-b', domain: 'site-b.example.com' }));
     // Only one connection profile — both sites share it.
     expect(Object.keys(profiles(c.store))).toEqual(['multi-host']);
+  });
+});
+
+describe('nexusHostAdd — per-site environment fallback (C1)', () => {
+  it('re-adding an existing site with --env omitted keeps its label, never downgrades to production', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    probeMock.mockResolvedValue(okReport({
+      alias: 'prod-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    const first = await m.nexusHostAdd(
+      null, { alias: 'prod-host', path: '/home/u1/site-a', environment: 'production', site: 'site-a' },
+    );
+    expect(first.registered).toBe(true);
+    expect(first.environment).toBe('production');
+    expect(c.upserted[0].environment).toBe('production');
+
+    // Re-run against the SAME alias+site with --env omitted — e.g. refreshing
+    // a discovered path. This must not silently relabel a production site.
+    const second = await m.nexusHostAdd(
+      null, { alias: 'prod-host', path: '/home/u1/site-a', environment: null, site: 'site-a' },
+    );
+    expect(second.registered).toBe(true);
+    expect(second.environment).toBe('production');
+    expect(c.upserted).toHaveLength(1); // same site row, upserted in place
+    expect(c.upserted[0].environment).toBe('production');
+  });
+
+  it('a genuinely new site on the same connection can still get an explicit --env, without affecting its sibling', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'mixed-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    await m.nexusHostAdd(
+      null, { alias: 'mixed-host', path: '/home/u1/site-a', environment: 'production', site: 'site-a' },
+    );
+
+    // A second, DIFFERENT site under the same connection, explicitly labelled
+    // staging. It must get its own label, and must not touch site-a's.
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'mixed-host', wpPath: '/home/u1/site-b', siteUrl: 'https://site-b.example.com',
+    }));
+    const second = await m.nexusHostAdd(
+      null, { alias: 'mixed-host', path: '/home/u1/site-b', environment: 'staging', site: 'site-b' },
+    );
+    expect(second.registered).toBe(true);
+    expect(second.environment).toBe('staging');
+
+    const siteA = c.upserted.find((s) => s.id === 'ssh:mixed-host/site-a');
+    const siteB = c.upserted.find((s) => s.id === 'ssh:mixed-host/site-b');
+    expect(siteA.environment).toBe('production');
+    expect(siteB.environment).toBe('staging');
+  });
+
+  it('omitting --env for a genuinely new site (no prior row) still defaults to production', async () => {
+    probeMock.mockResolvedValue(okReport({
+      alias: 'new-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    const c = ctx();
+    const result = await (createResolvers(c.context).Mutation as any).nexusHostAdd(
+      null, { alias: 'new-host', path: '/home/u1/site-a', environment: null, site: 'site-a' },
+    );
+    expect(result.registered).toBe(true);
+    expect(result.environment).toBe('production');
+    expect(c.upserted[0].environment).toBe('production');
   });
 });
