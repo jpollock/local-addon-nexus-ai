@@ -68,7 +68,12 @@ export function createTwinResolvers(services: NexusServices, registry: ToolRegis
         const graphService = services.graphService;
         const now = Date.now();
 
-        // Find the graph site ID for this install
+        // Find the graph site ID for this install.
+        // Deliberately NOT widened to `source IN ('wpe','external')`: this whole
+        // resolver calls `services.localServices.remoteWpCliRun`, which is the
+        // WP-Engine-CAPI SSH path and has no external-host equivalent. The live
+        // counterpart in resolvers.ts (nexusWpeSiteDeepRefresh) keeps this the
+        // same `source='wpe'`-only query for the same reason.
         let siteId: string | null = null;
         if (graphService?.getDb?.()) {
           const row = graphService.getDb()!.prepare(
@@ -193,7 +198,7 @@ export function createTwinResolvers(services: NexusServices, registry: ToolRegis
         try {
           if (graphService?.getDb?.()) {
             const db = graphService.getDb()!;
-            const wpeRows = db.prepare("SELECT * FROM sites WHERE source='wpe'").all() as any[];
+            const wpeRows = db.prepare("SELECT * FROM sites WHERE source IN ('wpe','external')").all() as any[];
             for (const row of wpeRows) {
               const hasPlugins = db.prepare('SELECT COUNT(*) as c FROM plugins WHERE site_id=?').get(row.id) as { c: number };
               const comp = hasPlugins.c > 0 ? 'metadata' : (row.wp_version ? 'filesystem' : 'none');
@@ -305,7 +310,7 @@ export function createTwinResolvers(services: NexusServices, registry: ToolRegis
           const graphService = services.graphService;
           if (graphService?.getDb?.()) {
             const db = graphService.getDb()!;
-            const wpeRows = db.prepare("SELECT id, name FROM sites WHERE source='wpe'").all() as any[];
+            const wpeRows = db.prepare("SELECT id, name FROM sites WHERE source IN ('wpe','external')").all() as any[];
             for (const row of wpeRows) {
               const pluginRows = db.prepare(
                 'SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?'
@@ -416,10 +421,10 @@ export function createTwinResolvers(services: NexusServices, registry: ToolRegis
         try {
           if (graphService?.getDb?.()) {
             const rows = graphService.getDb()!
-              .prepare("SELECT name, wp_version, php_version FROM sites WHERE source='wpe' AND is_active=1")
+              .prepare("SELECT name, wp_version, php_version, source FROM sites WHERE source IN ('wpe','external') AND is_active=1")
               .all() as any[];
             for (const row of rows) {
-              wpeTwins.push({ siteName: row.name, wpVersion: row.wp_version, phpVersion: row.php_version, source: 'wpe' });
+              wpeTwins.push({ siteName: row.name, wpVersion: row.wp_version, phpVersion: row.php_version, source: row.source });
             }
           }
         } catch { /* optional */ }

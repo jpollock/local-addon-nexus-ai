@@ -13,6 +13,7 @@ import {
   formatTwinAge,
 } from '../resolver-utils';
 import type { ResolverParent } from '../resolver-utils';
+import { externalSiteId } from '../../external/externalSiteStore';
 
 export function createSiteResolvers(services: NexusServices) {
   return {
@@ -193,6 +194,52 @@ export function createSiteResolvers(services: NexusServices) {
           const twin = services.twinService?.getFromGraph?.(graphSite, graphService) ?? null;
           const twinAge = twin?.asOf ? formatTwinAge(Date.now() - twin.asOf) : null;
           return { success: true, site: buildWpeSiteDetails(graphSite, twin, twinAge) };
+        }
+
+        // ── Explicit external target: ssh:alias@environment ───────────────
+        if (parsed.type === 'external') {
+          const alias = parsed.alias!;
+          const siteId = externalSiteId(alias);
+          const rows = graphService?.getDb?.()
+            // I7: is_active = 1 — a soft-deleted host must not resolve.
+            ? (graphService.getDb()!.prepare("SELECT * FROM sites WHERE source='external' AND is_active = 1").all() as any[])
+            : [];
+          const graphSite = rows.find((r: any) => r.id === siteId) ?? null;
+
+          if (!graphSite) {
+            return { success: false, error: `External host not found: ${target}` };
+          }
+
+          const twin = services.twinService?.getFromGraph?.(graphSite, graphService) ?? null;
+          const twinAge = twin?.asOf ? formatTwinAge(Date.now() - twin.asOf) : null;
+          return {
+            success: true,
+            site: {
+              id: graphSite.id,
+              name: graphSite.name,
+              domain: graphSite.domain ?? null,
+              path: '',
+              status: 'remote',
+              siteKind: 'external',
+              wpVersion:            twin?.wpVersion ?? graphSite.wp_version ?? null,
+              phpVersion:           twin?.phpVersion ?? graphSite.php_version ?? null,
+              mysqlVersion:         null,
+              siteUrl:              twin?.siteUrl ?? graphSite.site_url ?? graphSite.domain ?? null,
+              adminEmail:           null,
+              activeTheme:          twin?.activeTheme ?? null,
+              activePluginCount:    twin?.plugins?.filter((p: any) => p.status === 'active').length ?? null,
+              installedPluginCount: twin?.plugins?.length ?? null,
+              postCount:            twin?.postCount ?? null,
+              lastPostAt:           null,
+              twinCompleteness:     twin?.completeness ?? 'none',
+              twinAge,
+              indexed: false,
+              indexedAt: null,
+              documentCount: 0,
+              chunkCount: 0,
+              linkedTo: null,
+            },
+          };
         }
 
         if (!services.localServices) {
