@@ -119,6 +119,10 @@ export interface Site {
   remote_install_id?: string;
   remote_domain?: string;
   wpe_site_id?: string;   // WPE site container UUID (parent of the install)
+  /** External SSH hosts: absolute WordPress root on the remote, discovered at registration. */
+  wp_path?: string;
+  /** External SSH hosts: absolute WP-CLI path when it is not on the remote's PATH. */
+  wp_cli_path?: string;
   post_count?: number;
   user_count?: number;
   last_post_at?: number;

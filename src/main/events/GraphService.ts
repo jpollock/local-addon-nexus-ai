@@ -226,6 +226,25 @@ export class GraphService {
       this.logger.info('[GraphService] ✓ account_id column added');
     }
 
+    // Migration: per-site WP-CLI location for external SSH hosts.
+    // These were connection-profile fields (wpPath/wpCliPath) before the
+    // connection/site split — one connection can host several installs, so the
+    // path belongs to the site. Not indexed: only ever selected, never filtered on.
+    if (!this.hasColumn('sites', 'wp_path')) {
+      this.logger.info('[GraphService] Adding wp_path column to sites table...');
+      this.db.transaction(() => {
+        this.db!.exec('ALTER TABLE sites ADD COLUMN wp_path TEXT');
+      })();
+      this.logger.info('[GraphService] ✓ wp_path column added');
+    }
+    if (!this.hasColumn('sites', 'wp_cli_path')) {
+      this.logger.info('[GraphService] Adding wp_cli_path column to sites table...');
+      this.db.transaction(() => {
+        this.db!.exec('ALTER TABLE sites ADD COLUMN wp_cli_path TEXT');
+      })();
+      this.logger.info('[GraphService] ✓ wp_cli_path column added');
+    }
+
     // Migration: create wpe_accounts table if missing
     const hasAccountsTable = this.db
       .prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='wpe_accounts'")
@@ -340,8 +359,8 @@ export class GraphService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, environment, remote_install_id, remote_domain, wpe_site_id, platform, host)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, environment, remote_install_id, remote_domain, wpe_site_id, platform, host, wp_path, wp_cli_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
@@ -357,7 +376,9 @@ export class GraphService {
         remote_domain = excluded.remote_domain,
         wpe_site_id = COALESCE(excluded.wpe_site_id, wpe_site_id),
         platform = excluded.platform,
-        host = COALESCE(excluded.host, host)
+        host = COALESCE(excluded.host, host),
+        wp_path = COALESCE(excluded.wp_path, wp_path),
+        wp_cli_path = COALESCE(excluded.wp_cli_path, wp_cli_path)
     `);
 
     stmt.run(
@@ -377,7 +398,9 @@ export class GraphService {
       site.remote_domain ?? null,
       (site as any).wpe_site_id ?? null,
       'wordpress',
-      site.host ?? site.source ?? 'local'
+      site.host ?? site.source ?? 'local',
+      site.wp_path ?? null,
+      site.wp_cli_path ?? null
     );
   }
 

@@ -11,6 +11,7 @@ import {
 } from '../mcp/utils/operation-permissions';
 import { ExternalSshTransport } from './ExternalSshTransport';
 import { getExternalProfile } from '../external/externalSiteStore';
+import { findExternalSites } from '../mcp/site-resolver';
 
 /**
  * Resolve MCP tool args to a transport. Delegates target resolution (and
@@ -41,27 +42,68 @@ export async function resolveTransport(
       return error(`Not an external SSH target: ${sshTarget}. Expected ssh:alias@environment`);
     }
 
-    // Registration (nexus host add) stores what the probe discovered. Reading it
-    // back here is the whole point: otherwise a registered host still needs
-    // --path on every command.
-    //
-    // Read BEFORE the gate, not after: the registered environment is half of
-    // what the gate decides on. This lookup used to sit below it, which is how
-    // a host registered --env production stayed writable when addressed as
-    // ssh:<alias>@development.
+    // The connection profile carries reachability metadata only (wpCliPath).
+    // Everything per-site — environment, wp_path — lives on the site row now,
+    // because one connection can host several installs.
     const storage = (services as any).registryStorage;
-    const profile = storage ? getExternalProfile(storage, parsed.alias) : null;
+    const connectionProfile = storage ? getExternalProfile(storage, parsed.alias) : null;
+
+    // Resolve the SITE **before** the gate runs. Same ordering requirement as
+    // the profile lookup this replaces, and for the same reason: the registered
+    // environment (now per-site) is half of what the gate decides on. When this
+    // lookup sat below the gate, a host registered --env production stayed
+    // writable when addressed as ssh:<alias>@development.
+    const graphService = (services as any).graphService;
+    const db = graphService?.getDb?.();
+    const sites = findExternalSites(
+      db, parsed.alias, parsed.site, 'id, name, environment, wp_path, wp_cli_path',
+    );
+
+    let resolvedSite: {
+      id: string; name: string; environment: string | null;
+      wp_path: string | null; wp_cli_path: string | null;
+    };
+    if (parsed.site) {
+      if (sites.length === 0) {
+        return error(`No site "${parsed.site}" registered on connection "${parsed.alias}".`);
+      }
+      resolvedSite = sites[0];
+    } else if (sites.length === 0) {
+      return error(
+        `Connection "${parsed.alias}" has no registered sites. `
+        + `Run \`nexus host add ${parsed.alias}\`.`,
+      );
+    } else if (sites.length > 1) {
+      const names = sites.map(
+        (s: any) => `ssh:${parsed.alias}/${s.name}@${s.environment ?? 'production'}`,
+      );
+      return error(
+        `"${parsed.alias}" has ${sites.length} registered sites — specify which one: `
+        + names.join(', '),
+      );
+    } else {
+      resolvedSite = sites[0];
+    }
 
     // Same gate as WP Engine installs, keyed on an ssh: target ref — but on the
-    // more restrictive of the label the host was registered with and the one
-    // the caller typed. See mostRestrictiveEnvironment for why the target
-    // string alone cannot be trusted. An unregistered alias contributes
-    // nothing, so its target environment governs exactly as before.
-    const gatedEnv = mostRestrictiveEnvironment(parsed.environment, profile?.environment);
+    // more restrictive of the label the SITE was registered with and the one the
+    // caller typed. See mostRestrictiveEnvironment for why the target string
+    // alone cannot be trusted.
+    // `?? undefined` is load-bearing: sqlite hands back NULL for an unlabelled
+    // site, and mostRestrictiveEnvironment only filters `undefined` — a raw null
+    // normalises to "production" and would silently gate every unlabelled site
+    // as production regardless of the target. Unspecified must contribute
+    // nothing, exactly as an absent profile field used to.
+    const gatedEnv = mostRestrictiveEnvironment(
+      parsed.environment, resolvedSite.environment ?? undefined,
+    );
     const settings = getEffectiveSettings(storage);
-    if (!isOperationAllowed(operation as any, gatedEnv, settings, `ssh:${parsed.alias}`)) {
-      const registeredNote = profile && gatedEnv !== parsed.environment
-        ? ` '${parsed.alias}' is registered as "${profile.environment}", which is what applies.`
+    if (!isOperationAllowed(
+      operation as any, gatedEnv, settings, `ssh:${parsed.alias}/${resolvedSite.name}`,
+    )) {
+      const registeredNote = resolvedSite.environment && gatedEnv !== parsed.environment
+        ? ` '${parsed.alias}/${resolvedSite.name}' is registered as `
+          + `"${resolvedSite.environment}", which is what applies.`
         : '';
       return error(
         `Operation blocked: not permitted on "${gatedEnv}" environments.${registeredNote} `
@@ -69,11 +111,13 @@ export async function resolveTransport(
       );
     }
 
-    // An explicit wp_path wins — the user meant it.
+    // An explicit wp_path wins — the user meant it. Otherwise the site's own
+    // stored path, then nothing (WP-CLI searches from the login dir).
     const explicitPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
-    const wpPath = explicitPath ?? profile?.wpPath;
+    const wpPath = explicitPath ?? resolvedSite.wp_path ?? undefined;
+    const wpCliPath = resolvedSite.wp_cli_path ?? connectionProfile?.wpCliPath;
     return withPolicy(
-      new ExternalSshTransport(parsed.alias, wpPath, profile?.wpCliPath),
+      new ExternalSshTransport(parsed.alias, wpPath, wpCliPath),
       REMOTE_POLICY,
     );
   }
