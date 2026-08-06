@@ -51,12 +51,17 @@ type SiteRow = {
 };
 
 /** Build a NexusServices stand-in with a connection profile and graph site rows. */
-function makeServices(opts: { profile?: any; profiles?: any[]; sites?: SiteRow[] } = {}) {
+function makeServices(
+  opts: { profile?: any; profiles?: any[]; sites?: SiteRow[]; exceptions?: any[] } = {},
+) {
   const store: Record<string, unknown> = {};
   const profiles = opts.profiles ?? (opts.profile ? [opts.profile] : []);
   store[STORAGE_KEYS.EXTERNAL_SITE_PROFILES] = Object.fromEntries(
     profiles.map((p) => [p.alias, p]),
   );
+  if (opts.exceptions) {
+    store[STORAGE_KEYS.SETTINGS] = { remoteSiteExceptions: opts.exceptions };
+  }
 
   const db = openDb();
   dbs.push(db);
@@ -261,11 +266,12 @@ describe('resolveTransport — external connection/site resolution', () => {
       { ssh_target: 'ssh:hostinger-test@production' }, services, 'wpcli_read');
     expect('content' in result).toBe(true);
     if ('content' in result) {
-      expect(text(result)).toContain('site-a');
-      expect(text(result)).toContain('site-b');
-      expect(text(result)).toContain('/');
-      // The suggestions must be usable verbatim.
+      // Every suggestion must be usable verbatim, and BOTH must be present —
+      // a substring check on the second name would still pass if the mapped
+      // list dropped it.
       expect(text(result)).toContain('ssh:hostinger-test/site-a@production');
+      expect(text(result)).toContain('ssh:hostinger-test/site-b@production');
+      expect(text(result)).toContain('2 registered sites');
     }
   });
 
@@ -385,9 +391,149 @@ describe('resolveTransport — external connection/site resolution', () => {
     expect(spawnMock.mock.calls[0][1].at(-1)).not.toContain('--path');
   });
 
+  it('duplicate site names under one connection decline rather than pick', async () => {
+    const services = makeServices({
+      profile: { alias: 'dupes', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: [{ name: 'site-a', account_id: 'dupes', environment: 'production' }],
+    });
+    // (account_id, name) is de-facto unique, so force the shape directly.
+    const db = services.graphService.getDb();
+    db.prepare(
+      `INSERT INTO sites (id, name, domain, account_id, is_active, source, environment)
+       VALUES ('ssh:dupes/site-a#2', 'site-a', 'dupes', 'dupes', 1, 'external', 'production')`,
+    ).run();
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:dupes/site-a@production' }, services, 'wpcli_read');
+    expect('content' in t).toBe(true);
+    if ('content' in t) expect(text(t)).toMatch(/2 sites named "site-a"/);
+  });
+
   it('does not throw when no storage or graph is available at all', async () => {
     const t = await resolveTransport({ ssh_target: 'ssh:h1@development' }, {} as any, 'wpcli');
     // No graph ⇒ no sites ⇒ refusal, but never an exception.
+    expect('content' in t).toBe(true);
+  });
+});
+
+/**
+ * The target ref handed to the gate is now `ssh:<alias>/<site>`, but the
+ * Settings UI writes exceptions keyed at the bare connection level
+ * (`SettingsTab.tsx`), and exception matching is exact string equality. Without
+ * a connection-level fallback, an existing DENY exception fails OPEN silently.
+ */
+describe('resolveTransport — remoteSiteExceptions keyed at the connection level', () => {
+  const SITES: SiteRow[] = [
+    { name: 'site-a', account_id: 'hostinger-test', environment: 'production' },
+    { name: 'site-b', account_id: 'hostinger-test', environment: 'production' },
+  ];
+
+  it('a bare ssh:<alias> DENY still applies to ssh:<alias>/<site> (must not fail open)', async () => {
+    const services = makeServices({
+      profile: { alias: 'hostinger-test', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: SITES,
+      // wpcli_read is permitted on every environment by default, so only the
+      // exception can produce a refusal here.
+      exceptions: [{
+        targetRef: 'ssh:hostinger-test', environment: 'production',
+        overrides: { wpcli_read: false },
+      }],
+    });
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-a@production' }, services, 'wpcli_read');
+    expect('content' in t).toBe(true);
+    // ...and it covers every site under the connection, not just the first.
+    const t2 = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-b@production' }, services, 'wpcli_read');
+    expect('content' in t2).toBe(true);
+  });
+
+  it('a bare ssh:<alias> ALLOW still applies (must not fail closed)', async () => {
+    const services = makeServices({
+      profile: { alias: 'hostinger-test', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: SITES,
+      exceptions: [{
+        targetRef: 'ssh:hostinger-test', environment: 'production',
+        overrides: { wpcli: true },
+      }],
+    });
+    // wpcli is refused on production by default — only the exception permits it.
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-a@production' }, services, 'wpcli');
+    expect('content' in t).toBe(false);
+  });
+
+  it('a per-site exception overrides the connection-level one for that site', async () => {
+    const services = makeServices({
+      profile: { alias: 'hostinger-test', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: SITES,
+      exceptions: [
+        {
+          targetRef: 'ssh:hostinger-test', environment: 'production',
+          overrides: { wpcli: false },
+        },
+        {
+          targetRef: 'ssh:hostinger-test/site-a', environment: 'production',
+          overrides: { wpcli: true },
+        },
+      ],
+    });
+    const specific = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-a@production' }, services, 'wpcli');
+    expect('content' in specific).toBe(false);
+    // The sibling still gets the connection-level denial.
+    const sibling = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-b@production' }, services, 'wpcli');
+    expect('content' in sibling).toBe(true);
+  });
+
+  it('a per-site exception silent on this operation falls back to the connection-level rule', async () => {
+    // "Specific wins" must be per-operation. A site exception covering only
+    // `pull` must not shadow the connection's `wpcli_read` denial into
+    // fall-through — that would be the fail-open bug again, one level down.
+    const services = makeServices({
+      profile: { alias: 'hostinger-test', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: SITES,
+      exceptions: [
+        {
+          targetRef: 'ssh:hostinger-test', environment: 'production',
+          overrides: { wpcli_read: false },
+        },
+        {
+          targetRef: 'ssh:hostinger-test/site-a', environment: 'production',
+          overrides: { pull: true },
+        },
+      ],
+    });
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-a@production' }, services, 'wpcli_read');
+    expect('content' in t).toBe(true);
+  });
+
+  it('an exception for a DIFFERENT connection does not leak across', async () => {
+    const services = makeServices({
+      profile: { alias: 'hostinger-test', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: SITES,
+      exceptions: [{
+        targetRef: 'ssh:other-host', environment: 'production',
+        overrides: { wpcli_read: false },
+      }],
+    });
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-a@production' }, services, 'wpcli_read');
+    expect('content' in t).toBe(false);
+  });
+
+  it('the exception environment must match the GATED environment, not the typed one', async () => {
+    const services = makeServices({
+      profile: { alias: 'hostinger-test', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: SITES,
+      exceptions: [{
+        targetRef: 'ssh:hostinger-test', environment: 'production',
+        overrides: { wpcli_read: false },
+      }],
+    });
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:hostinger-test/site-a@development' }, services, 'wpcli_read');
     expect('content' in t).toBe(true);
   });
 });

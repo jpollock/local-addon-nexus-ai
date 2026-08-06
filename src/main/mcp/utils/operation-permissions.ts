@@ -44,7 +44,11 @@ export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boo
  * @param operation   The operation type to check
  * @param environment The install environment string (e.g. 'production')
  * @param settings    Current NexusSettings
- * @param targetRef   Target reference ('wpe:<installName>' or 'ssh:<alias>'); bare install names auto-prefixed with 'wpe:'
+ * @param targetRef   Target reference ('wpe:<installName>', 'ssh:<alias>' or
+ *                    'ssh:<alias>/<site>'); bare install names auto-prefixed with 'wpe:'.
+ *                    An `ssh:<alias>/<site>` ref also matches an exception keyed at the
+ *                    bare connection level, so a connection-wide rule covers every site
+ *                    under it and a per-site rule overrides it.
  */
 export function isOperationAllowed(
   operation: 'pull' | 'wpcli_read' | 'wpcli' | 'push' | 'delete',
@@ -67,9 +71,22 @@ export function isOperationAllowed(
   if (targetRef && exceptions?.length) {
     // Auto-prefix bare install names with 'wpe:' for backward compatibility
     const normalizedRef = targetRef.includes(':') ? targetRef : `wpe:${targetRef}`;
-    const exc = exceptions.find(
-      (e: any) => (e.targetRef ?? `wpe:${e.installName}`) === normalizedRef && e.environment === env,
+    const match = (ref: string) => exceptions.find(
+      (e: any) => (e.targetRef ?? `wpe:${e.installName}`) === ref && e.environment === env,
     );
+    // Specific wins, connection-level is the fallback. An external target is
+    // now `ssh:<alias>/<site>`, but the Settings UI writes (and every exception
+    // created before the connection/site split carries) a bare `ssh:<alias>`.
+    // Matching is exact string equality, so without this a user's existing
+    // exception silently stops applying — and a *denying* one fails OPEN.
+    const refs = [normalizedRef];
+    if (normalizedRef.startsWith('ssh:') && normalizedRef.includes('/')) {
+      refs.push(normalizedRef.slice(0, normalizedRef.indexOf('/')));
+    }
+    // The first candidate that actually rules on THIS operation wins — not
+    // merely the first that exists. A per-site exception covering only `pull`
+    // must not shadow a connection-level `wpcli` denial into fall-through.
+    const exc = refs.map(match).find((e) => e && operation in e.overrides);
     if (exc && operation in exc.overrides) {
       const override = (exc.overrides as any)[operation];
       return override !== undefined ? override : DEFAULT_OPERATION_PERMISSIONS[operation][env];

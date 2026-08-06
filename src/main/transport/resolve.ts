@@ -63,11 +63,19 @@ export async function resolveTransport(
       id: string; name: string; environment: string | null;
       wp_path: string | null; wp_cli_path: string | null;
     };
-    if (parsed.site) {
+    if (parsed.site && sites.length === 1) {
+      resolvedSite = sites[0];
+    } else if (parsed.site) {
+      // Unreachable while (account_id, name) is de-facto unique, but an
+      // unordered LIMIT-1 on a multi-row result is a coin toss, not a lookup —
+      // decline instead. Zero and many are distinct messages.
       if (sites.length === 0) {
         return error(`No site "${parsed.site}" registered on connection "${parsed.alias}".`);
       }
-      resolvedSite = sites[0];
+      return error(
+        `"${parsed.alias}" has ${sites.length} sites named "${parsed.site}" — cannot resolve. `
+        + `Remove the duplicate with \`nexus host remove\` and re-register.`,
+      );
     } else if (sites.length === 0) {
       return error(
         `Connection "${parsed.alias}" has no registered sites. `
