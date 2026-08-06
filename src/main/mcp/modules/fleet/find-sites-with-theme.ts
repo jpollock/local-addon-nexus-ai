@@ -82,6 +82,7 @@ export const findSitesWithThemeHandler: McpToolHandler = {
             FROM themes t
             JOIN sites s ON t.site_id = s.id
             WHERE s.source IN ('wpe', 'external')
+              AND s.is_active = 1
               AND (LOWER(t.slug) = ? OR LOWER(t.name) LIKE ?)
           `).all(queryLower, `%${queryLower}%`) as Array<{
             slug: string; name: string; version: string; is_active: number; site_name: string; source: string;
@@ -99,7 +100,7 @@ export const findSitesWithThemeHandler: McpToolHandler = {
           }
 
           const wpeCount = (db.prepare(
-            "SELECT COUNT(*) as c FROM sites WHERE source IN ('wpe', 'external')"
+            "SELECT COUNT(*) as c FROM sites WHERE source IN ('wpe', 'external') AND is_active = 1"
           ).get() as { c: number })?.c ?? 0;
           wpeTotal = wpeCount;
         }

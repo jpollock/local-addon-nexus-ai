@@ -8,13 +8,45 @@ import { registerFleetTools } from '../../src/main/mcp/modules/fleet/index';
 
 function makeDb(siteRows: any[], pluginRows: any[] = []) {
   return {
-    prepare: jest.fn().mockImplementation((sql: string) => ({
-      all: jest.fn().mockImplementation((...params: any[]) => {
-        if (sql.includes('FROM plugins')) return pluginRows;
-        return siteRows;
-      }),
-      get: jest.fn(),
-    })),
+    prepare: jest.fn().mockImplementation((sql: string) => {
+      const statement = {
+        all: jest.fn().mockImplementation((...params: any[]) => {
+          if (sql.includes('FROM plugins')) return pluginRows;
+          // Filter sites by is_active if WHERE clause includes is_active
+          if (sql.includes('is_active = 1')) {
+            return siteRows.filter(s => s.is_active === 1 || s.is_active === undefined);
+          }
+          return siteRows;
+        }),
+        get: jest.fn().mockImplementation(() => {
+          // For COUNT or single value queries
+          if (sql.includes('COUNT(*)')) {
+            let filtered;
+            if (sql.includes('is_active = 1')) {
+              filtered = siteRows.filter(s => s.is_active === 1 || s.is_active === undefined);
+            } else {
+              filtered = siteRows;
+            }
+            return { c: filtered.length };
+          }
+          if (sql.includes('MIN(last_sync_at)')) {
+            let filtered;
+            if (sql.includes('is_active = 1')) {
+              filtered = siteRows.filter(s => s.is_active === 1 || s.is_active === undefined);
+            } else {
+              filtered = siteRows;
+            }
+            return {
+              oldest: null,
+              total: filtered.length,
+              never_synced: 0,
+            };
+          }
+          return siteRows[0];
+        }),
+      };
+      return statement;
+    }),
   };
 }
 
@@ -156,5 +188,39 @@ describe('find_outdated_sites', () => {
     const s = makeServices(); // no graphService, empty indexRegistry
     const result = await registry.call('find_outdated_sites', {}, s);
     expect(getText(result)).toContain('No site version data available');
+  });
+
+  test('excludes a soft-deleted external host even if it has version data', async () => {
+    // Seed one active external site + one is_active:false external site.
+    // Assert only the active site is included in scope count.
+    const db = makeDb([
+      { id: 'ext1', name: 'active-host', source: 'external', is_active: 1, wp_version: '6.8.0', php_version: '8.2' },
+      { id: 'ext2', name: 'deleted-host', source: 'external', is_active: 0, wp_version: '6.8.0', php_version: '8.2' },
+    ]);
+    const s = makeServices(db);
+    const result = await registry.call('find_outdated_sites', {}, s);
+    expect(result.isError).toBeUndefined();
+    const text = getText(result);
+    // Only active site should be in scope
+    expect(text).toContain('1 sites in scope');
+    // Result should NOT mention the deleted host
+    expect(text).not.toContain('deleted-host');
+    // The report shows version groups; with only one site, it will say "All 1 site"
+    expect(text).toContain('All 1 site');
+  });
+
+  test('excludes a soft-deleted WPE install even if it has version data', async () => {
+    // Same test but with WPE sources
+    const db = makeDb([
+      { id: 'wpe1', name: 'active-install', source: 'wpe', is_active: 1, wp_version: '6.8.0', php_version: '8.2' },
+      { id: 'wpe2', name: 'deleted-install', source: 'wpe', is_active: 0, wp_version: '6.8.0', php_version: '8.2' },
+    ]);
+    const s = makeServices(db);
+    const result = await registry.call('find_outdated_sites', {}, s);
+    expect(result.isError).toBeUndefined();
+    const text = getText(result);
+    expect(text).toContain('1 sites in scope');
+    expect(text).not.toContain('deleted-install');
+    expect(text).toContain('All 1 site');
   });
 });

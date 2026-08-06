@@ -67,8 +67,8 @@ export const findOutdatedSitesHandler: McpToolHandler = {
         const db = graphService.getDb();
         if (db) {
           const q = sourceFilter === 'all'
-            ? 'SELECT id, name, source, wp_version, php_version FROM sites'
-            : 'SELECT id, name, source, wp_version, php_version FROM sites WHERE source = ?';
+            ? 'SELECT id, name, source, wp_version, php_version FROM sites WHERE is_active = 1'
+            : 'SELECT id, name, source, wp_version, php_version FROM sites WHERE source = ? AND is_active = 1';
           const params = sourceFilter === 'all' ? [] : [sourceFilter];
           const rows = db.prepare(q).all(...params) as SiteRecord[];
           for (const r of rows) {
