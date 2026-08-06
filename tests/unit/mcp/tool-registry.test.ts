@@ -9,10 +9,26 @@ function makeMemoryStorage() {
   };
 }
 
-/** Fake better-sqlite3 `db` whose `.prepare(...).all(...)` always returns `rows`. */
+/**
+ * Fake better-sqlite3 `db`. Answers BOTH query shapes so this fixture exercises
+ * the real create-vs-refresh decision against either implementation under
+ * test, rather than crashing on whichever one it doesn't happen to implement:
+ *   - `.prepare(...).all(...)`  — current code's `findExternalSites` lookup.
+ *   - `.prepare(...).get(...)`  — the pre-Task-7 code's single-row domain
+ *     lookup (`SELECT domain FROM sites WHERE id=?`).
+ * `rows` models "what the graph already has registered for this alias/site".
+ * An empty array must behave like a real empty result set for both shapes
+ * (`.all()` -> `[]`, `.get()` -> `undefined`), not throw — a throw here was
+ * previously masking the pre-Task-7 bug: its own try/catch swallowed the
+ * `.get is not a function` TypeError and returned early, so the "never
+ * invents a site" tests passed against the buggy code for the wrong reason.
+ */
 function makeFakeDb(rows: any[]) {
   return {
-    prepare: () => ({ all: () => rows }),
+    prepare: () => ({
+      all: () => rows,
+      get: () => rows[0],
+    }),
   };
 }
 
