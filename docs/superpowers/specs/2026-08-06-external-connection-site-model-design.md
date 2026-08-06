@@ -42,19 +42,21 @@ the install (the site: one WordPress instance under it). `ssh:<alias>` needs the
 
 ## 2. Scope
 
-**In:** the id scheme, storage split, target grammar, registration flow, removal semantics, and
-every existing consumer whose behavior depends on the old one-alias-one-site assumption.
+**In:** the id scheme, storage split, target grammar, registration flow, removal semantics, every
+existing consumer whose behavior depends on the old one-alias-one-site assumption, and the
+`find` symlink fix in §5.1 below — small, and it directly affects whether registration can even
+discover a second site on hosts whose home directory is a symlink.
 
 **Out**, named explicitly so they don't creep in:
 - The host-key trust-on-first-use gap (a first-time connection to an unknown host fails with
   "Host key verification failed" and no guidance) — a real, separately-discovered UX gap, not a
   data-model problem.
-- The probe's fixed `SEARCH_ROOTS` failing to find WordPress on hosts whose layout doesn't match
-  (confirmed against a real SiteGround connection) — a discovery-heuristic problem, not this one.
 - The `external-rest` channel itself (Spec 2b) — this design only removes the blocker.
 - A command-template mechanism for hosts whose WP-CLI needs a wrapper invocation (`gp wp`,
   `terminus remote:wp <site> -- `) rather than a binary substitution — a transport-layer gap,
   independent of how many sites a connection has.
+- Mandatory-IP-allowlisting hosts (Cloudways, Nexcess/SiteWorx) failing with no diagnostic
+  pointing at the panel setting — a probe-diagnostics gap, not this one.
 
 ## 3. The corrected model
 
@@ -113,9 +115,36 @@ real, sourced case, not speculative.
 
 ## 5. Registration flow
 
-**The probe needs no change.** `probeExternalHost.ts:198-209` already returns every discovered
-root as `candidates` when it finds more than one — the *data* already flows back, only the CLI
-currently treats it as a terminal failure instead of using it.
+### 5.1 Fix first: the discovery `find` doesn't follow a symlinked `$HOME`
+
+Diagnosed live against a real SiteGround connection, not guessed. `probeExternalHost.ts:189`'s
+`find "$HOME" -maxdepth 4 -name wp-config.php` finds nothing on SiteGround — not because the
+roots or depth are wrong, but because SiteGround's home directory is itself a symlink
+(`/home/u2640-gkgnd9yg00xk -> customer`), and `find` does not follow a symlink given as its
+starting argument unless told to:
+
+```
+$ find "$HOME" -maxdepth 4 -name wp-config.php 2>/dev/null
+(nothing)
+$ find -L "$HOME" -maxdepth 4 -name wp-config.php 2>/dev/null
+/home/u2640-gkgnd9yg00xk/www/awhatisthis.com/public_html/wp-config.php
+```
+
+The real path (`~/www/<domain>/public_html`) is three levels below the symlinked home — already
+within the existing `SEARCH_MAXDEPTH = 4`. **The fix is one flag, not new roots or a deeper
+search:** add `-L` to the `find` invocation. `-L` only adds matches (it makes `find` traverse
+symlinks it would otherwise skip); it cannot make a real, non-symlinked host like Hostinger find
+fewer files than it does today, so this is safe to make unconditional rather than host-detected.
+
+This belongs in this spec because registration can't offer a second site as a candidate if
+discovery never finds it in the first place — on a symlinked-home host, the multi-site picker in
+§5.2 below would silently have nothing to show.
+
+### 5.2 The picker
+
+**Beyond the `-L` fix, the probe needs no other change.** `probeExternalHost.ts:198-209` already
+returns every discovered root as `candidates` when it finds more than one — the *data* already
+flows back, only the CLI currently treats it as a terminal failure instead of using it.
 
 `nexus host add <alias>`:
 
@@ -250,6 +279,11 @@ since reconstruction is where the alias/site conflation is easiest to miss.
 
 ## 12. Testing
 
+- **Discovery (`-L` fix):** a fixture with a symlinked home directory finds `wp-config.php` through
+  the symlink — this is the regression pin for the SiteGround case, and must fail without `-L`
+  present so it actually proves the flag is there, not just that discovery works in the easy case.
+  A real, non-symlinked home continues to find every root it finds today — no fewer, confirming
+  `-L` is additive.
 - **Registration:** single root unchanged; multiple roots produces a checklist with correct
   per-candidate domain/suggested-slug (via the reused single-path probe); `-y` registers all with
   defaults; zero selected leaves a connection with zero sites; re-running `host add` on an
@@ -299,3 +333,6 @@ since reconstruction is where the alias/site conflation is easiest to miss.
 - Environment: **per-site**, not per-connection.
 - Removal: **`host remove` cascades to every site; `host remove-site` is the scoped-down command.**
 - Target shorthand: **accepted as input when unambiguous; never emitted in output.**
+- Search-root fix: **in scope** — add `-L` to the discovery `find` (§5.1), diagnosed live against
+  a real SiteGround connection rather than guessed. Root list and depth are unchanged; both were
+  already correct.
