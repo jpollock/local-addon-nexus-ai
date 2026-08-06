@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveAnySite } from '../../site-resolver';
 import { IndexEntry } from '../../../../common/types';
 import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
@@ -33,8 +33,13 @@ export const detectDriftHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const baselineSite = resolveSite(args.baseline_site as string, services.siteData);
-    if (!baselineSite) return error(`Baseline site "${args.baseline_site}" not found.`);
+    const graphService = (services as any).graphService;
+    const resolvedBaseline = resolveAnySite(args.baseline_site as string, services.siteData, graphService);
+    if (resolvedBaseline.kind === 'none') return error(`Baseline site "${args.baseline_site}" not found.`);
+    if (resolvedBaseline.kind === 'ambiguous') {
+      return error(`"${args.baseline_site}" matches ${resolvedBaseline.matches.length} sites across sources — specify which one: ${resolvedBaseline.matches.join(', ')}`);
+    }
+    const baselineSite = { id: resolvedBaseline.id, name: resolvedBaseline.name };
 
     const baselineEntry = services.indexRegistry.get(baselineSite.id);
     if (!baselineEntry?.structure) {
@@ -48,10 +53,13 @@ export const detectDriftHandler: McpToolHandler = {
     if (compareSiteNames && compareSiteNames.length > 0) {
       targets = [];
       for (const name of compareSiteNames) {
-        const site = resolveSite(name, services.siteData);
-        if (!site) return error(`Comparison site "${name}" not found.`);
-        const entry = services.indexRegistry.get(site.id);
-        if (!entry?.structure) return error(`Comparison site "${site.name}" has no index data.`);
+        const resolved = resolveAnySite(name, services.siteData, graphService);
+        if (resolved.kind === 'none') return error(`Comparison site "${name}" not found.`);
+        if (resolved.kind === 'ambiguous') {
+          return error(`"${name}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`);
+        }
+        const entry = services.indexRegistry.get(resolved.id);
+        if (!entry?.structure) return error(`Comparison site "${resolved.name}" has no index data.`);
         targets.push(entry);
       }
     } else {

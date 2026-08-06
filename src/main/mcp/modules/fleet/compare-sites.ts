@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveAnySite } from '../../site-resolver';
 import { SiteStructure } from '../../../../common/types';
 import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
@@ -26,11 +26,21 @@ export const compareSitesHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const siteA = resolveSite(args.site_a as string, services.siteData);
-    if (!siteA) return error(`Site "${args.site_a}" not found.`);
+    const graphService = (services as any).graphService;
 
-    const siteB = resolveSite(args.site_b as string, services.siteData);
-    if (!siteB) return error(`Site "${args.site_b}" not found.`);
+    const resolvedA = resolveAnySite(args.site_a as string, services.siteData, graphService);
+    if (resolvedA.kind === 'none') return error(`Site "${args.site_a}" not found.`);
+    if (resolvedA.kind === 'ambiguous') {
+      return error(`"${args.site_a}" matches ${resolvedA.matches.length} sites across sources — specify which one: ${resolvedA.matches.join(', ')}`);
+    }
+    const siteA = { id: resolvedA.id, name: resolvedA.name };
+
+    const resolvedB = resolveAnySite(args.site_b as string, services.siteData, graphService);
+    if (resolvedB.kind === 'none') return error(`Site "${args.site_b}" not found.`);
+    if (resolvedB.kind === 'ambiguous') {
+      return error(`"${args.site_b}" matches ${resolvedB.matches.length} sites across sources — specify which one: ${resolvedB.matches.join(', ')}`);
+    }
+    const siteB = { id: resolvedB.id, name: resolvedB.name };
 
     const entryA = services.indexRegistry.get(siteA.id);
     if (!entryA?.structure) return error(`Site "${siteA.name}" has no index data.`);
