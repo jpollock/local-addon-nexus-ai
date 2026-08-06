@@ -6,37 +6,33 @@ interface Storage {
   set(key: string, value: unknown): void;
 }
 
-export interface ExternalSiteProfile {
+export interface ExternalConnectionProfile {
   /** ~/.ssh/config Host alias. The credential path — no key material is stored. */
   alias: string;
-  /** WordPress root, passed as --path. Absent means WP-CLI searches from the login dir. */
-  wpPath?: string;
   /**
    * Absolute path to WP-CLI, stored only when it is NOT on the remote's
-   * non-interactive PATH. Undefined means plain `wp` works. Discovered by the
-   * registration probe; without persisting it, every later command repeats the
-   * same "wp: command not found" the probe already diagnosed.
+   * non-interactive PATH. Shared by every site under this connection unless a
+   * site overrides it. Undefined means plain `wp` works.
    */
   wpCliPath?: string;
-  environment: 'production' | 'staging' | 'development';
   firstSeenAt: number;
   lastSeenAt: number;
 }
 
-/** Stable site id for an external host. Distinct from any Local site id or WPE install name. */
-export function externalSiteId(alias: string): string {
-  return `ssh:${alias}`;
+/** Stable connection id. A site's own id (see externalSiteId) embeds this plus the site slug. */
+export function externalSiteId(alias: string, site: string): string {
+  return `ssh:${alias}/${site}`;
 }
 
-function readAll(storage: Storage): Record<string, ExternalSiteProfile> {
-  return (storage.get(STORAGE_KEYS.EXTERNAL_SITE_PROFILES) as Record<string, ExternalSiteProfile>) ?? {};
+function readAll(storage: Storage): Record<string, ExternalConnectionProfile> {
+  return (storage.get(STORAGE_KEYS.EXTERNAL_SITE_PROFILES) as Record<string, ExternalConnectionProfile>) ?? {};
 }
 
-export function getExternalProfile(storage: Storage, alias: string): ExternalSiteProfile | null {
+export function getExternalProfile(storage: Storage, alias: string): ExternalConnectionProfile | null {
   return readAll(storage)[alias] ?? null;
 }
 
-export function listExternalProfiles(storage: Storage): ExternalSiteProfile[] {
+export function listExternalProfiles(storage: Storage): ExternalConnectionProfile[] {
   return Object.values(readAll(storage));
 }
 
@@ -63,32 +59,30 @@ export type ProfileWriteSource = 'registration' | 'sighting';
  *
  * `firstSeenAt` is preserved from any existing record — it answers "when did
  * this host enter the fleet", which a later sighting must not overwrite.
- * `wpPath` and `wpCliPath` are only replaced when the incoming profile supplies
- * them: a command run without --path, or a sighting that never probed for the
- * binary, must not erase what registration discovered.
- * `environment` is protected by the same reasoning and needed it most — see
- * ProfileWriteSource. It is the write gate (`resolveTransport` gates on the
- * more restrictive of it and the target's), so a sighting that could lower it
- * would be a permission downgrade, not just a wrong label.
+ * `wpCliPath` is only replaced when the incoming profile supplies it: a
+ * sighting that never probed for the binary must not erase what registration
+ * discovered.
+ *
+ * `environment` used to live here and be described as this type's write gate.
+ * It no longer does — a connection can have multiple sites, each with its own
+ * environment, so that field (and the sighting-vs-registration protection it
+ * needed) moves to the site level in a later task. This function now merges
+ * only connection-scoped fields.
  *
  * The merged profile is returned so a caller can write a matching `sites` row
  * without re-deriving values the merge may have overridden.
  */
 export function upsertExternalProfile(
   storage: Storage,
-  profile: ExternalSiteProfile,
+  profile: ExternalConnectionProfile,
   source: ProfileWriteSource = 'sighting',
-): ExternalSiteProfile {
+): ExternalConnectionProfile {
   const all = readAll(storage);
   const existing = all[profile.alias];
-  const merged: ExternalSiteProfile = {
+  const merged: ExternalConnectionProfile = {
     ...profile,
     firstSeenAt: existing?.firstSeenAt ?? profile.firstSeenAt,
-    wpPath: profile.wpPath ?? existing?.wpPath,
     wpCliPath: profile.wpCliPath ?? existing?.wpCliPath,
-    environment: source === 'registration'
-      ? profile.environment
-      : (existing?.environment ?? profile.environment),
   };
   all[profile.alias] = merged;
   storage.set(STORAGE_KEYS.EXTERNAL_SITE_PROFILES, all);
