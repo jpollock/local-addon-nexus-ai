@@ -122,3 +122,37 @@ describe('parseTarget — external SSH targets', () => {
     expect(parseTarget('barename').type).toBe('local');
   });
 });
+
+describe('parseTarget — external site segment', () => {
+  it('parses ssh:<alias>/<site>@<environment>', () => {
+    const parsed = parseTarget('ssh:hostinger-test/mediumslateblue-hyena@production');
+    expect(parsed).toEqual({
+      type: 'external',
+      original: 'ssh:hostinger-test/mediumslateblue-hyena@production',
+      alias: 'hostinger-test',
+      site: 'mediumslateblue-hyena',
+      environment: 'production',
+    });
+  });
+
+  it('parses the bare shorthand with site left undefined', () => {
+    const parsed = parseTarget('ssh:hostinger-test@production');
+    expect(parsed.alias).toBe('hostinger-test');
+    expect(parsed.site).toBeUndefined();
+    expect(parsed.environment).toBe('production');
+  });
+
+  it('still rejects ssh:x@local as an incomplete SSH target, not a local site named "ssh:x"', () => {
+    expect(() => parseTarget('ssh:x@local')).toThrow(/Incomplete SSH target/);
+  });
+
+  it('still throws Incomplete SSH target for a bare alias with no environment', () => {
+    expect(() => parseTarget('ssh:hostinger-test')).toThrow(/Incomplete SSH target/);
+  });
+
+  it('does not let a slash in the site segment swallow the environment', () => {
+    const parsed = parseTarget('ssh:alias/site-name@staging');
+    expect(parsed.site).toBe('site-name');
+    expect(parsed.environment).toBe('staging');
+  });
+});

@@ -18,6 +18,8 @@ export interface ParsedTarget {
   installName?: string;
   /** For external SSH hosts: the ~/.ssh/config Host alias. */
   alias?: string;
+  /** For external SSH hosts: which site under the connection. Undefined ⇒ bare shorthand. */
+  site?: string;
   environment?: TargetEnvironment;
 }
 
@@ -34,13 +36,14 @@ export function parseTarget(target: string, opts: ParseTargetOptions = {}): Pars
   // Checked FIRST, ahead of the @local suffix test. `ssh:x@local` would
   // otherwise match endsWith('@local') and silently parse as a local site
   // named "ssh:x". Ordering it here turns that into a clear error instead.
-  const sshMatch = target.match(/^ssh:(.+?)@(production|staging|development)$/);
+  const sshMatch = target.match(/^ssh:([^/@]+)(?:\/([^@]+))?@(production|staging|development)$/);
   if (sshMatch) {
     return {
       type: 'external',
       original: target,
       alias: sshMatch[1],
-      environment: sshMatch[2] as TargetEnvironment,
+      site: sshMatch[2],
+      environment: sshMatch[3] as TargetEnvironment,
     };
   }
 
