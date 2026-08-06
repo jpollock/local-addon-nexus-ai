@@ -12,14 +12,25 @@ function makeServices(opts: {
       if (sql.includes('FROM plugins')) {
         return { get: jest.fn().mockReturnValue({ c: hasPlugins ? 1 : 0 }) };
       }
-      // `.all(name)` is the qualified-target path (WHERE source=… AND name=?);
-      // `.get(id)` is the raw-graph-id path. Honour the source clause so a
-      // qualified `ssh:` target cannot accidentally match a `wpe` fixture row.
+      // `.all(name)` is the qualified WPE-target path (WHERE source=… AND
+      // name=?); `.all(alias[, site])` is the external path, which routes
+      // through findExternalSites and filters on `account_id` instead of
+      // `name`. `.get(id)` is the raw-graph-id path. Honour whichever shape
+      // is present so a qualified `ssh:` target cannot accidentally match a
+      // `wpe` fixture row.
       return {
         get: jest.fn().mockReturnValue(graphRow),
-        all: jest.fn().mockImplementation((name: string) => {
+        all: jest.fn().mockImplementation((...params: string[]) => {
           if (!graphRow) return [];
-          const sourceMatch = sql.match(/source = '(\w+)'/);
+          if (sql.includes('account_id=?')) {
+            const [alias, site] = params;
+            if (graphRow.source !== 'external') return [];
+            if ((graphRow.account_id ?? graphRow.name) !== alias) return [];
+            if (site !== undefined && graphRow.name !== site) return [];
+            return [graphRow];
+          }
+          const [name] = params;
+          const sourceMatch = sql.match(/source\s*=\s*'(\w+)'/);
           if (sourceMatch && graphRow.source !== sourceMatch[1]) return [];
           return graphRow.name === name ? [graphRow] : [];
         }),

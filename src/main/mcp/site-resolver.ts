@@ -145,12 +145,17 @@ export function queryQualifiedTarget(
     return null;
   }
 
-  let source: 'external' | 'wpe';
-  let name: string | undefined;
   if (parsed.type === 'external') {
-    source = 'external';
-    name = parsed.alias;
-  } else if (parsed.type === 'wpe') {
+    if (!parsed.alias || !db) return [];
+    // The alias is a connection, not a site — findExternalSites returns every
+    // site under it when `site` is omitted, and the caller's existing
+    // length===1/>1/0 branching already does the right thing with that.
+    return findExternalSites(db, parsed.alias, parsed.site, columns);
+  }
+
+  let source: 'wpe';
+  let name: string | undefined;
+  if (parsed.type === 'wpe') {
     source = 'wpe';
     name = parsed.installName;
   } else {

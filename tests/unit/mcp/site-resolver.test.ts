@@ -1,4 +1,4 @@
-import { resolveAnySite, findExternalSites } from '../../../src/main/mcp/site-resolver';
+import { resolveAnySite, findExternalSites, queryQualifiedTarget } from '../../../src/main/mcp/site-resolver';
 
 describe('resolveAnySite', () => {
   function makeSiteData(sites: Array<{ id: string; name: string; domain?: string }>) {
@@ -8,15 +8,30 @@ describe('resolveAnySite', () => {
     } as any;
   }
 
-  function makeGraphService(rows: Array<{ id: string; name: string; source: string }>) {
+  function makeGraphService(rows: Array<{ id: string; name: string; source: string; account_id?: string }>) {
     return {
       getDb: () => ({
-        // The qualified-target query pins a source in the SQL text; the
-        // bare-name query does not. Honour whichever clause is present so a
-        // `ssh:` target cannot match a `wpe` row and vice versa.
+        // External targets route through findExternalSites, which filters on
+        // `account_id` (the connection alias), optionally `name` (the site).
+        // Everything else (bare-name lookups, WPE qualified lookups) filters
+        // on `name` alone, pinned to a source named in the SQL text. Honour
+        // whichever shape is present so a `ssh:` target cannot match a `wpe`
+        // row and vice versa. Fixtures that model the old single-site-per-
+        // alias shape (no explicit `account_id`) fall back to matching the
+        // alias against `name`.
         prepare: (sql: string) => ({
-          all: (name: string) => {
-            const sourceMatch = sql.match(/source = '(\w+)'/);
+          all: (...params: string[]) => {
+            if (sql.includes('account_id=?') || sql.includes('account_id =?')) {
+              const [alias, site] = params;
+              return rows.filter(
+                (r) =>
+                  r.source === 'external' &&
+                  (r.account_id ?? r.name) === alias &&
+                  (site === undefined || r.name === site),
+              );
+            }
+            const [name] = params;
+            const sourceMatch = sql.match(/source\s*=\s*'(\w+)'/);
             return rows.filter(
               (r) => r.name === name && (!sourceMatch || r.source === sourceMatch[1]),
             );
@@ -246,5 +261,73 @@ describe('findExternalSites', () => {
       { id: 'ssh:hostinger-test/gone', name: 'gone', account_id: 'hostinger-test', is_active: 0 },
     ]);
     expect(findExternalSites(db, 'hostinger-test')).toEqual([]);
+  });
+});
+
+describe('queryQualifiedTarget — external site resolution', () => {
+  function makeDb(rows: any[]) {
+    return {
+      prepare: (sql: string) => ({
+        all: (...params: any[]) => {
+          if (sql.includes('account_id=?') && sql.includes('name=?')) {
+            const [alias, site] = params;
+            return rows.filter((r) => r.source === 'external' && r.account_id === alias && r.name === site);
+          }
+          if (sql.includes('account_id=?')) {
+            const [alias] = params;
+            return rows.filter((r) => r.source === 'external' && r.account_id === alias);
+          }
+          return [];
+        },
+      }),
+    };
+  }
+
+  it('resolves ssh:<alias>/<site>@<env> to exactly that site', () => {
+    const db = makeDb([
+      { id: 'ssh:hostinger-test/site-a', name: 'site-a', source: 'external', account_id: 'hostinger-test' },
+      { id: 'ssh:hostinger-test/site-b', name: 'site-b', source: 'external', account_id: 'hostinger-test' },
+    ]);
+    const rows = queryQualifiedTarget(db, 'ssh:hostinger-test/site-a@production');
+    expect(rows).toHaveLength(1);
+    expect(rows![0].name).toBe('site-a');
+  });
+
+  it('bare shorthand resolves when the connection has exactly one site', () => {
+    const db = makeDb([
+      { id: 'ssh:solo/only-site', name: 'only-site', source: 'external', account_id: 'solo' },
+    ]);
+    const rows = queryQualifiedTarget(db, 'ssh:solo@production');
+    expect(rows).toHaveLength(1);
+  });
+
+  it('bare shorthand against a two-site connection returns both rows for the caller to disambiguate', () => {
+    const db = makeDb([
+      { id: 'ssh:hostinger-test/site-a', name: 'site-a', source: 'external', account_id: 'hostinger-test' },
+      { id: 'ssh:hostinger-test/site-b', name: 'site-b', source: 'external', account_id: 'hostinger-test' },
+    ]);
+    const rows = queryQualifiedTarget(db, 'ssh:hostinger-test@production');
+    expect(rows).toHaveLength(2);
+  });
+
+  it('a connection with zero registered sites returns an empty array, not null', () => {
+    const db = makeDb([]);
+    const rows = queryQualifiedTarget(db, 'ssh:unregistered@production');
+    expect(rows).toEqual([]);
+  });
+
+  it('still returns null for a bare name — not a qualified target at all', () => {
+    const db = makeDb([]);
+    expect(queryQualifiedTarget(db, 'mysite')).toBeNull();
+  });
+
+  it('WPE resolution is untouched by this change', () => {
+    const db = {
+      prepare: (sql: string) => ({
+        all: () => (sql.includes("source = 'wpe'") ? [{ id: 'wpe-1', name: 'myinstall', source: 'wpe' }] : []),
+      }),
+    };
+    const rows = queryQualifiedTarget(db, 'wpe:acct/myinstall@production');
+    expect(rows).toHaveLength(1);
   });
 });
