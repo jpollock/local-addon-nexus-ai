@@ -503,22 +503,34 @@ hostCommand
       const result = await client.mutate<{ nexusHostRefresh: any }>(`
         mutation($alias: String!) {
           nexusHostRefresh(alias: $alias) {
-            success error wpVersion phpVersion pluginCount themeCount
+            success
+            error
+            results { site success error wpVersion phpVersion pluginCount themeCount }
           }
         }
       `, { alias });
 
-      const { success, error, wpVersion, phpVersion, pluginCount, themeCount } = result.nexusHostRefresh;
+      const { success, error, results } = result.nexusHostRefresh;
       if (!success) {
         console.error(`\n✗ ${error}`);
         process.exit(1);
       }
-      console.log(`\n✓ Refreshed ${alias}`);
-      console.log(`  WordPress:  ${wpVersion ?? 'unknown'}`);
-      console.log(`  PHP:        ${phpVersion ?? 'unknown'}`);
-      console.log(`  Plugins:    ${pluginCount ?? 'not collected'}`);
-      console.log(`  Themes:     ${themeCount ?? 'not collected'}`);
+      console.log(`\nRefreshed ${alias}:`);
+      let anyFailed = false;
+      for (const r of results) {
+        if (!r.success) {
+          console.log(`  ✗ ${r.site}: ${r.error}`);
+          anyFailed = true;
+          continue;
+        }
+        console.log(`  ✓ ${r.site}`);
+        console.log(`      WordPress:  ${r.wpVersion ?? 'unknown'}`);
+        console.log(`      PHP:        ${r.phpVersion ?? 'unknown'}`);
+        console.log(`      Plugins:    ${r.pluginCount ?? 'not collected'}`);
+        console.log(`      Themes:     ${r.themeCount ?? 'not collected'}`);
+      }
       console.log('');
+      if (anyFailed) process.exit(1);
     } catch (e: any) {
       console.error(`✗ ${e.message}`);
       process.exit(1);
@@ -541,19 +553,31 @@ hostCommand
       const result = await client.mutate<{ nexusHostIndex: any }>(`
         mutation($alias: String!) {
           nexusHostIndex(alias: $alias) {
-            success error documentCount
+            success
+            error
+            results { site success error documentCount }
           }
         }
       `, { alias });
 
-      const { success, error, documentCount } = result.nexusHostIndex;
+      const { success, error, results } = result.nexusHostIndex;
       if (!success) {
         console.error(`\n✗ ${error}`);
         process.exit(1);
       }
-      console.log(`\n✓ Indexed ${alias}`);
-      console.log(`  Documents:  ${documentCount ?? 'not collected'}`);
+      console.log(`\nIndexed ${alias}:`);
+      let anyFailed = false;
+      for (const r of results) {
+        if (!r.success) {
+          console.log(`  ✗ ${r.site}: ${r.error}`);
+          anyFailed = true;
+          continue;
+        }
+        console.log(`  ✓ ${r.site}`);
+        console.log(`      Documents:  ${r.documentCount ?? 'not collected'}`);
+      }
       console.log('');
+      if (anyFailed) process.exit(1);
     } catch (e: any) {
       console.error(`✗ ${e.message}`);
       process.exit(1);

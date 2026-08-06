@@ -17,7 +17,7 @@ describe('nexusHostRefresh', () => {
   let testDbPath: string;
 
   beforeEach(async () => {
-    testDbPath = path.join(__dirname, `test-host-refresh-${Date.now()}.db`);
+    testDbPath = path.join(__dirname, `test-host-refresh-${Date.now()}-${Math.random()}.db`);
     graphService = new GraphService(testDbPath);
     await graphService.initialize();
     mockResolveTransport.mockReset();
@@ -71,59 +71,140 @@ describe('nexusHostRefresh', () => {
 
   it('reports what it collected on success', async () => {
     await graphService.upsertSite({
-      id: 'ssh:myhost',
+      id: 'ssh:myhost/myhost',
       name: 'myhost',
       source: 'external',
       host: 'external',
       domain: 'myhost',
+      account_id: 'myhost',
       environment: 'production',
       is_active: true,
       created_at: Date.now(),
       updated_at: Date.now(),
-    });
+    } as any);
 
     mockResolveTransport.mockResolvedValue(makeRunner());
 
     const r = await (createResolvers(ctx()).Mutation as any).nexusHostRefresh(null, { alias: 'myhost' });
     expect(r.success).toBe(true);
-    expect(r.wpVersion).toBe('6.8.0');
-    expect(r.pluginCount).toBe(0);
-    expect(r.themeCount).toBe(0);
+    expect(r.results).toHaveLength(1);
+    expect(r.results[0].site).toBe('myhost');
+    expect(r.results[0].wpVersion).toBe('6.8.0');
+    expect(r.results[0].pluginCount).toBe(0);
+    expect(r.results[0].themeCount).toBe(0);
 
     // resolveTransport must be called through the ssh: target form, not a raw
     // SSH invocation constructed here.
     expect(mockResolveTransport).toHaveBeenCalledWith(
-      { ssh_target: 'ssh:myhost@production' },
+      { ssh_target: 'ssh:myhost/myhost@production' },
       expect.anything(),
       'wpcli_read',
     );
 
     // The local graph actually got the write.
     const db = graphService.getDb()!;
-    const row = db.prepare('SELECT wp_version FROM sites WHERE id=?').get('ssh:myhost') as any;
+    const row = db.prepare('SELECT wp_version FROM sites WHERE id=?').get('ssh:myhost/myhost') as any;
     expect(row.wp_version).toBe('6.8.0');
   });
 
   it('surfaces a permission refusal as an error rather than a silent success', async () => {
     await graphService.upsertSite({
-      id: 'ssh:denied',
+      id: 'ssh:denied/denied',
       name: 'denied',
       source: 'external',
       host: 'external',
       domain: 'denied',
+      account_id: 'denied',
       environment: 'production',
       is_active: true,
       created_at: Date.now(),
       updated_at: Date.now(),
-    });
+    } as any);
 
     mockResolveTransport.mockResolvedValue({
       content: [{ type: 'text', text: 'Operation blocked: not permitted on "production" environments.' }],
     });
 
     const r = await (createResolvers(ctx()).Mutation as any).nexusHostRefresh(null, { alias: 'denied' });
-    expect(r.success).toBe(false);
-    expect(r.error).toBeTruthy();
-    expect(r.error).toMatch(/blocked/i);
+    expect(r.success).toBe(true); // the connection resolved; the one site under it failed
+    expect(r.results).toHaveLength(1);
+    expect(r.results[0].success).toBe(false);
+    expect(r.results[0].error).toBeTruthy();
+    expect(r.results[0].error).toMatch(/blocked/i);
+  });
+
+  describe('nexusHostRefresh — operates on every site under the connection', () => {
+    async function seedTwoSites(alias: string) {
+      const now = Date.now();
+      await graphService.upsertSite({
+        id: `ssh:${alias}/site-a`,
+        name: 'site-a',
+        source: 'external',
+        host: 'external',
+        domain: 'site-a.example.com',
+        account_id: alias,
+        environment: 'production',
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      } as any);
+      await graphService.upsertSite({
+        id: `ssh:${alias}/site-b`,
+        name: 'site-b',
+        source: 'external',
+        host: 'external',
+        domain: 'site-b.example.com',
+        account_id: alias,
+        environment: 'production',
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      } as any);
+    }
+
+    it('refreshes every site when given a bare alias', async () => {
+      await seedTwoSites('hostinger-test');
+      mockResolveTransport.mockResolvedValue(makeRunner());
+
+      const result = await (createResolvers(ctx()).Mutation as any).nexusHostRefresh(null, { alias: 'hostinger-test' });
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      const sites = result.results.map((r: any) => r.site).sort();
+      expect(sites).toEqual(['site-a', 'site-b']);
+    });
+
+    it('scopes to one site when given alias/site', async () => {
+      await seedTwoSites('hostinger-test');
+      mockResolveTransport.mockResolvedValue(makeRunner());
+
+      const result = await (createResolvers(ctx()).Mutation as any).nexusHostRefresh(null, { alias: 'hostinger-test/site-a' });
+      expect(result.results).toHaveLength(1);
+      expect(result.results[0].site).toBe('site-a');
+    });
+
+    it('one site failing does not prevent the others from refreshing', async () => {
+      await seedTwoSites('hostinger-test');
+      mockResolveTransport.mockImplementation(async ({ ssh_target }: { ssh_target: string }) => {
+        if (ssh_target.includes('/site-a@')) {
+          return { content: [{ type: 'text', text: 'Could not reach host' }] };
+        }
+        return makeRunner();
+      });
+
+      const result = await (createResolvers(ctx()).Mutation as any).nexusHostRefresh(null, { alias: 'hostinger-test' });
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(2);
+      const siteA = result.results.find((r: any) => r.site === 'site-a');
+      const siteB = result.results.find((r: any) => r.site === 'site-b');
+      expect(siteA.success).toBe(false);
+      expect(siteB.success).toBe(true);
+    });
+
+    it('a connection with zero sites reports a clear top-level error, not an empty results list', async () => {
+      const result = await (createResolvers(ctx()).Mutation as any).nexusHostRefresh(null, { alias: 'empty-conn' });
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/no registered sites/i);
+      expect(result.results).toEqual([]);
+    });
   });
 });

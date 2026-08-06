@@ -2197,8 +2197,9 @@ export const typeDefs = gql`
     removed: Boolean!
   }
 
-  "Result of refreshing one external SSH host's metadata."
-  type NexusHostRefreshResult {
+  "Result of refreshing one site under an external SSH connection."
+  type NexusSiteRefreshResult {
+    site: String!
     success: Boolean!
     error: String
     "WordPress version collected, null when it could not be read."
@@ -2211,12 +2212,29 @@ export const typeDefs = gql`
     themeCount: Int
   }
 
-  "Result of indexing one external SSH host's content."
-  type NexusHostIndexResult {
+  "Result of refreshing every site under one external SSH connection."
+  type NexusHostRefreshResult {
+    "False only when the connection itself could not be resolved (unregistered, zero sites)."
+    success: Boolean!
+    error: String
+    results: [NexusSiteRefreshResult!]!
+  }
+
+  "Result of indexing one site under an external SSH connection."
+  type NexusSiteIndexResult {
+    site: String!
     success: Boolean!
     error: String
     "Documents indexed, null when the batch failed before completing."
     documentCount: Int
+  }
+
+  "Result of content-indexing every site under one external SSH connection."
+  type NexusHostIndexResult {
+    "False only when the connection itself could not be resolved (unregistered, zero sites)."
+    success: Boolean!
+    error: String
+    results: [NexusSiteIndexResult!]!
   }
 
   extend type Mutation {
@@ -2230,9 +2248,9 @@ export const typeDefs = gql`
     nexusHostRemove(alias: String!): NexusHostRemoveResult!
     "Forget one site under a connection, leaving the connection and its other sites registered."
     nexusHostRemoveSite(alias: String!, site: String!): NexusHostRemoveSiteResult!
-    "Collect WordPress metadata from a registered external host now."
+    "Collect WordPress metadata from every site under a registered external connection now. 'alias' accepts a bare alias (every site) or alias/site (scoped to one)."
     nexusHostRefresh(alias: String!): NexusHostRefreshResult!
-    "Content-index a registered external host now, for semantic search."
+    "Content-index every site under a registered external connection now, for semantic search. 'alias' accepts a bare alias (every site) or alias/site (scoped to one)."
     nexusHostIndex(alias: String!): NexusHostIndexResult!
   }
 `;
