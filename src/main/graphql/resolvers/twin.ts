@@ -198,7 +198,7 @@ export function createTwinResolvers(services: NexusServices, registry: ToolRegis
         try {
           if (graphService?.getDb?.()) {
             const db = graphService.getDb()!;
-            const wpeRows = db.prepare("SELECT * FROM sites WHERE source IN ('wpe','external')").all() as any[];
+            const wpeRows = db.prepare("SELECT * FROM sites WHERE source IN ('wpe','external') AND is_active = 1").all() as any[];
             for (const row of wpeRows) {
               const hasPlugins = db.prepare('SELECT COUNT(*) as c FROM plugins WHERE site_id=?').get(row.id) as { c: number };
               const comp = hasPlugins.c > 0 ? 'metadata' : (row.wp_version ? 'filesystem' : 'none');
@@ -310,7 +310,7 @@ export function createTwinResolvers(services: NexusServices, registry: ToolRegis
           const graphService = services.graphService;
           if (graphService?.getDb?.()) {
             const db = graphService.getDb()!;
-            const wpeRows = db.prepare("SELECT id, name FROM sites WHERE source IN ('wpe','external')").all() as any[];
+            const wpeRows = db.prepare("SELECT id, name FROM sites WHERE source IN ('wpe','external') AND is_active = 1").all() as any[];
             for (const row of wpeRows) {
               const pluginRows = db.prepare(
                 'SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?'

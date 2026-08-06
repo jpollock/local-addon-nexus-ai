@@ -1437,7 +1437,7 @@ export function createResolvers(context: ResolverContext) {
             if (graphService?.getDb?.()) {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               const db = graphService.getDb()!;
-              const graphRows = db.prepare("SELECT * FROM sites WHERE source IN ('wpe','external')").all() as any[];
+              const graphRows = db.prepare("SELECT * FROM sites WHERE source IN ('wpe','external') AND is_active = 1").all() as any[];
               for (const row of graphRows) {
                 const hasPlugins = db.prepare('SELECT COUNT(*) as c FROM plugins WHERE site_id=?').get(row.id) as { c: number };
                 const comp = hasPlugins.c > 0 ? 'metadata' : (row.wp_version ? 'filesystem' : 'none');
@@ -1559,7 +1559,7 @@ export function createResolvers(context: ResolverContext) {
             if (graphService?.getDb?.()) {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               const db = graphService.getDb()!;
-              const graphRows = db.prepare("SELECT id, name FROM sites WHERE source IN ('wpe','external')").all() as any[];
+              const graphRows = db.prepare("SELECT id, name FROM sites WHERE source IN ('wpe','external') AND is_active = 1").all() as any[];
               for (const row of graphRows) {
                 const pluginRows = db.prepare(
                   'SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?'
@@ -2778,7 +2778,7 @@ export function createResolvers(context: ResolverContext) {
             try {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source IN ('wpe','external')").all() as Array<{ id: string }>;
+              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source IN ('wpe','external') AND is_active = 1").all() as Array<{ id: string }>;
               graphSiteIds = rows.map((r) => r.id);
             } catch { /* skip graph */ }
           }
@@ -3431,7 +3431,7 @@ export function createResolvers(context: ResolverContext) {
             try {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source IN ('wpe','external')").all() as Array<{ id: string }>;
+              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source IN ('wpe','external') AND is_active = 1").all() as Array<{ id: string }>;
               remoteSiteIds = rows.map((r) => r.id);
             } catch { /* skip wpe */ }
           }

@@ -2731,8 +2731,11 @@ Answer:`,
           // illegal in its table names); it's a no-op for WPE ids. Keep a
           // translated->raw map so membership checks below can use the raw id
           // the WPE/external per-site loops already key off.
-          const wpeSites = await graphService.listSites({ source: 'wpe' });
-          const externalSites = await graphService.listSites({ source: 'external' });
+          // active_only: nexusHostRemove/WPE deactivation soft-delete (is_active = 0)
+          // and listSites includes everything unless asked. A removed host must not
+          // be searched or rendered.
+          const wpeSites = await graphService.listSites({ source: 'wpe', active_only: true });
+          const externalSites = await graphService.listSites({ source: 'external', active_only: true });
           const remoteSites = [...wpeSites, ...externalSites];
           const translatedToRaw = new Map(remoteSites.map(s => [vectorSiteId(s.id), s.id]));
           const allSearchableSiteIds = [...localSiteIds, ...remoteSites.map(s => vectorSiteId(s.id))];
@@ -2954,7 +2957,7 @@ Answer:`,
       }
 
       // Check WPE sites (remote sites only support content/plugin/WP version filters)
-      const wpeSites = await graphService.listSites({ source: 'wpe' });
+      const wpeSites = await graphService.listSites({ source: 'wpe', active_only: true });
       for (const wpeSite of wpeSites) {
         let matches = true;
 
@@ -3107,7 +3110,10 @@ Answer:`,
       }
 
       // Check external sites (remote sites only support content/plugin/WP version filters)
-      const externalSites = await graphService.listSites({ source: 'external' });
+      // active_only: `nexus host remove` soft-deletes (is_active = 0, domain reset
+      // to the alias). Without this a removed host still renders in Site Finder's
+      // "External Hosts" section with the alias where the domain should be.
+      const externalSites = await graphService.listSites({ source: 'external', active_only: true });
       for (const externalSite of externalSites) {
         let matches = true;
 
