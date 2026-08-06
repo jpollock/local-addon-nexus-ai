@@ -1,4 +1,4 @@
-import { resolveAnySite } from '../../../src/main/mcp/site-resolver';
+import { resolveAnySite, findExternalSites } from '../../../src/main/mcp/site-resolver';
 
 describe('resolveAnySite', () => {
   function makeSiteData(sites: Array<{ id: string; name: string; domain?: string }>) {
@@ -192,5 +192,59 @@ describe('resolveAnySite', () => {
         kind: 'ok', id: 'site-1', name: 'mysite', source: 'local',
       });
     });
+  });
+});
+
+describe('findExternalSites', () => {
+  function makeDb(rows: Array<{ id: string; name: string; account_id: string; is_active: number }>) {
+    return {
+      prepare: (sql: string) => ({
+        all: (...params: any[]) => {
+          if (sql.includes('AND name=?')) {
+            const [alias, site] = params;
+            return rows.filter((r) => r.account_id === alias && r.name === site && r.is_active === 1);
+          }
+          const [alias] = params;
+          return rows.filter((r) => r.account_id === alias && r.is_active === 1);
+        },
+      }),
+    };
+  }
+
+  it('returns every active site under a connection when no site is given', () => {
+    const db = makeDb([
+      { id: 'ssh:hostinger-test/site-a', name: 'site-a', account_id: 'hostinger-test', is_active: 1 },
+      { id: 'ssh:hostinger-test/site-b', name: 'site-b', account_id: 'hostinger-test', is_active: 1 },
+      { id: 'ssh:other/site-c', name: 'site-c', account_id: 'other', is_active: 1 },
+    ]);
+    const rows = findExternalSites(db, 'hostinger-test');
+    expect(rows.map((r: any) => r.name).sort()).toEqual(['site-a', 'site-b']);
+  });
+
+  it('scopes to exactly one site when given', () => {
+    const db = makeDb([
+      { id: 'ssh:hostinger-test/site-a', name: 'site-a', account_id: 'hostinger-test', is_active: 1 },
+      { id: 'ssh:hostinger-test/site-b', name: 'site-b', account_id: 'hostinger-test', is_active: 1 },
+    ]);
+    const rows = findExternalSites(db, 'hostinger-test', 'site-a');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('site-a');
+  });
+
+  it('returns empty for a connection with zero registered sites', () => {
+    const db = makeDb([]);
+    expect(findExternalSites(db, 'unregistered')).toEqual([]);
+  });
+
+  it('returns empty rather than throwing when db is unavailable', () => {
+    expect(findExternalSites(undefined, 'hostinger-test')).toEqual([]);
+    expect(findExternalSites(null, 'hostinger-test')).toEqual([]);
+  });
+
+  it('excludes a soft-deleted site (is_active=0)', () => {
+    const db = makeDb([
+      { id: 'ssh:hostinger-test/gone', name: 'gone', account_id: 'hostinger-test', is_active: 0 },
+    ]);
+    expect(findExternalSites(db, 'hostinger-test')).toEqual([]);
   });
 });

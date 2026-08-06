@@ -77,6 +77,43 @@ export function resolveRemoteGraphSite(db: any, name: unknown): RemoteGraphSiteR
 }
 
 /**
+ * Find external sites registered under a connection alias, optionally scoped
+ * to one specific site.
+ *
+ * The alias is a CONNECTION (a `~/.ssh/config` Host entry), not a site — one
+ * connection can have zero, one, or many WordPress installs under it
+ * (confirmed live: a single Hostinger login can host two). `account_id` links
+ * a site row back to its connection, reusing the same generic column WP
+ * Engine already uses for its own account→install grouping.
+ *
+ * Returns every matching site when `site` is omitted — the caller decides
+ * what 0/1/many rows means for its own error message (see `resolveTransport`
+ * for the canonical ok/none/ambiguous handling). `columns` is an internal
+ * constant supplied by this module's own callers, not caller-controlled
+ * input, matching the same convention as `queryQualifiedTarget`.
+ */
+export function findExternalSites(
+  db: any,
+  alias: string,
+  site?: string,
+  columns = '*',
+): any[] {
+  if (!db) return [];
+  try {
+    return (site
+      ? db.prepare(
+          `SELECT ${columns} FROM sites WHERE source='external' AND is_active=1 AND account_id=? AND name=?`,
+        ).all(alias, site)
+      : db.prepare(
+          `SELECT ${columns} FROM sites WHERE source='external' AND is_active=1 AND account_id=?`,
+        ).all(alias)
+    ) as any[];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Look a fully qualified target — `ssh:<alias>@<env>` or
  * `wpe:<account>/<install>@<env>` — up in the graph, pinned to the source the
  * prefix names.
