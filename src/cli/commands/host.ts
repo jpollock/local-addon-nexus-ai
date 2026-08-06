@@ -83,30 +83,10 @@ function printFailure(r: any): void {
   console.error(`\n${r.failure.remedy ?? ''}\n`);
 }
 
-/**
- * What `add` will actually label this host, for the pre-confirmation preview.
- *
- * Omitting `--env` means "leave a registered host alone", so echoing the flag
- * back would be a lie for exactly the case that motivated dropping its default.
- * Returns null when the lookup itself failed — the caller says so rather than
- * guessing 'production', which would be wrong for every staging host.
- */
-async function previewEnvironment(
-  client: { mutate: <T>(q: string, v: Record<string, unknown>) => Promise<T> },
-  alias: string,
-  envFlag?: string,
-): Promise<string | null> {
-  if (envFlag) return envFlag;
-  try {
-    const r = await client.mutate<{ nexusHostList: any }>(
-      'mutation { nexusHostList { success hosts { alias environment } } }', {},
-    );
-    if (!r.nexusHostList?.success) return null;
-    const existing = (r.nexusHostList.hosts ?? []).find((h: any) => h.alias === alias);
-    return existing?.environment ?? 'production';
-  } catch {
-    return null;
-  }
+/** First label of a domain, or the alias if there's nothing to derive from. */
+function suggestSiteSlug(domain: string | undefined, alias: string): string {
+  if (!domain) return alias;
+  return domain.split('.')[0] || alias;
 }
 
 // ============================================================================
@@ -156,77 +136,149 @@ hostCommand
   .command('add <alias>')
   .description('Probe an SSH host and add it to the fleet')
   .option('--path <dir>', 'WordPress root (skips discovery)')
-  // No commander default. A default here reaches the resolver as a value the
-  // user "chose", which makes re-running `host add` to refresh a path relabel a
-  // staging host as production. Omitted means unspecified; the resolver keeps
-  // an existing host's label and falls back to production only for a new one.
-  .option('--env <environment>',
-    'production | staging | development (new hosts default to production; an already-registered host keeps its label)')
+  // Environment is resolved per site, here in the CLI, before nexusHostAdd is
+  // called: a connection can hold several sites and each is labelled
+  // independently. Omitted defaults to production for every site registered
+  // in this run — there is no "leave this site's existing label alone"
+  // behavior for `add` any more (registering a site with the same id again
+  // will relabel it if --env is passed).
+  .option('--env <environment>', 'production | staging | development (defaults to production)')
+  .option('--site <name>', 'Site slug to register under (only meaningful with --path; overrides the domain-derived slug)')
   .option('-y, --yes', 'Skip the confirmation prompt')
   .option('--json', 'Output as JSON')
   .action(async (alias, options) => {
     try {
       const client = getClient({ timeout: HOST_PROBE_CLIENT_TIMEOUT_MS });
+      // A connection can now hold zero, one, or many WordPress sites, so there
+      // is no zero-round-trip path any more: the CLI always probes once,
+      // unqualified, to find out which case it's in before deciding whether to
+      // register directly or prompt over a candidate list. `--json` suppresses
+      // the interactive chatter and per-candidate prompting (like `--yes`) and
+      // emits a single JSON summary at the end instead of the human-readable
+      // lines, so scripts keep the scriptable contract the old shortcut gave them.
+      const quiet = !!options.json;
 
-      if (!options.yes && !options.json) {
-        console.log(`\nProbing ${alias}...`);
-        const probe = await client.mutate<{ nexusHostProbe: any }>(`
-          mutation($alias: String!, $path: String) {
-            nexusHostProbe(alias: $alias, path: $path) { success error report { ${PROBE_FIELDS} } }
-          }
-        `, { alias, path: options.path ?? null });
-
-        const pr = probe.nexusHostProbe;
-        if (!pr.success) { console.error(`✗ ${pr.error}`); process.exit(1); }
-        if (!pr.report) {
-          console.error(`✗ ${alias}: probe returned no report.`);
-          process.exit(1);
+      if (!quiet) console.log(`\nProbing ${alias}...`);
+      const probe = await client.mutate<{ nexusHostProbe: any }>(`
+        mutation($alias: String!, $path: String) {
+          nexusHostProbe(alias: $alias, path: $path) { success error report { ${PROBE_FIELDS} } }
         }
-        if (!pr.report.ok) { printFailure(pr.report); process.exit(1); }
+      `, { alias, path: options.path ?? null });
 
-        printReport(pr.report);
-        const envPreview = await previewEnvironment(client, alias, options.env);
-        console.log(envPreview === null
-          ? '  Environment production for a new host; unchanged if this host is already registered'
-          : `  Environment ${envPreview}   (writes are refused on production by default)`);
-        if (!(await confirm(`\nAdd ${alias} to the fleet?`))) {
-          console.log('Cancelled.');
-          process.exit(0);
-        }
-        // The probe re-runs inside nexusHostAdd. Two round trips, but the
-        // alternative is a mutation that persists whatever a stale earlier
-        // probe found.
-      }
-
-      const result = await client.mutate<{ nexusHostAdd: any }>(`
-        mutation($alias: String!, $path: String, $environment: String) {
-          nexusHostAdd(alias: $alias, path: $path, environment: $environment) {
-            success error registered environment report { ${PROBE_FIELDS} }
-          }
-        }
-      `, { alias, path: options.path ?? null, environment: options.env ?? null });
-
-      const { success, error, registered, report, environment } = result.nexusHostAdd;
-      if (options.json) {
-        console.log(JSON.stringify({ registered, environment, report, error }, null, 2));
-        process.exit(registered ? 0 : 1);
-      }
-      if (!success) { console.error(`✗ ${error}`); process.exit(1); }
-      if (!registered) {
-        if (!report) {
-          console.error(`✗ ${alias}: registration failed with no report.`);
-          process.exit(1);
-        }
-        printFailure(report);
+      const pr = probe.nexusHostProbe;
+      if (!pr.success) {
+        if (quiet) { console.log(JSON.stringify({ error: pr.error }, null, 2)); process.exit(1); }
+        console.error(`✗ ${pr.error}`);
         process.exit(1);
+        return;
+      }
+      if (!pr.report) {
+        const msg = `${alias}: probe returned no report.`;
+        if (quiet) { console.log(JSON.stringify({ error: msg }, null, 2)); process.exit(1); }
+        console.error(`✗ ${msg}`);
+        process.exit(1);
+        return;
       }
 
-      console.log(`\n✓ Added ${alias} to the fleet.`);
-      printReport(report);
-      // The resolver's environment, not options.env: with --env omitted the two
-      // differ for a host that was already registered, and a target line the
-      // user cannot address the host by is worse than no target line.
-      console.log(`  Try: nexus wp core version ssh:${alias}@${environment ?? 'production'}\n`);
+      let selections: Array<{ path: string; site: string; environment: string }>;
+
+      if (pr.report.ok) {
+        // Zero-ambiguity case: one root, register it directly. An explicit
+        // --site (e.g. adding a second site under an already-registered
+        // connection via --path) wins over the domain-derived slug.
+        const slug = options.site || suggestSiteSlug(
+          pr.report.siteUrl ? new URL(pr.report.siteUrl).hostname : undefined, alias,
+        );
+        selections = [{ path: pr.report.wpPath, site: slug, environment: options.env ?? 'production' }];
+      } else if (pr.report.failure?.kind === 'multiple-wordpress') {
+        const candidates: string[] = pr.report.candidates ?? [];
+        if (!quiet) console.log(`\nFound ${candidates.length} WordPress installations on '${alias}':`);
+
+        // Probe each candidate individually to get its domain — reusing the
+        // same single-path probe, not new discovery logic.
+        const withDomains: Array<{ path: string; domain?: string }> = [];
+        for (const path of candidates) {
+          const p = await client.mutate<{ nexusHostProbe: any }>(`
+            mutation($alias: String!, $path: String) {
+              nexusHostProbe(alias: $alias, path: $path) { success report { ${PROBE_FIELDS} } }
+            }
+          `, { alias, path });
+          const r = p.nexusHostProbe?.report;
+          withDomains.push({ path, domain: r?.siteUrl ? new URL(r.siteUrl).hostname : undefined });
+        }
+
+        if (options.yes || quiet) {
+          selections = withDomains.map((c) => ({
+            path: c.path, site: suggestSiteSlug(c.domain, alias), environment: options.env ?? 'production',
+          }));
+        } else {
+          selections = [];
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+          try {
+            for (const c of withDomains) {
+              const suggested = suggestSiteSlug(c.domain, alias);
+              const answer = (await prompt(
+                rl, `  [${c.domain ?? c.path}] register as '${suggested}'? [Y/n/name] `,
+              )).trim();
+              if (answer.toLowerCase() === 'n') continue;
+              const site = answer && answer.toLowerCase() !== 'y' ? answer : suggested;
+              selections.push({ path: c.path, site, environment: options.env ?? 'production' });
+            }
+          } finally {
+            rl.close();
+          }
+        }
+
+        if (selections.length === 0) {
+          if (quiet) {
+            console.log(JSON.stringify({ registered: false, sites: [] }, null, 2));
+            return;
+          }
+          console.log('\nNo sites selected. Connection registered with zero sites.');
+          console.log(`  Add one later: nexus host add ${alias} --path <one-of-the-paths-above> --site <name>\n`);
+          return;
+        }
+      } else {
+        if (quiet) {
+          console.log(JSON.stringify({ error: pr.report.failure ?? 'probe failed', report: pr.report }, null, 2));
+          process.exit(1);
+          return;
+        }
+        printFailure(pr.report);
+        process.exit(1);
+        return;
+      }
+
+      let anyFailed = false;
+      const results: Array<{ site: string; registered: boolean; environment: string | null; error: string | null }> = [];
+      for (const sel of selections) {
+        const result = await client.mutate<{ nexusHostAdd: any }>(`
+          mutation($alias: String!, $path: String, $environment: String, $site: String) {
+            nexusHostAdd(alias: $alias, path: $path, environment: $environment, site: $site) {
+              success error registered environment report { ${PROBE_FIELDS} }
+            }
+          }
+        `, { alias, path: sel.path, environment: sel.environment, site: sel.site });
+
+        const { success, error, registered, environment } = result.nexusHostAdd;
+        results.push({ site: sel.site, registered: !!(success && registered), environment, error });
+        if (!success || !registered) {
+          anyFailed = true;
+          if (!quiet) console.error(`✗ ${sel.site}: ${error ?? 'registration failed'}`);
+          continue;
+        }
+        if (!quiet) {
+          console.log(`✓ Registered ${alias}/${sel.site}`);
+          console.log(`  Try: nexus wp core version ssh:${alias}/${sel.site}@${environment ?? 'production'}`);
+        }
+      }
+
+      if (quiet) {
+        console.log(JSON.stringify(results, null, 2));
+      } else {
+        console.log('');
+      }
+      if (anyFailed) process.exit(1);
     } catch (e: any) {
       console.error(`✗ ${e.message}`);
       process.exit(1);

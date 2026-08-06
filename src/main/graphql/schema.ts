@@ -2216,8 +2216,8 @@ export const typeDefs = gql`
   extend type Mutation {
     "Probe an external SSH host. Persists nothing."
     nexusHostProbe(alias: String!, path: String): NexusHostProbeResult!
-    "Probe an external SSH host and register it on success."
-    nexusHostAdd(alias: String!, path: String, environment: String): NexusHostAddResult!
+    "Probe an external SSH host and register it on success. 'site' names which discovered WordPress install to register — required when the connection has more than one and 'path' disambiguates which one; omitted for a single-site connection, where a slug is derived from the discovered domain."
+    nexusHostAdd(alias: String!, path: String, environment: String, site: String): NexusHostAddResult!
     "List registered external SSH hosts."
     nexusHostList: NexusHostListResult!
     "Forget an external SSH host."

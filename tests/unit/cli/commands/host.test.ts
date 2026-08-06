@@ -121,51 +121,136 @@ describe('host test — a failure report with no diagnosis', () => {
 });
 
 describe('host add — the environment it reports', () => {
-  it('sends null rather than a default when --env is omitted', async () => {
-    // The commander default is gone: the resolver must be able to tell
-    // "unspecified" from "the user chose production".
-    const mutate = jest.fn().mockResolvedValue({
+  // A connection can now hold zero, one, or many sites, so `add` always probes
+  // once (unqualified) before deciding whether to register directly or prompt
+  // over candidates. Every case here is the single-root case, so the second
+  // (and only the second) mutate call is nexusHostAdd.
+  function singleRootMutate(addEnvironment: string) {
+    return jest.fn().mockResolvedValue({
+      nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: true, alias: 'h1', hostname: 'x', port: '22', wpPath: '/home/u/public_html' },
+      },
       nexusHostAdd: {
-        success: true, error: null, registered: true, environment: 'staging',
+        success: true, error: null, registered: true, environment: addEnvironment,
         report: { ok: true, alias: 'h1', hostname: 'x', port: '22' },
       },
     });
+  }
+
+  it('resolves --env to production locally when it is omitted', async () => {
+    // Environment is now resolved per-site, in the CLI, before nexusHostAdd is
+    // called (a connection can have several sites, each independently
+    // labelled) — so unlike the old connection-scoped flow, the resolver never
+    // sees "unspecified" any more: the CLI always sends a concrete value.
+    const mutate = singleRootMutate('production');
     await run(loadHostCommand(mutate), ['add', 'h1', '--yes']);
-    expect(mutate.mock.calls[0][1]).toMatchObject({ alias: 'h1', environment: null });
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(mutate.mock.calls[1][1]).toMatchObject({ alias: 'h1', environment: 'production' });
   });
 
   it('prints the resolver\'s environment in the try line, not the flag', async () => {
-    const mutate = jest.fn().mockResolvedValue({
-      nexusHostAdd: {
-        success: true, error: null, registered: true, environment: 'staging',
-        report: { ok: true, alias: 'h1', hostname: 'x', port: '22' },
-      },
-    });
+    const mutate = singleRootMutate('staging');
     await run(loadHostCommand(mutate), ['add', 'h1', '--yes']);
-    expect(out.join('\n')).toContain('ssh:h1@staging');
+    expect(out.join('\n')).toContain('@staging');
   });
 
   it('passes an explicit --env straight through', async () => {
-    const mutate = jest.fn().mockResolvedValue({
-      nexusHostAdd: {
-        success: true, error: null, registered: true, environment: 'development',
-        report: { ok: true, alias: 'h1', hostname: 'x', port: '22' },
-      },
-    });
+    const mutate = singleRootMutate('development');
     await run(loadHostCommand(mutate), ['add', 'h1', '--yes', '--env', 'development']);
-    expect(mutate.mock.calls[0][1]).toMatchObject({ environment: 'development' });
+    expect(mutate.mock.calls[1][1]).toMatchObject({ environment: 'development' });
   });
 
   it('never prompts under --json', async () => {
-    // --json must be scriptable: no probe round trip for a preview, no confirm.
-    const mutate = jest.fn().mockResolvedValue({
-      nexusHostAdd: {
-        success: true, error: null, registered: true, environment: 'production',
-        report: { ok: true, alias: 'h1', hostname: 'x', port: '22' },
-      },
-    });
+    // --json must be scriptable: no confirmation, no per-candidate prompt.
+    // It still probes first (that's how the CLI learns there's only one root),
+    // then registers — two mutate calls, zero interactive prompts.
+    const mutate = singleRootMutate('production');
     await run(loadHostCommand(mutate), ['add', 'h1', '--json']);
-    expect(mutate).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(out[0])).toMatchObject({ registered: true, environment: 'production' });
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(out[0])).toMatchObject([{ registered: true, environment: 'production' }]);
+  });
+});
+
+describe('host add — multiple discovered sites', () => {
+  function multiHostMutate() {
+    return jest.fn()
+      // 1. the initial, unqualified probe
+      .mockResolvedValueOnce({
+        nexusHostProbe: {
+          success: true, error: null,
+          report: {
+            ok: false, alias: 'multi-host',
+            failure: { kind: 'multiple-wordpress', detail: 'Found 2.', remedy: 'Pass --path.' },
+            candidates: ['/home/u1/site-a', '/home/u1/site-b'],
+          },
+        },
+      })
+      // 2. per-candidate probe for site-a
+      .mockResolvedValueOnce({
+        nexusHostProbe: {
+          success: true,
+          report: { ok: true, alias: 'multi-host', wpPath: '/home/u1/site-a', siteUrl: 'https://alpha.example.com' },
+        },
+      })
+      // 3. per-candidate probe for site-b
+      .mockResolvedValueOnce({
+        nexusHostProbe: {
+          success: true,
+          report: { ok: true, alias: 'multi-host', wpPath: '/home/u1/site-b', siteUrl: 'https://beta.example.com' },
+        },
+      })
+      // 4 & 5. one nexusHostAdd call per selected site
+      .mockResolvedValueOnce({
+        nexusHostAdd: { success: true, error: null, registered: true, environment: 'production' },
+      })
+      .mockResolvedValueOnce({
+        nexusHostAdd: { success: true, error: null, registered: true, environment: 'production' },
+      });
+  }
+
+  it('--yes registers every discovered candidate without prompting', async () => {
+    const mutate = multiHostMutate();
+    await run(loadHostCommand(mutate), ['add', 'multi-host', '--yes']);
+
+    // 1 discovery probe + 2 per-candidate probes + 2 registrations.
+    expect(mutate).toHaveBeenCalledTimes(5);
+    expect(mutate.mock.calls[3][1]).toMatchObject({
+      alias: 'multi-host', path: '/home/u1/site-a', site: 'alpha',
+    });
+    expect(mutate.mock.calls[4][1]).toMatchObject({
+      alias: 'multi-host', path: '/home/u1/site-b', site: 'beta',
+    });
+    expect(exitCodes).toEqual([]);
+    expect(out.join('\n')).toContain('ssh:multi-host/alpha@production');
+    expect(out.join('\n')).toContain('ssh:multi-host/beta@production');
+  });
+
+  it('--json registers every candidate and emits one JSON summary', async () => {
+    const mutate = multiHostMutate();
+    await run(loadHostCommand(mutate), ['add', 'multi-host', '--json']);
+
+    expect(mutate).toHaveBeenCalledTimes(5);
+    const summary = JSON.parse(out.join(''));
+    expect(summary).toEqual([
+      { site: 'alpha', registered: true, environment: 'production', error: null },
+      { site: 'beta', registered: true, environment: 'production', error: null },
+    ]);
+  });
+
+  it('an explicit --path against a multi-site connection registers just that one root', async () => {
+    // Passing --path to probeExternalHost skips discovery, so the addon
+    // reports back a single successful root rather than multiple-wordpress —
+    // the CLI never needs to know the connection has siblings.
+    const mutate = jest.fn().mockResolvedValue({
+      nexusHostProbe: {
+        success: true,
+        report: { ok: true, alias: 'multi-host', wpPath: '/home/u1/site-a', siteUrl: 'https://alpha.example.com' },
+      },
+      nexusHostAdd: { success: true, error: null, registered: true, environment: 'production' },
+    });
+    await run(loadHostCommand(mutate), ['add', 'multi-host', '--path', '/home/u1/site-a', '--yes']);
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(mutate.mock.calls[1][1]).toMatchObject({ path: '/home/u1/site-a', site: 'alpha' });
   });
 });

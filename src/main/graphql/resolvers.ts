@@ -5452,10 +5452,9 @@ export function createResolvers(context: ResolverContext) {
         });
       },
 
-      nexusHostAdd: async (
-        _p: ResolverParent,
-        { alias, path, environment }: { alias: string; path?: string; environment?: string },
-      ) => {
+      nexusHostAdd: async (_parent: ResolverParent, {
+        alias, path, environment, site,
+      }: { alias: string; path?: string; environment?: string; site?: string }) => {
         return withQueue(async () => {
           try {
             if (environment !== undefined && environment !== null
@@ -5473,21 +5472,25 @@ export function createResolvers(context: ResolverContext) {
               };
             }
 
-            // No --env means "unspecified", not "production". Re-running
-            // `nexus host add <alias>` to refresh a discovered path is the
-            // idempotency this command advertises; defaulting to production
-            // there would silently relabel a staging host — and the label is
-            // the write gate. Only a genuinely new host falls back to
-            // production, which is the most restrictive default.
-            const existing = getExternalProfile(storage, alias);
-            const validEnv = (environment ?? existing?.environment ?? 'production') as
-              'production' | 'staging' | 'development';
-
+            const validEnv = (environment ?? 'production') as 'production' | 'staging' | 'development';
             const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
 
-            // Refuse on any probe failure: a typo must not litter the fleet with
-            // hosts that were never reachable.
             if (!report.ok) {
+              // A `multiple-wordpress` failure is not a refusal to register the
+              // CONNECTION — only to guess which site. Persist the connection
+              // profile now so `host list` shows it (with zero sites) even
+              // before the caller picks one; a genuinely unreachable/typo'd
+              // alias should NOT be persisted, so this only runs when the
+              // probe got far enough to discover WordPress at all.
+              if (report.failure?.kind === 'multiple-wordpress') {
+                const now = Date.now();
+                upsertExternalProfile(storage, {
+                  alias,
+                  wpCliPath: report.wpCliPath,
+                  firstSeenAt: now,
+                  lastSeenAt: now,
+                }, 'registration');
+              }
               return {
                 success: true, registered: false, report: toHostReport(report),
                 environment: validEnv, error: null,
@@ -5495,13 +5498,9 @@ export function createResolvers(context: ResolverContext) {
             }
 
             const now = Date.now();
-            // 'registration': this is the deliberate path, so the label it
-            // computed wins over whatever a previous lazy sighting stored.
             upsertExternalProfile(storage, {
               alias,
-              wpPath: report.wpPath,
               wpCliPath: report.wpCliPath,
-              environment: validEnv,
               firstSeenAt: now,
               lastSeenAt: now,
             }, 'registration');
@@ -5510,23 +5509,27 @@ export function createResolvers(context: ResolverContext) {
             if (report.siteUrl) {
               try { domain = new URL(report.siteUrl).hostname || alias; } catch { /* keep alias */ }
             }
+            // Auto-suggest a slug from the domain's first label when none was
+            // given — the single-site case, which stays zero-ceremony.
+            const siteSlug = site ?? domain.split('.')[0] ?? alias;
 
             await (services as any).graphService?.upsertSite({
-              id: externalSiteId(alias),
-              name: alias,
+              id: externalSiteId(alias, siteSlug),
+              name: siteSlug,
               domain,
               source: 'external',
               host: 'external',
+              account_id: alias,
               environment: validEnv,
               wp_version: report.wpVersion,
+              wp_path: report.wpPath,
+              wp_cli_path: report.wpCliPath,
               is_active: true,
               created_at: now,
               updated_at: now,
               last_sync_at: now,
             });
 
-            // `environment` is returned so the CLI can print what was actually
-            // used rather than echoing a flag the user may not have passed.
             return {
               success: true, registered: true, report: toHostReport(report),
               environment: validEnv, error: null,

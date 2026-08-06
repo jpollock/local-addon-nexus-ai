@@ -52,120 +52,13 @@ const profiles = (store: Record<string, any>) => store[STORAGE_KEYS.EXTERNAL_SIT
 
 beforeEach(() => probeMock.mockReset());
 
-describe('nexusHostAdd', () => {
-  it('persists the profile and a site row on success', async () => {
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const r = await (createResolvers(c.context).Mutation as any).nexusHostAdd(null, { alias: 'h1' });
-    expect(r.registered).toBe(true);
-    expect(profiles(c.store).h1.wpPath).toBe('/home/u/public_html');
-    expect(c.upserted).toHaveLength(1);
-    expect(c.upserted[0].source).toBe('external');
-    expect(c.upserted[0].host).toBe('external');
-  });
-
-  it('derives domain from siteUrl, not the alias', async () => {
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    await (createResolvers(c.context).Mutation as any).nexusHostAdd(null, { alias: 'h1' });
-    expect(c.upserted[0].domain).toBe('example.com');
-  });
-
-  it('falls back to the alias when siteUrl is absent', async () => {
-    probeMock.mockResolvedValue(okReport({ siteUrl: undefined }));
-    const c = ctx();
-    await (createResolvers(c.context).Mutation as any).nexusHostAdd(null, { alias: 'h1' });
-    expect(c.upserted[0].domain).toBe('h1');
-  });
-
-  it('persists nothing when the probe fails', async () => {
-    probeMock.mockResolvedValue(failReport());
-    const c = ctx();
-    const r = await (createResolvers(c.context).Mutation as any).nexusHostAdd(null, { alias: 'h1' });
-    expect(r.success).toBe(true);      // the mutation worked
-    expect(r.registered).toBe(false);  // the host did not qualify
-    expect(r.report.failure.kind).toBe('auth-failed');
-    expect(profiles(c.store)).toEqual({});
-    expect(c.upserted).toHaveLength(0);
-  });
-
-  it('rejects an invalid environment without probing', async () => {
-    const c = ctx();
-    const r = await (createResolvers(c.context).Mutation as any).nexusHostAdd(
-      null, { alias: 'h1', environment: 'prod' });
-    expect(r.success).toBe(false);
-    expect(r.error).toContain('prod');
-    expect(probeMock).not.toHaveBeenCalled();
-  });
-
-  it('is idempotent — a second add preserves firstSeenAt', async () => {
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const m = createResolvers(c.context).Mutation as any;
-    await m.nexusHostAdd(null, { alias: 'h1' });
-    const first = profiles(c.store).h1.firstSeenAt;
-    const lastFirst = profiles(c.store).h1.lastSeenAt;
-    await new Promise((r) => setTimeout(r, 2));
-    await m.nexusHostAdd(null, { alias: 'h1' });
-    expect(Object.keys(profiles(c.store))).toEqual(['h1']);
-    expect(profiles(c.store).h1.firstSeenAt).toBe(first);
-    expect(profiles(c.store).h1.lastSeenAt).toBeGreaterThan(lastFirst);
-  });
-});
-
-describe('nexusHostAdd — the environment label', () => {
-  it('defaults a brand-new host to production', async () => {
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const r = await (createResolvers(c.context).Mutation as any).nexusHostAdd(null, { alias: 'h1' });
-    expect(profiles(c.store).h1.environment).toBe('production');
-    expect(r.environment).toBe('production');
-  });
-
-  it('leaves an already-registered staging host alone when --env is omitted', async () => {
-    // The idempotency the design advertises: re-running `host add` to refresh a
-    // discovered path must not relabel the host, because the label gates writes.
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const m = createResolvers(c.context).Mutation as any;
-    await m.nexusHostAdd(null, { alias: 'h1', environment: 'staging' });
-    const r = await m.nexusHostAdd(null, { alias: 'h1' });
-    expect(profiles(c.store).h1.environment).toBe('staging');
-    expect(r.environment).toBe('staging');
-  });
-
-  it('relabels a production host when --env staging is passed deliberately', async () => {
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const m = createResolvers(c.context).Mutation as any;
-    await m.nexusHostAdd(null, { alias: 'h1', environment: 'production' });
-    const r = await m.nexusHostAdd(null, { alias: 'h1', environment: 'staging' });
-    expect(profiles(c.store).h1.environment).toBe('staging');
-    expect(r.environment).toBe('staging');
-    expect(c.upserted.at(-1).environment).toBe('staging');
-  });
-
-  it('treats an explicit null environment as unspecified, not invalid', async () => {
-    // The CLI sends null for an omitted --env, since GraphQL variables are
-    // serialised as JSON. That must not trip the validity check.
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const m = createResolvers(c.context).Mutation as any;
-    await m.nexusHostAdd(null, { alias: 'h1', environment: 'development' });
-    const r = await m.nexusHostAdd(null, { alias: 'h1', environment: null });
-    expect(r.success).toBe(true);
-    expect(r.environment).toBe('development');
-  });
-
-  it('writes the resolved environment to the sites row, not the argument', async () => {
-    probeMock.mockResolvedValue(okReport());
-    const c = ctx();
-    const m = createResolvers(c.context).Mutation as any;
-    await m.nexusHostAdd(null, { alias: 'h1', environment: 'staging' });
-    await m.nexusHostAdd(null, { alias: 'h1' });
-    expect(c.upserted.at(-1).environment).toBe('staging');
-  });
-});
+// `nexusHostAdd` coverage lives in tests/unit/graphql/host-add.test.ts (Task 8:
+// the multi-site picker rewrote it — id is now `ssh:<alias>/<site>`, the
+// connection profile no longer carries wpPath/environment, and there is no
+// "leave an already-registered host's label alone" default any more, since
+// environment is resolved per-site by the CLI before nexusHostAdd is ever
+// called). The describe blocks that used to live here tested the old
+// connection-scoped shape and no longer apply.
 
 describe('nexusHostProbe', () => {
   it('never persists, even on success', async () => {
