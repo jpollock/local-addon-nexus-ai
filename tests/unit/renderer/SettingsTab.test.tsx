@@ -65,27 +65,27 @@ describe('SettingsTab — external hosts', () => {
 
   it('renders a chip for each registered external host', async () => {
     const electron = mockElectron({
-      [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [{ alias: 'hostinger-test', environment: 'production', domain: 'example.com' }],
+      [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com' }],
     });
     const instance: any = new SettingsTab({ electron });
     (instance as any).mounted = true;
     spySetState(instance);
     await instance.loadAll();
     const tree = instance.render();
-    const chips = findAll(tree, (n) => textOf(n).trim() === 'hostinger-test');
+    const chips = findAll(tree, (n) => textOf(n).trim() === 'hostinger-test/site-a');
     expect(chips.length).toBeGreaterThan(0);
   });
 
   it('external host chips are not clickable — no onClick handler', async () => {
     const electron = mockElectron({
-      [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [{ alias: 'hostinger-test', environment: 'production', domain: 'example.com' }],
+      [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com' }],
     });
     const instance: any = new SettingsTab({ electron });
     (instance as any).mounted = true;
     spySetState(instance);
     await instance.loadAll();
     const tree = instance.render();
-    const chip = findAll(tree, (n) => textOf(n).trim() === 'hostinger-test')[0];
+    const chip = findAll(tree, (n) => textOf(n).trim() === 'hostinger-test/site-a')[0];
     expect(chip.props.onClick).toBeUndefined();
   });
 
