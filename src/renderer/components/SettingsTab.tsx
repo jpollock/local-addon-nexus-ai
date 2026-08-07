@@ -55,6 +55,7 @@ interface SettingsTabState {
   addingException: { op: string; targetRef: string; environment: string; allowing: boolean } | null;
   hostKeyCheckAlias: string;
   hostKeyCheckResult: null | { ok: boolean; failureKind?: string; detail?: string; remedy?: string; fingerprint?: string; keyType?: string };
+  hostKeyCheckedAlias: string;
   hostKeyTrusting: boolean;
 }
 
@@ -108,6 +109,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     addingException: null,
     hostKeyCheckAlias: '',
     hostKeyCheckResult: null,
+    hostKeyCheckedAlias: '',
     hostKeyTrusting: false,
   };
 
@@ -144,9 +146,14 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
   // ── Host key trust-on-first-use ──────────────────────────────────────────
 
   async checkHostKey(): Promise<void> {
+    // Capture the alias being checked NOW, before the await. If the input
+    // changes (or a newer check is kicked off) before this resolves, this
+    // response is stale and must be discarded rather than overwrite a newer
+    // result — see the in-flight-race note in the task-6 review.
     const alias = this.state.hostKeyCheckAlias.trim();
     if (!alias) return;
-    this.setState({ hostKeyCheckResult: null });
+    this.setState({ hostKeyCheckResult: null, hostKeyCheckedAlias: '' });
+    const isStale = () => this.state.hostKeyCheckAlias.trim() !== alias;
     try {
       const data = await rendererGql<{ nexusHostProbe: { success: boolean; error: string | null; report: any } }>(`
         mutation($alias: String!) {
@@ -156,10 +163,13 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
           }
         }
       `, { alias });
+      if (!this.mounted || isStale()) return;
       const report = data.nexusHostProbe.report;
-      if (!this.mounted) return;
       if (!report) {
-        this.setState({ hostKeyCheckResult: { ok: false, detail: data.nexusHostProbe.error ?? 'No report returned.' } });
+        this.setState({
+          hostKeyCheckResult: { ok: false, detail: data.nexusHostProbe.error ?? 'No report returned.' },
+          hostKeyCheckedAlias: alias,
+        });
         return;
       }
       this.setState({
@@ -171,15 +181,26 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
           fingerprint: report.failure?.fingerprint,
           keyType: report.failure?.keyType,
         },
+        // Prefer the alias the server actually resolved and echoed back
+        // (report.alias) over the locally-captured variable, but either is
+        // safe here since both were fixed before this await began — neither
+        // is re-read from live state.
+        hostKeyCheckedAlias: report.alias || alias,
       });
     } catch (e: any) {
-      if (this.mounted) this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) } });
+      if (!this.mounted || isStale()) return;
+      this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) }, hostKeyCheckedAlias: alias });
     }
   }
 
   async approveHostKey(): Promise<void> {
-    const alias = this.state.hostKeyCheckAlias.trim();
+    // Use the alias the displayed fingerprint was actually checked for, not
+    // whatever is currently typed in the input — the human verified THIS
+    // fingerprint, for THIS alias, and approval must never silently target a
+    // different host than what was shown on screen.
+    const alias = this.state.hostKeyCheckedAlias.trim();
     if (!alias) return;
+    if (this.state.hostKeyCheckAlias.trim() !== alias) return; // stale — button should be disabled, but guard anyway
     this.setState({ hostKeyTrusting: true });
     try {
       const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, alias);
@@ -608,20 +629,30 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
           this.state.hostKeyCheckResult.ok
             ? React.createElement('div', {}, this.state.hostKeyCheckResult.detail || 'Already reachable — no key approval needed.')
             : this.state.hostKeyCheckResult.failureKind === 'host-key-unknown' && this.state.hostKeyCheckResult.fingerprint
-              ? React.createElement('div', {},
-                  React.createElement('div', {}, `${this.state.hostKeyCheckResult.keyType} ${this.state.hostKeyCheckResult.fingerprint}`),
-                  React.createElement('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
-                    React.createElement('button', {
-                      disabled: this.state.hostKeyTrusting,
-                      onClick: () => this.approveHostKey(),
-                      style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
-                    }, 'Approve'),
-                    React.createElement('button', {
-                      onClick: () => this.setState({ hostKeyCheckResult: null }),
-                      style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
-                    }, 'Dismiss'),
-                  ),
-                )
+              ? (() => {
+                  // The Approve button must only ever act on the fingerprint the
+                  // human actually saw. If the alias input has been edited since
+                  // this result was fetched, the displayed fingerprint no longer
+                  // corresponds to what's typed — the button must not render, so
+                  // it can never be clicked for a host whose key was never shown.
+                  const staleAlias = this.state.hostKeyCheckAlias.trim() !== this.state.hostKeyCheckedAlias;
+                  return React.createElement('div', {},
+                    React.createElement('div', {}, `${this.state.hostKeyCheckResult.keyType} ${this.state.hostKeyCheckResult.fingerprint}`),
+                    staleAlias
+                      ? React.createElement('div', { style: { marginTop: 6, opacity: 0.6 } }, 'Alias changed since this check — check again to approve.')
+                      : React.createElement('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
+                          React.createElement('button', {
+                            disabled: this.state.hostKeyTrusting,
+                            onClick: () => this.approveHostKey(),
+                            style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
+                          }, 'Approve'),
+                          React.createElement('button', {
+                            onClick: () => this.setState({ hostKeyCheckResult: null, hostKeyCheckedAlias: '' }),
+                            style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
+                          }, 'Dismiss'),
+                        ),
+                  );
+                })()
               : React.createElement('div', {}, this.state.hostKeyCheckResult.remedy || this.state.hostKeyCheckResult.detail),
         ),
       ),

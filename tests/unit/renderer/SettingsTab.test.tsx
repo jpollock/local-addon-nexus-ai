@@ -216,6 +216,106 @@ describe('SettingsTab — external hosts', () => {
     expect(textOf(tree)).toContain('contact your admin');
     expect(findAll(tree, (n) => n.type === 'button' && textOf(n).includes('Approve'))).toHaveLength(0);
   });
+
+  it('editing the alias after a check hides the Approve button for the stale result', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'alias-a', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:abc123', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'alias-a' });
+    await instance.checkHostKey();
+    // User edits the input to a different alias WITHOUT re-checking.
+    instance.setState({ hostKeyCheckAlias: 'alias-b' });
+    const tree = instance.render();
+    // The stale fingerprint may still be shown, but there must be no live
+    // Approve button hanging off it — that would let alias-b get trusted
+    // using a fingerprint the human verified for alias-a.
+    expect(findAll(tree, (n) => n.type === 'button' && textOf(n).includes('Approve'))).toHaveLength(0);
+  });
+
+  it('approving targets the alias that was actually checked, not a since-edited input', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'alias-a', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:abc123', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    const invokeMock = jest.fn().mockResolvedValue({ success: true, error: null, fingerprint: 'SHA256:abc123' });
+    const electron = mockElectron({});
+    electron.ipcRenderer.invoke = invokeMock;
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'alias-a' });
+    await instance.checkHostKey();
+    // Simulate the input having changed, then reverted — approveHostKey must
+    // still use the stored checked-alias, never a live re-read.
+    instance.setState({ hostKeyCheckAlias: 'alias-a' });
+    await instance.approveHostKey();
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'alias-a');
+  });
+
+  it('a stale out-of-order response for an old alias does not overwrite a newer check', async () => {
+    let resolveFirst: (v: any) => void;
+    const firstResponse = new Promise((resolve) => { resolveFirst = resolve; });
+    const fetchMock = jest.fn()
+      .mockImplementationOnce(() => firstResponse)
+      .mockImplementationOnce(() => Promise.resolve({
+        json: async () => ({ data: { nexusHostProbe: {
+          success: true, error: null,
+          report: { ok: false, alias: 'alias-b', failure: {
+            kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+            fingerprint: 'SHA256:newer', keyType: 'ED25519',
+          } },
+        } } }),
+      }));
+    (global as any).fetch = fetchMock;
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+
+    // Kick off a check for alias-a; its response has not resolved yet.
+    instance.setState({ hostKeyCheckAlias: 'alias-a' });
+    const firstCheck = instance.checkHostKey();
+    // Before it resolves, the user edits the input and checks alias-b, which
+    // resolves immediately.
+    instance.setState({ hostKeyCheckAlias: 'alias-b' });
+    await instance.checkHostKey();
+    // Now the first (older) response for alias-a finally resolves.
+    resolveFirst!({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'alias-a', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:stale', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    await firstCheck;
+
+    const tree = instance.render();
+    // The newer alias-b result must still be displayed; the stale alias-a
+    // response must have been discarded, not applied on top.
+    expect(textOf(tree)).toContain('SHA256:newer');
+    expect(textOf(tree)).not.toContain('SHA256:stale');
+    expect(instance.state.hostKeyCheckedAlias).toBe('alias-b');
+  });
 });
 
 describe('SettingsTab — exception picker writes targetRef', () => {
