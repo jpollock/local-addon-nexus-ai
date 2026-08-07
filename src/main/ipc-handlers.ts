@@ -1025,11 +1025,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // "Approve": re-verify against the real known_hosts file immediately
       // before trusting. A conflicting entry (changed/MITM key) is hard-
       // refused here regardless of what the renderer already gated on.
-      const status = await checkHostKeyStatus(resolved.userKnownHostsFile, resolved.hostname, captured.rawLine);
+      const status = await checkHostKeyStatus(resolved.userKnownHostsFile, captured.rawLine);
       if (status === 'conflict') {
         return {
           success: false,
           error: "This host's key has changed since it was last trusted — refusing to overwrite it. This can indicate a compromised connection; do not approve without verifying the new fingerprint out-of-band.",
+        };
+      }
+      if (status === 'error') {
+        return {
+          success: false,
+          error: "Could not verify this host's existing trust state — refusing to proceed. Re-run 'nexus host test <alias>' and try again.",
         };
       }
       if (status === 'trusted') {

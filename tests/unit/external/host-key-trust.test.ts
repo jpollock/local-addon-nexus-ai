@@ -92,18 +92,17 @@ describe('trustHostKey', () => {
 
 describe('checkHostKeyStatus', () => {
   function keygenExiting(code: number | null, stdout = '') {
-    return async () => ({ code, stdout, stderr: '' });
+    return jest.fn(async () => ({ code, stdout, stderr: '' }));
   }
 
-  it('returns "none" when ssh-keygen -F finds no entry (non-zero exit)', async () => {
-    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', 'example.com', KEY_LINE, keygenExiting(1, ''));
+  it('returns "none" when ssh-keygen -F finds no entry (documented exit code 1)', async () => {
+    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExiting(1, ''));
     expect(status).toBe('none');
   });
 
   it('returns "trusted" when the existing entry has the same key material', async () => {
     const status = await checkHostKeyStatus(
       '/home/u/.ssh/known_hosts',
-      'example.com',
       KEY_LINE,
       keygenExiting(0, `# Host example.com found: line 3\n${KEY_LINE}\n`),
     );
@@ -114,10 +113,66 @@ describe('checkHostKeyStatus', () => {
     const differentKey = 'example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAdifferentKeyMaterialHere';
     const status = await checkHostKeyStatus(
       '/home/u/.ssh/known_hosts',
-      'example.com',
       KEY_LINE,
       keygenExiting(0, `# Host example.com found: line 3\n${differentKey}\n`),
     );
     expect(status).toBe('conflict');
+  });
+
+  it('looks up the bracketed [host]:port form from the captured rawLine, not a bare hostname', async () => {
+    // OpenSSH stores non-default-port entries as `[host]:port` in known_hosts;
+    // `ssh-keygen -F <bare-hostname>` misses them entirely (verified live).
+    // The captured rawLine's own host token is already in whichever form ssh
+    // itself considers correct, so that is what must be passed to -F.
+    const bracketedLine = '[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
+    const keygenExec = keygenExiting(1, '');
+
+    await checkHostKeyStatus('/home/u/.ssh/known_hosts', bracketedLine, keygenExec);
+
+    expect(keygenExec).toHaveBeenCalledWith(['-F', '[example.com]:2222', '-f', '/home/u/.ssh/known_hosts']);
+  });
+
+  it('detects a conflict against a bracketed non-default-port entry', async () => {
+    const bracketedLine = '[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
+    const differentKey = '[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAdifferentKeyMaterialHere';
+    const status = await checkHostKeyStatus(
+      '/home/u/.ssh/known_hosts',
+      bracketedLine,
+      keygenExiting(0, `# Host [example.com]:2222 found: line 1\n${differentKey}\n`),
+    );
+    expect(status).toBe('conflict');
+  });
+
+  it('returns "error" when the offered rawLine cannot be parsed', async () => {
+    const keygenExec = keygenExiting(1, '');
+    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', 'garbage', keygenExec);
+    expect(status).toBe('error');
+    expect(keygenExec).not.toHaveBeenCalled();
+  });
+
+  it('returns "error" when the keygen invocation throws (spawn failure)', async () => {
+    const keygenExec = jest.fn(async () => { throw new Error('ENOENT: ssh-keygen not found'); });
+    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExec);
+    expect(status).toBe('error');
+  });
+
+  it('returns "error" when keygen resolves with a null exit code (e.g. missing binary)', async () => {
+    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExiting(null, ''));
+    expect(status).toBe('error');
+  });
+
+  it('returns "error" on an unexpected non-0/1 exit code rather than treating it as "not found"', async () => {
+    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExiting(2, ''));
+    expect(status).toBe('error');
+  });
+
+  it('is not fooled by a leading @cert-authority marker shifting the key fields', async () => {
+    const markedLine = `@cert-authority ${KEY_LINE}`;
+    const status = await checkHostKeyStatus(
+      '/home/u/.ssh/known_hosts',
+      KEY_LINE,
+      keygenExiting(0, `# Host example.com found: line 3\n${markedLine}\n`),
+    );
+    expect(status).toBe('trusted');
   });
 });

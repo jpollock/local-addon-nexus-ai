@@ -69,7 +69,7 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
 
     expect(result).toEqual({ success: true, error: null, fingerprint: 'SHA256:abc' });
-    expect(statusMock).toHaveBeenCalledWith('/home/u/.ssh/known_hosts', 'h', 'h ssh-ed25519 AAAA');
+    expect(statusMock).toHaveBeenCalledWith('/home/u/.ssh/known_hosts', 'h ssh-ed25519 AAAA');
     expect(trustMock).toHaveBeenCalledWith('/home/u/.ssh/known_hosts', 'h ssh-ed25519 AAAA');
   });
 
@@ -128,6 +128,20 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe(
       "This host's key has changed since it was last trusted — refusing to overwrite it. This can indicate a compromised connection; do not approve without verifying the new fingerprint out-of-band.",
+    );
+    expect(trustMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses and never calls trustHostKey when the trust-state check itself could not be completed', async () => {
+    resolveMock.mockResolvedValue({ hostname: 'h', user: 'u', port: '22', userKnownHostsFile: '/home/u/.ssh/known_hosts' });
+    captureMock.mockResolvedValue({ fingerprint: 'SHA256:abc', keyType: 'ED25519', rawLine: 'h ssh-ed25519 AAAA' });
+    statusMock.mockResolvedValue('error');
+
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(
+      "Could not verify this host's existing trust state — refusing to proceed. Re-run 'nexus host test <alias>' and try again.",
     );
     expect(trustMock).not.toHaveBeenCalled();
   });

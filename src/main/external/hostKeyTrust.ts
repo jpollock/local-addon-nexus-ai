@@ -73,19 +73,34 @@ export async function captureOfferedHostKey(
 }
 
 /** Pull `<keytype> <base64key>` out of a known_hosts-style line, ignoring the
- * leading host field (which may be hashed) and any trailing comment. */
+ * leading host field (which may be hashed), a leading `@cert-authority` /
+ * `@revoked` marker token (which would otherwise shift keytype/material by
+ * one), and any trailing comment. */
 function parseKeyMaterial(line: string): [string, string] | null {
-  const tokens = line.trim().split(/\s+/);
+  let tokens = line.trim().split(/\s+/);
+  if (tokens[0]?.startsWith('@')) tokens = tokens.slice(1);
   if (tokens.length < 3) return null;
   return [tokens[1], tokens[2]];
 }
 
-export type HostKeyStatus = 'none' | 'trusted' | 'conflict';
+export type HostKeyStatus = 'none' | 'trusted' | 'conflict' | 'error';
 
 /**
  * Compare the key an alias just offered against whatever `userKnownHostsFile`
- * already has on record for `hostname`, via `ssh-keygen -F` (never by reading
- * the file directly — hashed known_hosts entries are not greppable).
+ * already has on record, via `ssh-keygen -F` (never by reading the file
+ * directly — hashed known_hosts entries are not greppable).
+ *
+ * The lookup key passed to `ssh-keygen -F` is the FIRST WHITESPACE TOKEN OF
+ * `offeredRawLine` ITSELF, not a hostname/port re-derived from
+ * `resolveSshConfig`. That token is whatever real ssh, in the accept-new
+ * capture, decided was the correct host identity for this exact connection —
+ * for a non-default port that is the bracketed `[host]:port` form OpenSSH
+ * actually uses in known_hosts, which `ssh-keygen -F <bare-hostname>` will
+ * silently miss (verified: `ssh-keygen -F example.com` exits 1/"not found"
+ * against an entry stored as `[example.com]:2222`). Re-deriving that string
+ * from `resolved.hostname`/`resolved.port` would have to reimplement that
+ * bracketing rule and would drift from it; the captured line already got it
+ * right once, so reuse it instead of trusting a second derivation.
  *
  * - 'none': no existing entry — safe to append.
  * - 'trusted': an existing entry already matches the offered key exactly —
@@ -93,25 +108,42 @@ export type HostKeyStatus = 'none' | 'trusted' | 'conflict';
  *   the line).
  * - 'conflict': an existing entry is for a *different* key — this is the
  *   changed/MITM case the design doc says must be hard-refused everywhere.
- *   Callers MUST NOT call trustHostKey when this is returned.
+ * - 'error': the check itself could not complete cleanly (unparseable
+ *   `offeredRawLine`, a keygen spawn failure, or any ssh-keygen exit code
+ *   that isn't the documented 0-found/1-not-found pair). This is
+ *   deliberately NOT folded into 'none' — for the one gate standing between
+ *   a possible MITM and a permanent trust write, "could not determine" must
+ *   never be treated as "safe to proceed."
+ *
+ * Callers MUST NOT call trustHostKey when this returns 'conflict' or 'error'.
  */
 export async function checkHostKeyStatus(
   userKnownHostsFile: string,
-  hostname: string,
   offeredRawLine: string,
   keygenExec: KeygenExec = defaultKeygenExec,
 ): Promise<HostKeyStatus> {
-  const result = await keygenExec(['-F', hostname, '-f', userKnownHostsFile]);
-  if (result.code !== 0) return 'none';
+  const offeredHostToken = offeredRawLine.trim().split(/\s+/)[0];
+  const offered = parseKeyMaterial(offeredRawLine);
+  if (!offeredHostToken || !offered) return 'error';
+
+  let result: { code: number | null; stdout: string; stderr: string };
+  try {
+    result = await keygenExec(['-F', offeredHostToken, '-f', userKnownHostsFile]);
+  } catch {
+    return 'error';
+  }
+
+  // ssh-keygen -F's documented contract: 0 = found, 1 = not found. Anything
+  // else (missing binary -> code: null, unreadable file, unexpected exit) is
+  // "could not determine", not "not found".
+  if (result.code === 1) return 'none';
+  if (result.code !== 0) return 'error';
 
   const existingLines = result.stdout
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith('#'));
   if (existingLines.length === 0) return 'none';
-
-  const offered = parseKeyMaterial(offeredRawLine);
-  if (!offered) return 'none';
 
   const matches = existingLines.some((l) => {
     const existing = parseKeyMaterial(l);
