@@ -104,12 +104,12 @@ describe('parseTarget — external SSH targets', () => {
 
   it('throws terse text for an ssh: target with no environment', () => {
     expect(() => parseTarget('ssh:acme-box'))
-      .toThrow('Incomplete SSH target: ssh:acme-box. Expected ssh:alias@environment');
+      .toThrow('Incomplete SSH target: ssh:acme-box. Expected ssh:alias/site@environment');
   });
 
   it('throws verbose text when asked', () => {
     expect(() => parseTarget('ssh:acme-box', { verboseErrors: true }))
-      .toThrow(/Expected: ssh:alias@environment/);
+      .toThrow(/Expected: ssh:alias\/site@environment/);
   });
 
   it('rejects ssh:alias@local — local is not a deployment environment', () => {

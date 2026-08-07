@@ -106,6 +106,29 @@ describe('nexusHostRemove — cascades to every site under the connection', () =
     expect(result.removed).toBe(false);
     expect(c.upserted).toHaveLength(0);
   });
+
+  it('cascades to deactivate site rows even when the connection profile is already gone', async () => {
+    // A prior partial failure can leave the connection profile removed but
+    // site rows under its account_id still is_active=1 — the cascade must
+    // not be gated on `removed` or those rows are stranded forever.
+    const c = ctx();
+    c.upserted.push(
+      {
+        id: 'ssh:hostinger-test/site-a', name: 'site-a', domain: 'site-a.example.com',
+        source: 'external', host: 'external', account_id: 'hostinger-test', environment: 'production',
+        is_active: true, created_at: 1, updated_at: 1,
+      },
+    );
+    // No EXTERNAL_SITE_PROFILES entry seeded — removeExternalProfile will find nothing.
+
+    const result = await (createResolvers(c.context).Mutation as any).nexusHostRemove(
+      null, { alias: 'hostinger-test' },
+    );
+
+    expect(result.removed).toBe(false);
+    const row = c.upserted.find((s) => s.id === 'ssh:hostinger-test/site-a');
+    expect(row.is_active).toBe(false);
+  });
 });
 
 describe('nexusHostRemoveSite — removes one site, leaves siblings', () => {

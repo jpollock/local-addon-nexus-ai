@@ -475,13 +475,14 @@ export function createResolvers(context: ResolverContext) {
               // stayed in `sites list` — with its domain clobbered — while
               // `host list` correctly omitted it.
               const externalRows = db.prepare(`
-                SELECT id, name, environment, domain, wp_version, php_version, last_sync_at
+                SELECT id, name, account_id, environment, domain, wp_version, php_version, last_sync_at
                 FROM sites
                 WHERE source = 'external' AND is_active = 1
               `).all() as any[];
 
               external = externalRows.map((row: any) => ({
-                alias: row.name,
+                alias: row.account_id,
+                site: row.name,
                 id: row.id,
                 environment: row.environment || 'unknown',
                 domain: row.domain || null,
@@ -5168,16 +5169,16 @@ export function createResolvers(context: ResolverContext) {
         if (db) {
           try {
             const extRows = db.prepare(
-              "SELECT name, environment, ssh_last_sync_at FROM sites WHERE source='external' AND LOWER(name)=? AND is_active=1 LIMIT 5"
-            ).all(nameLower) as any[];
+              "SELECT name, account_id, environment, ssh_last_sync_at FROM sites WHERE source='external' AND is_active=1 AND (LOWER(name)=? OR LOWER(account_id)=?) LIMIT 5"
+            ).all(nameLower, nameLower) as any[];
 
             for (const row of extRows) {
               const env = row.environment ?? 'production';
               const lastSyncAt = row.ssh_last_sync_at ? new Date(row.ssh_last_sync_at).toISOString() : null;
 
               matches.push({
-                target: `ssh:${row.name}@${env}`,
-                label: `${row.name} (SSH, ${env})`,
+                target: `ssh:${row.account_id}/${row.name}@${env}`,
+                label: `${row.account_id}/${row.name} (SSH, ${env})`,
                 type: 'external',
                 status: 'active',
                 lastSyncAt,
@@ -5609,23 +5610,25 @@ export function createResolvers(context: ResolverContext) {
             // command, everything under it goes. Deactivate rather than
             // delete: GraphService has no per-site delete, and the retention
             // sweep already hard-deletes inactive sites once they age out.
-            if (removed) {
-              const db = (services as any).graphService?.getDb?.();
-              const sites = findExternalSites(db, alias, undefined, 'id, name');
-              const now = Date.now();
-              for (const site of sites) {
-                await (services as any).graphService?.upsertSite({
-                  id: site.id,
-                  name: site.name,
-                  domain: site.name,
-                  source: 'external',
-                  host: 'external',
-                  account_id: alias,
-                  is_active: false,
-                  created_at: now,
-                  updated_at: now,
-                });
-              }
+            // This must run regardless of whether the connection profile
+            // itself was found (`removed`) — a prior partial failure can
+            // leave the profile gone but site rows still is_active=1, and
+            // those must not be stranded, visible forever in fleet surfaces.
+            const db = (services as any).graphService?.getDb?.();
+            const sites = findExternalSites(db, alias, undefined, 'id, name');
+            const now = Date.now();
+            for (const site of sites) {
+              await (services as any).graphService?.upsertSite({
+                id: site.id,
+                name: site.name,
+                domain: site.name,
+                source: 'external',
+                host: 'external',
+                account_id: alias,
+                is_active: false,
+                created_at: now,
+                updated_at: now,
+              });
             }
 
             return { success: true, error: null, removed };

@@ -45,7 +45,7 @@ interface SettingsTabState {
   sites: SiteItem[];
   wpeAccounts: WpeAccount[];
   wpeInstalls: WpeInstall[];
-  externalHosts: Array<{ alias: string; environment: string; domain: string }>;
+  externalHosts: Array<{ alias: string; site: string; environment: string; domain: string }>;
   loading: boolean;
   excludedExpanded: boolean;
   accessExpanded: boolean;
@@ -725,7 +725,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
                     }
                     if (externalMatches.length > 0) {
                       out.push(groupLabel('External SSH hosts'));
-                      out.push(...externalMatches.map(h => renderPick(`ssh:${h.alias}`, h.alias, h.environment, 'ssh')));
+                      out.push(...externalMatches.map(h => renderPick(`ssh:${h.alias}/${h.site}`, `${h.alias}/${h.site}`, h.environment, 'ssh')));
                     }
                     return out;
                   })(),

@@ -509,8 +509,8 @@ sitesCommand
       if (!options.wpeOnly && !options.localOnly && external && external.length > 0) {
         console.log('\nExternal SSH Hosts:');
         for (const site of external) {
-          console.log(`  ${site.alias} (${site.environment})`);
-          console.log(`    Target: ssh:${site.alias}@${site.environment}`);
+          console.log(`  ${site.alias}/${site.site} (${site.environment})`);
+          console.log(`    Target: ssh:${site.alias}/${site.site}@${site.environment}`);
           if (site.domain) {
             console.log(`    Domain: ${site.domain}`);
           }

@@ -134,8 +134,8 @@ export class ExternalContentIndexService {
     if (!db) return { indexed: 0, errors: 0 };
 
     const hosts = db.prepare(
-      "SELECT id, name, environment FROM sites WHERE source = 'external' AND is_active = 1"
-    ).all() as Array<{ id: string; name: string; environment: string | null }>;
+      "SELECT id, name, account_id, environment FROM sites WHERE source = 'external' AND is_active = 1"
+    ).all() as Array<{ id: string; name: string; account_id: string; environment: string | null }>;
 
     let indexed = 0;
     let errors = 0;
@@ -143,7 +143,7 @@ export class ExternalContentIndexService {
     for (const host of hosts) {
       try {
         const { resolveTransport } = await import('../transport');
-        const target = `ssh:${host.name}@${host.environment ?? 'production'}`;
+        const target = `ssh:${host.account_id}/${host.name}@${host.environment ?? 'production'}`;
         const transport = await resolveTransport({ ssh_target: target }, {} as any, 'wpcli_read');
         if (transport && typeof transport === 'object' && 'content' in transport) {
           continue; // refused/unresolvable — skip, not an error

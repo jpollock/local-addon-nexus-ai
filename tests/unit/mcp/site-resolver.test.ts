@@ -72,14 +72,14 @@ describe('resolveAnySite', () => {
     const siteData = makeSiteData([]);
     const graphService = makeGraphService([
       { id: 'wpe-abc', name: 'dupe', source: 'wpe' },
-      { id: 'ssh:dupe', name: 'dupe', source: 'external' },
+      { id: 'ssh:hostinger-test/dupe', name: 'dupe', source: 'external', account_id: 'hostinger-test' },
     ]);
 
     const result = resolveAnySite('dupe', siteData, graphService);
 
     expect(result.kind).toBe('ambiguous');
     if (result.kind === 'ambiguous') {
-      expect(result.matches).toEqual(expect.arrayContaining(['ssh:dupe', 'wpe:<account>/dupe']));
+      expect(result.matches).toEqual(expect.arrayContaining(['ssh:hostinger-test/dupe', 'wpe:<account>/dupe']));
     }
   });
 

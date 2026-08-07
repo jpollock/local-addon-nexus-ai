@@ -219,9 +219,45 @@ describe('fleet queries include external sites', () => {
   it('nexusResolveTarget resolves a registered external alias', async () => {
     const result = await (createResolvers(ctx()).Mutation as any).nexusResolveTarget(null, { name: 'ext-host' });
 
+    // Shared fixture's account_id === name === 'ext-host', so this alone
+    // can't distinguish alias from site — see the distinct-columns test below.
     expect(result.matches).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ target: 'ssh:ext-host@production', type: 'external' }),
+        expect.objectContaining({ target: 'ssh:ext-host/ext-host@production', type: 'external' }),
+      ]),
+    );
+  });
+
+  it('nexusResolveTarget emits ssh:<alias>/<site>@<env> with distinct alias and site columns', async () => {
+    // account_id (connection alias) and name (site slug) are deliberately
+    // different here — a fixture where they're equal (as above) can't catch
+    // a regression that silently swaps the two columns.
+    await graphService.upsertSite({
+      id: 'ssh:hostinger-test/site-a',
+      name: 'site-a',
+      account_id: 'hostinger-test',
+      source: 'external',
+      host: 'external',
+      domain: 'site-a.example.com',
+      environment: 'production',
+      is_active: true,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Matches by site slug.
+    const bySite = await (createResolvers(ctx()).Mutation as any).nexusResolveTarget(null, { name: 'site-a' });
+    expect(bySite.matches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target: 'ssh:hostinger-test/site-a@production', type: 'external' }),
+      ]),
+    );
+
+    // Also matches by the bare connection alias.
+    const byAlias = await (createResolvers(ctx()).Mutation as any).nexusResolveTarget(null, { name: 'hostinger-test' });
+    expect(byAlias.matches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target: 'ssh:hostinger-test/site-a@production', type: 'external' }),
       ]),
     );
   });
@@ -403,6 +439,29 @@ describe('fleet queries include external sites', () => {
       environment: 'production',
       wpVersion: '6.8.0',
     });
+  });
+
+  it('nexusSitesList reports alias (connection) and site (slug) as distinct columns', async () => {
+    // account_id and name are deliberately different here — the shared
+    // beforeEach fixture has them equal, which cannot catch a regression
+    // that silently swaps the two columns.
+    await graphService.upsertSite({
+      id: 'ssh:hostinger-test/site-a',
+      name: 'site-a',
+      account_id: 'hostinger-test',
+      source: 'external',
+      host: 'external',
+      domain: 'site-a.example.com',
+      environment: 'production',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusSitesList();
+    const row = r.external.find((e: any) => e.id === 'ssh:hostinger-test/site-a');
+    expect(row).toMatchObject({ alias: 'hostinger-test', site: 'site-a' });
   });
 
   it('nexusSitesList drops a host that `nexus host remove` soft-deleted', async () => {

@@ -51,9 +51,9 @@ export function parseTarget(target: string, opts: ParseTargetOptions = {}): Pars
     throw new Error(
       verbose
         ? `Incomplete SSH target: ${target}\n\n` +
-          `Expected: ssh:alias@environment\n` +
+          `Expected: ssh:alias/site@environment (or ssh:alias@environment if the connection has exactly one site)\n` +
           `Environments: production, staging, development`
-        : `Incomplete SSH target: ${target}. Expected ssh:alias@environment`,
+        : `Incomplete SSH target: ${target}. Expected ssh:alias/site@environment`,
     );
   }
 

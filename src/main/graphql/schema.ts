@@ -91,9 +91,11 @@ export const typeDefs = gql`
 
   "An external SSH-reachable host, registered with nexus host add."
   type ExternalSite {
-    "SSH config alias — the name used in ssh:<alias>@<environment> targets"
+    "SSH config alias — the connection; combine with site for the target"
     alias: String!
-    "Graph row id, of the form ssh:<alias>"
+    "Site slug — the name used in ssh:<alias>/<site>@<environment> targets"
+    site: String!
+    "Graph row id, of the form ssh:<alias>/<site>"
     id: ID!
     "Registered environment: production, staging or development"
     environment: String!

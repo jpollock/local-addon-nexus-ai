@@ -188,7 +188,7 @@ describe('nexus_get_site_twin — canAnswer() integration', () => {
 
 describe('nexus_get_site_twin — WPE/external resolution via the graph', () => {
   function makeRemoteServices(opts: {
-    rows?: Array<{ id: string; name: string; source: string }>;
+    rows?: Array<{ id: string; name: string; source: string; account_id?: string }>;
     fullRow?: Record<string, unknown>;
     getFromGraph?: jest.Mock;
   } = {}): NexusServices {
@@ -290,7 +290,7 @@ describe('nexus_get_site_twin — WPE/external resolution via the graph', () => 
     const services = makeRemoteServices({
       rows: [
         { id: 'wpe-abc123', name: 'dupe', source: 'wpe' },
-        { id: 'ssh:dupe', name: 'dupe', source: 'external' },
+        { id: 'ssh:hostinger-test/dupe', name: 'dupe', source: 'external', account_id: 'hostinger-test' },
       ],
     });
 
@@ -298,7 +298,7 @@ describe('nexus_get_site_twin — WPE/external resolution via the graph', () => 
 
     expect(result.isError).toBe(true);
     expect(getText(result)).toContain('matches 2 sites across sources');
-    expect(getText(result)).toContain('ssh:dupe');
+    expect(getText(result)).toContain('ssh:hostinger-test/dupe');
     expect(getText(result)).toContain('wpe:<account>/dupe');
   });
 

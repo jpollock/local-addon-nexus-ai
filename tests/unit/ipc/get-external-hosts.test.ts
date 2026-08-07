@@ -16,7 +16,7 @@ jest.mock('electron', () => ({ ipcMain: mockIpc, shell: { openPath: jest.fn() },
 import { registerIpcHandlers } from '../../../src/main/ipc-handlers';
 import { IPC_CHANNELS } from '../../../src/common/constants';
 
-function register(rows: Array<{ id: string; name: string; environment: string | null; domain: string | null; is_active: number }>) {
+function register(rows: Array<{ id: string; name: string; account_id?: string; environment: string | null; domain: string | null; is_active: number }>) {
   const noop = () => {};
   const db = {
     prepare: (sql: string) => ({
@@ -45,10 +45,10 @@ function register(rows: Array<{ id: string; name: string; environment: string | 
 describe('GET_EXTERNAL_HOSTS', () => {
   it('returns registered active external hosts', () => {
     register([
-      { id: 'ssh:myhost', name: 'myhost', environment: 'production', domain: 'example.com', is_active: 1 },
+      { id: 'ssh:hostinger-test/site-a', name: 'site-a', account_id: 'hostinger-test', environment: 'production', domain: 'example.com', is_active: 1 },
     ]);
     const result = mockIpc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS);
-    expect(result).toEqual([{ alias: 'myhost', environment: 'production', domain: 'example.com' }]);
+    expect(result).toEqual([{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com' }]);
   });
 
   it('excludes a removed (inactive) host', () => {
@@ -60,10 +60,10 @@ describe('GET_EXTERNAL_HOSTS', () => {
 
   it('defaults a missing environment to production and a missing domain to empty string', () => {
     register([
-      { id: 'ssh:bare', name: 'bare', environment: null, domain: null, is_active: 1 },
+      { id: 'ssh:hostinger-test/bare', name: 'bare', account_id: 'hostinger-test', environment: null, domain: null, is_active: 1 },
     ]);
     expect(mockIpc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS)).toEqual([
-      { alias: 'bare', environment: 'production', domain: '' },
+      { alias: 'hostinger-test', site: 'bare', environment: 'production', domain: '' },
     ]);
   });
 

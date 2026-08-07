@@ -57,11 +57,11 @@ export type RemoteGraphSiteResult =
 export function resolveRemoteGraphSite(db: any, name: unknown): RemoteGraphSiteResult {
   if (!db || typeof name !== 'string' || !name) return { kind: 'none' };
 
-  let rows: Array<{ id: string; name: string; source: string }>;
+  let rows: Array<{ id: string; name: string; source: string; account_id: string }>;
   try {
     rows = (db.prepare(
-      "SELECT id, name, source FROM sites WHERE source IN ('wpe','external') AND is_active = 1 AND name = ?"
-    ).all(name) ?? []) as Array<{ id: string; name: string; source: string }>;
+      "SELECT id, name, source, account_id FROM sites WHERE source IN ('wpe','external') AND is_active = 1 AND name = ?"
+    ).all(name) ?? []) as Array<{ id: string; name: string; source: string; account_id: string }>;
   } catch {
     return { kind: 'none' };
   }
@@ -70,7 +70,7 @@ export function resolveRemoteGraphSite(db: any, name: unknown): RemoteGraphSiteR
   if (rows.length > 1) {
     return {
       kind: 'ambiguous',
-      matches: rows.map((r) => (r.source === 'external' ? `ssh:${r.name}` : `wpe:<account>/${r.name}`)),
+      matches: rows.map((r) => (r.source === 'external' ? `ssh:${r.account_id}/${r.name}` : `wpe:<account>/${r.name}`)),
     };
   }
   return { kind: 'ok', siteId: rows[0].id, siteName: rows[0].name, source: rows[0].source };

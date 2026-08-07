@@ -135,14 +135,14 @@ export function buildFleetSnapshotForInstructions(
       const db = graphService?.getDb?.();
       if (db) {
         const rows = db.prepare(
-          "SELECT name, environment FROM sites WHERE source = 'external' AND is_active = 1"
-        ).all() as Array<{ name: string; environment: string | null }>;
+          "SELECT name, account_id, environment FROM sites WHERE source = 'external' AND is_active = 1"
+        ).all() as Array<{ name: string; account_id: string; environment: string | null }>;
         if (rows.length > 0) {
           lines.push('### External SSH Hosts');
-          lines.push('_Use ssh:<alias>@<environment> as the target for wp_* tools._');
+          lines.push('_Use ssh:<alias>/<site>@<environment> as the target for wp_* tools._');
           for (const r of rows) {
             const env = r.environment ?? 'production';
-            lines.push(`- **${r.name}** [${env}] — target: ssh:${r.name}@${env}`);
+            lines.push(`- **${r.account_id}/${r.name}** [${env}] — target: ssh:${r.account_id}/${r.name}@${env}`);
           }
           lines.push('');
           hasData = true;
@@ -257,18 +257,18 @@ function buildFleetSnapshot(storage: RegistryStorage, graphService?: { getDb?: (
       const db = graphService?.getDb?.();
       if (db) {
         const rows = db.prepare(
-          "SELECT name, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
-        ).all() as Array<{ name: string; environment: string | null; domain: string | null }>;
+          "SELECT name, account_id, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
+        ).all() as Array<{ name: string; account_id: string; environment: string | null; domain: string | null }>;
         if (rows.length > 0) {
           lines.push('## External SSH Hosts\n');
-          lines.push('| name | environment | domain | target |');
-          lines.push('|---|---|---|---|');
+          lines.push('| alias | site | environment | domain | target |');
+          lines.push('|---|---|---|---|---|');
           for (const r of rows) {
             const env = r.environment ?? 'production';
-            lines.push(`| ${r.name} | ${env} | ${r.domain || '—'} | ssh:${r.name}@${env} |`);
+            lines.push(`| ${r.account_id} | ${r.name} | ${env} | ${r.domain || '—'} | ssh:${r.account_id}/${r.name}@${env} |`);
           }
           lines.push('');
-          lines.push('_Use ssh:<alias>@<environment> as the target for wp_* tools._');
+          lines.push('_Use ssh:<alias>/<site>@<environment> as the target for wp_* tools._');
         }
       }
     } catch {

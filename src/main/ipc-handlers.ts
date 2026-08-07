@@ -996,10 +996,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const db = graphService?.getDb?.();
       if (!db) return [];
       const rows = db.prepare(
-        "SELECT name, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
-      ).all() as Array<{ name: string; environment: string | null; domain: string | null }>;
+        "SELECT name, account_id, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
+      ).all() as Array<{ name: string; account_id: string; environment: string | null; domain: string | null }>;
       return rows.map((r) => ({
-        alias: r.name,
+        alias: r.account_id,
+        site: r.name,
         environment: r.environment ?? 'production',
         domain: r.domain ?? '',
       }));

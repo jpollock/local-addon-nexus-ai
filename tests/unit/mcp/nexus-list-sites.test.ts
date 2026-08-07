@@ -5,7 +5,7 @@ function getText(result: any): string {
 }
 
 function makeServices(opts: {
-  externalRows?: Array<{ name: string; environment: string | null; domain: string | null }>;
+  externalRows?: Array<{ name: string; account_id?: string; environment: string | null; domain: string | null }>;
 } = {}) {
   const { externalRows = [] } = opts;
   const db = {
@@ -24,15 +24,15 @@ function makeServices(opts: {
 describe('nexus_list_sites — external hosts', () => {
   it('lists a registered external host', async () => {
     const services = makeServices({
-      externalRows: [{ name: 'hostinger-test', environment: 'production', domain: 'example.com' }],
+      externalRows: [{ name: 'site-a', account_id: 'hostinger-test', environment: 'production', domain: 'example.com' }],
     });
 
     const result = await nexusListSitesHandler.execute({}, services);
 
     const text = getText(result);
     expect(text).toContain('External SSH Hosts');
-    expect(text).toContain('hostinger-test');
-    expect(text).toContain('ssh:hostinger-test@production');
+    expect(text).toContain('hostinger-test/site-a');
+    expect(text).toContain('ssh:hostinger-test/site-a@production');
   });
 
   it('omits the External SSH Hosts section when there are none', async () => {

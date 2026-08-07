@@ -116,9 +116,9 @@ export class ContextSelector extends React.Component<Props, State> {
     try {
       const externalHosts = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS);
       if (Array.isArray(externalHosts) && externalHosts.length > 0) {
-        const externalOptions: SiteOption[] = externalHosts.map((h: { alias: string; environment: string; domain: string }) => ({
-          id: `ssh:${h.alias}`,
-          name: h.alias,
+        const externalOptions: SiteOption[] = externalHosts.map((h: { alias: string; site: string; environment: string; domain: string }) => ({
+          id: `ssh:${h.alias}/${h.site}`,
+          name: `${h.alias}/${h.site}`,
           source: 'external' as const,
           environment: h.environment,
         }));
