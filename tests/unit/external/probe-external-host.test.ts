@@ -1,5 +1,11 @@
+jest.mock('../../../src/main/external/hostKeyTrust', () => ({
+  captureOfferedHostKey: jest.fn(),
+}));
+
 import { resolveSshConfig } from '../../../src/main/external/sshExec';
 import type { RawSshResult, SshExec } from '../../../src/main/external/sshExec';
+import { captureOfferedHostKey } from '../../../src/main/external/hostKeyTrust';
+const captureMock = captureOfferedHostKey as jest.Mock;
 
 const ok = (stdout: string) => ({ code: 0, stdout, stderr: '' });
 
@@ -167,6 +173,46 @@ describe('probeExternalHost — gate 1', () => {
     });
     expect(r.failure?.kind).toBe('unreachable');
     expect(r.failure?.detail).toContain('ENOENT');
+  });
+
+  it('classifies a changed host key and never calls captureOfferedHostKey for it', async () => {
+    const bannerText = [
+      '@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @',
+      'The fingerprint for the ED25519 key sent by the remote host is',
+      'SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU.',
+      'Host key verification failed.',
+    ].join('\n');
+    const r = await probeExternalHost('example', {
+      exec: router([[/echo nexus-ok/, { code: 255, stdout: '', stderr: bannerText }]]),
+    });
+    expect(r.failure?.kind).toBe('host-key-changed');
+    expect(r.failure?.detail).toContain('REMOTE HOST IDENTIFICATION HAS CHANGED');
+    expect(r.failure?.fingerprint).toBeUndefined();
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('classifies an unknown host key and includes the captured fingerprint', async () => {
+    captureMock.mockResolvedValueOnce({ fingerprint: 'SHA256:abc123', keyType: 'ED25519', rawLine: 'x' });
+    const r = await probeExternalHost('example', {
+      exec: router([[/echo nexus-ok/, { code: 255, stdout: '', stderr: 'Host key verification failed.' }]]),
+    });
+    expect(r.failure?.kind).toBe('host-key-unknown');
+    expect(r.failure?.fingerprint).toBe('SHA256:abc123');
+    expect(r.failure?.keyType).toBe('ED25519');
+    expect(r.failure?.remedy).toContain('SHA256:abc123');
+    expect(r.failure?.remedy).toMatch(/Settings/i);
+    expect(captureMock).toHaveBeenCalledWith('example', expect.any(Function));
+  });
+
+  it('reports an unknown host key honestly when the fingerprint cannot be captured', async () => {
+    captureMock.mockResolvedValueOnce(null);
+    const r = await probeExternalHost('example', {
+      exec: router([[/echo nexus-ok/, { code: 255, stdout: '', stderr: 'Host key verification failed.' }]]),
+    });
+    expect(r.failure?.kind).toBe('host-key-unknown');
+    expect(r.failure?.fingerprint).toBeUndefined();
+    expect(r.failure?.remedy).toMatch(/could not fetch/i);
+    expect(r.failure?.remedy).toContain('nexus host test example');
   });
 });
 

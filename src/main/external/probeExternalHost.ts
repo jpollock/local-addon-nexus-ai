@@ -1,4 +1,5 @@
 import { buildExternalSshArgs, buildExternalWpCliCommand } from '../transport/ssh-args';
+import { captureOfferedHostKey } from './hostKeyTrust';
 import { defaultSshExec, resolveSshConfig } from './sshExec';
 import type { RawSshResult, ResolvedSshConfig, SshExec } from './sshExec';
 
@@ -8,7 +9,9 @@ export type ProbeFailureKind =
   | 'unreachable'
   | 'wp-cli-missing'
   | 'wordpress-not-found'
-  | 'multiple-wordpress';
+  | 'multiple-wordpress'
+  | 'host-key-unknown'
+  | 'host-key-changed';
 
 export interface ProbeFailure {
   kind: ProbeFailureKind;
@@ -16,6 +19,10 @@ export interface ProbeFailure {
   detail: string;
   /** A command or concrete action, never advice. */
   remedy: string;
+  /** Populated only for kind === 'host-key-unknown', and only when captureOfferedHostKey succeeded. */
+  fingerprint?: string;
+  /** Populated only alongside fingerprint. */
+  keyType?: string;
 }
 
 export interface ProbeReport {
@@ -113,8 +120,9 @@ function fail(
   detail: string,
   remedy: string,
   extra: Partial<ProbeReport> = {},
+  failureExtra: Partial<Pick<ProbeFailure, 'fingerprint' | 'keyType'>> = {},
 ): ProbeReport {
-  return { ok: false, alias, resolved, ...extra, failure: { kind, detail: detail.trim(), remedy } };
+  return { ok: false, alias, resolved, ...extra, failure: { kind, detail: detail.trim(), remedy, ...failureExtra } };
 }
 
 /** Text a caller should treat as the reason, whether ssh failed locally or remotely. */
@@ -151,6 +159,29 @@ export async function probeExternalHost(alias: string, opts: ProbeOptions = {}):
         + `  ssh-copy-id -i ~/.ssh/id_ed25519.pub -p ${resolved.port} ${account}\n\n`
         + `Then re-run: nexus host test ${alias}\n`
         + `Nexus does not run this for you — it will not handle your password.`);
+    }
+
+    if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(detail)) {
+      return fail(alias, resolved, 'host-key-changed', detail,
+        `The key '${alias}' (${resolved.hostname}) now presents does not match what was trusted `
+        + `before. This can mean the server was reinstalled or replaced, or that something is `
+        + `intercepting your connection. Verify the new fingerprint against your hosting `
+        + `provider's control panel or SSH access log before trusting it. If you're sure it's `
+        + `legitimate, remove the stale entry yourself and re-run this command:\n\n`
+        + `  ssh-keygen -R ${resolved.hostname}\n`);
+    }
+
+    if (/host key verification failed/i.test(detail)) {
+      const captured = await captureOfferedHostKey(alias, exec);
+      if (captured) {
+        return fail(alias, resolved, 'host-key-unknown', detail,
+          `New host key for '${alias}' (${resolved.hostname}):\n  ${captured.keyType} ${captured.fingerprint}\n\n`
+          + `Approve it in Local → Settings → Nexus AI → External Hosts, then re-run this command.`,
+          {}, { fingerprint: captured.fingerprint, keyType: captured.keyType });
+      }
+      return fail(alias, resolved, 'host-key-unknown', detail,
+        `Could not fetch the host's key to display a fingerprint (the host may have become `
+        + `unreachable) — re-run:\n  nexus host test ${alias}`);
     }
 
     return fail(alias, resolved, 'unreachable', detail,
