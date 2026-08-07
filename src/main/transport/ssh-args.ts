@@ -297,6 +297,38 @@ export function buildExternalSshArgs(
   ];
 }
 
+/** Seconds, not ms — matches ssh's own `-o ConnectTimeout=N` unit. */
+export const HOST_KEY_CAPTURE_CONNECT_TIMEOUT_SEC = 10;
+/** The whole capture is one trivial `exit` — short, like the connect-only gate it mirrors. */
+export const HOST_KEY_CAPTURE_TIMEOUT_MS = 15000;
+
+/**
+ * Connect through the alias just far enough to receive its offered host key,
+ * writing it to an ISOLATED temp known_hosts file rather than the real one.
+ *
+ * `StrictHostKeyChecking=accept-new` here does not grant real trust — it only
+ * lets ssh proceed past the handshake so the key can be inspected. Confirmed
+ * live: the key is written to `tempKnownHostsFile` even when the subsequent
+ * `exit` fails to authenticate, because host-key exchange happens before auth.
+ * Nothing is written to the caller's REAL known_hosts by this call.
+ *
+ * Must NOT pass -F /dev/null, for the same reason as buildExternalSshArgs:
+ * this has to traverse whatever ProxyJump/port/user/identity the alias
+ * specifies, which is also why ssh-keyscan (no ProxyJump support) cannot be
+ * used for this instead.
+ */
+export function buildHostKeyCaptureArgs(alias: string, tempKnownHostsFile: string): string[] {
+  assertSafeSshAlias(alias);
+  return [
+    '-o', 'BatchMode=yes',
+    '-o', `ConnectTimeout=${HOST_KEY_CAPTURE_CONNECT_TIMEOUT_SEC}`,
+    '-o', 'StrictHostKeyChecking=accept-new',
+    '-o', `UserKnownHostsFile=${tempKnownHostsFile}`,
+    alias,
+    'exit',
+  ];
+}
+
 /**
  * Ask ssh to print the config it would use for an alias (hostname, user, port).
  *

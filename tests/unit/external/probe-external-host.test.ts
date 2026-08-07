@@ -16,9 +16,12 @@ const SSH_G_OUTPUT = [
 ].join('\n');
 
 describe('resolveSshConfig', () => {
-  it('parses hostname, user and port from ssh -G', async () => {
+  it('parses hostname, user, port and userKnownHostsFile from ssh -G', async () => {
     const cfg = await resolveSshConfig('example', execReturning(SSH_G_OUTPUT));
-    expect(cfg).toEqual({ hostname: '203.0.113.10', user: 'deploy', port: '2222' });
+    expect(cfg).toEqual({
+      hostname: '203.0.113.10', user: 'deploy', port: '2222',
+      userKnownHostsFile: `${require('os').homedir()}/.ssh/known_hosts`,
+    });
   });
 
   it('invokes ssh -G <alias> and nothing else', async () => {
@@ -29,7 +32,9 @@ describe('resolveSshConfig', () => {
 
   it('is case-insensitive on keys, as ssh -G output can vary', async () => {
     const cfg = await resolveSshConfig('example', execReturning('HostName 10.0.0.1\nUser bob\nPort 22'));
-    expect(cfg).toEqual({ hostname: '10.0.0.1', user: 'bob', port: '22' });
+    expect(cfg.hostname).toBe('10.0.0.1');
+    expect(cfg.user).toBe('bob');
+    expect(cfg.port).toBe('22');
   });
 
   it('falls back to the alias and sane defaults when ssh -G yields nothing', async () => {
@@ -37,7 +42,16 @@ describe('resolveSshConfig', () => {
     // code. `ssh -G` resolves and never validates, so nothing here may gate on
     // its status — a 255 fixture would read as though something did.
     const cfg = await resolveSshConfig('example', async () => ({ code: 0, stdout: '', stderr: 'boom' }));
-    expect(cfg).toEqual({ hostname: 'example', user: '', port: '22' });
+    expect(cfg.hostname).toBe('example');
+    expect(cfg.user).toBe('');
+    expect(cfg.port).toBe('22');
+    expect(cfg.userKnownHostsFile).toBe(`${require('os').homedir()}/.ssh/known_hosts`);
+  });
+
+  it('uses the FIRST path when ssh -G reports a space-separated list', async () => {
+    const cfg = await resolveSshConfig('example',
+      execReturning('HostName 10.0.0.1\nUser bob\nPort 22\nUserKnownHostsFile /custom/hosts /home/bob/.ssh/known_hosts2'));
+    expect(cfg.userKnownHostsFile).toBe('/custom/hosts');
   });
 });
 
@@ -75,7 +89,10 @@ describe('probeExternalHost — happy path', () => {
     expect(r.wpVersion).toBe('6.8.1');
     expect(r.wpCliVersion).toBe('2.12.0');
     expect(r.siteUrl).toBe('https://example.com');
-    expect(r.resolved).toEqual({ hostname: '203.0.113.10', user: 'deploy', port: '2222' });
+    expect(r.resolved).toEqual({
+      hostname: '203.0.113.10', user: 'deploy', port: '2222',
+      userKnownHostsFile: `${require('os').homedir()}/.ssh/known_hosts`,
+    });
   });
 
   it('leaves wpCliPath undefined when wp is on PATH', async () => {

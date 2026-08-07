@@ -2,6 +2,7 @@ import {
   buildExternalSshArgs,
   buildExternalWpCliCommand,
   buildSshConfigDumpArgs,
+  buildHostKeyCaptureArgs,
   EXTERNAL_SSH_TIMEOUT_MS,
 } from '../../../src/main/transport/ssh-args';
 
@@ -101,6 +102,29 @@ describe('buildSshConfigDumpArgs', () => {
 
 it('pins the external SSH timeout', () => {
   expect(EXTERNAL_SSH_TIMEOUT_MS).toBe(20000);
+});
+
+describe('buildHostKeyCaptureArgs', () => {
+  it('does NOT pass -F /dev/null — must go through the alias\'s own ProxyJump/config', () => {
+    const args = buildHostKeyCaptureArgs('acme-box', '/tmp/nexus-hostkey-test');
+    expect(args).not.toContain('/dev/null');
+    expect(args).not.toContain('-F');
+  });
+
+  it('pins the exact argv', () => {
+    expect(buildHostKeyCaptureArgs('acme-box', '/tmp/nexus-hostkey-test')).toEqual([
+      '-o', 'BatchMode=yes',
+      '-o', 'ConnectTimeout=10',
+      '-o', 'StrictHostKeyChecking=accept-new',
+      '-o', 'UserKnownHostsFile=/tmp/nexus-hostkey-test',
+      'acme-box',
+      'exit',
+    ]);
+  });
+
+  it('rejects an unsafe alias', () => {
+    expect(() => buildHostKeyCaptureArgs('-oProxyCommand=evil', '/tmp/x')).toThrow(/Invalid SSH host alias/);
+  });
 });
 
 describe('alias validation — argv injection', () => {

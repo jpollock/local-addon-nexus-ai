@@ -1,4 +1,6 @@
 import { spawn } from 'child_process';
+import * as path from 'path';
+import * as os from 'os';
 import { buildSshConfigDumpArgs } from '../transport/ssh-args';
 
 export interface RawSshResult {
@@ -37,6 +39,8 @@ export interface ResolvedSshConfig {
   hostname: string;
   user: string;
   port: string;
+  /** First path when ssh -G reports a space-separated list — the file ssh itself would write to. */
+  userKnownHostsFile: string;
 }
 
 export const SSH_CONFIG_DUMP_TIMEOUT_MS = 5000;
@@ -62,9 +66,14 @@ export async function resolveSshConfig(
       if (!fields.has(key)) fields.set(key, m[2].trim());
     }
   }
+  const knownHostsField = fields.get('userknownhostsfile');
+  const userKnownHostsFile = knownHostsField
+    ? knownHostsField.split(/\s+/)[0]
+    : path.join(os.homedir(), '.ssh', 'known_hosts');
   return {
     hostname: fields.get('hostname') || alias,
     user: fields.get('user') || '',
     port: fields.get('port') || '22',
+    userKnownHostsFile,
   };
 }
