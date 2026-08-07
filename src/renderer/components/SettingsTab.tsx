@@ -518,10 +518,10 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
             },
               ...this.state.externalHosts.map(h =>
                 React.createElement('span', {
-                  key: h.alias,
+                  key: `${h.alias}/${h.site}`,
                   title: `${h.domain || h.alias} — ${h.environment}`,
                   style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(128,128,128,0.06)', color: 'var(--nxai-status-neutral, #9ca3af)', border: '1px dashed var(--nxai-card-border, #30363d)' },
-                }, h.alias),
+                }, `${h.alias}/${h.site}`),
               ),
             ),
       ),
@@ -691,7 +691,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
                   (() => {
                     const q = installSearch.toLowerCase();
                     const wpeMatches = wpeInstalls.filter(i => !q || i.installName.toLowerCase().includes(q) || i.primaryDomain.toLowerCase().includes(q)).slice(0, 30);
-                    const externalMatches = this.state.externalHosts.filter(h => !q || h.alias.toLowerCase().includes(q) || h.domain.toLowerCase().includes(q)).slice(0, 30);
+                    const externalMatches = this.state.externalHosts.filter(h => !q || h.alias.toLowerCase().includes(q) || h.site.toLowerCase().includes(q) || h.domain.toLowerCase().includes(q)).slice(0, 30);
 
                     const renderPick = (targetRef: string, label: string, environment: string, kind: 'wpe' | 'ssh') => {
                       const isSelected = addingException?.targetRef === targetRef;

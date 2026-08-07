@@ -439,6 +439,7 @@ sitesCommand
             }
             external {
               alias
+              site
               id
               environment
               domain

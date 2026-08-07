@@ -39,7 +39,7 @@ export async function resolveTransport(
       return error(e?.message ?? `Invalid SSH target: ${sshTarget}`);
     }
     if (parsed.type !== 'external' || !parsed.alias) {
-      return error(`Not an external SSH target: ${sshTarget}. Expected ssh:alias@environment`);
+      return error(`Not an external SSH target: ${sshTarget}. Expected ssh:alias/site@environment`);
     }
 
     // The connection profile carries reachability metadata only (wpCliPath).
