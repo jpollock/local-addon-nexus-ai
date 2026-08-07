@@ -4674,7 +4674,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   // Agent settings cache — synced from renderer via AGENT_SETTINGS_UPDATE.
   // Pre-populated from disk at startup so the scheduler/event bridge never defaults
   // to permissive before the renderer finishes loading and sends the initial sync.
-  const agentSettingsCache: Map<string, { enabled: boolean; scheduleEnabled: boolean; eventsEnabled: boolean; autonomy: 'suggest' | 'ask' | 'auto' }> =
+  //
+  // Values are spread wholesale, not hand-listed. This used to reconstruct the cached object
+  // field-by-field from exactly {enabled, scheduleEnabled, eventsEnabled, autonomy} — any other
+  // key a caller sent (scanScope, scope, savedScopes, cadence, subscribedEvents) was silently
+  // dropped before it ever reached ctx.settings. security-sentinel's resolveScanScope reads
+  // ctx.settings.scanScope expecting a persisted scope to survive here; it never did.
+  const agentSettingsCache: Map<string, Record<string, any>> =
     (deps as any).__agentSettingsCache ?? ((deps as any).__agentSettingsCache = new Map());
 
   const _fs = require('fs') as typeof import('fs');
@@ -4682,28 +4688,26 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   const _path = require('path') as typeof import('path');
   const _agentSettingsFile = _path.join(_os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agent-settings.json');
 
+  const withCoreDefaults = (s: Record<string, any>): Record<string, any> => ({
+    ...s,
+    enabled:         s.enabled         ?? true,
+    scheduleEnabled: s.scheduleEnabled ?? true,
+    eventsEnabled:   s.eventsEnabled   ?? true,
+    autonomy:        s.autonomy        ?? 'ask',
+  });
+
   // Load persisted settings into cache before any scheduler fires
   try {
     const _raw = _fs.readFileSync(_agentSettingsFile, 'utf8');
     const _saved = JSON.parse(_raw) as Record<string, any>;
     for (const [agentId, s] of Object.entries(_saved)) {
-      agentSettingsCache.set(agentId, {
-        enabled:         s.enabled         ?? true,
-        scheduleEnabled: s.scheduleEnabled ?? true,
-        eventsEnabled:   s.eventsEnabled   ?? true,
-        autonomy:        s.autonomy        ?? 'ask',
-      });
+      agentSettingsCache.set(agentId, withCoreDefaults(s));
     }
   } catch { /* file absent on first run — permissive defaults are correct */ }
 
   safeHandle(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, (_event, settings: Record<string, any>) => {
     for (const [agentId, s] of Object.entries(settings ?? {})) {
-      agentSettingsCache.set(agentId, {
-        enabled:         s.enabled         ?? true,
-        scheduleEnabled: s.scheduleEnabled ?? true,
-        eventsEnabled:   s.eventsEnabled   ?? true,
-        autonomy:        s.autonomy        ?? 'ask',
-      });
+      agentSettingsCache.set(agentId, withCoreDefaults(s));
     }
     // Persist to disk so next startup respects user's saved toggle state
     try {

@@ -528,6 +528,10 @@ module.exports = {
   // ctx.fullRun forcing Tier 2 past a Tier-1-clean verdict is dead code to a user who can never
   // set it.
   supportsFullRun: true,
+  // Investigates and surfaces findings; never writes to the production site it scans (the
+  // sandbox clone/pull/push tools above operate on a throwaway `sentinel-*` copy, not the site
+  // itself). Drives the site-picker's production-warning verb: "will be scanned", not "modified".
+  effect: 'readonly',
   // NO CRON. Removing this earlier from nexus.agent.yaml's `triggers:` list did nothing —
   // AgentRegistry.loadAgent() reads triggers exclusively from THIS array (module.exports),
   // never from the YAML manifest (loadManifest() there only pulls contributes.tools). The cron
