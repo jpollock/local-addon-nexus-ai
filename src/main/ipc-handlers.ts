@@ -95,6 +95,8 @@ import {
 const { ipcMain } = require('electron');
 import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 import { vectorSiteId } from './vector-store/vectorSiteId';
+import { captureOfferedHostKey, trustHostKey } from './external/hostKeyTrust';
+import { resolveSshConfig, defaultSshExec } from './external/sshExec';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -1006,6 +1008,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       }));
     } catch {
       return [];
+    }
+  });
+
+  // Renderer-only. Deliberately NOT a GraphQL mutation and NOT called from
+  // src/cli/ — see the constant's own comment in constants.ts. This is the
+  // only function in the codebase that may call trustHostKey.
+  safeHandle(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, async (_event: unknown, alias: string) => {
+    try {
+      const resolved = await resolveSshConfig(alias);
+      const captured = await captureOfferedHostKey(alias, defaultSshExec);
+      if (!captured) {
+        return { success: false, error: `Could not fetch a host key for '${alias}' — it may have become unreachable.` };
+      }
+      trustHostKey(resolved.userKnownHostsFile, captured.rawLine);
+      return { success: true, error: null, fingerprint: captured.fingerprint };
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? String(e) };
     }
   });
 

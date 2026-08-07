@@ -198,6 +198,10 @@ export const IPC_CHANNELS = {
 
   // External SSH Hosts
   GET_EXTERNAL_HOSTS: `${ADDON_PREFIX}:get-external-hosts`,
+  // Renderer-only: never add a matching GraphQL mutation. See
+  // docs/superpowers/specs/2026-08-07-host-key-trust-on-first-use-design.md
+  // for why a GraphQL mutation here would not actually be CLI-inaccessible.
+  TRUST_EXTERNAL_HOST_KEY: `${ADDON_PREFIX}:trust-external-host-key`,
 
   // UI Navigation
   NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,
