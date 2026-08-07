@@ -103,8 +103,25 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 ## External SSH Hosts
 
 Sites that are neither Local nor WP Engine, reached by a `~/.ssh/config` alias.
-Target syntax: `ssh:<alias>@<production|staging|development>`.
+Target syntax: `ssh:<alias>/<site>@<production|staging|development>`.
 
+- **An alias is a connection, not a site.** `ssh:<alias>` can have zero, one, or many
+  WordPress installs under it — confirmed live: a single Hostinger login hosts two. Target
+  syntax is `ssh:<alias>/<site>@<environment>`, mirroring `wpe:<account>/<install>@
+  <environment>`. The bare `ssh:<alias>@<environment>` form is accepted as input only when the
+  connection has exactly one site; every surface that PRINTS a target — `nexus_list_sites`,
+  `sites list`, `host list`, error messages — always prints the full `/<site>` form, so nothing
+  already scripted or agent-copied breaks the day a second site is added.
+- **`account_id` links a site row back to its connection**, reusing the same generic column WP
+  Engine uses for its own account→install grouping — no new table.
+- **A lazy "sighting" no longer auto-registers a site.** `nexus wp core version
+  ssh:newalias@production` against a connection that was never through `nexus host add` now
+  fails with "no registered sites," where it previously created a phantom row with no
+  discovered domain. A `sites` row means "a human, or the registration picker, named this,"
+  never "something referenced this string once."
+- **Registration lists every discovered WordPress install and lets the user pick which to
+  register** (`nexus host add <alias>`) — the probe already found every root before this
+  landed; only the registration step used to force picking exactly one.
 - **Nexus never writes to the user's server.** No WP-CLI upload, no
   `ssh-copy-id` execution. The probe detects, searches known locations, and
   prints the command for the user to run. Do not add an upload path.

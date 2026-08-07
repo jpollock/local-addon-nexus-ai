@@ -419,6 +419,7 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 **Key points:**
 
 - The alias is a `Host` entry in `~/.ssh/config`. Nexus stores no key material and never writes anything to your server.
+- **An alias is a connection, not a site.** One SSH login can host zero, one, or many WordPress installs. `nexus host add <alias>` discovers every install under the connection and lets you pick which ones to register. Target syntax is `ssh:<alias>/<site>@<environment>`, mirroring the `wpe:<account>/<install>@<environment>` form. The bare `ssh:<alias>@<environment>` form (no `/<site>`) still works as input, but only when the connection has exactly one registered site — once a second site is added, the bare form is rejected with an error naming all the registered sites, so you must disambiguate. Anywhere Nexus *prints* a target (`host list`, `sites list`, error messages) it always prints the full `/<site>` form.
 - The WordPress path is discovered automatically; `--path` is only needed when discovery finds nothing or finds several installs.
 - `--env` defaults to `production` for a host you have not registered before; re-running `nexus host add` without `--env` leaves an existing host's label alone. Writes are refused on production by default (see Settings > Nexus AI > Operation Permissions).
 - **The registered environment is the write gate, and a target suffix cannot loosen it.** A host registered as `production` still refuses writes when addressed as `ssh:<alias>@development`. The gate keys off the more restrictive of the two labels. To enable writes, re-register: `nexus host add <alias> --env development`.
@@ -445,7 +446,7 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 
 **Which `nexus wp` commands work against a registered host.**
 
-Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. **18 of the 22 `nexus wp` subcommands reach an external host** — every command that routes through the `nexusWpCommand` GraphQL resolver.
+Once a host is registered you address it as `ssh:<alias>/<site>@<environment>` (or the bare `ssh:<alias>@<environment>` form if the connection has exactly one registered site), with no `--path` needed. **18 of the 22 `nexus wp` subcommands reach an external host** — every command that routes through the `nexusWpCommand` GraphQL resolver.
 
 **The 4 that do NOT work:**
 - `wp db scan`, `wp db clean`, `wp db report` — local-only by design (analyze the database of a running Local site)
