@@ -24,12 +24,30 @@ function injectAgentConsoleStyles(): void {
 }
 injectAgentConsoleStyles();
 
+/**
+ * This addon's renderer bundle is require()'d directly into Local's own main-window renderer
+ * process (RendererAddonLoader, not an iframe/BrowserView) — same document, same DOM tree. By
+ * the time addon code runs, Local's own themecop-init has already applied `Theme__Dark` or
+ * `Theme__Light` to <html>, so that class is the resolved-theme source of truth (never 'auto' —
+ * ThemeCop resolves 'auto' before applying the class). agent-console.css keys its light palette
+ * off `data-ag-theme` rather than reusing Local's own class name directly, so this addon's CSS
+ * selector doesn't silently break if Local ever renames its own theme classes.
+ */
+function applyAgentTheme(): void {
+  const isDark = document.documentElement.classList.contains('Theme__Dark');
+  document.documentElement.setAttribute('data-ag-theme', isDark ? 'dark' : 'light');
+}
+
 export default function renderer(context: any): void {
   console.log('[Nexus AI] Renderer initializing...');
   const { React, hooks, ReactRouter } = context;
   const { Route, NavLink } = ReactRouter;
   const electron = context.electron || (window as any).electron;
   console.log('[Nexus AI] React, hooks, electron loaded');
+
+  applyAgentTheme();
+  const themeChangeHandler = () => applyAgentTheme();
+  electron.ipcRenderer.on('osThemeChange', themeChangeHandler);
 
   // Try to get TextButton from Local's components
   let TextButton: any = null;
@@ -109,6 +127,16 @@ export default function renderer(context: any): void {
           // and would cause silent validation failure if included.
           const { llmAvailable: _derived, ...toSave } = pendingSettings;
           const result = await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, toSave);
+          // UPDATE_SETTINGS's own handler catches every internal failure and still resolves
+          // (ipcMain.handle has no reject path here) — so a validation error never throws on
+          // this side, it comes back as `result._error`. Checking only the happy path meant a
+          // rejected save (e.g. a stale field from a different branch/worktree's addon sharing
+          // this settings file) looked identical to success: no toast, no console line, and
+          // the edit was discarded by clearing pendingSettings regardless.
+          if ((result as any)?._error) {
+            console.error('[NexusAI] Failed to save settings:', (result as any)._error);
+            return;
+          }
           pendingSettings = null;
           // Notify all site panels and the docked panel gate to refresh
           window.dispatchEvent(new CustomEvent('nexus-ai:settings-applied', { detail: result }));
@@ -463,6 +491,7 @@ export default function renderer(context: any): void {
     electron.ipcRenderer.removeListener('nexus:apply-sidebar-filter', applyFilterHandler);
     electron.ipcRenderer.removeListener('nexus:clear-sidebar-filter', clearFilterHandler);
     electron.ipcRenderer.removeListener(IPC_CHANNELS.NEXUS_STATE_UPDATE, stateUpdateHandler);
+    electron.ipcRenderer.removeListener('osThemeChange', themeChangeHandler);
   });
 
 }

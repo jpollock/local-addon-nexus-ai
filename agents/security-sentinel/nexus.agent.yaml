@@ -22,6 +22,7 @@ tools:
   - local_wpe_pull
   - local_operation_status
   - wp_eval
+  - scan_site_files
   - local_wpe_push
 
 contributes:

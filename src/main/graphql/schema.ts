@@ -2058,6 +2058,10 @@ export const typeDefs = gql`
     lastRunError: String
     "When true, the Run Now modal shows an Always do full run toggle"
     supportsFullRun: Boolean
+    "When false, production sites are locked (non-selectable) in this agent's site scope picker"
+    allowsProduction: Boolean
+    "Whether this agent only investigates ('readonly') or writes to the sites it runs on ('writes'). Drives the production-warning verb in the site scope picker."
+    effect: String
   }
 
   type AgentRunRecord {

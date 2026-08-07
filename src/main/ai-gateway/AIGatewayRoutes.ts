@@ -19,6 +19,7 @@ import { translateToAnthropic, translateFromAnthropic } from './format-translato
 import { callAnthropicAPI, calculateAnthropicCost } from './anthropic-client';
 import { callOpenAIAPI, calculateOpenAICost } from './openai-client';
 import { callGoogleAPI, calculateGoogleCost, callGoogleImageAPI, calculateGoogleImageCost, GOOGLE_IMAGE_MODELS } from './google-client';
+import { callPowerAPI, calculatePowerCost } from './power-client';
 import { callImageAPI, calculateImageCost, IMAGE_MODELS, ImageGenerationRequest } from './image-client';
 import { checkRateLimit } from './rate-limiter';
 import {
@@ -27,7 +28,7 @@ import {
   GatewayUsageRecord,
 } from './types';
 
-type ChatProvider = 'anthropic' | 'openai' | 'google';
+type ChatProvider = 'anthropic' | 'openai' | 'google' | 'power';
 
 /**
  * Maps known model IDs to their chat provider.
@@ -255,6 +256,32 @@ export class AIGatewayRoutes {
       responseId        = googleResponse.id ?? `chatcmpl-google-${Date.now()}`;
       actualProvider    = 'google';
       costUsd           = calculateGoogleCost(model, promptTokens, completionTokens);
+
+    } else if (resolvedProvider === 'power') {
+      // WP Engine Power — an OpenAI-compatible proxy. Was entirely unhandled here: any caller
+      // configured with aiProvider:'power' (chat works fine — it has its own separate provider
+      // implementation in src/main/chat/providers/power.ts) fell through every branch above and
+      // hit the generic "No API key configured" error below, even with a valid key set, because
+      // this gateway never knew 'power' was a provider at all. The model string arrives already
+      // prefixed (`anthropic/claude-sonnet-5`) — Power expects that form directly, no translation.
+      const powerKey = this.keyVault.getKey('power');
+      if (!powerKey) { this.sendError(res, 503, 'WP Engine Power API key not configured in Local'); return; }
+
+      let powerResponse;
+      try {
+        powerResponse = await callPowerAPI(openAIRequest, { apiKey: powerKey, logger: this.logger });
+      } catch (err) {
+        this.logger.error('[AIGateway] WP Engine Power API call failed:', err);
+        this.sendError(res, 502, `WP Engine Power API error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        return;
+      }
+
+      openAIResponse    = powerResponse;
+      promptTokens      = powerResponse.usage?.prompt_tokens ?? 0;
+      completionTokens  = powerResponse.usage?.completion_tokens ?? 0;
+      responseId        = powerResponse.id ?? `chatcmpl-power-${Date.now()}`;
+      actualProvider    = 'power';
+      costUsd           = calculatePowerCost(model, promptTokens, completionTokens);
 
     } else {
       this.sendError(res, 503, `No API key configured for model: ${model}`);

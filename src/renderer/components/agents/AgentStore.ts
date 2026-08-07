@@ -21,6 +21,8 @@ export interface AgentStatus {
   lastRunDurationMs: number | null;
   lastRunError: string | null;
   supportsFullRun: boolean;
+  allowsProduction: boolean;
+  effect: 'readonly' | 'writes';
 }
 
 export interface AgentRunRecord {
@@ -63,12 +65,41 @@ export interface ActivityEvent {
   summary?: string;             // free-text Site Content Report from AgentResult.summary
 }
 
+/**
+ * Which sites a *scheduled* run may touch. A run the user targets directly — Run Now, or an
+ * event naming one install — is not constrained by this.
+ *
+ * Always an explicit list, never a live rule — a site added to the account after this was saved
+ * is never auto-included (see the drift banner in the picker UI). An empty siteIds scans
+ * nothing, deliberately: the alternative, treating "nothing configured" as "scan everything", is
+ * the exact shape of the bug that had security-sentinel sweeping 375 sites every 15 minutes with
+ * nobody having chosen anything. There used to be a second, legacy `AgentScanScope` shape with a
+ * live `mode: 'all'` — removed 2026-08-07 when "Every site" was retired from the picker UI for
+ * contradicting this same explicit-list model. `AgentWorkspaceSettings` still reads that legacy
+ * on-disk shape as a one-time migration fallback when `scope` itself is absent.
+ */
+export interface AgentScope {
+  siteIds: string[];
+}
+
+export interface AgentSavedScope {
+  name: string;
+  siteIds: string[];
+}
+
 export interface AgentSettings {
   enabled: boolean;
   scheduleEnabled: boolean;
   cadence: string;  // '*/15 * * * *' | '0 * * * *' | '0 */6 * * *' | '0 0 * * *' | '0 0 * * 0'
   eventsEnabled: boolean;
   subscribedEvents: Record<string, boolean>;
+  /** Persistent scope for scheduled runs and event triggers, shared by both, and the same field
+   * Run Now prefills from — see AgentScope. */
+  scope: AgentScope;
+  /** Named scopes saved for quick re-application in the picker. Per-agent, not shared (v1). */
+  savedScopes?: AgentSavedScope[];
+  /** Unix ms timestamp of the last time `scope` was edited. Required to compute drift. */
+  scopeUpdatedAt?: number;
 }
 
 export interface AgentState {
@@ -205,6 +236,10 @@ class AgentStore {
       cadence: '*/15 * * * *',
       eventsEnabled: false,
       subscribedEvents: {},
+      // Opt-in. No site is scanned on a schedule until the user picks it in the site scope
+      // picker. The main process applies the same rule independently (resolveScanScope in the
+      // agent) — this default is the UI's view of it, not the enforcement.
+      scope: { siteIds: [] },
     };
   }
 

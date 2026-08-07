@@ -234,6 +234,10 @@ export const IPC_CHANNELS = {
   AGENT_SETTINGS_GET:   `${ADDON_PREFIX}:agent:settings-get`,
   AGENT_REMOVE:         `${ADDON_PREFIX}:agent:remove`,
   AGENT_LOG_OPEN:       `${ADDON_PREFIX}:agent:log-open`,
+  /** Sites already bound to a log source via log-processor's connect_log_source tool — the
+   * site scope picker for this agent only offers these, since an unconnected site's presence
+   * in scope would silently do nothing (see agents/log-processor/agent.ts's run()). */
+  AGENT_LOG_PROCESSOR_CONNECTED_SITES: `${ADDON_PREFIX}:agent:log-processor:connected-sites`,
 
   // Ad-hoc SELECT query against graph DB (for KPI rendering from agent manifest)
   FLEET_SQL_QUERY: `${ADDON_PREFIX}:fleet-sql-query`,

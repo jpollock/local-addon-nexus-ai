@@ -5852,6 +5852,8 @@ export function createResolvers(context: ResolverContext) {
             lastRunDurationMs: last ? last.finishedAt - last.startedAt : null,
             lastRunError: last?.error ?? null,
             supportsFullRun: (def as any).supportsFullRun ?? false,
+            allowsProduction: (def as any).allowsProduction ?? true,
+            effect: (def as any).effect ?? 'writes',
           };
         });
       },

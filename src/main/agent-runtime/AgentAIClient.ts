@@ -9,6 +9,25 @@ interface StreamResult {
   toolCalls: ToolCallRequest[];
 }
 
+/**
+ * Some models wrap their __output__ tool-call arguments in a `result` key instead of returning
+ * schema fields flat; some don't. Reproduced live: a synthesizer call returned
+ * `{ verdict: 'high-risk', result: { attackSummary: '...', ... } }` — verdict as a SIBLING of
+ * result, everything else inside it. The old `raw?.result ?? raw` unwrap is all-or-nothing: since
+ * `result` was truthy, the whole return value became `raw.result`, silently dropping `verdict`
+ * ("[Tier 2 Synthesis] NitroPack Production: undefined — ..." in the log — attackSummary present,
+ * verdict gone). Spreading both, with `result`'s fields taking precedence on overlap, covers the
+ * fully-wrapped, fully-flat, and split shapes without needing to know which one a given model uses.
+ */
+function unwrapOutputArguments(raw: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  const nested = raw.result;
+  if (nested && typeof nested === 'object') {
+    return { ...raw, ...(nested as Record<string, unknown>) };
+  }
+  return raw;
+}
+
 async function collectStream(gen: AsyncGenerator<ProviderStreamEvent>): Promise<StreamResult> {
   let content = '';
   const toolCalls: ToolCallRequest[] = [];
@@ -113,8 +132,7 @@ export class AgentAIClient implements AIClient {
       const response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
-        const raw = outputCall.arguments;
-        return (raw?.result ?? raw) as T;
+        return unwrapOutputArguments(outputCall.arguments) as T;
       }
       // Fallback: model responded in text despite forced tool — try to parse JSON
       const text = response.content?.trim() ?? '';
@@ -141,8 +159,7 @@ export class AgentAIClient implements AIClient {
 
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
-        const raw = outputCall.arguments;
-        return (raw?.result ?? raw) as T;
+        return unwrapOutputArguments(outputCall.arguments) as T;
       }
 
       if (response.toolCalls.length === 0) {

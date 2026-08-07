@@ -1,143 +1,91 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
+import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
+import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
+import type { AgentScope } from './AgentStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type SiteEnv = 'production' | 'staging' | 'development' | 'local';
-
-interface SiteForRun {
-  id: string;
-  name: string;
-  displayName: string;
-  account: string;
-  environment: SiteEnv;
-}
 
 interface ModalProps {
   agentName: string;       // e.g. "Security Sentinel"
   agentId: string;         // e.g. "security-sentinel"
   electron: any;           // Electron IPC — same pattern as NexusOverview
   supportsFullRun: boolean;
+  allowsProduction: boolean;
+  /** Drives the production-warning verb: "scanned" (readonly) vs "modified" (writes). */
+  effect: 'readonly' | 'writes';
+  /** The agent's persisted schedule/event scope. Undefined = never configured. */
+  scheduleScope?: AgentScope;
   onCancel: () => void;
   onRun: (siteNames: string[]) => void;
 }
 
 interface ModalState {
   isRunning: boolean;
-  sites: SiteForRun[];
-  selected: Set<string>;
-  searchText: string;
-  accountFilter: string;   // 'all' | 'wpe' | 'local' | account name
   loading: boolean;
-  includeProd: boolean;
+  sites: ScopeSite[];
+  selection: Set<string>;
   fullRun: boolean;
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const ENV_COLORS: Record<SiteEnv, { bg: string; color: string; label: string }> = {
-  production:  { bg: 'rgba(244,104,95,0.16)',  color: '#f4685f', label: 'PROD' },
-  staging:     { bg: 'rgba(245,181,68,0.16)',  color: '#f5b544', label: 'STAGING' },
-  development: { bg: 'rgba(123,140,255,0.16)', color: '#7b8cff', label: 'DEV' },
-  local:       { bg: 'rgba(53,208,197,0.16)',  color: '#35d0c5', label: 'LOCAL' },
-};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   state: ModalState = {
-    sites: [],
-    selected: new Set(),
-    searchText: '',
-    accountFilter: 'all',
     loading: true,
     isRunning: false,
-    includeProd: false,
+    sites: [],
+    selection: new Set(),
     fullRun: false,
   };
 
   async componentDidMount() {
-    await this.loadSites();
+    const sites = await fetchSitesForAgent(this.props.agentId, this.props.electron);
+    this.setState({ sites, loading: false, selection: this.initialSelection(sites) });
   }
 
-  private async loadSites() {
-    const { electron } = this.props;
-    const ipc = electron.ipcRenderer;
-    const sites: SiteForRun[] = [];
-
-    // WPE installs — returns { success, sites: Site[] } where Site has name, environment, account_id
-    try {
-      const wpeResult = await ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES).catch(() => null);
-      const wpeSites: any[] = wpeResult?.sites || [];
-      for (const s of wpeSites) {
-        const name: string = s.name || '';
-        const env = (s.environment || 'production') as SiteEnv;
-        if (!name) continue;
-        sites.push({ id: s.id || name, name, displayName: name, account: s.account_id || 'WP Engine', environment: env });
-      }
-    } catch {}
-
-    // Local sites — returns Site[] directly with { id, name, status, ... }
-    try {
-      const localSites: any[] = await ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []);
-      for (const s of (localSites || [])) {
-        const name: string = s.name || '';
-        if (!name || name.startsWith('sentinel-')) continue; // skip sentinel sandboxes
-        sites.push({ id: s.id || name, name, displayName: name, account: 'Local sites', environment: 'local' });
-      }
-    } catch {}
-
-    // C1: Default selection — non-production only
-    const selected = new Set(sites.filter(s => s.environment !== 'production').map(s => s.id));
-    this.setState({ sites, selected, loading: false });
-  }
-
-  private getFiltered(): SiteForRun[] {
-    const { sites, searchText, accountFilter } = this.state;
-    return sites.filter(s => {
-      if (searchText && !s.name.includes(searchText.toLowerCase()) && !s.displayName.toLowerCase().includes(searchText.toLowerCase())) return false;
-      if (accountFilter === 'all') return true;
-      if (accountFilter === 'wpe') return s.environment !== 'local';
-      if (accountFilter === 'local') return s.environment === 'local';
-      return s.account === accountFilter;
-    });
-  }
-
-  private getAccounts(): Array<{ id: string; label: string; count: number }> {
-    const { sites } = this.state;
-    let wpe = 0, local = 0;
-    for (const s of sites) {
-      if (s.environment === 'local') local++;
-      else wpe++;
+  /**
+   * Run now prefill: copy the schedule scope into a run-local selection. When no schedule scope
+   * has ever been saved (a brand-new agent), fall back to non-production sites — the same
+   * default the modal used before scope was configurable at all.
+   */
+  private initialSelection(sites: ScopeSite[]): Set<string> {
+    const { scheduleScope, allowsProduction } = this.props;
+    if (scheduleScope?.siteIds?.length) {
+      const bySite = new Map(sites.map(s => [s.id, s]));
+      return new Set(scheduleScope.siteIds.filter(id => {
+        const site = bySite.get(id);
+        return !site || allowsProduction || site.environment !== 'production';
+      }));
     }
-    return [
-      { id: 'all',   label: `All sites (${sites.length})`, count: sites.length },
-      { id: 'wpe',   label: `WP Engine (${wpe})`,          count: wpe },
-      { id: 'local', label: `Local (${local})`,            count: local },
-    ];
+    // No saved scope to prefill from — default to non-production regardless of policy.
+    // allowsProduction governs whether production CAN be selected, not whether it's
+    // pre-selected; the safe default has always excluded it either way.
+    return new Set(sites.filter(s => s.environment !== 'production').map(s => s.id));
   }
 
-  private toggleSite(id: string) {
-    this.setState(s => {
-      const next = new Set(s.selected);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return { selected: next };
-    });
-  }
+  private resetToScheduleScope = (): void => {
+    this.setState({ selection: this.initialSelection(this.state.sites) });
+  };
 
-  private clearAll() {
-    this.setState({ selected: new Set() });
+  /** Added/removed vs the schedule scope — computed live, never stored, per the design's state
+   * management rules (delta is derived, not persisted with the run-local selection). */
+  private getDelta(): { added: number; removed: number; modified: boolean } {
+    const scheduleIds = new Set(this.props.scheduleScope?.siteIds ?? []);
+    const current = this.state.selection;
+    let added = 0, removed = 0;
+    for (const id of current) if (!scheduleIds.has(id)) added++;
+    for (const id of scheduleIds) if (!current.has(id)) removed++;
+    return { added, removed, modified: added > 0 || removed > 0 };
   }
 
   private async handleRun() {
     if (this.state.isRunning) return;
     this.setState({ isRunning: true });
     const { onRun, electron, agentId } = this.props;
-    const filtered = this.getFiltered();
-    const toRun = filtered.filter(s => this.state.selected.has(s.id)).map(s => s.name);
+    const bySite = new Map(this.state.sites.map(s => [s.id, s]));
+    const toRun = [...this.state.selection].map(id => bySite.get(id)?.name).filter((n): n is string => !!n);
 
-    // C3: Pass fullRun in IPC call
     try {
       await electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_NOW, {
         agentId,
@@ -152,196 +100,102 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   }
 
   render() {
-    const { agentName, onCancel } = this.props;
-    const { searchText, accountFilter, selected, loading, includeProd, fullRun } = this.state;
-    const filtered = this.getFiltered();
-    const selectedCount = filtered.filter(s => selected.has(s.id)).length;
-    const accounts = this.getAccounts();
-
-    const chipStyle = (active: boolean): React.CSSProperties => ({
-      padding: '5px 13px', borderRadius: 20, fontSize: 12.5, fontWeight: 500,
-      cursor: 'pointer', border: 'none', whiteSpace: 'nowrap' as const,
-      background: active ? 'rgba(53,208,197,0.14)' : 'var(--ag-bg-inset)',
-      color: active ? 'var(--ag-teal)' : 'var(--ag-text-secondary)',
-      outline: active ? '1px solid rgba(53,208,197,0.4)' : '1px solid var(--ag-border)',
-    });
+    const { agentName, allowsProduction, effect, onCancel, supportsFullRun } = this.props;
+    const { loading, sites, selection, fullRun, isRunning } = this.state;
+    const { added, removed, modified } = this.getDelta();
+    const scheduleCount = this.props.scheduleScope?.siteIds?.length ?? 0;
+    const prodCount = selectedProductionCount(sites, selection);
+    const hasProd = prodCount > 0;
+    const warningSentence = hasProd
+      ? `${prodCount} live production site${prodCount === 1 ? '' : 's'} will be ${productionWarningVerb(effect)}.`
+      : null;
 
     return React.createElement('div', null,
-      // Scrim
       React.createElement('div', {
         onClick: onCancel,
         style: { position: 'fixed', inset: 0, background: 'rgba(8,9,12,0.6)', zIndex: 50 },
       }),
 
-      // Modal
       React.createElement('div', {
         style: {
           position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-          width: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-          background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)',
-          borderRadius: 16, zIndex: 51, animation: 'fadeUp 0.2s ease', overflow: 'hidden',
+          width: 760, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+          background: '#0f141d', border: '1px solid #232c38', borderRadius: 18,
+          boxShadow: '0 24px 60px rgba(0,0,0,0.5)', zIndex: 51, overflow: 'hidden',
         },
       },
 
         // Header
-        React.createElement('div', { style: { padding: '22px 24px 18px', borderBottom: '1px solid var(--ag-border-subtle)' } },
-          React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 } },
+        React.createElement('div', { style: { padding: '22px 24px 18px' } },
+          React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 14 } },
             React.createElement('div', {
-              style: { width: 40, height: 40, borderRadius: 10, background: 'rgba(53,208,197,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-            },
-              React.createElement('span', { style: { fontSize: 18, color: 'var(--ag-teal)' } }, '▶'),
-            ),
-            // C4: Updated subtitle + fullRun toggle
+              style: { width: 38, height: 38, borderRadius: 11, background: 'rgba(53,224,197,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+            }, React.createElement('span', { style: { fontSize: 16, color: '#35e0c5' } }, '▶')),
             React.createElement('div', { style: { flex: 1 } },
-              React.createElement('div', { style: { fontSize: 18, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 3 } },
-                `Run ${agentName} now`,
-              ),
-              React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-secondary)' } },
-                'Non-production sites are selected by default.',
-              ),
-              // C4: "Always do full run" toggle — only when supportsFullRun
-              this.props.supportsFullRun && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 } },
+              React.createElement('div', { style: { fontSize: 20, fontWeight: 800, color: 'var(--ag-text-primary)', marginBottom: 3 } }, `Run ${agentName} now`),
+              React.createElement('div', { style: { fontSize: 14, color: '#8a94a2' } }, 'Runs once, immediately. Does not change the schedule.'),
+              supportsFullRun && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 } },
                 React.createElement('div', {
                   onClick: () => this.setState(s => ({ fullRun: !s.fullRun })),
-                  style: {
-                    width: 46, height: 26, borderRadius: 999, cursor: 'pointer', position: 'relative' as const,
-                    background: fullRun ? 'var(--ag-teal)' : '#2a323e', transition: 'background .15s',
-                  },
+                  style: { width: 40, height: 22, borderRadius: 999, cursor: 'pointer', position: 'relative', background: fullRun ? '#22c088' : '#2a3441' },
                 },
-                  React.createElement('div', {
-                    style: {
-                      position: 'absolute' as const, top: 3, left: fullRun ? 23 : 3,
-                      width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .15s',
-                    },
-                  }),
+                  React.createElement('div', { style: { position: 'absolute', top: 3, left: fullRun ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .15s' } }),
                 ),
                 React.createElement('span', { style: { fontSize: 14, color: 'var(--ag-text-secondary)' } }, 'Always do full run'),
               ),
             ),
             React.createElement('button', {
               onClick: onCancel,
-              style: { background: 'none', border: 'none', color: 'var(--ag-text-muted)', cursor: 'pointer', fontSize: 18, padding: 4, lineHeight: 1 },
-            }, '✕'),
-          ),
-
-          // C4: Search + "Select non-prod" button (replaces Select all / Clear)
-          React.createElement('div', { style: { display: 'flex', gap: 10, marginBottom: 10 } },
-            React.createElement('input', {
-              type: 'text', placeholder: 'Search sites…',
-              value: searchText,
-              onChange: (e: any) => this.setState({ searchText: e.target.value }),
-              style: {
-                flex: 1, background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border)',
-                borderRadius: 9, padding: '9px 14px', fontSize: 13, color: 'var(--ag-text-primary)',
-              },
-            }),
-            React.createElement('button', {
-              onClick: () => {
-                const nonProd = this.state.sites.filter(s => s.environment !== 'production').map(s => s.id);
-                this.setState({ selected: new Set(nonProd), includeProd: false });
-              },
-              style: { padding: '9px 16px', borderRadius: 9, border: '1px solid var(--ag-border)', background: 'var(--ag-bg-elevated)', color: 'var(--ag-text-secondary)', fontSize: 13, cursor: 'pointer' },
-            }, 'Select non-prod'),
-          ),
-
-          // C4: "Include production sites" checkbox row
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, marginBottom: 4 } },
-            React.createElement('div', {
-              onClick: () => {
-                const next = !this.state.includeProd;
-                this.setState(s => {
-                  const newSel = new Set(s.selected);
-                  s.sites.forEach(site => {
-                    if (site.environment === 'production') {
-                      if (next) newSel.add(site.id);
-                      else newSel.delete(site.id);
-                    }
-                  });
-                  return { includeProd: next, selected: newSel };
-                });
-              },
-              style: {
-                width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: `2px solid ${includeProd ? '#f2666e' : '#3a4452'}`,
-                background: includeProd ? '#f2666e' : 'transparent',
-                color: '#2a0f11', fontWeight: 800, fontSize: 13,
-              },
-            }, includeProd ? '✓' : ''),
-            React.createElement('span', { style: { fontSize: 14, color: includeProd ? 'var(--ag-text-primary)' : 'var(--ag-text-secondary)' } },
-              'Include production sites ',
-              React.createElement('span', { style: { fontSize: 12, color: '#f2666e', fontWeight: 700 } }, '— use with care'),
-            ),
-          ),
-
-          // Filter chips (below include-prod checkbox)
-          React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginTop: 14 } },
-            ...accounts.map(a =>
-              React.createElement('button', {
-                key: a.id, onClick: () => this.setState({ accountFilter: a.id }),
-                style: chipStyle(accountFilter === a.id),
-              }, a.label),
-            ),
+              style: { background: 'none', border: 'none', color: '#6b7684', cursor: 'pointer', fontSize: 20, padding: 4, lineHeight: 1 },
+            }, '×'),
           ),
         ),
 
-        // Site list
-        React.createElement('div', { style: { flex: 1, overflowY: 'auto' as const } },
-
-          // Result count
+        // Prefill banner
+        !loading && React.createElement('div', { style: { padding: '0 24px 18px' } },
           React.createElement('div', {
-            style: { display: 'flex', justifyContent: 'space-between', padding: '10px 24px', fontSize: 12.5, color: 'var(--ag-text-muted)', borderBottom: '1px solid var(--ag-border-subtle)' },
+            style: { background: 'rgba(53,224,197,0.07)', border: '1px solid rgba(53,224,197,0.24)', borderRadius: 11, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
           },
-            React.createElement('span', null, `${filtered.length} shown`),
-            React.createElement('button', {
-              onClick: () => this.clearAll(),
-              style: { background: 'none', border: 'none', color: 'var(--ag-teal)', fontSize: 12.5, cursor: 'pointer', padding: 0 },
-            }, 'Clear these'),
+            React.createElement('span', { style: { fontSize: 13, color: 'var(--ag-text-secondary)' } },
+              modified
+                ? `Changed for this run only — ${added} added, ${removed} removed vs. the schedule scope.`
+                : scheduleCount > 0
+                  ? `Prefilled from this agent's schedule scope (${scheduleCount} sites).`
+                  : 'No schedule scope saved yet — starting from non-production sites.',
+            ),
+            modified && React.createElement('button', {
+              onClick: this.resetToScheduleScope,
+              style: { fontSize: 13, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: '1px solid #2a3441', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap' },
+            }, 'Reset to schedule scope'),
           ),
-
-          loading
-            ? React.createElement('div', { style: { padding: '40px', textAlign: 'center' as const, color: 'var(--ag-text-muted)' } }, 'Loading sites…')
-            : React.createElement('div', null,
-                ...filtered.map((site, i) => {
-                  const isSelected = selected.has(site.id);
-                  const envInfo = ENV_COLORS[site.environment];
-                  return React.createElement('div', {
-                    key: site.id,
-                    onClick: () => this.toggleSite(site.id),
-                    style: {
-                      display: 'flex', alignItems: 'center', gap: 14, padding: '12px 24px',
-                      cursor: 'pointer', borderBottom: i < filtered.length - 1 ? '1px solid var(--ag-border-subtle)' : 'none',
-                      background: isSelected ? 'rgba(53,208,197,0.04)' : 'transparent',
-                    },
-                  },
-                    // Checkbox
-                    React.createElement('div', {
-                      className: `ag-checkbox ${isSelected ? 'ag-checkbox--checked' : ''}`,
-                      style: { flexShrink: 0 },
-                    }, isSelected ? '✓' : ''),
-
-                    // Name + account
-                    React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-                      React.createElement('div', { style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-text-primary)' } }, site.displayName),
-                      React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)' } }, site.account),
-                    ),
-
-                    // C4: No status badge — env pill only
-                    // Env pill
-                    React.createElement('span', {
-                      style: { fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 5, background: envInfo.bg, color: envInfo.color, flexShrink: 0 },
-                    }, envInfo.label),
-                  );
-                }),
-              ),
         ),
 
-        // Footer
+        // Picker
+        React.createElement('div', { style: { padding: '0 24px', flex: 1, overflow: 'hidden', display: 'flex' } },
+          loading
+            ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: 'var(--ag-text-muted)', width: '100%' } }, 'Loading sites…')
+            : React.createElement(SitePicker, {
+                sites,
+                selection,
+                onChange: (next: Set<string>) => this.setState({ selection: next }),
+                allowsProduction,
+              }),
+        ),
+
+        // Footer — the production warning sentence takes over the note slot and tints the whole
+        // bar (escalation signal 3); the primary button turns red (signal 4). Neither blocks.
         React.createElement('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 12, padding: '16px 24px', borderTop: '1px solid var(--ag-border-subtle)', background: 'var(--ag-bg-card)' },
+          style: {
+            display: 'flex', alignItems: 'center', gap: 12, padding: '18px 24px', borderTop: '1px solid #1c232e',
+            background: hasProd ? 'rgba(255,107,122,0.07)' : '#0d1119',
+            ...(hasProd ? { borderTop: '1px solid rgba(255,107,122,0.24)' } : {}),
+          },
         },
-          React.createElement('span', { style: { flex: 1, fontSize: 13, color: 'var(--ag-text-muted)' } },
-            `${selectedCount} of ${filtered.length} sites selected`,
+          React.createElement('span', {
+            style: { flex: 1, fontSize: 13, fontWeight: hasProd ? 600 : 400, color: hasProd ? '#ff8a95' : '#7b8593' },
+          },
+            warningSentence
+              ?? (modified ? 'This selection applies to this run only. Save it to the schedule from Settings.' : 'Same sites the schedule uses.'),
           ),
           React.createElement('button', {
             onClick: onCancel,
@@ -349,19 +203,14 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
           }, 'Cancel'),
           React.createElement('button', {
             onClick: () => this.handleRun(),
-            disabled: selectedCount === 0 || this.state.isRunning,
+            disabled: selection.size === 0 || isRunning,
             style: {
-              padding: '10px 22px', borderRadius: 9, border: 'none', fontSize: 13.5, fontWeight: 600, cursor: selectedCount === 0 ? 'not-allowed' : 'pointer',
-              background: selectedCount === 0 ? 'var(--ag-bg-elevated)' : 'var(--ag-teal)',
-              color: selectedCount === 0 ? 'var(--ag-text-faint)' : 'var(--ag-on-teal)',
-              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '10px 22px', borderRadius: 9, border: 'none', fontSize: 13.5, fontWeight: 700,
+              cursor: selection.size === 0 ? 'not-allowed' : 'pointer',
+              background: selection.size === 0 ? 'var(--ag-bg-elevated)' : hasProd ? '#ff8a95' : '#35e0c5',
+              color: selection.size === 0 ? 'var(--ag-text-faint)' : '#0b0e14',
             },
-          },
-            React.createElement('span', null, '▶'),
-            selectedCount === filtered.length
-              ? `Run on all ${selectedCount} sites`
-              : `Run on ${selectedCount} selected`,
-          ),
+          }, `Run on ${selection.size} site${selection.size === 1 ? '' : 's'}`),
         ),
       ),
     );

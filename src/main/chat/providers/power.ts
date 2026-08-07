@@ -66,11 +66,27 @@ export class PowerProvider implements AIProvider {
       },
     })) : undefined;
 
+    // Power is OpenAI-compatible, so forceTool maps to tool_choice the same way local-gateway.ts
+    // does. Without this, generateObject's noTools path (AgentAIClient.ts) sets config.forceTool
+    // but the model is left free to respond in plain text instead of calling the forced tool —
+    // reproduced live as "generateObject: model did not call __output__ tool" on every specialist
+    // and synthesis call once the provider was actually reachable (see 2026-08-06 401 fix).
+    //
+    // max_tokens is likewise required: reproduced live that the two LARGEST prompts (Pattern,
+    // ~17KB, and Synthesis, which concatenates all five specialist results) kept failing with
+    // "did not call __output__ tool" even after tool_choice was fixed, while the four smaller
+    // specialist calls succeeded — consistent with Power applying a low default completion budget
+    // when none is given, truncating the response before the forced tool call ever completes.
+    // anthropic.ts sends max_tokens:4096 for the same reason (Anthropic requires it on every
+    // request); Power fans out to Anthropic/OpenAI/Google backends, several of which have small
+    // implicit defaults absent an explicit value.
     const body = JSON.stringify({
       model: config.model,
       messages: powerMessages,
       stream: true,
+      max_tokens: 8192,
       ...(powerTools ? { tools: powerTools } : {}),
+      ...(config.forceTool ? { tool_choice: { type: 'function', function: { name: config.forceTool } } } : {}),
     });
 
     try {

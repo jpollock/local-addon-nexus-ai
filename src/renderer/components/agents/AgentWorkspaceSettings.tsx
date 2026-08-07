@@ -1,10 +1,15 @@
 import * as React from 'react';
 import { agentStore, AgentSettings } from './AgentStore';
 import { IPC_CHANNELS } from '../../../common/constants';
+import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
+import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
 
 interface SettingsProps {
   agentId: string;
   electron?: any;
+  /** From this agent's AgentStatus. Undefined while status is still loading upstream. */
+  allowsProduction?: boolean;
+  effect?: 'readonly' | 'writes';
 }
 
 interface GoogleConnection {
@@ -18,20 +23,40 @@ interface SettingsState {
   googleConnection: GoogleConnection | null;
   connectingGoogle: boolean;
   confirmRemove: boolean;
+  scopeSites: ScopeSite[];
+  scopeLoading: boolean;
+  scopeExpanded: boolean;
+  /** Non-null while the picker is open — edits happen here first; Save commits, Cancel discards. */
+  scopeDraftSelection: Set<string> | null;
+  driftDismissed: boolean;
 }
 
 const CADENCE_OPTIONS = [
-  { label: 'Every 15 minutes', value: '*/15 * * * *' },
-  { label: 'Hourly',           value: '0 * * * *' },
-  { label: 'Every 6 hours',    value: '0 */6 * * *' },
-  { label: 'Daily',            value: '0 0 * * *' },
-  { label: 'Weekly',           value: '0 0 * * 0' },
+  { label: 'Every 15 minutes', value: '*/15 * * * *', every: 'every 15 minutes' },
+  { label: 'Hourly',           value: '0 * * * *',    every: 'every hour' },
+  { label: 'Every 6 hours',    value: '0 */6 * * *',  every: 'every 6 hours' },
+  { label: 'Daily',            value: '0 0 * * *',    every: 'every day' },
+  { label: 'Weekly',           value: '0 0 * * 0',    every: 'every week' },
 ];
 
+function formatLastEdited(updatedAt?: number): string {
+  if (!updatedAt) return 'Not yet saved';
+  const days = Math.floor((Date.now() - updatedAt) / 86_400_000);
+  if (days <= 0) return 'Last edited today';
+  if (days === 1) return 'Last edited yesterday';
+  return `Last edited ${days} days ago`;
+}
+
 // Event catalog per agent — in production, fetched from agent definition
+//
+// security-sentinel used to also list 'wpe:sync.completed' here. Removed 2026-08-06: that
+// trigger let WpeRefreshScheduler's automated fleet-wide refresh cycle (opt-in,
+// wpeRefreshAutoEnabled) silently launch a full Tier 2/3 investigation — fresh sandbox site
+// included — per stale WPE install per cycle, with no user action at all. The agent no longer
+// subscribes to it (see agents/security-sentinel/agent.js's triggers list); offering to
+// subscribe here would be a UI control for a trigger that does nothing.
 const EVENT_CATALOG: Record<string, Array<{ id: string; label: string; description: string }>> = {
   'security-sentinel': [
-    { id: 'wpe:sync.completed',   label: 'WPE sync completed',    description: 'Triggers after the 4-hour metadata sync refreshes plugin/user data for an install' },
     { id: 'wp:plugin.activated',  label: 'Plugin activated',      description: 'Triggers when a plugin is activated on any local site' },
     { id: 'wp:user.created',      label: 'User account created',  description: 'Triggers when a new user account is created on any local site' },
   ],
@@ -67,6 +92,11 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     googleConnection: null,
     connectingGoogle: false,
     confirmRemove: false,
+    scopeSites: [],
+    scopeLoading: false,
+    scopeExpanded: false,
+    scopeDraftSelection: null,
+    driftDismissed: false,
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -75,6 +105,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const update = () => this.setState({ settings: agentStore.getOrInitSettings(this.props.agentId) });
     agentStore.subscribe(update);
     this.unsubscribe = () => agentStore.unsubscribe(update);
+
+    this.loadScopeSites();
 
     // Load Google connection status if this agent uses Google credentials
     if (AGENTS_WITH_GOOGLE_CREDENTIALS.has(this.props.agentId)) {
@@ -126,6 +158,182 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
       });
       this.setState({ googleConnection: null });
     } catch { /* ignore */ }
+  }
+
+  /**
+   * Both WPE installs and local sites for most agents. Local's own registry holds only local
+   * sites, which is why site groups could not be reused for this — they resolve through
+   * siteData.getSites(). Some agents (log-processor) get a different, narrower site source —
+   * see fetchSitesForAgent's doc.
+   */
+  private async loadScopeSites() {
+    if (!this.props.electron?.ipcRenderer) return;
+    this.setState({ scopeLoading: true });
+    const sites = await fetchSitesForAgent(this.props.agentId, this.props.electron);
+    this.setState({ scopeSites: sites, scopeLoading: false });
+  }
+
+  /**
+   * "Every site" mode is retired (2026-08-07): it was a live rule that silently absorbed any
+   * site added to the account, which is exactly what an explicit-list scope exists to rule out
+   * — the two concepts contradicted each other under one toggle. An agent whose settings still
+   * carry legacy `mode: 'all'` data reads here as "currently every known site", so nothing it
+   * scans changes at the moment of this migration; the very next Save writes an explicit list
+   * (mode: 'explicit') and the account is fully migrated.
+   */
+  /**
+   * `scope` is the single field Settings and Run Now both read/write (see AgentStore.ts's
+   * AgentScope doc). The `scanScope` fallback below reads on-disk data from before this field
+   * was unified — settings persisted with the old `{mode, siteIds}` shape while `scope` was
+   * absent, so a not-yet-migrated install doesn't silently revert to "scan nothing" on first
+   * load post-upgrade. `mode: 'all'` has no equivalent under the current explicit-list model and
+   * reads as "no sites selected" rather than fabricating a full site list.
+   */
+  private currentScopeSiteIds(): string[] {
+    const { scope, scanScope } = this.state.settings as AgentSettings & { scanScope?: { mode: string; siteIds: string[] } };
+    if (scope) return scope.siteIds;
+    if (scanScope && scanScope.mode !== 'all') return scanScope.siteIds ?? [];
+    return [];
+  }
+
+  /** Sites created after this scope was last edited — a permanent property of an explicit-list
+   * model, not a bug: a scope never auto-includes anything added after it was set. Fires for any
+   * site with a known createdAt — WPE always, local sites once first indexed (see
+   * fetchScopeSites' ScopeSite.createdAt doc for what "created" means for each). An unindexed
+   * local site has no createdAt and is silently excluded, never flagged. */
+  private getDriftedSites(): ScopeSite[] {
+    const scopeUpdatedAt = this.state.settings.scopeUpdatedAt;
+    if (!scopeUpdatedAt) return [];
+    const currentIds = new Set(this.currentScopeSiteIds());
+    return this.state.scopeSites.filter(s =>
+      typeof s.createdAt === 'number' && s.createdAt > scopeUpdatedAt && !currentIds.has(s.id));
+  }
+
+  private openScopeEditor = (): void => {
+    this.setState({ scopeExpanded: true, scopeDraftSelection: new Set(this.currentScopeSiteIds()) });
+  };
+
+  private cancelScopeEdit = (): void => {
+    this.setState({ scopeExpanded: false, scopeDraftSelection: null });
+  };
+
+  private saveScopeEdit = (): void => {
+    const draft = this.state.scopeDraftSelection;
+    if (!draft) return;
+    this.updateSettings({
+      scope: { siteIds: [...draft] },
+      scopeUpdatedAt: Date.now(),
+    });
+    this.setState({ scopeExpanded: false, scopeDraftSelection: null });
+  };
+
+  /** The four scope-sentence forms from the v2 design — resting-state summary of the saved
+   * scope. "All sites" collapses into "mixed" when nothing is in production, since "including 0
+   * in production" reads as a bug report, not a status. */
+  private renderScopeSentence(selectedSites: ScopeSite[], total: number) {
+    const n = selectedSites.length;
+    const p = selectedSites.filter(s => s.environment === 'production').length;
+
+    if (n === 0) {
+      return React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, 'No sites selected — this agent will not run.');
+    }
+    if (n === total && total > 0 && p > 0) {
+      return React.createElement('span', { style: { color: '#ff8a95' } }, `Every site on the account, including ${p} in production`);
+    }
+    if (p === 0) {
+      return React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, `${n} site${n === 1 ? '' : 's'} — no production`);
+    }
+    return React.createElement('span', { style: { color: '#ff8a95' } },
+      n === 1 ? `1 site, in production` : `${n} sites, ${p} of them in production`);
+  }
+
+  private renderScanScope() {
+    const { scopeSites, scopeLoading, scopeExpanded, scopeDraftSelection, driftDismissed, settings } = this.state;
+    const selectedIds = new Set(this.currentScopeSiteIds());
+    const selectedSites = scopeSites.filter(s => selectedIds.has(s.id));
+    const drifted = this.getDriftedSites();
+    const allowsProduction = this.props.allowsProduction ?? true;
+    const effect = this.props.effect ?? 'writes';
+    const cadence = CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.every ?? 'on the configured schedule';
+
+    const draftProdCount = scopeDraftSelection ? selectedProductionCount(scopeSites, scopeDraftSelection) : 0;
+
+    return React.createElement('div', { style: { marginBottom: 14 } },
+      // Eyebrow + scope sentence — the resting state; the site list is a detail the user
+      // opens, never the default presentation.
+      React.createElement('div', {
+        style: { fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ag-text-faint)', marginBottom: 4 },
+      }, 'SITES IN SCOPE'),
+      React.createElement('div', { style: { fontSize: 16, lineHeight: 1.5, marginBottom: 4 } },
+        scopeLoading ? React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, 'Loading sites…')
+          : this.renderScopeSentence(selectedSites, scopeSites.length),
+      ),
+      React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-faint)', marginBottom: 10 } },
+        `${formatLastEdited(settings.scopeUpdatedAt)} · shared by the schedule and event triggers`),
+
+      // Drift banner — sites added to the account after this scope was last saved. Because
+      // scopes are explicit lists, drift is a permanent property of the model, not a bug.
+      !scopeExpanded && drifted.length > 0 && !driftDismissed && React.createElement('div', {
+        style: {
+          background: 'rgba(240,181,46,0.08)', border: '1px solid rgba(240,181,46,0.28)', borderRadius: 11,
+          padding: '12px 16px', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        },
+      },
+        React.createElement('span', { style: { fontSize: 13, color: 'var(--ag-text-secondary)' } },
+          `${drifted.length} site${drifted.length === 1 ? '' : 's'} were added to the account after this scope was set. They are not being scanned.`),
+        React.createElement('div', { style: { display: 'flex', gap: 10, flexShrink: 0 } },
+          React.createElement('button', {
+            onClick: this.openScopeEditor,
+            style: { fontSize: 13, fontWeight: 700, color: '#0b0e14', background: '#f0b52e', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' },
+          }, `Review ${drifted.length}`),
+          React.createElement('button', {
+            onClick: () => this.setState({ driftDismissed: true }),
+            style: { fontSize: 13, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: 'none', cursor: 'pointer' },
+          }, 'Dismiss'),
+        ),
+      ),
+
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end' } },
+        React.createElement('button', {
+          onClick: scopeExpanded ? this.cancelScopeEdit : this.openScopeEditor,
+          style: {
+            background: scopeExpanded ? 'transparent' : '#35e0c5',
+            color: scopeExpanded ? '#9aa4b2' : '#0b0e14',
+            border: scopeExpanded ? '1px solid #2a3441' : 'none',
+            borderRadius: 9, padding: '9px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          },
+        }, scopeExpanded ? 'Close list' : 'Edit sites'),
+      ),
+
+      // Picker opens inline, never in a modal — the scope only makes sense next to the trigger
+      // that consumes it, and a modal implies a one-off choice, which is what Run Now is.
+      scopeExpanded && scopeDraftSelection && React.createElement('div', { style: { marginTop: 12 } },
+        React.createElement(SitePicker, {
+          sites: scopeSites,
+          selection: scopeDraftSelection,
+          onChange: (next: Set<string>) => this.setState({ scopeDraftSelection: next }),
+          allowsProduction,
+        }),
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12 } },
+          React.createElement('span', { style: { flex: 1, fontSize: 13, fontWeight: 600, color: draftProdCount > 0 ? '#ff8a95' : 'transparent' } },
+            draftProdCount > 0
+              ? `${draftProdCount} live production site${draftProdCount === 1 ? '' : 's'} will be ${productionWarningVerb(effect)} ${cadence}.`
+              : ' ',
+          ),
+          React.createElement('button', {
+            onClick: this.cancelScopeEdit,
+            style: { fontSize: 14, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: '1px solid #2a3441', borderRadius: 9, padding: '9px 16px', cursor: 'pointer' },
+          }, 'Cancel'),
+          React.createElement('button', {
+            onClick: this.saveScopeEdit,
+            style: {
+              fontSize: 14, fontWeight: 700, color: '#0b0e14', border: 'none', borderRadius: 9, padding: '9px 16px', cursor: 'pointer',
+              background: draftProdCount > 0 ? '#ff8a95' : '#35e0c5',
+            },
+          }, `Save ${scopeDraftSelection.size} site${scopeDraftSelection.size === 1 ? '' : 's'}`),
+        ),
+      ),
+    );
   }
 
   private updateSettings(patch: Partial<AgentSettings>) {
@@ -267,6 +475,10 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
               },
             }, CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.label || 'Every 15 minutes'),
           ),
+
+          // Which sites the schedule may touch. Shown only when a schedule is on — it constrains
+          // scheduled runs, not Run Now, and offering it otherwise implies it gates everything.
+          settings.scheduleEnabled && this.renderScanScope(),
 
           // Respond to events
           React.createElement('div', { style: { marginBottom: 14 } },

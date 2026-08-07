@@ -273,6 +273,8 @@ async function withSiteRunning<T>(
   }
 }
 
+import { canAutoRunWith, AutoRunKind } from './agent-runtime/auto-run-gate';
+
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
 export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabled' | 'eventsEnabled'): boolean {
@@ -280,9 +282,44 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
   return cache?.get(agentId)?.[key] ?? true; // default true (permissive before settings sync)
 }
 
+/**
+ * May an automatic trigger start this agent right now?
+ *
+ * Thin wrapper: reads the settings cache and delegates to the pure predicate in
+ * agent-runtime/auto-run-gate.ts, where the reasoning lives. Both the cron path
+ * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart.
+ */
+export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  return canAutoRunWith(cache?.get(agentId), kind);
+}
+
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
   return cache?.get(agentId)?.autonomy ?? 'ask'; // default ask (safest before settings sync)
+}
+
+/**
+ * The agent's whole settings record, read-only, for `ctx.settings`.
+ *
+ * Every setting above is plumbed by hand — one exported getter and one line in
+ * buildAgentContext each. That does not scale past the handful that exist, and it means an
+ * agent cannot read a setting the runtime has not been taught about, so agent-specific
+ * configuration has nowhere to live.
+ *
+ * Returns a shallow copy: an agent mutating its own settings object must not write back into
+ * the shared cache that the scheduler and event bus read.
+ *
+ * Deliberately NOT permissive. `getAgentSetting`'s `?? true` fallback is the reason
+ * security-sentinel ran a fleet-wide sweep every 15 minutes for weeks with nothing configured
+ * (see seedAgentDefaultsIfMissing below). A caller reading raw settings gets `{}` when nothing
+ * is known, and must decide for itself what absence means — the safe reading, not the
+ * convenient one.
+ */
+export function getAgentSettings(agentId: string): Readonly<Record<string, unknown>> {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const raw = cache?.get(agentId);
+  return raw && typeof raw === 'object' ? { ...raw } : {};
 }
 
 /**
@@ -503,14 +540,24 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const indexed = indexRegistry.listAll();
       const indexedIds = new Set(indexed.map((e: any) => e.siteId));
 
-      // Fetch WP versions from graph for all local sites
+      // Fetch WP versions + first-indexed timestamp from graph for all local sites.
       const wpVersionsMap = new Map<string, string>();
+      // graph.db's sites.created_at IS populated for local sites (upsertSite's ON CONFLICT
+      // clause omits created_at from its SET list, so the value from the first-ever upsert
+      // survives every later refresh) — it just wasn't being read back out here. It means "first
+      // time Nexus indexed this site", not "when the site was created in Local" (a site that
+      // predates indexing, or has never been indexed, has no row and no value), but that is the
+      // same honest "unknown → no drift computed" semantics WPE's createdAt already carries.
+      const createdAtMap = new Map<string, number>();
       const db = graphService.getDb();
       if (db) {
-        const rows = db.prepare('SELECT id, wp_version FROM sites WHERE source = ? OR source IS NULL').all('local') as Array<{ id: string; wp_version: string | null }>;
+        const rows = db.prepare('SELECT id, wp_version, created_at FROM sites WHERE source = ? OR source IS NULL').all('local') as Array<{ id: string; wp_version: string | null; created_at: number | null }>;
         rows.forEach(row => {
           if (row.wp_version) {
             wpVersionsMap.set(row.id, row.wp_version);
+          }
+          if (typeof row.created_at === 'number') {
+            createdAtMap.set(row.id, row.created_at);
           }
         });
       }
@@ -535,10 +582,28 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           wpVersion: wpVersionsMap.get(site.id) || metadataCache?.get(site.id)?.wpVersion || null,
           phpVersion: site.phpVersion || null,
           hostConnections: site.hostConnections,
+          createdAt: createdAtMap.get(site.id) ?? null,
         };
       });
     } catch (err) {
       localLogger.error('[NexusAI] get-sites failed:', (err as Error).message);
+      return [];
+    }
+  });
+
+  // Sites log-processor already has a bound S3 source for (agents/log-processor/db.ts's
+  // `sources` table). The site scope picker for this agent only offers these — a site in scope
+  // with no bound source would silently do nothing on the nightly cron (see run()'s
+  // `getSource(db, siteId)` check). Reads the agent's own sqlite file directly and read-only,
+  // the same way GET_SITES reads graph.db directly above, rather than routing through the agent
+  // runtime for a plain SELECT.
+  safeHandle(IPC_CHANNELS.AGENT_LOG_PROCESSOR_CONNECTED_SITES, () => {
+    try {
+      const { AGENTS_DIR } = require('./agent-runtime/AgentRegistry') as typeof import('./agent-runtime/AgentRegistry');
+      const { getLogProcessorConnectedSites } = require('./agent-runtime/log-processor-sites') as typeof import('./agent-runtime/log-processor-sites');
+      return getLogProcessorConnectedSites(AGENTS_DIR);
+    } catch (err) {
+      localLogger.error('[NexusAI] log-processor connected-sites failed:', (err as Error).message);
       return [];
     }
   });
@@ -1085,11 +1150,26 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, async (_event: any, partial: Partial<NexusSettings>) => {
+    // Read before the try so the catch below can return the ACTUAL current settings on failure
+    // rather than bare DEFAULT_SETTINGS — see the note there.
+    const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+    const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
     try {
-      const validated = validateInput(UpdateSettingsSchema, partial);
+      // The renderer round-trips whatever GET_SETTINGS handed it, unchanged, on every save —
+      // including fields a *different* checked-out branch's addon wrote to this same on-disk
+      // file (e.g. externalRefreshAutoEnabled, enableHubBridge). UpdateSettingsSchema.strict()
+      // then throws "Unrecognized key(s)" on the whole payload, so a user switching between
+      // branches/worktrees on one machine loses the ability to save ANY setting — not just the
+      // new one — with no visible error, because nothing here or in the renderer's onApply
+      // catches the rejection. Drop keys this schema doesn't know before validating; they stay
+      // untouched on disk via the `current` spread below, so the other branch's data survives
+      // and this branch simply doesn't act on it.
+      const knownKeys = new Set(Object.keys((UpdateSettingsSchema as any).shape));
+      const recognized = Object.fromEntries(
+        Object.entries(partial ?? {}).filter(([key]) => knownKeys.has(key)),
+      );
+      const validated = validateInput(UpdateSettingsSchema, recognized);
 
-      const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
-      const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
       const updated = { ...current, ...validated };
       registryStorage.set(STORAGE_KEYS.SETTINGS, updated as any);
 
@@ -1154,7 +1234,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { ...updated, _providerChanged: providerChanged, _gatewayChanged: gatewayChanged };
     } catch (err) {
       localLogger.error('[NexusAI] update-settings failed:', (err as Error).message);
-      return DEFAULT_SETTINGS;
+      // This never rejects the IPC call — safeHandle's ipcMain.handle resolves with whatever
+      // is returned here, so a caller's `await` never throws. Returning bare DEFAULT_SETTINGS
+      // on failure meant the caller — and the 'nexus-ai:settings-applied' event every listener
+      // trusts — saw every real setting reset to factory defaults, even though nothing on disk
+      // had actually changed (the registryStorage.set above never ran). Return the untouched
+      // current settings instead, with an explicit error marker the caller can check.
+      return { ...current, _error: (err as Error).message };
     }
   });
 
@@ -4917,7 +5003,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   // Agent settings cache — synced from renderer via AGENT_SETTINGS_UPDATE.
   // Pre-populated from disk at startup so the scheduler/event bridge never defaults
   // to permissive before the renderer finishes loading and sends the initial sync.
-  const agentSettingsCache: Map<string, { enabled: boolean; scheduleEnabled: boolean; eventsEnabled: boolean; autonomy: 'suggest' | 'ask' | 'auto' }> =
+  //
+  // Values are spread wholesale, not hand-listed. This used to reconstruct the cached object
+  // field-by-field from exactly {enabled, scheduleEnabled, eventsEnabled, autonomy} — any other
+  // key a caller sent (scanScope, scope, savedScopes, cadence, subscribedEvents) was silently
+  // dropped before it ever reached ctx.settings. security-sentinel's resolveScanScope reads
+  // ctx.settings.scanScope expecting a persisted scope to survive here; it never did.
+  const agentSettingsCache: Map<string, Record<string, any>> =
     (deps as any).__agentSettingsCache ?? ((deps as any).__agentSettingsCache = new Map());
 
   const _fs = require('fs') as typeof import('fs');
@@ -5011,7 +5103,14 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       ((deps as any).__runAbortMap = new Map());
     runAbortMap.set(runId, abortController);
 
-    // Run agent directly via agentRunner — awaits actual completion, no log polling races
+    // Run agent directly via agentRunner — awaits actual completion, no log polling races.
+    // Everything from here on is wraped in one try/catch whose catch ALWAYS broadcasts a
+    // completion: reproduced live that a real, successfully-finished run (backend log ended
+    // with "sweep complete", agent_runs.status='success') left the Run Now modal stuck showing
+    // "running" indefinitely. Root cause: parseRunOutcomes() below ran unguarded — any throw
+    // there (or anywhere else after the site loop) became an unhandled rejection on this
+    // fire-and-forget IIFE, so AGENT_RUN_COMPLETE was simply never sent. The UI has no timeout
+    // of its own; a dropped completion event means the spinner runs forever.
     (async () => {
       const runner = deps.nexusServices?.agentRunner;
       if (!runner || !agent) {
@@ -5072,16 +5171,21 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         // Full payload failed to serialize (e.g. enriched plan evidence too large).
         // Send a minimal payload so the UI at least exits the 'running' state.
         console.error('[AGENT_RUN_NOW] broadcast failed, sending minimal completion:', broadcastErr?.message);
-        try {
-          broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-            runId, agentId, siteNames,
-            doneCount: outcomes.doneCount,
-            failedCount: outcomes.failedCount,
-            findingsSites: outcomes.findingsSites,
-          });
-        } catch {}
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
+          runId, agentId, siteNames,
+          doneCount: outcomes.doneCount,
+          failedCount: outcomes.failedCount,
+          findingsSites: outcomes.findingsSites,
+        });
       }
-    })();
+    })().catch((err: any) => {
+      // Last-resort net: something threw outside every inner try/catch above (e.g.
+      // parseRunOutcomes itself). The run may well have finished on the backend — the UI must
+      // still be told, or it spins forever with no way to recover short of a full reload.
+      console.error('[AGENT_RUN_NOW] unhandled error in run pipeline:', err?.message);
+      runAbortMap.delete(runId);
+      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
+    });
 
     return { runId };
   });

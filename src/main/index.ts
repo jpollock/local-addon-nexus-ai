@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import { safeStorage } from 'electron';
 import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS, STORAGE_KEYS, EMBEDDING_MODELS } from '../common/constants';
 import { OperationTracker } from './operation-tracker';
 import { SqliteVecStore } from './vector-store/index';
@@ -20,6 +21,7 @@ import { registerWpCliTools } from './mcp/modules/wp-cli/index';
 import { registerWpeTools } from './mcp/modules/wpe/index';
 import { registerCompositeTools } from './mcp/modules/composite/index';
 import { registerDbScannerTools } from './mcp/modules/db-scanner/index';
+import { registerSentinelScanTools } from './mcp/modules/sentinel-scan/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
 import { registerIwTools } from './mcp/modules/iw/index';
@@ -34,7 +36,7 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
-import { registerIpcHandlers, getAgentSetting, seedAgentDefaultsIfMissing } from './ipc-handlers';
+import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing } from './ipc-handlers';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -76,6 +78,7 @@ import type { CredentialEvent } from './credentials/types';
 import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
 import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events-bridge';
 import { getAIProvider } from './ai/getAIProvider';
+import { refreshProviderWhenEncryptionReady } from './ai/refreshProviderWhenEncryptionReady';
 import type { Unsubscribe, AgentDefinition } from './agent-sdk/types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -395,6 +398,7 @@ export default function main(context: any): void {
   registerWpeTools(registry);
   registerCompositeTools(registry);
   registerDbScannerTools(registry);
+  registerSentinelScanTools(registry);
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
   registerIwTools(registry);
@@ -574,12 +578,16 @@ export default function main(context: any): void {
     if (newContentEnabled) startWpeContentIndexScheduler(newContentHours);
 
     // Re-resolve agent provider when settings change (API key rotation, provider switch).
-    // agentRunner is stored on nexusServices so it's accessible here even though it was
-    // declared in the conditional if (agentDb) block above.
-    if (nexusServices.agentRunner) {
+    // agentRunner/dispatcher are stored on nexusServices so they're accessible here even
+    // though both were declared in the conditional if (agentDb) block above. Both need this:
+    // AgentRunner.run() (the "Run Now" / scheduled path) and AgentDispatcher.dispatch() (the
+    // contributed-tool path, e.g. security-sentinel's Tier-3-gated `scan` MCP tool) each hold
+    // their own independent snapshot from construction time.
+    if (nexusServices.agentRunner || nexusServices.dispatcher) {
       const updatedSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
       const updatedProvider = getAIProvider(registryStorage, updatedSettings);
-      nexusServices.agentRunner.setProvider(updatedProvider);
+      nexusServices.agentRunner?.setProvider(updatedProvider);
+      nexusServices.dispatcher?.setProvider(updatedProvider);
     }
   };
 
@@ -689,7 +697,8 @@ export default function main(context: any): void {
             } else if (trigger.type === 'event') {
               unsubs.push(
                 agentEventBus.subscribe(trigger.pattern, async (event) => {
-                  if (!getAgentSetting(agent.name, 'eventsEnabled')) return;
+                  // `enabled` too — see canAutoRun. A disabled agent must not run on an event.
+                  if (!canAutoRun(agent.name, 'event')) return;
                   await agentRunner.run(agent, event).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" event trigger failed: ${err.message}`);
                   });
@@ -768,6 +777,25 @@ export default function main(context: any): void {
         nexusServices.agentReload = agentReload;
         nexusServices.contributedRegistry = contributedRegistry;
         nexusServices.dispatcher = dispatcher;
+
+        // safeStorage.isEncryptionAvailable() can still be false this early in Local's addon
+        // startup (confirmed live: false at the exact moment getAIProvider() ran above). When
+        // that happens, KeyVault.decrypt() takes its "already plaintext" fallback and hands back
+        // the still-encrypted ciphertext as if it were the real key — resolvedAgentProvider then
+        // caches that wrong value on AgentRunner/AgentDispatcher for the rest of the process's
+        // life, so every agent LLM call 401s ("invalid or expired token") while chat (which
+        // decrypts fresh per message, well after startup) works fine with the identical stored
+        // key. A restart doesn't help because it reproduces the same early-timing race every time.
+        refreshProviderWhenEncryptionReady({
+          isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+          resolveProvider: () => getAIProvider(registryStorage, registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null),
+          setProviders: (freshProvider) => {
+            nexusServices.agentRunner?.setProvider(freshProvider);
+            nexusServices.dispatcher?.setProvider(freshProvider);
+            localLogger.info('[NexusAI] safeStorage became available after startup — re-resolved agent AI provider');
+          },
+          onGiveUp: () => localLogger.warn('[NexusAI] safeStorage never became available within 30s of startup — agent AI calls may use an undecrypted key'),
+        });
 
         localLogger.info(`[NexusAI] Agent platform initialized: ${agentRegistry.list().length} agent(s) loaded`);
       } else {
@@ -1157,6 +1185,13 @@ export default function main(context: any): void {
     registryStorage,
     localLogger,
     credentialBroadcaster,
+    // A key saved or rotated here never touches STORAGE_KEYS.SETTINGS, so it never reached this
+    // handler before — the agent runtime's cached provider (resolvedAgentProvider, resolved
+    // once at startup) kept using whatever key existed at Local's last launch. Reproduced live:
+    // chat worked immediately with a rotated Power key (it reads the key fresh every request),
+    // while the security-sentinel agent's specialist calls 401'd with "invalid or expired
+    // token" using the stale one, in the same running process.
+    onSettingsUpdated,
   });
 
   localLogger.info('[NexusAI] Addon loaded');

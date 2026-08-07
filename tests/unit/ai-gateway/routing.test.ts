@@ -18,6 +18,13 @@ const mockCheckRateLimit = jest.fn().mockReturnValue({ allowed: true });
 const mockGetSiteIdFromToken = jest.fn();
 const mockCalculateAnthropicCost = jest.fn().mockReturnValue(0.001);
 const mockCalculateOpenAICost = jest.fn().mockReturnValue(0.001);
+const mockCallPowerAPI = jest.fn();
+const mockCalculatePowerCost = jest.fn().mockReturnValue(0);
+
+jest.mock('../../../src/main/ai-gateway/power-client', () => ({
+  callPowerAPI: mockCallPowerAPI,
+  calculatePowerCost: mockCalculatePowerCost,
+}));
 
 jest.mock('../../../src/main/ai-gateway/anthropic-client', () => ({
   callAnthropicAPI: mockCallAnthropicAPI,
@@ -107,6 +114,14 @@ const OPENAI_RESPONSE = {
   usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
 };
 
+// Power's own responses are already OpenAI-shaped — same fixture shape, different id prefix.
+const POWER_RESPONSE = {
+  id: 'chatcmpl-power-123',
+  object: 'chat.completion',
+  choices: [{ index: 0, message: { role: 'assistant', content: 'Hello' }, finish_reason: 'stop' }],
+  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+};
+
 // --- Tests ---
 
 describe('AIGatewayRoutes — provider routing', () => {
@@ -118,6 +133,7 @@ describe('AIGatewayRoutes — provider routing', () => {
     mockGetSiteIdFromToken.mockReturnValue(null);
     mockCallAnthropicAPI.mockResolvedValue(ANTHROPIC_RESPONSE);
     mockCallOpenAIAPI.mockResolvedValue(OPENAI_RESPONSE);
+    mockCallPowerAPI.mockResolvedValue(POWER_RESPONSE);
     mockTranslateFromAnthropic.mockReturnValue({
       id: 'msg-123',
       object: 'chat.completion',
@@ -225,6 +241,53 @@ describe('AIGatewayRoutes — provider routing', () => {
 
     expect(res.statusCode).toBe(503);
     expect(mockCallOpenAIAPI).not.toHaveBeenCalled();
+  });
+
+  // Regression: aiProvider:'power' fell through every branch here (only 'anthropic'/'openai'/
+  // 'google' were handled) and hit the generic "No API key configured for model: ..." 503 even
+  // with a valid key configured — reproduced live via the security-sentinel agent's specialist
+  // calls, which route through this same gateway, while chat worked fine with the identical
+  // provider/model/key because chat has its own separate PowerProvider implementation
+  // (src/main/chat/providers/power.ts) that this gateway never shared code with.
+  it('routes to WP Engine Power when the global provider is power', async () => {
+    routes = new AIGatewayRoutes({
+      storage: createMockStorage({
+        ...BASE_STORAGE,
+        [STORAGE_KEYS.API_KEYS]: { ...BASE_STORAGE[STORAGE_KEYS.API_KEYS], power: 'wpe_test-key' },
+        [STORAGE_KEYS.SETTINGS]: { aiProvider: 'power' },
+      }),
+      logger: createMockLogger(),
+    });
+
+    // Power's own model ids carry a provider prefix and are not in MODEL_PROVIDER_MAP, so this
+    // falls through to the global provider — exactly the case that used to 503.
+    const req = buildRequest({ model: 'anthropic/claude-sonnet-5', messages: [{ role: 'user', content: 'hi' }] });
+    const res = buildResponse();
+
+    await routes.handleChatCompletions(req, res);
+
+    expect(mockCallPowerAPI).toHaveBeenCalled();
+    expect(mockCallAnthropicAPI).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('returns a WP Engine Power-specific 503 when its key is not configured, not the generic message', async () => {
+    routes = new AIGatewayRoutes({
+      storage: createMockStorage({
+        ...BASE_STORAGE, // no power key
+        [STORAGE_KEYS.SETTINGS]: { aiProvider: 'power' },
+      }),
+      logger: createMockLogger(),
+    });
+
+    const req = buildRequest({ model: 'anthropic/claude-sonnet-5', messages: [{ role: 'user', content: 'hi' }] });
+    const res = buildResponse();
+
+    await routes.handleChatCompletions(req, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(mockCallPowerAPI).not.toHaveBeenCalled();
+    expect(res.body).toMatch(/WP Engine Power/);
   });
 
   it('returns 401 when X-WP-Site-ID is not a known site', async () => {

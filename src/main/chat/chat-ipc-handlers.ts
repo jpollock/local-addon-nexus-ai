@@ -13,10 +13,23 @@ export interface ChatIpcHandlerDeps {
   registryStorage: RegistryStorage;
   localLogger: { info(...args: unknown[]): void; error(...args: unknown[]): void };
   credentialBroadcaster?: CredentialSyncBroadcaster;
+  /**
+   * Called after a key write. The agent runtime's provider (resolvedAgentProvider in
+   * src/main/index.ts) is resolved ONCE at Local startup and cached on AgentRunner/
+   * AgentDispatcher for the process lifetime — nothing here read it again. Chat itself never
+   * had this problem (chat-ipc-handlers reads the key fresh via keyVault.getKey() on every
+   * CHAT_SEND), which is exactly why "the key works in chat" and "the agent gets a 401" were
+   * simultaneously true: same key, same storage, two different staleness stories. The other
+   * half of this fix is in src/main/index.ts, whose onSettingsUpdated already refreshes
+   * agentRunner's provider for aiProvider/aiModel changes via UPDATE_SETTINGS — but a key
+   * saved or rotated here, through SAVE_API_KEY/VALIDATE_API_KEY, never touches
+   * STORAGE_KEYS.SETTINGS, so that call site never fired for a key-only change.
+   */
+  onSettingsUpdated?: () => void;
 }
 
 export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
-  const { chatService, registryStorage, localLogger, credentialBroadcaster } = deps;
+  const { chatService, registryStorage, localLogger, credentialBroadcaster, onSettingsUpdated } = deps;
 
   // Create a KeyVault scoped to API key storage, with migration support for
   // the legacy plain-text API_KEYS storage blob.
@@ -110,6 +123,7 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
         // Store the key encrypted on successful validation
         keyVault.setKey(providerId, apiKey);
         setKeyStatus(registryStorage, providerId, 'valid');
+        onSettingsUpdated?.();
         return { valid: true };
       }
 
@@ -123,6 +137,7 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
     async (_event: any, providerId: string, apiKey: string) => {
       keyVault.setKey(providerId, apiKey.trim());
       setKeyStatus(registryStorage, providerId, 'unchecked');
+      onSettingsUpdated?.();
 
       // Broadcast key change to all running WordPress sites (fire-and-forget)
       if (credentialBroadcaster) {

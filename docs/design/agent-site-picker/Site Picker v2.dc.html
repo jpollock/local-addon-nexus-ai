@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<meta name="design_doc_mode" content="canvas">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0b0e14; }
+  a { color:#35e0c5; text-decoration:none; }
+  a:hover { color:#5eeadb; }
+  input::placeholder { color:#5c6675; }
+  ::-webkit-scrollbar { width:9px; }
+  ::-webkit-scrollbar-thumb { background:#2a323e; border-radius:6px; }
+</style>
+</helmet>
+
+<section style="font-family:Figtree,sans-serif;color:#f2f5f8;padding:44px 48px 60px 48px;">
+
+  <div style="max-width:900px;">
+    <div style="font-size:13px;font-weight:800;letter-spacing:0.05em;color:#35e0c5;">TURN 3 — <a href="#2a">2a</a> IN BOTH PLACEMENTS</div>
+    <div style="font-size:30px;font-weight:800;margin-top:10px;">One component, two chromes</div>
+    <div style="font-size:16px;color:#9aa4b2;line-height:1.6;margin-top:10px;text-wrap:pretty;">The flagging basket, dropped into the two places it has to live. Identical picker; only the frame around it differs. <a href="#3a">3a</a> is the settings card, where the scope is persistent and collapsed by default. <a href="#3b">3b</a> is Run now, prefilled from that scope. Both are live and hold separate selections, as they would in the product.</div>
+  </div>
+
+  <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;margin-top:34px;">
+
+    <div id="3a" style="flex:0 0 auto;width:740px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#0b0e14;background:#35e0c5;padding:3px 8px;border-radius:6px;">3a</span>
+        <span style="font-size:18px;font-weight:700;">Settings — persistent scope</span>
+      </div>
+      <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:8px;text-wrap:pretty;">Collapsed, the scope is a sentence. The picker opens in place so the schedule stays visible. "Every site" mode is gone — the equivalent is adding everything, which then shows up honestly as 384 sites including production.</div>
+
+      <div style="background:#111621;border:1px solid #1f2732;border-radius:16px;padding:20px 22px;margin-top:14px;">
+        <div style="font-size:16px;font-weight:700;">How this agent runs</div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="width:40px;height:22px;border-radius:999px;background:#22c088;position:relative;display:inline-block;"><span style="position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;background:#fff;"></span></span>
+            <span style="font-size:15px;font-weight:600;">On a schedule</span>
+          </div>
+          <span style="font-size:13px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid #2a3441;color:#cdd5df;">Hourly</span>
+        </div>
+
+        <div style="border-top:1px solid #1c232e;margin-top:16px;padding-top:16px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="flex:1 1 380px;">
+              <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;color:#6b7684;text-transform:uppercase;">Sites in scope</div>
+              <div style="font-size:16px;color:{{ f.sentenceColor }};margin-top:7px;line-height:1.5;">{{ f.sentence }}</div>
+              <div style="font-size:13px;color:#6b7684;margin-top:4px;">{{ f.subline }}</div>
+            </div>
+            <span onClick="{{ f.toggle }}" style="cursor:pointer;font-size:14px;font-weight:700;padding:9px 16px;border-radius:9px;color:{{ f.btnColor }};background:{{ f.btnBg }};border:1px solid {{ f.btnBorder }};">{{ f.btnLabel }}</span>
+          </div>
+
+          <sc-if value="{{ f.open }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:14px;">
+            <dc-import name="Basket" m="{{ f.basket }}" hint-size="100%,400px"></dc-import>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:11px;">
+              <span style="font-size:13px;font-weight:600;color:{{ f.warnColor }};">{{ f.warn }}</span>
+              <div style="display:flex;gap:9px;">
+                <span onClick="{{ f.toggle }}" style="cursor:pointer;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;color:#9aa4b2;border:1px solid #2a3441;">Cancel</span>
+                <span style="font-size:14px;font-weight:700;padding:9px 17px;border-radius:9px;color:{{ f.ctaColor }};background:{{ f.ctaBg }};cursor:{{ f.ctaCursor }};">{{ f.cta }}</span>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+
+        <div style="border-top:1px solid #1c232e;margin-top:16px;padding-top:16px;display:flex;align-items:center;gap:12px;">
+          <span style="width:40px;height:22px;border-radius:999px;background:#2a3441;position:relative;display:inline-block;"><span style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#8a94a2;"></span></span>
+          <span style="font-size:15px;font-weight:600;color:#aeb7c4;">Respond to events</span>
+          <span style="font-size:13px;color:#6b7684;">— uses the same scope</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="3b" style="flex:0 0 auto;width:740px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#0b0e14;background:#35e0c5;padding:3px 8px;border-radius:6px;">3b</span>
+        <span style="font-size:18px;font-weight:700;">Run now — prefilled, same picker</span>
+      </div>
+      <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:8px;text-wrap:pretty;">Opens with the schedule scope already in the basket. Any change is labelled as this-run-only. Because the basket lists what you picked, "did I mean to include those" is answerable without leaving the modal.</div>
+
+      <div style="margin-top:14px;background:#0f141d;border:1px solid #232c38;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,0.5);overflow:hidden;">
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:20px 22px 16px 22px;">
+          <span style="width:36px;height:36px;flex:0 0 36px;border-radius:10px;background:rgba(53,224,197,0.12);display:flex;align-items:center;justify-content:center;color:#35e0c5;font-size:14px;">▶</span>
+          <div style="flex:1 1 auto;">
+            <div style="font-size:19px;font-weight:800;">Run security-sentinel now</div>
+            <div style="font-size:14px;color:#8a94a2;margin-top:3px;">Runs once, immediately. Does not change the schedule.</div>
+          </div>
+          <span style="font-size:19px;color:#6b7684;cursor:pointer;">×</span>
+        </div>
+
+        <div style="padding:0 22px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:rgba(53,224,197,0.07);border:1px solid rgba(53,224,197,0.24);border-radius:10px;padding:11px 14px;margin-bottom:14px;">
+            <span style="font-size:13px;color:#cdd5df;flex:1 1 300px;">{{ g.prefill }}</span>
+            <span onClick="{{ g.reset }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:6px 11px;border-radius:7px;color:#9aa4b2;border:1px solid #2a3441;">Reset to schedule scope</span>
+          </div>
+          <dc-import name="Basket" m="{{ g.basket }}" hint-size="100%,400px"></dc-import>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;margin-top:16px;border-top:1px solid {{ g.footBorder }};background:{{ g.footBg }};">
+          <span style="font-size:13px;font-weight:600;color:{{ g.footColor }};flex:1 1 240px;">{{ g.footNote }}</span>
+          <div style="display:flex;gap:9px;align-items:center;">
+            <span style="cursor:pointer;font-size:13px;font-weight:600;padding:9px 14px;border-radius:8px;color:#9aa4b2;border:1px solid #2a3441;">Cancel</span>
+            <span style="font-size:14px;font-weight:700;padding:10px 18px;border-radius:9px;color:{{ g.ctaColor }};background:{{ g.ctaBg }};cursor:{{ g.ctaCursor }};">{{ g.cta }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="font-family:Figtree,sans-serif;color:#f2f5f8;padding:20px 48px 60px 48px;">
+
+  <div style="max-width:900px;">
+    <div style="font-size:13px;font-weight:800;letter-spacing:0.05em;color:#6b7684;">TURN 2 — THE BASKET, TAKEN SERIOUSLY</div>
+    <div style="font-size:30px;font-weight:800;margin-top:10px;">If being wrong is expensive, make being wrong visible</div>
+    <div style="font-size:16px;color:#9aa4b2;line-height:1.6;margin-top:10px;text-wrap:pretty;">Two refinements of <a href="#1b">1b</a>. Both keep the readable basket; they disagree about when to make you look at it. <a href="#2a">2a</a> makes the basket itself the warning surface — production sites stand out inside your own list. <a href="#2b">2b</a> adds a deliberate review step: you cannot run until you have seen a plain-language summary of what is about to happen.</div>
+  </div>
+
+  <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;margin-top:34px;">
+
+    <div id="2a" style="flex:0 0 auto;width:680px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#0b0e14;background:#35e0c5;padding:3px 8px;border-radius:6px;">2a</span>
+        <span style="font-size:18px;font-weight:700;">Basket that flags itself</span>
+      </div>
+      <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:8px;min-height:66px;text-wrap:pretty;">The basket groups by environment with production pinned to the top in red. Adding a production site is never quiet — the group appears, the footer changes colour, and the run button names the number. No extra step, no modal on top of a modal.</div>
+
+      <div style="border:1px solid #232c38;border-radius:14px;background:#111621;overflow:hidden;margin-top:14px;">
+        <div style="display:flex;align-items:stretch;height:470px;">
+          <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;border-right:1px solid #1c232e;">
+            <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+              <input value="{{ d.q }}" onChange="{{ d.onQ }}" placeholder="Search sites…" style="width:100%;background:#0b0e14;border:1px solid #2a3441;border-radius:9px;padding:9px 13px;color:#f2f5f8;font-family:Figtree,sans-serif;font-size:14px;outline:none;" />
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+                <sc-for list="{{ d.tabs }}" as="t" hint-placeholder-count="4">
+                  <span onClick="{{ t.pick }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 10px;border-radius:7px;color:{{ t.color }};background:{{ t.bg }};border:1px solid {{ t.border }};">{{ t.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 auto;overflow-y:auto;">
+              <sc-for list="{{ d.rows }}" as="r" hint-placeholder-count="8">
+                <div onClick="{{ r.toggle }}" style="display:flex;align-items:center;gap:10px;padding:8px 15px;cursor:pointer;border-bottom:1px solid #161d27;opacity:{{ r.opacity }};">
+                  <span style="width:16px;height:16px;flex:0 0 16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:{{ r.plusColor }};border:1.5px solid {{ r.boxBorder }};">{{ r.mark }}</span>
+                  <span style="flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#e6ebf1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+                  <span style="font-size:11px;color:#6b7684;">{{ r.platform }}</span>
+                  <span style="font-size:10px;font-weight:800;letter-spacing:0.04em;padding:2px 6px;border-radius:4px;color:{{ r.envColor }};background:{{ r.envBg }};">{{ r.env }}</span>
+                </div>
+              </sc-for>
+              <div style="padding:11px 15px;font-size:12px;color:#5c6675;">{{ d.tail }}</div>
+            </div>
+          </div>
+
+          <div style="flex:0 0 276px;display:flex;flex-direction:column;background:#0e131c;">
+            <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                <span style="font-size:14px;font-weight:700;">In scope <span style="color:#35e0c5;">{{ d.count }}</span></span>
+                <span onClick="{{ d.clear }}" style="cursor:pointer;font-size:12px;color:#7b8593;">Clear</span>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+                <sc-for list="{{ d.quick }}" as="q" hint-placeholder-count="3">
+                  <span onClick="{{ q.add }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px;color:#9aa4b2;border:1px dashed #35404f;">{{ q.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 auto;overflow-y:auto;">
+              <sc-for list="{{ d.groups }}" as="g" hint-placeholder-count="3">
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;padding:8px 15px;background:{{ g.headBg }};border-bottom:1px solid #161d27;">
+                    <span style="width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:{{ g.dot }};"></span>
+                    <span style="flex:1 1 auto;font-size:12px;font-weight:800;letter-spacing:0.04em;color:{{ g.headColor }};">{{ g.label }}</span>
+                    <span style="font-size:12px;font-weight:700;color:{{ g.headColor }};">{{ g.count }}</span>
+                    <span onClick="{{ g.remove }}" style="cursor:pointer;font-size:14px;line-height:1;color:#59626f;">×</span>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:8px;padding:5px 15px 5px 29px;">
+                      <span style="flex:1 1 auto;min-width:0;font-size:13px;color:#cdd5df;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ i.name }}</span>
+                      <span onClick="{{ i.remove }}" style="cursor:pointer;font-size:14px;line-height:1;color:#59626f;">×</span>
+                    </div>
+                  </sc-for>
+                  <div style="padding:3px 15px 8px 29px;font-size:11px;color:#5c6675;">{{ g.more }}</div>
+                </div>
+              </sc-for>
+              <div style="padding:14px 15px;font-size:12px;color:#5c6675;">{{ d.emptyNote }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;background:{{ d.footBg }};border-top:1px solid {{ d.footBorder }};">
+          <span style="font-size:13px;font-weight:600;color:{{ d.footColor }};flex:1 1 auto;min-width:0;">{{ d.footNote }}</span>
+          <div style="display:flex;gap:9px;align-items:center;">
+            <span style="cursor:pointer;font-size:13px;font-weight:600;padding:8px 13px;border-radius:8px;color:#9aa4b2;border:1px solid #2a3441;">Cancel</span>
+            <span style="font-size:14px;font-weight:700;padding:9px 17px;border-radius:9px;color:{{ d.ctaColor }};background:{{ d.ctaBg }};cursor:{{ d.ctaCursor }};">{{ d.cta }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="2b" style="flex:0 0 auto;width:680px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#0b0e14;background:#35e0c5;padding:3px 8px;border-radius:6px;">2b</span>
+        <span style="font-size:18px;font-weight:700;">Choose, then review</span>
+      </div>
+      <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:8px;min-height:66px;text-wrap:pretty;">Two steps. Choosing is loose and fast; then a review screen states in words what will happen, lists every production site by name, and only there does the run button appear. The cost is one extra click on every run, including the safe ones.</div>
+
+      <div style="border:1px solid #232c38;border-radius:14px;background:#111621;overflow:hidden;margin-top:14px;">
+        <div style="display:flex;gap:0;padding:0 15px;border-bottom:1px solid #1c232e;background:#0e131c;">
+          <sc-for list="{{ e.steps }}" as="s" hint-placeholder-count="2">
+            <span onClick="{{ s.go }}" style="cursor:pointer;font-size:13px;font-weight:700;padding:13px 16px;color:{{ s.color }};border-bottom:2px solid {{ s.border }};">{{ s.label }}</span>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ e.onChoose }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:stretch;height:426px;">
+          <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;border-right:1px solid #1c232e;">
+            <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+              <input value="{{ e.q }}" onChange="{{ e.onQ }}" placeholder="Search sites…" style="width:100%;background:#0b0e14;border:1px solid #2a3441;border-radius:9px;padding:9px 13px;color:#f2f5f8;font-family:Figtree,sans-serif;font-size:14px;outline:none;" />
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+                <sc-for list="{{ e.tabs }}" as="t" hint-placeholder-count="4">
+                  <span onClick="{{ t.pick }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 10px;border-radius:7px;color:{{ t.color }};background:{{ t.bg }};border:1px solid {{ t.border }};">{{ t.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 auto;overflow-y:auto;">
+              <sc-for list="{{ e.rows }}" as="r" hint-placeholder-count="8">
+                <div onClick="{{ r.toggle }}" style="display:flex;align-items:center;gap:10px;padding:8px 15px;cursor:pointer;border-bottom:1px solid #161d27;opacity:{{ r.opacity }};">
+                  <span style="width:16px;height:16px;flex:0 0 16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:{{ r.plusColor }};border:1.5px solid {{ r.boxBorder }};">{{ r.mark }}</span>
+                  <span style="flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#e6ebf1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+                  <span style="font-size:11px;color:#6b7684;">{{ r.platform }}</span>
+                  <span style="font-size:10px;font-weight:800;letter-spacing:0.04em;padding:2px 6px;border-radius:4px;color:{{ r.envColor }};background:{{ r.envBg }};">{{ r.env }}</span>
+                </div>
+              </sc-for>
+              <div style="padding:11px 15px;font-size:12px;color:#5c6675;">{{ e.tail }}</div>
+            </div>
+          </div>
+          <div style="flex:0 0 250px;display:flex;flex-direction:column;background:#0e131c;">
+            <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                <span style="font-size:14px;font-weight:700;">In scope <span style="color:#35e0c5;">{{ e.count }}</span></span>
+                <span onClick="{{ e.clear }}" style="cursor:pointer;font-size:12px;color:#7b8593;">Clear</span>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+                <sc-for list="{{ e.quick }}" as="q" hint-placeholder-count="3">
+                  <span onClick="{{ q.add }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px;color:#9aa4b2;border:1px dashed #35404f;">{{ q.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 auto;overflow-y:auto;padding:6px 0;">
+              <sc-for list="{{ e.chosen }}" as="c" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 15px;">
+                  <span style="width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:{{ c.dot }};"></span>
+                  <span style="flex:1 1 auto;min-width:0;font-size:13px;color:#cdd5df;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ c.name }}</span>
+                  <span onClick="{{ c.remove }}" style="cursor:pointer;font-size:15px;line-height:1;color:#59626f;">×</span>
+                </div>
+              </sc-for>
+              <div style="padding:8px 15px;font-size:12px;color:#5c6675;">{{ e.chosenTail }}</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;background:#0d1119;border-top:1px solid #1c232e;">
+          <span style="font-size:13px;color:#7b8593;">{{ e.chooseNote }}</span>
+          <span onClick="{{ e.toReview }}" style="cursor:pointer;font-size:14px;font-weight:700;padding:9px 17px;border-radius:9px;color:#0b0e14;background:#35e0c5;">{{ e.reviewCta }}</span>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ e.onReview }}" hint-placeholder-val="{{ false }}">
+        <div style="height:426px;overflow-y:auto;padding:22px 24px;">
+          <div style="font-size:19px;font-weight:700;line-height:1.45;text-wrap:pretty;">{{ e.sentence }}</div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;">
+            <sc-for list="{{ e.summary }}" as="s" hint-placeholder-count="4">
+              <div style="flex:1 1 120px;background:#0e131c;border:1px solid {{ s.border }};border-radius:11px;padding:13px 15px;">
+                <div style="font-size:24px;font-weight:800;color:{{ s.color }};">{{ s.count }}</div>
+                <div style="font-size:13px;color:#8a94a2;margin-top:2px;">{{ s.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ e.hasProd }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:20px;border:1px solid rgba(255,107,122,0.3);background:rgba(255,107,122,0.06);border-radius:12px;padding:15px 17px;">
+            <div style="font-size:14px;font-weight:700;color:#ff8a95;">{{ e.prodHeading }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:11px;">
+              <sc-for list="{{ e.prodNames }}" as="p" hint-placeholder-count="6">
+                <span style="font-size:13px;color:#f0c6ca;background:rgba(255,107,122,0.1);border:1px solid rgba(255,107,122,0.22);padding:4px 10px;border-radius:7px;">{{ p.name }}</span>
+              </sc-for>
+            </div>
+            <div style="font-size:12px;color:#c99aa0;margin-top:11px;">{{ e.prodMore }}</div>
+          </div>
+          </sc-if>
+
+          <div style="margin-top:20px;font-size:14px;color:#8a94a2;line-height:1.6;text-wrap:pretty;">{{ e.effect }}</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;background:{{ e.footBg }};border-top:1px solid {{ e.footBorder }};">
+          <span onClick="{{ e.toChoose }}" style="cursor:pointer;font-size:13px;font-weight:600;padding:8px 13px;border-radius:8px;color:#9aa4b2;border:1px solid #2a3441;">Back to choosing</span>
+          <span style="font-size:14px;font-weight:700;padding:9px 17px;border-radius:9px;color:{{ e.ctaColor }};background:{{ e.ctaBg }};cursor:{{ e.ctaCursor }};">{{ e.cta }}</span>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="font-family:Figtree,sans-serif;color:#f2f5f8;padding:20px 48px 80px 48px;">
+
+  <div style="max-width:900px;">
+    <div style="font-size:13px;font-weight:800;letter-spacing:0.05em;color:#6b7684;">TURN 1 — SITE PICKER, RETHOUGHT</div>
+    <div style="font-size:30px;font-weight:800;margin-top:10px;">Three ways to choose sites</div>
+    <div style="font-size:16px;color:#9aa4b2;line-height:1.6;margin-top:10px;text-wrap:pretty;">Environment is no longer a filter — it is information shown on the row. Platform is the only filter, and it now has three values: WP Engine, Local, External. Each option below is fully interactive. <a href="#1a">1a</a> and <a href="#1b">1b</a> are lists with different selection models; <a href="#1c">1c</a> argues that most people should never see a list at all.</div>
+  </div>
+
+  <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;margin-top:34px;">
+
+    <div id="1a" style="flex:0 0 auto;width:640px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#0b0e14;background:#35e0c5;padding:3px 8px;border-radius:6px;">1a</span>
+        <span style="font-size:18px;font-weight:700;">Grouped — no filters, check at any level</span>
+      </div>
+      <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:8px;min-height:66px;text-wrap:pretty;">Sites are grouped by environment, so environment is structure rather than a filter. Each group header selects the whole group. There is no filter row, no bulk-action bar, and no side rail — the footer carries the count. Fastest path to "all staging plus these two."</div>
+
+      <div style="border:1px solid #232c38;border-radius:14px;background:#111621;overflow:hidden;margin-top:14px;">
+        <div style="display:flex;gap:8px;align-items:center;padding:13px 15px;border-bottom:1px solid #1c232e;">
+          <input value="{{ a.q }}" onChange="{{ a.onQ }}" placeholder="Search sites…" style="flex:1 1 auto;min-width:0;background:#0b0e14;border:1px solid #2a3441;border-radius:9px;padding:9px 13px;color:#f2f5f8;font-family:Figtree,sans-serif;font-size:14px;outline:none;" />
+        </div>
+        <div style="display:flex;gap:6px;padding:11px 15px;border-bottom:1px solid #1c232e;background:#0e131c;">
+          <sc-for list="{{ a.tabs }}" as="t" hint-placeholder-count="4">
+            <span onClick="{{ t.pick }}" style="cursor:pointer;font-size:13px;font-weight:600;padding:6px 12px;border-radius:8px;color:{{ t.color }};background:{{ t.bg }};border:1px solid {{ t.border }};">{{ t.label }}</span>
+          </sc-for>
+        </div>
+
+        <div style="max-height:396px;overflow-y:auto;">
+          <sc-for list="{{ a.groups }}" as="g" hint-placeholder-count="3">
+            <div>
+              <div style="display:flex;align-items:center;gap:11px;padding:10px 15px;background:#0e131c;border-bottom:1px solid #1c232e;position:sticky;top:0;">
+                <span onClick="{{ g.toggleAll }}" style="cursor:pointer;width:17px;height:17px;flex:0 0 17px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#0b0e14;background:{{ g.boxBg }};border:1.5px solid {{ g.boxBorder }};">{{ g.mark }}</span>
+                <span onClick="{{ g.collapse }}" style="cursor:pointer;flex:1 1 auto;display:flex;align-items:center;gap:9px;">
+                  <span style="width:7px;height:7px;border-radius:50%;background:{{ g.dot }};"></span>
+                  <span style="font-size:14px;font-weight:700;color:#e6ebf1;">{{ g.label }}</span>
+                  <span style="font-size:13px;color:#6b7684;">{{ g.countLine }}</span>
+                </span>
+                <span onClick="{{ g.collapse }}" style="cursor:pointer;font-size:11px;color:#6b7684;">{{ g.caret }}</span>
+              </div>
+              <sc-if value="{{ g.open }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+                  <div onClick="{{ r.toggle }}" style="display:flex;align-items:center;gap:11px;padding:8px 15px 8px 41px;cursor:pointer;background:{{ r.bg }};border-bottom:1px solid #161d27;">
+                    <span style="width:17px;height:17px;flex:0 0 17px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#0b0e14;background:{{ r.boxBg }};border:1.5px solid {{ r.boxBorder }};">{{ r.mark }}</span>
+                    <span style="flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#e6ebf1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+                    <span style="font-size:12px;color:#6b7684;">{{ r.platform }}</span>
+                  </div>
+                </sc-for>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="padding:11px 15px;font-size:12px;color:#5c6675;">{{ a.tail }}</div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;background:#0d1119;border-top:1px solid #1c232e;">
+          <span style="font-size:14px;color:#cdd5df;"><span style="font-weight:800;color:#35e0c5;">{{ a.count }}</span> {{ a.countLabel }}</span>
+          <div style="display:flex;gap:9px;align-items:center;">
+            <span onClick="{{ a.clear }}" style="cursor:pointer;font-size:13px;font-weight:600;padding:8px 13px;border-radius:8px;color:#9aa4b2;border:1px solid #2a3441;">Clear</span>
+            <span style="font-size:14px;font-weight:700;padding:9px 17px;border-radius:9px;color:{{ a.ctaColor }};background:{{ a.ctaBg }};cursor:{{ a.ctaCursor }};">{{ a.cta }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1b" style="flex:0 0 auto;width:640px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#0b0e14;background:#35e0c5;padding:3px 8px;border-radius:6px;">1b</span>
+        <span style="font-size:18px;font-weight:700;">Basket — build a list you can read</span>
+      </div>
+      <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:8px;min-height:66px;text-wrap:pretty;">The scope is a list on the right, not a number. You see the actual sites you picked and remove them by name. Quick-add buttons cover the bulk cases, then you refine by hand. Best when the answer is a specific handful and being wrong is expensive.</div>
+
+      <div style="border:1px solid #232c38;border-radius:14px;background:#111621;overflow:hidden;margin-top:14px;">
+        <div style="display:flex;align-items:stretch;height:474px;">
+
+          <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;border-right:1px solid #1c232e;">
+            <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+              <input value="{{ b.q }}" onChange="{{ b.onQ }}" placeholder="Search sites…" style="width:100%;background:#0b0e14;border:1px solid #2a3441;border-radius:9px;padding:9px 13px;color:#f2f5f8;font-family:Figtree,sans-serif;font-size:14px;outline:none;" />
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+                <sc-for list="{{ b.tabs }}" as="t" hint-placeholder-count="4">
+                  <span onClick="{{ t.pick }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 10px;border-radius:7px;color:{{ t.color }};background:{{ t.bg }};border:1px solid {{ t.border }};">{{ t.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 auto;overflow-y:auto;">
+              <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="8">
+                <div onClick="{{ r.toggle }}" style="display:flex;align-items:center;gap:10px;padding:8px 15px;cursor:pointer;border-bottom:1px solid #161d27;opacity:{{ r.opacity }};">
+                  <span style="width:16px;height:16px;flex:0 0 16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:{{ r.plusColor }};border:1.5px solid {{ r.boxBorder }};">{{ r.mark }}</span>
+                  <span style="flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#e6ebf1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+                  <span style="font-size:11px;color:#6b7684;">{{ r.platform }}</span>
+                  <span style="font-size:10px;font-weight:800;letter-spacing:0.04em;padding:2px 6px;border-radius:4px;color:{{ r.envColor }};background:{{ r.envBg }};">{{ r.env }}</span>
+                </div>
+              </sc-for>
+              <div style="padding:11px 15px;font-size:12px;color:#5c6675;">{{ b.tail }}</div>
+            </div>
+          </div>
+
+          <div style="flex:0 0 250px;display:flex;flex-direction:column;background:#0e131c;">
+            <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                <span style="font-size:14px;font-weight:700;">In scope <span style="color:#35e0c5;">{{ b.count }}</span></span>
+                <span onClick="{{ b.clear }}" style="cursor:pointer;font-size:12px;color:#7b8593;">Clear</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+                <sc-for list="{{ b.quick }}" as="q" hint-placeholder-count="3">
+                  <span onClick="{{ q.add }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:6px 10px;border-radius:7px;color:#9aa4b2;border:1px dashed #35404f;text-align:center;">{{ q.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 auto;overflow-y:auto;padding:6px 0;">
+              <sc-for list="{{ b.chosen }}" as="c" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 15px;">
+                  <span style="width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:{{ c.dot }};"></span>
+                  <span style="flex:1 1 auto;min-width:0;font-size:13px;color:#cdd5df;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ c.name }}</span>
+                  <span onClick="{{ c.remove }}" style="cursor:pointer;font-size:15px;line-height:1;color:#59626f;">×</span>
+                </div>
+              </sc-for>
+              <div style="padding:8px 15px;font-size:12px;color:#5c6675;">{{ b.chosenTail }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:9px;padding:13px 15px;background:#0d1119;border-top:1px solid #1c232e;">
+          <span style="cursor:pointer;font-size:13px;font-weight:600;padding:8px 13px;border-radius:8px;color:#9aa4b2;border:1px solid #2a3441;">Cancel</span>
+          <span style="font-size:14px;font-weight:700;padding:9px 17px;border-radius:9px;color:{{ b.ctaColor }};background:{{ b.ctaBg }};cursor:{{ b.ctaCursor }};">{{ b.cta }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="1c" style="flex:0 0 auto;width:640px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#0b0e14;background:#35e0c5;padding:3px 8px;border-radius:6px;">1c</span>
+        <span style="font-size:18px;font-weight:700;">Answer first — the list is the escape hatch</span>
+      </div>
+      <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:8px;min-height:66px;text-wrap:pretty;">Most scopes are one of five answers. Pick one and you are done — no list, no filters, no counting. "Specific sites" opens a plain list for the minority who need it. Each preset is stored as the explicit site IDs it resolved to, so the scope model is unchanged.</div>
+
+      <div style="border:1px solid #232c38;border-radius:14px;background:#111621;overflow:hidden;margin-top:14px;">
+        <div style="padding:16px 16px 6px 16px;display:flex;flex-direction:column;gap:9px;">
+          <sc-for list="{{ c.presets }}" as="p" hint-placeholder-count="5">
+            <div onClick="{{ p.pick }}" style="display:flex;align-items:center;gap:13px;padding:13px 15px;border-radius:11px;cursor:pointer;background:{{ p.bg }};border:1px solid {{ p.border }};">
+              <span style="width:18px;height:18px;flex:0 0 18px;border-radius:50%;border:2px solid {{ p.ringColor }};display:flex;align-items:center;justify-content:center;">
+                <span style="width:8px;height:8px;border-radius:50%;background:{{ p.dotColor }};"></span>
+              </span>
+              <span style="flex:1 1 auto;min-width:0;">
+                <span style="display:block;font-size:15px;font-weight:700;color:{{ p.titleColor }};">{{ p.title }}</span>
+                <span style="display:block;font-size:13px;color:#7b8593;margin-top:2px;">{{ p.sub }}</span>
+              </span>
+              <span style="font-size:15px;font-weight:800;color:{{ p.countColor }};">{{ p.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ c.showList }}" hint-placeholder-val="{{ false }}">
+        <div style="margin:10px 16px 0 16px;border:1px solid #232c38;border-radius:11px;overflow:hidden;background:#0e131c;">
+          <div style="display:flex;gap:8px;align-items:center;padding:11px 13px;border-bottom:1px solid #1c232e;">
+            <input value="{{ c.q }}" onChange="{{ c.onQ }}" placeholder="Search 384 sites…" style="flex:1 1 auto;min-width:0;background:#0b0e14;border:1px solid #2a3441;border-radius:8px;padding:8px 12px;color:#f2f5f8;font-family:Figtree,sans-serif;font-size:13px;outline:none;" />
+            <sc-for list="{{ c.tabs }}" as="t" hint-placeholder-count="4">
+              <span onClick="{{ t.pick }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px;color:{{ t.color }};background:{{ t.bg }};border:1px solid {{ t.border }};">{{ t.label }}</span>
+            </sc-for>
+          </div>
+          <div style="max-height:214px;overflow-y:auto;">
+            <sc-for list="{{ c.rows }}" as="r" hint-placeholder-count="6">
+              <div onClick="{{ r.toggle }}" style="display:flex;align-items:center;gap:10px;padding:8px 13px;cursor:pointer;background:{{ r.bg }};border-bottom:1px solid #161d27;">
+                <span style="width:16px;height:16px;flex:0 0 16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#0b0e14;background:{{ r.boxBg }};border:1.5px solid {{ r.boxBorder }};">{{ r.mark }}</span>
+                <span style="flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#e6ebf1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+                <span style="font-size:11px;color:#6b7684;">{{ r.platform }}</span>
+                <span style="font-size:10px;font-weight:800;letter-spacing:0.04em;padding:2px 6px;border-radius:4px;color:{{ r.envColor }};background:{{ r.envBg }};">{{ r.env }}</span>
+              </div>
+            </sc-for>
+            <div style="padding:10px 13px;font-size:12px;color:#5c6675;">{{ c.tail }}</div>
+          </div>
+        </div>
+        </sc-if>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;margin-top:14px;background:#0d1119;border-top:1px solid #1c232e;">
+          <span style="font-size:13px;color:#7b8593;flex:1 1 auto;min-width:0;">{{ c.summary }}</span>
+          <span style="font-size:14px;font-weight:700;padding:9px 17px;border-radius:9px;color:{{ c.ctaColor }};background:{{ c.ctaBg }};cursor:{{ c.ctaCursor }};">{{ c.cta }}</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="max-width:900px;margin-top:44px;border-top:1px solid #1c232e;padding-top:26px;">
+    <div style="font-size:18px;font-weight:700;">What changed in all three</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px;">
+      <sc-for list="{{ shared }}" as="s" hint-placeholder-count="5">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#e6ebf1;">{{ s.title }}</div>
+          <div style="font-size:14px;color:#8a94a2;line-height:1.55;margin-top:5px;text-wrap:pretty;">{{ s.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const BASES = ["a11ycheck","ACF Auto Car Finder","ACF Recipes","acfblocksnedev","acflikebutton","acfprod","acfrecipes","acfrecipestest","acfrecipeststg","atlas-blueprint","atlas-docs","beacon-marketing","blogx","bricksdemo","cartcheck","checkout-lab","clientportal","commerce-eu","commerce-us","content-hub","corp-www","coupons","crmbridge","dashboardui","designsystem","docsite","edgecache","eventhub","fieldnotes","formsdemo","gallerypro","gatewaytest","headless-poc","helpcenter","imagecdn","internal-wiki","inventory","jobsboard","knowledge","landing-a","landing-b","learnhub","ledger","lighthouse","mediahub","membersonly","microblog","newsroom","nexus-demo","onboarding","partnerhub","paywall","pdp-lab","pluginlab","podcast","pressroom","pricing","productdocs","recipes-v2","referrals","reviewsite","sandbox","searchlab","shopfront","signals","sitemapper","statuspage","storefront","supportdesk","surveys","themebeta","tickets","tracker","traininghub","translations","trialsite","uploader","vendorhub","webinars","wireframes"];
+const ENVS = {
+  production:  { label:"PROD",    full:"Production",  color:"#ff8a95", bg:"rgba(255,107,122,0.14)", dot:"#ff6b7a" },
+  staging:     { label:"STAGING", full:"Staging",     color:"#f0b52e", bg:"rgba(240,181,46,0.13)",  dot:"#f0b52e" },
+  development: { label:"DEV",     full:"Development", color:"#7cb6ff", bg:"rgba(124,182,255,0.13)", dot:"#7cb6ff" },
+  local:       { label:"LOCAL",   full:"Local",       color:"#b79bff", bg:"rgba(183,155,255,0.13)", dot:"#b79bff" }
+};
+const ORDER = ["production","staging","development","local"];
+const PLATS = ["WP Engine","Local","External"];
+
+const SITES = (() => {
+  const out = [];
+  let n = 0;
+  while (out.length < 384) {
+    const base = BASES[n % BASES.length];
+    const cycle = Math.floor(n / BASES.length);
+    const name = cycle === 0 ? base : base + "-" + (cycle + 1);
+    const m = n % 11;
+    let env = "production";
+    if (m === 2 || m === 7) env = "staging";
+    else if (m === 4) env = "development";
+    else if (m === 9) env = "local";
+    const platform = env === "local" ? "Local" : (n % 7 === 3 ? "External" : "WP Engine");
+    out.push({ id: "s" + n, name, env, platform });
+    n++;
+  }
+  return out;
+})();
+const N = SITES.length;
+const CNT = { total: N };
+for (const k of ORDER) CNT[k] = SITES.filter(s => s.env === k).length;
+for (const p of PLATS) CNT[p] = SITES.filter(s => s.platform === p).length;
+CNT.nonprod = N - CNT.production;
+
+function tabModel(active, onPick) {
+  return [["all", "All " + N], ["WP Engine", "WP Engine " + CNT["WP Engine"]], ["Local", "Local " + CNT.Local], ["External", "External " + CNT.External]]
+    .map(([v, label]) => {
+      const on = active === v;
+      return { label, color: on ? "#0b0e14" : "#9aa4b2", bg: on ? "#35e0c5" : "transparent", border: on ? "#35e0c5" : "#2a3441", pick: () => onPick(v) };
+    });
+}
+function match(s, plat, q) {
+  if (plat !== "all" && s.platform !== plat) return false;
+  if (!q) return true;
+  return s.name.toLowerCase().includes(q.toLowerCase().trim());
+}
+function box(on) {
+  return { mark: on ? "✓" : "", boxBg: on ? "#35e0c5" : "transparent", boxBorder: on ? "#35e0c5" : "#3a4553" };
+}
+function plural(n, one, many) { return n === 1 ? one : many; }
+function cta(n, danger) {
+  if (!n) return { ctaBg: "#1c232e", ctaColor: "#59626f", ctaCursor: "default" };
+  return { ctaBg: danger ? "#ff8a95" : "#35e0c5", ctaColor: "#0b0e14", ctaCursor: "pointer" };
+}
+
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    const nonprod = {};
+    for (const s of SITES) if (s.env !== "production") nonprod[s.id] = true;
+    this.state = {
+      a: { plat: "all", q: "", sel: Object.assign({}, nonprod), closed: {} },
+      b: { plat: "all", q: "", sel: {} },
+      d: { plat: "all", q: "", sel: {} },
+      e: { plat: "all", q: "", sel: { s0: true, s1: true, s3: true, s9: true, s14: true }, step: "choose" },
+      f: { plat: "all", q: "", sel: Object.assign({}, nonprod), open: true },
+      g: { plat: "all", q: "", sel: Object.assign({}, nonprod) },
+      c: { preset: "nonprod", custom: {}, q: "", plat: "all" }
+    };
+  }
+  up(k, patch) { this.setState(s => ({ [k]: Object.assign({}, s[k], patch) })); }
+  sel(k, fn) { this.up(k, { sel: (v => (fn(v), v))(Object.assign({}, this.state[k].sel)) }); }
+
+  optA() {
+    const st = this.state.a;
+    const vis = SITES.filter(s => match(s, st.plat, st.q));
+    const count = Object.keys(st.sel).length;
+    const groups = ORDER.map(env => {
+      const all = vis.filter(s => s.env === env);
+      if (!all.length) return null;
+      const on = all.filter(s => st.sel[s.id]).length;
+      const open = !st.closed[env];
+      const e = ENVS[env];
+      return {
+        label: e.full, dot: e.dot, open, caret: open ? "▾" : "▸",
+        countLine: on ? on + " of " + all.length + " selected" : all.length + " sites",
+        mark: on === all.length ? "✓" : on ? "–" : "",
+        boxBg: on ? "#35e0c5" : "transparent",
+        boxBorder: on ? "#35e0c5" : "#3a4553",
+        collapse: () => this.up("a", { closed: Object.assign({}, st.closed, { [env]: open }) }),
+        toggleAll: () => this.sel("a", v => { const fill = on !== all.length; for (const s of all) { if (fill) v[s.id] = true; else delete v[s.id]; } }),
+        rows: all.slice(0, 40).map(s => Object.assign({
+          name: s.name, platform: s.platform,
+          bg: st.sel[s.id] ? "rgba(53,224,197,0.07)" : "transparent",
+          toggle: () => this.sel("a", v => { if (v[s.id]) delete v[s.id]; else v[s.id] = true; })
+        }, box(!!st.sel[s.id])))
+      };
+    }).filter(Boolean);
+    return {
+      q: st.q, onQ: e => this.up("a", { q: e.target.value }),
+      tabs: tabModel(st.plat, v => this.up("a", { plat: v })),
+      groups,
+      tail: vis.length ? "Showing " + vis.length + " sites in " + groups.length + " groups." : "No sites match.",
+      count, countLabel: plural(count, "site selected", "sites selected"),
+      clear: () => this.up("a", { sel: {} }),
+      cta: "Run on " + count,
+      ...cta(count, false)
+    };
+  }
+
+  optB() {
+    const st = this.state.b;
+    const vis = SITES.filter(s => match(s, st.plat, st.q));
+    const chosen = SITES.filter(s => st.sel[s.id]);
+    return {
+      q: st.q, onQ: e => this.up("b", { q: e.target.value }),
+      tabs: tabModel(st.plat, v => this.up("b", { plat: v })),
+      rows: vis.slice(0, 60).map(s => {
+        const on = !!st.sel[s.id];
+        const e = ENVS[s.env];
+        return {
+          name: s.name, platform: s.platform, env: e.label, envColor: e.color, envBg: e.bg,
+          opacity: on ? "0.4" : "1", mark: on ? "✓" : "+",
+          plusColor: on ? "#35e0c5" : "#6b7684", boxBorder: on ? "#35e0c5" : "#3a4553",
+          toggle: () => this.sel("b", v => { if (v[s.id]) delete v[s.id]; else v[s.id] = true; })
+        };
+      }),
+      tail: vis.length > 60 ? "Showing 60 of " + vis.length + " — keep typing to narrow." : "End of results.",
+      count: chosen.length,
+      quick: [
+        { label: "+ All WP Engine (" + CNT["WP Engine"] + ")", f: s => s.platform === "WP Engine" },
+        { label: "+ All non-production (" + CNT.nonprod + ")", f: s => s.env !== "production" },
+        { label: "+ Everything (" + N + ")", f: () => true }
+      ].map(q => ({ label: q.label, add: () => this.sel("b", v => { for (const s of SITES) if (q.f(s)) v[s.id] = true; }) })),
+      chosen: chosen.slice(0, 40).map(s => ({
+        name: s.name, dot: ENVS[s.env].dot,
+        remove: () => this.sel("b", v => { delete v[s.id]; })
+      })),
+      chosenTail: chosen.length > 40 ? "+ " + (chosen.length - 40) + " more" : chosen.length ? "" : "Nothing selected yet.",
+      clear: () => this.up("b", { sel: {} }),
+      cta: "Run on " + chosen.length,
+      ...cta(chosen.length, false)
+    };
+  }
+
+  optC() {
+    const st = this.state.c;
+    const defs = [
+      { key: "all", title: "Every site", sub: "Resolved to " + N + " site IDs when saved", count: N },
+      { key: "wpe", title: "All WP Engine sites", sub: "Excludes Local and External", count: CNT["WP Engine"] },
+      { key: "nonprod", title: "Everything except production", sub: "Staging, development and local", count: CNT.nonprod },
+      { key: "local", title: "Local sites only", sub: "Runs against your machine", count: CNT.Local },
+      { key: "custom", title: "Specific sites…", sub: "Choose from the full list", count: Object.keys(st.custom).length }
+    ];
+    const vis = SITES.filter(s => match(s, st.plat, st.q));
+    const resolved = st.preset === "custom" ? Object.keys(st.custom).length : (defs.find(d => d.key === st.preset) || {}).count || 0;
+    const picked = defs.find(d => d.key === st.preset) || defs[0];
+    return {
+      presets: defs.map(d => {
+        const on = st.preset === d.key;
+        return {
+          title: d.title, sub: d.sub, count: d.count,
+          bg: on ? "rgba(53,224,197,0.07)" : "#0e131c",
+          border: on ? "rgba(53,224,197,0.45)" : "#1f2732",
+          ringColor: on ? "#35e0c5" : "#3a4553",
+          dotColor: on ? "#35e0c5" : "transparent",
+          titleColor: on ? "#f2f5f8" : "#cdd5df",
+          countColor: on ? "#35e0c5" : "#6b7684",
+          pick: () => this.up("c", { preset: d.key })
+        };
+      }),
+      showList: st.preset === "custom",
+      q: st.q, onQ: e => this.up("c", { q: e.target.value }),
+      tabs: tabModel(st.plat, v => this.up("c", { plat: v })).map(t => ({ ...t, label: t.label.replace(/ \d+$/, "") })),
+      rows: vis.slice(0, 50).map(s => {
+        const on = !!st.custom[s.id];
+        const e = ENVS[s.env];
+        return Object.assign({
+          name: s.name, platform: s.platform, env: e.label, envColor: e.color, envBg: e.bg,
+          bg: on ? "rgba(53,224,197,0.07)" : "transparent",
+          toggle: () => this.up("c", { custom: (v => (v[s.id] ? delete v[s.id] : (v[s.id] = true), v))(Object.assign({}, st.custom)) })
+        }, box(on));
+      }),
+      tail: vis.length > 50 ? "Showing 50 of " + vis.length + " — keep typing to narrow." : "End of results.",
+      summary: st.preset === "custom" ? resolved + " " + plural(resolved, "site", "sites") + " chosen by hand" : picked.title + " — " + resolved + " sites",
+      cta: "Run on " + resolved,
+      ...cta(resolved, false)
+    };
+  }
+
+  browse(k) {
+    const st = this.state[k];
+    const vis = SITES.filter(s => match(s, st.plat, st.q));
+    return {
+      q: st.q, onQ: ev => this.up(k, { q: ev.target.value }),
+      tabs: tabModel(st.plat, v => this.up(k, { plat: v })),
+      rows: vis.slice(0, 60).map(s => {
+        const on = !!st.sel[s.id];
+        const e = ENVS[s.env];
+        return {
+          name: s.name, platform: s.platform, env: e.label, envColor: e.color, envBg: e.bg,
+          opacity: on ? "0.4" : "1", mark: on ? "✓" : "+",
+          plusColor: on ? "#35e0c5" : "#6b7684", boxBorder: on ? "#35e0c5" : "#3a4553",
+          toggle: () => this.sel(k, v => { if (v[s.id]) delete v[s.id]; else v[s.id] = true; })
+        };
+      }),
+      tail: vis.length > 60 ? "Showing 60 of " + vis.length + " — keep typing to narrow." : "End of results.",
+      quick: [
+        { label: "All WP Engine", f: s => s.platform === "WP Engine" },
+        { label: "All non-prod", f: s => s.env !== "production" },
+        { label: "Everything", f: () => true }
+      ].map(q => ({ label: "+ " + q.label, add: () => this.sel(k, v => { for (const s of SITES) if (q.f(s)) v[s.id] = true; }) })),
+      clear: () => this.up(k, { sel: {} })
+    };
+  }
+
+  optD() {
+    const st = this.state.d;
+    const chosen = SITES.filter(s => st.sel[s.id]);
+    const prod = chosen.filter(s => s.env === "production").length;
+    const groups = ORDER.map(env => {
+      const all = chosen.filter(s => s.env === env);
+      if (!all.length) return null;
+      const e = ENVS[env];
+      const danger = env === "production";
+      return {
+        label: e.full.toUpperCase(), dot: e.dot, count: all.length,
+        headBg: danger ? "rgba(255,107,122,0.1)" : "transparent",
+        headColor: danger ? "#ff8a95" : "#8a94a2",
+        remove: () => this.sel("d", v => { for (const s of all) delete v[s.id]; }),
+        items: all.slice(0, 6).map(s => ({ name: s.name, remove: () => this.sel("d", v => { delete v[s.id]; }) })),
+        more: all.length > 6 ? "+ " + (all.length - 6) + " more" : ""
+      };
+    }).filter(Boolean);
+    return Object.assign(this.browse("d"), {
+      count: chosen.length, groups,
+      emptyNote: chosen.length ? "" : "Nothing selected yet. Add sites from the left, or use a shortcut above.",
+      footNote: prod
+        ? prod + " " + plural(prod, "live production site", "live production sites") + " will be scanned."
+        : chosen.length ? "No production sites in scope." : "Select at least one site.",
+      footColor: prod ? "#ff8a95" : "#7b8593",
+      footBg: prod ? "rgba(255,107,122,0.07)" : "#0d1119",
+      footBorder: prod ? "rgba(255,107,122,0.24)" : "#1c232e",
+      cta: "Run on " + chosen.length,
+      ...cta(chosen.length, prod)
+    });
+  }
+
+  optE() {
+    const st = this.state.e;
+    const chosen = SITES.filter(s => st.sel[s.id]);
+    const prodSites = chosen.filter(s => s.env === "production");
+    const onReview = st.step === "review";
+    const counts = ORDER.map(env => ({
+      label: ENVS[env].full, count: chosen.filter(s => s.env === env).length,
+      color: ENVS[env].color, border: env === "production" && prodSites.length ? "rgba(255,107,122,0.32)" : "#1f2732"
+    })).filter(x => x.count);
+    return Object.assign(this.browse("e"), {
+      count: chosen.length,
+      chosen: chosen.slice(0, 40).map(s => ({
+        name: s.name, dot: ENVS[s.env].dot,
+        remove: () => this.sel("e", v => { delete v[s.id]; })
+      })),
+      chosenTail: chosen.length > 40 ? "+ " + (chosen.length - 40) + " more" : chosen.length ? "" : "Nothing selected yet.",
+      steps: [["choose", "1 · Choose sites"], ["review", "2 · Review"]].map(([k, label]) => ({
+        label, go: () => this.up("e", { step: k }),
+        color: st.step === k ? "#f2f5f8" : "#6b7684",
+        border: st.step === k ? "#35e0c5" : "transparent"
+      })),
+      onChoose: !onReview, onReview,
+      chooseNote: chosen.length + " " + plural(chosen.length, "site", "sites") + " selected",
+      reviewCta: "Review " + chosen.length + " →",
+      toReview: () => this.up("e", { step: "review" }),
+      toChoose: () => this.up("e", { step: "choose" }),
+      sentence: chosen.length
+        ? "security-sentinel will scan " + chosen.length + " " + plural(chosen.length, "site", "sites") + " once, starting immediately."
+        : "Nothing is selected — go back and choose at least one site.",
+      summary: counts,
+      hasProd: prodSites.length > 0,
+      prodHeading: prodSites.length + " " + plural(prodSites.length, "production site", "production sites") + " will be scanned",
+      prodNames: prodSites.slice(0, 12).map(s => ({ name: s.name })),
+      prodMore: prodSites.length > 12 ? "and " + (prodSites.length - 12) + " more" : "",
+      effect: "This agent investigates on its own and surfaces findings — it takes no action on its own. Findings appear in Approvals. This run does not change the hourly schedule.",
+      footBg: prodSites.length ? "rgba(255,107,122,0.07)" : "#0d1119",
+      footBorder: prodSites.length ? "rgba(255,107,122,0.24)" : "#1c232e",
+      ...cta(chosen.length, prodSites.length),
+      cta: "Run on " + chosen.length + " " + plural(chosen.length, "site", "sites")
+    });
+  }
+
+  basket(k, height) {
+    const st = this.state[k];
+    const chosen = SITES.filter(s => st.sel[s.id]);
+    const groups = ORDER.map(env => {
+      const all = chosen.filter(s => s.env === env);
+      if (!all.length) return null;
+      const e = ENVS[env];
+      const danger = env === "production";
+      return {
+        label: e.full.toUpperCase(), dot: e.dot, count: all.length,
+        headBg: danger ? "rgba(255,107,122,0.1)" : "transparent",
+        headColor: danger ? "#ff8a95" : "#8a94a2",
+        remove: () => this.sel(k, v => { for (const s of all) delete v[s.id]; }),
+        items: all.slice(0, 5).map(s => ({ name: s.name, remove: () => this.sel(k, v => { delete v[s.id]; }) })),
+        more: all.length > 5 ? "+ " + (all.length - 5) + " more" : ""
+      };
+    }).filter(Boolean);
+    return Object.assign(this.browse(k), {
+      height, count: chosen.length, groups,
+      emptyNote: chosen.length ? "" : "Nothing selected yet. Add sites from the left, or use a shortcut above."
+    });
+  }
+
+  optF() {
+    const st = this.state.f;
+    const chosen = SITES.filter(s => st.sel[s.id]);
+    const prod = chosen.filter(s => s.env === "production").length;
+    const desc = chosen.length === 0 ? "No sites selected — this agent will not run."
+      : prod === 0 ? chosen.length + " sites — no production"
+      : chosen.length === N ? "Every site on the account, including " + prod + " in production"
+      : chosen.length + " sites, " + prod + " of them in production";
+    return {
+      sentence: desc,
+      sentenceColor: prod ? "#ff8a95" : "#e6ebf1",
+      subline: "Last edited 4 days ago · shared by the schedule and event triggers",
+      open: st.open,
+      toggle: () => this.up("f", { open: !st.open }),
+      btnLabel: st.open ? "Close list" : "Edit sites",
+      btnColor: st.open ? "#9aa4b2" : "#0b0e14",
+      btnBg: st.open ? "transparent" : "#35e0c5",
+      btnBorder: st.open ? "#2a3441" : "#35e0c5",
+      warn: prod ? prod + " " + plural(prod, "live production site", "live production sites") + " will be scanned every hour." : "",
+      warnColor: "#ff8a95",
+      ...cta(chosen.length, prod),
+      cta: "Save " + chosen.length + " " + plural(chosen.length, "site", "sites"),
+      basket: this.basket("f", "400px")
+    };
+  }
+
+  optG() {
+    const st = this.state.g;
+    const base = this.state.f.sel;
+    const chosen = SITES.filter(s => st.sel[s.id]);
+    const prod = chosen.filter(s => s.env === "production").length;
+    let added = 0, removed = 0;
+    for (const k in st.sel) if (!base[k]) added++;
+    for (const k in base) if (!st.sel[k]) removed++;
+    const changed = added || removed;
+    return {
+      prefill: changed
+        ? "Changed for this run only — " + added + " added, " + removed + " removed vs. the schedule scope."
+        : "Prefilled from this agent's schedule scope (" + Object.keys(base).length + " sites).",
+      reset: () => this.up("g", { sel: Object.assign({}, base) }),
+      footNote: prod
+        ? prod + " " + plural(prod, "live production site", "live production sites") + " will be scanned."
+        : changed ? "Applies to this run only. Save it to the schedule from Settings." : "Same sites the hourly schedule uses.",
+      footColor: prod ? "#ff8a95" : "#7b8593",
+      footBg: prod ? "rgba(255,107,122,0.07)" : "#0d1119",
+      footBorder: prod ? "rgba(255,107,122,0.24)" : "#1c232e",
+      ...cta(chosen.length, prod),
+      cta: "Run on " + chosen.length + " " + plural(chosen.length, "site", "sites"),
+      basket: this.basket("g", "400px")
+    };
+  }
+
+  renderVals() {
+    return {
+      a: this.optA(), b: this.optB(), c: this.optC(), d: this.optD(), e: this.optE(),
+      f: this.optF(), g: this.optG(),
+      shared: [
+        { title: "Environment is information, not a filter", body: "It appears as a badge or a group heading. You can still see at a glance that you are about to hit production, but you no longer navigate by it." },
+        { title: "One filter row, three values", body: "WP Engine, Local, External. The old design had nine chips across two rows, with \"Local\" appearing in both as two different things." },
+        { title: "Site IDs are gone from the row", body: "They wrapped to two lines and doubled the row height for information nobody reads. Show the ID on hover, and in search results when the query matched the ID rather than the name." },
+        { title: "No separate bulk-action bar", body: "Selecting many sites is folded into the thing you were already looking at — a group header, a quick-add button, or a preset." },
+        { title: "Counts live in the footer", body: "One number, next to the button that uses it, instead of a rail taking a third of the width." }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>
