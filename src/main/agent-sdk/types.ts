@@ -126,6 +126,24 @@ export interface AgentDefinition {
   onError?: (err: Error, ctx: AgentContext) => Promise<void>;
   /** When true, the Run Now modal shows an "Always do full run" toggle. */
   supportsFullRun?: boolean;
+  /**
+   * Whether this agent may ever be scoped to production sites. Default true (unrestricted).
+   * Set false for an agent whose manifest declares it must never touch production — e.g. one
+   * that runs destructive or exploratory operations unsuited to a live site. When false, the
+   * site scope picker locks production rows (non-interactive, checkbox shows an em-dash) in
+   * every placement — settings, Run Now, and any future bulk-actions menu — and the same rule
+   * must be enforced wherever a scope is actually applied (CLI, MCP), not just in the picker UI;
+   * the UI lock is a courtesy, not the boundary.
+   */
+  allowsProduction?: boolean;
+  /**
+   * What this agent does to the sites it runs on. Drives the production-warning verb in the
+   * site scope picker ("N live production sites will be scanned" vs "...will be modified").
+   * Default 'writes' — the conservative assumption for an agent that hasn't declared otherwise.
+   * Must reflect what the agent's `run()` actually does; a 'readonly' agent that later gains a
+   * remediation action must update this at the same time.
+   */
+  effect?: 'readonly' | 'writes';
 }
 
 export interface AgentResult {

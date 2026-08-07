@@ -21,6 +21,8 @@ export interface AgentStatus {
   lastRunDurationMs: number | null;
   lastRunError: string | null;
   supportsFullRun: boolean;
+  allowsProduction: boolean;
+  effect: 'readonly' | 'writes';
 }
 
 export interface AgentRunRecord {
@@ -76,6 +78,22 @@ export interface AgentScanScope {
   siteIds: string[];
 }
 
+/**
+ * The site scope picker's persisted output — always an explicit list, never a live rule.
+ * A site added to the account after this was saved is never auto-included (see the drift
+ * banner in the picker UI). Distinct from the legacy AgentScanScope above, which still
+ * supports a live 'all' mode for security-sentinel; the two are not migrated together (see
+ * docs/design/agent-site-picker/README.md).
+ */
+export interface AgentScope {
+  siteIds: string[];
+}
+
+export interface AgentSavedScope {
+  name: string;
+  siteIds: string[];
+}
+
 export interface AgentSettings {
   enabled: boolean;
   scheduleEnabled: boolean;
@@ -83,6 +101,12 @@ export interface AgentSettings {
   eventsEnabled: boolean;
   subscribedEvents: Record<string, boolean>;
   scanScope: AgentScanScope;
+  /** Persistent scope for scheduled runs and event triggers, shared by both — see AgentScope. */
+  scope?: AgentScope;
+  /** Named scopes saved for quick re-application in the picker. Per-agent, not shared (v1). */
+  savedScopes?: AgentSavedScope[];
+  /** Unix ms timestamp of the last time `scope` was edited. Required to compute drift. */
+  scopeUpdatedAt?: number;
 }
 
 export interface AgentState {

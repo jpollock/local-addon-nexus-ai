@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { agentStore, AgentStatus } from './AgentStore';
+import { agentStore, AgentStatus, ActivityEvent } from './AgentStore';
 import { AgentWorkspaceSettings } from './AgentWorkspaceSettings';
 import { AgentRunList } from './AgentRunList';
 import { AgentRunModal } from './AgentRunModal';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { rendererGql } from '../../utils/rendererGql';
+import { fetchScopeSites, ScopeSiteEnv } from './fetchScopeSites';
 
 type WorkspaceTab = 'settings' | 'approvals' | 'activity' | 'tools' | 'docs';
 
@@ -32,6 +33,54 @@ interface WorkspaceState {
   toolsLoading: boolean;
   readme: string | null;            // null = not loaded, '' = no README exists
   readmeLoading: boolean;
+  /** Site name → environment, for the Approvals tab's environment badges. */
+  siteEnvByName: Record<string, ScopeSiteEnv>;
+  /** Bulk-selection for Approvals — event IDs currently checked. */
+  selectedApprovals: Set<string>;
+}
+
+type ApprovalSeverity = 'high' | 'medium' | 'low';
+
+const SEVERITY_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+
+const SEVERITY_DISPLAY: Record<ApprovalSeverity, { label: string; fg: string; bg: string }> = {
+  high:   { label: 'HIGH', fg: '#f2666e', bg: 'rgba(242,102,110,0.16)' },
+  medium: { label: 'MED',  fg: '#f0b52e', bg: 'rgba(240,181,46,0.16)' },
+  low:    { label: 'LOW',  fg: '#8b95a3', bg: 'rgba(139,149,163,0.16)' },
+};
+
+const ENV_DISPLAY: Record<ScopeSiteEnv, { label: string; fg: string; bg: string }> = {
+  production:  { label: 'PROD',    fg: '#f2666e', bg: 'rgba(242,102,110,0.14)' },
+  staging:     { label: 'STAGING', fg: '#f0b52e', bg: 'rgba(240,181,46,0.14)' },
+  development: { label: 'DEV',     fg: '#7cb6ff', bg: 'rgba(124,182,255,0.14)' },
+  local:       { label: 'LOCAL',   fg: '#8b95a3', bg: 'rgba(139,149,163,0.14)' },
+};
+
+/** Highest severity among an event's structured findings, collapsed to the 3-tier display scale
+ * (critical/high → HIGH, medium → MED, low/info → LOW). Falls back to 'medium' when an event
+ * carries no structured findings — a real gap in older/simpler events, not a claim of severity. */
+export function eventSeverity(e: ActivityEvent): ApprovalSeverity {
+  const findings = e.findings ?? [];
+  if (findings.length === 0) return 'medium';
+  const worst = Math.max(...findings.map(f => SEVERITY_RANK[f.severity] ?? SEVERITY_RANK.medium));
+  if (worst >= SEVERITY_RANK.high) return 'high';
+  if (worst >= SEVERITY_RANK.medium) return 'medium';
+  return 'low';
+}
+
+export function formatDayLabel(day: string): string {
+  if (day === 'today') return 'Today';
+  if (day === 'yest') return 'Yesterday';
+  return day;
+}
+
+export function groupApprovalsByDay(events: ActivityEvent[]): Array<[string, ActivityEvent[]]> {
+  const groups = new Map<string, ActivityEvent[]>();
+  for (const e of events) {
+    if (!groups.has(e.day)) groups.set(e.day, []);
+    groups.get(e.day)!.push(e);
+  }
+  return [...groups.entries()];
 }
 
 function renderMarkdown(text: string): React.ReactNode[] {
@@ -150,6 +199,8 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     toolsLoading: false,
     readme: null,
     readmeLoading: false,
+    siteEnvByName: {},
+    selectedApprovals: new Set(),
   };
   private unsub!: () => void;
 
@@ -162,6 +213,13 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     agentStore.subscribe(update);
     this.unsub = update;
     update();
+
+    // For the Approvals tab's environment badges — same site list the scope picker uses.
+    fetchScopeSites(this.props.electron).then(sites => {
+      const byName: Record<string, ScopeSiteEnv> = {};
+      for (const s of sites) byName[s.name] = s.environment;
+      this.setState({ siteEnvByName: byName });
+    });
   }
 
   componentWillUnmount() {
@@ -416,43 +474,127 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     );
   }
 
+  private dismissApproval(id: string): void {
+    agentStore.setState({
+      activityEvents: agentStore.getState().activityEvents.map(e =>
+        e.id === id ? { ...e, status: 'dismissed' as const } : e,
+      ),
+    });
+    const next = new Set(this.state.selectedApprovals);
+    next.delete(id);
+    this.setState({ selectedApprovals: next });
+  }
+
+  private dismissSelectedApprovals = (): void => {
+    const ids = this.state.selectedApprovals;
+    agentStore.setState({
+      activityEvents: agentStore.getState().activityEvents.map(e =>
+        ids.has(e.id) ? { ...e, status: 'dismissed' as const } : e,
+      ),
+    });
+    this.setState({ selectedApprovals: new Set() });
+  };
+
+  private toggleApprovalSelection(id: string): void {
+    const next = new Set(this.state.selectedApprovals);
+    next.has(id) ? next.delete(id) : next.add(id);
+    this.setState({ selectedApprovals: next });
+  }
+
   private renderApprovalsTab() {
     const { agentId, onReviewEvent } = this.props;
+    const { selectedApprovals, siteEnvByName } = this.state;
     const pending = agentStore.getState().activityEvents.filter(
       e => e.agentId === agentId && e.status === 'review'
     );
+
     if (pending.length === 0) {
       return React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13, padding: '24px 0' } }, 'No pending approvals.');
     }
-    const dismiss = (id: string) => {
-      agentStore.setState({
-        activityEvents: agentStore.getState().activityEvents.map(e =>
-          e.id === id ? { ...e, status: 'dismissed' as const } : e,
-        ),
-      });
-    };
+
+    const allSelected = pending.every(e => selectedApprovals.has(e.id));
 
     return React.createElement('div', null,
-      ...pending.map(e =>
-        React.createElement('div', {
-          key: e.id,
-          style: { background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', borderRadius: 12, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 14 },
+      // Header caption + select-all/clear-all
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+        React.createElement('span', { style: { fontSize: 13, color: 'var(--ag-text-muted)' } }, 'Findings from recent runs — highest severity first'),
+        React.createElement('button', {
+          onClick: () => this.setState({ selectedApprovals: allSelected ? new Set() : new Set(pending.map(e => e.id)) }),
+          style: { background: 'none', border: 'none', color: 'var(--ag-teal)', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+        }, allSelected ? 'Clear all' : 'Select all'),
+      ),
+
+      // Bulk bar — visible only when >=1 selected
+      selectedApprovals.size > 0 && React.createElement('div', {
+        style: {
+          background: 'rgba(53,224,197,0.08)', border: '1px solid rgba(53,224,197,0.24)', borderRadius: 10,
+          padding: '10px 16px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14,
         },
-          React.createElement('div', { style: { flex: 1 } },
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
-              React.createElement('div', { style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-text-primary)' } }, e.siteName ?? e.text),
-              React.createElement('span', { style: { fontSize: 11.5, color: 'var(--ag-text-muted)' } }, e.time),
-            ),
-            React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)' } }, e.sub),
-          ),
-          e.ref && React.createElement('button', {
-            onClick: () => onReviewEvent(e.id),
-            style: { background: 'var(--ag-teal)', color: 'var(--ag-on-teal)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-          }, 'Review'),
-          React.createElement('button', {
-            onClick: () => dismiss(e.id),
-            style: { background: 'none', border: '1px solid var(--ag-border)', borderRadius: 8, padding: '8px 14px', fontSize: 13, color: 'var(--ag-text-muted)', cursor: 'pointer' },
-          }, 'Dismiss'),
+      },
+        React.createElement('span', { style: { fontSize: 13, color: 'var(--ag-text-primary)', flex: 1 } }, `${selectedApprovals.size} selected`),
+        React.createElement('button', {
+          onClick: this.dismissSelectedApprovals,
+          style: { background: 'var(--ag-teal)', color: 'var(--ag-on-teal)', border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+        }, 'Dismiss selected'),
+        React.createElement('button', {
+          onClick: () => this.setState({ selectedApprovals: new Set() }),
+          style: { background: 'none', border: 'none', color: 'var(--ag-text-muted)', fontSize: 13, cursor: 'pointer' },
+        }, 'Clear'),
+      ),
+
+      // Date groups
+      ...groupApprovalsByDay(pending).map(([day, events]) =>
+        React.createElement('div', { key: day, style: { marginBottom: 18 } },
+          React.createElement('div', { style: { fontSize: 13, fontWeight: 600, color: 'var(--ag-text-muted)', marginBottom: 8 } }, formatDayLabel(day)),
+          ...events.map(e => {
+            const severity = eventSeverity(e);
+            const sevDisplay = SEVERITY_DISPLAY[severity];
+            const env = e.siteName ? siteEnvByName[e.siteName] : undefined;
+            const envDisplay = env ? ENV_DISPLAY[env] : null;
+            const checked = selectedApprovals.has(e.id);
+
+            return React.createElement('div', {
+              key: e.id,
+              style: {
+                background: '#151a23', border: '1px solid #1f2732', borderRadius: 14, padding: '16px 20px',
+                marginBottom: 10, display: 'flex', alignItems: 'center', gap: 14, position: 'relative',
+              },
+            },
+              // Severity rail
+              React.createElement('div', {
+                style: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, borderRadius: '14px 0 0 14px', background: sevDisplay.fg },
+              }),
+              // Checkbox
+              React.createElement('div', {
+                onClick: () => this.toggleApprovalSelection(e.id),
+                className: `ag-checkbox ${checked ? 'ag-checkbox--checked' : ''}`,
+                style: { flexShrink: 0, marginLeft: 4 },
+              }, checked ? '✓' : ''),
+              // Content
+              React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' } },
+                  React.createElement('span', { style: { fontSize: 16, fontWeight: 700, color: 'var(--ag-text-primary)' } }, e.siteName ?? e.text),
+                  envDisplay && React.createElement('span', {
+                    style: { fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', padding: '3px 7px', borderRadius: 5, color: envDisplay.fg, background: envDisplay.bg },
+                  }, envDisplay.label),
+                  React.createElement('span', {
+                    style: { fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', padding: '3px 7px', borderRadius: 5, color: sevDisplay.fg, background: sevDisplay.bg },
+                  }, sevDisplay.label),
+                ),
+                React.createElement('div', { style: { fontSize: 14, color: '#aeb7c4' } }, e.sub),
+              ),
+              // Time + actions
+              React.createElement('span', { style: { fontSize: 12, color: 'var(--ag-text-muted)', flexShrink: 0 } }, e.time),
+              e.ref && React.createElement('button', {
+                onClick: () => onReviewEvent(e.id),
+                style: { background: 'var(--ag-teal)', color: 'var(--ag-on-teal)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0 },
+              }, 'Review'),
+              React.createElement('button', {
+                onClick: () => this.dismissApproval(e.id),
+                style: { background: 'none', border: '1px solid #2a323e', borderRadius: 8, padding: '8px 14px', fontSize: 13, color: 'var(--ag-text-muted)', cursor: 'pointer', flexShrink: 0 },
+              }, 'Dismiss'),
+            );
+          }),
         ),
       ),
     );
@@ -473,7 +615,12 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         onSwitchToApprovals: () => this.setState({ activeTab: 'approvals' }),
         electron: this.props.electron,
       }),
-      activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId, electron: this.props.electron }),
+      activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, {
+        agentId,
+        electron: this.props.electron,
+        allowsProduction: this.state.status?.allowsProduction ?? true,
+        effect: this.state.status?.effect ?? 'writes',
+      }),
       activeTab === 'tools'     && this.renderToolsTab(),
       activeTab === 'docs'      && this.renderDocsTab(),
 
@@ -483,6 +630,9 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         agentId,
         electron: this.props.electron,
         supportsFullRun: this.state.status?.supportsFullRun ?? false,
+        allowsProduction: this.state.status?.allowsProduction ?? true,
+        effect: this.state.status?.effect ?? 'writes',
+        scheduleScope: settings.scope,
         onCancel: () => this.setState({ showRunModal: false }),
         onRun: (_siteNames: string[]) => {
           // AgentRunModal.handleRun() already invoked AGENT_RUN_NOW via IPC.

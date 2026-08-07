@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;align-items:stretch;height:{{ m.height }};border:1px solid #232c38;border-radius:12px;background:#111621;overflow:hidden;">
+  <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;border-right:1px solid #1c232e;">
+    <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+      <input value="{{ m.q }}" onChange="{{ m.onQ }}" placeholder="Search sites…" style="width:100%;background:#0b0e14;border:1px solid #2a3441;border-radius:9px;padding:9px 13px;color:#f2f5f8;font-family:Figtree,sans-serif;font-size:14px;outline:none;" />
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+        <sc-for list="{{ m.tabs }}" as="t" hint-placeholder-count="4">
+          <span onClick="{{ t.pick }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 10px;border-radius:7px;color:{{ t.color }};background:{{ t.bg }};border:1px solid {{ t.border }};">{{ t.label }}</span>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1 1 auto;overflow-y:auto;">
+      <sc-for list="{{ m.rows }}" as="r" hint-placeholder-count="8">
+        <div onClick="{{ r.toggle }}" style="display:flex;align-items:center;gap:10px;padding:8px 15px;cursor:{{ r.cursor }};border-bottom:1px solid #161d27;opacity:{{ r.opacity }};">
+          <span style="width:16px;height:16px;flex:0 0 16px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:{{ r.plusColor }};border:1.5px solid {{ r.boxBorder }};">{{ r.mark }}</span>
+          <span style="flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:{{ r.nameColor }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</span>
+          <span style="font-size:11px;color:#6b7684;">{{ r.platform }}</span>
+          <span style="font-size:10px;font-weight:800;letter-spacing:0.04em;padding:2px 6px;border-radius:4px;color:{{ r.envColor }};background:{{ r.envBg }};">{{ r.env }}</span>
+        </div>
+      </sc-for>
+      <div style="padding:11px 15px;font-size:12px;color:#5c6675;">{{ m.tail }}</div>
+    </div>
+  </div>
+
+  <div style="flex:0 0 276px;display:flex;flex-direction:column;background:#0e131c;">
+    <div style="padding:13px 15px 11px 15px;border-bottom:1px solid #1c232e;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;">
+        <span style="font-size:14px;font-weight:700;">In scope <span style="color:#35e0c5;">{{ m.count }}</span></span>
+        <span onClick="{{ m.clear }}" style="cursor:pointer;font-size:12px;color:#7b8593;">Clear</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+        <sc-for list="{{ m.quick }}" as="q" hint-placeholder-count="3">
+          <span onClick="{{ q.add }}" style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px;color:#9aa4b2;border:1px dashed #35404f;">{{ q.label }}</span>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1 1 auto;overflow-y:auto;">
+      <sc-for list="{{ m.groups }}" as="g" hint-placeholder-count="3">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 15px;background:{{ g.headBg }};border-bottom:1px solid #161d27;">
+            <span style="width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:{{ g.dot }};"></span>
+            <span style="flex:1 1 auto;font-size:12px;font-weight:800;letter-spacing:0.04em;color:{{ g.headColor }};">{{ g.label }}</span>
+            <span style="font-size:12px;font-weight:700;color:{{ g.headColor }};">{{ g.count }}</span>
+            <span onClick="{{ g.remove }}" style="cursor:pointer;font-size:14px;line-height:1;color:#59626f;">×</span>
+          </div>
+          <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 15px 5px 29px;">
+              <span style="flex:1 1 auto;min-width:0;font-size:13px;color:#cdd5df;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ i.name }}</span>
+              <span onClick="{{ i.remove }}" style="cursor:pointer;font-size:14px;line-height:1;color:#59626f;">×</span>
+            </div>
+          </sc-for>
+          <div style="padding:3px 15px 8px 29px;font-size:11px;color:#5c6675;">{{ g.more }}</div>
+        </div>
+      </sc-for>
+      <div style="padding:14px 15px;font-size:12px;color:#5c6675;line-height:1.5;">{{ m.emptyNote }}</div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:700,&quot;height&quot;:440},&quot;m&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;}}"></script>
+</body>
+</html>

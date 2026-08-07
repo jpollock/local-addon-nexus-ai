@@ -1,22 +1,21 @@
 import * as React from 'react';
 import { agentStore, AgentSettings } from './AgentStore';
 import { IPC_CHANNELS } from '../../../common/constants';
+import { fetchScopeSites, ScopeSite } from './fetchScopeSites';
+import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
 
 interface SettingsProps {
   agentId: string;
   electron?: any;
+  /** From this agent's AgentStatus. Undefined while status is still loading upstream. */
+  allowsProduction?: boolean;
+  effect?: 'readonly' | 'writes';
 }
 
 interface GoogleConnection {
   id: string;
   accountLabel: string;
   status: string;
-}
-
-interface ScopeSite {
-  id: string;
-  name: string;
-  environment: string;   // 'production' | 'staging' | 'development' | 'local'
 }
 
 interface SettingsState {
@@ -27,21 +26,37 @@ interface SettingsState {
   scopeSites: ScopeSite[];
   scopeLoading: boolean;
   scopeExpanded: boolean;
-  scopeSearch: string;
+  /** Non-null while the picker is open — edits happen here first; Save commits, Cancel discards. */
+  scopeDraftSelection: Set<string> | null;
+  driftDismissed: boolean;
 }
 
 const CADENCE_OPTIONS = [
-  { label: 'Every 15 minutes', value: '*/15 * * * *' },
-  { label: 'Hourly',           value: '0 * * * *' },
-  { label: 'Every 6 hours',    value: '0 */6 * * *' },
-  { label: 'Daily',            value: '0 0 * * *' },
-  { label: 'Weekly',           value: '0 0 * * 0' },
+  { label: 'Every 15 minutes', value: '*/15 * * * *', every: 'every 15 minutes' },
+  { label: 'Hourly',           value: '0 * * * *',    every: 'every hour' },
+  { label: 'Every 6 hours',    value: '0 */6 * * *',  every: 'every 6 hours' },
+  { label: 'Daily',            value: '0 0 * * *',    every: 'every day' },
+  { label: 'Weekly',           value: '0 0 * * 0',    every: 'every week' },
 ];
 
+function formatLastEdited(updatedAt?: number): string {
+  if (!updatedAt) return 'Not yet saved';
+  const days = Math.floor((Date.now() - updatedAt) / 86_400_000);
+  if (days <= 0) return 'Last edited today';
+  if (days === 1) return 'Last edited yesterday';
+  return `Last edited ${days} days ago`;
+}
+
 // Event catalog per agent — in production, fetched from agent definition
+//
+// security-sentinel used to also list 'wpe:sync.completed' here. Removed 2026-08-06: that
+// trigger let WpeRefreshScheduler's automated fleet-wide refresh cycle (opt-in,
+// wpeRefreshAutoEnabled) silently launch a full Tier 2/3 investigation — fresh sandbox site
+// included — per stale WPE install per cycle, with no user action at all. The agent no longer
+// subscribes to it (see agents/security-sentinel/agent.js's triggers list); offering to
+// subscribe here would be a UI control for a trigger that does nothing.
 const EVENT_CATALOG: Record<string, Array<{ id: string; label: string; description: string }>> = {
   'security-sentinel': [
-    { id: 'wpe:sync.completed',   label: 'WPE sync completed',    description: 'Triggers after the 4-hour metadata sync refreshes plugin/user data for an install' },
     { id: 'wp:plugin.activated',  label: 'Plugin activated',      description: 'Triggers when a plugin is activated on any local site' },
     { id: 'wp:user.created',      label: 'User account created',  description: 'Triggers when a new user account is created on any local site' },
   ],
@@ -80,7 +95,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     scopeSites: [],
     scopeLoading: false,
     scopeExpanded: false,
-    scopeSearch: '',
+    scopeDraftSelection: null,
+    driftDismissed: false,
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -149,141 +165,160 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
    * why site groups could not be reused for this — they resolve through siteData.getSites().
    */
   private async loadScopeSites() {
-    const ipc = this.props.electron?.ipcRenderer;
-    if (!ipc) return;
+    if (!this.props.electron?.ipcRenderer) return;
     this.setState({ scopeLoading: true });
-
-    const sites: ScopeSite[] = [];
-    try {
-      const wpeResult = await ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES).catch(() => null);
-      for (const s of (wpeResult?.sites || [])) {
-        if (!s?.name) continue;
-        sites.push({ id: s.id || s.name, name: s.name, environment: s.environment || 'production' });
-      }
-    } catch { /* WPE not connected — local sites alone are a valid fleet */ }
-
-    try {
-      const localSites: any[] = await ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []);
-      for (const s of (localSites || [])) {
-        // sentinel-* are this agent's own forensic sandboxes; never offer them as scan targets.
-        if (!s?.name || s.name.startsWith('sentinel-')) continue;
-        sites.push({ id: s.id || s.name, name: s.name, environment: 'local' });
-      }
-    } catch { /* ignore */ }
-
-    sites.sort((a, b) => a.name.localeCompare(b.name));
+    const sites = await fetchScopeSites(this.props.electron);
     this.setState({ scopeSites: sites, scopeLoading: false });
   }
 
-  private toggleScopeSite(id: string) {
-    const scope = this.state.settings.scanScope ?? { mode: 'explicit' as const, siteIds: [] };
-    const next = new Set(scope.siteIds);
-    next.has(id) ? next.delete(id) : next.add(id);
-    this.updateSettings({ scanScope: { mode: 'explicit', siteIds: [...next] } });
+  /**
+   * "Every site" mode is retired (2026-08-07): it was a live rule that silently absorbed any
+   * site added to the account, which is exactly what an explicit-list scope exists to rule out
+   * — the two concepts contradicted each other under one toggle. An agent whose settings still
+   * carry legacy `mode: 'all'` data reads here as "currently every known site", so nothing it
+   * scans changes at the moment of this migration; the very next Save writes an explicit list
+   * (mode: 'explicit') and the account is fully migrated.
+   */
+  private currentScopeSiteIds(): string[] {
+    const scope = this.state.settings.scanScope;
+    if (scope?.mode === 'all') return this.state.scopeSites.map(s => s.id);
+    return scope?.siteIds ?? [];
+  }
+
+  /** Sites created after this scope was last edited — a permanent property of an explicit-list
+   * model, not a bug: a scope never auto-includes anything added after it was set. Only ever
+   * fires for WPE sites — local sites have no creation-time field available (see
+   * fetchScopeSites' ScopeSite.createdAt doc). */
+  private getDriftedSites(): ScopeSite[] {
+    const scopeUpdatedAt = this.state.settings.scopeUpdatedAt;
+    if (!scopeUpdatedAt) return [];
+    const currentIds = new Set(this.currentScopeSiteIds());
+    return this.state.scopeSites.filter(s =>
+      typeof s.createdAt === 'number' && s.createdAt > scopeUpdatedAt && !currentIds.has(s.id));
+  }
+
+  private openScopeEditor = (): void => {
+    this.setState({ scopeExpanded: true, scopeDraftSelection: new Set(this.currentScopeSiteIds()) });
+  };
+
+  private cancelScopeEdit = (): void => {
+    this.setState({ scopeExpanded: false, scopeDraftSelection: null });
+  };
+
+  private saveScopeEdit = (): void => {
+    const draft = this.state.scopeDraftSelection;
+    if (!draft) return;
+    this.updateSettings({
+      scanScope: { mode: 'explicit', siteIds: [...draft] },
+      scopeUpdatedAt: Date.now(),
+    });
+    this.setState({ scopeExpanded: false, scopeDraftSelection: null });
+  };
+
+  /** The four scope-sentence forms from the v2 design — resting-state summary of the saved
+   * scope. "All sites" collapses into "mixed" when nothing is in production, since "including 0
+   * in production" reads as a bug report, not a status. */
+  private renderScopeSentence(selectedSites: ScopeSite[], total: number) {
+    const n = selectedSites.length;
+    const p = selectedSites.filter(s => s.environment === 'production').length;
+
+    if (n === 0) {
+      return React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, 'No sites selected — this agent will not run.');
+    }
+    if (n === total && total > 0 && p > 0) {
+      return React.createElement('span', { style: { color: '#ff8a95' } }, `Every site on the account, including ${p} in production`);
+    }
+    if (p === 0) {
+      return React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, `${n} site${n === 1 ? '' : 's'} — no production`);
+    }
+    return React.createElement('span', { style: { color: '#ff8a95' } },
+      n === 1 ? `1 site, in production` : `${n} sites, ${p} of them in production`);
   }
 
   private renderScanScope() {
-    const { scopeSites, scopeLoading, scopeExpanded, scopeSearch } = this.state;
-    const scope = this.state.settings.scanScope ?? { mode: 'explicit' as const, siteIds: [] };
-    const selected = new Set(scope.siteIds);
-    const isAll = scope.mode === 'all';
+    const { scopeSites, scopeLoading, scopeExpanded, scopeDraftSelection, driftDismissed, settings } = this.state;
+    const selectedIds = new Set(this.currentScopeSiteIds());
+    const selectedSites = scopeSites.filter(s => selectedIds.has(s.id));
+    const drifted = this.getDriftedSites();
+    const allowsProduction = this.props.allowsProduction ?? true;
+    const effect = this.props.effect ?? 'writes';
+    const cadence = CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.every ?? 'on the configured schedule';
 
-    const wpeCount = scopeSites.filter(s => s.environment !== 'local').length;
-    const prodCount = scopeSites.filter(s => s.environment === 'production').length;
-
-    const modeButton = (mode: 'explicit' | 'all', label: string) =>
-      React.createElement('button', {
-        key: mode,
-        onClick: () => this.updateSettings({
-          scanScope: { mode, siteIds: mode === 'all' ? scope.siteIds : scope.siteIds },
-        }),
-        style: {
-          background: (scope.mode === mode) ? 'var(--ag-teal)' : 'var(--ag-bg-elevated)',
-          color: (scope.mode === mode) ? 'var(--ag-on-teal)' : 'var(--ag-text-primary)',
-          border: '1px solid var(--ag-border-control)', borderRadius: 7,
-          padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontWeight: 500,
-        },
-      }, label);
-
-    const filtered = scopeSearch
-      ? scopeSites.filter(s => s.name.toLowerCase().includes(scopeSearch.toLowerCase()))
-      : scopeSites;
+    const draftProdCount = scopeDraftSelection ? selectedProductionCount(scopeSites, scopeDraftSelection) : 0;
 
     return React.createElement('div', { style: { marginBottom: 14 } },
-      React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)', marginBottom: 6 } },
-        'Sites scanned on a schedule'),
-      React.createElement('div', { style: { display: 'flex', gap: 8, marginBottom: 8 } },
-        modeButton('explicit', 'Only selected sites'),
-        modeButton('all', 'Every site'),
+      // Eyebrow + scope sentence — the resting state; the site list is a detail the user
+      // opens, never the default presentation.
+      React.createElement('div', {
+        style: { fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ag-text-faint)', marginBottom: 4 },
+      }, 'SITES IN SCOPE'),
+      React.createElement('div', { style: { fontSize: 16, lineHeight: 1.5, marginBottom: 4 } },
+        scopeLoading ? React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, 'Loading sites…')
+          : this.renderScopeSentence(selectedSites, scopeSites.length),
+      ),
+      React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-faint)', marginBottom: 10 } },
+        `${formatLastEdited(settings.scopeUpdatedAt)} · shared by the schedule and event triggers`),
+
+      // Drift banner — sites added to the account after this scope was last saved. Because
+      // scopes are explicit lists, drift is a permanent property of the model, not a bug.
+      !scopeExpanded && drifted.length > 0 && !driftDismissed && React.createElement('div', {
+        style: {
+          background: 'rgba(240,181,46,0.08)', border: '1px solid rgba(240,181,46,0.28)', borderRadius: 11,
+          padding: '12px 16px', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        },
+      },
+        React.createElement('span', { style: { fontSize: 13, color: 'var(--ag-text-secondary)' } },
+          `${drifted.length} site${drifted.length === 1 ? '' : 's'} were added to the account after this scope was set. They are not being scanned.`),
+        React.createElement('div', { style: { display: 'flex', gap: 10, flexShrink: 0 } },
+          React.createElement('button', {
+            onClick: this.openScopeEditor,
+            style: { fontSize: 13, fontWeight: 700, color: '#0b0e14', background: '#f0b52e', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' },
+          }, `Review ${drifted.length}`),
+          React.createElement('button', {
+            onClick: () => this.setState({ driftDismissed: true }),
+            style: { fontSize: 13, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: 'none', cursor: 'pointer' },
+          }, 'Dismiss'),
+        ),
       ),
 
-      // "Every site" states the actual cost rather than a vague caution — the numbers are known.
-      isAll && React.createElement('div', {
-        style: {
-          fontSize: 12, color: 'var(--ag-text-faint)', background: 'var(--ag-bg-elevated)',
-          borderRadius: 7, padding: '8px 10px', lineHeight: 1.5,
-        },
-      }, `Every scheduled run will scan all ${scopeSites.length} known site(s)` +
-         (wpeCount ? ` — ${wpeCount} WP Engine (${prodCount} production), ${scopeSites.length - wpeCount} local` : '') +
-         `. Deep investigations are capped at 3 per run; anything beyond that is deferred to the next run.`),
-
-      !isAll && React.createElement('div', null,
-        React.createElement('div', {
-          style: { fontSize: 12, color: selected.size === 0 ? 'var(--ag-amber, #d89614)' : 'var(--ag-text-faint)', marginBottom: 6 },
-        }, scopeLoading
-            ? 'Loading sites…'
-            : selected.size === 0
-              ? `No sites selected — scheduled runs will scan nothing. ${scopeSites.length} site(s) available.`
-              : `${selected.size} of ${scopeSites.length} site(s) selected.`),
-
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end' } },
         React.createElement('button', {
-          onClick: () => this.setState({ scopeExpanded: !scopeExpanded }),
+          onClick: scopeExpanded ? this.cancelScopeEdit : this.openScopeEditor,
           style: {
-            background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
-            borderRadius: 7, padding: '5px 12px', fontSize: 12.5,
-            color: 'var(--ag-text-primary)', cursor: 'pointer', fontWeight: 500,
+            background: scopeExpanded ? 'transparent' : '#35e0c5',
+            color: scopeExpanded ? '#9aa4b2' : '#0b0e14',
+            border: scopeExpanded ? '1px solid #2a3441' : 'none',
+            borderRadius: 9, padding: '9px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
           },
-        }, scopeExpanded ? 'Done choosing' : 'Choose sites…'),
+        }, scopeExpanded ? 'Close list' : 'Edit sites'),
+      ),
 
-        scopeExpanded && React.createElement('div', { style: { marginTop: 8 } },
-          React.createElement('input', {
-            value: scopeSearch,
-            placeholder: `Search ${scopeSites.length} sites…`,
-            onChange: (e: any) => this.setState({ scopeSearch: e.target.value }),
-            style: {
-              width: '100%', boxSizing: 'border-box', marginBottom: 8,
-              background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
-              borderRadius: 7, padding: '6px 10px', fontSize: 12.5, color: 'var(--ag-text-primary)',
-            },
-          }),
-          React.createElement('div', {
-            style: {
-              maxHeight: 260, overflowY: 'auto', border: '1px solid var(--ag-border-control)',
-              borderRadius: 7,
-            },
-          },
-            ...filtered.slice(0, 400).map(s => React.createElement('div', {
-              key: s.id,
-              onClick: () => this.toggleScopeSite(s.id),
-              style: {
-                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px',
-                cursor: 'pointer', fontSize: 12.5, color: 'var(--ag-text-primary)',
-                background: selected.has(s.id) ? 'var(--ag-bg-elevated)' : 'transparent',
-              },
-            },
-              React.createElement('span', null, selected.has(s.id) ? '☑' : '☐'),
-              React.createElement('span', { style: { flex: 1 } }, s.name),
-              React.createElement('span', {
-                style: { fontSize: 11, color: s.environment === 'production' ? 'var(--ag-amber, #d89614)' : 'var(--ag-text-faint)' },
-              }, s.environment),
-            )),
-            filtered.length > 400 && React.createElement('div', {
-              style: { padding: '6px 10px', fontSize: 11.5, color: 'var(--ag-text-faint)' },
-            }, `${filtered.length - 400} more — refine the search to see them.`),
-            filtered.length === 0 && React.createElement('div', {
-              style: { padding: '6px 10px', fontSize: 12, color: 'var(--ag-text-faint)' },
-            }, 'No sites match.'),
+      // Picker opens inline, never in a modal — the scope only makes sense next to the trigger
+      // that consumes it, and a modal implies a one-off choice, which is what Run Now is.
+      scopeExpanded && scopeDraftSelection && React.createElement('div', { style: { marginTop: 12 } },
+        React.createElement(SitePicker, {
+          sites: scopeSites,
+          selection: scopeDraftSelection,
+          onChange: (next: Set<string>) => this.setState({ scopeDraftSelection: next }),
+          allowsProduction,
+        }),
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12 } },
+          React.createElement('span', { style: { flex: 1, fontSize: 13, fontWeight: 600, color: draftProdCount > 0 ? '#ff8a95' : 'transparent' } },
+            draftProdCount > 0
+              ? `${draftProdCount} live production site${draftProdCount === 1 ? '' : 's'} will be ${productionWarningVerb(effect)} ${cadence}.`
+              : ' ',
           ),
+          React.createElement('button', {
+            onClick: this.cancelScopeEdit,
+            style: { fontSize: 14, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: '1px solid #2a3441', borderRadius: 9, padding: '9px 16px', cursor: 'pointer' },
+          }, 'Cancel'),
+          React.createElement('button', {
+            onClick: this.saveScopeEdit,
+            style: {
+              fontSize: 14, fontWeight: 700, color: '#0b0e14', border: 'none', borderRadius: 9, padding: '9px 16px', cursor: 'pointer',
+              background: draftProdCount > 0 ? '#ff8a95' : '#35e0c5',
+            },
+          }, `Save ${scopeDraftSelection.size} site${scopeDraftSelection.size === 1 ? '' : 's'}`),
         ),
       ),
     );
