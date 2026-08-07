@@ -147,19 +147,21 @@ describe('Tier 2 filesystem detection no longer executes the site', () => {
   const src2 = fs2.readFileSync(
     path2.join(__dirname, '../../../../agents/security-sentinel/agent.js'), 'utf8');
 
-  it('FS-01, FS-02, FS-03, FS-04 and FS-06 have no wp_eval block left', () => {
+  it('FS-01 through FS-06, ABS-08 and ABS-09 have no wp_eval block left', () => {
     // Each of these booted WordPress on a possibly-compromised clone to ask it about itself.
-    for (const id of ['FS-01', 'FS-02', 'FS-03', 'FS-04', 'FS-06']) {
+    // FS-05/ABS-08/ABS-09 joined this list once ported to the byte scanner (filesystem.ts /
+    // directives.ts) and wired into runByteScan's deep-mode parser — they used to be the
+    // reason Tier 2 still needed to start-and-clone at that point; they no longer are.
+    for (const id of ['FS-01', 'FS-02', 'FS-03', 'FS-04', 'FS-05', 'FS-06', 'ABS-08', 'ABS-09']) {
       expect(src2).not.toMatch(new RegExp(`//\\s*${id}:`));
     }
   });
 
-  it('FS-05, ABS-08 and ABS-09 are honestly still wp_eval — not yet ported', () => {
-    // Their presence is the reason the sandbox still exists at that point in Tier 2. Claiming
-    // otherwise would be exactly the overstated-coverage failure this work is about.
-    for (const id of ['FS-05', 'ABS-08', 'ABS-09']) {
-      expect(src2).toMatch(new RegExp(`//\\s*${id}:`));
-    }
+  it('the sandbox comment above tier2Investigate reflects the completed port, not the old gap', () => {
+    // Pins against reintroducing the "FS-05/ABS-08/ABS-09 not ported yet" claim without also
+    // reintroducing the wp_eval blocks it justified — a stale comment here is exactly the
+    // overstated-coverage failure this work is about, just in the other direction.
+    expect(src2).not.toMatch(/FS-05.*ABS-08.*ABS-09.*not ported/);
   });
 
   it('runs the byte scan BEFORE tier2Investigate, which is what creates the sandbox', () => {
@@ -179,5 +181,122 @@ describe('Tier 2 filesystem detection no longer executes the site', () => {
 
   it('deep mode asks the tool for the deep scan', () => {
     expect(src2).toContain("tools.invoke('scan_site_files', { site: install.name, deep })");
+  });
+});
+
+describe('runByteScan deep mode parses ABS-08/ABS-09/FS-05 from the real handler output', () => {
+  // End-to-end, not hand-built markdown: a real temp WordPress-shaped tree, the real
+  // scanSiteFilesHandler rendering it, and runByteScan's regex parser reading that real text.
+  // Hand-writing the markdown risked pinning my own assumption about the format rather than
+  // the format the handler actually produces.
+  const os = require('os');
+  let scanSiteFilesHandler;
+  let tmp;
+
+  beforeAll(() => {
+    ({ scanSiteFilesHandler } = require('../../../../src/main/mcp/modules/sentinel-scan/scan-files-handler'));
+  });
+
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'abs-byte-scan-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  function makeSite() {
+    const sitePath = tmp;
+    const pub = path.join(sitePath, 'app', 'public');
+    fs.mkdirSync(path.join(pub, 'wp-includes'), { recursive: true });
+    fs.writeFileSync(path.join(pub, 'wp-includes', 'version.php'), "<?php $wp_version = '6.9.4';");
+    fs.writeFileSync(path.join(pub, 'wp-config.php'), "<?php $table_prefix = 'wp_';");
+
+    // ABS-09: suspicious filename under plugins/.
+    fs.mkdirSync(path.join(pub, 'wp-content/plugins/ranktool'), { recursive: true });
+    fs.writeFileSync(path.join(pub, 'wp-content/plugins/ranktool/check_file.php'), '<?php echo 1;');
+
+    // ABS-08: touch() + scandir in the same plugin PHP file.
+    fs.mkdirSync(path.join(pub, 'wp-content/plugins/fileorganizer'), { recursive: true });
+    fs.writeFileSync(
+      path.join(pub, 'wp-content/plugins/fileorganizer/backdate.php'),
+      '<?php function f($d,$t){foreach(scandir($d) as $x) touch($d."/".$x,$t);}',
+    );
+
+    // FS-05: .user.ini re-enabling execution before every request.
+    fs.writeFileSync(path.join(pub, '.user.ini'), 'auto_prepend_file = evil.php\n');
+
+    // DB-01: a spam post in a fresh, complete dump — no site process involved at all.
+    const sqlDir = path.join(sitePath, 'app', 'sql');
+    fs.mkdirSync(sqlDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sqlDir, 'local.sql'),
+      "INSERT INTO `wp_posts` VALUES (1,1,'2026-01-01 00:00:00','2026-01-01 00:00:00'," +
+        "'Best online casino bonuses','Spam',''," +
+        "'publish','open','open','','slug-1','','','2026-01-01 00:00:00','2026-01-01 00:00:00','',0," +
+        "'http://x/?p=1',0,'post','',0);\n" +
+        '-- Dump completed on 2026-08-06 12:00:00\n',
+    );
+
+    return { id: 'x', name: 'abs-fixture', path: sitePath };
+  }
+
+  it('surfaces ABS-08, ABS-09, FS-05 and DB-01 as Tier 1 signals with nothing executed', async () => {
+    const site = makeSite();
+
+    const result = await scanSiteFilesHandler.execute({ site: 'abs-fixture', deep: true }, {
+      siteData: { getSite: (id) => (id === 'x' ? site : null), getSites: () => ({ x: site }) },
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Suspicious filenames in plugins (ABS-09)');
+    expect(text).toContain('check_file.php');
+    expect(text).toContain('Anti-forensics timestamp manipulation (ABS-08)');
+    expect(text).toContain('backdate.php');
+    expect(text).toContain('.user.ini');
+    expect(text).toContain('Suspicious post content (DB-01)');
+    expect(text).toContain('casino/gambling spam');
+
+    const tools = mkTools(text);
+    const res = await runByteScan({ name: 'abs-fixture', source: 'local' }, tools, mkLog(), { deep: true });
+
+    expect(res.available).toBe(true);
+    const byId = Object.fromEntries(res.signals.map((s) => [s.id, s]));
+    expect(byId['ABS-09']).toBeDefined();
+    expect(byId['ABS-09'].evidence.some((e) => e.includes('check_file.php'))).toBe(true);
+    expect(byId['ABS-08']).toBeDefined();
+    expect(byId['ABS-08'].evidence.some((e) => e.includes('backdate.php'))).toBe(true);
+    expect(byId['FS-05']).toBeDefined();
+    expect(byId['FS-05'].evidence.some((e) => e.includes('.user.ini'))).toBe(true);
+    expect(byId['DB-01']).toBeDefined();
+    expect(byId['DB-01'].severity).toBe('high');
+    // Regression: buildRemediationChecklist's Step 5d extracts post IDs to delete via
+    // /ID:(\d+)/ against this exact evidence array. An earlier render used `post ${id}`
+    // instead — the regex found nothing, Step 5d silently dropped out of every checklist,
+    // and the flagged spam posts were never actually deleted even on a READY TO PUSH verdict
+    // (DB-01 is 'high', not 'critical', so its absence never blocked the gate).
+    expect(byId['DB-01'].evidence.some((e) => /ID:\d+/.test(e))).toBe(true);
+
+    for (const s of res.signals) {
+      expect(s.detail).toMatch(/nothing was executed/);
+    }
+  });
+
+  it('reports a "not examined" reason instead of silence when the site is running', async () => {
+    const site = makeSite();
+    // Simulate a running site: a socket file under the default run/ directory for this site id.
+    const runDir = path.join(
+      require('os').homedir(), 'Library', 'Application Support', 'Local', 'run', site.id, 'mysql',
+    );
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, 'mysqld.sock'), '');
+    try {
+      const result = await scanSiteFilesHandler.execute({ site: 'abs-fixture', deep: true }, {
+        siteData: { getSite: (id) => (id === 'x' ? site : null), getSites: () => ({ x: site }) },
+      });
+      const text = result.content[0].text;
+      expect(text).toContain('Database — NOT EXAMINED');
+      expect(text).toContain('site-running');
+
+      const res = await runByteScan({ name: 'abs-fixture', source: 'local' }, mkTools(text), mkLog(), { deep: true });
+      expect(res.signals.some((s) => s.id === 'DB-01')).toBe(false);
+    } finally {
+      fs.rmSync(path.dirname(runDir), { recursive: true, force: true });
+    }
   });
 });

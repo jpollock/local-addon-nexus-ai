@@ -1,12 +1,17 @@
 // tests/unit/agents/security-sentinel/fleet-cost.test.js
 'use strict';
 
-// The cron trigger is `*/15 * * * *` and fires with no event, so getScanScope() returns nulls,
-// collectFleetData() applies no site filter, and every sweep covers the whole fleet — 375 sites
-// on the machine this was measured on. Previously that meant two nested serial loops with no
-// cap: 343 SSH deep refreshes one at a time, then 375 Tier 1 passes, then Tier 2 (measured at
-// ~5 minutes for ONE site) inline for anything that escalated. AgentScheduler has no overlap
-// guard, so sweeps that outlive their 15-minute interval stack up.
+// HISTORICAL — the cron trigger (`*/15 * * * *`) that motivated this file is gone from
+// module.exports.triggers now; removing it from nexus.agent.yaml earlier had no effect
+// (AgentRegistry reads triggers only from agent.js's own exports, never the YAML), so the cron
+// kept firing fleet-wide every 15 minutes for the rest of that session regardless. The
+// behaviour these tests pin — getScanScope() returning nulls for an event-less or
+// non-wpe-sync trigger, so collectFleetData() applies no site filter — is still real and still
+// matters for any future automatic trigger, cron or otherwise: on the machine this was
+// measured on, an unscoped sweep covers the whole 375-site fleet. Previously that meant two
+// nested serial loops with no cap: 343 SSH deep refreshes one at a time, then 375 Tier 1
+// passes, then Tier 2 (measured at ~5 minutes for ONE site) inline for anything that escalated.
+// AgentScheduler has no overlap guard, so sweeps that outlive their interval stack up.
 
 const agent = require('../../../../agents/security-sentinel/agent');
 const {
@@ -177,5 +182,46 @@ describe('The cron trigger really is fleet-wide', () => {
       .toEqual({ installId: null, installName: 'x' });
     expect(getScanScope({ namespace: 'cron', type: 'tick' }))
       .toEqual({ installId: null, installName: null });
+  });
+});
+
+describe('No automatic cron trigger — AgentRegistry reads triggers only from agent.js', () => {
+  // Reproduced live: nexus.agent.yaml's `triggers:` list had the cron removed in an earlier
+  // session, and the fleet-wide sweep kept firing every 15 minutes anyway for the rest of that
+  // session — confirmed in agent.log at :00/:15/:30/:45 timestamps. AgentRegistry.loadAgent()
+  // requires agent.js and registers `def.triggers` directly from module.exports; loadManifest()
+  // only ever reads contributes.tools from the YAML. The YAML's triggers list is not consulted
+  // for scheduling at all, so editing it is a no-op — this is the assertion that would have
+  // caught that the first time.
+  it('module.exports.triggers has no cron entry', () => {
+    expect(agent.triggers.some((t) => t.type === 'cron')).toBe(false);
+  });
+
+  it('the only automatic triggers are events', () => {
+    expect(agent.triggers.every((t) => t.type === 'event')).toBe(true);
+  });
+
+  it('does NOT trigger on wpe:sync.completed (2026-08-06 incident: this event is not exclusively user-initiated)', () => {
+    // This test's own previous title claimed every event trigger was "opt-in-scoped by
+    // resolveScanScope" — false for this one, and the assertion never actually checked it.
+    // resolveScanScope's own comment says wpe:sync.completed "is not constrained by this — the
+    // user named the target", which is only true when a human manually syncs one install.
+    // WpeRefreshScheduler (opt-in, wpeRefreshAutoEnabled) publishes the identical event
+    // automatically for every stale WPE install in a cycle, with no way for security-sentinel to
+    // tell the two sources apart. Live result: dozens of orphaned sandbox sites across the fleet
+    // from a single 8-hour refresh cycle, several installs re-investigated repeatedly within an
+    // hour, until the whole app had to be force-killed. Re-adding this trigger requires a way to
+    // distinguish "user synced one site" from "scheduler swept the fleet" first.
+    expect(agent.triggers.some((t) => t.pattern === 'wpe:sync.completed')).toBe(false);
+  });
+});
+
+describe('supportsFullRun', () => {
+  // Without this, ctx.fullRun forcing Tier 2 past a Tier-1-clean verdict is unreachable from
+  // the UI: AgentRunModal's "Always do full run" toggle only renders when
+  // this.props.supportsFullRun is true, and that prop traces back to this exact manifest field
+  // via the agentStatus GraphQL resolver.
+  it('is declared true', () => {
+    expect(agent.supportsFullRun).toBe(true);
   });
 });

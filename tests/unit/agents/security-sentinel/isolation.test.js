@@ -92,4 +92,46 @@ describe('The sandbox is stopped when the scan ends', () => {
     expect(src).toContain("local_stop_site', { site: sandboxName }");
     expect(src).not.toContain("local_delete_site', { site: sandboxName }");
   });
+
+  it('also stops the ORIGINAL local site after cloning it — not just the sandbox', () => {
+    // Reproduced live, twice in one session: local_start_site was called unconditionally to
+    // give local_clone_site something to copy, and nothing ever called local_stop_site on
+    // install.name afterward — only on sandboxName. The actual known-compromised site was left
+    // running indefinitely after every scan, which is the exact "live PHP-FPM plus MySQL pair
+    // serving a known-compromised site" problem the sandbox-stop above exists to prevent, just
+    // on the real site instead of a copy. It also broke resolveDbSource's own staleness gate on
+    // the NEXT scan: the running site's data files kept advancing past the last dump, so the
+    // pre-flight byte scan correctly refused to trust it as stale.
+    expect(src).toContain("local_stop_site', { site: install.name }");
+  });
+});
+
+describe('fullRun forces Tier 2 past a Tier-1-clean verdict, scoped only', () => {
+  // The AgentRunner/AGENT_RUN_NOW plumbing for a "Full Run" toggle already existed
+  // (src/main/agent-runtime/AgentRunner.ts, buildAgentContext.ts) — the sentinel itself never
+  // read ctx.fullRun, so the toggle in Local's Run Now dialog was silently a no-op for this
+  // agent specifically. Fixed by reading it and forcing escalation when set.
+
+  it('destructures fullRun from run() and computes forceEscalate from it', () => {
+    expect(src).toMatch(/async run\(\{[^}]*\bfullRun\b[^}]*\}\)/);
+    expect(src).toContain('const forceEscalate = !!fullRun');
+  });
+
+  it('is gated on an actual scope — never forces escalation on an unscoped fleet-wide sweep', () => {
+    // Forcing a ~5 minute sandbox investigation on every clean site in the fleet on every cron
+    // tick would be exactly the disk-filling problem MAX_TIER2_PER_SWEEP exists to prevent,
+    // self-inflicted by this same feature.
+    const idx = src.indexOf('const forceEscalate = !!fullRun');
+    const line = src.slice(idx, src.indexOf('\n', idx));
+    expect(line).toMatch(/scope\.installId/);
+    expect(line).toMatch(/scope\.installName/);
+  });
+
+  it('the clean-verdict gate does not fire when forceEscalate is true', () => {
+    expect(src).toContain('if (signals.length === 0 && !forceEscalate)');
+  });
+
+  it('the Tier 2 escalation gate fires on forceEscalate alone, with zero signals', () => {
+    expect(src).toMatch(/else if \(forceEscalate \|\| criticalCount >= 1 \|\| compromiseHighCount >= 2\)/);
+  });
 });

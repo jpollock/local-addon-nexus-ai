@@ -26,8 +26,10 @@ export const scanSiteFilesHandler: McpToolHandler = {
   definition: {
     name: 'scan_site_files',
     description:
-      'Byte-level filesystem scan of a local WordPress site — reads files directly, executes no PHP, and does NOT require the site to be running. ' +
-      'Currently detects unexpected PHP in mu-plugins (files that load on every request and cannot be deactivated). ' +
+      'Byte-level scan of a local WordPress site — reads files and its mysqldump directly, executes no PHP, and does NOT require the site to be running. ' +
+      'Always detects unexpected PHP in mu-plugins. With deep=true, also covers obfuscation chains, unexpected web-root/uploads PHP, ELF binaries, ' +
+      'suspicious plugin filenames, anti-forensics timestamp manipulation, .htaccess/.user.ini/php.ini directives, and — reading app/sql/local.sql when the site ' +
+      'is halted and the dump is fresh — injected post content, suspicious autoloaded options, serialized objects in admin usermeta, and spam comments. ' +
       'Prefer this over wp_eval-based checks: WP-CLI --skip-plugins does not skip mu-plugins, so an eval-based check executes the very code it is looking for. ' +
       'Reports what it did NOT examine alongside what it did — a clean result is never evidence that a site is uncompromised.',
     inputSchema: {
@@ -95,6 +97,61 @@ export const scanSiteFilesHandler: McpToolHandler = {
       section('Unexpected web-root / content PHP (FS-03)', fsr.rootAndContent.map((h) => `\`${h.path}\` — ${h.reason}`));
       section('PHP under uploads (FS-04)', fsr.uploadsPhp.map((p) => `\`${p}\``));
       section('ELF binaries (FS-06)', fsr.elf.map((h) => `\`${h.path}\` — ${h.size} bytes`));
+      section('Suspicious filenames in plugins (ABS-09)', fsr.suspiciousFilenames.map((p) => `\`${p}\``));
+      section('Anti-forensics timestamp manipulation (ABS-08)', fsr.antiForensics.map((h) => `\`${h.path}\``));
+    }
+
+    // Findings computed in deep mode alongside filesystem, but never rendered — a caller
+    // reading only the sections above would never see a directive-file compromise even though
+    // it was already detected.
+    const dir = report.checks.directives;
+    if (dir) {
+      const section = (title: string, items: string[]) => {
+        lines.push(`### ${title} (${items.length})`, '');
+        if (items.length === 0) lines.push('None.', '');
+        else { for (const i of items.slice(0, 100)) lines.push(`- ${i}`);
+               if (items.length > 100) lines.push(`- …and ${items.length - 100} more`);
+               lines.push(''); }
+      };
+      // FS-05 covered only .htaccess originally; .user.ini and php.ini are new coverage this
+      // scanner added, not a port of an existing signal ID — labelling the whole section FS-05
+      // would misattribute that new detection to an old one.
+      section(
+        'Directive files — .htaccess (FS-05) / .user.ini / php.ini',
+        dir.findings.map((f) => `\`${f.path}\` — ${f.reason}: ${f.snippet}`),
+      );
+    }
+
+    const db = report.checks.database;
+    if (db && !db.ok) {
+      lines.push(`### Database — NOT EXAMINED`, `- ${db.reason}: ${db.detail}`, '');
+    } else if (db) {
+      // Same `### <title> (<ID>) (<count>)` shape as the filesystem sections above — runByteScan's
+      // deep-mode parser bounds each section on a sibling `### ` heading, so these must stay flat
+      // (no nested subheadings) for it to find them. The dump's `asOf`/lag already appear in the
+      // "Examined" section below via report.coverage; not repeated here.
+      const section = (title: string, items: string[]) => {
+        lines.push(`### ${title} (${items.length})`, '');
+        if (items.length === 0) lines.push('None.', '');
+        else { for (const i of items) lines.push(`- ${i}`); lines.push(''); }
+      };
+      // Backtick-wrapped key + " — " + description, same shape the filesystem sections above
+      // use — runByteScan's shared item parser requires it (`- \`key\` — detail`) and silently
+      // finds zero items for a line that doesn't match, which a plain-text render did.
+      // `ID:${id}` (no space before the digits) is a load-bearing format, not decoration:
+      // buildRemediationChecklist's Step 5d extracts post IDs to delete via /ID:(\d+)/ against
+      // this exact evidence string. An earlier render used `post ${id}` instead — Step 5d's
+      // regex found nothing, so it silently dropped out of the checklist on every run, on a
+      // verdict that still said READY TO PUSH (DB-01 is 'high', not 'critical', so its absence
+      // never blocked the gate) while the 12 flagged spam posts were never actually deleted.
+      section('Suspicious post content (DB-01)',
+        db.posts.suspicious.map((p) => `\`ID:${p.id}\` — [${p.status}] "${p.title}" (${p.date}) — ${p.reasons.join(', ')}`));
+      section('Suspicious autoloaded options (DB-02)',
+        db.options.suspicious.map((o) => `\`${o.name}\` — ${o.snippet.slice(0, 80)}...`));
+      section('Serialized objects in admin usermeta (DB-03)',
+        db.usermeta.suspicious.map((m) => `\`user ${m.userId} / ${m.key}\` — ${m.snippet}`));
+      section('Spam content in comments (DB-04)',
+        db.comments.suspicious.map((c) => `\`comment ${c.id}\` — by "${c.author}" (${c.date}): ${c.snippet}`));
     }
 
     lines.push('### Examined', '');

@@ -523,9 +523,34 @@ module.exports = {
   version: '1.0.0',
   timeoutMs: 20 * 60 * 1000, // 20 minutes — Tier 2 pull + filesystem scan can take 10+ minutes
   description: 'Fleet-wide security surveillance — detects compromise and pre-breach exposure across all WPE installs',
+  // Renders the "Always do full run" toggle in Local's Run Now dialog (AgentRunModal.tsx,
+  // gated on this.props.supportsFullRun). Declaring it here is what makes the toggle appear —
+  // ctx.fullRun forcing Tier 2 past a Tier-1-clean verdict is dead code to a user who can never
+  // set it.
+  supportsFullRun: true,
+  // NO CRON. Removing this earlier from nexus.agent.yaml's `triggers:` list did nothing —
+  // AgentRegistry.loadAgent() reads triggers exclusively from THIS array (module.exports),
+  // never from the YAML manifest (loadManifest() there only pulls contributes.tools). The cron
+  // kept firing every 15 minutes for the rest of this session; the opt-in scope check
+  // (resolveScanScope) is the only reason it swept 0 sites instead of the whole fleet. That
+  // check is a safety net, not a substitute for not scheduling this at all — a corrupted or
+  // reset agent-settings.json (the exact class of bug fixed earlier today, cross-branch schema
+  // collision) removes the net with nothing behind it.
+  // wpe:sync.completed EXCLUDED (2026-08-06 incident) — this trigger, and resolveScanScope's
+  // comment justifying its exemption from the scope check ("the user named the target"), assumed
+  // the event only ever meant a human manually synced one install. WpeRefreshScheduler (opt-in,
+  // wpeRefreshAutoEnabled) publishes the exact same event automatically for every stale WPE
+  // install in a cycle — dozens at once, on an 8h timer, zero user involvement. Same event,
+  // security-sentinel can't tell the two apart, so it fired a full Tier 2/3 investigation —
+  // fresh sandbox site included — per install per cycle. Live result: dozens of orphaned
+  // `sentinel-*` sites (nginx/php-fpm/mysqld each) accumulated across the fleet, several installs
+  // re-investigated multiple times within an hour, until the whole app had to be force-killed to
+  // stop it. This is the identical class of bug as the cron runaway below, just a second,
+  // unguarded event source the cron fix never covered. If this needs to come back, it must carry
+  // a way to distinguish "user synced one site" from "scheduler swept the fleet" — e.g. a
+  // `source` field on the published event — and route the scheduler's case through
+  // resolveScanScope like every other unattended trigger.
   triggers: [
-    { type: 'cron', expression: '*/15 * * * *' },
-    { type: 'event', pattern: 'wpe:sync.completed' },
     // wp:plugin.activated and wp:user.created work for local sites
     { type: 'event', pattern: 'wp:plugin.activated' },
     { type: 'event', pattern: 'wp:user.created' },
@@ -545,9 +570,18 @@ module.exports = {
   ],
   contributes: { tools: contributedTools },
 
-  async run({ event, tools, ai, log, state, autonomy, settings }) {
+  async run({ event, tools, ai, log, state, autonomy, settings, fullRun }) {
     const scope = getScanScope(event);
     const scopeLabel = scope.installId || scope.installName || 'fleet-wide';
+
+    // fullRun forces Tier 2 on the scoped site regardless of what Tier 1 found — the lever for
+    // "I don't trust the quick pass, investigate properly." The AgentRunner/AGENT_RUN_NOW
+    // plumbing for this already existed; the sentinel itself never read it, so the "Full Run"
+    // toggle in Local's Run Now dialog was silently a no-op for this agent. Gated on an actual
+    // scope, never for a fleet-wide sweep — forcing a ~5 minute sandbox investigation on every
+    // clean site in the fleet on every cron tick would be the disk-filling problem
+    // MAX_TIER2_PER_SWEEP exists to prevent, self-inflicted.
+    const forceEscalate = !!fullRun && (!!scope.installId || !!scope.installName);
 
     // The cron fires every 15 minutes; a fleet sweep takes considerably longer than that, and
     // AgentScheduler starts a run without checking whether the last one finished. Refuse rather
@@ -719,7 +753,7 @@ module.exports = {
         allFindings.push({ id: sig.id, severity: sig.severity, title: sig.title, site: install.name, category: sig.category });
       }
 
-      if (signals.length === 0) {
+      if (signals.length === 0 && !forceEscalate) {
         // Say what was actually inspected. "clean" on its own invites the reader to conclude
         // the site is not compromised, when a Tier 1 pass has read cached plugin, user and
         // settings rows and nothing else — no files, no database contents, no core integrity.
@@ -729,7 +763,10 @@ module.exports = {
           (skipped.length ? ` — NOT checked: ${skipped.join(', ')}` : ''),
         );
         log.siteStatus(install.name, 'clean');
-      } else if (criticalCount >= 1 || compromiseHighCount >= 2) {
+      } else if (forceEscalate || criticalCount >= 1 || compromiseHighCount >= 2) {
+        if (forceEscalate && signals.length === 0) {
+          log.info(`security-sentinel: ${install.name} — Tier 1 found nothing, but Full Run forces Tier 2 anyway`);
+        }
         log.siteStatus(install.name, 'escalated');
         signals.forEach(s => log.finding({
           id: s.id, severity: s.severity, title: s.title,
@@ -1190,6 +1227,37 @@ async function runByteScan(install, tools, log, { deep = false } = {}) {
     push('FS-06', 'critical', 'ELF binaries \\(FS-06\\)',
       (i) => `${i.length} ELF binary/binaries in wp-content`,
       'Native executables under wp-content. Note that legitimate image-optimiser plugins ship these.');
+    push('ABS-09', 'critical', 'Suspicious filenames in plugins \\(ABS-09\\)',
+      (i) => `Suspicious internal filenames in plugins: ${i.map(x => x.path.split('/').pop()).join(', ')}`,
+      'Files with names matching known attacker tool patterns were found inside plugin directories.');
+    push('ABS-08', 'critical', 'Anti-forensics timestamp manipulation \\(ABS-08\\)',
+      (i) => `Anti-forensics tool detected: timestamp manipulation code in ${i.length} file(s)`,
+      'PHP code combining touch() with directory enumeration was found. This is used by attackers to backdate planted files.');
+    push('FS-05', 'critical', 'Directive files — \\.htaccess \\(FS-05\\) / \\.user\\.ini / php\\.ini',
+      (i) => `Suspicious directive file(s) in ${i.length} location(s)`,
+      '.htaccess, .user.ini or php.ini contents that re-enable PHP execution, redirect externally, or override disable_functions/open_basedir.');
+
+    if (/^### Database — NOT EXAMINED/m.test(text)) {
+      // A database section that could not be read is a distinct partial-coverage case, not the
+      // all-or-nothing "not scannable" one above — the filesystem was scanned fine, only the
+      // dump was not trustworthy (site running, stale, or no completion marker). Surfaced, not
+      // silently absorbed into an otherwise-clean-looking signal list.
+      const reasonLine = text.match(/^### Database — NOT EXAMINED\n- (.+)$/m);
+      log.info(`[bytes] ${install.name} database not examined: ${reasonLine ? reasonLine[1] : 'unknown reason'}`);
+    } else {
+      push('DB-01', 'high', 'Suspicious post content \\(DB-01\\)',
+        (i) => `Suspicious post content: ${i.length} post(s) flagged`,
+        'Posts contain injected scripts or blackhat SEO spam content (casino/gambling keywords), read from the database dump.');
+      push('DB-02', 'critical', 'Suspicious autoloaded options \\(DB-02\\)',
+        (i) => `Suspicious code in wp_options: ${i.length} autoloaded option(s) contain eval/exec/script`,
+        'Autoloaded options containing code patterns that execute on every page load, read from the database dump.');
+      push('DB-03', 'high', 'Serialized objects in admin usermeta \\(DB-03\\)',
+        (i) => `Serialized PHP objects in admin user meta: ${i.length} entry(ies)`,
+        'Serialized objects in wp_usermeta can execute code on deserialization. Used for persistence. Read from the database dump.');
+      push('DB-04', 'medium', 'Spam content in comments \\(DB-04\\)',
+        (i) => `Spam content in comments: ${i.length} comment(s) flagged`,
+        'Approved comments with casino/gambling keywords or long URLs — common SEO spam injection vector. Read from the database dump.');
+    }
   }
 
   return { signals, available: true };
@@ -1617,12 +1685,22 @@ async function collectSpecialistData(sandboxName, siteUrl, tools, integrity = {}
       `,
     }),
 
-    // Obfuscation pattern scan (pre-existing FS-02 code — reuse result)
+    // Obfuscation pattern scan (specialist LLM context — not a detection gate). Synced to the
+    // retuned set in filesystem.ts's OBFUSCATION_PATTERNS; this had the same stale assert($/
+    // create_function( patterns as Step 8 (236 and 5 false-positive hits, 0 real catches).
     tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
         $dirs = [WP_CONTENT_DIR . '/plugins', WP_CONTENT_DIR . '/mu-plugins', WP_CONTENT_DIR . '/themes'];
-        $patterns = ['/eval\\s*\\(\\s*base64_decode/','/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/','/eval\\s*\\(\\s*str_rot13/','/assert\\s*\\(\\s*\\$/','/create_function\\s*\\(/'];
+        $patterns = [
+          '/eval\\s*\\(\\s*base64_decode/',
+          '/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/',
+          '/eval\\s*\\(\\s*gzuncompress\\s*\\(\\s*base64_decode/',
+          '/eval\\s*\\(\\s*str_rot13/',
+          '/base64_decode\\s*\\(\\s*(base64_decode|gzinflate|gzuncompress|str_rot13|strrev|rawurldecode)\\s*\\(/',
+          '/(eval|assert|preg_replace|create_function|call_user_func|system|exec|passthru|shell_exec)\\s*\\([^;]{0,80}base64_decode/',
+          '/eval\\s*\\(\\s*\\$/',
+        ];
         $found = []; $total = 0;
         foreach ($dirs as $dir) {
           if (!is_dir($dir)) continue;
@@ -1642,7 +1720,11 @@ async function collectSpecialistData(sandboxName, siteUrl, tools, integrity = {}
       `,
     }),
 
-    // Database: wp_posts content sample
+    // Database: wp_posts content sample — specialist LLM context, not a detection signal.
+    // Still wp_eval against the sandbox, deliberately deferred: Tier 2 already starts and
+    // clones the site for CHK-01/02, content examination and ELF strings, so this collector
+    // adds no new detonation risk beyond what already happens. Porting it to read the dump
+    // (like DB-01..04) is a smaller follow-up, not done in this pass.
     tools.invoke('wp_eval', {
       site: sandboxName,
       skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
@@ -1654,7 +1736,12 @@ async function collectSpecialistData(sandboxName, siteUrl, tools, integrity = {}
       `,
     }),
 
-    // Database: autoloaded options + critical options
+    // Database: autoloaded options + critical options — specialist LLM context, same deferral
+    // as the collector above. NOTE: `autoload='yes'` here has the identical vocabulary bug
+    // DB-02 had before this port — WordPress 6.6 widened autoload to ('yes','on','auto-on',
+    // 'auto'), so this list is empty on any 6.6+ site. Left as-is: fixing it belongs to the
+    // same follow-up that ports this collector off wp_eval, not a standalone patch to a query
+    // that will be replaced anyway.
     tools.invoke('wp_eval', {
       site: sandboxName,
       skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
@@ -2337,6 +2424,21 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     }
     if (!cloneDone) { log.warn(`[Tier 2] Clone timed out`); return null; }
     log.info(`[Tier 2] Clone ready.`);
+
+    // We started this site ourselves, above, purely so local_clone_site had something running
+    // to copy. Once the clone exists, the original does not need to stay running for anything
+    // that follows — the rest of Tier 2 works entirely against the sandbox. Leaving it running
+    // is the same problem the sandbox-stop below exists for, except worse: this is the actual
+    // known-compromised site, not a copy, and reproduced twice live in one session — a scan
+    // starts it, nothing stops it again, and the next scan's pre-flight byte scan then refuses
+    // to trust its own database dump because the data files raced ahead of it (resolveDbSource
+    // correctly reports 'stale', but only because this left the site running for no reason).
+    try {
+      await tools.invoke('local_stop_site', { site: install.name });
+      log.info(`[Tier 2] Source site ${install.name} stopped (was only started to enable the clone)`);
+    } catch (err) {
+      log.warn(`[Tier 2] Could not stop source site ${install.name} after cloning: ${err.message} — it is still running`);
+    }
   } else {
     // WPE install — create blank site and pull from WPE
     const createResult = await tools.invoke('local_create_site', { name: sandboxName });
@@ -2457,126 +2559,10 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   // across 33 installs and 82,068 PHP files matched the byte implementation on 33 of 33 sites.
   fsSignals.push(...preflightSignals);
 
-  // FS-05 (.htaccess), ABS-08 and ABS-09 still run as wp_eval against the sandbox — they are
-  // not ported yet. Their presence is why the sandbox still exists at this point.
-
-  // FS-05: Suspicious .htaccess rules — PHP re-enable, external redirects, auto_prepend/append_file
-  const htaccessResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true,
-    code: `
-      $root = ABSPATH;
-      $findings = [];
-      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $f) {
-        if ($f->getFilename() !== '.htaccess') continue;
-        $content = @file_get_contents($f->getPathname());
-        $path = str_replace($root, '', $f->getPathname());
-        // PHP re-enabled in non-root .htaccess (especially in uploads/)
-        if (strpos($path, '/uploads/') !== false && preg_match('/\\.php/i', $content)) {
-          $findings[] = ['path' => $path, 'reason' => 'PHP execution enabled in uploads/', 'snippet' => substr($content, 0, 300)];
-        }
-        // External redirect rules
-        if (preg_match('/RewriteRule.*https?:\\/\\/(?!'.preg_quote($_SERVER["HTTP_HOST"] ?? 'localhost', '/').')/', $content, $m)) {
-          $findings[] = ['path' => $path, 'reason' => 'RewriteRule redirecting to external domain', 'snippet' => $m[0]];
-        }
-        // php_value re-enabling execution
-        if (preg_match('/php_value\\s+auto_prepend_file|php_value\\s+auto_append_file/', $content, $m)) {
-          $findings[] = ['path' => $path, 'reason' => 'auto_prepend/append_file set via php_value', 'snippet' => $m[0]];
-        }
-      }
-      echo json_encode($findings);
-    `,
-  });
-  try {
-    const htaccessFindings = JSON.parse(extractResult(htaccessResult) || '[]');
-    if (htaccessFindings.length > 0) {
-      fsSignals.push({
-        id: 'FS-05', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `Suspicious .htaccess rules in ${htaccessFindings.length} location(s)`,
-        detail: 'htaccess files with rules that re-enable PHP execution or redirect to external domains were found.',
-        fix: 'Review each file. Remove rules that allow PHP in uploads/ or redirect to external domains.',
-        evidence: htaccessFindings.map(f => `${f.path}: ${f.reason} — ${(f.snippet || '').slice(0, 80)}`),
-      });
-    }
-  } catch {}
-
-  // ABS-09: Suspicious internal filenames within plugins
-  // Files named check_file.php, shell.php, cmd.php, c99.php, r57.php, etc. signal attacker tools
-  // regardless of whether they use obfuscation
-  const suspiciousFileResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true,
-    code: `
-      $dir = WP_PLUGIN_DIR;
-      $suspicious = [
-        'check_file.php', 'shell.php', 'cmd.php', 'c99.php', 'r57.php', 'php.php',
-        'eval.php', 'exec.php', 'bypass.php', 'b374k.php', 'wso.php',
-        'FilesMan.php', 'b374.php', 'indoxploit.php',
-      ];
-      $found = [];
-      if (!is_dir($dir)) { echo json_encode($found); exit; }
-      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $f) {
-        if (in_array(strtolower($f->getFilename()), array_map('strtolower', $suspicious))) {
-          $found[] = [
-            'path' => str_replace(ABSPATH, '', $f->getPathname()),
-            'size' => $f->getSize(),
-            'mtime' => date('Y-m-d H:i:s', $f->getMTime()),
-          ];
-        }
-      }
-      echo json_encode($found);
-    `,
-  });
-  try {
-    const suspiciousFiles = JSON.parse(extractResult(suspiciousFileResult) || '[]');
-    if (suspiciousFiles.length > 0) {
-      fsSignals.push({
-        id: 'ABS-09', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `Suspicious internal filenames in plugins: ${suspiciousFiles.map(f => f.path.split('/').pop()).join(', ')}`,
-        detail: 'Files with names matching known attacker tool patterns were found inside plugin directories.',
-        fix: 'Inspect each file. Delete if not part of a legitimate plugin.',
-        evidence: suspiciousFiles.map(f => `${f.path} (${f.size} bytes, modified ${f.mtime})`),
-      });
-    }
-  } catch {}
-
-  // ABS-08: Anti-forensics tools — PHP that recursively modifies file timestamps
-  // The touch() + scandir/glob/RecursiveIterator pattern is specific to timestamp-backdating tools
-  const antiForensicsResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true,
-    code: `
-      $dir = WP_PLUGIN_DIR;
-      $found = [];
-      if (!is_dir($dir)) { echo json_encode($found); exit; }
-      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $f) {
-        if ($f->getExtension() !== 'php') continue;
-        $content = @file_get_contents($f->getPathname());
-        if (!$content) continue;
-        // touch() + scandir/glob/RecursiveIterator in same file = timestamp manipulation
-        if (preg_match('/touch\\s*\\(/', $content) &&
-            preg_match('/scandir|glob|RecursiveIterator/', $content)) {
-          $found[] = [
-            'path' => str_replace(ABSPATH, '', $f->getPathname()),
-            'snippet' => substr($content, 0, 200),
-          ];
-        }
-      }
-      echo json_encode($found);
-    `,
-  });
-  try {
-    const antiForensics = JSON.parse(extractResult(antiForensicsResult) || '[]');
-    if (antiForensics.length > 0) {
-      fsSignals.push({
-        id: 'ABS-08', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `Anti-forensics tool detected: timestamp manipulation code in ${antiForensics.length} file(s)`,
-        detail: 'PHP code using touch() to recursively modify file timestamps was found. This is used by attackers to hide when files were planted.',
-        fix: 'Delete the containing plugin/directory. The attacker used this to backdate all planted files, so timestamp-based analysis of the site is unreliable.',
-        evidence: antiForensics.map(f => f.path),
-      });
-    }
-  } catch {}
+  // FS-05 (.htaccess), ABS-08 and ABS-09 now run through the pre-flight byte scan above
+  // (preflightSignals), not wp_eval — ported so Tier 2 no longer needs to detonate the
+  // site just to compute them. The sandbox (start + clone) below still exists for the
+  // database, checksum, and content-examination checks that follow, which do still need it.
 
   // FS-MISMATCH: intentionally runs WITH plugins loaded to detect account-hiding hooks
   const dbCountResult = await tools.invoke('wp_eval', {
@@ -2616,185 +2602,10 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Filesystem scan complete: ${fsSignals.length} finding(s)`);
 
-  // ─── Database content scan ─────────────────────────────────────────────────
-  log.info(`[Tier 2] Running database content scan...`);
-
-  // DB-01: wp_posts content scan — injected scripts, hidden spam content
-  const postsContentResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
-    code: `
-      global $wpdb;
-      $posts = $wpdb->get_results(
-        "SELECT ID, post_title, post_status, post_type, post_date, LEFT(post_content, 1000) as content
-         FROM {$wpdb->posts}
-         WHERE post_status IN ('publish','draft','private','future','pending')
-           AND post_type NOT IN ('revision','auto-draft')
-         ORDER BY post_date DESC LIMIT 200",
-        ARRAY_A
-      );
-      $suspicious = [];
-      $spamPatterns = ['/<script/i', '/javascript:/i', '/base64_decode/i', '/eval\\s*\\(/i', '/document\\.write/i', '/\\.onload\\s*=/i'];
-      $spamKeywords = ['/casino/i', '/poker/i', '/slots?/i', '/gambling/i', '/kasyno/i', '/spielautomat/i', '/scommesse/i'];
-      foreach ($posts as $post) {
-        $content = $post['content'] ?? '';
-        $title = $post['post_title'] ?? '';
-        $reasons = [];
-        foreach ($spamPatterns as $p) {
-          if (preg_match($p, $content)) { $reasons[] = 'injected script/eval'; break; }
-        }
-        foreach ($spamKeywords as $p) {
-          if (preg_match($p, $title) || preg_match($p, $content)) { $reasons[] = 'casino/gambling spam'; break; }
-        }
-        if ($reasons) {
-          $suspicious[] = [
-            'id' => $post['ID'],
-            'title' => $post['post_title'],
-            'status' => $post['post_status'],
-            'date' => $post['post_date'],
-            'reasons' => $reasons,
-          ];
-        }
-      }
-      echo json_encode(['total' => count($posts), 'suspicious' => $suspicious]);
-    `,
-  });
-  try {
-    const postsData = JSON.parse(extractResult(postsContentResult) || '{}');
-    if ((postsData.suspicious || []).length > 0) {
-      fsSignals.push({
-        id: 'DB-01', severity: 'high', category: 'active-compromise',
-        installName: install.name,
-        title: `Suspicious post content: ${postsData.suspicious.length} of ${postsData.total} posts flagged`,
-        detail: 'Posts contain injected scripts or blackhat SEO spam content (casino/gambling keywords).',
-        fix: 'Delete spam posts. Inspect posts with injected scripts — remove the script tag or delete the post.',
-        evidence: postsData.suspicious.map(p => `[${p.status}] "${p.title}" (ID:${p.id}, ${p.date}) — ${p.reasons.join(', ')}`),
-      });
-    }
-  } catch {}
-
-  // DB-02: wp_options scan for injected code in autoloaded options
-  const optionsScanResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
-    code: `
-      global $wpdb;
-      $options = $wpdb->get_results(
-        "SELECT option_name, LEFT(option_value, 500) as val FROM {$wpdb->options} WHERE autoload='yes'",
-        ARRAY_A
-      );
-      $suspicious = [];
-      $patterns = ['/eval\\s*\\(/i', '/base64_decode/i', '/<script/i', '/exec\\s*\\(/i', '/system\\s*\\(/i'];
-      foreach ($options as $opt) {
-        foreach ($patterns as $p) {
-          if (preg_match($p, $opt['val'])) {
-            $suspicious[] = ['name' => $opt['option_name'], 'snippet' => substr($opt['val'], 0, 150)];
-            break;
-          }
-        }
-      }
-      echo json_encode(['total' => count($options), 'suspicious' => $suspicious]);
-    `,
-  });
-  try {
-    const optData = JSON.parse(extractResult(optionsScanResult) || '{}');
-    if ((optData.suspicious || []).length > 0) {
-      fsSignals.push({
-        id: 'DB-02', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `Suspicious code in wp_options: ${optData.suspicious.length} autoloaded option(s) contain eval/exec/script`,
-        detail: 'Autoloaded options containing code patterns that execute on every page load.',
-        fix: 'Update or delete each flagged option: wp option update <name> ""',
-        evidence: optData.suspicious.map(o => `${o.name}: ${o.snippet.slice(0, 80)}...`),
-      });
-    }
-  } catch {}
-
-  // DB-03: wp_usermeta — serialized PHP objects with callable methods
-  const usermetaResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
-    code: `
-      global $wpdb;
-      // Prefixed meta_key — "{$wpdb->prefix}capabilities", never the literal 'wp_capabilities'.
-      // Same bug as FS-MISMATCH above: on any install with a non-wp_ prefix this returned zero
-      // admins, so DB-03 examined nobody's usermeta and reported clean. WP Engine randomises the
-      // prefix, so that is every production target.
-      $capKey = $wpdb->prefix . 'capabilities';
-      $admins = $wpdb->get_col($wpdb->prepare(
-        "SELECT u.ID FROM {$wpdb->users} u
-         JOIN {$wpdb->usermeta} m ON u.ID = m.user_id
-         WHERE m.meta_key = %s AND m.meta_value LIKE '%administrator%'",
-        $capKey
-      ));
-      $suspicious = [];
-      if ($admins) {
-        $meta = $wpdb->get_results(
-          "SELECT user_id, meta_key, LEFT(meta_value, 300) as meta_value
-           FROM {$wpdb->usermeta}
-           WHERE user_id IN (" . implode(',', array_map('intval', $admins)) . ")
-           AND meta_value LIKE 'O:%'",
-          ARRAY_A
-        );
-        foreach ($meta as $m) {
-          if (preg_match('/O:\\d+:"[^"]+":/', $m['meta_value'])) {
-            $suspicious[] = ['user_id' => $m['user_id'], 'key' => $m['meta_key'], 'snippet' => substr($m['meta_value'], 0, 100)];
-          }
-        }
-      }
-      echo json_encode($suspicious);
-    `,
-  });
-  try {
-    const metaData = JSON.parse(extractResult(usermetaResult) || '[]');
-    if (metaData.length > 0) {
-      fsSignals.push({
-        id: 'DB-03', severity: 'high', category: 'active-compromise',
-        installName: install.name,
-        title: `Serialized PHP objects in admin user meta: ${metaData.length} entry(ies)`,
-        detail: 'Serialized objects in wp_usermeta can execute code on deserialization. Used for persistence.',
-        fix: 'Inspect each meta value. Delete if not from a known legitimate plugin.',
-        evidence: metaData.map(m => `User ${m.user_id}, meta_key: ${m.key} — ${m.snippet}`),
-      });
-    }
-  } catch {}
-
-  // DB-04: wp_comments — SEO spam injection
-  const commentsResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
-    code: `
-      global $wpdb;
-      $count = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->comments}");
-      $sample = $wpdb->get_results(
-        "SELECT comment_ID, comment_author, comment_content, comment_date
-         FROM {$wpdb->comments}
-         WHERE comment_approved = '1'
-         ORDER BY comment_date DESC LIMIT 50",
-        ARRAY_A
-      );
-      $spamKeywords = ['/casino/i', '/poker/i', '/slot/i', '/gambling/i', '/kasyno/i', '/https?:\\/\\/[^\\s]{30,}/'];
-      $suspicious = [];
-      foreach ($sample as $c) {
-        foreach ($spamKeywords as $p) {
-          if (preg_match($p, $c['comment_content'])) {
-            $suspicious[] = ['id' => $c['comment_ID'], 'author' => $c['comment_author'], 'date' => $c['comment_date'], 'snippet' => substr($c['comment_content'], 0, 100)];
-            break;
-          }
-        }
-      }
-      echo json_encode(['total' => $count, 'suspicious' => $suspicious]);
-    `,
-  });
-  try {
-    const commData = JSON.parse(extractResult(commentsResult) || '{}');
-    if ((commData.suspicious || []).length > 0) {
-      fsSignals.push({
-        id: 'DB-04', severity: 'medium', category: 'active-compromise',
-        installName: install.name,
-        title: `Spam content in comments: ${commData.suspicious.length} of ${commData.total} total comments`,
-        detail: 'Approved comments with casino/gambling keywords or long URLs — common SEO spam injection vector.',
-        fix: 'Delete flagged comments: wp comment delete <id> --force',
-        evidence: commData.suspicious.map(c => `Comment ${c.id} by "${c.author}" (${c.date}): ${c.snippet}`),
-      });
-    }
-  } catch {}
+  // DB-01 through DB-04 now run through the pre-flight byte scan above (preflightSignals),
+  // reading app/sql/local.sql instead of querying wp_posts/wp_options/wp_usermeta/wp_comments
+  // via wp_eval against this sandbox — ported for the same reason FS-05/ABS-08/09 were:
+  // --skip-plugins does not stop mu-plugins from executing on a `wp eval` call.
 
   // Hoisted so collectSpecialistData can reuse them instead of re-running the same work.
   // Collector 6 used to shell out to `wp core verify-checksums` inside this very function,
@@ -3599,6 +3410,15 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
   });
 
   // Step 6: Shuffle authentication salts
+  //
+  // This had no verification mode (expectedEmpty: false, no verifyKey/verifyContains), so
+  // executeChecklist's bare `else` branch made it unconditional: stepPassed = true no matter
+  // what shell_exec returned. Live on theawfulpm-test, PHP itself failed to load ("Failed
+  // loading .../php-8.2.29") and the step still reported "✅ ... verified" with the failure
+  // text sitting in its own detail. wp config shuffle-salts's own success text is not a stable
+  // string to match against across WP-CLI versions, so verify the one fact that actually
+  // matters — ABS-06's placeholder salts are gone from wp-config.php — the same source ABS-06
+  // itself reads.
   checklist.push({
     step: 6,
     action: 'Shuffle authentication salts',
@@ -3606,9 +3426,17 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
-      code: `echo shell_exec('wp config shuffle-salts 2>&1');`,
+      code: `
+        $output = shell_exec('wp config shuffle-salts 2>&1');
+        clearstatcache();
+        $after = @file_get_contents(ABSPATH . 'wp-config.php');
+        $stillDefault = $after === false || strpos($after, 'put your unique phrase here') !== false;
+        echo $stillDefault
+          ? ('SALTS_SHUFFLE_FAILED: ' . trim(substr((string) $output, 0, 300)))
+          : 'SALTS_SHUFFLE_OK';
+      `,
     },
-    expectedEmpty: false,
+    verifyContains: 'SALTS_SHUFFLE_OK',
   });
 
   // Step 7: Apply hardening (DISALLOW_FILE_EDIT)
@@ -3670,9 +3498,23 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
         foreach ($mu as $f) {
           if (!in_array(basename($f), $known)) $remaining[] = 'mu-plugin:' . basename($f);
         }
-        // FS-02 check: obfuscation patterns across plugins/, mu-plugins/, themes/
+        // FS-02 check: obfuscation patterns across plugins/, mu-plugins/, themes/.
+        // Synced to the retuned set in filesystem.ts's OBFUSCATION_PATTERNS — this was a SEPARATE,
+        // unsynced copy that still carried assert($ and create_function(, the two patterns
+        // measured at 236 and 5 hits with ZERO real catches on a clean fleet (both target PHP
+        // constructs removed in PHP 8, so neither can execute on any target this scanner runs
+        // against). Live consequence: a commented-out create_function() call in a legitimate
+        // plugin (economic-market-news) blocked this exact step's push verdict.
         $dirs = [WP_CONTENT_DIR . '/plugins', WP_CONTENT_DIR . '/mu-plugins', WP_CONTENT_DIR . '/themes'];
-        $patterns = ['/eval\\s*\\(\\s*base64_decode/', '/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/', '/eval\\s*\\(\\s*str_rot13/', '/assert\\s*\\(\\s*\\$/', '/create_function\\s*\\(/'];
+        $patterns = [
+          '/eval\\s*\\(\\s*base64_decode/',
+          '/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/',
+          '/eval\\s*\\(\\s*gzuncompress\\s*\\(\\s*base64_decode/',
+          '/eval\\s*\\(\\s*str_rot13/',
+          '/base64_decode\\s*\\(\\s*(base64_decode|gzinflate|gzuncompress|str_rot13|strrev|rawurldecode)\\s*\\(/',
+          '/(eval|assert|preg_replace|create_function|call_user_func|system|exec|passthru|shell_exec)\\s*\\([^;]{0,80}base64_decode/',
+          '/eval\\s*\\(\\s*\\$/',
+        ];
         foreach ($dirs as $dir) {
           if (!is_dir($dir)) continue;
           foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
@@ -3805,11 +3647,25 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
                                              s.id.startsWith('FS-') ? 'filesystem' :
                                              s.id.startsWith('TC-') ? 'temporal' : 'plugins_users');
 
+  // A signal's evidence is either a plain string array, or — for the four LOG-* signals once
+  // runLogChecks attaches real log corroboration — an object shaped
+  // { sampleLines, totalMatched, truncated, window, filter }. Reproduced live: rendering a
+  // NitroPack Production run (real attack traffic, so LOG-AUTH/LOG-PROBE/LOG-ENUM/LOG-DIST all
+  // got the object form attached) crashed with "(s.evidence || []).map is not a function" —
+  // truthy objects skip the `|| []` fallback and have no .map. The crash happened deep inside an
+  // agent run with no top-level catch wired to the per-run log file, so it looked identical to a
+  // silent hang: the process was genuinely idle (confirmed via a live CDP inspector attach — clean
+  // Debugger.pause into processTimers, zero active libuv requests) while agent_runs.status had
+  // already recorded 'error' — the crash just never reached the log a human was watching.
+  const evidenceLines = (s) => Array.isArray(s.evidence) ? s.evidence
+    : (s.evidence && Array.isArray(s.evidence.sampleLines)) ? s.evidence.sampleLines
+    : [];
+
   const renderCategory = (title, signals) => {
     if (!signals || signals.length === 0) return '';
     const lines = signals.map(s => {
       const sev = (s.severity || 'unknown').toUpperCase();
-      const evidence = (s.evidence || []).map(e => `  - ${e}`).join('\n');
+      const evidence = evidenceLines(s).map(e => `  - ${e}`).join('\n');
       return evidence
         ? `- [${sev}] **${s.id}:** ${s.title}\n${evidence}`
         : `- [${sev}] **${s.id}:** ${s.title}`;

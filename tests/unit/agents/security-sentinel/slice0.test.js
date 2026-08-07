@@ -19,6 +19,11 @@ const CODE = SRC.split('\n')
 describe('The capabilities meta_key is derived, never hardcoded', () => {
   // 'wp_capabilities' matches nothing on a randomised prefix, which WP Engine always uses.
   // FS-MISMATCH was fixed earlier; DB-03 and remediation step 2 were missed.
+  //
+  // DB-03 dropped out of this count when it was ported to TypeScript (checks/database.ts):
+  // it derives the capabilities key from resolveScanRoot's own tablePrefix, not PHP, so there
+  // is no `$capKey = ...` line left in agent.js for it to contribute here. Two remain:
+  // FS-MISMATCH (still wp_eval, intentionally runs with plugins loaded) and remediation step 2.
   it('no SQL compares meta_key against the literal wp_capabilities', () => {
     // The remaining textual occurrences are explanatory comments, including one inside a PHP
     // /* */ comment embedded in a JS template literal, which a line-based stripper cannot see.
@@ -26,9 +31,9 @@ describe('The capabilities meta_key is derived, never hardcoded', () => {
     expect(CODE).not.toMatch(/meta_key\s*=\s*'wp_capabilities'/);
   });
 
-  it('all three sites derive it from $wpdb->prefix', () => {
+  it('both remaining PHP sites derive it from $wpdb->prefix', () => {
     const derived = CODE.match(/\$capKey = \$wpdb->prefix \. 'capabilities'/g) || [];
-    expect(derived.length).toBe(3);   // FS-MISMATCH, DB-03, remediation step 2
+    expect(derived.length).toBe(2);   // FS-MISMATCH, remediation step 2
   });
 
   it('each derived key is passed through $wpdb->prepare, not interpolated', () => {

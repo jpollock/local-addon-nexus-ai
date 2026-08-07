@@ -1,11 +1,23 @@
 import { FileSource, FileEntry } from '../FileSource';
 
 /**
- * FS-02, FS-03, FS-04 and FS-06 over one filesystem walk.
+ * FS-02, FS-03, FS-04, FS-06, ABS-08 and ABS-09 over one filesystem walk.
  *
- * Today these are four separate `wp_eval` calls, each doing its own
- * RecursiveDirectoryIterator over overlapping trees, on a site that has been started and cloned
- * first. Here it is one traversal in Node against a stopped site with nothing executed.
+ * Today these are separate `wp_eval` calls, each doing its own RecursiveDirectoryIterator over
+ * overlapping trees, on a site that has been started and cloned first. Here it is one traversal
+ * in Node against a stopped site with nothing executed.
+ *
+ * ABS-08 (anti-forensics timestamp manipulation) and ABS-09 (suspicious internal filenames) are
+ * scoped to `pluginDir` exactly as the original's `WP_PLUGIN_DIR` walk was — not mu-plugins or
+ * themes, where the same code shape would be equally suspicious but is out of scope for a
+ * faithful port. MEASURED FALSE-POSITIVE LOAD (36 real sites, 117,646 files under plugins/):
+ * ABS-09 hits 14 files on 6 clean sites — all legitimate vendor filenames (`PHP.php`, `Php.php`,
+ * `exec.php`, `Eval.php` from defender-security, query-monitor, elementor, phpseclib). ABS-08
+ * hits 43 files on 8 clean sites — all legitimate file-transfer/streaming code (WP Migrate DB
+ * Pro, ewww-image-optimizer, amazon-s3-and-cloudfront, Dompdf) that happens to combine touch()
+ * with a directory-enumeration call for ordinary reasons. This is not a retuning pass — those
+ * numbers are reproduced from the original patterns unchanged, per the port-then-tune split
+ * FS-02 already established below. Retuning ABS-08/09 is a deliberate follow-up.
  *
  * DETECTION IS REPRODUCED EXACTLY, quirks included, so that any difference in output is a port
  * bug rather than a silent change of behaviour. The quirks are real and measured, and each is
@@ -30,6 +42,7 @@ import { FileSource, FileEntry } from '../FileSource';
 export interface PatternHit { file: string; pattern: string; }
 export interface RootPhpHit { path: string; reason: string; }
 export interface ElfHit { path: string; size: number; }
+export interface AntiForensicsHit { path: string; snippet: string; }
 
 export interface FilesystemScanResult {
   /** FS-02 — obfuscation chains in plugins, mu-plugins, themes. */
@@ -40,6 +53,10 @@ export interface FilesystemScanResult {
   uploadsPhp: string[];
   /** FS-06 — files whose first four bytes are the ELF magic. */
   elf: ElfHit[];
+  /** ABS-09 — filenames matching known attacker-tool names, anywhere under plugins/. */
+  suspiciousFilenames: string[];
+  /** ABS-08 — PHP under plugins/ combining touch() with directory enumeration. */
+  antiForensics: AntiForensicsHit[];
   phpFilesScanned: number;
   filesWalked: number;
   /** Directories that could not be read. A partial scan must never read as a clean one. */
@@ -118,11 +135,27 @@ const ELF_SKIP_EXTENSIONS = new Set([
 const ELF_MAGIC = Buffer.from([0x7f, 0x45, 0x4c, 0x46]);
 const MAX_CONTENT_BYTES = 5 * 1024 * 1024;   // FS-02 skips files above this
 
+/** ABS-09's list, verbatim, lowercased for the case-insensitive comparison the original does
+ *  via strtolower() on both sides — unlike FS-02/03/04's extension check, this one is NOT
+ *  case-sensitive in the original, and porting it case-sensitively would be a silent change. */
+const SUSPICIOUS_FILENAMES = new Set([
+  'check_file.php', 'shell.php', 'cmd.php', 'c99.php', 'r57.php', 'php.php',
+  'eval.php', 'exec.php', 'bypass.php', 'b374k.php', 'wso.php',
+  'filesman.php', 'b374.php', 'indoxploit.php',
+]);
+
+/** ABS-08's two-pattern combination, verbatim. */
+const ANTI_FORENSICS_TOUCH = /touch\s*\(/;
+const ANTI_FORENSICS_ENUM = /scandir|glob|RecursiveIterator/;
+
 const KNOWN_ISSUES = [
   'FS-02/03/04 match the extension case-sensitively, so evil.PHP is not examined',
   'FS-06 skips 28 extensions, so an ELF named miner.png is not examined',
   'FS-02 skips files larger than 5 MB',
   'two independent adjacent base64_decode calls are not matched — see the note on the pattern set',
+  'ABS-08 skips PHP files larger than 5 MB, a bound the original wp_eval check did not have',
+  'ABS-08/09 patterns are reproduced unchanged and carry real false-positive load on legitimate '
+    + 'file-transfer and vendor-library code — see the note at the top of this file; retuning is deferred',
 ];
 
 /** PHP's getExtension(): everything after the final dot, case preserved. */
@@ -138,6 +171,8 @@ function underAny(relPath: string, prefixes: string[]): boolean {
 
 export interface FilesystemScanOptions {
   contentDir: string;
+  /** Root-relative plugin directory — ABS-08/09's scope, resolved from WP_PLUGIN_DIR. */
+  pluginDir: string;
   /** Root docroot filenames that are expected. Anything else is FS-03. */
   knownRootPhp: ReadonlySet<string>;
   /** Safety valve for a pathological tree. Truncation is always reported. */
@@ -149,12 +184,14 @@ export async function scanFilesystem(
   opts: FilesystemScanOptions,
 ): Promise<FilesystemScanResult> {
   const started = Date.now();
-  const { contentDir, knownRootPhp, limit = 400_000 } = opts;
+  const { contentDir, pluginDir, knownRootPhp, limit = 400_000 } = opts;
 
   const obfuscation: PatternHit[] = [];
   const rootAndContent: RootPhpHit[] = [];
   const uploadsPhp: string[] = [];
   const elf: ElfHit[] = [];
+  const suspiciousFilenames: string[] = [];
+  const antiForensics: AntiForensicsHit[] = [];
   let phpFilesScanned = 0;
 
   // FS-03's web-root half: a flat listing, matching the original's glob(ABSPATH . '*.php').
@@ -186,7 +223,15 @@ export async function scanFilesystem(
     // FS-04 — any PHP under uploads, regardless of content.
     if (isPhp && underAny(entry.path, [uploadsRoot])) uploadsPhp.push(entry.path);
 
-    // FS-02 — obfuscation in plugins/mu-plugins/themes.
+    // ABS-09 — suspicious filename anywhere under plugins/. No extension gate: the original
+    // matches on strtolower(basename) alone, and every name in the list happens to end .php.
+    if (underAny(entry.path, [pluginDir]) && SUSPICIOUS_FILENAMES.has(entry.name.toLowerCase())) {
+      suspiciousFilenames.push(entry.path);
+    }
+
+    // FS-02 — obfuscation in plugins/mu-plugins/themes. ABS-08 shares this read when the file
+    // is also under plugins/ — pluginDir is ordinarily one of the three obfuscationRoots, so
+    // this avoids a second read of the same bytes for the common case.
     if (isPhp && underAny(entry.path, obfuscationRoots)) {
       const stat = await source.lstat(entry.path);
       if (stat && stat.size <= MAX_CONTENT_BYTES) {
@@ -197,6 +242,23 @@ export async function scanFilesystem(
           const content = buf.toString('latin1');
           for (const p of OBFUSCATION_PATTERNS) {
             if (p.re.test(content)) { obfuscation.push({ file: entry.path, pattern: p.label }); break; }
+          }
+          if (underAny(entry.path, [pluginDir]) && ANTI_FORENSICS_TOUCH.test(content) && ANTI_FORENSICS_ENUM.test(content)) {
+            antiForensics.push({ path: entry.path, snippet: content.slice(0, 200) });
+          }
+        }
+      }
+    } else if (isPhp && underAny(entry.path, [pluginDir])) {
+      // A plugin PHP file outside obfuscationRoots's three directories (e.g. a custom
+      // WP_PLUGIN_DIR that resolveScanRoot placed elsewhere) still needs its own ABS-08 read —
+      // this is the uncommon path, not the shared one above.
+      const stat = await source.lstat(entry.path);
+      if (stat && stat.size <= MAX_CONTENT_BYTES) {
+        const buf = await source.readFile(entry.path);
+        if (buf) {
+          const content = buf.toString('latin1');
+          if (ANTI_FORENSICS_TOUCH.test(content) && ANTI_FORENSICS_ENUM.test(content)) {
+            antiForensics.push({ path: entry.path, snippet: content.slice(0, 200) });
           }
         }
       }
@@ -228,6 +290,8 @@ export async function scanFilesystem(
     rootAndContent,
     uploadsPhp,
     elf,
+    suspiciousFilenames,
+    antiForensics,
     phpFilesScanned,
     filesWalked: walked.entries.length,
     unreadable: walked.unreadable,
@@ -237,4 +301,7 @@ export async function scanFilesystem(
   };
 }
 
-export const _internals = { OBFUSCATION_PATTERNS, CONTENT_OBFUSCATION, ELF_SKIP_EXTENSIONS, extensionOf };
+export const _internals = {
+  OBFUSCATION_PATTERNS, CONTENT_OBFUSCATION, ELF_SKIP_EXTENSIONS, extensionOf,
+  SUSPICIOUS_FILENAMES, ANTI_FORENSICS_TOUCH, ANTI_FORENSICS_ENUM,
+};

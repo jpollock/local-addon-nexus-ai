@@ -34,13 +34,24 @@ export class AgentDispatcher {
     private readonly toolRegistry: ToolRegistry,
     private readonly services: NexusServices,
     private readonly agentsDir: string = DEFAULT_AGENTS_DIR,
-    private readonly resolvedProvider: ResolvedAIProvider,
+    private resolvedProvider: ResolvedAIProvider,
     private readonly stateStore: AgentStateStore,
     private readonly dbManager?: AgentDbManager,
   ) {}
 
   clearCache(agentName: string): void {
     this.moduleCache.delete(agentName);
+  }
+
+  /**
+   * Same fix as AgentRunner.setProvider — this dispatcher's resolvedProvider was captured once
+   * at construction (Local startup) and never touched again, so a contributed tool invoked
+   * through here (e.g. security-sentinel's `scan`, the Tier-3-gated MCP tool) kept using
+   * whatever API key existed at that moment, even after a key rotation. AgentRunner.run() (the
+   * "Run Now" / scheduled path) already had this fixed; dispatch() did not.
+   */
+  setProvider(provider: ResolvedAIProvider): void {
+    this.resolvedProvider = provider;
   }
 
   async dispatch(agentName: string, toolName: string, args: unknown): Promise<McpToolResult> {

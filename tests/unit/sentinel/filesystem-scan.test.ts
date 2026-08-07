@@ -31,7 +31,7 @@ function site(files: Record<string, string | Buffer>) {
 }
 
 const run = (pub: string) =>
-  scanFilesystem(new LocalFileSource(pub), { contentDir: 'wp-content', knownRootPhp: KNOWN_ROOT_PHP });
+  scanFilesystem(new LocalFileSource(pub), { contentDir: 'wp-content', pluginDir: 'wp-content/plugins', knownRootPhp: KNOWN_ROOT_PHP });
 
 beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fsscan-')); });
 afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
@@ -173,6 +173,75 @@ describe('FS-04 PHP under uploads', () => {
   });
 });
 
+describe('ABS-09 suspicious filenames', () => {
+  it('flags a known attacker-tool filename under plugins/', async () => {
+    const { pub } = site({ 'wp-content/plugins/ranktool/check_file.php': '<?php echo 1;' });
+    const r = await run(pub);
+    expect(r.suspiciousFilenames).toEqual(['wp-content/plugins/ranktool/check_file.php']);
+  });
+
+  it('is case-insensitive, unlike FS-02/03/04 — the original compares strtolower on both sides', async () => {
+    const { pub } = site({ 'wp-content/plugins/x/Check_File.PHP': '<?php echo 1;' });
+    const r = await run(pub);
+    expect(r.suspiciousFilenames).toEqual(['wp-content/plugins/x/Check_File.PHP']);
+  });
+
+  it('does not flag the same filename outside plugins/', async () => {
+    const { pub } = site({ 'wp-content/mu-plugins/check_file.php': '<?php echo 1;' });
+    const r = await run(pub);
+    expect(r.suspiciousFilenames).toHaveLength(0);
+  });
+
+  it('does not flag an ordinary plugin filename', async () => {
+    const { pub } = site({ 'wp-content/plugins/x/index.php': '<?php echo 1;' });
+    const r = await run(pub);
+    expect(r.suspiciousFilenames).toHaveLength(0);
+  });
+});
+
+describe('ABS-08 anti-forensics timestamp manipulation', () => {
+  it('flags touch() combined with directory enumeration in one plugin file', async () => {
+    const { pub } = site({
+      'wp-content/plugins/fileorganizer/backdate.php':
+        '<?php function f($d,$t){foreach(scandir($d) as $x) touch($d."/".$x,$t);}',
+    });
+    const r = await run(pub);
+    expect(r.antiForensics).toHaveLength(1);
+    expect(r.antiForensics[0].path).toBe('wp-content/plugins/fileorganizer/backdate.php');
+  });
+
+  it('does not flag touch() alone', async () => {
+    const { pub } = site({ 'wp-content/plugins/x/a.php': '<?php touch($f);' });
+    const r = await run(pub);
+    expect(r.antiForensics).toHaveLength(0);
+  });
+
+  it('does not flag directory enumeration alone', async () => {
+    const { pub } = site({ 'wp-content/plugins/x/a.php': '<?php foreach (glob("*") as $f) echo $f;' });
+    const r = await run(pub);
+    expect(r.antiForensics).toHaveLength(0);
+  });
+
+  it('matches on glob() and RecursiveIterator as well as scandir()', async () => {
+    const { pub } = site({
+      'wp-content/plugins/x/a.php': '<?php touch($f); glob("*");',
+      'wp-content/plugins/x/b.php': '<?php touch($f); new RecursiveIterator($d);',
+    });
+    const r = await run(pub);
+    expect(r.antiForensics.map((h) => h.path).sort()).toEqual([
+      'wp-content/plugins/x/a.php', 'wp-content/plugins/x/b.php',
+    ]);
+  });
+
+  it('does not flag the same code outside plugins/', async () => {
+    const { pub } = site({
+      'wp-content/themes/x/a.php': '<?php touch($f); scandir($d);',
+    });
+    const r = await run(pub);
+    expect(r.antiForensics).toHaveLength(0);
+  });
+});
+
 describe('FS-06 ELF binaries', () => {
   const elf = Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46]), Buffer.alloc(64)]);
 
@@ -229,7 +298,7 @@ describe('Coverage and cost', () => {
     for (let i = 0; i < 30; i++) files[`wp-content/plugins/p/f${i}.php`] = '<?php';
     const { pub } = site(files);
     const r = await scanFilesystem(new LocalFileSource(pub), {
-      contentDir: 'wp-content', knownRootPhp: KNOWN_ROOT_PHP, limit: 5,
+      contentDir: 'wp-content', pluginDir: 'wp-content/plugins', knownRootPhp: KNOWN_ROOT_PHP, limit: 5,
     });
     expect(r.truncated).toBe(true);
   });

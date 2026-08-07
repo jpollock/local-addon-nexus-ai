@@ -3,17 +3,32 @@ import { resolveScanRoot, SiteLike } from './resolveScanRoot';
 import { checkMuPlugins, MuPluginResult } from './checks/muPlugins';
 import { scanFilesystem, FilesystemScanResult } from './checks/filesystem';
 import { scanDirectiveFiles, DirectiveScanResult } from './checks/directives';
+import { checkDatabase, DatabaseCheckResult } from './checks/database';
+import { resolveDbSource } from './db/resolveDbSource';
 
 export { LocalFileSource } from './LocalFileSource';
 export { resolveScanRoot } from './resolveScanRoot';
 export { checkMuPlugins } from './checks/muPlugins';
 export { scanFilesystem } from './checks/filesystem';
 export { scanDirectiveFiles } from './checks/directives';
+export { checkDatabase } from './checks/database';
+export { resolveDbSource } from './db/resolveDbSource';
 export type { FileSource, FileEntry, FileStat, WalkResult } from './FileSource';
 export type { ScanRoot, SiteLike } from './resolveScanRoot';
 export type { MuPluginResult, MuPluginFinding } from './checks/muPlugins';
 export type { FilesystemScanResult } from './checks/filesystem';
 export type { DirectiveScanResult, DirectiveFinding } from './checks/directives';
+export type { DatabaseCheckResult } from './checks/database';
+export type { DbSource } from './db/resolveDbSource';
+
+/**
+ * `checks.database`'s two shapes: a trusted read of the dump, or a typed refusal. A caller must
+ * render the refusal branch as "not checked" — never fall back to treating it as "checked and
+ * clean" — which is why this is a tagged union rather than an optional result with nulls inside.
+ */
+export type DatabaseScanResult =
+  | ({ ok: true; asOf: Date; lagMs: number } & DatabaseCheckResult)
+  | { ok: false; reason: string; detail: string };
 
 /**
  * Files the host and this addon install into mu-plugins.
@@ -57,7 +72,12 @@ export interface ScanReport {
    * checked", never as "clean" — that distinction is the reason the whole scanner exists.
    */
   unscannable?: { reason: string; detail: string };
-  checks: { muPlugins?: MuPluginResult; filesystem?: FilesystemScanResult; directives?: DirectiveScanResult };
+  checks: {
+    muPlugins?: MuPluginResult;
+    filesystem?: FilesystemScanResult;
+    directives?: DirectiveScanResult;
+    database?: DatabaseScanResult;
+  };
   /** What was inspected, in the report's own words. */
   coverage: string[];
   /** What was NOT inspected. Never omitted, even when empty. */
@@ -105,7 +125,7 @@ export async function scanLocalSite(site: SiteLike, options: ScanOptions = {}): 
   const source = new LocalFileSource(root.webRoot);
   const muPlugins = await checkMuPlugins(source, root.muPluginDir, KNOWN_MU_PLUGINS);
   const filesystem = options.deep
-    ? await scanFilesystem(source, { contentDir: root.contentDir, knownRootPhp: KNOWN_ROOT_PHP })
+    ? await scanFilesystem(source, { contentDir: root.contentDir, pluginDir: root.pluginDir, knownRootPhp: KNOWN_ROOT_PHP })
     : undefined;
   // Deep only. The intent was to run this always — .user.ini is the one persistence slot
   // wp_eval structurally cannot see — but finding a handful of directive files requires walking
@@ -114,6 +134,21 @@ export async function scanLocalSite(site: SiteLike, options: ScanOptions = {}): 
   const directives = options.deep
     ? await scanDirectiveFiles(source, { siteHost: site?.domain ?? null })
     : undefined;
+
+  // Deep only, same reasoning as filesystem/directives above — this reads the whole dump file
+  // once, which is milliseconds for the median site but measured up to ~3.6s on an 808 MB
+  // outlier, well outside the shallow scan's speed budget.
+  let database: DatabaseScanResult | undefined;
+  if (options.deep) {
+    if (!site?.id) {
+      database = { ok: false, reason: 'no-site-id', detail: 'site record has no id — cannot locate its run/ directory' };
+    } else {
+      const dbSource = resolveDbSource(site.id, root.webRoot);
+      database = dbSource.ok
+        ? { ok: true, asOf: dbSource.asOf, lagMs: dbSource.lagMs, ...(await checkDatabase(dbSource.dumpPath, root.tablePrefix)) }
+        : { ok: false, reason: dbSource.reason, detail: dbSource.detail };
+    }
+  }
 
   const coverage: string[] = [];
   const notChecked: string[] = [];
@@ -151,15 +186,29 @@ export async function scanLocalSite(site: SiteLike, options: ScanOptions = {}): 
   } else {
     notChecked.push('.htaccess, .user.ini and php.ini directives — deep scan not requested');
   }
-  notChecked.push(
-    'database contents (injected posts, autoloaded options, usermeta)',
-    'core and plugin checksums',
-  );
+  if (database) {
+    if (database.ok) {
+      coverage.push(
+        `database (as of ${database.asOf.toISOString()}, ${Math.round(database.lagMs / 1000)}s before last shutdown) — ` +
+        `${database.posts.examined} post(s), ${database.options.examined} autoloaded option(s), ` +
+        `${database.usermeta.examined} usermeta row(s), ${database.comments.examined} approved comment(s) examined`,
+      );
+      notChecked.push(...database.knownGaps.map((g) => `database ${g}`));
+      for (const [table, count] of Object.entries(database.malformedRows)) {
+        if (count > 0) notChecked.push(`database ${count} malformed row(s) dropped from ${table} — column count mismatch`);
+      }
+    } else {
+      notChecked.push(`database contents — NOT checked: ${database.reason} (${database.detail})`);
+    }
+  } else {
+    notChecked.push('database contents (injected posts, autoloaded options, usermeta) — deep scan not requested');
+  }
+  notChecked.push('core and plugin checksums');
 
   return {
     site: name,
     webRoot: root.webRoot,
-    checks: { muPlugins, filesystem, directives },
+    checks: { muPlugins, filesystem, directives, database },
     coverage,
     notChecked,
     durationMs: Date.now() - started,

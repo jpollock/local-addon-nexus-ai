@@ -48,17 +48,26 @@ export function buildAgentContext(deps: AgentContextDeps): {
   );
 
   // Build AI client per-run so it gets this agent's scoped tool set.
-  // When Local Gateway is enabled, route through the gateway so Nexus injects
-  // credentials — same model as per-site WordPress AI capabilities.
-  const effectiveProvider = resolvedProvider.useLocalGateway ? 'local-gateway' : resolvedProvider.provider;
+  //
+  // Agents ALWAYS call the resolved provider directly — never through the Local AI Gateway HTTP
+  // server, regardless of settings.useLocalGateway. That flag governs whether a WordPress SITE's
+  // own AI calls (from its PHP/MU-plugin code) route through Local so Nexus can inject
+  // credentials the site never sees. An agent runs in this process already, with direct access
+  // to resolvedProvider.apiKey — it has no WP-site credential problem to solve by detouring
+  // through a server built for a completely different caller. Routing agents through it anyway
+  // meant every agent's AI calls broke the moment a user turned useLocalGateway on for their
+  // sites: the gateway's own provider routing (AIGatewayRoutes.ts) only recognized a subset of
+  // providers, so an agent configured for e.g. 'power' 503'd with "No API key configured" even
+  // though a real key was present — the gateway just isn't the right layer for this caller.
+  const effectiveProvider = resolvedProvider.provider;
   const aiProvider = getProvider(effectiveProvider);
   const agentModel = agent.model ?? resolvedProvider.model;
-  // When using local-gateway, pass the gateway URL and auth token via apiKey/baseUrl
-  const providerConfig = effectiveProvider === 'local-gateway'
-    ? { apiKey: services.gatewayAuthToken ?? '', model: agentModel, baseUrl: services.gatewayUrl }
-    : { apiKey: resolvedProvider.apiKey, model: agentModel };
-  // Direct provider config: used for generateObject forced-tool calls that need tool_config/tool_choice
-  // The local-gateway proxy doesn't translate these, so we bypass it for structured output calls
+  const providerConfig = { apiKey: resolvedProvider.apiKey, model: agentModel };
+  // directProvider/directConfig used to exist to bypass the local-gateway proxy for
+  // generateObject's forced-tool calls (tool_config/tool_choice, which the proxy didn't
+  // translate). With effectiveProvider never resolving to local-gateway anymore, these are
+  // identical to aiProvider/providerConfig — kept as distinct values rather than collapsed, so
+  // AgentAIClient's constructor signature doesn't change in this fix.
   const directProvider = getProvider(resolvedProvider.provider);
   const directConfig = { apiKey: resolvedProvider.apiKey, model: agentModel };
   const aiClient = aiProvider
