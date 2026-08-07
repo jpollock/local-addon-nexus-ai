@@ -78,6 +78,25 @@ describe('nexusHostProbe', () => {
     expect(r.report.user).toBe('deploy');
     expect(r.report.port).toBe('2222');
   });
+
+  it('passes fingerprint and keyType through from probeExternalHost, unmodified', async () => {
+    probeMock.mockResolvedValueOnce({
+      ok: false,
+      alias: 'h1',
+      resolved: { hostname: '203.0.113.10', user: 'deploy', port: '2222', userKnownHostsFile: '/x' },
+      failure: {
+        kind: 'host-key-unknown',
+        detail: 'Host key verification failed.',
+        remedy: 'New host key ...',
+        fingerprint: 'SHA256:abc123',
+        keyType: 'ED25519',
+      },
+    });
+    const c = ctx();
+    const r = await (createResolvers(c.context).Mutation as any).nexusHostProbe(null, { alias: 'h1' });
+    expect(r.report.failure.fingerprint).toBe('SHA256:abc123');
+    expect(r.report.failure.keyType).toBe('ED25519');
+  });
 });
 
 // `nexusHostRemove`/`nexusHostRemoveSite` coverage lives in

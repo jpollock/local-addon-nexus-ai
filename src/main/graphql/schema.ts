@@ -2131,12 +2131,16 @@ export const typeDefs = gql`
   # ============================================================================
 
   type NexusHostProbeFailure {
-    "One of: alias-not-found, auth-failed, unreachable, wp-cli-missing, wordpress-not-found, multiple-wordpress"
+    "One of: alias-not-found, auth-failed, unreachable, wp-cli-missing, wordpress-not-found, multiple-wordpress, host-key-unknown, host-key-changed"
     kind: String!
     "ssh's or WP-CLI's own output, verbatim"
     detail: String!
     "The exact next command or action"
     remedy: String!
+    "SHA256 fingerprint of a newly offered host key. Populated only when kind is host-key-unknown, and only when the key could be captured."
+    fingerprint: String
+    "Key type (e.g. ED25519, RSA) matching fingerprint. Populated only alongside fingerprint."
+    keyType: String
   }
 
   type NexusHostProbeReport {
