@@ -281,4 +281,22 @@ describe('ExternalSshTransport', () => {
     expect(res.success).toBe(false);
     expect(res.output).toMatch(/not supported/i);
   });
+
+  it('hints that an unknown host key must be approved via nexus host test', async () => {
+    spawnMock.mockImplementation(() => fakeProc({ code: 255, stderr: 'Host key verification failed.' }));
+    const res = await new ExternalSshTransport('acme-box').runWpCli(['core', 'version']);
+    expect(res.success).toBe(false);
+    expect(res.stdout).toMatch(/nexus host test/i);
+    expect(res.stdout).not.toMatch(/SHA256/); // no fingerprint fetch on this path
+  });
+
+  it('hints about a changed host key without offering to fix it automatically', async () => {
+    spawnMock.mockImplementation(() => fakeProc({
+      code: 255,
+      stderr: 'WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\nHost key verification failed.',
+    }));
+    const res = await new ExternalSshTransport('acme-box').runWpCli(['core', 'version']);
+    expect(res.success).toBe(false);
+    expect(res.stdout).toMatch(/reinstalled|intercepting/i);
+  });
 });

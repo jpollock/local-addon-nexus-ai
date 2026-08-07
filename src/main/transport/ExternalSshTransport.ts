@@ -47,6 +47,15 @@ function annotateFailure(stderr: string): string {
     return `${text}\n\nHint: pass --path=/path/to/wordpress if WordPress is not in the `
       + `SSH login directory.`;
   }
+  if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(text)) {
+    return `${text}\n\nThis host's key no longer matches what was trusted before — this can mean `
+      + `the server was reinstalled, or that something is intercepting your connection. Run `
+      + `'nexus host test <alias>' for details before doing anything else.`;
+  }
+  if (/host key verification failed/i.test(text)) {
+    return `${text}\n\nHint: this host's identity has never been verified. Run `
+      + `'nexus host test <alias>' — it will show the key's fingerprint and where to approve it.`;
+  }
   return text;
 }
 
