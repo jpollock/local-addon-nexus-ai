@@ -95,7 +95,7 @@ import {
 const { ipcMain } = require('electron');
 import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 import { vectorSiteId } from './vector-store/vectorSiteId';
-import { captureOfferedHostKey, trustHostKey } from './external/hostKeyTrust';
+import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from './external/hostKeyTrust';
 import { resolveSshConfig, defaultSshExec } from './external/sshExec';
 
 /**
@@ -1020,6 +1020,20 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const captured = await captureOfferedHostKey(alias, defaultSshExec);
       if (!captured) {
         return { success: false, error: `Could not fetch a host key for '${alias}' — it may have become unreachable.` };
+      }
+      // Defense in depth against TOCTOU between an earlier "Check" and this
+      // "Approve": re-verify against the real known_hosts file immediately
+      // before trusting. A conflicting entry (changed/MITM key) is hard-
+      // refused here regardless of what the renderer already gated on.
+      const status = await checkHostKeyStatus(resolved.userKnownHostsFile, resolved.hostname, captured.rawLine);
+      if (status === 'conflict') {
+        return {
+          success: false,
+          error: "This host's key has changed since it was last trusted — refusing to overwrite it. This can indicate a compromised connection; do not approve without verifying the new fingerprint out-of-band.",
+        };
+      }
+      if (status === 'trusted') {
+        return { success: true, error: null, fingerprint: captured.fingerprint };
       }
       trustHostKey(resolved.userKnownHostsFile, captured.rawLine);
       return { success: true, error: null, fingerprint: captured.fingerprint };

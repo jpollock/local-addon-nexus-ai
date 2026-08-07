@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { captureOfferedHostKey, trustHostKey } from '../../../src/main/external/hostKeyTrust';
+import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from '../../../src/main/external/hostKeyTrust';
 import type { SshExec } from '../../../src/main/external/sshExec';
 
 const KEY_LINE = 'example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
@@ -87,5 +87,37 @@ describe('trustHostKey', () => {
     const file = path.join(dir, 'nested', '.ssh', 'known_hosts');
     trustHostKey(file, KEY_LINE);
     expect(fs.readFileSync(file, 'utf-8')).toBe(`${KEY_LINE}\n`);
+  });
+});
+
+describe('checkHostKeyStatus', () => {
+  function keygenExiting(code: number | null, stdout = '') {
+    return async () => ({ code, stdout, stderr: '' });
+  }
+
+  it('returns "none" when ssh-keygen -F finds no entry (non-zero exit)', async () => {
+    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', 'example.com', KEY_LINE, keygenExiting(1, ''));
+    expect(status).toBe('none');
+  });
+
+  it('returns "trusted" when the existing entry has the same key material', async () => {
+    const status = await checkHostKeyStatus(
+      '/home/u/.ssh/known_hosts',
+      'example.com',
+      KEY_LINE,
+      keygenExiting(0, `# Host example.com found: line 3\n${KEY_LINE}\n`),
+    );
+    expect(status).toBe('trusted');
+  });
+
+  it('returns "conflict" when the existing entry has different key material', async () => {
+    const differentKey = 'example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAdifferentKeyMaterialHere';
+    const status = await checkHostKeyStatus(
+      '/home/u/.ssh/known_hosts',
+      'example.com',
+      KEY_LINE,
+      keygenExiting(0, `# Host example.com found: line 3\n${differentKey}\n`),
+    );
+    expect(status).toBe('conflict');
   });
 });

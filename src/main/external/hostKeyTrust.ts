@@ -72,11 +72,60 @@ export async function captureOfferedHostKey(
   }
 }
 
+/** Pull `<keytype> <base64key>` out of a known_hosts-style line, ignoring the
+ * leading host field (which may be hashed) and any trailing comment. */
+function parseKeyMaterial(line: string): [string, string] | null {
+  const tokens = line.trim().split(/\s+/);
+  if (tokens.length < 3) return null;
+  return [tokens[1], tokens[2]];
+}
+
+export type HostKeyStatus = 'none' | 'trusted' | 'conflict';
+
+/**
+ * Compare the key an alias just offered against whatever `userKnownHostsFile`
+ * already has on record for `hostname`, via `ssh-keygen -F` (never by reading
+ * the file directly — hashed known_hosts entries are not greppable).
+ *
+ * - 'none': no existing entry — safe to append.
+ * - 'trusted': an existing entry already matches the offered key exactly —
+ *   safe to no-op (re-approving an already-trusted host must not duplicate
+ *   the line).
+ * - 'conflict': an existing entry is for a *different* key — this is the
+ *   changed/MITM case the design doc says must be hard-refused everywhere.
+ *   Callers MUST NOT call trustHostKey when this is returned.
+ */
+export async function checkHostKeyStatus(
+  userKnownHostsFile: string,
+  hostname: string,
+  offeredRawLine: string,
+  keygenExec: KeygenExec = defaultKeygenExec,
+): Promise<HostKeyStatus> {
+  const result = await keygenExec(['-F', hostname, '-f', userKnownHostsFile]);
+  if (result.code !== 0) return 'none';
+
+  const existingLines = result.stdout
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+  if (existingLines.length === 0) return 'none';
+
+  const offered = parseKeyMaterial(offeredRawLine);
+  if (!offered) return 'none';
+
+  const matches = existingLines.some((l) => {
+    const existing = parseKeyMaterial(l);
+    return !!existing && existing[0] === offered[0] && existing[1] === offered[1];
+  });
+  return matches ? 'trusted' : 'conflict';
+}
+
 /**
  * Append a raw known_hosts line to the real file, creating the parent
  * directory if needed. The ONLY function in this module that touches real
  * trust state — called exclusively from the TRUST_EXTERNAL_HOST_KEY IPC
- * handler (renderer-only; see ipc-handlers.ts).
+ * handler (renderer-only; see ipc-handlers.ts), and only after
+ * checkHostKeyStatus has confirmed there is no conflicting entry.
  */
 export function trustHostKey(userKnownHostsFile: string, rawLine: string): void {
   fs.mkdirSync(path.dirname(userKnownHostsFile), { recursive: true, mode: 0o700 });
