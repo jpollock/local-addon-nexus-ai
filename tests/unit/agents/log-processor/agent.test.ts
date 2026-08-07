@@ -17,6 +17,50 @@ describe('agent identity', () => {
   it('has a cron trigger', () => {
     expect(agent.triggers.some(t => t.type === 'cron')).toBe(true);
   });
+
+  it('declares effect: readonly — it never writes to the WP site itself', () => {
+    expect((agent as unknown as { effect?: string }).effect).toBe('readonly');
+  });
+});
+
+describe('run (nightly cron)', () => {
+  it('processes nothing when scope is absent, and says so', async () => {
+    const ctx = mockContext();
+    const info = jest.spyOn(ctx.log, 'info');
+    const db = ctx.db.open('logs');
+    initSchema(db);
+    upsertSource(db, { site: 'site1', provider: 's3', bucket: 'b1', region: 'us-east-1', prefix: '', enabled: 1 });
+    await agent.run(ctx);
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('No sites in scope'));
+  });
+
+  it('processes nothing when scope is an empty list', async () => {
+    const ctx = mockContext({ settings: { scope: { siteIds: [] } } });
+    const info = jest.spyOn(ctx.log, 'info');
+    initSchema(ctx.db.open('logs'));
+    await agent.run(ctx);
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('No sites in scope'));
+  });
+
+  it('skips a scoped site with no bound log source, and warns', async () => {
+    const ctx = mockContext({ settings: { scope: { siteIds: ['not-connected'] } } });
+    const info = jest.spyOn(ctx.log, 'info');
+    const warn = jest.spyOn(ctx.log, 'warn');
+    initSchema(ctx.db.open('logs'));
+    await agent.run(ctx);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('not-connected'));
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('No scoped sites have a bound log source'));
+  });
+
+  it('ignores a connected site that is not in scope — enabled alone is not enough', async () => {
+    const ctx = mockContext({ settings: { scope: { siteIds: [] } } });
+    const info = jest.spyOn(ctx.log, 'info');
+    const db = ctx.db.open('logs');
+    initSchema(db);
+    upsertSource(db, { site: 'site1', provider: 's3', bucket: 'b1', region: 'us-east-1', prefix: '', enabled: 1 });
+    await agent.run(ctx);
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('No sites in scope'));
+  });
 });
 
 describe('connect_log_source', () => {
@@ -163,7 +207,7 @@ describe('log_storage_status', () => {
     expect(text).toMatch(/site1/);
     expect(text).toMatch(/1 agg days/);
     expect(text).toMatch(/1 ledgered file-dates/);
-    expect(text).toMatch(/enabled \(cron\)/);
+    expect(text).toMatch(/opted in/);
     expect(text).toMatch(/Fleet total:/);
   });
 });

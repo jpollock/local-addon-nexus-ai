@@ -1,7 +1,7 @@
 import { defineAgent, cron } from '@nexus-ai/agent-sdk';
 import type { AgentContext, AgentDatabase, AgentToolResult } from '@nexus-ai/agent-sdk';
 import {
-  initSchema, getSource, upsertSource, setEnabled, getEnabledSites,
+  initSchema, getSource, upsertSource, setEnabled,
   getLedger, markLedger, saveAggregate, getAggregate,
   getAggregatesInRange, evict, storageStats,
 } from './db';
@@ -149,6 +149,10 @@ export default defineAgent({
   name: 'log-processor',
   version: '1.0.0',
   description: 'Access log ingestion and read contract. Streams WPE Apache-style logs from S3, folds into daily aggregates, serves seo-insights and security-sentinel via contributed tools.',
+  // Reads from S3 and writes only to its own local sqlite aggregates — never touches the WP
+  // site itself. Drives the site picker's production-warning verb: "will be scanned", not
+  // "modified".
+  effect: 'readonly',
   triggers: [cron('0 3 * * *')],
   credentials: [{
     provider: 'aws',
@@ -202,7 +206,11 @@ export default defineAgent({
       },
 
       set_log_processing: {
-        description: 'Enable or disable scheduled log processing for a WPE install. Enabled sites are picked up by the nightly cron. Site must already be connected via connect_log_source.',
+        // The nightly cron's actual gate is ctx.settings.scope.siteIds (set via the agent's
+        // Settings screen / site scope picker), not this flag — see run() below. `enabled` is
+        // now informational only (surfaced in storage_stats as "opted in"): a connected site
+        // still needs to be selected in the picker to actually be processed on schedule.
+        description: 'Mark a WPE install as ready for scheduled log processing. Informational — actual scheduling is controlled by the agent\'s site scope (Settings screen). Site must already be connected via connect_log_source.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -216,7 +224,7 @@ export default defineAgent({
           const db = openDb(ctx);
           if (!getSource(db, args.siteId)) return err(`⚠ No log source for "${args.siteId}". Run connect_log_source first.`);
           setEnabled(db, args.siteId, args.enabled);
-          return ok(`✓ Log processing ${args.enabled ? 'enabled' : 'disabled'} for ${args.siteId}.`);
+          return ok(`✓ ${args.siteId} marked ${args.enabled ? 'opted in' : 'opted out'}. Select it in the agent's Settings screen to include it in scheduled runs.`);
         },
       },
 
@@ -376,7 +384,7 @@ export default defineAgent({
           const stats = storageStats(db);
           if (stats.length === 0) return ok('No sites connected. Run connect_log_source to bind an S3 log source.');
           const lines = stats.map(s =>
-            `  ${s.site}: ${s.aggregateDays} agg days, ${s.ledgerDays} ledgered file-dates, ~${(s.approxBytes / 1024).toFixed(1)}KB — ${s.enabled ? 'enabled (cron)' : 'disabled'}`,
+            `  ${s.site}: ${s.aggregateDays} agg days, ${s.ledgerDays} ledgered file-dates, ~${(s.approxBytes / 1024).toFixed(1)}KB — ${s.enabled ? 'opted in' : 'not opted in'} (actual scheduling is controlled by the agent's site scope)`,
           ).join('\n');
           const totalKB = (stats.reduce((s, r) => s + r.approxBytes, 0) / 1024).toFixed(1);
           return ok(`Log storage:\n${lines}\n\nFleet total: ~${totalKB}KB`);
@@ -407,12 +415,33 @@ export default defineAgent({
   run: async (ctx) => {
     ctx.log.phase('cron', 'log-processor nightly sync');
     const db = openDb(ctx);
-    const sites = getEnabledSites(db);
-    if (sites.length === 0) {
-      ctx.log.info('No sites enabled for log processing. Use set_log_processing to opt in.');
+
+    // The nightly sync's gate is the agent's site scope (same field/UI security-sentinel uses —
+    // ctx.settings.scope.siteIds), not the sources.enabled flag set_log_processing toggles. A
+    // site can be connected (has a bound S3 source) without being in scope, and vice versa; only
+    // the intersection actually runs. Absent/empty scope processes nothing, deliberately — the
+    // same "unconfigured must never mean everything" rule security-sentinel's resolveScanScope
+    // documents.
+    const scope = ctx.settings?.scope as { siteIds?: unknown } | undefined;
+    const scopedSiteIds = Array.isArray(scope?.siteIds)
+      ? scope!.siteIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+    if (scopedSiteIds.length === 0) {
+      ctx.log.info('No sites in scope for scheduled log processing. Select sites in the agent\'s settings.');
       return;
     }
-    ctx.log.info(`Processing ${sites.length} enabled site(s): ${sites.join(', ')}`);
+
+    const sites = scopedSiteIds.filter(siteId => !!getSource(db, siteId));
+    const unconnected = scopedSiteIds.filter(siteId => !sites.includes(siteId));
+    if (unconnected.length > 0) {
+      ctx.log.warn(`${unconnected.length} scoped site(s) have no bound log source and were skipped: ${unconnected.join(', ')}. Run connect_log_source first.`);
+    }
+    if (sites.length === 0) {
+      ctx.log.info('No scoped sites have a bound log source yet. Nothing to process.');
+      return;
+    }
+
+    ctx.log.info(`Processing ${sites.length} site(s) in scope: ${sites.join(', ')}`);
     for (const siteId of sites) {
       await runSync(db, siteId, undefined, undefined, DEFAULT_SYNC_BUDGET_MB, ctx);
     }

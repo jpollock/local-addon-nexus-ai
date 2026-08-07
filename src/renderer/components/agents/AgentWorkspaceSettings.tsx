@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { agentStore, AgentSettings } from './AgentStore';
 import { IPC_CHANNELS } from '../../../common/constants';
-import { fetchScopeSites, ScopeSite } from './fetchScopeSites';
+import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
 import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
 
 interface SettingsProps {
@@ -161,13 +161,15 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
   }
 
   /**
-   * Both WPE installs and local sites. Local's own registry holds only local sites, which is
-   * why site groups could not be reused for this — they resolve through siteData.getSites().
+   * Both WPE installs and local sites for most agents. Local's own registry holds only local
+   * sites, which is why site groups could not be reused for this — they resolve through
+   * siteData.getSites(). Some agents (log-processor) get a different, narrower site source —
+   * see fetchSitesForAgent's doc.
    */
   private async loadScopeSites() {
     if (!this.props.electron?.ipcRenderer) return;
     this.setState({ scopeLoading: true });
-    const sites = await fetchScopeSites(this.props.electron);
+    const sites = await fetchSitesForAgent(this.props.agentId, this.props.electron);
     this.setState({ scopeSites: sites, scopeLoading: false });
   }
 
@@ -179,16 +181,26 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
    * scans changes at the moment of this migration; the very next Save writes an explicit list
    * (mode: 'explicit') and the account is fully migrated.
    */
+  /**
+   * `scope` is the single field Settings and Run Now both read/write (see AgentStore.ts's
+   * AgentScope doc). The `scanScope` fallback below reads on-disk data from before this field
+   * was unified — settings persisted with the old `{mode, siteIds}` shape while `scope` was
+   * absent, so a not-yet-migrated install doesn't silently revert to "scan nothing" on first
+   * load post-upgrade. `mode: 'all'` has no equivalent under the current explicit-list model and
+   * reads as "no sites selected" rather than fabricating a full site list.
+   */
   private currentScopeSiteIds(): string[] {
-    const scope = this.state.settings.scanScope;
-    if (scope?.mode === 'all') return this.state.scopeSites.map(s => s.id);
-    return scope?.siteIds ?? [];
+    const { scope, scanScope } = this.state.settings as AgentSettings & { scanScope?: { mode: string; siteIds: string[] } };
+    if (scope) return scope.siteIds;
+    if (scanScope && scanScope.mode !== 'all') return scanScope.siteIds ?? [];
+    return [];
   }
 
   /** Sites created after this scope was last edited — a permanent property of an explicit-list
-   * model, not a bug: a scope never auto-includes anything added after it was set. Only ever
-   * fires for WPE sites — local sites have no creation-time field available (see
-   * fetchScopeSites' ScopeSite.createdAt doc). */
+   * model, not a bug: a scope never auto-includes anything added after it was set. Fires for any
+   * site with a known createdAt — WPE always, local sites once first indexed (see
+   * fetchScopeSites' ScopeSite.createdAt doc for what "created" means for each). An unindexed
+   * local site has no createdAt and is silently excluded, never flagged. */
   private getDriftedSites(): ScopeSite[] {
     const scopeUpdatedAt = this.state.settings.scopeUpdatedAt;
     if (!scopeUpdatedAt) return [];
@@ -209,7 +221,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const draft = this.state.scopeDraftSelection;
     if (!draft) return;
     this.updateSettings({
-      scanScope: { mode: 'explicit', siteIds: [...draft] },
+      scope: { siteIds: [...draft] },
       scopeUpdatedAt: Date.now(),
     });
     this.setState({ scopeExpanded: false, scopeDraftSelection: null });

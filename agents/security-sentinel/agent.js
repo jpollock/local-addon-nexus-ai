@@ -389,33 +389,46 @@ const MAX_REFRESH_PER_SWEEP = 10;
  * narrows the scope — without this the fleet-wide default is whatever happens to be in
  * graph.db, which here is 375 sites nobody chose.
  *
- * `scanScope` in the agent's settings:
- *   { mode: 'explicit', siteIds: [...] }  — scan exactly these. THE DEFAULT.
- *   { mode: 'all' }                       — scan everything, chosen deliberately.
+ * Reads `settings.scope.siteIds` — the same field the site scope picker's Settings tab and Run
+ * Now modal use (AgentStore.ts's `AgentScope`). There is no "scan everything" mode: that concept
+ * (formerly `scanScope: {mode:'all'}`) was retired when "Every site" was removed from the picker
+ * UI as a live rule that contradicted the explicit-list model — selecting all 384 sites in the
+ * picker now IS the explicit list, just a long one.
  *
- * Absent or malformed settings resolve to explicit-with-an-empty-list, which scans **nothing**
- * and says so. That asymmetry is the whole point: `scanScope ?? { mode: 'all' }` would be the
- * same permissive-default bug that made this agent sweep the fleet unattended for weeks, just
- * spelled differently. An empty list is a configuration the user has not finished, and the safe
- * reading of "I don't know which sites you meant" is none of them.
+ * Absent or empty settings resolve to an empty list, which scans **nothing** and says so. That
+ * asymmetry is the whole point: defaulting to "everything" would be the same permissive-default
+ * bug that made this agent sweep the fleet unattended for weeks, just spelled differently. An
+ * empty list is a configuration the user has not finished, and the safe reading of "I don't know
+ * which sites you meant" is none of them.
  *
  * An explicitly-triggered run (wpe:sync.completed for one install, or Run Now) is not
  * constrained by this — the user named the target.
+ *
+ * Reads the legacy `settings.scanScope` shape (pre-migration on-disk settings from earlier
+ * builds this session) only when `settings.scope` is entirely absent, so an unmigrated install
+ * doesn't silently revert to "scan nothing" the first time it loads post-upgrade. `mode: 'all'`
+ * in that legacy shape has no equivalent here and is treated as "no explicit list" (empty).
  */
 function resolveScanScope(settings, log) {
-  const raw = settings && typeof settings === 'object' ? settings.scanScope : undefined;
-
-  if (raw && raw.mode === 'all') {
-    return { mode: 'all', siteIds: null };
+  const scope = settings && typeof settings === 'object' ? settings.scope : undefined;
+  if (scope && Array.isArray(scope.siteIds)) {
+    const siteIds = scope.siteIds.filter(id => typeof id === 'string' && id.length > 0);
+    return { siteIds: new Set(siteIds) };
   }
-  const siteIds = Array.isArray(raw?.siteIds)
-    ? raw.siteIds.filter(id => typeof id === 'string' && id.length > 0)
-    : [];
 
-  if (raw && raw.mode !== 'explicit' && raw.mode !== undefined) {
-    log?.warn?.(`security-sentinel: unrecognised scanScope.mode "${raw.mode}" — treating as 'explicit'`);
+  const legacy = settings && typeof settings === 'object' ? settings.scanScope : undefined;
+  if (legacy) {
+    if (legacy.mode === 'all') {
+      log?.warn?.('security-sentinel: legacy scanScope.mode "all" has no equivalent under the current scope model — treating as no sites selected. Re-select sites in Settings.');
+      return { siteIds: new Set() };
+    }
+    const siteIds = Array.isArray(legacy.siteIds)
+      ? legacy.siteIds.filter(id => typeof id === 'string' && id.length > 0)
+      : [];
+    return { siteIds: new Set(siteIds) };
   }
-  return { mode: 'explicit', siteIds: new Set(siteIds) };
+
+  return { siteIds: new Set() };
 }
 
 /** Map with bounded concurrency, preserving input order. Rejections surface as {error}. */
@@ -615,37 +628,29 @@ module.exports = {
     const isUnscopedSweep = !scope.installId && !scope.installName;
     if (isUnscopedSweep) {
       const scanScope = resolveScanScope(settings, log);
-      if (scanScope.mode === 'all') {
+      const before = installs.length;
+      installs = installs.filter(i => scanScope.siteIds.has(i.id) || scanScope.siteIds.has(i.name));
+      if (scanScope.siteIds.size === 0) {
         log.warn(
-          `security-sentinel: scanScope is 'all' — sweeping every site in graph.db (${installs.length}). ` +
-          `Tier 2 is capped at ${MAX_TIER2_PER_SWEEP} per sweep; the rest are deferred.`,
+          `security-sentinel: no sites are in this agent's scope, so this sweep checked NOTHING. ` +
+          `Choose sites in the agent's settings. (${before} site(s) are known but unselected.)`,
         );
-      } else {
-        const before = installs.length;
-        installs = installs.filter(i => scanScope.siteIds.has(i.id) || scanScope.siteIds.has(i.name));
-        if (scanScope.siteIds.size === 0) {
-          log.warn(
-            `security-sentinel: no sites are opted in to scheduled scanning, so this sweep checked NOTHING. ` +
-            `Choose sites in the agent's settings, or select "scan every site" there. ` +
-            `(${before} site(s) are known but unselected.)`,
-          );
-          return {
-            verdict: 'skipped', findings: [], sites: {},
-            summary: `No sites opted in to scheduled scanning — ${before} known, 0 scanned. Nothing was checked.`,
-          };
-        }
-        const missing = [...scanScope.siteIds].filter(
-          id => !installs.some(i => i.id === id || i.name === id),
-        );
-        log.info(
-          `security-sentinel: scanScope 'explicit' — ${installs.length} of ${before} known site(s) opted in` +
-          (missing.length ? ` (${missing.length} selected site(s) not found in graph.db: ${missing.slice(0, 5).join(', ')})` : ''),
-        );
-        if (missing.length) {
-          // A selected site that no longer resolves is a silent coverage hole — the user believes
-          // it is being scanned.
-          log.warn(`security-sentinel: ${missing.length} opted-in site(s) could not be resolved and were NOT scanned`);
-        }
+        return {
+          verdict: 'skipped', findings: [], sites: {},
+          summary: `No sites in scope for scheduled scanning — ${before} known, 0 scanned. Nothing was checked.`,
+        };
+      }
+      const missing = [...scanScope.siteIds].filter(
+        id => !installs.some(i => i.id === id || i.name === id),
+      );
+      log.info(
+        `security-sentinel: scope — ${installs.length} of ${before} known site(s) in scope` +
+        (missing.length ? ` (${missing.length} selected site(s) not found in graph.db: ${missing.slice(0, 5).join(', ')})` : ''),
+      );
+      if (missing.length) {
+        // A selected site that no longer resolves is a silent coverage hole — the user believes
+        // it is being scanned.
+        log.warn(`security-sentinel: ${missing.length} scoped site(s) could not be resolved and were NOT scanned`);
       }
     }
 

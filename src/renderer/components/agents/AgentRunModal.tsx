@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
-import { fetchScopeSites, ScopeSite } from './fetchScopeSites';
+import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
 import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
 import type { AgentScope } from './AgentStore';
 
@@ -40,7 +40,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   };
 
   async componentDidMount() {
-    const sites = await fetchScopeSites(this.props.electron);
+    const sites = await fetchSitesForAgent(this.props.agentId, this.props.electron);
     this.setState({ sites, loading: false, selection: this.initialSelection(sites) });
   }
 

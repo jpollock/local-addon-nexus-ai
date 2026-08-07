@@ -27,6 +27,45 @@
   --ag-purple: #7b8cff;
 }
 
+/*
+ * Light palette — applied when src/renderer/index.tsx's applyAgentTheme() detects Local is in
+ * Light mode (`document.documentElement.classList.contains('Theme__Dark')` is false). Keyed off
+ * `data-ag-theme` (this addon's own attribute) rather than reusing Local's `Theme__Light` class
+ * name directly, so this selector doesn't silently stop matching if Local ever renames its own
+ * theme classes.
+ *
+ * Every accent (teal/green/amber/red/purple) is darkened from its dark-mode value to hold
+ * WCAG-AA-ish contrast against white/near-white backgrounds — the dark-mode values are tuned to
+ * glow against #1e2128 and read as washed-out pastels on white at the same lightness.
+ */
+:root[data-ag-theme='light'] {
+  /* Backgrounds */
+  --ag-bg-app: #f4f5f7;
+  --ag-bg-card: #ffffff;
+  --ag-bg-elevated: #ffffff;
+  --ag-bg-inset: #eef0f3;
+  --ag-bg-code: #f4f5f7;
+
+  /* Borders */
+  --ag-border: #dde1e7;
+  --ag-border-subtle: #e6e9ee;
+  --ag-border-control: #d2d7de;
+
+  /* Text */
+  --ag-text-primary: #1a1d23;
+  --ag-text-secondary: #4b5563;
+  --ag-text-muted: #6b7280;
+  --ag-text-faint: #8a94a2;
+
+  /* Accent / semantic */
+  --ag-teal: #0e8f83;
+  --ag-on-teal: #ffffff;
+  --ag-green: #1f8f56;
+  --ag-amber: #a3690a;
+  --ag-red: #c93f37;
+  --ag-purple: #4c5cd6;
+}
+
 /* Typography helpers */
 .ag-mono {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -90,6 +129,7 @@
 }
 .ag-toggle--on  { background: var(--ag-green); }
 .ag-toggle--off { background: #3a4049; }
+:root[data-ag-theme='light'] .ag-toggle--off { background: #c7cdd6; }
 .ag-toggle__knob {
   position: absolute;
   top: 3px;
@@ -115,6 +155,7 @@
   flex-shrink: 0;
   transition: background 0.12s, border-color 0.12s;
 }
+:root[data-ag-theme='light'] .ag-checkbox { border-color: #c7cdd6; }
 .ag-checkbox--checked {
   background: var(--ag-teal);
   border-color: var(--ag-teal);
