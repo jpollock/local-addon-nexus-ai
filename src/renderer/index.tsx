@@ -109,6 +109,16 @@ export default function renderer(context: any): void {
           // and would cause silent validation failure if included.
           const { llmAvailable: _derived, ...toSave } = pendingSettings;
           const result = await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, toSave);
+          // UPDATE_SETTINGS's own handler catches every internal failure and still resolves
+          // (ipcMain.handle has no reject path here) — so a validation error never throws on
+          // this side, it comes back as `result._error`. Checking only the happy path meant a
+          // rejected save (e.g. a stale field from a different branch/worktree's addon sharing
+          // this settings file) looked identical to success: no toast, no console line, and
+          // the edit was discarded by clearing pendingSettings regardless.
+          if ((result as any)?._error) {
+            console.error('[NexusAI] Failed to save settings:', (result as any)._error);
+            return;
+          }
           pendingSettings = null;
           // Notify all site panels and the docked panel gate to refresh
           window.dispatchEvent(new CustomEvent('nexus-ai:settings-applied', { detail: result }));

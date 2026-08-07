@@ -93,4 +93,25 @@ describe('AgentDispatcher', () => {
     const d = new AgentDispatcher(new ContributedToolRegistry(), makeStubs().toolRegistry, makeStubs().services, '/nonexistent', makeStubs().resolvedProvider, makeStubs().stateStore);
     expect(() => (d as any).loadModule('../../../etc')).toThrow('Invalid agent name');
   });
+
+  describe('setProvider', () => {
+    // Reproduced live: resolvedProvider was captured once at construction (Local startup) with
+    // no way to update it. A contributed tool dispatched through here (e.g. security-sentinel's
+    // Tier-3-gated `scan` MCP tool) kept using whatever API key existed at that moment even
+    // after the user rotated it — chat picked up the new key immediately (it reads fresh every
+    // request), the dispatched agent's specialist calls kept 401'ing with the stale one, in the
+    // same running process. AgentRunner.setProvider already existed for the "Run Now" path;
+    // this is the same fix for the dispatch() path, which had no equivalent at all.
+    it('replaces resolvedProvider so a later dispatch uses the new value', () => {
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(makeReg(), stubs.toolRegistry, stubs.services, '/nonexistent', stubs.resolvedProvider, stubs.stateStore);
+      expect((d as any).resolvedProvider).toBe(stubs.resolvedProvider);
+
+      const rotated = { provider: 'power', apiKey: 'wpe_new-real-key', model: 'anthropic/claude-sonnet-5', useLocalGateway: false } as any;
+      d.setProvider(rotated);
+
+      expect((d as any).resolvedProvider).toBe(rotated);
+      expect((d as any).resolvedProvider.apiKey).toBe('wpe_new-real-key');
+    });
+  });
 });

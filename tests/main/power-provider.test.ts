@@ -98,6 +98,66 @@ describe('PowerProvider', () => {
     expect(events.some((e) => e.type === 'done')).toBe(true);
   });
 
+  test('streamChat always sends an explicit max_tokens (regression: large prompts — Pattern specialist, Synthesis — got truncated before the forced tool call could complete when this was left to Power\'s default)', async () => {
+    mockStreamingRequest.mockImplementation(async function* () {
+      yield JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] });
+    });
+
+    const p = new PowerProvider();
+    const signal = new AbortController().signal;
+    for await (const _e of p.streamChat(
+      [{ role: 'user', content: 'hi' }] as any,
+      [],
+      { model: 'anthropic/claude-haiku-4-5', apiKey: 'wpe_test' },
+      signal,
+    )) { /* drain */ }
+
+    const callArg = mockStreamingRequest.mock.calls[0][0];
+    const body = JSON.parse(callArg.body as string);
+    expect(body.max_tokens).toBe(8192);
+  });
+
+  test('streamChat sends tool_choice when config.forceTool is set (regression: generateObject noTools calls forceTool but Power silently ignored it, so the model was never actually forced to call __output__)', async () => {
+    mockStreamingRequest.mockImplementation(async function* () {
+      yield JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] });
+    });
+
+    const p = new PowerProvider();
+    const signal = new AbortController().signal;
+    const events: any[] = [];
+    for await (const e of p.streamChat(
+      [{ role: 'user', content: 'hi' }] as any,
+      [{ name: '__output__', description: 'd', parameters: {} }],
+      { model: 'anthropic/claude-haiku-4-5', apiKey: 'wpe_test', forceTool: '__output__' },
+      signal,
+    )) {
+      events.push(e);
+    }
+
+    const callArg = mockStreamingRequest.mock.calls[0][0];
+    const body = JSON.parse(callArg.body as string);
+    expect(body.tool_choice).toEqual({ type: 'function', function: { name: '__output__' } });
+  });
+
+  test('streamChat omits tool_choice when config.forceTool is absent', async () => {
+    mockStreamingRequest.mockImplementation(async function* () {
+      yield JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] });
+    });
+
+    const p = new PowerProvider();
+    const signal = new AbortController().signal;
+    for await (const _e of p.streamChat(
+      [{ role: 'user', content: 'hi' }] as any,
+      [{ name: 'some_tool', description: 'd', parameters: {} }],
+      { model: 'anthropic/claude-haiku-4-5', apiKey: 'wpe_test' },
+      signal,
+    )) { /* drain */ }
+
+    const callArg = mockStreamingRequest.mock.calls[0][0];
+    const body = JSON.parse(callArg.body as string);
+    expect(body.tool_choice).toBeUndefined();
+  });
+
   test('streamChat surfaces provider errors as an error event', async () => {
     mockStreamingRequest.mockImplementation(async function* () {
       throw new Error('HTTP 429: {"error":{"message":"rate limited"}}');

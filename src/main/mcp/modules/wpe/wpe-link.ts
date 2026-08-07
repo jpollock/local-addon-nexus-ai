@@ -45,9 +45,28 @@ export const wpeLinkHandler: McpToolHandler = {
       } catch { return null; }
     };
 
-    const resolveBySiteId = (uuid: string): string | null => {
+    // `remoteSiteId` is a WPE *Site* UUID, not an install UUID — one Site commonly has
+    // production, staging and development as siblings all sharing it (confirmed live: NitroPack
+    // has three installs under one wpe_site_id). Without the environment filter this returns
+    // whichever sibling SQLite hands back first for a bare `wpe_site_id = ?`, which is exactly
+    // how a local site named "NitroPack Production", genuinely connected to the production
+    // install per Local's own Pull-to-Local UI, got reported as linked to "nitropackstg"
+    // (staging) instead — silently, with no error, feeding wrong log/attack data into every
+    // downstream check that trusted this resolution. `hostConnections` already carries
+    // `remoteSiteEnv` for exactly this — it was just never read.
+    const resolveBySiteId = (uuid: string, environment?: string): string | null => {
       if (!db || !uuid) return null;
       try {
+        if (environment) {
+          const scoped = db.prepare(
+            `SELECT name FROM sites WHERE source = 'wpe' AND wpe_site_id = ? AND environment = ? LIMIT 1`
+          ).get(uuid, environment) as { name: string } | undefined;
+          if (scoped?.name) return scoped.name;
+        }
+        // No environment to filter by, or no row matched it — fall back to the ambiguous
+        // lookup rather than reporting nothing; a possibly-wrong sibling still beats silence
+        // for a read-only "is this linked at all" check, but callers that need to be SURE
+        // which environment must pass remoteSiteEnv.
         const row = db.prepare(
           `SELECT name FROM sites WHERE source = 'wpe' AND wpe_site_id = ? LIMIT 1`
         ).get(uuid) as { name: string } | undefined;
@@ -59,7 +78,7 @@ export const wpeLinkHandler: McpToolHandler = {
     for (const [key, conn] of Object.entries(connections) as [string, any][]) {
       const installName = conn?.installName
         ?? resolveByInstallId(conn?.installId)
-        ?? resolveBySiteId(conn?.remoteSiteId)
+        ?? resolveBySiteId(conn?.remoteSiteId, conn?.remoteSiteEnv)
         ?? resolveByInstallId(conn?.remoteSiteId)
         ?? conn?.remoteSiteId
         ?? conn?.name

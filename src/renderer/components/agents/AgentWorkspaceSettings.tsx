@@ -13,11 +13,21 @@ interface GoogleConnection {
   status: string;
 }
 
+interface ScopeSite {
+  id: string;
+  name: string;
+  environment: string;   // 'production' | 'staging' | 'development' | 'local'
+}
+
 interface SettingsState {
   settings: AgentSettings;
   googleConnection: GoogleConnection | null;
   connectingGoogle: boolean;
   confirmRemove: boolean;
+  scopeSites: ScopeSite[];
+  scopeLoading: boolean;
+  scopeExpanded: boolean;
+  scopeSearch: string;
 }
 
 const CADENCE_OPTIONS = [
@@ -67,6 +77,10 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     googleConnection: null,
     connectingGoogle: false,
     confirmRemove: false,
+    scopeSites: [],
+    scopeLoading: false,
+    scopeExpanded: false,
+    scopeSearch: '',
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -75,6 +89,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const update = () => this.setState({ settings: agentStore.getOrInitSettings(this.props.agentId) });
     agentStore.subscribe(update);
     this.unsubscribe = () => agentStore.unsubscribe(update);
+
+    this.loadScopeSites();
 
     // Load Google connection status if this agent uses Google credentials
     if (AGENTS_WITH_GOOGLE_CREDENTIALS.has(this.props.agentId)) {
@@ -126,6 +142,151 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
       });
       this.setState({ googleConnection: null });
     } catch { /* ignore */ }
+  }
+
+  /**
+   * Both WPE installs and local sites. Local's own registry holds only local sites, which is
+   * why site groups could not be reused for this — they resolve through siteData.getSites().
+   */
+  private async loadScopeSites() {
+    const ipc = this.props.electron?.ipcRenderer;
+    if (!ipc) return;
+    this.setState({ scopeLoading: true });
+
+    const sites: ScopeSite[] = [];
+    try {
+      const wpeResult = await ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES).catch(() => null);
+      for (const s of (wpeResult?.sites || [])) {
+        if (!s?.name) continue;
+        sites.push({ id: s.id || s.name, name: s.name, environment: s.environment || 'production' });
+      }
+    } catch { /* WPE not connected — local sites alone are a valid fleet */ }
+
+    try {
+      const localSites: any[] = await ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []);
+      for (const s of (localSites || [])) {
+        // sentinel-* are this agent's own forensic sandboxes; never offer them as scan targets.
+        if (!s?.name || s.name.startsWith('sentinel-')) continue;
+        sites.push({ id: s.id || s.name, name: s.name, environment: 'local' });
+      }
+    } catch { /* ignore */ }
+
+    sites.sort((a, b) => a.name.localeCompare(b.name));
+    this.setState({ scopeSites: sites, scopeLoading: false });
+  }
+
+  private toggleScopeSite(id: string) {
+    const scope = this.state.settings.scanScope ?? { mode: 'explicit' as const, siteIds: [] };
+    const next = new Set(scope.siteIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    this.updateSettings({ scanScope: { mode: 'explicit', siteIds: [...next] } });
+  }
+
+  private renderScanScope() {
+    const { scopeSites, scopeLoading, scopeExpanded, scopeSearch } = this.state;
+    const scope = this.state.settings.scanScope ?? { mode: 'explicit' as const, siteIds: [] };
+    const selected = new Set(scope.siteIds);
+    const isAll = scope.mode === 'all';
+
+    const wpeCount = scopeSites.filter(s => s.environment !== 'local').length;
+    const prodCount = scopeSites.filter(s => s.environment === 'production').length;
+
+    const modeButton = (mode: 'explicit' | 'all', label: string) =>
+      React.createElement('button', {
+        key: mode,
+        onClick: () => this.updateSettings({
+          scanScope: { mode, siteIds: mode === 'all' ? scope.siteIds : scope.siteIds },
+        }),
+        style: {
+          background: (scope.mode === mode) ? 'var(--ag-teal)' : 'var(--ag-bg-elevated)',
+          color: (scope.mode === mode) ? 'var(--ag-on-teal)' : 'var(--ag-text-primary)',
+          border: '1px solid var(--ag-border-control)', borderRadius: 7,
+          padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontWeight: 500,
+        },
+      }, label);
+
+    const filtered = scopeSearch
+      ? scopeSites.filter(s => s.name.toLowerCase().includes(scopeSearch.toLowerCase()))
+      : scopeSites;
+
+    return React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)', marginBottom: 6 } },
+        'Sites scanned on a schedule'),
+      React.createElement('div', { style: { display: 'flex', gap: 8, marginBottom: 8 } },
+        modeButton('explicit', 'Only selected sites'),
+        modeButton('all', 'Every site'),
+      ),
+
+      // "Every site" states the actual cost rather than a vague caution — the numbers are known.
+      isAll && React.createElement('div', {
+        style: {
+          fontSize: 12, color: 'var(--ag-text-faint)', background: 'var(--ag-bg-elevated)',
+          borderRadius: 7, padding: '8px 10px', lineHeight: 1.5,
+        },
+      }, `Every scheduled run will scan all ${scopeSites.length} known site(s)` +
+         (wpeCount ? ` — ${wpeCount} WP Engine (${prodCount} production), ${scopeSites.length - wpeCount} local` : '') +
+         `. Deep investigations are capped at 3 per run; anything beyond that is deferred to the next run.`),
+
+      !isAll && React.createElement('div', null,
+        React.createElement('div', {
+          style: { fontSize: 12, color: selected.size === 0 ? 'var(--ag-amber, #d89614)' : 'var(--ag-text-faint)', marginBottom: 6 },
+        }, scopeLoading
+            ? 'Loading sites…'
+            : selected.size === 0
+              ? `No sites selected — scheduled runs will scan nothing. ${scopeSites.length} site(s) available.`
+              : `${selected.size} of ${scopeSites.length} site(s) selected.`),
+
+        React.createElement('button', {
+          onClick: () => this.setState({ scopeExpanded: !scopeExpanded }),
+          style: {
+            background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
+            borderRadius: 7, padding: '5px 12px', fontSize: 12.5,
+            color: 'var(--ag-text-primary)', cursor: 'pointer', fontWeight: 500,
+          },
+        }, scopeExpanded ? 'Done choosing' : 'Choose sites…'),
+
+        scopeExpanded && React.createElement('div', { style: { marginTop: 8 } },
+          React.createElement('input', {
+            value: scopeSearch,
+            placeholder: `Search ${scopeSites.length} sites…`,
+            onChange: (e: any) => this.setState({ scopeSearch: e.target.value }),
+            style: {
+              width: '100%', boxSizing: 'border-box', marginBottom: 8,
+              background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
+              borderRadius: 7, padding: '6px 10px', fontSize: 12.5, color: 'var(--ag-text-primary)',
+            },
+          }),
+          React.createElement('div', {
+            style: {
+              maxHeight: 260, overflowY: 'auto', border: '1px solid var(--ag-border-control)',
+              borderRadius: 7,
+            },
+          },
+            ...filtered.slice(0, 400).map(s => React.createElement('div', {
+              key: s.id,
+              onClick: () => this.toggleScopeSite(s.id),
+              style: {
+                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px',
+                cursor: 'pointer', fontSize: 12.5, color: 'var(--ag-text-primary)',
+                background: selected.has(s.id) ? 'var(--ag-bg-elevated)' : 'transparent',
+              },
+            },
+              React.createElement('span', null, selected.has(s.id) ? '☑' : '☐'),
+              React.createElement('span', { style: { flex: 1 } }, s.name),
+              React.createElement('span', {
+                style: { fontSize: 11, color: s.environment === 'production' ? 'var(--ag-amber, #d89614)' : 'var(--ag-text-faint)' },
+              }, s.environment),
+            )),
+            filtered.length > 400 && React.createElement('div', {
+              style: { padding: '6px 10px', fontSize: 11.5, color: 'var(--ag-text-faint)' },
+            }, `${filtered.length - 400} more — refine the search to see them.`),
+            filtered.length === 0 && React.createElement('div', {
+              style: { padding: '6px 10px', fontSize: 12, color: 'var(--ag-text-faint)' },
+            }, 'No sites match.'),
+          ),
+        ),
+      ),
+    );
   }
 
   private updateSettings(patch: Partial<AgentSettings>) {
@@ -267,6 +428,10 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
               },
             }, CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.label || 'Every 15 minutes'),
           ),
+
+          // Which sites the schedule may touch. Shown only when a schedule is on — it constrains
+          // scheduled runs, not Run Now, and offering it otherwise implies it gates everything.
+          settings.scheduleEnabled && this.renderScanScope(),
 
           // Respond to events
           React.createElement('div', { style: { marginBottom: 14 } },

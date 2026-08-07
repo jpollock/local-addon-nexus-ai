@@ -267,6 +267,8 @@ async function withSiteRunning<T>(
   }
 }
 
+import { canAutoRunWith, AutoRunKind } from './agent-runtime/auto-run-gate';
+
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
 export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabled' | 'eventsEnabled'): boolean {
@@ -274,9 +276,44 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
   return cache?.get(agentId)?.[key] ?? true; // default true (permissive before settings sync)
 }
 
+/**
+ * May an automatic trigger start this agent right now?
+ *
+ * Thin wrapper: reads the settings cache and delegates to the pure predicate in
+ * agent-runtime/auto-run-gate.ts, where the reasoning lives. Both the cron path
+ * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart.
+ */
+export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  return canAutoRunWith(cache?.get(agentId), kind);
+}
+
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
   return cache?.get(agentId)?.autonomy ?? 'ask'; // default ask (safest before settings sync)
+}
+
+/**
+ * The agent's whole settings record, read-only, for `ctx.settings`.
+ *
+ * Every setting above is plumbed by hand — one exported getter and one line in
+ * buildAgentContext each. That does not scale past the handful that exist, and it means an
+ * agent cannot read a setting the runtime has not been taught about, so agent-specific
+ * configuration has nowhere to live.
+ *
+ * Returns a shallow copy: an agent mutating its own settings object must not write back into
+ * the shared cache that the scheduler and event bus read.
+ *
+ * Deliberately NOT permissive. `getAgentSetting`'s `?? true` fallback is the reason
+ * security-sentinel ran a fleet-wide sweep every 15 minutes for weeks with nothing configured
+ * (see seedAgentDefaultsIfMissing below). A caller reading raw settings gets `{}` when nothing
+ * is known, and must decide for itself what absence means — the safe reading, not the
+ * convenient one.
+ */
+export function getAgentSettings(agentId: string): Readonly<Record<string, unknown>> {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const raw = cache?.get(agentId);
+  return raw && typeof raw === 'object' ? { ...raw } : {};
 }
 
 /**
@@ -985,11 +1022,26 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, async (_event: any, partial: Partial<NexusSettings>) => {
+    // Read before the try so the catch below can return the ACTUAL current settings on failure
+    // rather than bare DEFAULT_SETTINGS — see the note there.
+    const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+    const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
     try {
-      const validated = validateInput(UpdateSettingsSchema, partial);
+      // The renderer round-trips whatever GET_SETTINGS handed it, unchanged, on every save —
+      // including fields a *different* checked-out branch's addon wrote to this same on-disk
+      // file (e.g. externalRefreshAutoEnabled, enableHubBridge). UpdateSettingsSchema.strict()
+      // then throws "Unrecognized key(s)" on the whole payload, so a user switching between
+      // branches/worktrees on one machine loses the ability to save ANY setting — not just the
+      // new one — with no visible error, because nothing here or in the renderer's onApply
+      // catches the rejection. Drop keys this schema doesn't know before validating; they stay
+      // untouched on disk via the `current` spread below, so the other branch's data survives
+      // and this branch simply doesn't act on it.
+      const knownKeys = new Set(Object.keys((UpdateSettingsSchema as any).shape));
+      const recognized = Object.fromEntries(
+        Object.entries(partial ?? {}).filter(([key]) => knownKeys.has(key)),
+      );
+      const validated = validateInput(UpdateSettingsSchema, recognized);
 
-      const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
-      const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
       const updated = { ...current, ...validated };
       registryStorage.set(STORAGE_KEYS.SETTINGS, updated as any);
 
@@ -1054,7 +1106,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { ...updated, _providerChanged: providerChanged, _gatewayChanged: gatewayChanged };
     } catch (err) {
       localLogger.error('[NexusAI] update-settings failed:', (err as Error).message);
-      return DEFAULT_SETTINGS;
+      // This never rejects the IPC call — safeHandle's ipcMain.handle resolves with whatever
+      // is returned here, so a caller's `await` never throws. Returning bare DEFAULT_SETTINGS
+      // on failure meant the caller — and the 'nexus-ai:settings-applied' event every listener
+      // trusts — saw every real setting reset to factory defaults, even though nothing on disk
+      // had actually changed (the registryStorage.set above never ran). Return the untouched
+      // current settings instead, with an explicit error marker the caller can check.
+      return { ...current, _error: (err as Error).message };
     }
   });
 
@@ -4691,7 +4749,14 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       ((deps as any).__runAbortMap = new Map());
     runAbortMap.set(runId, abortController);
 
-    // Run agent directly via agentRunner — awaits actual completion, no log polling races
+    // Run agent directly via agentRunner — awaits actual completion, no log polling races.
+    // Everything from here on is wraped in one try/catch whose catch ALWAYS broadcasts a
+    // completion: reproduced live that a real, successfully-finished run (backend log ended
+    // with "sweep complete", agent_runs.status='success') left the Run Now modal stuck showing
+    // "running" indefinitely. Root cause: parseRunOutcomes() below ran unguarded — any throw
+    // there (or anywhere else after the site loop) became an unhandled rejection on this
+    // fire-and-forget IIFE, so AGENT_RUN_COMPLETE was simply never sent. The UI has no timeout
+    // of its own; a dropped completion event means the spinner runs forever.
     (async () => {
       const runner = deps.nexusServices?.agentRunner;
       if (!runner || !agent) {
@@ -4752,16 +4817,21 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         // Full payload failed to serialize (e.g. enriched plan evidence too large).
         // Send a minimal payload so the UI at least exits the 'running' state.
         console.error('[AGENT_RUN_NOW] broadcast failed, sending minimal completion:', broadcastErr?.message);
-        try {
-          broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-            runId, agentId, siteNames,
-            doneCount: outcomes.doneCount,
-            failedCount: outcomes.failedCount,
-            findingsSites: outcomes.findingsSites,
-          });
-        } catch {}
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
+          runId, agentId, siteNames,
+          doneCount: outcomes.doneCount,
+          failedCount: outcomes.failedCount,
+          findingsSites: outcomes.findingsSites,
+        });
       }
-    })();
+    })().catch((err: any) => {
+      // Last-resort net: something threw outside every inner try/catch above (e.g.
+      // parseRunOutcomes itself). The run may well have finished on the backend — the UI must
+      // still be told, or it spins forever with no way to recover short of a full reload.
+      console.error('[AGENT_RUN_NOW] unhandled error in run pipeline:', err?.message);
+      runAbortMap.delete(runId);
+      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
+    });
 
     return { runId };
   });

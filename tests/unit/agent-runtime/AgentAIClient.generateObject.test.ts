@@ -85,4 +85,36 @@ describe('AgentAIClient.generateObject', () => {
     expect(result.verdict).toBe('blocked');
     expect(result.count).toBe(3);
   });
+
+  it('merges fields split between top level and a "result" wrapper, rather than dropping one side', async () => {
+    // Reproduced live: security-sentinel's synthesizer call logged
+    // "[Tier 2 Synthesis] NitroPack Production: undefined — This site presents primarily as..." —
+    // attackSummary present, verdict undefined. `(raw?.result ?? raw)` is all-or-nothing: since
+    // raw.result was truthy, the whole return value became raw.result, silently dropping verdict,
+    // which the model had placed as a SIBLING of result rather than inside it. Both existing tests
+    // above only cover the fully-wrapped and fully-flat shapes, never a split between the two.
+    const mockProvider = {
+      streamChat: jest.fn().mockImplementation(async function*() {
+        yield {
+          type: 'tool_call_end', name: '__output__', id: 'c3',
+          arguments: { verdict: 'high-risk', result: { attackSummary: 'Attack detected', entryPoint: 'unknown' } },
+        };
+      }),
+    } as any;
+    const client = new AgentAIClient(
+      mockProvider,
+      { model: 'claude-sonnet-5', apiKey: 'test' } as any,
+      { getProviderToolDefinitions: () => [], invoke: jest.fn() } as any,
+    );
+    const result = await client.generateObject<{ verdict: string; attackSummary: string }>({
+      prompt: 'Synthesize',
+      schema: {
+        type: 'object',
+        properties: { verdict: { type: 'string' }, attackSummary: { type: 'string' } },
+        required: ['verdict', 'attackSummary'],
+      },
+    });
+    expect(result.verdict).toBe('high-risk');
+    expect(result.attackSummary).toBe('Attack detected');
+  });
 });

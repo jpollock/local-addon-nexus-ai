@@ -1,0 +1,2875 @@
+{
+  "jeremypollockblog": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/wpmudev-updates/lib/PHPSecLib/Crypt/RSA.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 754
+  },
+  "jpp0413p": {
+    "fs02": [],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 195
+  },
+  "nexus": {
+    "fs02": [],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 206
+  },
+  "nitropack-1": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/nitropack/functions.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/nitropack-sdk/bootstrap.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 932
+  },
+  "ACF Auto Car Finder": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1440
+  },
+  "local-copy-jpp": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/ai/includes/Vendor/Secrets/Secrets_Provider_Encrypted_Options.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/faustwp/includes/auth/functions.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/stream/connectors/class-connector-widgets.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Definition/Type.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Validator/ValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1869
+  },
+  "Newsroom Demo": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/mediapress-core-2.0.0/pro/slider/build/blocks/slider/render.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/mediapress-core-2.0.0/pro/slider/src/blocks/slider/render.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 5634
+  },
+  "the-awful-pm": {
+    "fs02": [],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 184
+  },
+  "pm-bulletin": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/EntityReader/class-wxrentityreader.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigInteger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigNumber.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/Component/Host/IPv6AddressParser.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeSlashState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/SchemeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/URL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/XML/class-xmlprocessor.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1205
+  },
+  "advanced-custom-fields": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 460
+  },
+  "markshare": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/markshare/includes/class-markdown.php",
+        "pattern": "preg_replace(/e"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/EntityReader/class-wxrentityreader.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigInteger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigNumber.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/Component/Host/IPv6AddressParser.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeSlashState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/SchemeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/URL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/XML/class-xmlprocessor.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 973
+  },
+  "myloop": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/onelogin-saml-sso/php/extlib/xmlseclibs/src/XMLSecEnc.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/onelogin-saml-sso/php/extlib/xmlseclibs/src/XMLSecurityDSig.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/onelogin-saml-sso/php/lib/Saml2/Utils.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 3126
+  },
+  "AI Toolkit Demo": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/EntityReader/class-wxrentityreader.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigInteger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigNumber.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/Component/Host/IPv6AddressParser.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeSlashState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/SchemeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/URL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/XML/class-xmlprocessor.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1036
+  },
+  "ACF Recipes": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1033
+  },
+  "testjppstg": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/defender-security/src/component/crypt.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/src/controller/webauthn.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/fgrosse/phpasn1/lib/ASN1/Universal/Integer.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/league/uri/src/Uri.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/ramsey/uuid/src/Fields/SerializableFieldsTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/ramsey/uuid/src/Lazy/LazyUuidFromString.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/ramsey/uuid/src/Uuid.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/spomky-labs/base64url/src/Base64Url.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/thecodingmachine/safe/generated/funchand.php",
+        "pattern": "create_function("
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/thecodingmachine/safe/generated/url.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/thecodingmachine/safe/rector-migrate-0.7.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/web-auth/metadata-service/src/SingleMetadata.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/web-auth/webauthn-lib/src/AttestedCredentialData.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/web-auth/webauthn-lib/src/AuthenticatorAssertionResponse.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/web-auth/webauthn-lib/src/PublicKeyCredentialSource.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/defender-security/vendor/web-auth/webauthn-lib/src/PublicKeyCredentialUserEntity.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/hummingbird-performance/vendor/predis/predis/src/ClientContextInterface.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/hummingbird-performance/vendor/predis/predis/src/ClientInterface.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/snapshot-backups/lib/snapshot/task/backup/class-zipstream.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/snapshot-backups/vendor/phpseclib/phpseclib/phpseclib/Crypt/RSA.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/snapshot-backups/vendor/phpseclib/phpseclib/phpseclib/File/X509.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpmudev-updates/lib/PHPSecLib/Crypt/RSA.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [
+      "wp-content/uploads/snapshot-backups/index.php",
+      "wp-content/uploads/wp-defender/index.php"
+    ],
+    "fs06": [],
+    "phpFilesScanned": 3199
+  },
+  "thelocalshed": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/classes/as3cf-utils.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Api/Parser/AbstractRestParser.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Api/Parser/MetadataParserTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Crypto/DecryptionTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Crypto/DecryptionTraitV2.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/brick/math/src/BigInteger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/brick/math/src/BigNumber.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/firebase/php-jwt/src/JWT.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/auth/src/Logging/LoggingTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/cloud-storage/src/SigningHelper.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/gax/src/ResourceTemplate/RelativeResourceTemplate.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/protobuf/src/Google/Protobuf/Internal/Message.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/grpc/grpc/src/lib/AbstractCall.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/grpc/grpc/src/lib/BaseStub.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/FeatureSet.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/Fields/SerializableFieldsTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/Lazy/LazyUuidFromString.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/Uuid.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/UuidFactory.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/functions.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/nitropack-sdk/bootstrap.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/query-monitor/classes/QM.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/query-monitor/classes/Util.php",
+        "pattern": "create_function("
+      },
+      {
+        "file": "wp-content/plugins/query-monitor/collectors/logger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/seo-by-rank-math/includes/admin/wizard/class-compatibility.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/seo-by-rank-math/vendor/wordpress/mcp-adapter/includes/Domain/Utils/McpValidator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 3486
+  },
+  "testmariadb": {
+    "fs02": [],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 172
+  },
+  "t1": {
+    "fs02": [],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 173
+  },
+  "t2": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 424
+  },
+  "Local Labs": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/classes/as3cf-utils.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Api/Parser/AbstractRestParser.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Api/Parser/MetadataParserTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Crypto/DecryptionTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Aws3/Aws/Crypto/DecryptionTraitV2.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/brick/math/src/BigInteger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/brick/math/src/BigNumber.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/firebase/php-jwt/src/JWT.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/auth/src/Logging/LoggingTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/cloud-storage/src/SigningHelper.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/gax/src/ResourceTemplate/RelativeResourceTemplate.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/google/protobuf/src/Google/Protobuf/Internal/Message.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/grpc/grpc/src/lib/AbstractCall.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/grpc/grpc/src/lib/BaseStub.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/FeatureSet.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/Fields/SerializableFieldsTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/Lazy/LazyUuidFromString.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/Uuid.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront/vendor/Gcp/ramsey/uuid/src/UuidFactory.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/query-monitor/classes/QM.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/query-monitor/classes/Util.php",
+        "pattern": "create_function("
+      },
+      {
+        "file": "wp-content/plugins/query-monitor/collectors/logger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/seo-by-rank-math/includes/admin/wizard/class-compatibility.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/seo-by-rank-math/vendor/wordpress/mcp-adapter/includes/Domain/Utils/McpValidator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 3427
+  },
+  "nexus-e2e-cli-test-site": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/classes/as3cf-utils.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Aws3/Aws/Api/Parser/AbstractRestParser.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Aws3/Aws/Api/Parser/MetadataParserTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Aws3/Aws/Crypto/DecryptionTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Aws3/Aws/Crypto/DecryptionTraitV2.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/brick/math/src/BigInteger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/brick/math/src/BigNumber.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/firebase/php-jwt/src/JWT.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/google/auth/src/Logging/LoggingTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/google/cloud-storage/src/SigningHelper.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/google/gax/src/ResourceTemplate/RelativeResourceTemplate.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/google/protobuf/src/Google/Protobuf/Internal/Message.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/grpc/grpc/src/lib/AbstractCall.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/grpc/grpc/src/lib/BaseStub.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/ramsey/uuid/src/FeatureSet.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/ramsey/uuid/src/Fields/SerializableFieldsTrait.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/ramsey/uuid/src/Lazy/LazyUuidFromString.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/ramsey/uuid/src/Uuid.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/amazon-s3-and-cloudfront-pro/vendor/Gcp/ramsey/uuid/src/UuidFactory.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/ewww-image-optimizer/classes/class-exactdn.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/limit-login-attempts-reloaded/core/mfa/MfaBackupCodes.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/onelogin-saml-sso/php/extlib/xmlseclibs/src/XMLSecEnc.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/onelogin-saml-sso/php/extlib/xmlseclibs/src/XMLSecurityDSig.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/onelogin-saml-sso/php/lib/Saml2/Utils.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/searchwp/lib/vendor/doctrine/sql-formatter/src/SqlFormatter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/searchwp/lib/vendor/doctrine/sql-formatter/src/Tokenizer.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/searchwp/lib/vendor/voku/portable-utf8/src/voku/helper/UTF8.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woo-order-export-lite/classes/core/class-wc-order-export-engine.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/woo-order-export-lite/classes/vendor/ezyang/htmlpurifier/library/HTMLPurifier/Arborize.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woo-order-export-lite/classes/vendor/ezyang/htmlpurifier/library/HTMLPurifier/ChildDef/Table.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woo-order-export-lite/classes/vendor/ezyang/htmlpurifier/library/HTMLPurifier/Zipper.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/src/StoreApi/Utilities/JsonWebToken.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-authorize-json-api.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-error-handler.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-rest-connector.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-tokens.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/composer/installers/src/Composer/Installers/MicroweberInstaller.php",
+        "pattern": "preg_replace(/e"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/wordpress/mcp-adapter/includes/Domain/Prompts/McpPromptValidator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-delivery-notes/vendor/dompdf/dompdf/lib/Cpdf.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-delivery-notes/vendor/dompdf/dompdf/src/Adapter/CPDF.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-delivery-notes/vendor/dompdf/dompdf/src/Adapter/PDFLib.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-delivery-notes/vendor/dompdf/dompdf/src/PhpEvaluator.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-delivery-notes/vendor/phenx/php-svg-lib/src/Svg/Surface/CPdf.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-gateway-paypal-express/lib/skyverge/woocommerce/payment-gateway/class-sv-wc-payment-gateway-direct.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-gateway-paypal-express/lib/skyverge/woocommerce/payment-gateway/class-sv-wc-payment-gateway.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-gateway-stripe/includes/class-wc-stripe-webhook-handler.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/classes/core/class-wc-order-export-engine.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/classes/vendor/ezyang/htmlpurifier/library/HTMLPurifier/Arborize.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/classes/vendor/ezyang/htmlpurifier/library/HTMLPurifier/ChildDef/Table.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/classes/vendor/ezyang/htmlpurifier/library/HTMLPurifier/Zipper.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/pro_version/vendor/phpseclib/phpseclib/phpseclib/Common/Functions/Strings.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/pro_version/vendor/phpseclib/phpseclib/phpseclib/Crypt/Common/Formats/Keys/OpenSSH.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/pro_version/vendor/phpseclib/phpseclib/phpseclib/Crypt/Common/Formats/Keys/PuTTY.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/pro_version/vendor/phpseclib/phpseclib/phpseclib/Crypt/EC/Formats/Keys/PuTTY.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/pro_version/vendor/phpseclib/phpseclib/phpseclib/File/ASN1/Maps/TBSCertificate.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-order-export/pro_version/vendor/phpseclib/phpseclib/phpseclib/File/X509.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai/authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai-authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/encryption.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/key-pair-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/encoding/base64url.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-crontrol/src/bootstrap.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Import.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Migration/Connection/Remote.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Migration/FinalizeComplete.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Migration/Tables/Remote.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/mu-plugins/wp-markdown/markdown-extra.php",
+        "pattern": "create_function("
+      }
+    ],
+    "fs03": [
+      {
+        "path": "boot-config.php",
+        "reason": "unknown PHP in web root"
+      },
+      {
+        "path": "init-tasks.php",
+        "reason": "unknown PHP in web root"
+      },
+      {
+        "path": "live-config.php",
+        "reason": "unknown PHP in web root"
+      },
+      {
+        "path": "wp-config-bk.php",
+        "reason": "unknown PHP in web root"
+      }
+    ],
+    "fs04": [],
+    "fs06": [
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/cwebp-fbsd",
+        "size": 1379088
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/cwebp-linux",
+        "size": 1731088
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/gifsicle-fbsd",
+        "size": 930112
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/gifsicle-linux",
+        "size": 1246576
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/jpegtran-fbsd",
+        "size": 762216
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/jpegtran-linux",
+        "size": 1077936
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/optipng-fbsd",
+        "size": 775480
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/optipng-linux",
+        "size": 991896
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/pngquant-fbsd",
+        "size": 1900008
+      },
+      {
+        "path": "wp-content/plugins/ewww-image-optimizer/binaries/pngquant-linux",
+        "size": 2326696
+      }
+    ],
+    "phpFilesScanned": 12084
+  },
+  "eComm Tru Spice": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/WP/Capability/Capability_Service.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/functions.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/nitropack-sdk/bootstrap.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/includes/admin/settings/class-wc-settings-page.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Deferred.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/AmpFutureAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/AmpPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/ReactPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/SyncPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/ReferenceExecutor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Values.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/GraphQL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Language/Visitor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/InputObjectType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/ListOfType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/NonNull.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/QueryPlan.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/ResolveInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/Type.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Schema.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/SchemaValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/AST.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/ASTDefinitionBuilder.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/SchemaExtender.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/SchemaPrinter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/TypeInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/Value.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/QueryValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/ExecutableDefinitions.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/UniqueArgumentDefinitionNames.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/UniqueFieldDefinitionNames.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/src/Api/Pagination/IdCursorFilter.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/src/StoreApi/Utilities/JsonWebToken.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-authorize-json-api.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-error-handler.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-rest-connector.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-tokens.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/composer/installers/src/Composer/Installers/MicroweberInstaller.php",
+        "pattern": "preg_replace(/e"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/wordpress/mcp-adapter/includes/Domain/Prompts/McpPromptValidator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-gateway-paypal-express-checkout/includes/class-wc-gateway-ppec-settings.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-gateway-stripe/includes/class-wc-stripe-webhook-handler.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpe-configuration/includes/vendors/firebase/php-jwt/src/JWT.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/includes/class-process.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/src/Helpers/Crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/src/Tasks/Meta.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/vendor_prefixed/apimatic/core/src/TestCase/BodyMatchers/KeysBodyMatcher.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/vendor_prefixed/apimatic/core/src/TestCase/BodyMatchers/NativeBodyMatcher.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/vendor_prefixed/apimatic/core/src/TestCase/BodyMatchers/RawBodyMatcher.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/vendor_prefixed/apimatic/core/src/TestCase/CoreTestCase.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/vendor_prefixed/ezyang/htmlpurifier/library/HTMLPurifier/Arborize.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/vendor_prefixed/ezyang/htmlpurifier/library/HTMLPurifier/ChildDef/Table.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpforms-lite/vendor_prefixed/ezyang/htmlpurifier/library/HTMLPurifier/Zipper.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/yith-woocommerce-gift-cards-premium/lib/vendor/mpdf/mpdf/src/Mpdf.php",
+        "pattern": "preg_replace(/e"
+      }
+    ],
+    "fs03": [],
+    "fs04": [
+      "wp-content/uploads/wpforms/cache/index.php",
+      "wp-content/uploads/wpo_wcpdf/attachments/index.php",
+      "wp-content/uploads/wpo_wcpdf/dompdf/index.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/OpenSans-Bold.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/OpenSans-BoldItalic.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/OpenSans-Italic.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/OpenSans-Normal.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/RobotoSlab-Bold.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/RobotoSlab-BoldItalic.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/RobotoSlab-Italic.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/RobotoSlab-Normal.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Segoe-Bold.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Segoe-BoldItalic.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Segoe-Italic.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Segoe-Normal.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Times-Bold.afm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Times-BoldItalic.afm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Times-Italic.afm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/Times-Roman.afm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/currencies.ufm.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/dompdf_font_family_cache.dist.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/dompdf_font_family_cache.php",
+      "wp-content/uploads/wpo_wcpdf/fonts/index.php"
+    ],
+    "fs06": [],
+    "phpFilesScanned": 12004
+  },
+  "goldenecomm": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/elementor/core/dynamic-tags/manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/elementor/vendor/elementor/wp-one-package/src/Connect/Classes/Data.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/elementor/vendor_prefixed/twig/twig/twig/src/Test/IntegrationTestCase.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/functions.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/nitropack-sdk/bootstrap.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/includes/admin/settings/class-wc-settings-page.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Deferred.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/AmpFutureAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/AmpPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/ReactPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/SyncPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/ReferenceExecutor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Values.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/GraphQL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Language/Visitor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/InputObjectType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/ListOfType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/NonNull.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/QueryPlan.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/ResolveInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/Type.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Schema.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/SchemaValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/AST.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/ASTDefinitionBuilder.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/SchemaExtender.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/SchemaPrinter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/TypeInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/Value.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/QueryValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/ExecutableDefinitions.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/UniqueArgumentDefinitionNames.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/UniqueFieldDefinitionNames.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/src/Api/Pagination/IdCursorFilter.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/src/StoreApi/Utilities/JsonWebToken.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-authorize-json-api.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-error-handler.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-rest-connector.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-tokens.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/composer/installers/src/Composer/Installers/MicroweberInstaller.php",
+        "pattern": "preg_replace(/e"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/wordpress/mcp-adapter/includes/Domain/Prompts/McpPromptValidator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-gateway-stripe/includes/class-wc-stripe-webhook-handler.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai/authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai-authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/encryption.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/key-pair-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/encoding/base64url.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Import.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Migration/Connection/Remote.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Migration/FinalizeComplete.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-migrate-db-pro/class/Pro/Migration/Tables/Remote.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-configuration/includes/vendors/firebase/php-jwt/src/JWT.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [
+      "wp-content/uploads/wp-migrate-db/index.php"
+    ],
+    "fs06": [],
+    "phpFilesScanned": 9372
+  },
+  "theawfulpm-test": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/economic-market-news/stockdio_economic_news_overview_widget.php",
+        "pattern": "create_function("
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/class_fma_pure_php_validator.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/library/php/elFinder.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/library/php/elFinderVolumeDriver.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/library/php-parser/vendor/nikic/php-parser/lib/PhpParser/Internal/PrintableNewAnonClassNode.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/library/php-parser/vendor/nikic/php-parser/lib/PhpParser/Lexer/Emulative.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/library/php-parser/vendor/nikic/php-parser/lib/PhpParser/Lexer/TokenEmulator/NumericLiteralSeparatorEmulator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/library/php-parser/vendor/nikic/php-parser/lib/PhpParser/ParserAbstract.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/library/php-parser/vendor/nikic/php-parser/lib/PhpParser/PrettyPrinterAbstract.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Framework/Assert.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Framework/MockObject/Matcher.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Framework/MockObject/MockClass.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Framework/MockObject/MockTrait.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Framework/TestBuilder.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Framework/TestCase.php",
+        "pattern": "eval($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Framework/TestSuiteIterator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/TextUI/Command.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/TextUI/TestRunner.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Util/Configuration.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Util/PHP/AbstractPhpProcess.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/fileorganizer/manager/php/elFinder.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/fileorganizer/manager/php/elFinderVolumeDriver.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/filester/includes/File_manager/lib/php/elFinder.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/filester/includes/File_manager/lib/php/elFinderVolumeDriver.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/noted/includes/Markdown.php",
+        "pattern": "preg_replace(/e"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce-conversion-tracking/vendor/composer/installers/src/Composer/Installers/MicroweberInstaller.php",
+        "pattern": "preg_replace(/e"
+      },
+      {
+        "file": "wp-content/plugins/wp-file-manager/file_folder_manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-file-manager/lib/php/elFinder.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-file-manager/lib/php/elFinderVolumeDriver.class.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/mu-plugins/index.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [
+      {
+        "path": "goods.php",
+        "reason": "unknown PHP in web root"
+      },
+      {
+        "path": "shop.php",
+        "reason": "unknown PHP in web root"
+      }
+    ],
+    "fs04": [],
+    "fs06": [
+      {
+        "path": "wp-content/languages/lib_options_sub",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/date-time-picker-field/public/css/advanced_search",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/assets/maintenance",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/apl/cp_header",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/cmake/default_graph",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/crystal/beginedit6",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/idl/maintenance",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/livescript/beginedit6",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/mllike/handlevirus",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/slim/photoHandler",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/solr/menuleftbackup",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/codemirror/mode/xquery/memberlist",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/img/src/enrol_database",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/php-parser/vendor/nikic/php-parser/lib/PhpParser/Node/Scalar/MagicConst/fantversion",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/php-parser/vendor/nikic/php-parser/lib/PhpParser/Node/Scalar/MagicConst/report_unittest",
+        "size": 2814114
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/library/themes/moono/css/rate_accept04",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/doctrine/instantiator/docs/cancer_hope",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/file-manager-advanced/application/svg-sanitizer/includes/phpunit/phpunit/src/Util/PHP/Template/fix_setup_file",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/fileorganizer/main/commenters",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/fileorganizer/manager/js/mediasize",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/fileorganizer/manager/php/editors/tcpdf_config",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/fileorganizer/themeimgform",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/filester/includes/File_manager/lib/files/db_details",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/filester/includes/File_manager/lib/jquery/images/handlevirus",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/filester/includes/File_manager/lib/php/libs/cancer_hope",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/filester/includes/File_manager/lib/php/plugins/Sanitizer/help_youtube",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/filester/includes/File_manager/lib/themes/Material/select_lang.lib",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/filester/includes/File_manager/lib/themes/courseSchedule",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/noted/vendor/tdrayson/top_referrals",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/django/action.rss",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/dockerfile/tot_report01",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/factor/users.class",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/forth/livehelp_admin",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/lua/fbratings",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/nsis/themeimgform",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/pascal/pressrelease",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/spreadsheet/en_US.nls",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/codemirror/mode/table.referrals",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/php/editors/ZohoOffice/content_space",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/plugins/wp-file-manager/lib/themes/windows - 10/images/48px/adminedit",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/themes/php_pfpro",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/themes/twentytwentyfive/styles/colors/usergroup_2",
+        "size": 3946
+      },
+      {
+        "path": "wp-content/themes/twentytwentyfour/templates/advanced_search",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/themes/twentytwentyfour/templates/photoHandler",
+        "size": 2572450
+      },
+      {
+        "path": "wp-content/themes/twentytwentythree/assets/fonts/inter/FileUpload",
+        "size": 2572450
+      }
+    ],
+    "phpFilesScanned": 1800
+  },
+  "our-plugins": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 511
+  },
+  "NitroPack Production": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/leadin/public/auth/class-oauthcrypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/functions.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/nitropack/nitropack-sdk/bootstrap.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/safe-svg/vendor/ezyang/htmlpurifier/library/HTMLPurifier/Arborize.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/safe-svg/vendor/ezyang/htmlpurifier/library/HTMLPurifier/ChildDef/Table.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/safe-svg/vendor/ezyang/htmlpurifier/library/HTMLPurifier/Zipper.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/EntityReader/class-wxrentityreader.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigInteger.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/BigNumber.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/brick/math/src/Internal/Calculator/NativeCalculator.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/Component/Host/IPv6AddressParser.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeSlashState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/RelativeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/State/SchemeState.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/DataLiberation/vendor-patched/rowbot/url/src/URL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-importer/php-toolkit/XML/class-xmlprocessor.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai/authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai-authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/encryption.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/key-pair-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/encoding/base64url.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo-premium/src/integrations/admin/extension-importer/media-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-2fa/includes/classes/Admin/Methods/passkeys/class-web-authn.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-2fa/includes/classes/Admin/Methods/passkeys/format/android-safety-net.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-2fa/includes/classes/Authenticator/class-login.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-2fa/includes/classes/Authenticator/class-open-ssl.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wp-crontrol/src/bootstrap.php",
+        "pattern": "eval($"
+      }
+    ],
+    "fs03": [
+      {
+        "path": "wp-config-local-sample.php",
+        "reason": "unknown PHP in web root"
+      }
+    ],
+    "fs04": [
+      "wp-content/uploads/wp-migrate-db/index.php",
+      "wp-content/uploads/wpallimport/files/index.php",
+      "wp-content/uploads/wpallimport/history/index.php",
+      "wp-content/uploads/wpallimport/index.php",
+      "wp-content/uploads/wpallimport/logs/index.php",
+      "wp-content/uploads/wpallimport/temp/index.php",
+      "wp-content/uploads/wpallimport/uploads/860b1cc7d37083da544dd7711df55644/index.php",
+      "wp-content/uploads/wpallimport/uploads/index.php",
+      "wp-content/uploads/wpseo-redirects/index.php"
+    ],
+    "fs06": [],
+    "phpFilesScanned": 3691
+  },
+  "t3": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/WP/Capability/Capability_Service.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1066
+  },
+  "t4": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/ai/includes/Vendor/Secrets/Secrets_Provider_Encrypted_Options.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/WP/Capability/Capability_Service.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1089
+  },
+  "Alpine Outfitters": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields-pro/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/ai/includes/Vendor/Secrets/Secrets_Provider_Encrypted_Options.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/WP/Capability/Capability_Service.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/includes/admin/settings/class-wc-settings-page.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Deferred.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/AmpFutureAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/AmpPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/ReactPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Promise/Adapter/SyncPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/ReferenceExecutor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Executor/Values.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/GraphQL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Language/Visitor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/InputObjectType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/ListOfType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/NonNull.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/QueryPlan.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/ResolveInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Definition/Type.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/Schema.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Type/SchemaValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/AST.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/ASTDefinitionBuilder.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/SchemaExtender.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/SchemaPrinter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/TypeInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Utils/Value.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/QueryValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/ExecutableDefinitions.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/UniqueArgumentDefinitionNames.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/lib/packages/GraphQL/Validator/Rules/UniqueFieldDefinitionNames.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/src/Api/Pagination/IdCursorFilter.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/src/StoreApi/Utilities/JsonWebToken.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-authorize-json-api.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-error-handler.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-rest-connector.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/automattic/jetpack-connection/src/class-tokens.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/composer/installers/src/Composer/Installers/MicroweberInstaller.php",
+        "pattern": "preg_replace(/e"
+      },
+      {
+        "file": "wp-content/plugins/woocommerce/vendor/wordpress/mcp-adapter/includes/Domain/Prompts/McpPromptValidator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai/authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/ai-authorization/application/token-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/encryption.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/crypto/key-pair-manager.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wordpress-seo/src/myyoast-client/infrastructure/encoding/base64url.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/includes/class-wpe-hub-debug-panel.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-chatbot/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-connector/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Gateway.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/src/Validator.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-ai-playground/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-crypto.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-register.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/wpe-hub/vendor/wpengine/wpe-auth-core/includes/class-wpe-auth-core-token.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 7496
+  },
+  "nexus-race-test": {
+    "fs02": [],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 173
+  },
+  "another-race-test": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/atlas-search/app/Core/Registry/Keyed_Registry.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/atlas-search/app/WP/Capability/Capability_Service.php",
+        "pattern": "assert($"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 814
+  },
+  "another-race-test-2": {
+    "fs02": [],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 173
+  },
+  "nexus-e2e-mcp-clone-tmp": {
+    "fs02": [
+      {
+        "file": "wp-content/plugins/advanced-custom-fields/includes/api/api-helpers.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/faustwp/includes/auth/functions.php",
+        "pattern": "base64_decode..base64_decode (dotAll)"
+      },
+      {
+        "file": "wp-content/plugins/stream/connectors/class-connector-widgets.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Deferred.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Executor/Promise/Adapter/AmpPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Executor/Promise/Adapter/SyncPromiseAdapter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Executor/ReferenceExecutor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Executor/Values.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/GraphQL.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Language/Visitor.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Definition/InputObjectType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Definition/ListOfType.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Definition/NonNull.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Definition/QueryPlan.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Definition/ResolveInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Definition/Type.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/Schema.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/SchemaConfig.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Type/SchemaValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Utils/AST.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Utils/ASTDefinitionBuilder.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Utils/SchemaExtender.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Utils/SchemaPrinter.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Utils/TypeInfo.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Utils/Value.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Validator/QueryValidationContext.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Validator/Rules/ExecutableDefinitions.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Validator/Rules/UniqueArgumentDefinitionNames.php",
+        "pattern": "assert($"
+      },
+      {
+        "file": "wp-content/plugins/wp-graphql/vendor/webonyx/graphql-php/src/Validator/Rules/UniqueFieldDefinitionNames.php",
+        "pattern": "assert($"
+      }
+    ],
+    "fs03": [],
+    "fs04": [],
+    "fs06": [],
+    "phpFilesScanned": 1867
+  }
+}

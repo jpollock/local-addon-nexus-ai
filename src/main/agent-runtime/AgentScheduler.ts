@@ -2,7 +2,7 @@ import * as nodeCron from 'node-cron';
 import { createLogger } from '../logging/Logger';
 import type { AgentDefinition, CronTrigger } from '../agent-sdk/types';
 import type { AgentRunner } from './AgentRunner';
-import { getAgentSetting } from '../ipc-handlers';
+import { canAutoRun } from '../ipc-handlers';
 
 const logger = createLogger('AgentScheduler');
 
@@ -31,8 +31,11 @@ export class AgentScheduler {
 
       const taskKey = `${agent.name}::${trigger.expression}`;
       const task = nodeCron.schedule(trigger.expression, async () => {
-        if (!getAgentSetting(agent.name, 'scheduleEnabled')) {
-          logger.info(`AgentScheduler: skipping "${agent.name}" — schedule disabled by settings`);
+        // Checks `enabled` as well as `scheduleEnabled`. An agent switched off in the UI must
+        // not keep firing on its cron — that is how security-sentinel swept the fleet while
+        // sitting at {enabled: false}.
+        if (!canAutoRun(agent.name, 'schedule')) {
+          logger.info(`AgentScheduler: skipping "${agent.name}" — agent or schedule disabled by settings`);
           return;
         }
         logger.info(`AgentScheduler: firing "${agent.name}" (cron: ${trigger.expression})`);

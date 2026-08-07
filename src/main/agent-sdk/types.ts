@@ -93,6 +93,20 @@ export interface AgentContext {
   credentials: AgentCredentials;
   /** Platform-managed SQLite databases scoped to this agent. */
   db: AgentDbHandle;
+  /**
+   * This agent's persisted settings, read-only, exactly as written by the agent settings panel.
+   *
+   * Use for agent-specific configuration the runtime has no reason to know about — scan scope,
+   * thresholds, per-agent allowlists. `enabled` / `scheduleEnabled` / `eventsEnabled` /
+   * `autonomy` are here too, but the runtime has already acted on the first three before `run`
+   * is called and `autonomy` is surfaced above; do not re-implement gating from them.
+   *
+   * `{}` when nothing has been persisted. That is genuinely "unknown", not "default to on" —
+   * treat a missing setting as the *safe* value, not the permissive one. A permissive fallback
+   * on exactly this data is why security-sentinel swept the whole fleet every 15 minutes with
+   * nothing configured.
+   */
+  settings: Readonly<Record<string, unknown>>;
   /** True when the user explicitly requested a full (non-incremental) run from the Run Now modal. */
   fullRun: boolean;
 }
