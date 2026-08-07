@@ -89,12 +89,12 @@ export class ExternalRefreshScheduler {
     const result: ExternalRefreshResult = { scanned: 0, skipped: 0, failed: 0 };
     const now = Date.now();
 
-    let rows: Array<{ id: string; name: string; environment: string | null; ssh_last_sync_at: number | null }>;
+    let rows: Array<{ id: string; name: string; account_id: string; environment: string | null; ssh_last_sync_at: number | null }>;
     try {
       const db = this.graphService.getDb?.();
       if (!db) return result;   // startup race — try again next cycle
       rows = db.prepare(
-        `SELECT id, name, environment, ssh_last_sync_at
+        `SELECT id, name, account_id, environment, ssh_last_sync_at
          FROM sites
          WHERE source = 'external' AND is_active = 1`
       ).all();
@@ -113,7 +113,7 @@ export class ExternalRefreshScheduler {
     const limit = pLimit(CONCURRENCY);
     await Promise.all(due.map((row) => limit(async () => {
       try {
-        const target = `ssh:${row.name}@${row.environment ?? 'production'}`;
+        const target = `ssh:${row.account_id}/${row.name}@${row.environment ?? 'production'}`;
         const transport = await resolveTransport({ ssh_target: target }, this.services, 'wpcli_read');
 
         // A `content` key means refused or unresolvable. A permission refusal is

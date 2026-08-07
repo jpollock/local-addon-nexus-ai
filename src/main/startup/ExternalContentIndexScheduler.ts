@@ -120,10 +120,10 @@ export class ExternalContentIndexScheduler {
     if (!db) return result;
     this.ensureColumn(db);
 
-    let rows: Array<{ id: string; name: string; environment: string | null; content_indexed_at: number | null }>;
+    let rows: Array<{ id: string; name: string; account_id: string; environment: string | null; content_indexed_at: number | null }>;
     try {
       rows = db.prepare(
-        `SELECT id, name, environment, content_indexed_at
+        `SELECT id, name, account_id, environment, content_indexed_at
          FROM sites
          WHERE source = 'external' AND is_active = 1`
       ).all();
@@ -142,7 +142,7 @@ export class ExternalContentIndexScheduler {
     const limit = pLimit(CONCURRENCY);
     await Promise.all(due.map((row) => limit(async () => {
       try {
-        const target = `ssh:${row.name}@${row.environment ?? 'production'}`;
+        const target = `ssh:${row.account_id}/${row.name}@${row.environment ?? 'production'}`;
         const transport = await resolveTransport({ ssh_target: target }, this.services, 'wpcli_read');
 
         if (transport && typeof transport === 'object' && 'content' in transport) {

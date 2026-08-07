@@ -30,7 +30,7 @@ afterEach(() => { jest.restoreAllMocks(); });
 
 describe('ExternalContentIndexScheduler', () => {
   it('skips a host indexed more recently than the staleness threshold', async () => {
-    const g = graph([{ id: 'ssh:fresh', name: 'fresh', environment: 'production', content_indexed_at: NOW - 1000 }]);
+    const g = graph([{ id: 'ssh:hostinger-test/fresh', name: 'fresh', account_id: 'hostinger-test', environment: 'production', content_indexed_at: NOW - 1000 }]);
     const indexService = makeIndexService();
     const s = new ExternalContentIndexScheduler({
       graphService: g as any, services: {} as any, indexService: indexService as any,
@@ -42,17 +42,17 @@ describe('ExternalContentIndexScheduler', () => {
   });
 
   it('includes a host that has never been indexed', async () => {
-    const g = graph([{ id: 'ssh:new', name: 'new', environment: 'production', content_indexed_at: null }]);
+    const g = graph([{ id: 'ssh:hostinger-test/new', name: 'new', account_id: 'hostinger-test', environment: 'production', content_indexed_at: null }]);
     (resolveTransport as jest.Mock).mockResolvedValue(okTransport());
     const indexService = makeIndexService();
     const s = new ExternalContentIndexScheduler({ graphService: g as any, services: {} as any, indexService: indexService as any, logger });
     const r = await s.runCycleNow();
     expect(r.scanned).toBe(1);
-    expect(indexService.indexOne).toHaveBeenCalledWith(expect.anything(), 'ssh:new', 'new');
+    expect(indexService.indexOne).toHaveBeenCalledWith(expect.anything(), 'ssh:hostinger-test/new', 'new');
   });
 
   it('counts a permission refusal as skipped, not failed', async () => {
-    const g = graph([{ id: 'ssh:denied', name: 'denied', environment: 'production', content_indexed_at: null }]);
+    const g = graph([{ id: 'ssh:hostinger-test/denied', name: 'denied', account_id: 'hostinger-test', environment: 'production', content_indexed_at: null }]);
     (resolveTransport as jest.Mock).mockResolvedValue({ content: [{ type: 'text', text: 'Operation blocked' }] });
     const indexService = makeIndexService();
     const s = new ExternalContentIndexScheduler({ graphService: g as any, services: {} as any, indexService: indexService as any, logger });
@@ -63,8 +63,8 @@ describe('ExternalContentIndexScheduler', () => {
 
   it('one host throwing does not abort the cycle', async () => {
     const g = graph([
-      { id: 'ssh:bad', name: 'bad', environment: 'production', content_indexed_at: null },
-      { id: 'ssh:good', name: 'good', environment: 'production', content_indexed_at: null },
+      { id: 'ssh:hostinger-test/bad', name: 'bad', account_id: 'hostinger-test', environment: 'production', content_indexed_at: null },
+      { id: 'ssh:linode-prod/good', name: 'good', account_id: 'linode-prod', environment: 'production', content_indexed_at: null },
     ]);
     (resolveTransport as jest.Mock).mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(okTransport());
     const indexService = makeIndexService();
@@ -110,5 +110,15 @@ describe('ExternalContentIndexScheduler', () => {
     const s = new ExternalContentIndexScheduler({ graphService: g as any, services: {} as any, indexService: makeIndexService() as any, logger });
     await s.runCycleNow();
     expect(alterRan).toBe(true);
+  });
+
+  it('reconstructs the target from account_id and name, not name alone — regression pin for the multi-site case', async () => {
+    const g = graph([{ id: 'ssh:hostinger-test/site-a', name: 'site-a', account_id: 'hostinger-test', environment: 'production', content_indexed_at: null }]);
+    (resolveTransport as jest.Mock).mockResolvedValue(okTransport());
+    const indexService = makeIndexService();
+    const s = new ExternalContentIndexScheduler({ graphService: g as any, services: {} as any, indexService: indexService as any, logger });
+    await s.runCycleNow();
+    expect(resolveTransport).toHaveBeenCalledWith(
+      { ssh_target: 'ssh:hostinger-test/site-a@production' }, expect.anything(), 'wpcli_read');
   });
 });

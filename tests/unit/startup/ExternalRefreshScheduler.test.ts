@@ -38,7 +38,7 @@ describe('ExternalRefreshScheduler', () => {
   });
 
   it('skips a host synced more recently than the staleness threshold', async () => {
-    const g = graph([{ id: 'ssh:fresh', name: 'fresh', environment: 'production', ssh_last_sync_at: NOW - 1000 }]);
+    const g = graph([{ id: 'ssh:hostinger-test/fresh', name: 'fresh', account_id: 'hostinger-test', environment: 'production', ssh_last_sync_at: NOW - 1000 }]);
     const s = new ExternalRefreshScheduler({
       graphService: g as any, services: {} as any, logger, stalenessThresholdMs: 60_000,
     });
@@ -48,7 +48,7 @@ describe('ExternalRefreshScheduler', () => {
   });
 
   it('includes a host that has never been synced', async () => {
-    const g = graph([{ id: 'ssh:new', name: 'new', environment: 'production', ssh_last_sync_at: null }]);
+    const g = graph([{ id: 'ssh:hostinger-test/new', name: 'new', account_id: 'hostinger-test', environment: 'production', ssh_last_sync_at: null }]);
     (resolveTransport as jest.Mock).mockResolvedValue(okTransport());
     const s = new ExternalRefreshScheduler({ graphService: g as any, services: {} as any, logger });
     const r = await s.runCycleNow();
@@ -56,7 +56,7 @@ describe('ExternalRefreshScheduler', () => {
   });
 
   it('counts a permission refusal as skipped, not failed', async () => {
-    const g = graph([{ id: 'ssh:denied', name: 'denied', environment: 'production', ssh_last_sync_at: null }]);
+    const g = graph([{ id: 'ssh:hostinger-test/denied', name: 'denied', account_id: 'hostinger-test', environment: 'production', ssh_last_sync_at: null }]);
     (resolveTransport as jest.Mock).mockResolvedValue({ content: [{ type: 'text', text: 'Operation blocked' }] });
     const s = new ExternalRefreshScheduler({ graphService: g as any, services: {} as any, logger });
     const r = await s.runCycleNow();
@@ -66,8 +66,8 @@ describe('ExternalRefreshScheduler', () => {
 
   it('one host throwing does not abort the cycle', async () => {
     const g = graph([
-      { id: 'ssh:bad',  name: 'bad',  environment: 'production', ssh_last_sync_at: null },
-      { id: 'ssh:good', name: 'good', environment: 'production', ssh_last_sync_at: null },
+      { id: 'ssh:hostinger-test/bad',  name: 'bad',  account_id: 'hostinger-test', environment: 'production', ssh_last_sync_at: null },
+      { id: 'ssh:linode-prod/good', name: 'good', account_id: 'linode-prod', environment: 'production', ssh_last_sync_at: null },
     ]);
     (resolveTransport as jest.Mock)
       .mockRejectedValueOnce(new Error('boom'))
@@ -79,12 +79,12 @@ describe('ExternalRefreshScheduler', () => {
   });
 
   it('addresses the host with its registered environment', async () => {
-    const g = graph([{ id: 'ssh:stg', name: 'stg', environment: 'staging', ssh_last_sync_at: null }]);
+    const g = graph([{ id: 'ssh:hostinger-test/stg', name: 'stg', account_id: 'hostinger-test', environment: 'staging', ssh_last_sync_at: null }]);
     (resolveTransport as jest.Mock).mockResolvedValue(okTransport());
     const s = new ExternalRefreshScheduler({ graphService: g as any, services: {} as any, logger });
     await s.runCycleNow();
     expect(resolveTransport).toHaveBeenCalledWith(
-      { ssh_target: 'ssh:stg@staging' }, expect.anything(), 'wpcli_read');
+      { ssh_target: 'ssh:hostinger-test/stg@staging' }, expect.anything(), 'wpcli_read');
   });
 
   it('start() is idempotent', () => {
@@ -98,5 +98,14 @@ describe('ExternalRefreshScheduler', () => {
     const g = { getDb: () => null, upsertSite: jest.fn(), upsertPlugin: jest.fn(), upsertTheme: jest.fn() };
     const s = new ExternalRefreshScheduler({ graphService: g as any, services: {} as any, logger });
     await expect(s.runCycleNow()).resolves.toEqual({ scanned: 0, skipped: 0, failed: 0 });
+  });
+
+  it('reconstructs the target from account_id and name, not name alone — regression pin for the multi-site case', async () => {
+    const g = graph([{ id: 'ssh:hostinger-test/site-a', name: 'site-a', account_id: 'hostinger-test', environment: 'production', ssh_last_sync_at: null }]);
+    (resolveTransport as jest.Mock).mockResolvedValue(okTransport());
+    const s = new ExternalRefreshScheduler({ graphService: g as any, services: {} as any, logger });
+    await s.runCycleNow();
+    expect(resolveTransport).toHaveBeenCalledWith(
+      { ssh_target: 'ssh:hostinger-test/site-a@production' }, expect.anything(), 'wpcli_read');
   });
 });
