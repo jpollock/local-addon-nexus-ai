@@ -179,10 +179,14 @@ export class McpServer {
       return;
     }
 
-    const url = req.url ?? '/';
+    // req.url carries the full path plus any query string (e.g.
+    // `/mcp/messages?sessionId=<uuid>`, exactly what handleSse() tells
+    // clients to POST to) — strip it before matching routes, or every
+    // spec-following client 404s on the endpoint we ourselves advertised.
+    const path = (req.url ?? '/').split('?')[0];
 
     // Health check — no auth
-    if (url === '/health' && req.method === 'GET') {
+    if (path === '/health' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', port: this.port }));
       return;
@@ -196,9 +200,9 @@ export class McpServer {
       return;
     }
 
-    if (url === '/mcp/sse' && req.method === 'GET') {
+    if (path === '/mcp/sse' && req.method === 'GET') {
       this.handleSse(req, res);
-    } else if (url === '/mcp/messages' && req.method === 'POST') {
+    } else if (path === '/mcp/messages' && req.method === 'POST') {
       this.handleMessages(req, res);
     } else {
       res.writeHead(404, { 'Content-Type': 'application/json' });

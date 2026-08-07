@@ -111,6 +111,21 @@ describe('McpServer', () => {
     expect(res.body.result.protocolVersion).toBe('2024-11-05');
   });
 
+  test('initialize works when POSTed to the exact endpoint the SSE handshake advertises (?sessionId=...)', async () => {
+    // handleSse() sends `event: endpoint\ndata: /mcp/messages?sessionId=<uuid>\n\n` —
+    // a spec-following client POSTs its JSON-RPC requests to that exact URL,
+    // query string included.
+    const res = await httpRequest(
+      port,
+      'POST',
+      '/mcp/messages?sessionId=11111111-1111-1111-1111-111111111111',
+      { jsonrpc: '2.0', id: 99, method: 'initialize' } as JsonRpcRequest,
+      token,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.result.serverInfo.name).toBe('nexus-ai');
+  });
+
   test('ping returns empty result', async () => {
     const res = await httpRequest(
       port,
