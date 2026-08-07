@@ -66,18 +66,36 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     captureMock.mockResolvedValue({ fingerprint: 'SHA256:abc', keyType: 'ED25519', rawLine: 'h ssh-ed25519 AAAA' });
     statusMock.mockResolvedValue('none');
 
-    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
 
     expect(result).toEqual({ success: true, error: null, fingerprint: 'SHA256:abc' });
     expect(statusMock).toHaveBeenCalledWith('/home/u/.ssh/known_hosts', 'h ssh-ed25519 AAAA');
     expect(trustMock).toHaveBeenCalledWith('/home/u/.ssh/known_hosts', 'h ssh-ed25519 AAAA');
   });
 
+  it('refuses and never calls trustHostKey when the fresh capture does not match the fingerprint the human approved', async () => {
+    resolveMock.mockResolvedValue({ hostname: 'h', user: 'u', port: '22', userKnownHostsFile: '/home/u/.ssh/known_hosts' });
+    // The connection made during Approve lands on a DIFFERENT key than the
+    // one shown during Check (e.g. a round-robin endpoint, or an on-path
+    // attacker active only in the window between the two clicks).
+    captureMock.mockResolvedValue({ fingerprint: 'SHA256:different', keyType: 'ED25519', rawLine: 'h ssh-ed25519 BBBB' });
+    statusMock.mockResolvedValue('none');
+
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/changed between checking and approving/i);
+    expect(result.error).toContain('SHA256:different');
+    expect(result.error).toContain('SHA256:abc');
+    expect(statusMock).not.toHaveBeenCalled();
+    expect(trustMock).not.toHaveBeenCalled();
+  });
+
   it('reports failure and never calls trustHostKey when capture fails', async () => {
     resolveMock.mockResolvedValue({ hostname: 'h', user: 'u', port: '22', userKnownHostsFile: '/home/u/.ssh/known_hosts' });
     captureMock.mockResolvedValue(null);
 
-    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/could not/i);
@@ -90,7 +108,7 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     statusMock.mockResolvedValue('none');
     trustMock.mockImplementation(() => { throw new Error('EACCES'); });
 
-    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('EACCES');
@@ -101,7 +119,7 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     captureMock.mockResolvedValue({ fingerprint: 'SHA256:abc', keyType: 'ED25519', rawLine: 'h ssh-ed25519 AAAA' });
     statusMock.mockResolvedValue('none');
 
-    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
 
     expect(result).toEqual({ success: true, error: null, fingerprint: 'SHA256:abc' });
     expect(trustMock).toHaveBeenCalledTimes(1);
@@ -112,7 +130,7 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     captureMock.mockResolvedValue({ fingerprint: 'SHA256:abc', keyType: 'ED25519', rawLine: 'h ssh-ed25519 AAAA' });
     statusMock.mockResolvedValue('trusted');
 
-    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
 
     expect(result).toEqual({ success: true, error: null, fingerprint: 'SHA256:abc' });
     expect(trustMock).not.toHaveBeenCalled();
@@ -123,7 +141,7 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     captureMock.mockResolvedValue({ fingerprint: 'SHA256:abc', keyType: 'ED25519', rawLine: 'h ssh-ed25519 AAAA' });
     statusMock.mockResolvedValue('conflict');
 
-    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
 
     expect(result.success).toBe(false);
     expect(result.error).toBe(
@@ -137,7 +155,7 @@ describe('TRUST_EXTERNAL_HOST_KEY', () => {
     captureMock.mockResolvedValue({ fingerprint: 'SHA256:abc', keyType: 'ED25519', rawLine: 'h ssh-ed25519 AAAA' });
     statusMock.mockResolvedValue('error');
 
-    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box');
+    const result = await mockIpc.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'acme-box', 'SHA256:abc');
 
     expect(result.success).toBe(false);
     expect(result.error).toBe(
@@ -153,7 +171,7 @@ describe('trustHostKey has exactly one caller, and no network-reachable surface 
   const repoRoot = path.resolve(__dirname, '../../..');
 
   it('is imported only by hostKeyTrust.ts itself and ipc-handlers.ts', () => {
-    const hits = execSync('grep -rl "trustHostKey" src/ --include=*.ts', { cwd: repoRoot })
+    const hits = execSync('grep -rl "trustHostKey" src/ --include=*.ts --include=*.tsx', { cwd: repoRoot })
       .toString().trim().split('\n').sort();
     expect(hits).toEqual(['src/main/external/hostKeyTrust.ts', 'src/main/ipc-handlers.ts']);
   });

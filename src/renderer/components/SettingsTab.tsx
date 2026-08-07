@@ -30,6 +30,22 @@ type WpeOperation = keyof typeof WPE_OPERATION_DEFAULTS;
 type WpeEnv = 'development' | 'staging' | 'production';
 
 // ---------------------------------------------------------------------------
+// Host-key probe timeout
+// ---------------------------------------------------------------------------
+
+/**
+ * Must stay in sync with `probeExternalHost`'s documented sequential worst
+ * case (~155s: 5s config dump + 6x20s steps + 30s discovery — see the
+ * docblock in src/main/external/probeExternalHost.ts) and with
+ * HOST_PROBE_CLIENT_TIMEOUT_MS in src/cli/commands/host.ts, which the CLI
+ * uses for the same reason. Duplicated here rather than imported because
+ * src/cli is a separate surface from the renderer; if you raise one, raise
+ * both. rendererGql's own default (10s) is sized for ordinary queries, not
+ * a remote SSH probe, so this call must pass its own timeout explicitly.
+ */
+const HOST_PROBE_CLIENT_TIMEOUT_MS = 210000;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -57,6 +73,7 @@ interface SettingsTabState {
   hostKeyCheckResult: null | { ok: boolean; failureKind?: string; detail?: string; remedy?: string; fingerprint?: string; keyType?: string };
   hostKeyCheckedAlias: string;
   hostKeyTrusting: boolean;
+  hostKeyChecking: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +128,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     hostKeyCheckResult: null,
     hostKeyCheckedAlias: '',
     hostKeyTrusting: false,
+    hostKeyChecking: false,
   };
 
   componentDidMount(): void {
@@ -152,7 +170,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     // result — see the in-flight-race note in the task-6 review.
     const alias = this.state.hostKeyCheckAlias.trim();
     if (!alias) return;
-    this.setState({ hostKeyCheckResult: null, hostKeyCheckedAlias: '' });
+    this.setState({ hostKeyCheckResult: null, hostKeyCheckedAlias: '', hostKeyChecking: true });
     const isStale = () => this.state.hostKeyCheckAlias.trim() !== alias;
     try {
       const data = await rendererGql<{ nexusHostProbe: { success: boolean; error: string | null; report: any } }>(`
@@ -162,13 +180,14 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
             report { ok alias failure { kind detail remedy fingerprint keyType } }
           }
         }
-      `, { alias });
+      `, { alias }, HOST_PROBE_CLIENT_TIMEOUT_MS);
       if (!this.mounted || isStale()) return;
       const report = data.nexusHostProbe.report;
       if (!report) {
         this.setState({
           hostKeyCheckResult: { ok: false, detail: data.nexusHostProbe.error ?? 'No report returned.' },
           hostKeyCheckedAlias: alias,
+          hostKeyChecking: false,
         });
         return;
       }
@@ -186,10 +205,11 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
         // safe here since both were fixed before this await began — neither
         // is re-read from live state.
         hostKeyCheckedAlias: report.alias || alias,
+        hostKeyChecking: false,
       });
     } catch (e: any) {
       if (!this.mounted || isStale()) return;
-      this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) }, hostKeyCheckedAlias: alias });
+      this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) }, hostKeyCheckedAlias: alias, hostKeyChecking: false });
     }
   }
 
@@ -201,9 +221,16 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     const alias = this.state.hostKeyCheckedAlias.trim();
     if (!alias) return;
     if (this.state.hostKeyCheckAlias.trim() !== alias) return; // stale — button should be disabled, but guard anyway
+    // Send the exact fingerprint that was displayed and visually verified —
+    // not just the alias. The main-process handler compares this against a
+    // FRESH capture and refuses to trust a different key, so the human's
+    // verification of this specific fingerprint can't be silently bypassed
+    // by a connection that lands on a different host key between clicks.
+    const expectedFingerprint = this.state.hostKeyCheckResult?.fingerprint;
+    if (!expectedFingerprint) return;
     this.setState({ hostKeyTrusting: true });
     try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, alias);
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, alias, expectedFingerprint);
       if (!this.mounted) return;
       if (result.success) {
         this.setState({
@@ -619,9 +646,10 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
             style: { flex: 1, fontSize: 12, padding: '4px 8px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'inherit' },
           }),
           React.createElement('button', {
+            disabled: this.state.hostKeyChecking,
             onClick: () => this.checkHostKey(),
             style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
-          }, 'Check'),
+          }, this.state.hostKeyChecking ? 'Checking…' : 'Check'),
         ),
         this.state.hostKeyCheckResult && React.createElement('div', {
           style: { fontSize: 12, padding: '8px 10px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4 },

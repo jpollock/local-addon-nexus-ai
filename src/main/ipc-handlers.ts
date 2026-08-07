@@ -1014,12 +1014,26 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Renderer-only. Deliberately NOT a GraphQL mutation and NOT called from
   // src/cli/ — see the constant's own comment in constants.ts. This is the
   // only function in the codebase that may call trustHostKey.
-  safeHandle(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, async (_event: unknown, alias: string) => {
+  safeHandle(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, async (_event: unknown, alias: string, expectedFingerprint: string) => {
     try {
       const resolved = await resolveSshConfig(alias);
       const captured = await captureOfferedHostKey(alias, defaultSshExec);
       if (!captured) {
         return { success: false, error: `Could not fetch a host key for '${alias}' — it may have become unreachable.` };
+      }
+      // The human visually verified `expectedFingerprint` (from an earlier
+      // "Check" call). The KEY MATERIAL always comes from a fresh capture
+      // made right here, never from a value that crossed the renderer/main
+      // boundary — but the fingerprint the human looked at must be the one
+      // that's about to be trusted. Without this check, a round-robin/anycast
+      // endpoint (or an on-path attacker active only in the window between
+      // the two clicks) could hand this connection a different key than the
+      // one the human approved, and it would be written unconditionally.
+      if (captured.fingerprint !== expectedFingerprint) {
+        return {
+          success: false,
+          error: `The host's key changed between checking and approving (now ${captured.fingerprint}, expected ${expectedFingerprint}) — refusing to trust it. Re-check the alias and verify the new fingerprint before approving again.`,
+        };
       }
       // Defense in depth against TOCTOU between an earlier "Check" and this
       // "Approve": re-verify against the real known_hosts file immediately

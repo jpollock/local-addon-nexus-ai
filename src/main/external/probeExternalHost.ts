@@ -84,6 +84,14 @@ const DISCOVERY_TIMEOUT_MS = 30000;
  * an operation that worked. HOST_PROBE_CLIENT_TIMEOUT_MS in
  * src/cli/commands/host.ts must therefore stay above this sum; raise any
  * timeout above and raise that one too.
+ *
+ * The host-key-capture step (HOST_KEY_CAPTURE_TIMEOUT_MS, 15s, in
+ * hostKeyTrust.ts) is NOT part of this sum. It only runs on the
+ * 'host key verification failed' branch of Gate 1 above, which returns
+ * immediately afterward rather than continuing on to the other gates — it
+ * can never stack with the other six steps or with discovery. The 155s
+ * ceiling above still describes the full happy-path/other-failure sequence
+ * accurately.
  */
 
 /** Roots searched for wp-config.php, and the depth limit. Never an unbounded walk. */
@@ -163,7 +171,7 @@ export async function probeExternalHost(alias: string, opts: ProbeOptions = {}):
 
     if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(detail)) {
       return fail(alias, resolved, 'host-key-changed', detail,
-        `The key '${alias}' (${resolved.hostname}) now presents does not match what was trusted `
+        `The key that '${alias}' (${resolved.hostname}) now presents does not match what was trusted `
         + `before. This can mean the server was reinstalled or replaced, or that something is `
         + `intercepting your connection. Verify the new fingerprint against your hosting `
         + `provider's control panel or SSH access log before trusting it. If you're sure it's `

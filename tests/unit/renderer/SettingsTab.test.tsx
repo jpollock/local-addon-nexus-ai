@@ -193,7 +193,34 @@ describe('SettingsTab — external hosts', () => {
     instance.setState({ hostKeyCheckAlias: 'newbox' });
     await instance.checkHostKey();
     await instance.approveHostKey();
-    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'newbox');
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'newbox', 'SHA256:abc123');
+  });
+
+  it('approveHostKey sends the fingerprint that was actually displayed to the human, not a hardcoded or empty value', async () => {
+    // Use a fingerprint that no other test in this file happens to use, so a
+    // hardcoded/copy-pasted literal in the implementation would fail this test.
+    const displayedFingerprint = 'SHA256:uniquely-displayed-999';
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'newbox', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: displayedFingerprint, keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    const invokeMock = jest.fn().mockResolvedValue({ success: true, error: null, fingerprint: displayedFingerprint });
+    const electron = mockElectron({});
+    electron.ipcRenderer.invoke = invokeMock;
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'newbox' });
+    await instance.checkHostKey();
+    expect(instance.state.hostKeyCheckResult.fingerprint).toBe(displayedFingerprint);
+    await instance.approveHostKey();
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'newbox', displayedFingerprint);
   });
 
   it('a changed host key shows no Approve button', async () => {
@@ -266,7 +293,7 @@ describe('SettingsTab — external hosts', () => {
     // still use the stored checked-alias, never a live re-read.
     instance.setState({ hostKeyCheckAlias: 'alias-a' });
     await instance.approveHostKey();
-    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'alias-a');
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'alias-a', 'SHA256:abc123');
   });
 
   it('a stale out-of-order response for an old alias does not overwrite a newer check', async () => {
@@ -315,6 +342,54 @@ describe('SettingsTab — external hosts', () => {
     expect(textOf(tree)).toContain('SHA256:newer');
     expect(textOf(tree)).not.toContain('SHA256:stale');
     expect(instance.state.hostKeyCheckedAlias).toBe('alias-b');
+  });
+
+  it('checkHostKey passes the 210s host-probe timeout to rendererGql, not the 10s default', async () => {
+    // probeExternalHost's documented sequential worst case is ~155s; the CLI's
+    // HOST_PROBE_CLIENT_TIMEOUT_MS (src/cli/commands/host.ts) is 210000 for the
+    // same reason. rendererGql's own default (10s) would abort a slow-but-working
+    // probe long before it finishes.
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ data: { nexusHostProbe: { success: true, error: null, report: { ok: true, alias: 'newbox' } } } }),
+    });
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'newbox' });
+    await instance.checkHostKey();
+    const timeoutCall = setTimeoutSpy.mock.calls.find((c) => c[1] === 210000);
+    expect(timeoutCall).toBeDefined();
+    setTimeoutSpy.mockRestore();
+  });
+
+  it('disables the Check button and shows a pending indicator while a check is in flight', async () => {
+    let resolveFetch: (v: any) => void;
+    const pending = new Promise((resolve) => { resolveFetch = resolve; });
+    (global as any).fetch = jest.fn().mockReturnValue(pending);
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'newbox' });
+
+    const checkPromise = instance.checkHostKey();
+    const treeDuring = instance.render();
+    const checkButtonDuring = findAll(treeDuring, (n) => n.type === 'button' && /check/i.test(textOf(n)))[0];
+    expect(checkButtonDuring.props.disabled).toBe(true);
+    expect(textOf(checkButtonDuring)).toMatch(/checking/i);
+
+    resolveFetch!({
+      json: async () => ({ data: { nexusHostProbe: { success: true, error: null, report: { ok: true, alias: 'newbox' } } } }),
+    });
+    await checkPromise;
+
+    const treeAfter = instance.render();
+    const checkButtonAfter = findAll(treeAfter, (n) => n.type === 'button' && /check/i.test(textOf(n)))[0];
+    expect(checkButtonAfter.props.disabled).toBe(false);
   });
 });
 
