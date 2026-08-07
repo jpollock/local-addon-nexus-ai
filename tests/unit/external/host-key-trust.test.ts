@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from '../../../src/main/external/hostKeyTrust';
 import type { SshExec } from '../../../src/main/external/sshExec';
 
@@ -95,14 +96,26 @@ describe('checkHostKeyStatus', () => {
     return jest.fn(async () => ({ code, stdout, stderr: '' }));
   }
 
+  // Most of these tests exercise the ssh-keygen-spawning path, which only
+  // runs when userKnownHostsFile exists (see the dedicated "does not exist
+  // yet" test below for the other branch) — so give them a real file.
+  let existingKnownHostsFile: string;
+  beforeEach(() => {
+    existingKnownHostsFile = path.join(os.tmpdir(), `nexus-known-hosts-test-${crypto.randomUUID()}.tmp`);
+    fs.writeFileSync(existingKnownHostsFile, '');
+  });
+  afterEach(() => {
+    try { fs.unlinkSync(existingKnownHostsFile); } catch { /* already gone */ }
+  });
+
   it('returns "none" when ssh-keygen -F finds no entry (documented exit code 1)', async () => {
-    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExiting(1, ''));
+    const status = await checkHostKeyStatus(existingKnownHostsFile, KEY_LINE, keygenExiting(1, ''));
     expect(status).toBe('none');
   });
 
   it('returns "trusted" when the existing entry has the same key material', async () => {
     const status = await checkHostKeyStatus(
-      '/home/u/.ssh/known_hosts',
+      existingKnownHostsFile,
       KEY_LINE,
       keygenExiting(0, `# Host example.com found: line 3\n${KEY_LINE}\n`),
     );
@@ -112,7 +125,7 @@ describe('checkHostKeyStatus', () => {
   it('returns "conflict" when the existing entry has different key material', async () => {
     const differentKey = 'example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAdifferentKeyMaterialHere';
     const status = await checkHostKeyStatus(
-      '/home/u/.ssh/known_hosts',
+      existingKnownHostsFile,
       KEY_LINE,
       keygenExiting(0, `# Host example.com found: line 3\n${differentKey}\n`),
     );
@@ -127,16 +140,16 @@ describe('checkHostKeyStatus', () => {
     const bracketedLine = '[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
     const keygenExec = keygenExiting(1, '');
 
-    await checkHostKeyStatus('/home/u/.ssh/known_hosts', bracketedLine, keygenExec);
+    await checkHostKeyStatus(existingKnownHostsFile, bracketedLine, keygenExec);
 
-    expect(keygenExec).toHaveBeenCalledWith(['-F', '[example.com]:2222', '-f', '/home/u/.ssh/known_hosts']);
+    expect(keygenExec).toHaveBeenCalledWith(['-F', '[example.com]:2222', '-f', existingKnownHostsFile]);
   });
 
   it('detects a conflict against a bracketed non-default-port entry', async () => {
     const bracketedLine = '[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
     const differentKey = '[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAdifferentKeyMaterialHere';
     const status = await checkHostKeyStatus(
-      '/home/u/.ssh/known_hosts',
+      existingKnownHostsFile,
       bracketedLine,
       keygenExiting(0, `# Host [example.com]:2222 found: line 1\n${differentKey}\n`),
     );
@@ -145,31 +158,42 @@ describe('checkHostKeyStatus', () => {
 
   it('returns "error" when the offered rawLine cannot be parsed', async () => {
     const keygenExec = keygenExiting(1, '');
-    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', 'garbage', keygenExec);
+    const status = await checkHostKeyStatus(existingKnownHostsFile, 'garbage', keygenExec);
     expect(status).toBe('error');
     expect(keygenExec).not.toHaveBeenCalled();
   });
 
   it('returns "error" when the keygen invocation throws (spawn failure)', async () => {
     const keygenExec = jest.fn(async () => { throw new Error('ENOENT: ssh-keygen not found'); });
-    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExec);
+    const status = await checkHostKeyStatus(existingKnownHostsFile, KEY_LINE, keygenExec);
     expect(status).toBe('error');
   });
 
   it('returns "error" when keygen resolves with a null exit code (e.g. missing binary)', async () => {
-    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExiting(null, ''));
+    const status = await checkHostKeyStatus(existingKnownHostsFile, KEY_LINE, keygenExiting(null, ''));
     expect(status).toBe('error');
   });
 
   it('returns "error" on an unexpected non-0/1 exit code rather than treating it as "not found"', async () => {
-    const status = await checkHostKeyStatus('/home/u/.ssh/known_hosts', KEY_LINE, keygenExiting(2, ''));
+    const status = await checkHostKeyStatus(existingKnownHostsFile, KEY_LINE, keygenExiting(2, ''));
     expect(status).toBe('error');
+  });
+
+  it('returns "none" without spawning keygen when userKnownHostsFile does not exist yet', async () => {
+    const missingFile = path.join(os.tmpdir(), `nexus-nonexistent-known-hosts-${Date.now()}`);
+    expect(fs.existsSync(missingFile)).toBe(false);
+    const keygenExec = keygenExiting(255, '');
+
+    const status = await checkHostKeyStatus(missingFile, KEY_LINE, keygenExec);
+
+    expect(status).toBe('none');
+    expect(keygenExec).not.toHaveBeenCalled();
   });
 
   it('is not fooled by a leading @cert-authority marker shifting the key fields', async () => {
     const markedLine = `@cert-authority ${KEY_LINE}`;
     const status = await checkHostKeyStatus(
-      '/home/u/.ssh/known_hosts',
+      existingKnownHostsFile,
       KEY_LINE,
       keygenExiting(0, `# Host example.com found: line 3\n${markedLine}\n`),
     );

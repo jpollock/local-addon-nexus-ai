@@ -102,7 +102,15 @@ export type HostKeyStatus = 'none' | 'trusted' | 'conflict' | 'error';
  * bracketing rule and would drift from it; the captured line already got it
  * right once, so reuse it instead of trusting a second derivation.
  *
- * - 'none': no existing entry — safe to append.
+ * - 'none': no existing entry — safe to append. This includes the case where
+ *   `userKnownHostsFile` does not exist yet at all: a file nothing has ever
+ *   created genuinely has no entries (a determinate, safe answer), which is
+ *   the normal state for a fresh Local install trusting its very first
+ *   external host. `ssh-keygen -F` itself would exit 255 ("Cannot stat …")
+ *   against a missing file rather than its documented 1/"not found", so that
+ *   case is handled before ever spawning it — otherwise the only thing that
+ *   can create the file (`trustHostKey`) would be permanently refused by the
+ *   'error' fail-closed path below, for every brand-new user.
  * - 'trusted': an existing entry already matches the offered key exactly —
  *   safe to no-op (re-approving an already-trusted host must not duplicate
  *   the line).
@@ -125,6 +133,12 @@ export async function checkHostKeyStatus(
   const offeredHostToken = offeredRawLine.trim().split(/\s+/)[0];
   const offered = parseKeyMaterial(offeredRawLine);
   if (!offeredHostToken || !offered) return 'error';
+
+  // A known_hosts file that has never been created has no entries — that is
+  // a determinate "none", not an inconclusive failure. ssh-keygen -F would
+  // exit 255 ("Cannot stat …") against a missing file, which the fail-closed
+  // branch below would otherwise (wrongly) treat as 'error'.
+  if (!fs.existsSync(userKnownHostsFile)) return 'none';
 
   let result: { code: number | null; stdout: string; stderr: string };
   try {
