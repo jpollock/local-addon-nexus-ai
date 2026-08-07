@@ -95,9 +95,32 @@ describe('WP-CLI Tools', () => {
   });
 
   describe('external SSH transport', () => {
+    test('an unregistered connection is refused before any SSH attempt', async () => {
+      // Task 6: a connection alias with no registered sites now refuses up
+      // front in resolveTransport, instead of resolving blind and letting the
+      // SSH attempt itself fail. `services` here has no graphService, so
+      // findExternalSites sees zero rows for "acme-box" — exactly the
+      // never-registered case.
+      const result = await registry.call('wp_core_version', { ssh_target: 'ssh:acme-box@staging' }, services);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).not.toContain('Site not found:');
+      expect(result.content[0].text).toContain('Connection "acme-box" has no registered sites.');
+    });
+
     test('wp_core_version uses external SSH path and does not fall through to local', async () => {
       // This test verifies FINDING 1: external-ssh transport branches correctly
-      // and does NOT fall through to the local path (which would throw "Site not found:")
+      // and does NOT fall through to the local path (which would throw "Site not found:").
+      // Registering a site under the connection first is what earns it past Task 6's
+      // "no registered sites" refusal and into the real transport attempt.
+      const fakeDb = {
+        prepare: () => ({
+          all: () => [
+            { id: 'ssh:acme-box/acme-box', name: 'acme-box', environment: 'staging', wp_path: null, wp_cli_path: null },
+          ],
+        }),
+      };
+      (services as any).graphService = { getDb: () => fakeDb };
+
       const result = await registry.call('wp_core_version', { ssh_target: 'ssh:acme-box@staging' }, services);
       // The SSH spawn will fail (no actual host), but it should reach the SSH path
       // and return a Remote WP-CLI error, NOT "Site not found:"

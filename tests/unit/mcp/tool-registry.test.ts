@@ -148,4 +148,51 @@ describe('maybeUpsertExternalSite — refresh only, never create', () => {
       ),
     ).resolves.toBeUndefined();
   });
+
+  // Ported from the now-deleted tests/unit/external/lazy-upsert.test.ts, which
+  // asserted the pre-Task-5/7 one-alias-one-site model (`ssh:<alias>` ids, a
+  // wpPath/environment pair on the connection profile) and was never updated
+  // when that model changed. The two real behaviors it covered that have no
+  // equivalent above — a malformed target must not throw, and a sighting must
+  // never relabel an existing site's environment from the target's suffix —
+  // are re-asserted here against the current refresh-only implementation.
+
+  it('never throws on a malformed target — a sighting failure must not break a working command', async () => {
+    const graphService = { upsertSite: jest.fn(async () => {}), getDb: () => makeFakeDb([]) };
+    const registryStorage = makeMemoryStorage();
+
+    await expect(
+      maybeUpsertExternalSite(
+        { ssh_target: 'not-a-valid-target' },
+        true,
+        registryStorage,
+        graphService,
+      ),
+    ).resolves.toBeUndefined();
+    expect(graphService.upsertSite).not.toHaveBeenCalled();
+  });
+
+  it('never relabels a registered site from the target suffix', async () => {
+    // `nexus wp core version ssh:hostinger-test/site-a@development` is a
+    // permitted read on every environment, so it succeeds — the row's own
+    // stored `environment` (from registration) must win over the `@development`
+    // suffix on the target string, or a read against a production site would
+    // silently relabel it as development.
+    const fakeDb = makeFakeDb([
+      { id: 'ssh:hostinger-test/site-a', name: 'site-a', domain: 'site-a.example.com', environment: 'production' },
+    ]);
+    const graphService = { upsertSite: jest.fn(async () => {}), getDb: () => fakeDb };
+    const registryStorage = makeMemoryStorage();
+
+    await maybeUpsertExternalSite(
+      { ssh_target: 'ssh:hostinger-test/site-a@development' },
+      true,
+      registryStorage,
+      graphService,
+    );
+
+    expect(graphService.upsertSite).toHaveBeenCalledWith(
+      expect.objectContaining({ environment: 'production' }),
+    );
+  });
 });
