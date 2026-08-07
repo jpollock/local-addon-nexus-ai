@@ -24,12 +24,30 @@ function injectAgentConsoleStyles(): void {
 }
 injectAgentConsoleStyles();
 
+/**
+ * This addon's renderer bundle is require()'d directly into Local's own main-window renderer
+ * process (RendererAddonLoader, not an iframe/BrowserView) — same document, same DOM tree. By
+ * the time addon code runs, Local's own themecop-init has already applied `Theme__Dark` or
+ * `Theme__Light` to <html>, so that class is the resolved-theme source of truth (never 'auto' —
+ * ThemeCop resolves 'auto' before applying the class). agent-console.css keys its light palette
+ * off `data-ag-theme` rather than reusing Local's own class name directly, so this addon's CSS
+ * selector doesn't silently break if Local ever renames its own theme classes.
+ */
+function applyAgentTheme(): void {
+  const isDark = document.documentElement.classList.contains('Theme__Dark');
+  document.documentElement.setAttribute('data-ag-theme', isDark ? 'dark' : 'light');
+}
+
 export default function renderer(context: any): void {
   console.log('[Nexus AI] Renderer initializing...');
   const { React, hooks, ReactRouter } = context;
   const { Route, NavLink } = ReactRouter;
   const electron = context.electron || (window as any).electron;
   console.log('[Nexus AI] React, hooks, electron loaded');
+
+  applyAgentTheme();
+  const themeChangeHandler = () => applyAgentTheme();
+  electron.ipcRenderer.on('osThemeChange', themeChangeHandler);
 
   // Try to get TextButton from Local's components
   let TextButton: any = null;
@@ -473,6 +491,7 @@ export default function renderer(context: any): void {
     electron.ipcRenderer.removeListener('nexus:apply-sidebar-filter', applyFilterHandler);
     electron.ipcRenderer.removeListener('nexus:clear-sidebar-filter', clearFilterHandler);
     electron.ipcRenderer.removeListener(IPC_CHANNELS.NEXUS_STATE_UPDATE, stateUpdateHandler);
+    electron.ipcRenderer.removeListener('osThemeChange', themeChangeHandler);
   });
 
 }

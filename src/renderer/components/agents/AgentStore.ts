@@ -69,21 +69,14 @@ export interface ActivityEvent {
  * Which sites a *scheduled* run may touch. A run the user targets directly — Run Now, or an
  * event naming one install — is not constrained by this.
  *
- * 'explicit' with an empty siteIds scans nothing, deliberately. The alternative, treating
- * "nothing configured" as "scan everything", is the exact shape of the bug that had
- * security-sentinel sweeping 375 sites every 15 minutes with nobody having chosen anything.
- */
-export interface AgentScanScope {
-  mode: 'explicit' | 'all';
-  siteIds: string[];
-}
-
-/**
- * The site scope picker's persisted output — always an explicit list, never a live rule.
- * A site added to the account after this was saved is never auto-included (see the drift
- * banner in the picker UI). Distinct from the legacy AgentScanScope above, which still
- * supports a live 'all' mode for security-sentinel; the two are not migrated together (see
- * docs/design/agent-site-picker/README.md).
+ * Always an explicit list, never a live rule — a site added to the account after this was saved
+ * is never auto-included (see the drift banner in the picker UI). An empty siteIds scans
+ * nothing, deliberately: the alternative, treating "nothing configured" as "scan everything", is
+ * the exact shape of the bug that had security-sentinel sweeping 375 sites every 15 minutes with
+ * nobody having chosen anything. There used to be a second, legacy `AgentScanScope` shape with a
+ * live `mode: 'all'` — removed 2026-08-07 when "Every site" was retired from the picker UI for
+ * contradicting this same explicit-list model. `AgentWorkspaceSettings` still reads that legacy
+ * on-disk shape as a one-time migration fallback when `scope` itself is absent.
  */
 export interface AgentScope {
   siteIds: string[];
@@ -100,9 +93,9 @@ export interface AgentSettings {
   cadence: string;  // '*/15 * * * *' | '0 * * * *' | '0 */6 * * *' | '0 0 * * *' | '0 0 * * 0'
   eventsEnabled: boolean;
   subscribedEvents: Record<string, boolean>;
-  scanScope: AgentScanScope;
-  /** Persistent scope for scheduled runs and event triggers, shared by both — see AgentScope. */
-  scope?: AgentScope;
+  /** Persistent scope for scheduled runs and event triggers, shared by both, and the same field
+   * Run Now prefills from — see AgentScope. */
+  scope: AgentScope;
   /** Named scopes saved for quick re-application in the picker. Per-agent, not shared (v1). */
   savedScopes?: AgentSavedScope[];
   /** Unix ms timestamp of the last time `scope` was edited. Required to compute drift. */
@@ -206,10 +199,10 @@ class AgentStore {
       cadence: '*/15 * * * *',
       eventsEnabled: true,
       subscribedEvents: {},
-      // Opt-in. No site is scanned on a schedule until the user picks it, or picks "every site".
-      // The main process applies the same rule independently (resolveScanScope in the agent) —
-      // this default is the UI's view of it, not the enforcement.
-      scanScope: { mode: 'explicit', siteIds: [] },
+      // Opt-in. No site is scanned on a schedule until the user picks it in the site scope
+      // picker. The main process applies the same rule independently (resolveScanScope in the
+      // agent) — this default is the UI's view of it, not the enforcement.
+      scope: { siteIds: [] },
     };
   }
 

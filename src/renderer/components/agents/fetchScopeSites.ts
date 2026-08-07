@@ -16,10 +16,11 @@ export interface ScopeSite {
   environment: ScopeSiteEnv;
   platform: ScopeSitePlatform;
   /**
-   * Unix ms. Present for WP Engine sites (comes straight through from the synced graph.db row).
-   * Not currently available for local sites — GET_SITES has no creation-time field — so drift
-   * detection only ever fires for WPE sites until that gap is closed. Never fabricate a value
-   * here: an unknown creation time must read as "can't compute drift", not "no drift".
+   * Unix ms. For WP Engine sites this comes straight through from the synced graph.db row. For
+   * local sites it is graph.db's `sites.created_at` too, but it means "first time Nexus indexed
+   * this site" rather than "when the site was created in Local" — a site that predates indexing,
+   * or has never been indexed at all, has no row and so no value here. Never fabricate a value:
+   * an unknown creation time must read as "can't compute drift", not "no drift".
    */
   createdAt?: number;
 }
@@ -63,11 +64,64 @@ export async function fetchScopeSites(electron: any): Promise<ScopeSite[]> {
         name: s.name,
         environment: 'local',
         platform: 'Local',
-        // No creation-time field available from GET_SITES today — left undefined on purpose.
+        createdAt: typeof s.createdAt === 'number' ? s.createdAt : undefined,
       });
     }
   } catch { /* ignore */ }
 
   sites.sort((a, b) => a.name.localeCompare(b.name));
   return sites;
+}
+
+/**
+ * log-processor's site scope is a subset of "the fleet" that isn't meaningful the way it is for
+ * security-sentinel: a site must already have a bound S3 log source (via its connect_log_source
+ * tool) before including it in scope does anything — the nightly cron skips any scoped site with
+ * no source (see agents/log-processor/agent.ts's run()). So this agent's picker offers only
+ * already-connected sites, not the full fleet fetchScopeSites() returns.
+ *
+ * `id` here is the site's NAME, not fetchScopeSites()'s usual graph.db id — log-processor's own
+ * `sources` table keys everything by the install name it was given at connect time (there is no
+ * graph.db access to resolve a name back to an id), so using the name as `id` lets `scope.siteIds`
+ * round-trip through this agent's runtime with zero extra resolution step. This is a deliberate,
+ * agent-local exception to the id convention; the generic SitePicker only requires `id` to be a
+ * stable unique string, not a particular id scheme.
+ *
+ * Cross-references fetchScopeSites() purely for display (environment/platform/createdAt) — a
+ * connected site with no fleet match (e.g. removed from the account since connecting) still
+ * appears, since it is still a fact about what log-processor has stored.
+ */
+export async function fetchConnectedLogSites(electron: any): Promise<ScopeSite[]> {
+  const ipc = electron?.ipcRenderer;
+  if (!ipc) return [];
+
+  const connectedNames: string[] = await ipc.invoke(IPC_CHANNELS.AGENT_LOG_PROCESSOR_CONNECTED_SITES).catch(() => []);
+  if (!connectedNames?.length) return [];
+
+  const fleet = await fetchScopeSites(electron);
+  const byName = new Map(fleet.map(s => [s.name, s]));
+
+  return connectedNames
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
+    .map(name => {
+      const match = byName.get(name);
+      return {
+        id: name,
+        name,
+        environment: match?.environment ?? 'production',
+        platform: match?.platform ?? 'WP Engine',
+        createdAt: match?.createdAt,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Single dispatch point Settings and Run Now both call — "which sites can this agent be scoped
+ * to" is not the same question for every agent (see fetchConnectedLogSites' doc), and this is
+ * where that per-agent difference lives instead of being duplicated at each call site.
+ */
+export async function fetchSitesForAgent(agentId: string, electron: any): Promise<ScopeSite[]> {
+  if (agentId === 'log-processor') return fetchConnectedLogSites(electron);
+  return fetchScopeSites(electron);
 }

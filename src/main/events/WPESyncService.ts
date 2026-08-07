@@ -550,14 +550,19 @@ export class WPESyncService {
         const db = this.graphService.getDb();
         if (db) {
           const row = db.prepare(
-            'SELECT name, php_version, domain, account_id, remote_install_id FROM sites WHERE id = ?'
-          ).get(siteId) as { name: string; php_version: string | null; domain: string; account_id: string | null; remote_install_id: string | null } | undefined;
+            'SELECT name, php_version, domain, account_id, remote_install_id, environment FROM sites WHERE id = ?'
+          ).get(siteId) as { name: string; php_version: string | null; domain: string; account_id: string | null; remote_install_id: string | null; environment: string | null } | undefined;
 
           if (row) {
+            // Read the install's real environment back from the row this same sync already
+            // wrote via syncInstall() — a hardcoded 'production' literal here previously
+            // clobbered every staging/dev install's environment on every content re-sync
+            // (upsertSite's ON CONFLICT applies any non-null value via COALESCE, so a wrong
+            // literal actively overwrites a correct one rather than just failing to update it).
             const installData: WPEInstallData = {
               install_id: row.remote_install_id ?? siteId.replace(/^wpe-/, ''),
               install_name: installName,
-              environment: 'production',
+              environment: row.environment ?? 'production',
               primary_domain: row.domain,
               php_version: row.php_version ?? undefined,
               account_id: row.account_id ?? undefined,

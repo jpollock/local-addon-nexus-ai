@@ -1,4 +1,4 @@
-import { defineAgent, cron, on } from '@nexus-ai/agent-sdk';
+import { defineAgent, cron } from '@nexus-ai/agent-sdk';
 
 // Buffer is a Node.js global — not in lib.es2020 typings but always present at agent runtime.
 // eslint-disable-next-line no-var
@@ -794,6 +794,12 @@ export default defineAgent({
   version: '0.5.0',
   description: 'Content strategy agent — topical map, gap analysis, and overlap detection from your WordPress install',
 
+  // Pulls a WPE install to a local sandbox and creates/starts Local sites during analysis —
+  // writes to the local filesystem/site registry, not to the production site itself, but that
+  // distinction is finer than the picker's readonly/writes binary supports today. 'writes' is
+  // the conservative choice.
+  effect: 'writes',
+
   timeoutMs: 20 * 60 * 1000,   // 20 min — WPE pull + analysis can take 10+ min (same as sentinel)
 
   credentials: [
@@ -805,12 +811,27 @@ export default defineAgent({
     },
   ],
 
+  // wpe:sync.completed EXCLUDED (2026-08-07) — same incident class documented in
+  // agents/security-sentinel/agent.js. Its only real publisher is WpeRefreshScheduler.ts
+  // (opt-in, wpeRefreshAutoEnabled), which fires this event automatically for every stale WPE
+  // install in a cycle — dozens at once, zero user involvement. The per-site cooldown this
+  // trigger used to lean on only rate-limits re-firing the SAME site within 6h; it does nothing
+  // to stop a single scheduler cycle from launching a sandbox-pull-and-analyze pass across many
+  // DIFFERENT installs at once, which is the identical resource-exhaustion shape as the sentinel
+  // incident, just for content analysis instead of security scanning. There is no `source` field
+  // on the published event distinguishing "user synced one site" from "scheduler swept the
+  // fleet", so — as security-sentinel's own comment prescribes — this cannot be scoped safely
+  // and is removed instead.
+  //
+  // Known cost: `nexus agent run seo-insights --install <site>` (src/cli/commands/agent.ts)
+  // scopes a run by emitting this same event via handleAgentEmit(), so that CLI path is now a
+  // silent no-op for this agent — the identical tradeoff already accepted for security-sentinel.
+  // Run Now (the site scope picker) does NOT depend on this trigger — it calls AgentRunner.run()
+  // directly (see AGENT_RUN_NOW in src/main/ipc-handlers.ts) — so it remains the way to run this
+  // agent against a specific site on demand. The weekly cron + settings.scope.siteIds covers
+  // "run automatically on selected sites."
   triggers: [
     cron('0 7 * * 1'),           // Weekly scheduled report
-    on('wpe:sync.completed'),    // UI site selector + nexus agent run --install <site>
-    // NOTE: on('wpe:sync.completed') also fires for background WPE syncs (every site, every
-    // N hours). The 6-hour per-site cooldown in run() prevents re-analyzing the same site
-    // more than once per cooldown window, even if the event fires repeatedly.
   ],
 
   tools: [
@@ -2060,44 +2081,33 @@ ${queries.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}`,
   // Per-site cooldown prevents duplicate runs when the weekly cron fires
   // while a site was already analyzed recently.
   // ---------------------------------------------------------------------------
-  async run({ event, tools, state, log, credentials }) {
+  async run({ event, tools, state, log, credentials, settings }) {
     const payloadSite = (event?.payload as Record<string, unknown> | undefined)
       ?.installName as string | undefined;
 
     // -----------------------------------------------------------------------
-    // Target resolution. Previously an empty payload returned immediately,
-    // which meant the cron trigger could never do any work.
+    // Target resolution. An event naming one install (or Run Now) is the user
+    // pointing at a site directly and is not constrained by scope — same rule
+    // security-sentinel's resolveScanScope documents.
+    //
+    // The scheduled path used to fall back to a "watchlist" state key, then to
+    // auto-picking the largest Local sites by post count — both acted without
+    // the user having chosen anything, which is the exact "unconfigured must
+    // never mean pick-for-me" bug resolveScanScope exists to prevent. Replaced
+    // with the same settings.scope.siteIds field security-sentinel and
+    // log-processor use: absent or empty scope analyzes nothing, deliberately.
     // -----------------------------------------------------------------------
     let targets: string[] = [];
     if (payloadSite) {
       targets = [payloadSite];
     } else {
-      // Cron path: a watchlist if the user set one, else the largest Local
-      // sites. WPE installs are excluded here — each needs a sandbox pull, and
-      // several of those will not fit in one run's time budget. They are
-      // analyzed via wpe:sync.completed or an explicit run instead.
-      const watchlistRaw = state.get<string>('watchlist');
-      if (watchlistRaw) {
-        try {
-          const parsedList = JSON.parse(watchlistRaw) as unknown;
-          if (Array.isArray(parsedList)) {
-            targets = parsedList.filter((s): s is string => typeof s === 'string').slice(0, CRON_MAX_SITES);
-          }
-        } catch { /* malformed watchlist — fall through to auto-selection */ }
-      }
+      const scope = (settings as Record<string, unknown> | undefined)?.scope as { siteIds?: unknown } | undefined;
+      targets = Array.isArray(scope?.siteIds)
+        ? scope!.siteIds.filter((id): id is string => typeof id === 'string' && id.length > 0).slice(0, CRON_MAX_SITES)
+        : [];
+
       if (targets.length === 0) {
-        try {
-          const rows = parseFleetSqlRows(await tools.invoke('fleet_sql', {
-            query: `SELECT id, name, source, ssh_last_sync_at, post_count FROM sites
-                    WHERE source != 'wpe' AND CAST(post_count AS INTEGER) > 0
-                    ORDER BY CAST(post_count AS INTEGER) DESC LIMIT ?`,
-            params: [CRON_MAX_SITES],
-          }));
-          targets = rows.map(r => r.name).filter(Boolean);
-        } catch { /* fleet_sql unavailable */ }
-      }
-      if (targets.length === 0) {
-        log.info('seo-insights: no target sites — set a "watchlist" state key, use the UI site selector, or run: nexus agent run seo-insights --install <site>');
+        log.info('seo-insights: no sites in scope for scheduled analysis. Select sites in the agent\'s settings.');
         return;
       }
       log.info(`Scheduled run targets: ${targets.join(', ')}`);
@@ -2245,7 +2255,7 @@ ${queries.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}`,
           try {
             const linkResult = await tools.invoke('local_wpe_link', { site: siteName }) as string;
             // Response: "## WPE Link for ...\n- **wpe:** <installName or UUID>"
-            const match = typeof linkResult === 'string' && linkResult.match(/\*\*\w+:\*\*\s+(\S+)/);
+            const match = typeof linkResult === 'string' ? linkResult.match(/\*\*\w+:\*\*\s+(\S+)/) : null;
             if (match?.[1]) {
               let candidate = match[1];
               const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate);

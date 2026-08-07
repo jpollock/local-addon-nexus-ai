@@ -534,14 +534,24 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const indexed = indexRegistry.listAll();
       const indexedIds = new Set(indexed.map((e: any) => e.siteId));
 
-      // Fetch WP versions from graph for all local sites
+      // Fetch WP versions + first-indexed timestamp from graph for all local sites.
       const wpVersionsMap = new Map<string, string>();
+      // graph.db's sites.created_at IS populated for local sites (upsertSite's ON CONFLICT
+      // clause omits created_at from its SET list, so the value from the first-ever upsert
+      // survives every later refresh) — it just wasn't being read back out here. It means "first
+      // time Nexus indexed this site", not "when the site was created in Local" (a site that
+      // predates indexing, or has never been indexed, has no row and no value), but that is the
+      // same honest "unknown → no drift computed" semantics WPE's createdAt already carries.
+      const createdAtMap = new Map<string, number>();
       const db = graphService.getDb();
       if (db) {
-        const rows = db.prepare('SELECT id, wp_version FROM sites WHERE source = ? OR source IS NULL').all('local') as Array<{ id: string; wp_version: string | null }>;
+        const rows = db.prepare('SELECT id, wp_version, created_at FROM sites WHERE source = ? OR source IS NULL').all('local') as Array<{ id: string; wp_version: string | null; created_at: number | null }>;
         rows.forEach(row => {
           if (row.wp_version) {
             wpVersionsMap.set(row.id, row.wp_version);
+          }
+          if (typeof row.created_at === 'number') {
+            createdAtMap.set(row.id, row.created_at);
           }
         });
       }
@@ -566,10 +576,28 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           wpVersion: wpVersionsMap.get(site.id) || metadataCache?.get(site.id)?.wpVersion || null,
           phpVersion: site.phpVersion || null,
           hostConnections: site.hostConnections,
+          createdAt: createdAtMap.get(site.id) ?? null,
         };
       });
     } catch (err) {
       localLogger.error('[NexusAI] get-sites failed:', (err as Error).message);
+      return [];
+    }
+  });
+
+  // Sites log-processor already has a bound S3 source for (agents/log-processor/db.ts's
+  // `sources` table). The site scope picker for this agent only offers these — a site in scope
+  // with no bound source would silently do nothing on the nightly cron (see run()'s
+  // `getSource(db, siteId)` check). Reads the agent's own sqlite file directly and read-only,
+  // the same way GET_SITES reads graph.db directly above, rather than routing through the agent
+  // runtime for a plain SELECT.
+  safeHandle(IPC_CHANNELS.AGENT_LOG_PROCESSOR_CONNECTED_SITES, () => {
+    try {
+      const { AGENTS_DIR } = require('./agent-runtime/AgentRegistry') as typeof import('./agent-runtime/AgentRegistry');
+      const { getLogProcessorConnectedSites } = require('./agent-runtime/log-processor-sites') as typeof import('./agent-runtime/log-processor-sites');
+      return getLogProcessorConnectedSites(AGENTS_DIR);
+    } catch (err) {
+      localLogger.error('[NexusAI] log-processor connected-sites failed:', (err as Error).message);
       return [];
     }
   });
