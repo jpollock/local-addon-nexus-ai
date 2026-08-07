@@ -534,16 +534,25 @@ export function createResolvers(context: ResolverContext) {
           // ── Explicit external target: ssh:alias@environment ───────────────
           if (parsed.type === 'external') {
             const alias = parsed.alias!;
-            const siteId = externalSiteId(alias);
-            const rows = graphService?.getDb?.()
-              // I7: is_active = 1 — a soft-deleted host must not resolve.
-              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              ? (graphService.getDb()!.prepare("SELECT * FROM sites WHERE source='external' AND is_active = 1").all() as any[])
-              : [];
-            const graphSite = rows.find((r: any) => r.id === siteId) ?? null;
+            const db = graphService?.getDb?.();
+            const rows = findExternalSites(db, alias, parsed.site, '*');
 
-            if (!graphSite) {
-              return { success: false, error: `External host not found: ${target}` };
+            let graphSite: any;
+            if (rows.length === 0) {
+              return {
+                success: false,
+                error: parsed.site
+                  ? `No site "${parsed.site}" registered on connection "${alias}".`
+                  : `External host not found: ${target}`,
+              };
+            } else if (rows.length > 1) {
+              const names = rows.map((r: any) => `ssh:${alias}/${r.name}@${r.environment ?? 'production'}`);
+              return {
+                success: false,
+                error: `"${alias}" has ${rows.length} registered sites — specify which one: ${names.join(', ')}`,
+              };
+            } else {
+              graphSite = rows[0];
             }
 
             const twin = services.twinService?.getFromGraph?.(graphSite, graphService) ?? null;
