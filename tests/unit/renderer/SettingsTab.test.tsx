@@ -132,6 +132,90 @@ describe('SettingsTab — external hosts', () => {
     const chip = findAll(tree, (n) => textOf(n).trim().includes('Acme'));
     expect(chip.length).toBeGreaterThan(0);
   });
+
+  it('checking an alias with an unknown host key shows the fingerprint and an Approve button', async () => {
+    const mutateMock = jest.fn().mockResolvedValue({
+      data: {
+        nexusHostProbe: {
+          success: true, error: null,
+          report: { ok: false, alias: 'newbox', failure: {
+            kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+            fingerprint: 'SHA256:abc123', keyType: 'ED25519',
+          } },
+        },
+      },
+    });
+    jest.spyOn(global as any, 'fetch').mockImplementation(() => Promise.resolve({
+      json: () => Promise.resolve((mutateMock() as any).then ? undefined : undefined),
+    } as any));
+    // rendererGql posts to fetch and reads response.json() -- simulate that shape directly:
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'newbox', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:abc123', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'newbox' });
+    await instance.checkHostKey();
+    const tree = instance.render();
+    expect(textOf(tree)).toContain('SHA256:abc123');
+    expect(textOf(tree)).toContain('ED25519');
+    const approveButtons = findAll(tree, (n) => n.type === 'button' && textOf(n).includes('Approve'));
+    expect(approveButtons.length).toBeGreaterThan(0);
+  });
+
+  it('approving calls the TRUST_EXTERNAL_HOST_KEY IPC channel, not GraphQL', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'newbox', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:abc123', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    const invokeMock = jest.fn().mockResolvedValue({ success: true, error: null, fingerprint: 'SHA256:abc123' });
+    const electron = mockElectron({});
+    electron.ipcRenderer.invoke = invokeMock;
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'newbox' });
+    await instance.checkHostKey();
+    await instance.approveHostKey();
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, 'newbox');
+  });
+
+  it('a changed host key shows no Approve button', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'newbox', failure: {
+          kind: 'host-key-changed', detail: 'REMOTE HOST IDENTIFICATION HAS CHANGED', remedy: 'contact your admin',
+        } },
+      } } }),
+    });
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ hostKeyCheckAlias: 'newbox' });
+    await instance.checkHostKey();
+    const tree = instance.render();
+    expect(textOf(tree)).toContain('contact your admin');
+    expect(findAll(tree, (n) => n.type === 'button' && textOf(n).includes('Approve'))).toHaveLength(0);
+  });
 });
 
 describe('SettingsTab — exception picker writes targetRef', () => {

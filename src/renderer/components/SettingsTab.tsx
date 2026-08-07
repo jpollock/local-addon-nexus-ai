@@ -11,6 +11,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../common/constants';
 import { injectThemeVars } from '../utils/theme';
+import { rendererGql } from '../utils/rendererGql';
 import type { NexusSettings } from '../../common/types';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,9 @@ interface SettingsTabState {
   expandedOps: Set<string>;
   installSearch: string;
   addingException: { op: string; targetRef: string; environment: string; allowing: boolean } | null;
+  hostKeyCheckAlias: string;
+  hostKeyCheckResult: null | { ok: boolean; failureKind?: string; detail?: string; remedy?: string; fingerprint?: string; keyType?: string };
+  hostKeyTrusting: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +106,9 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     expandedOps: new Set(),
     installSearch: '',
     addingException: null,
+    hostKeyCheckAlias: '',
+    hostKeyCheckResult: null,
+    hostKeyTrusting: false,
   };
 
   componentDidMount(): void {
@@ -132,6 +139,62 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
       loading: false,
     });
+  }
+
+  // ── Host key trust-on-first-use ──────────────────────────────────────────
+
+  async checkHostKey(): Promise<void> {
+    const alias = this.state.hostKeyCheckAlias.trim();
+    if (!alias) return;
+    this.setState({ hostKeyCheckResult: null });
+    try {
+      const data = await rendererGql<{ nexusHostProbe: { success: boolean; error: string | null; report: any } }>(`
+        mutation($alias: String!) {
+          nexusHostProbe(alias: $alias) {
+            success error
+            report { ok alias failure { kind detail remedy fingerprint keyType } }
+          }
+        }
+      `, { alias });
+      const report = data.nexusHostProbe.report;
+      if (!this.mounted) return;
+      if (!report) {
+        this.setState({ hostKeyCheckResult: { ok: false, detail: data.nexusHostProbe.error ?? 'No report returned.' } });
+        return;
+      }
+      this.setState({
+        hostKeyCheckResult: {
+          ok: report.ok,
+          failureKind: report.failure?.kind,
+          detail: report.failure?.detail,
+          remedy: report.failure?.remedy,
+          fingerprint: report.failure?.fingerprint,
+          keyType: report.failure?.keyType,
+        },
+      });
+    } catch (e: any) {
+      if (this.mounted) this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) } });
+    }
+  }
+
+  async approveHostKey(): Promise<void> {
+    const alias = this.state.hostKeyCheckAlias.trim();
+    if (!alias) return;
+    this.setState({ hostKeyTrusting: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, alias);
+      if (!this.mounted) return;
+      if (result.success) {
+        this.setState({
+          hostKeyCheckResult: { ok: true, detail: `Trusted. Run 'nexus host add ${alias}' to finish registration.` },
+          hostKeyTrusting: false,
+        });
+      } else {
+        this.setState({ hostKeyCheckResult: { ok: false, detail: result.error }, hostKeyTrusting: false });
+      }
+    } catch (e: any) {
+      if (this.mounted) this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) }, hostKeyTrusting: false });
+    }
   }
 
   // ── Settings persistence ─────────────────────────────────────────────────
@@ -524,6 +587,43 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
                 }, `${h.alias}/${h.site}`),
               ),
             ),
+      ),
+      React.createElement('div', { style: { marginBottom: 10 } },
+        React.createElement('div', { style: { display: 'flex', gap: 6, marginBottom: 6 } },
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'alias to check',
+            value: this.state.hostKeyCheckAlias,
+            onChange: (e: any) => this.setState({ hostKeyCheckAlias: e.target.value }),
+            style: { flex: 1, fontSize: 12, padding: '4px 8px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'inherit' },
+          }),
+          React.createElement('button', {
+            onClick: () => this.checkHostKey(),
+            style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
+          }, 'Check'),
+        ),
+        this.state.hostKeyCheckResult && React.createElement('div', {
+          style: { fontSize: 12, padding: '8px 10px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4 },
+        },
+          this.state.hostKeyCheckResult.ok
+            ? React.createElement('div', {}, this.state.hostKeyCheckResult.detail || 'Already reachable — no key approval needed.')
+            : this.state.hostKeyCheckResult.failureKind === 'host-key-unknown' && this.state.hostKeyCheckResult.fingerprint
+              ? React.createElement('div', {},
+                  React.createElement('div', {}, `${this.state.hostKeyCheckResult.keyType} ${this.state.hostKeyCheckResult.fingerprint}`),
+                  React.createElement('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
+                    React.createElement('button', {
+                      disabled: this.state.hostKeyTrusting,
+                      onClick: () => this.approveHostKey(),
+                      style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
+                    }, 'Approve'),
+                    React.createElement('button', {
+                      onClick: () => this.setState({ hostKeyCheckResult: null }),
+                      style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
+                    }, 'Dismiss'),
+                  ),
+                )
+              : React.createElement('div', {}, this.state.hostKeyCheckResult.remedy || this.state.hostKeyCheckResult.detail),
+        ),
       ),
       React.createElement('div', { style: { ...cardStyle, borderTopLeftRadius: this.state.externalHosts.length ? 0 : 8, borderTopRightRadius: this.state.externalHosts.length ? 0 : 8 } },
         React.createElement('div', { style: { ...rowStyle, borderBottom: 'none' } },
