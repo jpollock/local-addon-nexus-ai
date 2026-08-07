@@ -118,59 +118,84 @@ file on the user's own machine (`~/.ssh/known_hosts`), never a remote site or
 
 ## API surface
 
+**Simplification found while planning implementation**: `host.ts`'s existing `printFailure()`
+already prints any `{kind, detail, remedy}` generically — every existing failure kind flows
+through it unchanged. Folding the fingerprint capture directly into `probeExternalHost`'s
+existing Gate 1 (rather than a separate GraphQL query) means the CLI needs **no new code at
+all**: it keeps calling the same `nexusHostProbe` mutation it already calls, and gets a better
+`remedy` string through the exact same generic path. This also means the renderer can reuse
+`nexusHostProbe` directly for its own "Check" step — no new query is needed.
+
 - `probeExternalHost` / `ProbeFailureKind` gains `'host-key-unknown' | 'host-key-changed'`.
-  `ExternalSshTransport.annotateFailure()` gets the same two stderr classifications (hint text
-  only — `wp_*` commands and the schedulers never auto-trust, and have no path to approve
-  anything).
-- New GraphQL query `nexusHostKeyFingerprint(alias: String!): NexusHostKeyFingerprintResult!`
-  — read-only, never writes. Runs the Gate-1-equivalent connectivity check and returns a
-  discriminated status: `{ status: 'already-trusted' | 'unknown' | 'changed' | 'error',
-  fingerprint, keyType, detail, remedy }` (fields populated per status — `fingerprint`/`keyType`
-  only for `unknown`, `detail`/`remedy` for `changed`/`error`). Reachable by both the CLI (for
-  its informational message) and the renderer (to populate the approval UI) — it's inert either
-  way.
+  `ProbeFailure` gains two optional fields, populated **only** for `host-key-unknown`:
+  `fingerprint?: string`, `keyType?: string` — structured, so the renderer can build its Approve
+  button without parsing prose, while `remedy` still carries the same information in text for
+  the CLI's existing generic printer.
+  - On `Host key verification failed.`, Gate 1 calls the new `captureOfferedHostKey(alias, exec)`
+    (see below) to fetch the fingerprint inline, using the same injectable `exec: SshExec` the
+    probe already threads through every other step. `remedy` becomes:
+    ```
+    New host key for '<alias>' (<hostname>):
+      <keyType> <fingerprint>
+
+    Approve it in Local → Settings → Nexus AI → External Hosts, then re-run this command.
+    ```
+  - If the capture itself fails (e.g. the host went down between Gate 1's connect attempt and
+    the capture attempt), `fingerprint`/`keyType` stay undefined and `remedy` says so honestly:
+    "Could not fetch the host's key to display a fingerprint (the host may have become
+    unreachable) — re-run `nexus host test <alias>`." Never fabricated.
+  - `host-key-changed` needs no extra capture — ssh's own stderr banner already contains the
+    offending key's fingerprint as prose, so `detail`/`remedy` carry it without a structured
+    field. There is no approve action for this case on any surface, so nothing needs to consume
+    it programmatically.
+  - `NexusHostProbeFailure` (GraphQL) gains matching optional `fingerprint: String` and
+    `keyType: String` fields.
+- `ExternalSshTransport.annotateFailure()` gets the same two stderr classifications, but as
+  **plain hint text only, no fingerprint** — that function is synchronous today and used inline
+  in `runWpCli`; making it async to fetch a fingerprint for a path that can never approve
+  anything anyway is disproportionate. `wp_*` commands and the schedulers get a hint pointing at
+  `nexus host test <alias>` (which *will* show the fingerprint), nothing more.
 - New Electron IPC channel `TRUST_EXTERNAL_HOST_KEY` (added to `IPC_CHANNELS`, handled via
   `safeHandle` in `ipc-handlers.ts`) — `(alias: string) => Promise<{ success: boolean; error:
-  string | null; fingerprint?: string }>`. Re-runs the capture (cheap, one more SSH round trip;
-  simpler and safer than trusting a value that already crossed a process boundary once) and
-  appends to the real `known_hosts`. **Not added to the GraphQL schema, not callable from the
-  CLI, not exposed as an MCP tool.** Invoked only from the renderer via the existing
-  preload-bridge pattern, wired to a button in `SettingsTab.tsx`.
+  string | null; fingerprint?: string }>`. Re-runs `captureOfferedHostKey` (cheap, one more SSH
+  round trip; simpler and safer than trusting a value that already crossed a process boundary
+  once) and appends to the real `known_hosts` via `trustHostKey`. **Not added to the GraphQL
+  schema, not callable from the CLI, not exposed as an MCP tool.** Invoked only from the
+  renderer, via `this.props.electron.ipcRenderer.invoke(...)` (the same direct-invoke pattern
+  `SettingsTab.tsx` already uses for `GET_EXTERNAL_HOSTS` etc. — no separate preload bridge
+  file exists in this codebase to change), wired to a button in `SettingsTab.tsx`.
 - New module `src/main/external/hostKeyTrust.ts`: `captureOfferedHostKey(alias, exec)` (the
-  temp-file capture + `ssh-keygen -lf` parse, shared by both the query and the IPC handler) and
-  `trustHostKey(userKnownHostsFile, rawLine)` (the append, called only from the IPC handler).
-  New builder `buildHostKeyCaptureArgs(alias, tempFilePath)` in `ssh-args.ts`, following the
-  same family/docblock discipline as the existing builders (calls `assertSafeSshAlias` —
-  mandatory, since this module is the sole place an SSH invocation is constructed).
+  temp-file capture + `ssh-keygen -lf` parse, shared by `probeExternalHost` and the IPC handler)
+  and `trustHostKey(userKnownHostsFile, rawLine)` (the append, called only from the IPC
+  handler). New builder `buildHostKeyCaptureArgs(alias, tempFilePath)` in `ssh-args.ts`,
+  following the same family/docblock discipline as the existing builders (calls
+  `assertSafeSshAlias` — mandatory, since this module is the sole place an SSH invocation is
+  constructed).
 
 ## CLI flow (`host test` / `host add`, both identical here)
 
-1. Probe as today.
-2. `ok: true` → unchanged behavior.
-3. `failure.kind === 'host-key-changed'` → print `failure.detail` (already contains ssh's
-   fingerprint + banner) and `failure.remedy`, exit 1. No approval path exists for this case,
-   on any surface.
-4. `failure.kind === 'host-key-unknown'` → call `nexusHostKeyFingerprint(alias)` and print:
-   ```
-   New host key for '<alias>' (<hostname>):
-     <keyType> <fingerprint>
-
-   Approve it in Local → Settings → Nexus AI → External Hosts, then re-run this command.
-   ```
-   Exit 1. No `y/n` prompt, no `--yes`/`--json` bypass — `--yes` continues to mean only what it
-   already means for `host add`'s unrelated multi-site confirmation.
+Unchanged from today's code path. `host-key-unknown` and `host-key-changed` are just two more
+entries in the same `ProbeFailureKind` union every other gate already produces — `printFailure`
+prints `kind`/`detail`/`remedy` the same way it does for `alias-not-found` or `auth-failed`
+today. No `y/n` prompt, no `--yes`/`--json` interaction, no branching added to `host.ts` at
+all — `--yes` continues to mean only what it already means for `host add`'s unrelated
+multi-site confirmation.
 
 ## Renderer flow (new, small — `SettingsTab.tsx`)
 
 A new section alongside the existing External Hosts card: an alias text field and a "Check"
 button.
 
-1. Check → calls `nexusHostKeyFingerprint(alias)`.
-2. `already-trusted` → "This host's key is already trusted."
-3. `unknown` → show `<keyType> <fingerprint>` with an **Approve** and a **Dismiss** button.
-   Approve → calls the `TRUST_EXTERNAL_HOST_KEY` IPC channel → on success, show "Trusted. Run
-   `nexus host add <alias>` to finish registration." Dismiss → clear the state, nothing written.
-4. `changed` / `error` → show `detail`/`remedy` as plain text. No approve option.
+1. Check → calls the existing `nexusHostProbe(alias)` mutation (same one the CLI uses).
+2. `report.ok === true` → "Already reachable — no key approval needed."
+3. `report.failure?.kind === 'host-key-unknown'` → if `fingerprint` is present, show
+   `<keyType> <fingerprint>` with an **Approve** and a **Dismiss** button. Approve → calls the
+   `TRUST_EXTERNAL_HOST_KEY` IPC channel → on success, show "Trusted. Run `nexus host add
+   <alias>` to finish registration." Dismiss → clear the state, nothing written. If `fingerprint`
+   is absent (the capture-failed case above), show `remedy` as plain text with no Approve
+   button — nothing to approve yet.
+4. Any other `failure.kind` (`host-key-changed` included) → show `detail`/`remedy` as plain
+   text. No approve option.
 
 This UI does not replace or duplicate `host add`'s registration flow (site discovery, slug
 picking, environment labeling) — it does exactly one thing, approving a host's identity, and
@@ -180,17 +205,20 @@ sends the user back to the CLI to finish.
 
 - Unit: `probeExternalHost`'s new classification, using the existing injectable `SshExec` —
   feed exact stderr text captured live (`Host key verification failed.` /
-  the `REMOTE HOST IDENTIFICATION HAS CHANGED!` banner) as fixtures.
+  the `REMOTE HOST IDENTIFICATION HAS CHANGED!` banner) as fixtures. Cover both the successful
+  capture (fingerprint/keyType populated) and the capture-fails sub-case (undefined fields,
+  honest remedy text).
 - Unit: `captureOfferedHostKey`/`trustHostKey` against a fake `SshExec` and a temp directory —
   no real network access in tests.
-- Unit: `annotateFailure`'s two new hint branches.
-- Unit: `nexusHostKeyFingerprint` resolver — all four status branches.
+- Unit: `annotateFailure`'s two new hint-only branches (no fingerprint).
 - Unit: the `TRUST_EXTERNAL_HOST_KEY` IPC handler — capture + append, and that it is registered
   only as an IPC channel (grep-based test asserting it never appears in `schema.ts`'s mutation
   list, so a future refactor can't silently promote it back into GraphQL).
-- CLI: `host.ts` tests for the `host-key-unknown` and `host-key-changed` message paths — assert
-  neither ever prompts or writes.
-- Renderer: `SettingsTab.test.tsx` — the four status branches and the Approve/Dismiss actions.
+- CLI: no new CLI-level test needed beyond what already exercises `printFailure` generically —
+  confirm via existing `host.ts` tests that a `host-key-unknown`/`host-key-changed` report
+  renders through the same path as any other failure kind, with no prompt and no write.
+- Renderer: `SettingsTab.test.tsx` — the four branches (ok / unknown-with-fingerprint /
+  unknown-capture-failed / other) and the Approve/Dismiss actions.
 
 ## Out of scope
 
