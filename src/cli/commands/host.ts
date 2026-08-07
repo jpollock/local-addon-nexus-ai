@@ -379,7 +379,7 @@ hostCommand
         mutation {
           nexusHostList {
             success error
-            hosts { alias wpPath wpCliPath environment firstSeenAt lastSeenAt }
+            hosts { alias wpCliPath firstSeenAt lastSeenAt sites { name domain environment wpVersion } }
           }
         }
       `, {});
@@ -401,12 +401,19 @@ hostCommand
         return;
       }
 
-      console.log(`\n${hosts.length} external host${hosts.length === 1 ? '' : 's'}:\n`);
+      console.log(`\n${hosts.length} external connection${hosts.length === 1 ? '' : 's'}:\n`);
       for (const h of hosts) {
-        console.log(`  ${h.alias}  [${h.environment}]`);
-        console.log(`    path       ${h.wpPath ?? '(not set — pass --path)'}`);
+        console.log(`  ${h.alias}`);
         if (h.wpCliPath) console.log(`    wp-cli     ${h.wpCliPath}`);
         console.log(`    last seen  ${new Date(h.lastSeenAt).toLocaleString()}`);
+        if (h.sites.length === 0) {
+          console.log(`    (no sites registered — nexus host add ${h.alias} --path <dir>)`);
+        } else {
+          for (const s of h.sites) {
+            console.log(`    ${s.name} [${s.environment}]  ${s.domain ?? ''}`.trimEnd());
+            console.log(`      target: ssh:${h.alias}/${s.name}@${s.environment}`);
+          }
+        }
       }
       console.log('');
     } catch (e: any) {

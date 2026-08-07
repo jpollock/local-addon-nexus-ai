@@ -69,6 +69,7 @@ describe('fleet queries include external sites', () => {
     await graphService.upsertSite({
       id: 'ssh:ext-host',
       name: 'ext-host',
+      account_id: 'ext-host',
       source: 'external',
       host: 'external',
       domain: 'example.com',
@@ -886,6 +887,7 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
         await graphService.upsertSite({
           id: 'ssh:ext-host',
           name: 'ext-host',
+          account_id: 'ext-host',
           source: 'external',
           host: 'external',
           domain: 'example.com',
@@ -1243,6 +1245,7 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
     await graphService.upsertSite({
       id: 'ssh:ext-host',
       name: 'ext-host',
+      account_id: 'ext-host',
       source: 'external',
       host: 'external',
       domain: 'example.com',
@@ -1462,6 +1465,7 @@ describe('nexusFleetSiteHealth scores an external host once it has data', () => 
     await graphService.upsertSite({
       id: 'ssh:myhost',
       name: 'myhost',
+      account_id: 'myhost',
       source: 'external',
       host: 'external',
       domain: 'myhost.example.com',
@@ -1504,6 +1508,7 @@ describe('nexusFleetSiteHealth scores an external host once it has data', () => 
     await graphService.upsertSite({
       id: 'ssh:bare',
       name: 'bare',
+      account_id: 'bare',
       source: 'external',
       host: 'external',
       domain: 'bare.example.com',
@@ -1523,6 +1528,7 @@ describe('nexusFleetSiteHealth scores an external host once it has data', () => 
     await graphService.upsertSite({
       id: 'ssh:myhost',
       name: 'myhost',
+      account_id: 'myhost',
       source: 'external',
       host: 'external',
       domain: 'myhost.example.com',

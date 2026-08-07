@@ -2644,16 +2644,21 @@ export function createResolvers(context: ResolverContext) {
                 "SELECT id, domain, php_version, wp_version, site_url, remote_install_id FROM sites WHERE source = 'wpe' AND is_active = 1 AND (remote_install_id = ? OR LOWER(name) = ?) LIMIT 1"
               ).get(installName, installName.toLowerCase()) as typeof row;
             } else {
-              // M2: Use LOWER() for external alias match; M3: prefer id
-              // I7: is_active = 1 — `nexus host remove` soft-deletes, and without this
-              // a removed host still reports health.
+              // I7: is_active = 1 enforced inside findExternalSites.
               const sshTarget = targetArgs.ssh_target as string;
               const parsed = parseTarget(sshTarget);
               const alias = parsed.alias!;
-              const expectedId = externalSiteId(alias);
-              row = db.prepare(
-                "SELECT id, domain, php_version, wp_version, site_url FROM sites WHERE source = 'external' AND is_active = 1 AND (id = ? OR LOWER(name) = ?) LIMIT 1"
-              ).get(expectedId, alias.toLowerCase()) as typeof row;
+              const db2 = db; // the outer `db` is already confirmed non-null above this block
+              const rows = findExternalSites(db2, alias, parsed.site,
+                'id, domain, php_version, wp_version, site_url');
+              if (rows.length === 1) {
+                row = rows[0] as typeof row;
+              }
+              // rows.length === 0 or > 1 both fall through to the existing
+              // "Remote site not found" handling below — an ambiguous bare
+              // shorthand is reported the same as not-found here, since this
+              // path has no per-site disambiguation message today; that is
+              // consistent with its existing behavior for a missing row.
             }
 
             if (!row) {
@@ -5570,7 +5575,23 @@ export function createResolvers(context: ResolverContext) {
         try {
           const storage = (services as any).registryStorage;
           if (!storage) return { success: false, error: 'Storage not available', hosts: [] };
-          return { success: true, error: null, hosts: listExternalProfiles(storage) };
+          const db = (services as any).graphService?.getDb?.();
+          const profiles = listExternalProfiles(storage);
+          const hosts = profiles.map((p: any) => {
+            const sites = findExternalSites(db, p.alias, undefined,
+              'name, domain, environment, wp_version');
+            return {
+              alias: p.alias,
+              wpCliPath: p.wpCliPath ?? null,
+              firstSeenAt: p.firstSeenAt,
+              lastSeenAt: p.lastSeenAt,
+              sites: sites.map((s: any) => ({
+                name: s.name, domain: s.domain, environment: s.environment ?? 'production',
+                wpVersion: s.wp_version,
+              })),
+            };
+          });
+          return { success: true, error: null, hosts };
         } catch (e: any) {
           return { success: false, error: e?.message ?? String(e), hosts: [] };
         }

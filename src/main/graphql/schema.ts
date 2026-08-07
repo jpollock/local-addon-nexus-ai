@@ -2155,13 +2155,19 @@ export const typeDefs = gql`
     failure: NexusHostProbeFailure
   }
 
+  type NexusExternalSite {
+    name: String!
+    domain: String
+    environment: String!
+    wpVersion: String
+  }
+
   type NexusHostEntry {
     alias: String!
-    wpPath: String
     wpCliPath: String
-    environment: String!
     firstSeenAt: Float!
     lastSeenAt: Float!
+    sites: [NexusExternalSite!]!
   }
 
   type NexusHostProbeResult {
