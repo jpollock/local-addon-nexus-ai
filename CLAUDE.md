@@ -152,6 +152,22 @@ Target syntax: `ssh:<alias>/<site>@<production|staging|development>`.
   it cannot override a host registered as `production`. This is deliberate: the
   environment now comes from the install cache (for WPE) or the most restrictive
   of the registered label and the typed suffix (for external).
+- **A brand-new host's first command fails with a real fingerprint, not an opaque error.**
+  `probeExternalHost`'s Gate 1 classifies `Host key verification failed.` as
+  `host-key-unknown` and fetches the offered key by connecting through the alias itself into an
+  isolated temp `known_hosts` file — never `ssh-keyscan`, which cannot traverse a `ProxyJump`
+  and would silently break every bastion-based host. A previously-trusted host whose key later
+  changes is `host-key-changed` and is hard-refused everywhere, with no approval path on any
+  surface — matching ssh's own model of never re-prompting past a real MITM/reinstall warning.
+  **Approving a new key is possible only from Local's Settings UI**, via a genuine
+  `ipcMain`/`ipcRenderer` channel (`TRUST_EXTERNAL_HOST_KEY`) that is deliberately never added
+  to the GraphQL schema and never called from `src/cli/`. This is not a CLI convention — the
+  renderer and CLI hit the identical HTTP GraphQL endpoint with the identical bearer token
+  (`rendererGql.ts` reads the same `graphql-connection-info.json` the CLI does), so a GraphQL
+  mutation the CLI "just doesn't call" would not be a real boundary; only a true IPC channel is.
+  `host test`/`host add` show the fingerprint (read-only, via the same `nexusHostProbe` mutation
+  they already call) and point at Settings — neither has a `y/n` prompt, and `--yes` never
+  bypasses this.
 - **18 of the 22 `nexus wp` subcommands reach an external host** (every command
   routed through `nexusWpCommand`), up from 3 before the unification.
   `nexusWpCommand` now delegates to `resolveTransport` via `resolveTargetArgs`,
