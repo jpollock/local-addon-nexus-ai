@@ -111,6 +111,12 @@ const sectionHeaderStyle: React.CSSProperties = {
 
 export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabState> {
   private mounted = false;
+  // Bumped at the start of every checkHostKey() call. Lets a call that
+  // resolves late (superseded by a newer one) tell whether it is still the
+  // most recent in-flight request before touching hostKeyChecking — otherwise
+  // a stale response arriving after a newer check has already started would
+  // clear the flag out from under that newer, still-running check.
+  private hostKeyCheckSeq = 0;
 
   state: SettingsTabState = {
     settings: null,
@@ -170,6 +176,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     // result — see the in-flight-race note in the task-6 review.
     const alias = this.state.hostKeyCheckAlias.trim();
     if (!alias) return;
+    const mySeq = ++this.hostKeyCheckSeq;
     this.setState({ hostKeyCheckResult: null, hostKeyCheckedAlias: '', hostKeyChecking: true });
     const isStale = () => this.state.hostKeyCheckAlias.trim() !== alias;
     try {
@@ -181,7 +188,14 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
           }
         }
       `, { alias }, HOST_PROBE_CLIENT_TIMEOUT_MS);
-      if (!this.mounted || isStale()) return;
+      if (!this.mounted || isStale()) {
+        // A stale/discarded response must not leave the button stuck on
+        // "Checking…" forever. But only clear the flag if no newer check has
+        // started since this one — if it has, that newer call already owns
+        // hostKeyChecking and this stale resolution must not clobber it.
+        if (this.mounted && this.hostKeyCheckSeq === mySeq) this.setState({ hostKeyChecking: false });
+        return;
+      }
       const report = data.nexusHostProbe.report;
       if (!report) {
         this.setState({

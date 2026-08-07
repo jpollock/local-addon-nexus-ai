@@ -344,6 +344,96 @@ describe('SettingsTab — external hosts', () => {
     expect(instance.state.hostKeyCheckedAlias).toBe('alias-b');
   });
 
+  it('a stale/discarded response clears hostKeyChecking so the Check button does not stay disabled forever', async () => {
+    // Regression test: click Check, edit the alias before the (now up-to-210s)
+    // probe resolves, so the response is discarded as stale -- but no NEW check
+    // is kicked off. hostKeyChecking must still be cleared, or the Check button
+    // stays disabled/stuck on "Checking…" until the component remounts.
+    let resolveFetch: (v: any) => void;
+    const pending = new Promise((resolve) => { resolveFetch = resolve; });
+    (global as any).fetch = jest.fn().mockReturnValue(pending);
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+
+    instance.setState({ hostKeyCheckAlias: 'alias-a' });
+    const checkPromise = instance.checkHostKey();
+    expect(instance.state.hostKeyChecking).toBe(true);
+
+    // User edits the alias while the probe is still in flight, WITHOUT
+    // kicking off a new check.
+    instance.setState({ hostKeyCheckAlias: 'alias-b' });
+
+    resolveFetch!({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'alias-a', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:stale', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    await checkPromise;
+
+    expect(instance.state.hostKeyChecking).toBe(false);
+    const tree = instance.render();
+    const checkButton = findAll(tree, (n) => n.type === 'button' && /check/i.test(textOf(n)))[0];
+    expect(checkButton.props.disabled).toBe(false);
+  });
+
+  it('a stale response does NOT clear hostKeyChecking out from under a newer check that is still in flight', async () => {
+    // If a second checkHostKey() genuinely started before the first (stale)
+    // one resolves, the first must not clear hostKeyChecking -- the second
+    // call owns it until it finishes.
+    let resolveFirst: (v: any) => void;
+    let resolveSecond: (v: any) => void;
+    const firstResponse = new Promise((resolve) => { resolveFirst = resolve; });
+    const secondResponse = new Promise((resolve) => { resolveSecond = resolve; });
+    const fetchMock = jest.fn()
+      .mockImplementationOnce(() => firstResponse)
+      .mockImplementationOnce(() => secondResponse);
+    (global as any).fetch = fetchMock;
+    const electron = mockElectron({});
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+
+    instance.setState({ hostKeyCheckAlias: 'alias-a' });
+    const firstCheck = instance.checkHostKey();
+    instance.setState({ hostKeyCheckAlias: 'alias-b' });
+    const secondCheck = instance.checkHostKey();
+    expect(instance.state.hostKeyChecking).toBe(true);
+
+    // The stale first response resolves while the second is still pending.
+    resolveFirst!({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'alias-a', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:stale', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    await firstCheck;
+    // The second check is still in flight -- its hostKeyChecking must survive.
+    expect(instance.state.hostKeyChecking).toBe(true);
+
+    resolveSecond!({
+      json: async () => ({ data: { nexusHostProbe: {
+        success: true, error: null,
+        report: { ok: false, alias: 'alias-b', failure: {
+          kind: 'host-key-unknown', detail: 'x', remedy: 'y',
+          fingerprint: 'SHA256:newer', keyType: 'ED25519',
+        } },
+      } } }),
+    });
+    await secondCheck;
+    expect(instance.state.hostKeyChecking).toBe(false);
+  });
+
   it('checkHostKey passes the 210s host-probe timeout to rendererGql, not the 10s default', async () => {
     // probeExternalHost's documented sequential worst case is ~155s; the CLI's
     // HOST_PROBE_CLIENT_TIMEOUT_MS (src/cli/commands/host.ts) is 210000 for the
