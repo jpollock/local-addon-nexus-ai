@@ -59,11 +59,8 @@ describe('nexusFleetSearch resolver', () => {
     expect(services.vectorStore.searchAcrossSites).toHaveBeenCalledTimes(1);
     const [siteIds, vector, options, concurrency] = services.vectorStore.searchAcrossSites.mock.calls[0];
     expect(Array.isArray(siteIds)).toBe(true);
-    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
-    expect(siteIds).toEqual(expect.arrayContaining([
-      expect.stringMatching(/^site-a_[0-9a-f]{8}$/),
-      expect.stringMatching(/^site-b_[0-9a-f]{8}$/),
-    ]));
+    // Local ids contain no invalid character, so vectorSiteId() is identity — no hash suffix.
+    expect(siteIds).toEqual(expect.arrayContaining(['site-a', 'site-b']));
     expect(vector).toBeInstanceOf(Float32Array);
     expect(options).toMatchObject({ queryText: 'about page' });
     expect(typeof concurrency).toBe('number');
@@ -119,8 +116,8 @@ describe('nexusContentSearch resolver', () => {
     expect(services.embeddingService.embed).toHaveBeenCalledWith('contact');
     expect(services.vectorStore.search).toHaveBeenCalledTimes(1);
     const [siteId, vector, options] = services.vectorStore.search.mock.calls[0];
-    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
-    expect(siteId).toMatch(/^site-a_[0-9a-f]{8}$/);
+    // Local ids contain no invalid character, so vectorSiteId() is identity — no hash suffix.
+    expect(siteId).toBe('site-a');
     expect(vector).toBeInstanceOf(Float32Array);
     expect(options).toMatchObject({ limit: 5 });
 
@@ -144,8 +141,8 @@ describe('nexusContentSearch resolver', () => {
 
     const [firstArg] = services.vectorStore.search.mock.calls[0];
     expect(typeof firstArg).toBe('string');
-    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
-    expect(firstArg).toMatch(/^site-a_[0-9a-f]{8}$/);
+    // Local ids contain no invalid character, so vectorSiteId() is identity — no hash suffix.
+    expect(firstArg).toBe('site-a');
   });
 
   it('returns site-not-found error for unknown target', async () => {

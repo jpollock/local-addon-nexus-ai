@@ -76,15 +76,17 @@ describe.each([
     const searchedIds: string[] = searchAcrossSites.mock.calls[0][0];
 
     // vectorSiteId() rewrites `ssh:alias` -> `ssh_alias` and appends a stable
-    // hash suffix at the vector-store boundary, so assert against the
-    // translated-with-suffix form.
-    const matchesAny = (prefix: string) =>
+    // hash suffix at the vector-store boundary (it contains a `:`, so it needs
+    // sanitizing); WPE ids contain no invalid character, so vectorSiteId() is
+    // identity for them -- assert an exact match, not a hash-suffixed one.
+    const matchesHashed = (prefix: string) =>
       searchedIds.some((id) => new RegExp(`^${prefix}_[0-9a-f]{8}$`).test(id));
+    const matchesExact = (id: string) => searchedIds.includes(id);
 
-    expect(matchesAny('ssh_live-host')).toBe(true);
-    expect(matchesAny('wpe-live')).toBe(true);
-    expect(matchesAny('ssh_removed-host')).toBe(false);
-    expect(matchesAny('ssh_removed-host'.replace('_', ':'))).toBe(false);
-    expect(matchesAny('wpe-gone')).toBe(false);
+    expect(matchesHashed('ssh_live-host')).toBe(true);
+    expect(matchesExact('wpe-live')).toBe(true);
+    expect(matchesHashed('ssh_removed-host')).toBe(false);
+    expect(matchesHashed('ssh_removed-host'.replace('_', ':'))).toBe(false);
+    expect(matchesExact('wpe-gone')).toBe(false);
   });
 });

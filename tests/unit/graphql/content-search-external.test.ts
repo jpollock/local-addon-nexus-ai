@@ -86,9 +86,9 @@ describe('nexusContentSearch — remote targets', () => {
     });
 
     expect(r.success).toBe(true);
-    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
+    // WPE ids contain no invalid character, so vectorSiteId() is identity — no hash suffix.
     expect(search).toHaveBeenCalledWith(
-      expect.stringMatching(/^wpe-1234_[0-9a-f]{8}$/),
+      'wpe-1234',
       expect.any(Array),
       expect.any(Object),
     );

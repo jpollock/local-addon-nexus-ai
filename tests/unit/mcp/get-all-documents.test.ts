@@ -43,7 +43,8 @@ describe('get_all_site_documents — remote resolution', () => {
     const result = await getAllDocumentsHandler.execute({ site: 'mysite' }, services);
 
     expect(result.isError).toBeUndefined();
-    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith(expect.stringMatching(/^site-1_[0-9a-f]{8}$/));
+    // Local ids contain no invalid character, so vectorSiteId() is identity — no hash suffix.
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('site-1');
   });
 
   it('declines on a cross-source name collision', async () => {
@@ -86,7 +87,8 @@ describe('get_all_site_documents — qualified target strings', () => {
     const result = await getAllDocumentsHandler.execute({ site: 'wpe:acct/myinstall@production' }, services);
 
     expect(result.isError).toBeUndefined();
-    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith(expect.stringMatching(/^wpe-abc_[0-9a-f]{8}$/));
+    // WPE ids contain no invalid character, so vectorSiteId() is identity — no hash suffix.
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('wpe-abc');
   });
 
   it('errors cleanly (no throw) on an unknown qualified target', async () => {

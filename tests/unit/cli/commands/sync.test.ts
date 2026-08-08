@@ -148,10 +148,11 @@ describe('nexus sync push — files-only confirmation (interactive TTY)', () => 
   });
 
   it('--yes skips the prompt entirely (no readline interaction needed)', async () => {
-    // No mockReadlineAnswer() call -- if the code path tried to prompt, the
-    // real (unmocked) readline module would hang waiting on stdin, and this
-    // test would time out. Reaching the mutate call at all proves the prompt
-    // was skipped.
+    // No mockReadlineAnswer() call -- the outer beforeEach's
+    // resetReadlineMockToFailLoudly() is still in effect, so if the code path
+    // tried to prompt, readline's mocked question() would throw synchronously
+    // rather than hang. Reaching the mutate call at all proves the prompt was
+    // skipped.
     const mutate = successPushMutate();
 
     await run(loadSyncCommand(mutate), ['push', 'mysite@local', '--to', 'wpe:acct/inst@staging', '--yes']);

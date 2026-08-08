@@ -56,7 +56,9 @@ export async function executeSentinelCommands(
           ok: false,
           durationMs: Date.now() - start,
           error: `Operation blocked: file deletion is not permitted on "${environment}" environments. `
-            + 'Adjust in Nexus AI → Settings → WP Engine Access.',
+            + `To allow security-sentinel to remove this file automatically, grant "delete" `
+            + `permission for the "${environment}" environment in Nexus AI → Settings → WP Engine `
+            + 'Access, or remove the file manually.',
         });
         allOk = false;
       } else if (isRm) {
@@ -86,7 +88,9 @@ export async function executeSentinelCommands(
           ok: false,
           durationMs: Date.now() - start,
           error: `Operation blocked: WP-CLI is not permitted on "${environment}" environments. `
-            + 'Adjust in Nexus AI → Settings → WP Engine Access.',
+            + `To allow security-sentinel to run this remediation command automatically, grant `
+            + `"wpcli" permission for the "${environment}" environment in Nexus AI → Settings → `
+            + 'WP Engine Access, or run it manually.',
         });
         allOk = false;
       } else {

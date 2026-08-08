@@ -18,8 +18,10 @@ const logger = createLogger('McpSafetyWrapper');
  * wrapper only adds MCP-specific audit logging on top of that shared gate.
  *
  * This layer is ONLY used by the MCP server for Claude chat interactions.
- * GraphQL/CLI calls the tool registry directly and handles confirmations
- * at their own interface layer (e.g., terminal prompts in CLI).
+ * GraphQL/CLI call `ToolRegistry.call()` directly and are gated by the same
+ * shared Tier 3 confirmation check inside it — they are not exempt from it,
+ * and do not re-implement their own confirmation logic; a CLI terminal
+ * prompt, when one exists, is layered on top of (not instead of) that gate.
  */
 export class McpSafetyWrapper {
   constructor(private registry: ToolRegistry) {}

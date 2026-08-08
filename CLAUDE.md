@@ -810,3 +810,18 @@ completeness claim here is worse than no claim at all.
   `delete` refused everywhere. So on a production install, reads work and writes
   do not — SSH is *not* off wholesale. Delete `environment-filter.ts` or wire it
   up; do not cite it as a live protection.
+- **This is why security-sentinel's "Remediate" button will not work out of the
+  box.** `SentinelExecutor` (`src/main/sentinel/SentinelExecutor.ts`) gates every
+  remediation command through the same `isOperationAllowed` check above: an
+  `rm` (webshell removal) is gated on `delete`, refused on **every**
+  environment by default including development; any other WP-CLI command is
+  gated on `wpcli` (not `wpcli_read`, deliberately — remediation commands are
+  LLM-composed and can mutate), refused on production by default. This is a
+  deliberate fail-closed default, not a bug, and there is **no** sentinel-specific
+  carve-out — do not add one. The first time a user clicks "Remediate" on a
+  confirmed finding it will therefore fail with an "Operation blocked" error
+  until they explicitly grant `delete` and/or `wpcli` for the relevant
+  environment in Nexus AI → Settings → WP Engine Access. The error message
+  itself names the exact permission and environment to grant, so this should
+  surface as an actionable message, not a silent no-op — if you touch
+  `SentinelExecutor`'s error strings, keep them that specific.

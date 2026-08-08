@@ -677,7 +677,12 @@ export class SqliteVecStore implements IVectorStore {
     const rows = this.conn.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'site_%_docs' ORDER BY name`,
     ).all() as { name: string }[];
-    // Strip "site_" prefix and "_docs" suffix to recover the original siteId (hyphens preserved)
+    // Strip "site_" prefix and "_docs" suffix. For local/WPE ids (identity-mapped
+    // by vectorSiteId — no invalid characters, so nothing was ever sanitized) this
+    // DOES recover the original siteId exactly. For external multi-site ids (which
+    // contained a `:` or `/` and were therefore sanitized + hash-suffixed), the
+    // sanitization and hashing in vectorSiteId() are one-way — this returns the
+    // opaque, non-reversible table key, not the original siteId.
     return rows.map(({ name }) => name.slice('site_'.length, -'_docs'.length));
   }
 

@@ -83,12 +83,16 @@ export async function maybeUpsertExternalSite(
 
 /**
  * Central registry for MCP tools. Modules register handlers during startup.
- * The registry is a dumb router: it validates prerequisites and dispatches to handlers.
  *
- * Safety enforcement (Tier 3 confirmations, audit logging) is handled by:
- * - McpSafetyWrapper: For MCP server (chat interface)
- * - CLI commands: For terminal interface (sync.ts, etc)
- * - GraphQL resolvers: Call registry directly (no safety wrapper)
+ * `call()` IS the safety chokepoint: Tier 3 confirmation gating
+ * (`checkTierThreeConfirmation`) and durable audit logging to
+ * `operation-audit.log` both live inside it, on both the success and catch
+ * paths. Every caller goes through the same gate:
+ * - MCP server (chat interface) via `McpSafetyWrapper`, which calls `call()`
+ *   underneath it (and only logs in-memory itself, to avoid double-logging)
+ * - CLI commands (sync.ts, etc)
+ * - GraphQL resolvers — these call `registry.call()` directly, and are gated
+ *   the same as every other caller, not exempt from it
  */
 export class ToolRegistry {
   private handlers = new Map<string, McpToolHandler>();

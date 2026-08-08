@@ -2,14 +2,17 @@ import { vectorSiteId } from '../../../src/main/vector-store/vectorSiteId';
 
 describe('vectorSiteId', () => {
   it('replaces colons with underscores', () => {
-    // Implementation appends a stable 8-hex-char hash suffix unconditionally (F2),
+    // Ids that need sanitizing get a stable 8-hex-char hash suffix appended,
     // so the sanitized prefix is checked rather than an exact literal match.
     expect(vectorSiteId('ssh:hostinger-test')).toMatch(/^ssh_hostinger-test_[0-9a-f]{8}$/);
   });
 
-  it('leaves the sanitized prefix of an id with no invalid character unchanged', () => {
-    expect(vectorSiteId('wpe-abc123')).toMatch(/^wpe-abc123_[0-9a-f]{8}$/);
-    expect(vectorSiteId('mmWgjXGRS')).toMatch(/^mmWgjXGRS_[0-9a-f]{8}$/);
+  it('leaves an id with no invalid character unchanged (identity — no hash suffix)', () => {
+    // Load-bearing: writers never call vectorSiteId() for local/WPE ids, so
+    // readers must resolve to the exact same, unmodified id or search silently
+    // returns empty results for every local/WPE site.
+    expect(vectorSiteId('wpe-abc123')).toBe('wpe-abc123');
+    expect(vectorSiteId('mmWgjXGRS')).toBe('mmWgjXGRS');
   });
 
   it('translates a multi-site external id (alias/site) into a valid table name', () => {

@@ -145,6 +145,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   local_wpe_push: 3,
   wp_eval: 2,
   clean_database_items: 3,
+  wp_import_database: 3,
 
   // Tier 3 — Destructive (new WPE ops)
   wpe_delete_account_user: 3,
@@ -223,6 +224,7 @@ export const CONFIRMATION_MESSAGES: Record<string, string> = {
   local_wpe_push: 'This will overwrite the remote WP Engine environment with local site data.',
   // wp_eval is Tier 2 — logged but no confirmation required on local sites
   clean_database_items: 'This will permanently delete database rows. Always run with dry_run=true first.',
+  wp_import_database: "This will completely overwrite the site's existing database. This cannot be undone.",
   wpe_delete_account_user: 'This will revoke WP Engine portal access for this user.',
   wpe_delete_site: 'This will delete the WP Engine site and ALL its installs (production, staging, development).',
   wpe_delete_install: 'This will permanently delete this WP Engine environment and all its content. This cannot be undone.',
