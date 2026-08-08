@@ -202,6 +202,10 @@ export const IPC_CHANNELS = {
   // docs/superpowers/specs/2026-08-07-host-key-trust-on-first-use-design.md
   // for why a GraphQL mutation here would not actually be CLI-inaccessible.
   TRUST_EXTERNAL_HOST_KEY: `${ADDON_PREFIX}:trust-external-host-key`,
+  // Renderer-only, same reasoning as TRUST_EXTERNAL_HOST_KEY: never add a
+  // matching GraphQL mutation or CLI command for either of these.
+  WRITE_SSH_HOST_ENTRY: `${ADDON_PREFIX}:write-ssh-host-entry`,
+  GENERATE_SSH_KEY: `${ADDON_PREFIX}:generate-ssh-key`,
 
   // UI Navigation
   NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,

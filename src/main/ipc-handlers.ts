@@ -97,6 +97,7 @@ import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 import { vectorSiteId } from './vector-store/vectorSiteId';
 import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from './external/hostKeyTrust';
 import { resolveSshConfig, defaultSshExec } from './external/sshExec';
+import { detectCollision, writeHostBlock, generateHostKey } from './external/sshConfigWriter';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -1122,6 +1123,32 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       }
       trustHostKey(resolved.userKnownHostsFile, captured.rawLine);
       return { success: true, error: null, fingerprint: captured.fingerprint };
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? String(e) };
+    }
+  });
+
+  // Renderer-only. See constants.ts's comment on this channel for why.
+  safeHandle(IPC_CHANNELS.WRITE_SSH_HOST_ENTRY, async (_event: unknown, input: {
+    alias: string; hostname: string; user: string; port: string; identityFile: string;
+  }) => {
+    try {
+      const collision = detectCollision(input.alias);
+      if (collision.kind === 'exact') {
+        return { success: false, error: `'${input.alias}' already exists in ${collision.file}:${collision.line}.` };
+      }
+      writeHostBlock(input);
+      return { success: true, error: null };
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? String(e) };
+    }
+  });
+
+  // Renderer-only. See constants.ts's comment on this channel for why.
+  safeHandle(IPC_CHANNELS.GENERATE_SSH_KEY, async (_event: unknown, aliasSlug: string) => {
+    try {
+      const key = generateHostKey(aliasSlug);
+      return { success: true, error: null, privateKeyPath: key.privateKeyPath, publicKeyLine: key.publicKeyLine };
     } catch (e: any) {
       return { success: false, error: e?.message ?? String(e) };
     }
