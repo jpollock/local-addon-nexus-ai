@@ -3,6 +3,15 @@ jest.mock('../../../src/main/external/probeExternalHost', () => ({
   probeExternalHost: (...args: any[]) => probeMock(...args),
 }));
 
+// Task 2: nexusHostProbe now also runs the multi-issue probe (Step 2 of the
+// External Host Onboarding wizard) in parallel with the existing
+// single-failure probeExternalHost above -- mocked independently here, the
+// same convention host-add.test.ts uses for its own second exec mock.
+const multiIssueMock = jest.fn();
+jest.mock('../../../src/main/external/probeHostMultiIssue', () => ({
+  probeHostMultiIssue: (...args: any[]) => multiIssueMock(...args),
+}));
+
 import { createResolvers } from '../../../src/main/graphql/resolvers';
 import { STORAGE_KEYS } from '../../../src/common/constants';
 
@@ -50,7 +59,31 @@ function ctx() {
 
 const profiles = (store: Record<string, any>) => store[STORAGE_KEYS.EXTERNAL_SITE_PROFILES] ?? {};
 
-beforeEach(() => probeMock.mockReset());
+function okMultiIssue(over: Partial<{
+  checks: Record<string, { status: string; detail: string }>;
+  issues: any[];
+  wpCli: { path?: string; version: string };
+  installs: string[];
+}> = {}) {
+  return {
+    checks: {
+      connection: { status: 'ok', detail: 'deploy@203.0.113.10' },
+      hostKey: { status: 'ok', detail: 'trusted' },
+      wpCli: { status: 'ok', detail: 'WP-CLI 2.12.0' },
+      installs: { status: 'ok', detail: '1 found' },
+    },
+    issues: [],
+    wpCli: { path: undefined, version: '2.12.0' },
+    installs: ['/home/u/public_html'],
+    ...over,
+  };
+}
+
+beforeEach(() => {
+  probeMock.mockReset();
+  multiIssueMock.mockReset();
+  multiIssueMock.mockResolvedValue(okMultiIssue());
+});
 
 // `nexusHostAdd` coverage lives in tests/unit/graphql/host-add.test.ts (Task 8:
 // the multi-site picker rewrote it — id is now `ssh:<alias>/<site>`, the
@@ -96,6 +129,51 @@ describe('nexusHostProbe', () => {
     const r = await (createResolvers(c.context).Mutation as any).nexusHostProbe(null, { alias: 'h1' });
     expect(r.report.failure.fingerprint).toBe('SHA256:abc123');
     expect(r.report.failure.keyType).toBe('ED25519');
+  });
+
+  it('response includes a multiIssue field built from probeHostMultiIssue, alongside the unchanged legacy report', async () => {
+    probeMock.mockResolvedValueOnce(failReport('auth-failed'));
+    multiIssueMock.mockResolvedValueOnce(okMultiIssue({
+      checks: {
+        connection: { status: 'ok', detail: 'deploy@203.0.113.10' },
+        hostKey: { status: 'ok', detail: 'trusted' },
+        wpCli: { status: 'warn', detail: 'not found' },
+        installs: { status: 'idle', detail: 'needs WP-CLI' },
+      },
+      issues: [{
+        kind: 'wpCliMissing',
+        title: 'WP-CLI not found',
+        detail: 'wp: command not found',
+        remedy: 'Install WP-CLI on the host, then re-run the probe.',
+      }],
+      wpCli: undefined,
+      installs: undefined,
+    }));
+    const c = ctx();
+    const r = await (createResolvers(c.context).Mutation as any).nexusHostProbe(null, { alias: 'h1' });
+
+    // The legacy single-failure report reflects probeExternalHost's result,
+    // exactly as before this task -- untouched by the new parallel call.
+    expect(r.report.failure.kind).toBe('auth-failed');
+
+    expect(r.multiIssue.issues).toEqual([
+      expect.objectContaining({ kind: 'wpCliMissing' }),
+    ]);
+    expect(r.multiIssue.checks.connection.status).toBe('ok');
+  });
+
+  it('still succeeds and returns an empty multiIssue.issues array when the host is fully healthy', async () => {
+    probeMock.mockResolvedValueOnce(okReport());
+    multiIssueMock.mockResolvedValueOnce(okMultiIssue());
+    const c = ctx();
+    const r = await (createResolvers(c.context).Mutation as any).nexusHostProbe(null, { alias: 'h1' });
+
+    expect(r.success).toBe(true);
+    expect(r.multiIssue.issues).toEqual([]);
+    expect(r.multiIssue.checks.connection.status).toBe('ok');
+    expect(r.multiIssue.checks.hostKey.status).toBe('ok');
+    expect(r.multiIssue.checks.wpCli.status).toBe('ok');
+    expect(r.multiIssue.checks.installs.status).toBe('ok');
   });
 });
 

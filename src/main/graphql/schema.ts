@@ -2180,10 +2180,43 @@ export const typeDefs = gql`
     sites: [NexusExternalSite!]!
   }
 
+  type NexusHostIssue {
+    "One of: unknownHostKey, changedHostKey, authKeyNotLoaded, authPassphraseNoAgent, connRefused, connTimeout, proxyJumpFailed, aliasNotFound, rootUser, wpCliMissing, wpCliInteractivePathOnly, wordPressNotFound"
+    kind: String!
+    title: String!
+    detail: String!
+    "Already fully interpolated by the backend -- render as-is, never re-template."
+    remedy: String!
+    fingerprint: String
+    keyType: String
+    previousFingerprint: String
+  }
+
+  type NexusHostCheckState {
+    "One of: ok, warn, fail, idle"
+    status: String!
+    detail: String!
+  }
+
+  type NexusHostMultiIssueChecks {
+    connection: NexusHostCheckState!
+    hostKey: NexusHostCheckState!
+    wpCli: NexusHostCheckState!
+    installs: NexusHostCheckState!
+  }
+
+  type NexusHostMultiIssueProbe {
+    checks: NexusHostMultiIssueChecks!
+    issues: [NexusHostIssue!]!
+    wpCliVersion: String
+    installs: [String!]
+  }
+
   type NexusHostProbeResult {
     success: Boolean!
     error: String
     report: NexusHostProbeReport
+    multiIssue: NexusHostMultiIssueProbe
   }
 
   "Result of verifying one site immediately after registering it. A verification failure does NOT roll back the registration -- the site row stays saved, just reported as unusable."

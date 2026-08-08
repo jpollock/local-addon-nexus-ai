@@ -33,6 +33,7 @@ import pLimit from 'p-limit';
 import { withQueue, parseTarget } from './resolver-utils';
 import { probeExternalHost } from '../external/probeExternalHost';
 import type { ProbeReport } from '../external/probeExternalHost';
+import { probeHostMultiIssue } from '../external/probeHostMultiIssue';
 import { defaultSshExec } from '../external/sshExec';
 import { buildExternalSshArgs, buildExternalWpCliCommand, EXTERNAL_SSH_TIMEOUT_MS } from '../transport/ssh-args';
 import { resolveTargetArgs } from '../transport/resolveTargetArgs';
@@ -5507,9 +5508,32 @@ export function createResolvers(context: ResolverContext) {
         return withQueue(async () => {
           try {
             const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
-            return { success: true, error: null, report: toHostReport(report) };
+
+            // Additive: runs alongside the legacy single-failure probe above
+            // for the External Host Onboarding wizard's Step 2. Never allowed
+            // to throw and abort the resolver -- the legacy `report` remains
+            // the resolver's primary contract and must still return even if
+            // this new parallel probe fails for some reason.
+            let multiIssue = null;
+            try {
+              const multi = await probeHostMultiIssue(alias, path ? { wpPath: path } : undefined);
+              multiIssue = {
+                checks: multi.checks,
+                issues: multi.issues,
+                wpCliVersion: multi.wpCli?.version ?? null,
+                installs: multi.installs ?? null,
+              };
+            } catch (e) {
+              // Non-fatal -- see comment above.
+            }
+
+            return {
+              success: true, error: null, report: toHostReport(report), multiIssue,
+            };
           } catch (e: any) {
-            return { success: false, error: e?.message ?? String(e), report: null };
+            return {
+              success: false, error: e?.message ?? String(e), report: null, multiIssue: null,
+            };
           }
         });
       },
