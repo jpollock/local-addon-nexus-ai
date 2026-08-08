@@ -11,9 +11,6 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../common/constants';
 import { injectThemeVars } from '../utils/theme';
-import { rendererGql } from '../utils/rendererGql';
-import { ExternalHostAddWizard } from './settings/ExternalHostAddWizard';
-import type { SshConfigHostLike } from './settings/ExternalHostAddWizard';
 import type { NexusSettings } from '../../common/types';
 
 // ---------------------------------------------------------------------------
@@ -32,22 +29,6 @@ type WpeOperation = keyof typeof WPE_OPERATION_DEFAULTS;
 type WpeEnv = 'development' | 'staging' | 'production';
 
 // ---------------------------------------------------------------------------
-// Host-key probe timeout
-// ---------------------------------------------------------------------------
-
-/**
- * Must stay in sync with `probeExternalHost`'s documented sequential worst
- * case (~155s: 5s config dump + 6x20s steps + 30s discovery — see the
- * docblock in src/main/external/probeExternalHost.ts) and with
- * HOST_PROBE_CLIENT_TIMEOUT_MS in src/cli/commands/host.ts, which the CLI
- * uses for the same reason. Duplicated here rather than imported because
- * src/cli is a separate surface from the renderer; if you raise one, raise
- * both. rendererGql's own default (10s) is sized for ordinary queries, not
- * a remote SSH probe, so this call must pass its own timeout explicitly.
- */
-const HOST_PROBE_CLIENT_TIMEOUT_MS = 210000;
-
-// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -64,26 +45,18 @@ interface SettingsTabState {
   sites: SiteItem[];
   wpeAccounts: WpeAccount[];
   wpeInstalls: WpeInstall[];
+  /** Kept here (not just in NexusPreferences) because renderWpeAccessSection's
+   *  site-exception picker needs to list external hosts alongside WPE installs
+   *  -- see the "External SSH hosts" group in that picker. The host list UI,
+   *  key-trust flow and Add Host wizard itself live in NexusPreferences now
+   *  (Local's native Preferences -> Nexus AI page), not here. */
   externalHosts: Array<{ alias: string; site: string; environment: string; domain: string }>;
-  /** Connection info for every alias in ~/.ssh/config, including already-
-   *  registered ones -- LIST_SSH_CONFIG_HOSTS is the only source that carries
-   *  user/hostname/port, so this is joined against externalHosts by alias to
-   *  render "user@host:port · from ~/.ssh/config" in the host list. */
-  sshConfigHosts: SshConfigHostLike[];
   loading: boolean;
   excludedExpanded: boolean;
   accessExpanded: boolean;
   expandedOps: Set<string>;
   installSearch: string;
   addingException: { op: string; targetRef: string; environment: string; allowing: boolean } | null;
-  hostKeyCheckAlias: string;
-  hostKeyCheckResult: null | { ok: boolean; failureKind?: string; detail?: string; remedy?: string; fingerprint?: string; keyType?: string };
-  hostKeyCheckedAlias: string;
-  hostKeyTrusting: boolean;
-  hostKeyChecking: boolean;
-  showAddHostWizard: boolean;
-  /** Alias whose inline Manage row (root-mode toggle) is currently expanded, or null. */
-  manageAlias: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,12 +94,6 @@ const sectionHeaderStyle: React.CSSProperties = {
 
 export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabState> {
   private mounted = false;
-  // Bumped at the start of every checkHostKey() call. Lets a call that
-  // resolves late (superseded by a newer one) tell whether it is still the
-  // most recent in-flight request before touching hostKeyChecking — otherwise
-  // a stale response arriving after a newer check has already started would
-  // clear the flag out from under that newer, still-running check.
-  private hostKeyCheckSeq = 0;
 
   state: SettingsTabState = {
     settings: null,
@@ -134,20 +101,12 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     wpeAccounts: [],
     wpeInstalls: [],
     externalHosts: [],
-    sshConfigHosts: [],
     loading: true,
     excludedExpanded: false,
     accessExpanded: false,
     expandedOps: new Set(),
     installSearch: '',
     addingException: null,
-    hostKeyCheckAlias: '',
-    hostKeyCheckResult: null,
-    hostKeyCheckedAlias: '',
-    hostKeyTrusting: false,
-    hostKeyChecking: false,
-    showAddHostWizard: false,
-    manageAlias: null,
   };
 
   componentDidMount(): void {
@@ -162,13 +121,12 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
 
   async loadAll(): Promise<void> {
     const ipc = this.props.electron.ipcRenderer;
-    const [settings, sitesResult, accounts, installs, externalHosts, sshConfigHosts] = await Promise.all([
+    const [settings, sitesResult, accounts, installs, externalHosts] = await Promise.all([
       ipc.invoke(IPC_CHANNELS.GET_SETTINGS).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => ({ sites: [] })),
       ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
-      ipc.invoke(IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS).catch(() => ({ success: false, hosts: [] })),
     ]);
     if (!this.mounted) return;
     this.setState({
@@ -177,219 +135,8 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       wpeAccounts: Array.isArray(accounts) ? accounts : [],
       wpeInstalls: Array.isArray(installs) ? installs : [],
       externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
-      sshConfigHosts: Array.isArray(sshConfigHosts?.hosts) ? sshConfigHosts.hosts : [],
       loading: false,
     });
-  }
-
-  /** Re-fetches just the external-host-list data. Used by the wizard's
-   *  onClose/onCompleted so the newly-registered (or unchanged) host list is
-   *  current without re-running the rest of loadAll's fetches. */
-  async reloadExternalHosts(): Promise<void> {
-    const ipc = this.props.electron.ipcRenderer;
-    const [externalHosts, sshConfigHosts] = await Promise.all([
-      ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
-      ipc.invoke(IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS).catch(() => ({ success: false, hosts: [] })),
-    ]);
-    if (!this.mounted) return;
-    this.setState({
-      externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
-      sshConfigHosts: Array.isArray(sshConfigHosts?.hosts) ? sshConfigHosts.hosts : [],
-    });
-  }
-
-  // ── External host list / add wizard ─────────────────────────────────────
-
-  private groupedExternalHosts(): Array<{ alias: string; sites: Array<{ site: string; environment: string; domain: string }>; connection: string | null }> {
-    const byAlias = new Map<string, Array<{ site: string; environment: string; domain: string }>>();
-    for (const h of this.state.externalHosts) {
-      const arr = byAlias.get(h.alias) ?? [];
-      arr.push({ site: h.site, environment: h.environment, domain: h.domain });
-      byAlias.set(h.alias, arr);
-    }
-    return Array.from(byAlias.entries()).map(([alias, sites]) => {
-      const cfg = this.state.sshConfigHosts.find(c => c.alias === alias);
-      const connection = cfg
-        ? `${cfg.user ? cfg.user + '@' : ''}${cfg.hostname}${cfg.port ? ':' + cfg.port : ''} · from ~/.ssh/config`
-        : null;
-      return { alias, sites, connection };
-    });
-  }
-
-  openAddHostWizard = (): void => {
-    this.setState({ showAddHostWizard: true });
-  };
-
-  closeAddHostWizard = async (): Promise<void> => {
-    this.setState({ showAddHostWizard: false });
-    await this.reloadExternalHosts();
-  };
-
-  completeAddHostWizard = async (_alias: string): Promise<void> => {
-    this.setState({ showAddHostWizard: false });
-    await this.reloadExternalHosts();
-  };
-
-  toggleManageAlias = (alias: string): void => {
-    this.setState(prev => ({ manageAlias: prev.manageAlias === alias ? null : alias }));
-  };
-
-  handleSetRootMode = async (alias: string, allowRoot: boolean): Promise<void> => {
-    try {
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, alias, allowRoot);
-    } catch {
-      // Best-effort -- Manage stays open (see renderManagePopover) so the user can retry.
-    }
-  };
-
-  /**
-   * GET_EXTERNAL_HOSTS carries no last-check timestamp or outcome (see
-   * src/main/ipc-handlers.ts's handler -- it selects only name/account_id/
-   * environment/domain from the sites table), so a genuine three-state dot
-   * (verified/config-changed/last-check-failed, per BEHAVIOR.md §3) is not
-   * buildable from data this plan added. This is the documented, deliberate
-   * fallback: a simple two-state dot keyed on whether the alias still
-   * resolves in ~/.ssh/config (LIST_SSH_CONFIG_HOSTS), which is the one
-   * piece of "is something wrong" signal actually available today.
-   */
-  private hostStatusDot(alias: string): React.ReactNode {
-    const stillConfigured = this.state.sshConfigHosts.some(c => c.alias === alias);
-    const color = stillConfigured ? 'var(--nxai-status-ok, #3fb950)' : 'var(--nxai-status-warn, #d29922)';
-    const title = stillConfigured ? 'Alias found in ~/.ssh/config' : 'Alias missing from ~/.ssh/config';
-    return React.createElement('div', {
-      title,
-      style: { width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 },
-    });
-  }
-
-  renderManagePopover(alias: string): React.ReactNode {
-    return React.createElement('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
-      React.createElement('button', {
-        onClick: () => this.handleSetRootMode(alias, true),
-        style: { fontSize: 11, padding: '3px 8px', borderRadius: 4 },
-      }, 'Allow root'),
-      React.createElement('button', {
-        onClick: () => this.handleSetRootMode(alias, false),
-        style: { fontSize: 11, padding: '3px 8px', borderRadius: 4 },
-      }, 'Disallow root'),
-      React.createElement('button', {
-        onClick: () => this.toggleManageAlias(alias),
-        style: { fontSize: 11, padding: '3px 8px', borderRadius: 4 },
-      }, 'Done'),
-    );
-  }
-
-  renderExternalHostRow(row: { alias: string; sites: Array<{ site: string; environment: string; domain: string }>; connection: string | null }): React.ReactNode {
-    const siteCountLabel = `${row.sites.length} site${row.sites.length === 1 ? '' : 's'}`;
-    return React.createElement('div', { key: row.alias, style: rowStyle },
-      React.createElement('div', { style: rowLabelStyle },
-        React.createElement('div', { style: { ...rowTitleStyle, fontWeight: 700 } }, row.alias),
-        React.createElement('div', { style: rowSubStyle },
-          row.connection ?? 'Connection info unavailable — run `nexus host test ' + row.alias + '`.'),
-        React.createElement('div', { style: rowSubStyle }, siteCountLabel),
-      ),
-      React.createElement('div', { style: { ...rowControlStyle, gap: 10 } },
-        this.hostStatusDot(row.alias),
-        this.state.manageAlias === row.alias
-          ? this.renderManagePopover(row.alias)
-          : React.createElement('button', {
-              onClick: () => this.toggleManageAlias(row.alias),
-              style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
-            }, 'Manage'),
-      ),
-    );
-  }
-
-  // ── Host key trust-on-first-use ──────────────────────────────────────────
-
-  async checkHostKey(): Promise<void> {
-    // Capture the alias being checked NOW, before the await. If the input
-    // changes (or a newer check is kicked off) before this resolves, this
-    // response is stale and must be discarded rather than overwrite a newer
-    // result — see the in-flight-race note in the task-6 review.
-    const alias = this.state.hostKeyCheckAlias.trim();
-    if (!alias) return;
-    const mySeq = ++this.hostKeyCheckSeq;
-    this.setState({ hostKeyCheckResult: null, hostKeyCheckedAlias: '', hostKeyChecking: true });
-    const isStale = () => this.state.hostKeyCheckAlias.trim() !== alias;
-    try {
-      const data = await rendererGql<{ nexusHostProbe: { success: boolean; error: string | null; report: any } }>(`
-        mutation($alias: String!) {
-          nexusHostProbe(alias: $alias) {
-            success error
-            report { ok alias failure { kind detail remedy fingerprint keyType } }
-          }
-        }
-      `, { alias }, HOST_PROBE_CLIENT_TIMEOUT_MS);
-      if (!this.mounted || isStale()) {
-        // A stale/discarded response must not leave the button stuck on
-        // "Checking…" forever. But only clear the flag if no newer check has
-        // started since this one — if it has, that newer call already owns
-        // hostKeyChecking and this stale resolution must not clobber it.
-        if (this.mounted && this.hostKeyCheckSeq === mySeq) this.setState({ hostKeyChecking: false });
-        return;
-      }
-      const report = data.nexusHostProbe.report;
-      if (!report) {
-        this.setState({
-          hostKeyCheckResult: { ok: false, detail: data.nexusHostProbe.error ?? 'No report returned.' },
-          hostKeyCheckedAlias: alias,
-          hostKeyChecking: false,
-        });
-        return;
-      }
-      this.setState({
-        hostKeyCheckResult: {
-          ok: report.ok,
-          failureKind: report.failure?.kind,
-          detail: report.failure?.detail,
-          remedy: report.failure?.remedy,
-          fingerprint: report.failure?.fingerprint,
-          keyType: report.failure?.keyType,
-        },
-        // Prefer the alias the server actually resolved and echoed back
-        // (report.alias) over the locally-captured variable, but either is
-        // safe here since both were fixed before this await began — neither
-        // is re-read from live state.
-        hostKeyCheckedAlias: report.alias || alias,
-        hostKeyChecking: false,
-      });
-    } catch (e: any) {
-      if (!this.mounted || isStale()) return;
-      this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) }, hostKeyCheckedAlias: alias, hostKeyChecking: false });
-    }
-  }
-
-  async approveHostKey(): Promise<void> {
-    // Use the alias the displayed fingerprint was actually checked for, not
-    // whatever is currently typed in the input — the human verified THIS
-    // fingerprint, for THIS alias, and approval must never silently target a
-    // different host than what was shown on screen.
-    const alias = this.state.hostKeyCheckedAlias.trim();
-    if (!alias) return;
-    if (this.state.hostKeyCheckAlias.trim() !== alias) return; // stale — button should be disabled, but guard anyway
-    // Send the exact fingerprint that was displayed and visually verified —
-    // not just the alias. The main-process handler compares this against a
-    // FRESH capture and refuses to trust a different key, so the human's
-    // verification of this specific fingerprint can't be silently bypassed
-    // by a connection that lands on a different host key between clicks.
-    const expectedFingerprint = this.state.hostKeyCheckResult?.fingerprint;
-    if (!expectedFingerprint) return;
-    this.setState({ hostKeyTrusting: true });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, alias, expectedFingerprint);
-      if (!this.mounted) return;
-      if (result.success) {
-        this.setState({
-          hostKeyCheckResult: { ok: true, detail: `Trusted. Run 'nexus host add ${alias}' to finish registration.` },
-          hostKeyTrusting: false,
-        });
-      } else {
-        this.setState({ hostKeyCheckResult: { ok: false, detail: result.error }, hostKeyTrusting: false });
-      }
-    } catch (e: any) {
-      if (this.mounted) this.setState({ hostKeyCheckResult: { ok: false, detail: e?.message ?? String(e) }, hostKeyTrusting: false });
-    }
   }
 
   // ── Settings persistence ─────────────────────────────────────────────────
@@ -766,68 +513,13 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
         ),
       ),
 
+      // Note: the host list, host-key trust-on-first-use check/approve UI, and
+      // the "Add a host" wizard live in NexusPreferences.tsx now (Local's
+      // native Preferences -> Nexus AI page's "External SSH Hosts" section),
+      // not here -- only this metadata-refresh schedule setting remains, as
+      // part of Sync Schedule alongside the WPE sync toggles above it.
       sublabel('External SSH Hosts'),
-      React.createElement('div', { style: { marginBottom: 10 } },
-        this.groupedExternalHosts().length === 0
-          ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', padding: '4px 0 10px' } },
-              'No external hosts registered yet.')
-          : React.createElement('div', { style: cardStyle },
-              ...this.groupedExternalHosts().map(row => this.renderExternalHostRow(row)),
-            ),
-        React.createElement('button', {
-          onClick: this.openAddHostWizard,
-          style: { fontSize: 12, padding: '5px 12px', borderRadius: 4, marginTop: 6 },
-        }, 'Add a host'),
-      ),
-      React.createElement('div', { style: { marginBottom: 10 } },
-        React.createElement('div', { style: { display: 'flex', gap: 6, marginBottom: 6 } },
-          React.createElement('input', {
-            type: 'text',
-            placeholder: 'alias to check',
-            value: this.state.hostKeyCheckAlias,
-            onChange: (e: any) => this.setState({ hostKeyCheckAlias: e.target.value }),
-            style: { flex: 1, fontSize: 12, padding: '4px 8px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'inherit' },
-          }),
-          React.createElement('button', {
-            disabled: this.state.hostKeyChecking,
-            onClick: () => this.checkHostKey(),
-            style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
-          }, this.state.hostKeyChecking ? 'Checking…' : 'Check'),
-        ),
-        this.state.hostKeyCheckResult && React.createElement('div', {
-          style: { fontSize: 12, padding: '8px 10px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4 },
-        },
-          this.state.hostKeyCheckResult.ok
-            ? React.createElement('div', {}, this.state.hostKeyCheckResult.detail || 'Already reachable — no key approval needed.')
-            : this.state.hostKeyCheckResult.failureKind === 'host-key-unknown' && this.state.hostKeyCheckResult.fingerprint
-              ? (() => {
-                  // The Approve button must only ever act on the fingerprint the
-                  // human actually saw. If the alias input has been edited since
-                  // this result was fetched, the displayed fingerprint no longer
-                  // corresponds to what's typed — the button must not render, so
-                  // it can never be clicked for a host whose key was never shown.
-                  const staleAlias = this.state.hostKeyCheckAlias.trim() !== this.state.hostKeyCheckedAlias;
-                  return React.createElement('div', {},
-                    React.createElement('div', {}, `${this.state.hostKeyCheckResult.keyType} ${this.state.hostKeyCheckResult.fingerprint}`),
-                    staleAlias
-                      ? React.createElement('div', { style: { marginTop: 6, opacity: 0.6 } }, 'Alias changed since this check — check again to approve.')
-                      : React.createElement('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
-                          React.createElement('button', {
-                            disabled: this.state.hostKeyTrusting,
-                            onClick: () => this.approveHostKey(),
-                            style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
-                          }, 'Approve'),
-                          React.createElement('button', {
-                            onClick: () => this.setState({ hostKeyCheckResult: null, hostKeyCheckedAlias: '' }),
-                            style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
-                          }, 'Dismiss'),
-                        ),
-                  );
-                })()
-              : React.createElement('div', {}, this.state.hostKeyCheckResult.remedy || this.state.hostKeyCheckResult.detail),
-        ),
-      ),
-      React.createElement('div', { style: { ...cardStyle, borderTopLeftRadius: this.state.externalHosts.length ? 0 : 8, borderTopRightRadius: this.state.externalHosts.length ? 0 : 8 } },
+      React.createElement('div', { style: cardStyle },
         React.createElement('div', { style: { ...rowStyle, borderBottom: 'none' } },
           React.createElement('div', { style: rowLabelStyle },
             React.createElement('div', { style: rowTitleStyle }, 'Metadata refresh for external hosts'),
@@ -1119,26 +811,13 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     const sectionHeader = (title: string) =>
       React.createElement('div', { style: sectionHeaderStyle }, title);
 
-    return React.createElement('div', null,
-      React.createElement('div', { style: { padding: '20px 24px', overflowY: 'auto' as const } },
-        sectionHeader('Auto-Indexing'),
-        this.renderAutoIndexingSection(),
-        sectionHeader('Sync Schedule'),
-        this.renderSyncScheduleSection(),
-        sectionHeader('Access & Permissions'),
-        this.renderWpeAccessSection(),
-      ),
-      this.state.showAddHostWizard
-        ? React.createElement(ExternalHostAddWizard, {
-            electron: this.props.electron,
-            onClose: this.closeAddHostWizard,
-            onCompleted: this.completeAddHostWizard,
-            // The wizard now owns its own Step 2 -> Step 3 transition
-            // (see ExternalHostAddWizard.advanceToStep3); SettingsTab has
-            // nothing further to do on this notification.
-            onProbeClean: () => {},
-          })
-        : null,
+    return React.createElement('div', { style: { padding: '20px 24px', overflowY: 'auto' as const } },
+      sectionHeader('Auto-Indexing'),
+      this.renderAutoIndexingSection(),
+      sectionHeader('Sync Schedule'),
+      this.renderSyncScheduleSection(),
+      sectionHeader('Access & Permissions'),
+      this.renderWpeAccessSection(),
     );
   }
 }
