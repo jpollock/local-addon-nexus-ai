@@ -81,7 +81,7 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ## Scheduler Settings — Non-Reactivity
 
-**`HaltedSiteRefreshScheduler` and `WpeRefreshScheduler` read interval settings once at startup**, then become reactive via `onSettingsUpdated` callback (which calls `scheduler.restart(newIntervalMs)`). If you add a new scheduler with a settings-driven interval, wire it into the `onSettingsUpdated` block in `src/main/index.ts:523` (line drifts — grep for `const onSettingsUpdated = ` rather than trusting this number). As of this writing that function restarts/stops **six** schedulers: the opportunistic/local-content scheduler, halted-site refresh, WPE refresh, WPE content-index, external host refresh, and external content-index.
+**`HaltedSiteRefreshScheduler` and `WpeRefreshScheduler` read interval settings once at startup**, then become reactive via `onSettingsUpdated` callback (which calls `scheduler.restart(newIntervalMs)`). If you add a new scheduler with a settings-driven interval, wire it into the `onSettingsUpdated` block in `src/main/index.ts:525` (line drifts — grep for `const onSettingsUpdated = ` rather than trusting this number). As of this writing that function restarts/stops **six** schedulers: the opportunistic/local-content scheduler, halted-site refresh, WPE refresh, WPE content-index, external host refresh, and external content-index.
 
 **Default values for WPE sync settings:**
 - `wpeSyncAutoEnabled` — **false** (opt-in). The type comment used to say "default: true" — that was wrong.
@@ -743,7 +743,7 @@ through it. (`wp_eval`'s `code` was the original motivating example; it is now
 withheld outright rather than masked.)
 
 Tier 1 (read-only) is deliberately not written to disk. Tier 2 is the **default**
-tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:285` —
+tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:283` —
 grep for `TIER_OVERRIDES\[toolName\] ?? 2` rather than trusting this line number,
 it has drifted before) — `getToolSafety()` falls back to
 `TIER_OVERRIDES[toolName] ?? 2` — so new tools are audited by default unless
