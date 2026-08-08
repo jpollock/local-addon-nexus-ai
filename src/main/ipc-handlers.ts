@@ -99,6 +99,7 @@ import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from './exter
 import { resolveSshConfig, defaultSshExec } from './external/sshExec';
 import { detectCollision, writeHostBlock, generateHostKey, previewHostBlock } from './external/sshConfigWriter';
 import { listSshConfigHosts } from './external/sshConfigParser';
+import { getExternalProfile, upsertExternalProfile } from './external/externalSiteStore';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -1174,6 +1175,27 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const block = previewHostBlock(input);
       const collision = detectCollision(input.alias);
       return { success: true, block, collision };
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? String(e) };
+    }
+  });
+
+  // Renderer-only. See constants.ts's comment on this channel for why. Reads
+  // the existing profile first so upsertExternalProfile's merge-preserve
+  // logic has the alias's current wpCliPath/firstSeenAt to fall back on --
+  // this handler only ever changes allowRoot.
+  safeHandle(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, async (_event: unknown, alias: string, allowRoot: boolean) => {
+    try {
+      const existing = getExternalProfile(registryStorage, alias);
+      const now = Date.now();
+      upsertExternalProfile(registryStorage, {
+        alias,
+        wpCliPath: existing?.wpCliPath,
+        allowRoot,
+        firstSeenAt: existing?.firstSeenAt ?? now,
+        lastSeenAt: now,
+      });
+      return { success: true, error: null };
     } catch (e: any) {
       return { success: false, error: e?.message ?? String(e) };
     }

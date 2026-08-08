@@ -397,3 +397,73 @@ describe('nexusHostAdd — post-registration verification (Task 5)', () => {
     expect(sshArgs.some((a) => a.includes('--allow-root'))).toBe(true);
   });
 });
+
+describe('nexusHostAddSites — batched registration for the onboarding wizard (Task 3)', () => {
+  it('registers multiple sites in one call, each with its own environment, and returns one combined siteVerification array', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'batch-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({ code: 0, stdout: '6.8.1', stderr: '', spawnError: undefined });
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'batch-host', wpPath: '/home/u1/site-b', siteUrl: 'https://site-b.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({
+      code: 255, stdout: '', stderr: 'wp: command not found', spawnError: undefined,
+    });
+
+    const result = await m.nexusHostAddSites(
+      null,
+      {
+        alias: 'batch-host',
+        path: null,
+        sites: [
+          { site: 'site-a', environment: 'staging' },
+          { site: 'site-b', environment: 'production' },
+        ],
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(c.upserted).toHaveLength(2);
+    expect(c.upserted[0]).toEqual(expect.objectContaining({ id: 'ssh:batch-host/site-a', environment: 'staging' }));
+    expect(c.upserted[1]).toEqual(expect.objectContaining({ id: 'ssh:batch-host/site-b', environment: 'production' }));
+    expect(result.siteVerification).toEqual([
+      { site: 'site-a', verified: true, error: null },
+      { site: 'site-b', verified: false, error: expect.stringContaining('wp: command not found') },
+    ]);
+  });
+
+  it('does not roll back a site whose verification failed', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'batch-flaky-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({
+      code: 1, stdout: '', stderr: 'Error: This does not seem to be a WordPress installation.', spawnError: undefined,
+    });
+
+    const result = await m.nexusHostAddSites(
+      null,
+      {
+        alias: 'batch-flaky-host',
+        path: null,
+        sites: [{ site: 'site-a', environment: 'production' }],
+      },
+    );
+
+    expect(result.success).toBe(true);
+    // The write is not rolled back -- the site row still exists.
+    expect(c.upserted).toHaveLength(1);
+    expect(c.upserted[0]).toEqual(expect.objectContaining({ id: 'ssh:batch-flaky-host/site-a' }));
+    // But it is reported as unusable, not silently counted as connected.
+    expect(result.siteVerification).toEqual([
+      { site: 'site-a', verified: false, error: expect.stringContaining('WordPress installation') },
+    ]);
+  });
+});

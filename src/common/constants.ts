@@ -210,6 +210,11 @@ export const IPC_CHANNELS = {
   // for consistency, even though read-only data is lower-risk over GraphQL.
   LIST_SSH_CONFIG_HOSTS: `${ADDON_PREFIX}:list-ssh-config-hosts`,
   PREVIEW_SSH_HOST_ENTRY: `${ADDON_PREFIX}:preview-ssh-host-entry`,
+  // Renderer-only: lets a user flip --allow-root for an already-registered
+  // connection from Settings/Manage, without re-running the onboarding
+  // wizard. No GraphQL mutation or CLI command for this by design, matching
+  // TRUST_EXTERNAL_HOST_KEY's precedent.
+  SET_EXTERNAL_HOST_ROOT_MODE: `${ADDON_PREFIX}:set-external-host-root-mode`,
 
   // UI Navigation
   NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,

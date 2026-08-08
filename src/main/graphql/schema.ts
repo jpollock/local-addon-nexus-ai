@@ -2237,6 +2237,20 @@ export const typeDefs = gql`
     siteVerification: [NexusSiteVerificationResult!]!
   }
 
+  "One site's target environment as selected during batched registration."
+  input NexusHostSiteEnvironmentInput {
+    site: String!
+    environment: String!
+  }
+
+  "Result of registering several sites under one external SSH connection in a single call."
+  type NexusHostAddSitesResult {
+    success: Boolean!
+    error: String
+    "Per-site 'wp core version' verification, one entry per site in the input array, in the same order."
+    siteVerification: [NexusSiteVerificationResult!]!
+  }
+
   type NexusHostListResult {
     success: Boolean!
     error: String
@@ -2300,6 +2314,8 @@ export const typeDefs = gql`
     nexusHostProbe(alias: String!, path: String): NexusHostProbeResult!
     "Probe an external SSH host and register it on success. 'site' names which discovered WordPress install to register — required when the connection has more than one and 'path' disambiguates which one; omitted for a single-site connection, where a slug is derived from the discovered domain."
     nexusHostAdd(alias: String!, path: String, environment: String, site: String): NexusHostAddResult!
+    "Register several discovered sites under one external SSH connection in a single call, each with its own environment. Additive alongside nexusHostAdd -- used by the onboarding wizard's batched Step 3, not by the CLI."
+    nexusHostAddSites(alias: String!, path: String, sites: [NexusHostSiteEnvironmentInput!]!): NexusHostAddSitesResult!
     "List registered external SSH hosts."
     nexusHostList: NexusHostListResult!
     "Forget an external SSH host and every site registered under it."

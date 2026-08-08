@@ -213,6 +213,145 @@ async function verifyExternalSite(
 export function createResolvers(context: ResolverContext) {
   const { services, registry } = context;
 
+  /**
+   * Register (or re-register) one site under one external SSH alias:
+   * probe the host, persist the connection profile, upsert the site row,
+   * then verify WP-CLI still reaches it. Shared by `nexusHostAdd` (the CLI's
+   * one-site-per-call entry point) and `nexusHostAddSites` (the onboarding
+   * wizard's batched entry point) so the upsert-then-verify logic is written
+   * once. A verification failure does NOT roll back the site write above —
+   * see the inline comment near `verifyExternalSite` below.
+   */
+  async function registerExternalHostSite(
+    alias: string,
+    path: string | undefined,
+    environment: string | undefined,
+    site: string | undefined,
+  ): Promise<{
+    success: boolean;
+    registered: boolean;
+    report: unknown;
+    environment: string | null;
+    siteVerification: Array<{ site: string; verified: boolean; error: string | null }>;
+    error: string | null;
+  }> {
+    try {
+      if (environment !== undefined && environment !== null
+        && !['production', 'staging', 'development'].includes(environment)) {
+        return {
+          success: false, registered: false, report: null, environment: null,
+          siteVerification: [],
+          error: `Invalid environment '${environment}'. Expected production, staging or development.`,
+        };
+      }
+      const storage = (services as any).registryStorage;
+      if (!storage) {
+        return {
+          success: false, registered: false, report: null, environment: null,
+          siteVerification: [],
+          error: 'Storage not available',
+        };
+      }
+
+      // Used only for the early-return branches below, where no site row
+      // is written and there is nothing site-specific to preserve.
+      const requestedEnv = (environment ?? 'production') as 'production' | 'staging' | 'development';
+      const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
+
+      if (!report.ok) {
+        // A `multiple-wordpress` failure is not a refusal to register the
+        // CONNECTION — only to guess which site. Persist the connection
+        // profile now so `host list` shows it (with zero sites) even
+        // before the caller picks one; a genuinely unreachable/typo'd
+        // alias should NOT be persisted, so this only runs when the
+        // probe got far enough to discover WordPress at all.
+        if (report.failure?.kind === 'multiple-wordpress') {
+          const now = Date.now();
+          upsertExternalProfile(storage, {
+            alias,
+            wpCliPath: report.wpCliPath,
+            firstSeenAt: now,
+            lastSeenAt: now,
+          });
+        }
+        return {
+          success: true, registered: false, report: toHostReport(report),
+          environment: requestedEnv, siteVerification: [], error: null,
+        };
+      }
+
+      const now = Date.now();
+      upsertExternalProfile(storage, {
+        alias,
+        wpCliPath: report.wpCliPath,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      });
+
+      let domain = alias;
+      if (report.siteUrl) {
+        try { domain = new URL(report.siteUrl).hostname || alias; } catch { /* keep alias */ }
+      }
+      // Auto-suggest a slug from the domain's first label when none was
+      // given — the single-site case, which stays zero-ceremony.
+      const siteSlug = site ?? domain.split('.')[0] ?? alias;
+
+      // The site-level equivalent of the connection-level "leave an
+      // already-registered host's label alone" fallback this plan's
+      // earlier connection-scoped model had: environment now lives per
+      // site, so the lookup is keyed on (alias, siteSlug), not alias
+      // alone. Omitting `environment` must never silently downgrade (or
+      // loosen) a site that already has a label — only a genuinely new
+      // site falls back to 'production'.
+      const db = (services as any).graphService?.getDb?.();
+      const existingSite = db ? findExternalSites(db, alias, siteSlug)[0] : undefined;
+      const validEnv = (environment ?? existingSite?.environment ?? 'production') as
+        'production' | 'staging' | 'development';
+
+      await (services as any).graphService?.upsertSite({
+        id: externalSiteId(alias, siteSlug),
+        name: siteSlug,
+        domain,
+        source: 'external',
+        host: 'external',
+        account_id: alias,
+        environment: validEnv,
+        wp_version: report.wpVersion,
+        wp_path: report.wpPath,
+        wp_cli_path: report.wpCliPath,
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+        last_sync_at: now,
+      });
+
+      // Verify the site we just wrote — the selection was only a
+      // probe's read of the discovered path; it must not be trusted
+      // blindly as "connected" without re-confirming WP-CLI can still
+      // reach it. A verification failure does NOT roll back the write
+      // above: the site stays registered, and is instead reported as
+      // unusable in the result. Reuses the same exec-based SSH
+      // primitive probeExternalHost itself uses
+      // (buildExternalSshArgs/buildExternalWpCliCommand over
+      // defaultSshExec), rather than a second SSH invocation pattern.
+      const connectionProfile = getExternalProfile(storage, alias);
+      const siteVerification = [
+        await verifyExternalSite(alias, siteSlug, report, connectionProfile?.allowRoot),
+      ];
+
+      return {
+        success: true, registered: true, report: toHostReport(report),
+        environment: validEnv, siteVerification, error: null,
+      };
+    } catch (e: any) {
+      return {
+        success: false, registered: false, report: null, environment: null,
+        siteVerification: [],
+        error: e?.message ?? String(e),
+      };
+    }
+  }
+
   return {
     Mutation: {
       /**
@@ -5541,122 +5680,29 @@ export function createResolvers(context: ResolverContext) {
       nexusHostAdd: async (_parent: ResolverParent, {
         alias, path, environment, site,
       }: { alias: string; path?: string; environment?: string; site?: string }) => {
+        return withQueue(() => registerExternalHostSite(alias, path, environment, site));
+      },
+
+      // Batched sibling of nexusHostAdd for the External Host Onboarding
+      // wizard's Step 3, which discovers several WordPress installs under one
+      // alias in a single probe and lets the user label each with its own
+      // environment before registering all of them in one round trip. Reuses
+      // registerExternalHostSite (the exact same upsert-then-verify logic
+      // nexusHostAdd calls) once per site rather than duplicating it — see
+      // that function's docstring. The single-site nexusHostAdd mutation is
+      // unchanged and remains the CLI's entry point.
+      nexusHostAddSites: async (_parent: ResolverParent, { alias, path, sites }: {
+        alias: string;
+        path?: string;
+        sites: Array<{ site: string; environment: string }>;
+      }) => {
         return withQueue(async () => {
-          try {
-            if (environment !== undefined && environment !== null
-              && !['production', 'staging', 'development'].includes(environment)) {
-              return {
-                success: false, registered: false, report: null, environment: null,
-                siteVerification: [],
-                error: `Invalid environment '${environment}'. Expected production, staging or development.`,
-              };
-            }
-            const storage = (services as any).registryStorage;
-            if (!storage) {
-              return {
-                success: false, registered: false, report: null, environment: null,
-                siteVerification: [],
-                error: 'Storage not available',
-              };
-            }
-
-            // Used only for the early-return branches below, where no site row
-            // is written and there is nothing site-specific to preserve.
-            const requestedEnv = (environment ?? 'production') as 'production' | 'staging' | 'development';
-            const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
-
-            if (!report.ok) {
-              // A `multiple-wordpress` failure is not a refusal to register the
-              // CONNECTION — only to guess which site. Persist the connection
-              // profile now so `host list` shows it (with zero sites) even
-              // before the caller picks one; a genuinely unreachable/typo'd
-              // alias should NOT be persisted, so this only runs when the
-              // probe got far enough to discover WordPress at all.
-              if (report.failure?.kind === 'multiple-wordpress') {
-                const now = Date.now();
-                upsertExternalProfile(storage, {
-                  alias,
-                  wpCliPath: report.wpCliPath,
-                  firstSeenAt: now,
-                  lastSeenAt: now,
-                });
-              }
-              return {
-                success: true, registered: false, report: toHostReport(report),
-                environment: requestedEnv, siteVerification: [], error: null,
-              };
-            }
-
-            const now = Date.now();
-            upsertExternalProfile(storage, {
-              alias,
-              wpCliPath: report.wpCliPath,
-              firstSeenAt: now,
-              lastSeenAt: now,
-            });
-
-            let domain = alias;
-            if (report.siteUrl) {
-              try { domain = new URL(report.siteUrl).hostname || alias; } catch { /* keep alias */ }
-            }
-            // Auto-suggest a slug from the domain's first label when none was
-            // given — the single-site case, which stays zero-ceremony.
-            const siteSlug = site ?? domain.split('.')[0] ?? alias;
-
-            // The site-level equivalent of the connection-level "leave an
-            // already-registered host's label alone" fallback this plan's
-            // earlier connection-scoped model had: environment now lives per
-            // site, so the lookup is keyed on (alias, siteSlug), not alias
-            // alone. Omitting `environment` must never silently downgrade (or
-            // loosen) a site that already has a label — only a genuinely new
-            // site falls back to 'production'.
-            const db = (services as any).graphService?.getDb?.();
-            const existingSite = db ? findExternalSites(db, alias, siteSlug)[0] : undefined;
-            const validEnv = (environment ?? existingSite?.environment ?? 'production') as
-              'production' | 'staging' | 'development';
-
-            await (services as any).graphService?.upsertSite({
-              id: externalSiteId(alias, siteSlug),
-              name: siteSlug,
-              domain,
-              source: 'external',
-              host: 'external',
-              account_id: alias,
-              environment: validEnv,
-              wp_version: report.wpVersion,
-              wp_path: report.wpPath,
-              wp_cli_path: report.wpCliPath,
-              is_active: true,
-              created_at: now,
-              updated_at: now,
-              last_sync_at: now,
-            });
-
-            // Verify the site we just wrote — the selection was only a
-            // probe's read of the discovered path; it must not be trusted
-            // blindly as "connected" without re-confirming WP-CLI can still
-            // reach it. A verification failure does NOT roll back the write
-            // above: the site stays registered, and is instead reported as
-            // unusable in the result. Reuses the same exec-based SSH
-            // primitive probeExternalHost itself uses
-            // (buildExternalSshArgs/buildExternalWpCliCommand over
-            // defaultSshExec), rather than a second SSH invocation pattern.
-            const connectionProfile = getExternalProfile(storage, alias);
-            const siteVerification = [
-              await verifyExternalSite(alias, siteSlug, report, connectionProfile?.allowRoot),
-            ];
-
-            return {
-              success: true, registered: true, report: toHostReport(report),
-              environment: validEnv, siteVerification, error: null,
-            };
-          } catch (e: any) {
-            return {
-              success: false, registered: false, report: null, environment: null,
-              siteVerification: [],
-              error: e?.message ?? String(e),
-            };
+          const siteVerification: Array<{ site: string; verified: boolean; error: string | null }> = [];
+          for (const { site, environment } of sites) {
+            const result = await registerExternalHostSite(alias, path, environment, site);
+            siteVerification.push(...result.siteVerification);
           }
+          return { success: true, error: null, siteVerification };
         });
       },
 
