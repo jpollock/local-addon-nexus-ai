@@ -5694,12 +5694,19 @@ export function createResolvers(context: ResolverContext) {
       nexusHostAddSites: async (_parent: ResolverParent, { alias, path, sites }: {
         alias: string;
         path?: string;
-        sites: Array<{ site: string; environment: string }>;
+        sites: Array<{ site: string; environment: string; path?: string }>;
       }) => {
         return withQueue(async () => {
           const siteVerification: Array<{ site: string; verified: boolean; error: string | null }> = [];
-          for (const { site, environment } of sites) {
-            const result = await registerExternalHostSite(alias, path, environment, site);
+          for (const { site, environment, path: sitePath } of sites) {
+            // Each site's own path (when the caller already knows it, e.g.
+            // from probeHostMultiIssue.installs[i]) wins over the
+            // batch-level path -- otherwise every site in the batch would
+            // probe the identical filesystem location, which is the whole
+            // reason this mutation exists to avoid. Falling back to the
+            // batch-level path (or full discovery) is only correct for a
+            // single-install alias.
+            const result = await registerExternalHostSite(alias, sitePath ?? path, environment, site);
             siteVerification.push(...result.siteVerification);
           }
           return { success: true, error: null, siteVerification };

@@ -2241,6 +2241,8 @@ export const typeDefs = gql`
   input NexusHostSiteEnvironmentInput {
     site: String!
     environment: String!
+    "Filesystem path to this site's WordPress install, e.g. from probeHostMultiIssue.installs[i]. When omitted, falls back to the batch-level path (or full discovery) -- correct only for a single-install alias. Required to disambiguate multiple installs under one alias."
+    path: String
   }
 
   "Result of registering several sites under one external SSH connection in a single call."

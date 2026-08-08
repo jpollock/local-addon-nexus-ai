@@ -421,8 +421,8 @@ describe('nexusHostAddSites — batched registration for the onboarding wizard (
         alias: 'batch-host',
         path: null,
         sites: [
-          { site: 'site-a', environment: 'staging' },
-          { site: 'site-b', environment: 'production' },
+          { site: 'site-a', environment: 'staging', path: '/home/u1/site-a' },
+          { site: 'site-b', environment: 'production', path: '/home/u1/site-b' },
         ],
       },
     );
@@ -435,6 +435,45 @@ describe('nexusHostAddSites — batched registration for the onboarding wizard (
       { site: 'site-a', verified: true, error: null },
       { site: 'site-b', verified: false, error: expect.stringContaining('wp: command not found') },
     ]);
+
+    // The staged multi-path mock behaviour above is only meaningful if each
+    // call actually received its own site's path -- confirm the probe was
+    // invoked with each site's distinct path, not the same value twice.
+    expect(probeMock).toHaveBeenCalledTimes(2);
+    expect(probeMock.mock.calls[0]).toEqual(['batch-host', { wpPath: '/home/u1/site-a' }]);
+    expect(probeMock.mock.calls[1]).toEqual(['batch-host', { wpPath: '/home/u1/site-b' }]);
+  });
+
+  it('falls back to the batch-level path when no per-site path is given (single-install alias, unaffected by the per-site-path fix)', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'shared-path-host', wpPath: '/home/u1/shared', siteUrl: 'https://site-a.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({ code: 0, stdout: '6.8.1', stderr: '', spawnError: undefined });
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'shared-path-host', wpPath: '/home/u1/shared', siteUrl: 'https://site-b.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({ code: 0, stdout: '6.8.1', stderr: '', spawnError: undefined });
+
+    const result = await m.nexusHostAddSites(
+      null,
+      {
+        alias: 'shared-path-host',
+        path: '/home/u1/shared',
+        sites: [
+          { site: 'site-a', environment: 'staging' },
+          { site: 'site-b', environment: 'production' },
+        ],
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(probeMock).toHaveBeenCalledTimes(2);
+    expect(probeMock.mock.calls[0]).toEqual(['shared-path-host', { wpPath: '/home/u1/shared' }]);
+    expect(probeMock.mock.calls[1]).toEqual(['shared-path-host', { wpPath: '/home/u1/shared' }]);
   });
 
   it('does not roll back a site whose verification failed', async () => {
