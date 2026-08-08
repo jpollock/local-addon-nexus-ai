@@ -5247,13 +5247,17 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   // Blast radius exceeds anything else instrumented on this branch: arbitrary
   // WP-CLI over SSH against a PRODUCTION install, plus raw
   // `rm -f /nas/content/live/<install>/<path>` that deliberately bypasses
-  // WordPress entirely (see SentinelExecutor.remoteSshRaw). Both outcomes are
+  // WordPress entirely (see `executeSentinelCommands` in SentinelExecutor.ts).
+  // `registryStorage` is threaded through so the function can gate both
+  // branches on `isOperationAllowed` before executing, the same permission
+  // check `resolveTransport`/`resolveTarget` apply to every other remote-command
+  // path — this handler used to be the one bypass. Both outcomes are
   // audited — a remediation that fails half way through is exactly the case
   // someone will need the record for.
   safeHandle('nexus:sentinel:execute', async (_event: any, { installName, commands }: { installName: string; commands: string[] }) => {
     const started = Date.now();
     try {
-      const result = await executeSentinelCommands(installName, commands, localServicesBridge);
+      const result = await executeSentinelCommands(installName, commands, localServicesBridge, registryStorage);
       // Keep each failed step's ORIGINAL position (1-based) — `failed` below is
       // a filtered subset of `result.steps`, so its own array index does not
       // correspond to "which step ran". The index has to be captured before
