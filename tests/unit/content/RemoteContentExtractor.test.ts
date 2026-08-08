@@ -5,7 +5,6 @@ function makeTransport(runWpCli: (args: string[], opts?: RunOpts) => Promise<WpC
   return {
     kind: 'external-ssh' as any,
     siteRef: { kind: 'external', alias: 'test' } as any,
-    supports: () => true,
     probe: async () => ({ reachable: true }),
     deleteRemoteFile: async () => ({ success: false, output: 'n/a' }),
     runWpCli,

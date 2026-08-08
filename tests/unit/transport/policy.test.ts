@@ -41,7 +41,6 @@ describe('withPolicy', () => {
     siteRef: { kind: 'wpe' as const, installName: 'acmeprod' },
     runWpCli: jest.fn(async () => ({ stdout: 'ran', success: true })),
     deleteRemoteFile: jest.fn(async () => ({ success: true, output: '' })),
-    supports: () => true,
     probe: jest.fn(async () => ({ reachable: true })),
   });
 
@@ -62,7 +61,7 @@ describe('withPolicy', () => {
     });
   });
 
-  it('does not gate deleteRemoteFile, supports or probe', async () => {
+  it('does not gate deleteRemoteFile or probe', async () => {
     const t = inner();
     const wrapped = withPolicy(t, REMOTE_POLICY);
     await wrapped.deleteRemoteFile('/tmp/x');
@@ -77,7 +76,6 @@ function makeExternalLikeTransport(batchImpl?: (c: string[][]) => Promise<(strin
   const base: SiteTransport & { runWpCliBatch?: any } = {
     kind: 'external-ssh' as any,
     siteRef: { kind: 'external', alias: 'test' } as any,
-    supports: () => true,
     probe: async () => ({ reachable: true }),
     deleteRemoteFile: async () => ({ success: false, output: 'n/a' }),
     runWpCli: async () => ({ stdout: '', success: true }),

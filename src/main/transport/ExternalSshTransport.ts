@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import type { WpCliResult } from '../mcp/local-services-bridge';
 import type {
-  Capability, DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
+  DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
 } from './types';
 import {
   buildExternalSshArgs, buildExternalWpCliCommand, buildExternalWpCliBatch,
@@ -77,11 +77,6 @@ export class ExternalSshTransport implements SiteTransport {
     readonly wpCliBin?: string,
   ) {
     this.siteRef = { kind: 'external', alias };
-  }
-
-  /** SSH + WP-CLI covers every seeded capability. */
-  supports(_cap: Capability): boolean {
-    return true;
   }
 
   async runWpCli(args: string[], _opts?: RunOpts): Promise<WpCliResult> {

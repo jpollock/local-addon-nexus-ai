@@ -1,21 +1,7 @@
 import type { WpCliResult } from '../mcp/local-services-bridge';
 export type { WpCliResult };
 
-export type TransportKind = 'local' | 'wpe-ssh' | 'external-ssh' | 'external-rest';
-
-/**
- * Seeded with only the tokens the 15 existing wp-cli tools need. Deliberately
- * NOT exhaustive — Spec 2 enumerates it properly once the REST surface makes the
- * distinctions load-bearing. Do not invent tokens no caller checks.
- */
-export type Capability =
-  | 'wp-cli'
-  | 'arbitrary-options'
-  | 'db-query'
-  | 'eval'
-  | 'search-replace'
-  | 'core-update'
-  | 'theme-activate';
+export type TransportKind = 'local' | 'wpe-ssh' | 'external-ssh';
 
 export type SiteRef =
   | { kind: 'local'; siteId: string; siteName: string }
@@ -54,7 +40,6 @@ export interface SiteTransport {
    */
   deleteRemoteFile(absolutePath: string): Promise<DeleteResult>;
 
-  supports(cap: Capability): boolean;
   probe(): Promise<ProbeResult>;
 
   /**

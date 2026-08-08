@@ -1,6 +1,6 @@
 import type { LocalServicesBridge, WpCliResult } from '../mcp/local-services-bridge';
 import type {
-  Capability, DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
+  DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
 } from './types';
 
 export class LocalTransport implements SiteTransport {
@@ -13,10 +13,6 @@ export class LocalTransport implements SiteTransport {
     private readonly localServices: LocalServicesBridge,
   ) {
     this.siteRef = { kind: 'local', siteId, siteName };
-  }
-
-  supports(_cap: Capability): boolean {
-    return true;
   }
 
   async runWpCli(args: string[], opts?: RunOpts): Promise<WpCliResult> {

@@ -71,7 +71,6 @@ export function withPolicy(transport: SiteTransport, policy: CommandPolicy): Sit
   return {
     kind: transport.kind,
     siteRef: transport.siteRef,
-    supports: (cap) => transport.supports(cap),
     probe: () => transport.probe(),
     deleteRemoteFile: (p) => transport.deleteRemoteFile(p),
     async runWpCli(args, opts) {

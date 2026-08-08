@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import type { WpCliResult } from '../mcp/local-services-bridge';
 import type {
-  Capability, DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
+  DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
 } from './types';
 import {
   buildWpCliCommand, buildWpeSshArgs, escapeShellArg, WPE_SSH_TIMEOUT_MS,
@@ -30,11 +30,6 @@ export class WpeSshTransport implements SiteTransport {
 
   constructor(private readonly installName: string) {
     this.siteRef = { kind: 'wpe', installName };
-  }
-
-  /** SSH + WP-CLI can do everything the seeded capability list covers. */
-  supports(_cap: Capability): boolean {
-    return true;
   }
 
   async runWpCli(args: string[], opts?: RunOpts): Promise<WpCliResult> {

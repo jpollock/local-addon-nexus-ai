@@ -40,11 +40,6 @@ export interface ConformanceFixtures {
   failing: () => SiteTransport;
 }
 
-const ALL_CAPABILITIES = [
-  'wp-cli', 'arbitrary-options', 'db-query', 'eval',
-  'search-replace', 'core-update', 'theme-activate',
-] as const;
-
 export function runTransportConformance(name: string, fx: ConformanceFixtures) {
   describe(`SiteTransport conformance — ${name}`, () => {
     it('exposes a non-empty kind and a siteRef with a kind discriminant', () => {
@@ -55,11 +50,9 @@ export function runTransportConformance(name: string, fx: ConformanceFixtures) {
       expect(typeof t.siteRef.kind).toBe('string');
     });
 
-    it('supports() returns a boolean for every seeded capability', () => {
+    it('has no supports() method — Capability plumbing was removed as dead code', () => {
       const t = fx.ok();
-      for (const cap of ALL_CAPABILITIES) {
-        expect(typeof t.supports(cap)).toBe('boolean');
-      }
+      expect((t as any).supports).toBeUndefined();
     });
 
     it('runWpCli succeeds on the happy path and returns a string-or-null stdout', async () => {
