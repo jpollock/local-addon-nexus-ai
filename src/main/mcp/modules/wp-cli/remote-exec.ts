@@ -12,6 +12,41 @@ import { STORAGE_KEYS } from '../../../../common/constants';
 // replaced by REMOTE_POLICY and checkCommand in the transport layer.
 
 // ---------------------------------------------------------------------------
+// WPE Install Cache Lookup
+// ---------------------------------------------------------------------------
+
+export interface CachedWpeInstall {
+  installName?: string;
+  install_name?: string;
+  environment: string;
+  installId?: string;
+  install_id?: string;
+}
+
+/**
+ * Looks up a WPE install by name in the cached install list
+ * (`STORAGE_KEYS.WPE_INSTALL_CACHE`), the same cache both `resolveTarget`
+ * below and `SentinelExecutor` key their environment gate off of. Shared here
+ * so there is exactly one place this lookup — and its `installName` /
+ * `install_name` field fallback — is written; see the "one router, one
+ * policy" rule in CLAUDE.md. Callers derive `environment` themselves via
+ * `cachedInstall?.environment ?? 'production'` (the safe default for an
+ * install this cache doesn't know about).
+ */
+export function lookupCachedWpeInstall(
+  installName: string,
+  registryStorage: { get(key: string): unknown } | null | undefined,
+): CachedWpeInstall | undefined {
+  const wpeCache = registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as {
+    installs: CachedWpeInstall[];
+    syncedAt: number;
+  } | null;
+  return wpeCache?.installs?.find(
+    (i) => (i.installName ?? i.install_name) === installName,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Target Resolution
 // ---------------------------------------------------------------------------
 
@@ -96,10 +131,7 @@ export async function resolveTarget(
 
     // Not a local site — treat install_name as a direct WPE install name.
     // Look up environment from WPE install cache; default to 'production' when unknown (safe default).
-    const wpeCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: Array<{ installName?: string; install_name?: string; environment: string; installId?: string; install_id?: string }>; syncedAt: number } | null;
-    const cachedInstall = wpeCache?.installs?.find(
-      (i: any) => (i.installName ?? i.install_name) === installName
-    );
+    const cachedInstall = lookupCachedWpeInstall(installName, services.registryStorage);
     const environment = cachedInstall?.environment ?? 'production';
 
     if (!isOperationAllowed(operation, environment, settings, `wpe:${installName}`)) {

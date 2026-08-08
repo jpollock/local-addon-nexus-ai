@@ -11,6 +11,7 @@ jest.mock('child_process', () => ({ spawn: (...args: any[]) => spawnMock(...args
 
 import { createLocalServicesBridge } from '../../../src/main/mcp/local-services-bridge';
 import { executeSentinelCommands } from '../../../src/main/sentinel/SentinelExecutor';
+import { STORAGE_KEYS } from '../../../src/common/constants';
 
 const EXPECTED_KEY = path.join(
   os.homedir(), 'Library', 'Application Support', 'Local', 'ssh', 'wpe-connect',
@@ -111,11 +112,27 @@ describe('WPE SSH argv — golden characterization', () => {
     });
   });
 
-  describe('remoteSshRaw (SentinelExecutor)', () => {
+  describe('executeSentinelCommands (SentinelExecutor)', () => {
     const stubServices: any = { remoteWpCliRun: jest.fn() };
 
+    // These two tests pin exact SSH argv byte-for-byte; they are not about the
+    // permission gate (that's tests/unit/sentinel/sentinel-executor.test.ts's
+    // job). 'delete' is denied on every environment by default, so an
+    // explicit permissive registryStorage is required just to get past the
+    // gate to the SSH argv this file exists to characterize.
+    const permissiveRegistryStorage: any = {
+      get: (key: string) => {
+        if (key === STORAGE_KEYS.SETTINGS) {
+          return { remoteOperationPermissions: { delete: { development: true, staging: true, production: true } } };
+        }
+        return null;
+      },
+    };
+
     it('builds the same ssh argv with a bare rm command', async () => {
-      await executeSentinelCommands('acmeprod', ['rm wp-content/mu-plugins/evil.php'], stubServices);
+      await executeSentinelCommands(
+        'acmeprod', ['rm wp-content/mu-plugins/evil.php'], stubServices, permissiveRegistryStorage,
+      );
 
       const [cmd, args, opts] = spawnMock.mock.calls[0];
       expect(cmd).toBe('ssh');
@@ -129,7 +146,9 @@ describe('WPE SSH argv — golden characterization', () => {
 
     it('on failure prefers stdout over stderr — the OPPOSITE of remoteWpCliRun', async () => {
       spawnMock.mockImplementation(() => fakeProc({ code: 1, stdout: 'from-stdout', stderr: 'from-stderr' }));
-      const res = await executeSentinelCommands('acmeprod', ['rm evil.php'], stubServices);
+      const res = await executeSentinelCommands(
+        'acmeprod', ['rm evil.php'], stubServices, permissiveRegistryStorage,
+      );
       expect(res.success).toBe(false);
       expect(res.steps[0].error).toBe('from-stdout');
     });

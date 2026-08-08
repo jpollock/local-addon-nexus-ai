@@ -1,8 +1,9 @@
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
+import type { RegistryStorage } from '../content/IndexRegistry';
 import { createLogger } from '../logging/Logger';
 import { WpeSshTransport } from '../transport/WpeSshTransport';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
-import { STORAGE_KEYS } from '../../common/constants';
+import { lookupCachedWpeInstall } from '../mcp/modules/wp-cli/remote-exec';
 
 const logger = createLogger('SentinelExecutor');
 
@@ -13,42 +14,24 @@ export interface ExecuteStep {
   error?: string;
 }
 
-// Minimal shape `getEffectiveSettings` needs — matches its own parameter type
-// so this module does not have to import the full `RegistryStorage` class.
-type RegistryStorageLike = { get(key: string): unknown } | null | undefined;
-
-/**
- * Resolves the environment a WPE install is registered under, the same way
- * `resolveTarget`'s "direct install name" branch does (`remote-exec.ts`):
- * look it up in the cached WPE install list, defaulting to 'production' when
- * unknown. Sentinel remediation always addresses installs by name directly —
- * there is no linked-local-site path here.
- */
-function resolveInstallEnvironment(installName: string, registryStorage: RegistryStorageLike): string {
-  const wpeCache = registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as {
-    installs: Array<{ installName?: string; install_name?: string; environment: string }>;
-  } | null;
-  const cachedInstall = wpeCache?.installs?.find(
-    (i: any) => (i.installName ?? i.install_name) === installName,
-  );
-  return cachedInstall?.environment ?? 'production';
-}
-
 export async function executeSentinelCommands(
   installName: string,
   commands: string[],
   localServices: LocalServicesBridge,
-  registryStorage?: RegistryStorageLike,
+  registryStorage: RegistryStorage,
 ): Promise<{ success: boolean; steps: ExecuteStep[] }> {
   const steps: ExecuteStep[] = [];
   let allOk = true;
 
   // Resolved once per run — same install, same environment for every command
   // in the batch. Mirrors `resolveTransport`/`resolveTarget`'s existing gate
-  // for WP Engine installs (see `remote-exec.ts`): permission check happens
-  // before either the raw-SSH `rm` path or the WP-CLI path is allowed to run.
+  // for WP Engine installs (see `remote-exec.ts`'s "direct install name"
+  // branch, which `lookupCachedWpeInstall` is shared from): permission check
+  // happens before either the raw-SSH `rm` path or the WP-CLI path is
+  // allowed to run.
   const settings = getEffectiveSettings(registryStorage);
-  const environment = resolveInstallEnvironment(installName, registryStorage);
+  const cachedInstall = lookupCachedWpeInstall(installName, registryStorage);
+  const environment = cachedInstall?.environment ?? 'production';
 
   for (const command of commands) {
     const start = Date.now();
@@ -62,8 +45,12 @@ export async function executeSentinelCommands(
       continue;
     }
 
+    // Computed once per command — both branches below key off it, and the
+    // gate check under each needs to match the branch it guards.
+    const isRm = cleanCommand.startsWith('rm ');
+
     try {
-      if (cleanCommand.startsWith('rm ') && !isOperationAllowed('delete', environment, settings, `wpe:${installName}`)) {
+      if (isRm && !isOperationAllowed('delete', environment, settings, `wpe:${installName}`)) {
         steps.push({
           command,
           ok: false,
@@ -72,7 +59,7 @@ export async function executeSentinelCommands(
             + 'Adjust in Nexus AI → Settings → WP Engine Access.',
         });
         allOk = false;
-      } else if (cleanCommand.startsWith('rm ')) {
+      } else if (isRm) {
         // Use raw SSH file deletion — WP-CLI always loads MU plugins (even with
         // --skip-plugins), so any webshell in mu-plugins/ poisons wp eval.
         // Direct rm over SSH bypasses WordPress entirely.
@@ -88,6 +75,12 @@ export async function executeSentinelCommands(
         });
         if (!ok) allOk = false;
       } else if (!isOperationAllowed('wpcli', environment, settings, `wpe:${installName}`)) {
+        // Gated on 'wpcli' (the write-capable check, refused on production by
+        // default), not 'wpcli_read' — deliberately conservative. Sentinel
+        // remediation commands are LLM-composed and can include mutating
+        // WP-CLI (e.g. `option update`, `plugin deactivate`) alongside reads,
+        // and this function has no way to distinguish the two per-command, so
+        // every non-rm command is held to the stricter check.
         steps.push({
           command,
           ok: false,
