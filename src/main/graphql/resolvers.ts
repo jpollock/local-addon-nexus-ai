@@ -5672,12 +5672,14 @@ export function createResolvers(context: ResolverContext) {
       },
 
       // Opens SSH sessions to third-party production hosts, like every other
-      // SSH-spawning resolver in this file, so it is queued (withQueue) and
-      // audited (auditDirectOperation) the same way nexusHostProbe/nexusHostAdd
-      // are — the remote commands collectExternalHostData issues are reads,
-      // but the local graph write via writeExternalHostData is a mutation
-      // through services.graphService directly, which is exactly the class of
-      // call auditDirectOperation exists for.
+      // SSH-spawning resolver in this file, so its body is queued the same way
+      // nexusHostProbe/nexusHostAdd wrap theirs (withQueue). It is now also
+      // explicitly audited (auditDirectOperation), following the same call
+      // shape used elsewhere in this file (e.g. nexusWpeUserAdd) — the remote
+      // commands collectExternalHostData issues are reads, but the local graph
+      // write via writeExternalHostData is a mutation through
+      // services.graphService directly, which is exactly the class of call
+      // auditDirectOperation exists for.
       //
       // A connection can have N sites under it (Task 3's findExternalSites),
       // so this iterates every active site rather than the single row that
@@ -5746,12 +5748,14 @@ export function createResolvers(context: ResolverContext) {
       },
 
       // Opens SSH sessions to third-party production hosts, like every other
-      // SSH-spawning resolver in this file, so it is queued (withQueue) and
-      // audited (auditDirectOperation) the same way nexusHostProbe/nexusHostAdd
-      // are — `wp post list` on the remote side is a read, but the local graph
-      // writes (`content` table, vector store, IndexRegistry, the
-      // content_indexed_at stamp) go through services.graphService directly,
-      // which is exactly the class of call auditDirectOperation exists for.
+      // SSH-spawning resolver in this file, so its body is queued the same way
+      // nexusHostProbe/nexusHostAdd wrap theirs (withQueue). It is now also
+      // explicitly audited (auditDirectOperation), following the same call
+      // shape used elsewhere in this file (e.g. nexusWpeUserAdd) — `wp post
+      // list` on the remote side is a read, but the local graph writes
+      // (`content` table, vector store, IndexRegistry, the content_indexed_at
+      // stamp) go through services.graphService directly, which is exactly the
+      // class of call auditDirectOperation exists for.
       //
       // Same connection-wide iteration as nexusHostRefresh — see its comment.
       nexusHostIndex: async (_parent: ResolverParent, { alias: aliasArg }: { alias: string }) => {

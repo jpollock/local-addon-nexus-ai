@@ -559,6 +559,10 @@ WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates
   unreferenced** — `createResolvers` in `resolvers.ts` wins module resolution
   for `./graphql/resolvers`. It is kept in sync so the in-progress split does
   not silently lose the audit trail when it lands.
+- `nexusHostAdd`/`nexusHostRemove` write to the graph directly via
+  `upsertSite` — the exact reasoning that justified auditing
+  `nexusHostRefresh`/`nexusHostIndex` (fixed above) — yet remain unaudited
+  themselves.
 
 **How this list has been wrong before.** It previously scoped the remaining gap
 to "IPC handlers that mutate *local* site state" and asserted production-WPE
