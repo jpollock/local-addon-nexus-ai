@@ -897,9 +897,11 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
         ? React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-muted)', marginBottom: 10 } }, 'No installs were discovered automatically — add a path below.')
         : null,
       ...siteSelections.map((s, i) => this.renderSiteRow(s, i)),
-      React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 12 } },
+      React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', marginTop: 14, marginBottom: 6 } },
+        'Don’t see a site that should be here? Enter the full path to its wp-config.php directory on the server, then click Add.'),
+      React.createElement('div', { style: { display: 'flex', gap: 8 } },
         React.createElement('input', {
-          type: 'text', placeholder: '/path/to/wordpress (path discovery missed)',
+          type: 'text', placeholder: '/home/user/public_html',
           value: manualPath,
           onChange: (e: any) => this.setState({ manualPath: e.target.value }),
           style: { ...inputStyle, flex: 1 },
@@ -914,7 +916,7 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
         onClick: this.submitStep3,
         disabled: registering || includedCount === 0,
         style: { ...primaryButtonStyle, marginTop: 16, opacity: (registering || includedCount === 0) ? 0.5 : 1, cursor: (registering || includedCount === 0) ? 'not-allowed' : 'pointer' },
-      }, registering ? 'Registering…' : `Register ${includedCount} site${includedCount === 1 ? '' : 's'}`),
+      }, registering ? 'Connecting…' : `Connect ${includedCount} site${includedCount === 1 ? '' : 's'}`),
     );
   }
 
