@@ -112,6 +112,38 @@ describe('Safety Tiers', () => {
   });
 });
 
+describe('Tier-1 backfill for read-only tools (F4)', () => {
+  it.each([
+    'fleet_overview',
+    'search_site_content',
+    'get_metrics',
+    'compare_sites',
+    'detect_drift',
+    'iw_fleet_status',
+    'iw_get_connection_status',
+    'iw_get_kb_collection',
+    'iw_list_kb_collections',
+    'iw_search_kb',
+    'ask_ollama',
+    'list_ollama_models',
+    'nexus_get_settings',
+    'search_tools',
+  ])('%s is explicitly Tier 1, not defaulting to Tier 2', (name) => {
+    expect(TIER_OVERRIDES[name]).toBe(1);
+    expect(getToolSafety(name).tier).toBe(1);
+  });
+
+  test('ambiguous or write tools are left as Tier 2 default, not backfilled', () => {
+    // These were reviewed and deliberately NOT marked Tier 1 — see task-8-report.md.
+    expect(TIER_OVERRIDES['local_get_site_changes']).toBeUndefined();
+    expect(TIER_OVERRIDES['nexus_site_audit']).toBeUndefined();
+    expect(TIER_OVERRIDES['reset_metrics']).toBeUndefined();
+    expect(getToolSafety('local_get_site_changes').tier).toBe(2);
+    expect(getToolSafety('nexus_site_audit').tier).toBe(2);
+    expect(getToolSafety('reset_metrics').tier).toBe(2);
+  });
+});
+
 describe('ConfirmationManager', () => {
   let manager: ConfirmationManager;
 
