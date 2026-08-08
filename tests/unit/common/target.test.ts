@@ -90,6 +90,10 @@ describe('formatTarget', () => {
     const parsed = parseTarget('ssh:my-alias/my-site@production');
     expect(formatTarget(parsed)).toBe('ssh:my-alias/my-site@production');
   });
+  it('throws when formatting an external target with no resolved site', () => {
+    const parsed = parseTarget('ssh:my-alias@production');
+    expect(() => formatTarget(parsed)).toThrow(/no resolved site/);
+  });
 });
 
 describe('parseTarget — external SSH targets', () => {

@@ -140,9 +140,12 @@ export function requireWpeTarget(target: string, opts?: ParseTargetOptions): {
 export function formatTarget(parsed: ParsedTarget): string {
   if (parsed.type === 'local') return `${parsed.siteName}@local`;
   if (parsed.type === 'external') {
-    return parsed.site
-      ? `ssh:${parsed.alias}/${parsed.site}@${parsed.environment}`
-      : `ssh:${parsed.alias}@${parsed.environment}`;
+    if (!parsed.site) {
+      throw new Error(
+        `Cannot format an external target with no resolved site (alias: ${parsed.alias}). Resolve the site before formatting.`,
+      );
+    }
+    return `ssh:${parsed.alias}/${parsed.site}@${parsed.environment}`;
   }
   return `wpe:${parsed.account}/${parsed.installName}@${parsed.environment}`;
 }
