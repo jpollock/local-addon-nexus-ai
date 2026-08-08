@@ -37,6 +37,30 @@ describe('detectCollision', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-ssh-writer-test-empty-'));
     expect(detectCollision('anything', home)).toEqual({ kind: 'none' });
   });
+
+  it('finds an exact collision even when a wildcard Host block appears earlier in the file', () => {
+    const home = makeHomeDir('Host *\n  AddKeysToAgent yes\n\nHost taken\n  HostName 1.1.1.1\n  User u\n');
+    const result = detectCollision('taken', home);
+    expect(result.kind).toBe('exact');
+  });
+
+  it('refuses a second write of the same alias to config.d/nexus even before any Include line exists in the main config', () => {
+    const home = makeHomeDir();
+    writeHostBlock({
+      alias: 'dup-host', hostname: '1.1.1.1', user: 'u', port: '22', identityFile: '/k',
+    }, home);
+    expect(() => writeHostBlock({
+      alias: 'dup-host', hostname: '2.2.2.2', user: 'u', port: '22', identityFile: '/k',
+    }, home)).toThrow(/already/i);
+  });
+
+  it('detects a collision with an alias defined only inside an Included file', () => {
+    const home = makeHomeDir('Include config.d/*\n');
+    fs.mkdirSync(path.join(home, '.ssh', 'config.d'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.ssh', 'config.d', 'other'), 'Host included-alias\n  HostName 9.9.9.9\n  User u\n');
+    const result = detectCollision('included-alias', home);
+    expect(result.kind).toBe('exact');
+  });
 });
 
 describe('previewHostBlock', () => {

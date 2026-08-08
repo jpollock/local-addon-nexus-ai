@@ -365,4 +365,35 @@ describe('nexusHostAdd — post-registration verification (Task 5)', () => {
       { site: 'site-a', verified: false, error: expect.stringContaining('WordPress installation') },
     ]);
   });
+
+  it('threads the connection profile\'s allowRoot into the verification WP-CLI command', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    // Pre-seed the connection profile as root-connecting, the way a prior
+    // probeHostMultiIssue('rootUser') decision would have recorded it.
+    c.store[STORAGE_KEYS.EXTERNAL_SITE_PROFILES] = {
+      'root-host': {
+        alias: 'root-host', allowRoot: true, firstSeenAt: 1, lastSeenAt: 1,
+      },
+    };
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'root-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({ code: 0, stdout: '6.8.1', stderr: '', spawnError: undefined });
+
+    const result = await m.nexusHostAdd(
+      null, { alias: 'root-host', path: '/home/u1/site-a', environment: 'production', site: 'site-a' },
+    );
+
+    expect(result.registered).toBe(true);
+    expect(result.siteVerification).toEqual([
+      { site: 'site-a', verified: true, error: null },
+    ]);
+    // verifyExecMock is called with the built ssh argv; the WP-CLI command
+    // string embedded in it must carry --allow-root.
+    const sshArgs = verifyExecMock.mock.calls[0][0] as string[];
+    expect(sshArgs.some((a) => a.includes('--allow-root'))).toBe(true);
+  });
 });

@@ -37,7 +37,7 @@ import { defaultSshExec } from '../external/sshExec';
 import { buildExternalSshArgs, buildExternalWpCliCommand, EXTERNAL_SSH_TIMEOUT_MS } from '../transport/ssh-args';
 import { resolveTargetArgs } from '../transport/resolveTargetArgs';
 import {
-  externalSiteId, listExternalProfiles,
+  externalSiteId, getExternalProfile, listExternalProfiles,
   removeExternalProfile, upsertExternalProfile,
 } from '../external/externalSiteStore';
 import { createWpCliResolvers } from './resolvers/wp-cli';
@@ -177,14 +177,21 @@ function toHostReport(r: ProbeReport) {
  * Never throws — a verification failure is reported in the returned object,
  * not propagated, so it cannot turn a successful registration into an error
  * result.
+ *
+ * Threads the connection's `allowRoot` flag through, the same way
+ * resolveTransport does for ordinary command execution — otherwise a
+ * root-connecting host with `allowRoot: true` on its profile works for every
+ * later command but fails verification here alone, since WP-CLI refuses to
+ * run as root without `--allow-root`.
  */
 async function verifyExternalSite(
   alias: string,
   siteSlug: string,
   report: Pick<ProbeReport, 'wpPath' | 'wpCliPath'>,
+  allowRoot?: boolean,
 ): Promise<{ site: string; verified: boolean; error: string | null }> {
   try {
-    const cmd = buildExternalWpCliCommand(['core', 'version'], report.wpPath, report.wpCliPath);
+    const cmd = buildExternalWpCliCommand(['core', 'version'], report.wpPath, report.wpCliPath, allowRoot);
     const result = await defaultSshExec(
       buildExternalSshArgs(alias, cmd, { connectTimeoutSec: 10 }),
       EXTERNAL_SSH_TIMEOUT_MS,
@@ -5610,7 +5617,10 @@ export function createResolvers(context: ResolverContext) {
             // primitive probeExternalHost itself uses
             // (buildExternalSshArgs/buildExternalWpCliCommand over
             // defaultSshExec), rather than a second SSH invocation pattern.
-            const siteVerification = [await verifyExternalSite(alias, siteSlug, report)];
+            const connectionProfile = getExternalProfile(storage, alias);
+            const siteVerification = [
+              await verifyExternalSite(alias, siteSlug, report, connectionProfile?.allowRoot),
+            ];
 
             return {
               success: true, registered: true, report: toHostReport(report),

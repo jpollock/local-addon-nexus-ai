@@ -20,6 +20,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { assertSafeSshAlias } from '../transport/ssh-args';
+import { listSshConfigHosts } from './sshConfigParser';
 import SSHConfig, { LineType } from 'ssh-config';
 import type { Line } from 'ssh-config';
 
@@ -57,14 +58,17 @@ function directiveValue(line: Line): string {
 }
 
 /**
- * Checks the real ~/.ssh/config (NOT config.d/nexus — a collision against
- * Nexus's own prior writes is impossible, since writeHostBlock itself refuses
- * a repeat alias by construction) for an exact or pattern collision with a
- * new alias, before anything is written.
+ * Scans ~/.ssh/config directly, collecting BOTH the first exact match and the
+ * first pattern (wildcard) match anywhere in the file, rather than returning
+ * on whichever is seen first. A leading `Host *` block (common on macOS, e.g.
+ * AddKeysToAgent/UseKeychain) must never shadow an exact match that appears
+ * later in the same file -- exact always wins over pattern, regardless of
+ * scan order.
  */
-export function detectCollision(alias: string, homeDir: string = os.homedir()): CollisionResult {
-  const file = configPath(homeDir);
-  if (!fs.existsSync(file)) return { kind: 'none' };
+function scanFileForCollision(file: string, alias: string): { exact: { file: string; line: number } | null; pattern: { pattern: string; file: string } | null } {
+  let exact: { file: string; line: number } | null = null;
+  let pattern: { pattern: string; file: string } | null = null;
+  if (!fs.existsSync(file)) return { exact, pattern };
 
   const text = fs.readFileSync(file, 'utf-8');
   const lines = SSHConfig.parse(text);
@@ -74,15 +78,60 @@ export function detectCollision(alias: string, homeDir: string = os.homedir()): 
     lineNumber++;
     if (line.type === LineType.DIRECTIVE && line.param.toLowerCase() === 'host') {
       const patterns = directiveValue(line).split(/\s+/).filter(Boolean);
-      if (patterns.includes(alias)) {
-        return { kind: 'exact', file, line: lineNumber };
+      if (!exact && patterns.includes(alias)) {
+        exact = { file, line: lineNumber };
       }
-      const wildcardMatch = patterns.find((p) => (p.includes('*') || p.includes('?')) && !p.startsWith('!'));
-      if (wildcardMatch) {
-        return { kind: 'pattern', pattern: wildcardMatch, file };
+      if (!pattern) {
+        const wildcardMatch = patterns.find((p) => (p.includes('*') || p.includes('?')) && !p.startsWith('!'));
+        if (wildcardMatch) {
+          pattern = { pattern: wildcardMatch, file };
+        }
       }
     }
   }
+  return { exact, pattern };
+}
+
+/**
+ * Checks for an exact or pattern collision with a new alias, before anything
+ * is written. This must NOT be a naive re-parse of ~/.ssh/config alone --
+ * two things that used to be invisible to it:
+ *
+ *   - An alias defined only inside a file ~/.ssh/config Include's. Handled
+ *     by sourcing from listSshConfigHosts, which is Include-aware.
+ *   - config.d/nexus itself, i.e. Nexus's own prior writes. A collision
+ *     against Nexus's own file is NOT impossible -- writeHostBlock's refusal
+ *     is only as good as detectCollision's visibility into that file, and a
+ *     fresh install may not yet have the `Include ~/.ssh/config.d/nexus` line
+ *     in ~/.ssh/config that would otherwise make listSshConfigHosts see it.
+ *     So config.d/nexus is always checked explicitly as a fallback, in
+ *     addition to (not instead of) the Include-aware scan.
+ *
+ * An exact match anywhere wins over a pattern match found elsewhere, and line
+ * numbers are only meaningful for matches found by directly parsing a single
+ * file -- a match found via listSshConfigHosts (which does not report line
+ * numbers) is reported with line 0.
+ */
+export function detectCollision(alias: string, homeDir: string = os.homedir()): CollisionResult {
+  const file = configPath(homeDir);
+  const top = scanFileForCollision(file, alias);
+  if (top.exact) return { kind: 'exact', ...top.exact };
+
+  // Include-aware scan: covers files ~/.ssh/config Includes, and covers
+  // config.d/nexus itself once the Include line Nexus writes is present.
+  const includeAwareHosts = listSshConfigHosts(null, homeDir);
+  if (includeAwareHosts.some((h) => h.alias === alias)) {
+    return { kind: 'exact', file: nexusConfigPath(homeDir), line: 0 };
+  }
+
+  // Explicit fallback: config.d/nexus even when ~/.ssh/config has no Include
+  // line yet (first-ever write) or the user removed it while old Nexus
+  // entries remain.
+  const nexusFile = nexusConfigPath(homeDir);
+  const nexusScan = scanFileForCollision(nexusFile, alias);
+  if (nexusScan.exact) return { kind: 'exact', ...nexusScan.exact };
+
+  if (top.pattern) return { kind: 'pattern', ...top.pattern };
   return { kind: 'none' };
 }
 
