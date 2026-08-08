@@ -44,7 +44,11 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const toolProvider = new NexusToolProvider(
     toolRegistry,
     services,
-    agent.tools?.length ? agent.tools : undefined,
+    // undefined (agent never declares a tools list) stays unrestricted -- that is existing,
+    // correct behavior. An EMPTY array means the author explicitly locked this agent down and
+    // must deny every tool, not fall through to the undefined/unrestricted case. Do not collapse
+    // `[]` to `undefined` here.
+    agent.tools,
   );
 
   // Build AI client per-run so it gets this agent's scoped tool set.

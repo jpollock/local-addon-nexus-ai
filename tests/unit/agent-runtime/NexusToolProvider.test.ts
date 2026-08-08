@@ -76,4 +76,56 @@ describe('NexusToolProvider.getProviderToolDefinitions', () => {
     const defs = p.getProviderToolDefinitions();
     expect(defs[0].parameters).toEqual({ type: 'object', properties: {} });
   });
+
+  it('an empty tools array denies every tool (no unrestricted fallback)', () => {
+    const p = new NexusToolProvider(fakeRegistry as any, {} as any, []);
+    expect(p.getProviderToolDefinitions()).toEqual([]);
+  });
+});
+
+describe('NexusToolProvider — empty allowedTools denies everything', () => {
+  it('an empty tools array refuses invoke() for any tool name', async () => {
+    const registry = makeRegistry({ nexus_list_sites: () => [{ name: 'mysite' }] });
+    const provider = new NexusToolProvider(registry as any, fakeServices, []);
+    await expect(provider.invoke('nexus_list_sites', {})).rejects.toThrow(
+      'Tool "nexus_list_sites" is not declared in this agent\'s tools list'
+    );
+    expect(registry.call).not.toHaveBeenCalled();
+  });
+
+  it('undefined tools (agent never declares) remains unrestricted, unchanged', async () => {
+    const registry = makeRegistry({ nexus_list_sites: () => [{ name: 'mysite' }] });
+    const provider = new NexusToolProvider(registry as any, fakeServices, undefined);
+    const result = await provider.invoke('nexus_list_sites', {});
+    expect(result).toEqual([{ name: 'mysite' }]);
+  });
+});
+
+describe('NexusToolProvider — wp_eval sandbox scoping', () => {
+  it('refuses wp_eval against any site when allowedTools is set but registerSandbox was never called', async () => {
+    const registry = makeRegistry({ wp_eval: () => 'ok' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['wp_eval']);
+    // registerSandbox() is never called -- sandboxSiteIds stays empty.
+    await expect(provider.invoke('wp_eval', { site: 'any-site' })).rejects.toThrow(
+      'wp_eval refused: no sandbox site registered for this agent'
+    );
+    expect(registry.call).not.toHaveBeenCalled();
+  });
+
+  it('allows wp_eval against a registered sandbox site', async () => {
+    const registry = makeRegistry({ wp_eval: () => 'ok' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['wp_eval']);
+    provider.registerSandbox('my-site');
+    const result = await provider.invoke('wp_eval', { site: 'my-site' });
+    expect(result).toBe('ok');
+  });
+
+  it('still refuses wp_eval against a site outside the registered sandbox', async () => {
+    const registry = makeRegistry({ wp_eval: () => 'ok' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['wp_eval']);
+    provider.registerSandbox('my-site');
+    await expect(provider.invoke('wp_eval', { site: 'other-site' })).rejects.toThrow(
+      'wp_eval: site "other-site" is not in this agent\'s registered sandbox scope'
+    );
+  });
 });

@@ -52,6 +52,38 @@ describe('buildAgentContext', () => {
     expect(accSites['my-site'].status).toBe('clean');
   });
 
+  describe('agent.tools scoping', () => {
+    it('agent.tools: [] produces a NexusToolProvider that denies every tool (not unrestricted access)', async () => {
+      const stubs = makeStubs();
+      stubs.toolRegistry.list.mockReturnValue([
+        { name: 'nexus_list_sites', description: 'List sites', inputSchema: { type: 'object', properties: {} } },
+      ]);
+      const { ctx } = buildAgentContext({
+        agent: { ...makeAgent(), tools: [] },
+        ...stubs,
+      });
+      // An empty tools list must not fall through to "undefined = unrestricted".
+      expect((ctx.tools as any).getProviderToolDefinitions()).toEqual([]);
+      await expect(ctx.tools.invoke('nexus_list_sites', {})).rejects.toThrow(
+        'Tool "nexus_list_sites" is not declared in this agent\'s tools list'
+      );
+    });
+
+    it('agent with no tools field at all remains unrestricted (existing behavior, unchanged)', async () => {
+      const stubs = makeStubs();
+      stubs.toolRegistry.list.mockReturnValue([
+        { name: 'nexus_list_sites', description: 'List sites', inputSchema: { type: 'object', properties: {} } },
+      ]);
+      stubs.toolRegistry.call.mockResolvedValue({ content: [{ type: 'text', text: '{}' }], isError: false });
+      const { ctx } = buildAgentContext({
+        agent: makeAgent(), // no `tools` field
+        ...stubs,
+      });
+      expect((ctx.tools as any).getProviderToolDefinitions()).toHaveLength(1);
+      await expect(ctx.tools.invoke('nexus_list_sites', {})).resolves.toEqual({});
+    });
+  });
+
   describe('agents never route through the Local AI Gateway, regardless of useLocalGateway', () => {
     // Reproduced live: with settings.useLocalGateway=true (a flag meant to route a WordPress
     // SITE's own AI calls through Local so Nexus can inject credentials the site never sees),

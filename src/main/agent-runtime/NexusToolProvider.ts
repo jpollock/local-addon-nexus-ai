@@ -44,7 +44,13 @@ export class NexusToolProvider implements ToolProvider {
 
     // Enforce wp_eval site scope: when running as an agent, restrict wp_eval to registered
     // sandbox sites to prevent prompt-injected code from targeting unrelated local sites.
-    if (name === 'wp_eval' && this.allowedTools && this.sandboxSiteIds.size > 0) {
+    if (name === 'wp_eval' && this.allowedTools) {
+      // No sandbox registered means no site is authorized for wp_eval at all -- this must
+      // refuse, not fall through to "any site is fine" the way an empty sandboxSiteIds set
+      // used to.
+      if (this.sandboxSiteIds.size === 0) {
+        throw new Error('wp_eval refused: no sandbox site registered for this agent');
+      }
       const targetSite = args.site as string | undefined;
       if (targetSite && !this.sandboxSiteIds.has(targetSite)) {
         throw new Error(`wp_eval: site "${targetSite}" is not in this agent's registered sandbox scope`);
