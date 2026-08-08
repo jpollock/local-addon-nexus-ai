@@ -135,6 +135,7 @@ export function writeHostBlock(input: WriteHostBlockInput, homeDir: string = os.
  * returned for the caller to display.
  */
 export function generateHostKey(aliasSlug: string, homeDir: string = os.homedir()): GeneratedKey {
+  assertSafeSshAlias(aliasSlug);
   const dir = sshDir(homeDir);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const privateKeyPath = path.join(dir, `nexus_${aliasSlug}`);

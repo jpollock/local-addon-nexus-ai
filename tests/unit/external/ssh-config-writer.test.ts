@@ -125,4 +125,8 @@ describe('generateHostKey', () => {
     expect(fs.statSync(result.privateKeyPath).mode & 0o777).toBe(0o600);
     expect(result.publicKeyLine).toMatch(/^ssh-ed25519 /);
   });
+
+  it('rejects a path-traversal aliasSlug before touching the filesystem', () => {
+    expect(() => generateHostKey('../../../etc/foo', home)).toThrow(/Invalid SSH host alias/);
+  });
 });
