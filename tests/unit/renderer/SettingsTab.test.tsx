@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { SettingsTab } from '../../../src/renderer/components/SettingsTab';
+import { ExternalHostAddWizard } from '../../../src/renderer/components/settings/ExternalHostAddWizard';
 import { IPC_CHANNELS } from '../../../src/common/constants';
 
 function findAll(node: any, pred: (n: any) => boolean, out: any[] = []): any[] {
@@ -26,6 +27,8 @@ function mockElectron(overrides: Record<string, any> = {}) {
     [IPC_CHANNELS.GET_WPE_INSTALLS_CACHE]: [],
     [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [],
     [IPC_CHANNELS.UPDATE_SETTINGS]: { success: true },
+    [IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS]: { success: true, hosts: [] },
+    [IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE]: { success: true, error: null },
   };
   const table = { ...defaults, ...overrides };
   return { ipcRenderer: { invoke: jest.fn((ch: string) => Promise.resolve(table[ch])) } };
@@ -63,20 +66,30 @@ describe('SettingsTab — external hosts', () => {
     ]);
   });
 
-  it('renders a chip for each registered external host', async () => {
+  it('renders a host list row per registered external host with alias, resolved connection info, and a status dot', async () => {
     const electron = mockElectron({
       [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com' }],
+      [IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS]: {
+        success: true,
+        hosts: [{ alias: 'hostinger-test', hostname: 'box.example.com', user: 'deploy', port: 22, alreadyRegistered: true }],
+      },
     });
     const instance: any = new SettingsTab({ electron });
     (instance as any).mounted = true;
     spySetState(instance);
     await instance.loadAll();
     const tree = instance.render();
-    const chips = findAll(tree, (n) => textOf(n).trim() === 'hostinger-test/site-a');
-    expect(chips.length).toBeGreaterThan(0);
+    const text = textOf(tree);
+    expect(text).toContain('hostinger-test');
+    expect(text).toContain('deploy@box.example.com:22');
+    expect(text).toContain('~/.ssh/config');
+    expect(text).toContain('1 site');
+    // A status dot (a small round div) is rendered alongside the row.
+    const dots = findAll(tree, (n) => n.type === 'div' && n.props?.style?.borderRadius === '50%');
+    expect(dots.length).toBeGreaterThan(0);
   });
 
-  it('external host chips are not clickable — no onClick handler', async () => {
+  it('external host rows are not clickable — no onClick handler on the alias/connection info', async () => {
     const electron = mockElectron({
       [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com' }],
     });
@@ -85,8 +98,76 @@ describe('SettingsTab — external hosts', () => {
     spySetState(instance);
     await instance.loadAll();
     const tree = instance.render();
-    const chip = findAll(tree, (n) => textOf(n).trim() === 'hostinger-test/site-a')[0];
-    expect(chip.props.onClick).toBeUndefined();
+    const aliasNode = findAll(tree, (n) => textOf(n).trim() === 'hostinger-test')[0];
+    expect(aliasNode.props.onClick).toBeUndefined();
+  });
+
+  it('an "Add a host" button mounts ExternalHostAddWizard', async () => {
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    let tree = instance.render();
+    const addButton = findAll(tree, (n) => n.type === 'button' && /add a host/i.test(textOf(n)))[0];
+    expect(addButton).toBeDefined();
+    expect(instance.state.showAddHostWizard).toBe(false);
+    addButton.props.onClick();
+    expect(instance.state.showAddHostWizard).toBe(true);
+    tree = instance.render();
+    const wizardNodes = findAll(tree, (n) => n.type === ExternalHostAddWizard);
+    expect(wizardNodes.length).toBe(1);
+  });
+
+  it('closing the wizard (onClose) unmounts it and reloads the host list', async () => {
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ showAddHostWizard: true });
+    let tree = instance.render();
+    const wizard = findAll(tree, (n) => n.type === ExternalHostAddWizard)[0];
+    electron.ipcRenderer.invoke.mockClear();
+    await wizard.props.onClose();
+    expect(instance.state.showAddHostWizard).toBe(false);
+    expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.GET_EXTERNAL_HOSTS);
+    tree = instance.render();
+    expect(findAll(tree, (n) => n.type === ExternalHostAddWizard)).toHaveLength(0);
+  });
+
+  it('completing the wizard (onCompleted) unmounts it and reloads the host list', async () => {
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ showAddHostWizard: true });
+    const tree = instance.render();
+    const wizard = findAll(tree, (n) => n.type === ExternalHostAddWizard)[0];
+    electron.ipcRenderer.invoke.mockClear();
+    await wizard.props.onCompleted('newbox');
+    expect(instance.state.showAddHostWizard).toBe(false);
+    expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.GET_EXTERNAL_HOSTS);
+  });
+
+  it('Manage exposes a root-mode toggle that calls SET_EXTERNAL_HOST_ROOT_MODE for that alias', async () => {
+    const electron = mockElectron({
+      [IPC_CHANNELS.GET_EXTERNAL_HOSTS]: [{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com' }],
+    });
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    let tree = instance.render();
+    const manageButton = findAll(tree, (n) => n.type === 'button' && /manage/i.test(textOf(n)))[0];
+    expect(manageButton).toBeDefined();
+    manageButton.props.onClick();
+    tree = instance.render();
+    const rootButton = findAll(tree, (n) => n.type === 'button' && /allow root/i.test(textOf(n)))[0];
+    expect(rootButton).toBeDefined();
+    await rootButton.props.onClick();
+    expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, 'hostinger-test', true);
   });
 
   it('the external refresh schedule row reads and writes externalRefreshAutoEnabled/IntervalHours', async () => {

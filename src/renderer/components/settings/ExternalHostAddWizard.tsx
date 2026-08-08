@@ -89,20 +89,55 @@ interface PreviewState {
   collision: CollisionLike;
 }
 
+export type SiteEnvironment = 'production' | 'staging' | 'development';
+
+export interface SiteSelection {
+  /** Filesystem path to the WordPress install, from multiIssue.installs[i]
+   *  or the manual "add a path discovery missed" input. Sent as-is to
+   *  nexusHostAddSites so it can disambiguate multiple installs. */
+  path: string;
+  /** Editable site name/slug -- the 'site' field of NexusHostSiteEnvironmentInput. */
+  site: string;
+  include: boolean;
+  environment: SiteEnvironment;
+  /** Never populated today -- probeHostMultiIssue's installs array is a bare
+   *  string[] with no multisite signal. Kept so the row renderer can show a
+   *  badge the day that data exists, without inventing it now. */
+  multisite?: boolean;
+}
+
+export interface SiteVerificationResult {
+  site: string;
+  verified: boolean;
+  error?: string | null;
+}
+
+/** Derives a default site slug from a discovered install path, e.g.
+ *  '/var/www/example.com/htdocs' -> 'htdocs'. Best-effort only -- the field
+ *  stays editable in Step 3 so a bad guess never blocks registration. */
+function deriveSiteNameFromPath(path: string): string {
+  const trimmed = path.replace(/\/+$/, '');
+  const last = trimmed.split('/').filter(Boolean).pop() || trimmed;
+  const slug = (last || 'site').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || 'site';
+}
+
 export interface ExternalHostAddWizardProps {
   electron: any;
   onClose: () => void;
   onCompleted: (alias: string) => void;
   /**
-   * Fired once the zero-issue state is reached in Step 2. This task only
-   * renders a placeholder "Continue" button that calls this — Task 5 wires
-   * it to advance into its own Step 3.
+   * Fired when Step 2's Continue button advances the wizard past the
+   * zero-issue state. The wizard itself now also transitions internally to
+   * Step 3 (see advanceToStep3) -- this prop remains a separate notification
+   * hook so a parent (SettingsTab) can react (e.g. logging) without owning
+   * the wizard's own step machinery.
    */
   onProbeClean: (alias: string) => void;
 }
 
 interface ExternalHostAddWizardState {
-  step: 1 | 2;
+  step: 1 | 2 | 3 | 4;
   step1Mode: 'pick' | 'new';
   loadingHosts: boolean;
   hosts: SshConfigHostLike[];
@@ -120,6 +155,21 @@ interface ExternalHostAddWizardState {
 
   approvingKind: string | null;
   applyingRootMode: boolean;
+
+  // ── Step 3: site picker ──────────────────────────────────────────────────
+  siteSelections: SiteSelection[];
+  manualPath: string;
+  registering: boolean;
+  registerError: string | null;
+
+  // ── Step 4: registration result ──────────────────────────────────────────
+  /** The exact set of sites submitted by submitStep3, in submission order --
+   *  siteVerification's order mirrors this per the mutation's contract, and
+   *  a failed row's Retry needs this entry's path/environment/site to re-call
+   *  nexusHostAddSites scoped to just that one site. */
+  includedSelections: SiteSelection[];
+  siteVerification: SiteVerificationResult[] | null;
+  retryingIndex: number | null;
 }
 
 const emptyNewEntry: NewEntryForm = { alias: '', hostname: '', user: '', port: '22', identityFile: '' };
@@ -249,6 +299,15 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
 
     approvingKind: null,
     applyingRootMode: false,
+
+    siteSelections: [],
+    manualPath: '',
+    registering: false,
+    registerError: null,
+
+    includedSelections: [],
+    siteVerification: null,
+    retryingIndex: null,
   };
 
   async componentDidMount(): Promise<void> {
@@ -642,10 +701,234 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
         : null,
       dedupedIssues.length === 0
         ? React.createElement('button', {
-            onClick: () => this.props.onProbeClean(alias),
+            onClick: () => this.advanceToStep3(alias),
             style: { ...primaryButtonStyle, marginTop: 14, width: '100%' },
           }, 'Continue')
         : null,
+    );
+  }
+
+  // ── Step 3: site picker ──────────────────────────────────────────────────
+
+  /**
+   * Advances from Step 2's zero-issue state into Step 3, seeding one
+   * SiteSelection per discovered install (default-checked, default
+   * 'production' per nexusHostAdd's own default). When the probe found no
+   * installs, Step 3 starts empty and relies on the manual "add a path
+   * discovery missed" input -- there is nothing else to seed it with.
+   * Still notifies the onProbeClean prop, unchanged from Task 4's contract.
+   */
+  advanceToStep3 = (alias: string): void => {
+    const installs = this.state.multiIssue?.installs ?? [];
+    const siteSelections: SiteSelection[] = installs.map(path => ({
+      path,
+      site: deriveSiteNameFromPath(path),
+      include: true,
+      environment: 'production',
+    }));
+    this.setState({ step: 3, siteSelections, manualPath: '', registerError: null });
+    this.props.onProbeClean(alias);
+  };
+
+  toggleSiteInclude = (index: number): void => {
+    this.setState(prev => ({
+      siteSelections: prev.siteSelections.map((s, i) => (i === index ? { ...s, include: !s.include } : s)),
+    }));
+  };
+
+  updateSiteField = (index: number, field: 'site' | 'environment', value: string): void => {
+    this.setState(prev => ({
+      siteSelections: prev.siteSelections.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+    }));
+  };
+
+  addManualSite = (): void => {
+    const path = this.state.manualPath.trim();
+    if (!path) return;
+    this.setState(prev => ({
+      siteSelections: [...prev.siteSelections, {
+        path, site: deriveSiteNameFromPath(path), include: true, environment: 'production',
+      }],
+      manualPath: '',
+    }));
+  };
+
+  submitStep3 = async (): Promise<void> => {
+    const included = this.state.siteSelections.filter(s => s.include);
+    if (included.length === 0) return;
+    this.setState({ registering: true, registerError: null });
+    try {
+      const data = await rendererGql<{ nexusHostAddSites: {
+        success: boolean; error: string | null; siteVerification: SiteVerificationResult[];
+      } }>(`
+        mutation($alias: String!, $sites: [NexusHostSiteEnvironmentInput!]!) {
+          nexusHostAddSites(alias: $alias, sites: $sites) {
+            success error
+            siteVerification { site verified error }
+          }
+        }
+      `, {
+        alias: this.state.alias,
+        sites: included.map(s => ({ site: s.site, environment: s.environment, path: s.path })),
+      }, HOST_PROBE_CLIENT_TIMEOUT_MS);
+      if (!this.mounted) return;
+      const result = data.nexusHostAddSites;
+      if (!result.success) {
+        this.setState({ registering: false, registerError: result.error ?? 'Could not register sites.' });
+        return;
+      }
+      this.setState({
+        registering: false,
+        step: 4,
+        includedSelections: included,
+        siteVerification: result.siteVerification,
+      });
+    } catch (e: any) {
+      if (this.mounted) this.setState({ registering: false, registerError: e?.message ?? String(e) });
+    }
+  };
+
+  renderSiteRow(s: SiteSelection, index: number): React.ReactNode {
+    return React.createElement('div', {
+      key: `${s.path}-${index}`,
+      style: { ...rowLine, flexDirection: 'column', alignItems: 'stretch' },
+    },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+        React.createElement('input', {
+          type: 'checkbox', checked: s.include, onChange: () => this.toggleSiteInclude(index),
+        }),
+        React.createElement('input', {
+          type: 'text', value: s.site,
+          onChange: (e: any) => this.updateSiteField(index, 'site', e.target.value),
+          style: { ...inputStyle, flex: 1 },
+        }),
+        s.multisite
+          ? React.createElement('span', {
+              style: { fontSize: 10, fontWeight: 600, color: 'var(--ag-text-muted)', border: '1px solid var(--ag-border-control)', borderRadius: 4, padding: '2px 6px' },
+            }, 'Multisite')
+          : null,
+      ),
+      React.createElement('div', { style: { fontSize: 11, color: 'var(--ag-text-muted)', marginTop: 4 } }, s.path || '(manually added)'),
+      React.createElement('select', {
+        value: s.environment,
+        disabled: !s.include,
+        onChange: (e: any) => this.updateSiteField(index, 'environment', e.target.value),
+        style: { ...inputStyle, marginTop: 6, width: 180, opacity: s.include ? 1 : 0.5 },
+      },
+        React.createElement('option', { value: 'production' }, 'Production'),
+        React.createElement('option', { value: 'staging' }, 'Staging'),
+        React.createElement('option', { value: 'development' }, 'Development'),
+      ),
+    );
+  }
+
+  renderStep3(): React.ReactNode {
+    const { siteSelections, manualPath, registering, registerError } = this.state;
+    const includedCount = siteSelections.filter(s => s.include).length;
+    return React.createElement('div', null,
+      React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', marginBottom: 14 } },
+        'Writes are refused on a site whose environment is Production unless you grant WP-CLI write access in Settings → WP Engine Access.'),
+      siteSelections.length === 0
+        ? React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-muted)', marginBottom: 10 } }, 'No installs were discovered automatically — add a path below.')
+        : null,
+      ...siteSelections.map((s, i) => this.renderSiteRow(s, i)),
+      React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 12 } },
+        React.createElement('input', {
+          type: 'text', placeholder: '/path/to/wordpress (path discovery missed)',
+          value: manualPath,
+          onChange: (e: any) => this.setState({ manualPath: e.target.value }),
+          style: { ...inputStyle, flex: 1 },
+        }),
+        React.createElement('button', {
+          onClick: this.addManualSite,
+          style: { ...secondaryButtonStyle, flex: 'none' },
+        }, 'Add'),
+      ),
+      registerError ? React.createElement('div', { style: { ...failCardStyle, marginTop: 12 } }, registerError) : null,
+      React.createElement('button', {
+        onClick: this.submitStep3,
+        disabled: registering || includedCount === 0,
+        style: { ...primaryButtonStyle, marginTop: 16, opacity: (registering || includedCount === 0) ? 0.5 : 1, cursor: (registering || includedCount === 0) ? 'not-allowed' : 'pointer' },
+      }, registering ? 'Registering…' : `Register ${includedCount} site${includedCount === 1 ? '' : 's'}`),
+    );
+  }
+
+  // ── Step 4: registration result ─────────────────────────────────────────
+
+  retryVerification = async (index: number): Promise<void> => {
+    const sel = this.state.includedSelections[index];
+    if (!sel) return;
+    this.setState({ retryingIndex: index });
+    try {
+      const data = await rendererGql<{ nexusHostAddSites: {
+        success: boolean; error: string | null; siteVerification: SiteVerificationResult[];
+      } }>(`
+        mutation($alias: String!, $sites: [NexusHostSiteEnvironmentInput!]!) {
+          nexusHostAddSites(alias: $alias, sites: $sites) {
+            success error
+            siteVerification { site verified error }
+          }
+        }
+      `, {
+        alias: this.state.alias,
+        sites: [{ site: sel.site, environment: sel.environment, path: sel.path }],
+      }, HOST_PROBE_CLIENT_TIMEOUT_MS);
+      if (!this.mounted) return;
+      const result = data.nexusHostAddSites;
+      const updated: SiteVerificationResult = result.siteVerification[0]
+        ?? { site: sel.site, verified: false, error: result.error ?? 'Retry failed.' };
+      this.setState(prev => ({
+        retryingIndex: null,
+        siteVerification: (prev.siteVerification ?? []).map((r, i) => (i === index ? updated : r)),
+      }));
+    } catch (e: any) {
+      if (!this.mounted) return;
+      this.setState(prev => ({
+        retryingIndex: null,
+        siteVerification: (prev.siteVerification ?? []).map((r, i) =>
+          i === index ? { site: sel.site, verified: false, error: e?.message ?? String(e) } : r),
+      }));
+    }
+  };
+
+  renderVerificationRow(r: SiteVerificationResult, index: number): React.ReactNode {
+    const retrying = this.state.retryingIndex === index;
+    return React.createElement('div', {
+      key: `${r.site}-${index}`,
+      style: { ...rowLine, flexDirection: 'column', alignItems: 'stretch' },
+    },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+        statusDot(r.verified ? 'ok' : 'fail'),
+        React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: 'var(--ag-text-primary)' } }, r.site),
+      ),
+      !r.verified
+        ? React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-secondary)', marginTop: 4 } }, r.error || 'Verification failed.')
+        : null,
+      !r.verified
+        ? React.createElement('button', {
+            onClick: () => this.retryVerification(index),
+            disabled: retrying,
+            style: { ...secondaryButtonStyle, marginTop: 6, fontSize: 12, padding: '5px 10px', alignSelf: 'flex-start', opacity: retrying ? 0.5 : 1 },
+          }, retrying ? 'Retrying…' : 'Retry verification')
+        : null,
+    );
+  }
+
+  renderStep4(): React.ReactNode {
+    const { siteVerification, alias } = this.state;
+    const results = siteVerification ?? [];
+    const verifiedCount = results.filter(r => r.verified).length;
+    const total = results.length;
+    const allVerified = total > 0 && verifiedCount === total;
+    return React.createElement('div', null,
+      React.createElement('div', {
+        style: { fontSize: 14, fontWeight: 600, marginBottom: 14, color: allVerified ? 'var(--ag-green)' : 'var(--ag-amber)' },
+      }, `${verifiedCount} of ${total} verified`),
+      ...results.map((r, i) => this.renderVerificationRow(r, i)),
+      React.createElement('button', {
+        onClick: () => this.props.onCompleted(alias),
+        style: { ...primaryButtonStyle, marginTop: 16, width: '100%' },
+      }, 'Close'),
     );
   }
 
@@ -653,22 +936,36 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
 
   render(): React.ReactNode {
     const { step } = this.state;
+    const stepLabel =
+      step === 1 ? 'Step 1 of 4 — Choose or create a host' :
+      step === 2 ? 'Step 2 of 4 — Resolve any issues' :
+      step === 3 ? 'Step 3 of 4 — Choose sites to register' :
+      'Step 4 of 4 — Registration complete';
     return React.createElement('div', null,
-      React.createElement('div', { onClick: this.props.onClose, style: scrimStyle }),
+      // No scrim-click-to-dismiss on Step 4 -- the host is already saved and
+      // there is nothing left to cancel out of.
+      React.createElement('div', { onClick: step === 4 ? undefined : this.props.onClose, style: scrimStyle }),
       React.createElement('div', { style: panelStyle },
         React.createElement('div', { style: headerStyle },
-          React.createElement('button', {
-            onClick: this.props.onClose,
-            style: { background: 'none', border: 'none', color: 'var(--ag-text-secondary)', cursor: 'pointer', fontSize: 18, padding: 0, flexShrink: 0 },
-          }, '✕'),
+          // Step 4 has no Cancel: the host row and its sites are already
+          // persisted by submitStep3, and there is no rollback. Only the
+          // footer's Close button (which calls onCompleted) is offered.
+          step === 4
+            ? null
+            : React.createElement('button', {
+                onClick: this.props.onClose,
+                style: { background: 'none', border: 'none', color: 'var(--ag-text-secondary)', cursor: 'pointer', fontSize: 18, padding: 0, flexShrink: 0 },
+              }, '✕'),
           React.createElement('div', null,
             React.createElement('div', { style: { fontSize: 17, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 4 } }, 'Add an external SSH host'),
-            React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)' } },
-              step === 1 ? 'Step 1 of 4 — Choose or create a host' : 'Step 2 of 4 — Resolve any issues'),
+            React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)' } }, stepLabel),
           ),
         ),
         React.createElement('div', { style: bodyStyle },
-          step === 1 ? this.renderStep1() : this.renderStep2(),
+          step === 1 ? this.renderStep1() :
+          step === 2 ? this.renderStep2() :
+          step === 3 ? this.renderStep3() :
+          this.renderStep4(),
         ),
       ),
     );

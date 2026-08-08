@@ -443,4 +443,165 @@ describe('ExternalHostAddWizard', () => {
     continueBtn.props.onClick();
     expect(onProbeClean).toHaveBeenCalledWith('cleanbox');
   });
+
+  it('the Continue action in step 2 also advances the wizard itself to step 3', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step: 2,
+      alias: 'cleanbox',
+      multiIssue: { checks: baseChecks(), issues: [], wpCliVersion: '2.9', installs: ['/var/www/html'] },
+    });
+    const tree = instance.render();
+    const continueBtn = findAll(tree, (n) => n.type === 'button' && /continue/i.test(textOf(n)))[0];
+    continueBtn.props.onClick();
+    expect(instance.state.step).toBe(3);
+    expect(instance.state.siteSelections.length).toBe(1);
+  });
+
+  it('completing step 3 calls nexusHostAddSites with one environment per selected site and advances to step 4', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({
+        data: {
+          nexusHostAddSites: {
+            success: true, error: null,
+            siteVerification: [
+              { site: 'site-a', verified: true, error: null },
+              { site: 'site-b', verified: true, error: null },
+            ],
+          },
+        },
+      }),
+    });
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step: 3,
+      alias: 'multibox',
+      siteSelections: [
+        { path: '/var/www/a', site: 'site-a', include: true, environment: 'production' },
+        { path: '/var/www/b', site: 'site-b', include: true, environment: 'staging' },
+      ],
+    });
+    await instance.submitStep3();
+    expect((global as any).fetch).toHaveBeenCalled();
+    const body = JSON.parse(((global as any).fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.variables.alias).toBe('multibox');
+    expect(body.variables.sites).toEqual([
+      { site: 'site-a', environment: 'production', path: '/var/www/a' },
+      { site: 'site-b', environment: 'staging', path: '/var/www/b' },
+    ]);
+    expect(instance.state.step).toBe(4);
+    expect(instance.state.siteVerification).toEqual([
+      { site: 'site-a', verified: true, error: null },
+      { site: 'site-b', verified: true, error: null },
+    ]);
+  });
+
+  it('a site unchecked in step 3 is not included in the nexusHostAddSites call', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      json: async () => ({
+        data: {
+          nexusHostAddSites: {
+            success: true, error: null,
+            siteVerification: [{ site: 'site-a', verified: true, error: null }],
+          },
+        },
+      }),
+    });
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step: 3,
+      alias: 'multibox',
+      siteSelections: [
+        { path: '/var/www/a', site: 'site-a', include: true, environment: 'production' },
+        { path: '/var/www/b', site: 'site-b', include: false, environment: 'staging' },
+      ],
+    });
+    await instance.submitStep3();
+    const body = JSON.parse(((global as any).fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.variables.sites).toEqual([
+      { site: 'site-a', environment: 'production', path: '/var/www/a' },
+    ]);
+  });
+
+  it('step 4 renders "N of M verified" derived from siteVerification, never restating the selection count as the result', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step: 4,
+      alias: 'multibox',
+      includedSelections: [
+        { path: '/var/www/a', site: 'site-a', include: true, environment: 'production' },
+        { path: '/var/www/b', site: 'site-b', include: true, environment: 'staging' },
+      ],
+      siteVerification: [
+        { site: 'site-a', verified: true, error: null },
+        { site: 'site-b', verified: false, error: 'wp core version failed' },
+      ],
+    });
+    const tree = instance.render();
+    const text = textOf(tree);
+    expect(text).toContain('1 of 2 verified');
+    // The result must never be restated as "2 of 2" (the selection count).
+    expect(text).not.toContain('2 of 2 verified');
+  });
+
+  it('a failed site row in step 4 shows its error and a next action, not a dead end', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step: 4,
+      alias: 'multibox',
+      includedSelections: [
+        { path: '/var/www/b', site: 'site-b', include: true, environment: 'staging' },
+      ],
+      siteVerification: [
+        { site: 'site-b', verified: false, error: 'wp core version failed' },
+      ],
+    });
+    const tree = instance.render();
+    const text = textOf(tree);
+    expect(text).toContain('wp core version failed');
+    const retryButtons = findAll(tree, (n) => n.type === 'button' && /retry/i.test(textOf(n)));
+    expect(retryButtons.length).toBeGreaterThan(0);
+  });
+
+  it('step 4 has no Cancel action, only Close, and Close calls onCompleted(alias)', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step: 4,
+      alias: 'multibox',
+      includedSelections: [
+        { path: '/var/www/a', site: 'site-a', include: true, environment: 'production' },
+      ],
+      siteVerification: [{ site: 'site-a', verified: true, error: null }],
+    });
+    const tree = instance.render();
+    expect(findAll(tree, (n) => n.type === 'button' && /cancel/i.test(textOf(n)))).toHaveLength(0);
+    const closeButtons = findAll(tree, (n) => n.type === 'button' && /close/i.test(textOf(n)));
+    expect(closeButtons.length).toBeGreaterThan(0);
+    closeButtons[0].props.onClick();
+    expect(props.onCompleted).toHaveBeenCalledWith('multibox');
+  });
 });

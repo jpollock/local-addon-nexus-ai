@@ -12,6 +12,8 @@ import * as React from 'react';
 import { IPC_CHANNELS } from '../../common/constants';
 import { injectThemeVars } from '../utils/theme';
 import { rendererGql } from '../utils/rendererGql';
+import { ExternalHostAddWizard } from './settings/ExternalHostAddWizard';
+import type { SshConfigHostLike } from './settings/ExternalHostAddWizard';
 import type { NexusSettings } from '../../common/types';
 
 // ---------------------------------------------------------------------------
@@ -63,6 +65,11 @@ interface SettingsTabState {
   wpeAccounts: WpeAccount[];
   wpeInstalls: WpeInstall[];
   externalHosts: Array<{ alias: string; site: string; environment: string; domain: string }>;
+  /** Connection info for every alias in ~/.ssh/config, including already-
+   *  registered ones -- LIST_SSH_CONFIG_HOSTS is the only source that carries
+   *  user/hostname/port, so this is joined against externalHosts by alias to
+   *  render "user@host:port · from ~/.ssh/config" in the host list. */
+  sshConfigHosts: SshConfigHostLike[];
   loading: boolean;
   excludedExpanded: boolean;
   accessExpanded: boolean;
@@ -74,6 +81,9 @@ interface SettingsTabState {
   hostKeyCheckedAlias: string;
   hostKeyTrusting: boolean;
   hostKeyChecking: boolean;
+  showAddHostWizard: boolean;
+  /** Alias whose inline Manage row (root-mode toggle) is currently expanded, or null. */
+  manageAlias: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +134,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     wpeAccounts: [],
     wpeInstalls: [],
     externalHosts: [],
+    sshConfigHosts: [],
     loading: true,
     excludedExpanded: false,
     accessExpanded: false,
@@ -135,6 +146,8 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     hostKeyCheckedAlias: '',
     hostKeyTrusting: false,
     hostKeyChecking: false,
+    showAddHostWizard: false,
+    manageAlias: null,
   };
 
   componentDidMount(): void {
@@ -149,12 +162,13 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
 
   async loadAll(): Promise<void> {
     const ipc = this.props.electron.ipcRenderer;
-    const [settings, sitesResult, accounts, installs, externalHosts] = await Promise.all([
+    const [settings, sitesResult, accounts, installs, externalHosts, sshConfigHosts] = await Promise.all([
       ipc.invoke(IPC_CHANNELS.GET_SETTINGS).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => ({ sites: [] })),
       ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
+      ipc.invoke(IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS).catch(() => ({ success: false, hosts: [] })),
     ]);
     if (!this.mounted) return;
     this.setState({
@@ -163,8 +177,127 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       wpeAccounts: Array.isArray(accounts) ? accounts : [],
       wpeInstalls: Array.isArray(installs) ? installs : [],
       externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
+      sshConfigHosts: Array.isArray(sshConfigHosts?.hosts) ? sshConfigHosts.hosts : [],
       loading: false,
     });
+  }
+
+  /** Re-fetches just the external-host-list data. Used by the wizard's
+   *  onClose/onCompleted so the newly-registered (or unchanged) host list is
+   *  current without re-running the rest of loadAll's fetches. */
+  async reloadExternalHosts(): Promise<void> {
+    const ipc = this.props.electron.ipcRenderer;
+    const [externalHosts, sshConfigHosts] = await Promise.all([
+      ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
+      ipc.invoke(IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS).catch(() => ({ success: false, hosts: [] })),
+    ]);
+    if (!this.mounted) return;
+    this.setState({
+      externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
+      sshConfigHosts: Array.isArray(sshConfigHosts?.hosts) ? sshConfigHosts.hosts : [],
+    });
+  }
+
+  // ── External host list / add wizard ─────────────────────────────────────
+
+  private groupedExternalHosts(): Array<{ alias: string; sites: Array<{ site: string; environment: string; domain: string }>; connection: string | null }> {
+    const byAlias = new Map<string, Array<{ site: string; environment: string; domain: string }>>();
+    for (const h of this.state.externalHosts) {
+      const arr = byAlias.get(h.alias) ?? [];
+      arr.push({ site: h.site, environment: h.environment, domain: h.domain });
+      byAlias.set(h.alias, arr);
+    }
+    return Array.from(byAlias.entries()).map(([alias, sites]) => {
+      const cfg = this.state.sshConfigHosts.find(c => c.alias === alias);
+      const connection = cfg
+        ? `${cfg.user ? cfg.user + '@' : ''}${cfg.hostname}${cfg.port ? ':' + cfg.port : ''} · from ~/.ssh/config`
+        : null;
+      return { alias, sites, connection };
+    });
+  }
+
+  openAddHostWizard = (): void => {
+    this.setState({ showAddHostWizard: true });
+  };
+
+  closeAddHostWizard = async (): Promise<void> => {
+    this.setState({ showAddHostWizard: false });
+    await this.reloadExternalHosts();
+  };
+
+  completeAddHostWizard = async (_alias: string): Promise<void> => {
+    this.setState({ showAddHostWizard: false });
+    await this.reloadExternalHosts();
+  };
+
+  toggleManageAlias = (alias: string): void => {
+    this.setState(prev => ({ manageAlias: prev.manageAlias === alias ? null : alias }));
+  };
+
+  handleSetRootMode = async (alias: string, allowRoot: boolean): Promise<void> => {
+    try {
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, alias, allowRoot);
+    } catch {
+      // Best-effort -- Manage stays open (see renderManagePopover) so the user can retry.
+    }
+  };
+
+  /**
+   * GET_EXTERNAL_HOSTS carries no last-check timestamp or outcome (see
+   * src/main/ipc-handlers.ts's handler -- it selects only name/account_id/
+   * environment/domain from the sites table), so a genuine three-state dot
+   * (verified/config-changed/last-check-failed, per BEHAVIOR.md §3) is not
+   * buildable from data this plan added. This is the documented, deliberate
+   * fallback: a simple two-state dot keyed on whether the alias still
+   * resolves in ~/.ssh/config (LIST_SSH_CONFIG_HOSTS), which is the one
+   * piece of "is something wrong" signal actually available today.
+   */
+  private hostStatusDot(alias: string): React.ReactNode {
+    const stillConfigured = this.state.sshConfigHosts.some(c => c.alias === alias);
+    const color = stillConfigured ? 'var(--nxai-status-ok, #3fb950)' : 'var(--nxai-status-warn, #d29922)';
+    const title = stillConfigured ? 'Alias found in ~/.ssh/config' : 'Alias missing from ~/.ssh/config';
+    return React.createElement('div', {
+      title,
+      style: { width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 },
+    });
+  }
+
+  renderManagePopover(alias: string): React.ReactNode {
+    return React.createElement('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+      React.createElement('button', {
+        onClick: () => this.handleSetRootMode(alias, true),
+        style: { fontSize: 11, padding: '3px 8px', borderRadius: 4 },
+      }, 'Allow root'),
+      React.createElement('button', {
+        onClick: () => this.handleSetRootMode(alias, false),
+        style: { fontSize: 11, padding: '3px 8px', borderRadius: 4 },
+      }, 'Disallow root'),
+      React.createElement('button', {
+        onClick: () => this.toggleManageAlias(alias),
+        style: { fontSize: 11, padding: '3px 8px', borderRadius: 4 },
+      }, 'Done'),
+    );
+  }
+
+  renderExternalHostRow(row: { alias: string; sites: Array<{ site: string; environment: string; domain: string }>; connection: string | null }): React.ReactNode {
+    const siteCountLabel = `${row.sites.length} site${row.sites.length === 1 ? '' : 's'}`;
+    return React.createElement('div', { key: row.alias, style: rowStyle },
+      React.createElement('div', { style: rowLabelStyle },
+        React.createElement('div', { style: { ...rowTitleStyle, fontWeight: 700 } }, row.alias),
+        React.createElement('div', { style: rowSubStyle },
+          row.connection ?? 'Connection info unavailable — run `nexus host test ' + row.alias + '`.'),
+        React.createElement('div', { style: rowSubStyle }, siteCountLabel),
+      ),
+      React.createElement('div', { style: { ...rowControlStyle, gap: 10 } },
+        this.hostStatusDot(row.alias),
+        this.state.manageAlias === row.alias
+          ? this.renderManagePopover(row.alias)
+          : React.createElement('button', {
+              onClick: () => this.toggleManageAlias(row.alias),
+              style: { fontSize: 12, padding: '4px 10px', borderRadius: 4 },
+            }, 'Manage'),
+      ),
+    );
   }
 
   // ── Host key trust-on-first-use ──────────────────────────────────────────
@@ -634,21 +767,17 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       ),
 
       sublabel('External SSH Hosts'),
-      React.createElement('div', { style: { marginBottom: 6 } },
-        this.state.externalHosts.length === 0
+      React.createElement('div', { style: { marginBottom: 10 } },
+        this.groupedExternalHosts().length === 0
           ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', padding: '4px 0 10px' } },
-              'No external hosts registered. Run `nexus host add <alias>` from the CLI.')
-          : React.createElement('div', {
-              style: { display: 'flex', flexWrap: 'wrap' as const, gap: 5, padding: '9px 12px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: '7px 7px 0 0', borderBottom: 'none' },
-            },
-              ...this.state.externalHosts.map(h =>
-                React.createElement('span', {
-                  key: `${h.alias}/${h.site}`,
-                  title: `${h.domain || h.alias} — ${h.environment}`,
-                  style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(128,128,128,0.06)', color: 'var(--nxai-status-neutral, #9ca3af)', border: '1px dashed var(--nxai-card-border, #30363d)' },
-                }, `${h.alias}/${h.site}`),
-              ),
+              'No external hosts registered yet.')
+          : React.createElement('div', { style: cardStyle },
+              ...this.groupedExternalHosts().map(row => this.renderExternalHostRow(row)),
             ),
+        React.createElement('button', {
+          onClick: this.openAddHostWizard,
+          style: { fontSize: 12, padding: '5px 12px', borderRadius: 4, marginTop: 6 },
+        }, 'Add a host'),
       ),
       React.createElement('div', { style: { marginBottom: 10 } },
         React.createElement('div', { style: { display: 'flex', gap: 6, marginBottom: 6 } },
@@ -990,13 +1119,26 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     const sectionHeader = (title: string) =>
       React.createElement('div', { style: sectionHeaderStyle }, title);
 
-    return React.createElement('div', { style: { padding: '20px 24px', overflowY: 'auto' as const } },
-      sectionHeader('Auto-Indexing'),
-      this.renderAutoIndexingSection(),
-      sectionHeader('Sync Schedule'),
-      this.renderSyncScheduleSection(),
-      sectionHeader('Access & Permissions'),
-      this.renderWpeAccessSection(),
+    return React.createElement('div', null,
+      React.createElement('div', { style: { padding: '20px 24px', overflowY: 'auto' as const } },
+        sectionHeader('Auto-Indexing'),
+        this.renderAutoIndexingSection(),
+        sectionHeader('Sync Schedule'),
+        this.renderSyncScheduleSection(),
+        sectionHeader('Access & Permissions'),
+        this.renderWpeAccessSection(),
+      ),
+      this.state.showAddHostWizard
+        ? React.createElement(ExternalHostAddWizard, {
+            electron: this.props.electron,
+            onClose: this.closeAddHostWizard,
+            onCompleted: this.completeAddHostWizard,
+            // The wizard now owns its own Step 2 -> Step 3 transition
+            // (see ExternalHostAddWizard.advanceToStep3); SettingsTab has
+            // nothing further to do on this notification.
+            onProbeClean: () => {},
+          })
+        : null,
     );
   }
 }
