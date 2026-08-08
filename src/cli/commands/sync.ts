@@ -130,6 +130,30 @@ syncCommand
         }
 
         console.log('');
+      } else {
+        // Files-only push is a real write to WP Engine too, even though it can't
+        // destroy data the way a database overwrite can -- still needs a real
+        // human yes, not a silent execute. (The resolver behind this mutation
+        // always passes requireConfirmation: false to the underlying Tier-3
+        // tool, trusting this prompt to be the one and only confirmation.)
+        const readline = require('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(`\nPush files to ${options.to}? [y/N] `, resolve);
+        });
+
+        rl.close();
+
+        if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
+          console.log('\nCancelled.');
+          process.exit(0);
+        }
+
+        console.log('');
       }
 
       const client = getClient({ timeout: 600000 }); // 10 min for push
@@ -168,14 +192,12 @@ syncCommand
         },
       });
 
-      const { success, error, confirmationToken } = result.nexusSyncPush;
+      const { success, error } = result.nexusSyncPush;
 
-      // Handle confirmation token (though we do CLI-level confirmation, MCP tool might also need it)
-      if (confirmationToken) {
-        console.error(`\n❌ Unexpected confirmation required at MCP level.`);
-        console.error(`   This should have been handled at CLI level.`);
-        process.exit(1);
-      }
+      // Note: nexusSyncPush's GraphQL type has no confirmationToken field, and the
+      // resolver always calls the underlying Tier-3 tool with requireConfirmation:
+      // false -- confirmation is handled entirely above, before this mutation is
+      // ever sent. There is no confirmation-required response to detect here.
 
       if (!success) {
         console.error(`\n❌ Failed to push: ${error}`);

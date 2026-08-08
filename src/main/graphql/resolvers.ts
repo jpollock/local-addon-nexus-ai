@@ -1903,8 +1903,14 @@ export function createResolvers(context: ResolverContext) {
             include_database: input.includeDb || input.dbOnly || false,
           };
 
-          // Mark as 'cli' access since this is the CLI/GraphQL path
-          const result = await registry.call('local_wpe_push', pushArgs, services, 'cli');
+          // Mark as 'cli' access since this is the CLI/GraphQL path.
+          // requireConfirmation: false -- local_wpe_push is Tier 3, but nexusSyncPush's
+          // only real caller (nexus sync push, src/cli/commands/sync.ts) already prompts
+          // the user for a real yes/no confirmation itself, on every path (db and
+          // files-only), before this mutation is ever sent. The registry's own gate would
+          // be a redundant second prompt this resolver has no way to surface anyway --
+          // a GraphQL mutation isn't a synchronous CLI-tty conversation.
+          const result = await registry.call('local_wpe_push', pushArgs, services, 'cli', false);
 
           // Check if MCP tool returned an error
           if (result.isError) {
