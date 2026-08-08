@@ -1067,9 +1067,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       if (!db) return [];
       const rows = db.prepare(
         "SELECT name, account_id, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
-      ).all() as Array<{ name: string; account_id: string; environment: string | null; domain: string | null }>;
+      ).all() as Array<{ name: string; account_id: string | null; environment: string | null; domain: string | null }>;
       return rows.map((r) => ({
-        alias: r.account_id,
+        // A legacy single-site registration has account_id = null -- the
+        // site's own row IS the connection, so its own name is the alias.
+        alias: r.account_id ?? r.name,
         site: r.name,
         environment: r.environment ?? 'production',
         domain: r.domain ?? '',

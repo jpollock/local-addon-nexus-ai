@@ -67,6 +67,15 @@ describe('GET_EXTERNAL_HOSTS', () => {
     ]);
   });
 
+  it('falls back to the site name as the alias for a legacy single-site row with no account_id', () => {
+    register([
+      { id: 'ssh:hostinger-test', name: 'hostinger-test', account_id: undefined, environment: 'production', domain: 'example.hostingersite.com', is_active: 1 },
+    ]);
+    expect(mockIpc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS)).toEqual([
+      { alias: 'hostinger-test', site: 'hostinger-test', environment: 'production', domain: 'example.hostingersite.com' },
+    ]);
+  });
+
   it('returns an empty array when the graph is not ready', () => {
     const deps: any = {
       siteData: { getSite: () => null, getSites: () => ({}) },
