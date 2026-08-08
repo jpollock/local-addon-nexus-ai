@@ -86,6 +86,10 @@ describe('formatTarget', () => {
   it('formats wpe', () => {
     expect(formatTarget(parseTarget('wpe:a/b@production'))).toBe('wpe:a/b@production');
   });
+  it('formats an external SSH target correctly', () => {
+    const parsed = parseTarget('ssh:my-alias/my-site@production');
+    expect(formatTarget(parsed)).toBe('ssh:my-alias/my-site@production');
+  });
 });
 
 describe('parseTarget — external SSH targets', () => {

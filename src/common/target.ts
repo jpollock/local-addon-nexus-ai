@@ -139,5 +139,10 @@ export function requireWpeTarget(target: string, opts?: ParseTargetOptions): {
 
 export function formatTarget(parsed: ParsedTarget): string {
   if (parsed.type === 'local') return `${parsed.siteName}@local`;
+  if (parsed.type === 'external') {
+    return parsed.site
+      ? `ssh:${parsed.alias}/${parsed.site}@${parsed.environment}`
+      : `ssh:${parsed.alias}@${parsed.environment}`;
+  }
   return `wpe:${parsed.account}/${parsed.installName}@${parsed.environment}`;
 }
