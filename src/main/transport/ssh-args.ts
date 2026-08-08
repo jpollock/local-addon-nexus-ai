@@ -170,11 +170,22 @@ export const EXTERNAL_SSH_BATCH_TIMEOUT_MS = 60000;
  * early-returns when there is no tty. Undefined means plain `wp`. It is third,
  * not second: swapping it with wpPath compiles (both are `string | undefined`)
  * and silently transposes the one existing call site.
+ *
+ * `allowRoot` is fourth and defaults to omitted/falsy, so every existing call
+ * site is unaffected unless it explicitly opts in. When true, emits
+ * `--allow-root` — for hosts whose SSH user is root, where WP-CLI otherwise
+ * refuses to run at all.
  */
-export function buildExternalWpCliCommand(args: string[], wpPath?: string, wpCliBin?: string): string {
+export function buildExternalWpCliCommand(
+  args: string[],
+  wpPath?: string,
+  wpCliBin?: string,
+  allowRoot?: boolean,
+): string {
   const bin = wpCliBin ? escapeShellArg(wpCliBin) : 'wp';
+  const rootFlag = allowRoot ? '--allow-root ' : '';
   const pathFlag = wpPath ? `--path=${escapeShellArg(wpPath)} ` : '';
-  return `${bin} ${pathFlag}${args.map(escapeShellArg).join(' ')}`.trim();
+  return `${bin} ${rootFlag}${pathFlag}${args.map(escapeShellArg).join(' ')}`.trim();
 }
 
 /**
@@ -205,6 +216,7 @@ export function buildExternalWpCliBatch(
   commands: string[][],
   wpPath?: string,
   wpCliBin?: string,
+  allowRoot?: boolean,
 ): string {
   if (commands.length === 0) return '';
   return commands
@@ -217,7 +229,7 @@ export function buildExternalWpCliBatch(
       // now-unrecognised marker text) into whichever section closes next — a
       // WRONG value, not a missing one. The extra blank line this adds is
       // absorbed by parseWpCliBatchOutput's existing `.trim()`.
-      `${buildExternalWpCliCommand(args, wpPath, wpCliBin)}; echo; echo '${WP_CLI_BATCH_DELIMITER}${i + 1}>>>'`)
+      `${buildExternalWpCliCommand(args, wpPath, wpCliBin, allowRoot)}; echo; echo '${WP_CLI_BATCH_DELIMITER}${i + 1}>>>'`)
     .join('; ');
 }
 

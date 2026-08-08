@@ -15,6 +15,13 @@ export interface ExternalConnectionProfile {
    * site overrides it. Undefined means plain `wp` works.
    */
   wpCliPath?: string;
+  /**
+   * True when this connection's remote user is root and the user has chosen
+   * to pass --allow-root on every WP-CLI command rather than switch to a
+   * non-root alias. Detected by probeHostMultiIssue's 'rootUser' issue;
+   * this field is the Nexus-side decision recorded in response to it.
+   */
+  allowRoot?: boolean;
   firstSeenAt: number;
   lastSeenAt: number;
 }
@@ -43,7 +50,8 @@ export function listExternalProfiles(storage: Storage): ExternalConnectionProfil
  * this host enter the fleet", which a later sighting must not overwrite.
  * `wpCliPath` is only replaced when the incoming profile supplies it: a
  * sighting that never probed for the binary must not erase what registration
- * discovered.
+ * discovered. `allowRoot` is preserved the same way: a sighting that never
+ * re-probed root status must not erase what was previously recorded.
  *
  * This function is connection-scoped only — it has no `source` /
  * registration-vs-sighting parameter. `environment` used to live on this
@@ -73,6 +81,7 @@ export function upsertExternalProfile(
     ...profile,
     firstSeenAt: existing?.firstSeenAt ?? profile.firstSeenAt,
     wpCliPath: profile.wpCliPath ?? existing?.wpCliPath,
+    allowRoot: profile.allowRoot ?? existing?.allowRoot,
   };
   all[profile.alias] = merged;
   storage.set(STORAGE_KEYS.EXTERNAL_SITE_PROFILES, all);

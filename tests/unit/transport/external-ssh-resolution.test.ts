@@ -332,6 +332,34 @@ describe('resolveTransport — external connection/site resolution', () => {
     expect(remoteCommand).toMatch(/^'\/usr\/bin\/wp' /);
   });
 
+  it('passes allowRoot through to ExternalSshTransport when the connection profile has it set', async () => {
+    // withPolicy wraps the transport in a plain object literal (see policy.ts)
+    // that does not re-expose constructor fields like `allowRoot`, so this
+    // asserts the observable effect — the emitted command — rather than
+    // reaching into the wrapped instance.
+    const services = makeServices({
+      profile: { alias: 'root-box', allowRoot: true, firstSeenAt: 1, lastSeenAt: 1 },
+      sites: [{ name: 'site-a', account_id: 'root-box', environment: 'production' }],
+    });
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:root-box/site-a@production' }, services, 'wpcli_read');
+    if ('content' in t) fail('Expected transport, got error');
+    await t.runWpCli(['core', 'version']);
+    expect(spawnMock.mock.calls[0][1].at(-1)).toContain('--allow-root');
+  });
+
+  it('does not emit --allow-root when the connection profile has it unset', async () => {
+    const services = makeServices({
+      profile: { alias: 'normal-box', firstSeenAt: 1, lastSeenAt: 1 },
+      sites: [{ name: 'site-a', account_id: 'normal-box', environment: 'production' }],
+    });
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:normal-box/site-a@production' }, services, 'wpcli_read');
+    if ('content' in t) fail('Expected transport, got error');
+    await t.runWpCli(['core', 'version']);
+    expect(spawnMock.mock.calls[0][1].at(-1)).not.toContain('--allow-root');
+  });
+
   it('a per-site wp_cli_path overrides the connection default', async () => {
     const services = makeServices({
       profile: { alias: 'h1', wpCliPath: '/usr/bin/wp', firstSeenAt: 1, lastSeenAt: 1 },

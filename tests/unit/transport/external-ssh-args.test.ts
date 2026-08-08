@@ -75,6 +75,29 @@ describe('buildExternalWpCliCommand — wpCliBin', () => {
   });
 });
 
+describe('buildExternalWpCliCommand — allowRoot', () => {
+  it('does not emit --allow-root by default', () => {
+    expect(buildExternalWpCliCommand(['core', 'version'])).not.toContain('--allow-root');
+  });
+
+  it('emits --allow-root when explicitly true', () => {
+    expect(buildExternalWpCliCommand(['core', 'version'], undefined, undefined, true))
+      .toBe("wp --allow-root 'core' 'version'");
+  });
+
+  it('combines correctly with an explicit wpPath and wpCliBin', () => {
+    // NOTE: the brief's literal expected string omits the shell-escaping
+    // quotes around wpCliBin ("/usr/local/bin/wp --allow-root ..."), but
+    // every existing wpCliBin test in this file (see "keeps wpCliBin third
+    // so wpPath is not transposed" above) confirms wpCliBin IS escaped via
+    // escapeShellArg, same as the Step 3 implementation given in the brief.
+    // Asserting the brief's literal string would fail against correct,
+    // existing, tested behavior — so this asserts the escaped form instead.
+    expect(buildExternalWpCliCommand(['core', 'version'], '/var/www/html', '/usr/local/bin/wp', true))
+      .toBe("'/usr/local/bin/wp' --allow-root --path='/var/www/html' 'core' 'version'");
+  });
+});
+
 describe('buildExternalSshArgs — connectTimeoutSec', () => {
   it('omits ConnectTimeout by default', () => {
     expect(buildExternalSshArgs('h1', 'echo ok')).toEqual(['-o', 'BatchMode=yes', 'h1', 'echo ok']);

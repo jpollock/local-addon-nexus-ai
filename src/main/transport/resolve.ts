@@ -125,7 +125,7 @@ export async function resolveTransport(
     const wpPath = explicitPath ?? resolvedSite.wp_path ?? undefined;
     const wpCliPath = resolvedSite.wp_cli_path ?? connectionProfile?.wpCliPath;
     return withPolicy(
-      new ExternalSshTransport(parsed.alias, wpPath, wpCliPath),
+      new ExternalSshTransport(parsed.alias, wpPath, wpCliPath, connectionProfile?.allowRoot),
       REMOTE_POLICY,
     );
   }

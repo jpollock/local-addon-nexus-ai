@@ -75,12 +75,20 @@ export class ExternalSshTransport implements SiteTransport {
     readonly wpPath?: string,
     /** Absolute WP-CLI path when it is off the remote's PATH; undefined means `wp`. */
     readonly wpCliBin?: string,
+    /**
+     * True when this connection's remote user is root — emits --allow-root on
+     * every WP-CLI command, otherwise WP-CLI refuses to run at all. Sourced
+     * from the connection profile's `allowRoot` field, not the site row: it is
+     * a property of who you connect as, shared by every site under the
+     * connection.
+     */
+    readonly allowRoot?: boolean,
   ) {
     this.siteRef = { kind: 'external', alias };
   }
 
   async runWpCli(args: string[], _opts?: RunOpts): Promise<WpCliResult> {
-    const res = await runSsh(this.alias, buildExternalWpCliCommand(args, this.wpPath, this.wpCliBin));
+    const res = await runSsh(this.alias, buildExternalWpCliCommand(args, this.wpPath, this.wpCliBin, this.allowRoot));
     if (res.spawnError !== undefined) return { stdout: res.spawnError, success: false };
     if (res.code === 0) return { stdout: res.stdout, success: true };
     // Timeout: spawn kills the child with SIGTERM, yielding code=null and empty stderr
@@ -107,7 +115,7 @@ export class ExternalSshTransport implements SiteTransport {
    */
   async runWpCliBatch(commands: string[][]): Promise<(string | null)[]> {
     if (commands.length === 0) return [];
-    const remote = buildExternalWpCliBatch(commands, this.wpPath, this.wpCliBin);
+    const remote = buildExternalWpCliBatch(commands, this.wpPath, this.wpCliBin, this.allowRoot);
     const res = await runSsh(this.alias, remote, EXTERNAL_SSH_BATCH_TIMEOUT_MS);
     if (res.spawnError !== undefined) return new Array(commands.length).fill(null);
 
