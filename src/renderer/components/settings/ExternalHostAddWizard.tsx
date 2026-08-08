@@ -118,8 +118,61 @@ export interface SiteVerificationResult {
 function deriveSiteNameFromPath(path: string): string {
   const trimmed = path.replace(/\/+$/, '');
   const last = trimmed.split('/').filter(Boolean).pop() || trimmed;
-  const slug = (last || 'site').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  return slugify(last || trimmed);
+}
+
+function slugify(raw: string): string {
+  const slug = (raw || 'site').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
   return slug || 'site';
+}
+
+/**
+ * Derives one site slug per discovered path, disambiguating collisions
+ * instead of letting them through -- a standard shared-host layout like
+ * '/home/u/domains/foo.com/public_html' and
+ * '/home/u/domains/bar.com/public_html' both derive 'public_html' from their
+ * last path segment alone, and since externalSiteId(alias, site) keys on
+ * that slug, an undisambiguated collision means the second nexusHostAddSites
+ * call in the batch silently overwrites the first site's registration while
+ * Step 4 still reports "2 of 2 verified".
+ *
+ * Only paths that actually collide grow an extra path segment (e.g.
+ * 'foo.com-public_html' vs 'bar.com-public_html') -- an already-unique name
+ * elsewhere in the batch is left alone rather than churned just because some
+ * unrelated pair collided. If two paths are identical all the way to their
+ * root (segments exhausted) a numeric suffix breaks the remaining tie.
+ */
+function deriveUniqueSiteNames(paths: string[]): string[] {
+  const segsList = paths.map((p) => p.replace(/\/+$/, '').split('/').filter(Boolean));
+  const result = new Array<string>(paths.length);
+
+  const assign = (indices: number[], depth: number): void => {
+    const groups = new Map<string, number[]>();
+    for (const i of indices) {
+      const segs = segsList[i];
+      const candidate = slugify(segs.slice(-depth).join('-'));
+      const group = groups.get(candidate) ?? [];
+      group.push(i);
+      groups.set(candidate, group);
+    }
+    for (const [candidate, idxs] of groups) {
+      if (idxs.length === 1) {
+        result[idxs[0]] = candidate;
+        continue;
+      }
+      const canGoDeeper = idxs.some((i) => segsList[i].length > depth);
+      if (canGoDeeper) {
+        assign(idxs, depth + 1);
+      } else {
+        idxs.forEach((i, n) => {
+          result[i] = n === 0 ? candidate : `${candidate}-${n + 1}`;
+        });
+      }
+    }
+  };
+
+  assign(paths.map((_, i) => i), 1);
+  return result;
 }
 
 export interface ExternalHostAddWizardProps {
@@ -379,7 +432,7 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
   writeEntryAndProbe = async (): Promise<void> => {
     const { newEntry, preview } = this.state;
     if (preview?.collision.kind === 'exact') return;
-    if (!newEntry.alias || !newEntry.hostname) return;
+    if (!newEntry.alias || !newEntry.hostname || !newEntry.user || !newEntry.port) return;
     this.setState({ writing: true, writeError: null });
     try {
       const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WRITE_SSH_HOST_ENTRY, {
@@ -536,7 +589,11 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
         }),
       );
 
-    const blocked = preview?.collision.kind === 'exact';
+    // identityFile is genuinely optional (the backend omits its directive
+    // line entirely when blank) -- alias/hostname/user/port are not, since a
+    // bare directive with no value makes ssh terminate parsing entirely.
+    const missingRequired = !newEntry.alias || !newEntry.hostname || !newEntry.user || !newEntry.port;
+    const blocked = preview?.collision.kind === 'exact' || missingRequired;
 
     return React.createElement('div', null,
       React.createElement('button', {
@@ -720,9 +777,10 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
    */
   advanceToStep3 = (alias: string): void => {
     const installs = this.state.multiIssue?.installs ?? [];
-    const siteSelections: SiteSelection[] = installs.map(path => ({
+    const uniqueNames = deriveUniqueSiteNames(installs);
+    const siteSelections: SiteSelection[] = installs.map((path, i) => ({
       path,
-      site: deriveSiteNameFromPath(path),
+      site: uniqueNames[i],
       include: true,
       environment: 'production',
     }));
@@ -745,12 +803,19 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
   addManualSite = (): void => {
     const path = this.state.manualPath.trim();
     if (!path) return;
-    this.setState(prev => ({
-      siteSelections: [...prev.siteSelections, {
-        path, site: deriveSiteNameFromPath(path), include: true, environment: 'production',
-      }],
-      manualPath: '',
-    }));
+    this.setState(prev => {
+      let site = deriveSiteNameFromPath(path);
+      const existingNames = new Set(prev.siteSelections.map(s => s.site));
+      if (existingNames.has(site)) {
+        let n = 2;
+        while (existingNames.has(`${site}-${n}`)) n++;
+        site = `${site}-${n}`;
+      }
+      return {
+        siteSelections: [...prev.siteSelections, { path, site, include: true, environment: 'production' }],
+        manualPath: '',
+      };
+    });
   };
 
   submitStep3 = async (): Promise<void> => {

@@ -180,6 +180,76 @@ describe('ExternalHostAddWizard', () => {
     expect(textOf(tree)).toContain('*.example.com');
   });
 
+  // hostname/user/port must all be filled before "Write entry & probe" is
+  // enabled -- a blank one previously reached previewHostBlock/writeHostBlock
+  // and produced a bare directive line that makes ssh terminate parsing for
+  // every subsequent invocation. identityFile is genuinely optional (the
+  // backend omits its directive entirely when blank) and must NOT gate the
+  // button on its own.
+  it('the Write entry & probe button is disabled when hostname is blank', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: '', user: 'u', port: '22', identityFile: '' },
+      preview: { block: '', collision: { kind: 'none' } },
+    });
+    const tree = instance.render();
+    const btn = findAll(tree, (n) => n.type === 'button' && /write entry/i.test(textOf(n)))[0];
+    expect(btn.props.disabled).toBe(true);
+  });
+
+  it('the Write entry & probe button is disabled when user is blank', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: '', port: '22', identityFile: '' },
+      preview: { block: '', collision: { kind: 'none' } },
+    });
+    const tree = instance.render();
+    const btn = findAll(tree, (n) => n.type === 'button' && /write entry/i.test(textOf(n)))[0];
+    expect(btn.props.disabled).toBe(true);
+  });
+
+  it('the Write entry & probe button is disabled when port is blank', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '', identityFile: '' },
+      preview: { block: '', collision: { kind: 'none' } },
+    });
+    const tree = instance.render();
+    const btn = findAll(tree, (n) => n.type === 'button' && /write entry/i.test(textOf(n)))[0];
+    expect(btn.props.disabled).toBe(true);
+  });
+
+  it('the Write entry & probe button stays enabled when only identityFile is blank -- it is genuinely optional', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', identityFile: '' },
+      preview: { block: 'Host x', collision: { kind: 'none' } },
+    });
+    const tree = instance.render();
+    const btn = findAll(tree, (n) => n.type === 'button' && /write entry/i.test(textOf(n)))[0];
+    expect(btn.props.disabled).toBeFalsy();
+  });
+
   it('submitting step 1b calls WRITE_SSH_HOST_ENTRY then probes the new alias and advances to step 2', async () => {
     (global as any).fetch = jest.fn().mockResolvedValue(gqlResponse({ checks: baseChecks(), issues: [], wpCliVersion: '2.9', installs: [] }));
     const electron = mockElectron({
@@ -460,6 +530,36 @@ describe('ExternalHostAddWizard', () => {
     continueBtn.props.onClick();
     expect(instance.state.step).toBe(3);
     expect(instance.state.siteSelections.length).toBe(1);
+  });
+
+  // A standard shared-host layout gives two installs whose last path segment
+  // is identical (e.g. both end in 'public_html'), which is exactly the case
+  // the batched nexusHostAddSites mutation exists to serve. Since
+  // externalSiteId(alias, site) keys on the derived slug, an undisambiguated
+  // collision would make the second site's registration silently overwrite
+  // the first's while Step 4 still reports "2 of 2 verified".
+  it('two discovered installs sharing a last path segment get distinct derived site slugs, not a collision', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step: 2,
+      alias: 'sharedhost',
+      multiIssue: {
+        checks: baseChecks(), issues: [], wpCliVersion: '2.9',
+        installs: ['/home/u/domains/foo.com/public_html', '/home/u/domains/bar.com/public_html'],
+      },
+    });
+    const tree = instance.render();
+    const continueBtn = findAll(tree, (n) => n.type === 'button' && /continue/i.test(textOf(n)))[0];
+    continueBtn.props.onClick();
+    expect(instance.state.step).toBe(3);
+    const slugs = instance.state.siteSelections.map((s: any) => s.site);
+    expect(slugs).toHaveLength(2);
+    expect(new Set(slugs).size).toBe(2); // no collision -- the whole point of the fix
+    expect(slugs).toEqual(['foo-com-public-html', 'bar-com-public-html']);
   });
 
   it('completing step 3 calls nexusHostAddSites with one environment per selected site and advances to step 4', async () => {

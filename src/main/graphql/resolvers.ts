@@ -235,21 +235,29 @@ export function createResolvers(context: ResolverContext) {
     siteVerification: Array<{ site: string; verified: boolean; error: string | null }>;
     error: string | null;
   }> {
+    // Best-effort label for a failure entry reported before the real site
+    // slug (siteSlug, derived from the probed domain) is known -- the caller
+    // still needs exactly one siteVerification row per input site, per the
+    // schema's documented one-entry-per-site contract, so a name is required
+    // even on the earliest failure paths.
+    const fallbackSiteLabel = site ?? alias;
     try {
       if (environment !== undefined && environment !== null
         && !['production', 'staging', 'development'].includes(environment)) {
+        const error = `Invalid environment '${environment}'. Expected production, staging or development.`;
         return {
           success: false, registered: false, report: null, environment: null,
-          siteVerification: [],
-          error: `Invalid environment '${environment}'. Expected production, staging or development.`,
+          siteVerification: [{ site: fallbackSiteLabel, verified: false, error }],
+          error,
         };
       }
       const storage = (services as any).registryStorage;
       if (!storage) {
+        const error = 'Storage not available';
         return {
           success: false, registered: false, report: null, environment: null,
-          siteVerification: [],
-          error: 'Storage not available',
+          siteVerification: [{ site: fallbackSiteLabel, verified: false, error }],
+          error,
         };
       }
 
@@ -274,9 +282,12 @@ export function createResolvers(context: ResolverContext) {
             lastSeenAt: now,
           });
         }
+        const probeError = report.failure?.detail ?? `Probe failed (${report.failure?.kind ?? 'unknown'}).`;
         return {
           success: true, registered: false, report: toHostReport(report),
-          environment: requestedEnv, siteVerification: [], error: null,
+          environment: requestedEnv,
+          siteVerification: [{ site: fallbackSiteLabel, verified: false, error: probeError }],
+          error: null,
         };
       }
 
@@ -344,10 +355,11 @@ export function createResolvers(context: ResolverContext) {
         environment: validEnv, siteVerification, error: null,
       };
     } catch (e: any) {
+      const error = e?.message ?? String(e);
       return {
         success: false, registered: false, report: null, environment: null,
-        siteVerification: [],
-        error: e?.message ?? String(e),
+        siteVerification: [{ site: fallbackSiteLabel, verified: false, error }],
+        error,
       };
     }
   }

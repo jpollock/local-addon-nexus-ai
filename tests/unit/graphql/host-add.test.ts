@@ -505,4 +505,45 @@ describe('nexusHostAddSites — batched registration for the onboarding wizard (
       { site: 'site-a', verified: false, error: expect.stringContaining('WordPress installation') },
     ]);
   });
+
+  it('does not drop a site that fails entirely at the probe stage -- returns one entry per input site, not a shrunk array', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    // site-a probes fine and registers.
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'partial-fail-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({ code: 0, stdout: '6.8.1', stderr: '', spawnError: undefined });
+
+    // site-b fails at the probe stage entirely (e.g. auth failure) -- before
+    // this fix, registerExternalHostSite returned siteVerification: [] here,
+    // which made this site vanish from the response instead of counting
+    // against the total.
+    probeMock.mockResolvedValueOnce({
+      ok: false,
+      alias: 'partial-fail-host',
+      resolved: { hostname: '203.0.113.40', user: 'deploy', port: '22' },
+      failure: { kind: 'auth-failed', detail: 'Permission denied (publickey).', remedy: 'ssh-copy-id ...' },
+    });
+
+    const result = await m.nexusHostAddSites(
+      null,
+      {
+        alias: 'partial-fail-host',
+        path: null,
+        sites: [
+          { site: 'site-a', environment: 'production', path: '/home/u1/site-a' },
+          { site: 'site-b', environment: 'production', path: '/home/u1/site-b' },
+        ],
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.siteVerification).toHaveLength(2);
+    expect(result.siteVerification[0]).toEqual({ site: 'site-a', verified: true, error: null });
+    expect(result.siteVerification[1]).toEqual({
+      site: 'site-b', verified: false, error: expect.stringContaining('Permission denied'),
+    });
+  });
 });

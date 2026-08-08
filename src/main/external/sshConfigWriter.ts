@@ -34,7 +34,10 @@ export interface WriteHostBlockInput {
   hostname: string;
   user: string;
   port: string;
-  identityFile: string;
+  /** Optional. A bare `IdentityFile` directive with no value makes ssh
+   * terminate parsing entirely, so an empty/omitted value must produce NO
+   * IdentityFile (or IdentitiesOnly) line at all -- see previewHostBlock. */
+  identityFile?: string;
 }
 
 export interface GeneratedKey {
@@ -135,14 +138,34 @@ export function detectCollision(alias: string, homeDir: string = os.homedir()): 
   return { kind: 'none' };
 }
 
+/**
+ * A bare directive (e.g. `IdentityFile` with no value) makes ssh terminate
+ * parsing ENTIRELY -- verified against real ssh on this machine ("no argument
+ * after keyword..."). Since Nexus's Include line sits at the top of
+ * ~/.ssh/config, that one blank line breaks every subsequent ssh invocation
+ * the user makes, not just Nexus's -- so alias/hostname/user/port (the fields
+ * the UI treats as required) are validated here as a last line of defense,
+ * and identityFile (genuinely optional) is omitted entirely rather than
+ * emitted blank.
+ */
+function assertRequiredHostFields(input: WriteHostBlockInput): void {
+  if (!input.hostname) throw new Error('hostname is required');
+  if (!input.user) throw new Error('user is required');
+  if (!input.port) throw new Error('port is required');
+}
+
 export function previewHostBlock(input: WriteHostBlockInput): string {
   assertSafeSshAlias(input.alias);
-  return `Host ${input.alias}\n`
+  assertRequiredHostFields(input);
+  let block = `Host ${input.alias}\n`
     + `  HostName ${input.hostname}\n`
     + `  User ${input.user}\n`
-    + `  Port ${input.port}\n`
-    + `  IdentityFile ${input.identityFile}\n`
-    + `  IdentitiesOnly yes\n`;
+    + `  Port ${input.port}\n`;
+  if (input.identityFile) {
+    block += `  IdentityFile ${input.identityFile}\n`
+      + `  IdentitiesOnly yes\n`;
+  }
+  return block;
 }
 
 /**

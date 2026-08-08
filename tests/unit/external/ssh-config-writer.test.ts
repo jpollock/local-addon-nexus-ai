@@ -84,6 +84,50 @@ describe('previewHostBlock', () => {
       alias: '-oProxyCommand=evil', hostname: 'h', user: 'u', port: '22', identityFile: '/k',
     })).toThrow(/Invalid SSH host alias/);
   });
+
+  // A bare `IdentityFile`/`User`/`Port` directive with no value makes ssh
+  // terminate parsing entirely -- verified against real ssh. Since Nexus's
+  // Include line sits at the top of ~/.ssh/config, one such blank line would
+  // break every subsequent ssh invocation the user makes, not just Nexus's.
+  it('omits the IdentityFile and IdentitiesOnly lines entirely when identityFile is empty, rather than emitting a bare directive', () => {
+    const text = previewHostBlock({
+      alias: 'my-new-host', hostname: '203.0.113.10', user: 'deploy', port: '22', identityFile: '',
+    });
+    expect(text).toBe(
+      'Host my-new-host\n'
+      + '  HostName 203.0.113.10\n'
+      + '  User deploy\n'
+      + '  Port 22\n',
+    );
+    expect(text).not.toContain('IdentityFile');
+    expect(text).not.toContain('IdentitiesOnly');
+  });
+
+  it('also omits IdentityFile when identityFile is undefined (widened optional type)', () => {
+    const text = previewHostBlock({
+      alias: 'my-new-host', hostname: '203.0.113.10', user: 'deploy', port: '22',
+    });
+    expect(text).not.toContain('IdentityFile');
+    expect(text).not.toContain('IdentitiesOnly');
+  });
+
+  it('throws a clear error when hostname is missing, rather than writing a bare directive', () => {
+    expect(() => previewHostBlock({
+      alias: 'my-new-host', hostname: '', user: 'deploy', port: '22', identityFile: '/k',
+    })).toThrow(/hostname is required/);
+  });
+
+  it('throws a clear error when user is missing, rather than writing a bare directive', () => {
+    expect(() => previewHostBlock({
+      alias: 'my-new-host', hostname: '203.0.113.10', user: '', port: '22', identityFile: '/k',
+    })).toThrow(/user is required/);
+  });
+
+  it('throws a clear error when port is missing, rather than writing a bare directive', () => {
+    expect(() => previewHostBlock({
+      alias: 'my-new-host', hostname: '203.0.113.10', user: 'deploy', port: '', identityFile: '/k',
+    })).toThrow(/port is required/);
+  });
 });
 
 describe('writeHostBlock', () => {
