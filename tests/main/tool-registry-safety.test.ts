@@ -42,26 +42,64 @@ describe('MCP Safety Architecture', () => {
     jest.restoreAllMocks();
   });
 
-  describe('Tool Registry (Dumb Router)', () => {
-    test('executes all tools immediately without safety checks', async () => {
+  describe('Tool Registry (Dumb Router, now with an unbypassable tier-3 gate)', () => {
+    // ToolRegistry.call() used to execute every tool -- including Tier 3 --
+    // with no confirmation check at all: that logic previously lived only in
+    // McpSafetyWrapper, so any caller reaching the registry directly (7 live
+    // GraphQL resolvers, NexusToolProvider, AiProxyServer) skipped it
+    // entirely. The gate now lives inside call() itself (see
+    // checkTierThreeConfirmation in safety.ts) so it cannot be bypassed by a
+    // future caller forgetting to route through a wrapper.
+    test('Tier 3 tools now require confirmation even via a direct registry.call()', async () => {
       const registry = new ToolRegistry();
       const tool = makeTool('test_tier3_tool');
       registry.register(tool);
 
       const result = await registry.call('test_tier3_tool', { siteId: '123' }, mockServices);
+      const parsed = JSON.parse(result.content[0].text as string);
+      expect(parsed.requiresConfirmation).toBe(true);
+      expect(parsed.confirmationToken).toBeTruthy();
+      expect(tool.execute).not.toHaveBeenCalled();
+    });
+
+    test('Tier 3 tools execute once a valid confirmation token is supplied', async () => {
+      const registry = new ToolRegistry();
+      const tool = makeTool('test_tier3_tool');
+      registry.register(tool);
+
+      const first = await registry.call('test_tier3_tool', { siteId: '123' }, mockServices);
+      const { confirmationToken } = JSON.parse(first.content[0].text as string);
+
+      const result = await registry.call(
+        'test_tier3_tool',
+        { siteId: '123', _confirmationToken: confirmationToken },
+        mockServices,
+      );
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBe('executed test_tier3_tool');
       expect(tool.execute).toHaveBeenCalled();
     });
 
-    test('does not generate confirmation tokens', async () => {
+    test('requireConfirmation: false lets a caller that already handled confirmation skip the gate', async () => {
       const registry = new ToolRegistry();
-      registry.register(makeTool('test_tier3_tool'));
+      const tool = makeTool('test_tier3_tool');
+      registry.register(tool);
 
-      const result = await registry.call('test_tier3_tool', { siteId: '123' }, mockServices);
-      const text = result.content[0].text;
-      expect(text).not.toContain('confirmationToken');
-      expect(text).not.toContain('requiresConfirmation');
+      const result = await registry.call('test_tier3_tool', { siteId: '123' }, mockServices, 'cli', false);
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBe('executed test_tier3_tool');
+      expect(tool.execute).toHaveBeenCalled();
+    });
+
+    test('Tier 1/2 tools are unaffected -- still execute immediately with no confirmation dance', async () => {
+      const registry = new ToolRegistry();
+      const tool = makeTool('test_tier1_tool');
+      registry.register(tool);
+
+      const result = await registry.call('test_tier1_tool', { siteId: '123' }, mockServices);
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBe('executed test_tier1_tool');
+      expect(tool.execute).toHaveBeenCalled();
     });
 
     test('does not perform audit logging', async () => {

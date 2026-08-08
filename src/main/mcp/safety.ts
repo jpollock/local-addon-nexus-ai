@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { McpToolResult } from './types';
 
 // ---------------------------------------------------------------------------
 // Safety Tiers
@@ -312,4 +313,71 @@ export class ConfirmationManager {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Confirmation gate — extracted so it can be enforced from a single place
+// ---------------------------------------------------------------------------
+
+export interface ConfirmationGateResult {
+  /** True if the gate returned a "please confirm" response and the caller must stop here. */
+  blocked: boolean;
+  /** Set only when blocked is true. */
+  response?: McpToolResult;
+  /** Set only when blocked is false and a token was consumed — args with _confirmationToken stripped. */
+  cleanedArgs?: Record<string, unknown>;
+}
+
+/**
+ * Tier-3 confirmation gate, extracted so it can be enforced from a single
+ * place (ToolRegistry.call()) instead of duplicated per dispatch surface —
+ * see A4 in the 2026-08-08 external-host-onboarding-and-fixes review for why
+ * duplication let three callers skip it entirely.
+ */
+export function checkTierThreeConfirmation(
+  toolName: string,
+  args: Record<string, unknown>,
+  tier: SafetyTier,
+  confirmationMessage: string | undefined,
+  preChecks: string[] | undefined,
+  confirmations: ConfirmationManager,
+): ConfirmationGateResult {
+  if (tier !== 3) {
+    return { blocked: false, cleanedArgs: args };
+  }
+
+  const token = args._confirmationToken as string | undefined;
+
+  if (!token) {
+    const confirmationToken = confirmations.generate(toolName, args);
+    return {
+      blocked: true,
+      response: {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            requiresConfirmation: true,
+            tier: 3,
+            action: confirmationMessage,
+            warning: 'This action may not be reversible.',
+            howToConfirm: `To proceed, call ${toolName} again with the same arguments plus _confirmationToken set to the value below.`,
+            preChecks,
+            confirmationToken,
+          }, null, 2),
+        }],
+      },
+    };
+  }
+
+  const validationParams = { ...args };
+  delete validationParams._confirmationToken;
+  const validationError = confirmations.validate(token, toolName, validationParams);
+  if (validationError) {
+    return {
+      blocked: true,
+      response: { content: [{ type: 'text', text: validationError }], isError: true },
+    };
+  }
+
+  return { blocked: false, cleanedArgs: validationParams };
 }

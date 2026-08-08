@@ -114,30 +114,53 @@ describe('Tool Registry - Dumb Router', () => {
     expect(result.content[0].text).toBe('Executed with value: test');
   });
 
-  it('should execute Tier 3 tools immediately without safety checks', async () => {
+  // ToolRegistry.call() used to execute every tool -- including Tier 3 --
+  // immediately with no confirmation check at all. That gate now lives
+  // inside call() itself (see checkTierThreeConfirmation in safety.ts) so it
+  // cannot be bypassed by a caller reaching the registry directly (the 7 live
+  // GraphQL resolvers, NexusToolProvider, AiProxyServer previously did).
+  it('requires confirmation for Tier 3 tools even via a direct registry.call()', async () => {
     const result = await registry.call('test_tier3_tool', { siteId: 'site-1' }, services);
 
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed.requiresConfirmation).toBe(true);
+    expect(parsed.tier).toBe(3);
+    expect(parsed.confirmationToken).toBeTruthy();
+  });
+
+  it('executes a Tier 3 tool once a valid confirmation token is supplied', async () => {
+    const first = await registry.call('test_tier3_tool', { siteId: 'site-1' }, services);
+    const { confirmationToken } = JSON.parse(first.content[0].text as string);
+
+    const result = await registry.call(
+      'test_tier3_tool',
+      { siteId: 'site-1', _confirmationToken: confirmationToken },
+      services,
+    );
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toBe('Executed with siteId: site-1');
-    // No confirmation token required - registry is dumb router
   });
 
-  it('should not generate confirmation tokens', async () => {
-    const result = await registry.call('test_tier3_tool', { siteId: 'site-1' }, services);
-
-    const resultText = result.content[0].text;
-    expect(resultText).not.toContain('requiresConfirmation');
-    expect(resultText).not.toContain('confirmationToken');
-  });
-
-  it('should not check for _confirmationToken parameter', async () => {
+  it('rejects a bogus _confirmationToken rather than executing regardless of token presence', async () => {
     const result = await registry.call(
       'test_tier3_tool',
       { siteId: 'site-1', _confirmationToken: 'fake-token' },
       services
     );
 
-    // Should execute regardless of token presence
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/invalid|expired/i);
+  });
+
+  it('requireConfirmation: false skips the gate for a caller that already pre-confirmed', async () => {
+    const result = await registry.call(
+      'test_tier3_tool',
+      { siteId: 'site-1' },
+      services,
+      'cli',
+      false,
+    );
+
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain('Executed');
   });
@@ -368,16 +391,21 @@ describe('Architecture Benefits', () => {
     expect(cliResult.content[0].text).toBe(mcpResult.content[0].text);
   });
 
-  it('MCP adds safety layer, CLI does not', async () => {
+  it('MCP and a direct registry.call() (e.g. CLI/GraphQL) both require confirmation for Tier 3', async () => {
+    // Previously the gate lived only in McpSafetyWrapper, so a direct
+    // registry.call() (as CLI/GraphQL resolvers make) executed a Tier 3 tool
+    // with zero confirmation check. The gate now lives inside call() itself,
+    // so both paths enforce it identically.
     const registry = new ToolRegistry();
     const safetyWrapper = new McpSafetyWrapper(registry);
     const services = createMockServices();
 
     registry.register(tier3ToolHandler);
 
-    // CLI path - executes immediately (no safety)
+    // Direct registry path - requires confirmation (gate lives in call() now)
     const cliResult = await registry.call('test_tier3_tool', { siteId: 'site-1' }, services);
-    expect(cliResult.content[0].text).toContain('Executed');
+    const cliParsed = JSON.parse(cliResult.content[0].text as string);
+    expect(cliParsed.requiresConfirmation).toBe(true);
 
     // MCP path - requires confirmation (safety enforced)
     const mcpResult = await safetyWrapper.callWithSafety('test_tier3_tool', { siteId: 'site-1' }, services);

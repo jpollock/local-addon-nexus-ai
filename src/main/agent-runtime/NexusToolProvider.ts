@@ -61,7 +61,7 @@ export class NexusToolProvider implements ToolProvider {
     const startTime = Date.now();
 
     // Call the registry with 'agent' as the access method
-    const result = await this.registry.call(name, args, this.services, 'agent' as any);
+    const result = await this.registry.call(name, args, this.services, 'agent');
 
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
     const duration_ms = Date.now() - startTime;

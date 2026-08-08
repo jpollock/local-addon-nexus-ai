@@ -57,7 +57,11 @@ describe('ToolRegistry.call() — audit path safety', () => {
     registry.register(contentlessHandler('wpe_delete_install', 'error'));
     const services = { operationAuditLog: new OperationAuditLog(logPath) } as unknown as NexusServices;
 
-    const result = await registry.call('wpe_delete_install', { install_id: 'prod' }, services);
+    // requireConfirmation: false — this test targets the audit-path safety net
+    // (M2: a contentless result), not the Tier-3 confirmation gate, which would
+    // otherwise intercept the call before the handler (and its contentless
+    // result) is ever reached.
+    const result = await registry.call('wpe_delete_install', { install_id: 'prod' }, services, undefined, false);
     expect(result.isError).toBe(true);
 
     // The audit entry is still written, with the fallback error text.
@@ -91,8 +95,10 @@ describe('ToolRegistry.call() — audit path safety', () => {
     registry.register(contentlessHandler('wpe_delete_install', 'throw'));
     const services = { operationAuditLog: throwingAuditLog } as unknown as NexusServices;
 
+    // requireConfirmation: false — same reason as above: this test targets the
+    // catch-path audit safety net, not the Tier-3 confirmation gate.
     await expect(
-      registry.call('wpe_delete_install', { install_id: 'prod' }, services),
+      registry.call('wpe_delete_install', { install_id: 'prod' }, services, undefined, false),
     ).resolves.toMatchObject({ isError: true });
   });
 });

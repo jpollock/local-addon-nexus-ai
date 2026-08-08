@@ -232,4 +232,19 @@ describe('McpServer', () => {
     expect(info2.authToken).toBe(existingToken);
     await s2.stop();
   });
+
+  test('agent-tool confirmation tokens and builtin-tool confirmation tokens share one ConfirmationManager', () => {
+    // McpServer.dispatch's agent-tool branch uses this.safetyWrapper.confirmationManager
+    // directly; ToolRegistry.call() uses registry.confirmationManager internally. Both
+    // MUST resolve to the exact same instance, or a token generated on one dispatch path
+    // will fail to validate on the other.
+    const registry3 = new ToolRegistry();
+    const s3 = new McpServer({
+      services: createMockServices(),
+      registry: registry3,
+      port: 0,
+    });
+    const safetyWrapper = (s3 as any).safetyWrapper;
+    expect(safetyWrapper.confirmationManager).toBe(registry3.confirmationManager);
+  });
 });

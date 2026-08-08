@@ -679,7 +679,7 @@ export class AiProxyServer {
           let resultText: string;
           try {
             const result = await Promise.race([
-              this.toolRegistry!.call(toolName, args, this.nexusServices!),
+              this.toolRegistry!.call(toolName, args, this.nexusServices!, 'agent'),
               new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error('Tool execution timed out')), AiProxyServer.TOOL_TIMEOUT_MS),
               ),

@@ -1,4 +1,6 @@
-import { maybeUpsertExternalSite } from '../../../src/main/mcp/tool-registry';
+import { maybeUpsertExternalSite, ToolRegistry } from '../../../src/main/mcp/tool-registry';
+import { McpToolHandler, NexusServices } from '../../../src/main/mcp/types';
+import { TIER_OVERRIDES } from '../../../src/main/mcp/safety';
 
 /** Minimal in-memory stand-in for Local's RegistryStorage. */
 function makeMemoryStorage() {
@@ -194,5 +196,77 @@ describe('maybeUpsertExternalSite — refresh only, never create', () => {
     expect(graphService.upsertSite).toHaveBeenCalledWith(
       expect.objectContaining({ environment: 'production' }),
     );
+  });
+});
+
+describe('ToolRegistry.call() — tier-3 confirmation gate', () => {
+  const services = {} as unknown as NexusServices;
+
+  function makeTool(name: string): McpToolHandler {
+    return {
+      definition: {
+        name,
+        description: `Test tool: ${name}`,
+        inputSchema: { type: 'object', properties: {} },
+      },
+      execute: jest.fn(async () => ({
+        content: [{ type: 'text' as const, text: `executed ${name}` }],
+      })),
+    };
+  }
+
+  beforeAll(() => {
+    TIER_OVERRIDES['test_gate_tier1_tool'] = 1;
+    TIER_OVERRIDES['test_gate_tier3_tool'] = 3;
+  });
+
+  afterAll(() => {
+    delete TIER_OVERRIDES['test_gate_tier1_tool'];
+    delete TIER_OVERRIDES['test_gate_tier3_tool'];
+  });
+
+  it('a tier-3 tool called with no confirmation token returns a requiresConfirmation response, not the tool result', async () => {
+    const registry = new ToolRegistry();
+    const tool = makeTool('test_gate_tier3_tool');
+    registry.register(tool);
+
+    const result = await registry.call('test_gate_tier3_tool', {}, services);
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed.requiresConfirmation).toBe(true);
+    expect(parsed.confirmationToken).toBeTruthy();
+    expect(tool.execute).not.toHaveBeenCalled();
+  });
+
+  it('a tier-3 tool called with a valid confirmation token executes normally', async () => {
+    const registry = new ToolRegistry();
+    const tool = makeTool('test_gate_tier3_tool');
+    registry.register(tool);
+
+    const first = await registry.call('test_gate_tier3_tool', {}, services);
+    const { confirmationToken } = JSON.parse(first.content[0].text as string);
+    const second = await registry.call('test_gate_tier3_tool', { _confirmationToken: confirmationToken }, services);
+    expect(second.isError).toBeFalsy();
+    expect(tool.execute).toHaveBeenCalled();
+  });
+
+  it('requireConfirmation: false skips the gate for a caller that already pre-confirmed', async () => {
+    const registry = new ToolRegistry();
+    const tool = makeTool('test_gate_tier3_tool');
+    registry.register(tool);
+
+    const result = await registry.call('test_gate_tier3_tool', {}, services, 'cli', false);
+    expect(result.isError).toBeFalsy();
+    expect(tool.execute).toHaveBeenCalled();
+  });
+
+  it('a tier-1 tool is completely unaffected by the new parameter', async () => {
+    const registry = new ToolRegistry();
+    const tool = makeTool('test_gate_tier1_tool');
+    registry.register(tool);
+
+    const result = await registry.call('test_gate_tier1_tool', {}, services);
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toBe('executed test_gate_tier1_tool');
+    expect(tool.execute).toHaveBeenCalled();
   });
 });

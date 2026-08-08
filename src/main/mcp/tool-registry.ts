@@ -1,7 +1,7 @@
 import { McpToolHandler, McpToolDefinition, McpToolResult, NexusServices } from './types';
 import { createLogger } from '../logging/Logger';
 import { getMetrics } from '../telemetry/MetricsCollector';
-import { getToolSafety } from './safety';
+import { getToolSafety, ConfirmationManager, checkTierThreeConfirmation } from './safety';
 import { parseTarget } from '../../common/target';
 import { findExternalSites } from './site-resolver';
 import { upsertExternalProfile } from '../external/externalSiteStore';
@@ -92,6 +92,7 @@ export async function maybeUpsertExternalSite(
  */
 export class ToolRegistry {
   private handlers = new Map<string, McpToolHandler>();
+  readonly confirmationManager = new ConfirmationManager();
 
   register(handler: McpToolHandler): void {
     if (this.handlers.has(handler.definition.name)) {
@@ -135,7 +136,8 @@ export class ToolRegistry {
     name: string,
     args: Record<string, unknown>,
     services: NexusServices,
-    accessMethod?: 'mcp' | 'cli',
+    accessMethod?: 'mcp' | 'cli' | 'agent',
+    requireConfirmation: boolean = true,
   ): Promise<McpToolResult> {
     const startTime = Date.now();
     logger.debug(`call: name="${name}" via ${accessMethod || 'unknown'}`, { args });
@@ -158,10 +160,18 @@ export class ToolRegistry {
       };
     }
 
-    // Execute handler directly (no safety checks)
+    const safety = getToolSafety(name);
+    let handlerArgs = args;
+    if (requireConfirmation) {
+      const gate = checkTierThreeConfirmation(name, args, safety.tier, safety.confirmationMessage, safety.preChecks, this.confirmationManager);
+      if (gate.blocked) return gate.response!;
+      handlerArgs = gate.cleanedArgs!;
+    }
+
+    // Execute handler (Tier 3 confirmation, if required, already gated above)
     try {
       logger.debug(`Executing handler for "${name}"`);
-      const result = await handler.execute(args, services);
+      const result = await handler.execute(handlerArgs, services);
       const duration = Date.now() - startTime;
 
       // Record metrics with access method

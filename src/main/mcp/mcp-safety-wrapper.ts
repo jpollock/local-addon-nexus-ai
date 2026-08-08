@@ -9,17 +9,19 @@ const logger = createLogger('McpSafetyWrapper');
  * MCP Safety Wrapper
  *
  * Wraps the tool registry with MCP-specific safety enforcement:
- * - Tier 3 confirmation token flow (async, chat-friendly)
  * - Audit logging for all tool executions
  * - Rate limiting (future)
+ *
+ * The Tier 3 confirmation token flow itself now lives in
+ * `ToolRegistry.call()` (see `checkTierThreeConfirmation` in `safety.ts`), so
+ * it cannot be bypassed by a caller that reaches the registry directly. This
+ * wrapper only adds MCP-specific audit logging on top of that shared gate.
  *
  * This layer is ONLY used by the MCP server for Claude chat interactions.
  * GraphQL/CLI calls the tool registry directly and handles confirmations
  * at their own interface layer (e.g., terminal prompts in CLI).
  */
 export class McpSafetyWrapper {
-  private confirmations = new ConfirmationManager();
-
   constructor(private registry: ToolRegistry) {}
 
   /**
@@ -27,7 +29,9 @@ export class McpSafetyWrapper {
    *
    * - Tier 1: Execute immediately
    * - Tier 2: Execute and audit-log
-   * - Tier 3: Require confirmation token (generate → validate → execute)
+   * - Tier 3: Require confirmation token (generate → validate → execute) —
+   *   enforced inside `ToolRegistry.call()`, detected here from the response
+   *   shape so the audit log can still record 'confirmation_required'.
    */
   async callWithSafety(
     name: string,
@@ -38,62 +42,40 @@ export class McpSafetyWrapper {
     const safety = getToolSafety(name);
     const startTime = Date.now();
 
-    // Tier 3: MCP confirmation token flow
-    if (safety.tier === 3) {
-      const token = args._confirmationToken as string | undefined;
-
-      if (!token) {
-        // Generate confirmation token
-        const confirmationToken = this.confirmations.generate(name, args);
-        this.auditLog(services, name, safety.tier, args, null, 'confirmation_required', undefined, Date.now() - startTime);
-
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              requiresConfirmation: true,
-              tier: 3,
-              action: safety.confirmationMessage,
-              warning: 'This action may not be reversible.',
-              howToConfirm: `To proceed, call ${name} again with the same arguments plus _confirmationToken set to the value below.`,
-              preChecks: safety.preChecks,
-              confirmationToken,
-            }, null, 2),
-          }],
-        };
-      }
-
-      // Validate confirmation token
-      const validationParams = { ...args };
-      delete validationParams._confirmationToken;
-      const validationError = this.confirmations.validate(token, name, validationParams);
-      if (validationError) {
-        this.auditLog(services, name, safety.tier, args, false, 'error', validationError, Date.now() - startTime);
-        return {
-          content: [{ type: 'text', text: validationError }],
-          isError: true,
-        };
-      }
-    }
-
-    // Strip confirmation token before calling tool
-    const handlerArgs = { ...args };
-    delete handlerArgs._confirmationToken;
-
-    // Call tool registry (which calls the handler)
-    // Mark as 'mcp' access since this is the MCP server path
-    const result = await this.registry.call(name, handlerArgs, services, 'mcp');
+    // Call tool registry (which calls the handler). Pass the ORIGINAL args
+    // (with _confirmationToken still present, if any) — call() needs to see
+    // it to run the tier-3 gate itself.
+    const result = await this.registry.call(name, args, services, 'mcp');
 
     // Only audit log if tool executed (not unknown/unavailable)
     const errorMessage = result.content[0]?.text || '';
     const isUnknownOrUnavailable = errorMessage.startsWith('Unknown tool:') || errorMessage.startsWith('Tool "') && errorMessage.includes('not currently available');
 
-    if (!isUnknownOrUnavailable) {
-      if (result.isError) {
-        this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'error', errorMessage, Date.now() - startTime);
-      } else {
-        this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'success', undefined, Date.now() - startTime);
+    if (isUnknownOrUnavailable) {
+      return result;
+    }
+
+    // Detect the "please confirm" shape checkTierThreeConfirmation() returns,
+    // so this still logs 'confirmation_required' instead of 'success'/'error'.
+    if (!result.isError) {
+      const text = result.content[0]?.text;
+      if (typeof text === 'string') {
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && parsed.requiresConfirmation === true) {
+            this.auditLog(services, name, safety.tier, args, null, 'confirmation_required', undefined, Date.now() - startTime);
+            return result;
+          }
+        } catch {
+          // Not JSON — a normal tool result, fall through to success logging.
+        }
       }
+    }
+
+    if (result.isError) {
+      this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'error', errorMessage, Date.now() - startTime);
+    } else {
+      this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'success', undefined, Date.now() - startTime);
     }
 
     return result;
@@ -127,8 +109,14 @@ export class McpSafetyWrapper {
     });
   }
 
-  /** Public access to ConfirmationManager for ChatService tier 3 approval flow */
+  /**
+   * Public access to ConfirmationManager for ChatService tier 3 approval flow.
+   * Passthrough to the registry's instance — this is the SAME ConfirmationManager
+   * `ToolRegistry.call()` uses internally, so a token generated on one dispatch
+   * path (e.g. an agent tool in McpServer.dispatch) validates on the other
+   * (a builtin MCP tool routed through this wrapper), and vice versa.
+   */
   get confirmationManager(): ConfirmationManager {
-    return this.confirmations;
+    return this.registry.confirmationManager;
   }
 }
