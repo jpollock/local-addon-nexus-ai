@@ -333,6 +333,17 @@ export interface ConfirmationGateResult {
  * place (ToolRegistry.call()) instead of duplicated per dispatch surface —
  * see A4 in the 2026-08-08 external-host-onboarding-and-fixes review for why
  * duplication let three callers skip it entirely.
+ *
+ * Limitation: this closes the gap fully for `mcp`/`cli` callers, where a human
+ * (a chat approval click, a CLI y/n prompt) is the only thing that can ever
+ * produce a valid `_confirmationToken`. For `accessMethod: 'agent'`
+ * (AiProxyServer, NexusToolProvider), the token is handed back to a model
+ * inside a server-side tool loop, which can simply re-issue the call with that
+ * token itself — no human ever sees it. This is a pre-existing gap this task
+ * narrows (it adds a round-trip a model must complete) but does not close.
+ * Full closure would mean refusing Tier 3 outright for agent-driven calls, or
+ * filtering Tier-3 tools out of the agent tool list entirely; that is a
+ * separate design decision, out of scope here.
  */
 export function checkTierThreeConfirmation(
   toolName: string,
@@ -380,4 +391,22 @@ export function checkTierThreeConfirmation(
   }
 
   return { blocked: false, cleanedArgs: validationParams };
+}
+
+/**
+ * The exact message set `ConfirmationManager.validate()` can return on
+ * failure. Callers that need to distinguish "the gate rejected this token"
+ * from "the handler itself failed after being validly confirmed" (e.g. for
+ * the audit log's `confirmed` field) should match against this rather than
+ * assuming every Tier-3 error means confirmation succeeded.
+ */
+const CONFIRMATION_VALIDATION_ERROR_PREFIXES = [
+  'Invalid or expired confirmation token.',
+  'Confirmation token expired',
+  'Confirmation token was issued for a different tool.',
+  'Parameters changed since confirmation was requested.',
+];
+
+export function isConfirmationValidationError(errorText: string): boolean {
+  return CONFIRMATION_VALIDATION_ERROR_PREFIXES.some((prefix) => errorText.startsWith(prefix));
 }

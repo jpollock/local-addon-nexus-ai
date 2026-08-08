@@ -1,6 +1,6 @@
 import { ToolRegistry } from './tool-registry';
 import { McpToolResult, NexusServices } from './types';
-import { getToolSafety, ConfirmationManager } from './safety';
+import { getToolSafety, ConfirmationManager, isConfirmationValidationError } from './safety';
 import { createLogger } from '../logging/Logger';
 
 const logger = createLogger('McpSafetyWrapper');
@@ -57,7 +57,11 @@ export class McpSafetyWrapper {
 
     // Detect the "please confirm" shape checkTierThreeConfirmation() returns,
     // so this still logs 'confirmation_required' instead of 'success'/'error'.
-    if (!result.isError) {
+    // Gated on tier === 3: only a Tier-3 tool can ever produce this response
+    // shape for real, so a Tier 1/2 tool that coincidentally returns JSON
+    // shaped like { requiresConfirmation: true, ... } (e.g. echoing back an
+    // argument) can't be misfiled as a confirmation prompt.
+    if (safety.tier === 3 && !result.isError) {
       const text = result.content[0]?.text;
       if (typeof text === 'string') {
         try {
@@ -73,7 +77,15 @@ export class McpSafetyWrapper {
     }
 
     if (result.isError) {
-      this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'error', errorMessage, Date.now() - startTime);
+      // A Tier-3 error is NOT always "confirmed then the handler failed" --
+      // checkTierThreeConfirmation() also returns isError: true when the gate
+      // itself rejects the token (invalid/expired/mismatched params). That
+      // case must log confirmed: false, not true, or the audit trail records
+      // a rejected confirmation attempt as if it had succeeded.
+      const confirmed = safety.tier === 3
+        ? (isConfirmationValidationError(errorMessage) ? false : true)
+        : null;
+      this.auditLog(services, name, safety.tier, args, confirmed, 'error', errorMessage, Date.now() - startTime);
     } else {
       this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'success', undefined, Date.now() - startTime);
     }

@@ -123,14 +123,20 @@ export class ToolRegistry {
   }
 
   /**
-   * Execute a tool by name. No safety enforcement — just route to handler.
+   * Execute a tool by name.
    *
-   * Safety enforcement happens at the interface layer:
-   * - MCP Server: Uses McpSafetyWrapper
-   * - CLI: Handles confirmations in CLI commands
-   * - GraphQL: Calls this directly (no confirmations needed)
+   * Enforces the Tier-3 confirmation gate itself (see `checkTierThreeConfirmation`
+   * in `safety.ts`) so it cannot be bypassed by a caller that reaches the
+   * registry directly — this used to be delegated entirely to the interface
+   * layer (McpSafetyWrapper for MCP; CLI commands and GraphQL resolvers
+   * handling it themselves, or not at all), which meant a Tier-3 tool invoked
+   * through a caller that forgot the wrapper executed with zero confirmation
+   * check. Callers that already obtained a human confirmation through some
+   * other channel (a CLI y/n prompt, a chat UI approval click) pass
+   * `requireConfirmation: false` to skip the gate rather than re-confirming.
    *
-   * @param accessMethod - 'mcp' if called from MCP server, 'cli' if called from CLI/GraphQL
+   * @param accessMethod - 'mcp' if called from MCP server, 'cli' if called from CLI/GraphQL, 'agent' if called from an agent tool loop (NexusToolProvider, AiProxyServer)
+   * @param requireConfirmation - defaults to true; pass false only when the caller has already obtained an equivalent human confirmation through its own interface (see checkTierThreeConfirmation's doc comment for the residual gap this leaves for accessMethod: 'agent')
    */
   async call(
     name: string,
@@ -164,7 +170,27 @@ export class ToolRegistry {
     let handlerArgs = args;
     if (requireConfirmation) {
       const gate = checkTierThreeConfirmation(name, args, safety.tier, safety.confirmationMessage, safety.preChecks, this.confirmationManager);
-      if (gate.blocked) return gate.response!;
+      if (gate.blocked) {
+        // Durable trail for a blocked Tier-3 attempt -- this matters most for
+        // the callers that reach call() directly (GraphQL resolvers, agent
+        // tool loops, AiProxyServer): without this, a Tier-3 tool invoked
+        // through one of them with no/invalid confirmation left no record at
+        // all. Mirrors nexusWpCommand's convention of auditing a refusal as
+        // outcome: 'failure'.
+        try {
+          const blockedText = gate.response?.content?.[0]?.text;
+          services.operationAuditLog?.log({
+            operation: name,
+            target: String(args.site ?? args.install_id ?? args.install_name ?? args.ssh_target ?? 'unknown'),
+            parameters: { ...args, _tier: safety.tier, _accessMethod: accessMethod ?? 'unknown' },
+            outcome: 'failure',
+            error: gate.response?.isError
+              ? (blockedText || 'confirmation rejected')
+              : 'blocked: tier-3 confirmation required, no valid _confirmationToken provided',
+          });
+        } catch { /* never throw from an audit path */ }
+        return gate.response!;
+      }
       handlerArgs = gate.cleanedArgs!;
     }
 

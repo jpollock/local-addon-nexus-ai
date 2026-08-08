@@ -345,8 +345,13 @@ export class ChatService {
         return { text: denialText };
       }
 
-      // User approved - execute directly via registry (no confirmation token needed)
-      // ChatService handles safety at the UI layer, registry is now a dumb router
+      // User approved via the tool_call_approval_needed UI card above -- that
+      // click IS the real human confirmation, so pass requireConfirmation:
+      // false to skip ToolRegistry.call()'s own Tier-3 gate. Without this,
+      // the registry would intercept this call and return the
+      // requiresConfirmation JSON instead of executing, since no
+      // _confirmationToken is (or should be) generated for a UI-approved
+      // chat action.
       this.emit(sessionId(session), {
         type: 'tool_call_executing',
         id: toolCall.id,
@@ -354,7 +359,7 @@ export class ChatService {
       });
 
       const { startedIds: _s3, autoStop: _as3 } = await this.prepareSiteLifecycle(toolCall.name, toolCall.arguments);
-      const result3 = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp');
+      const result3 = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp', false);
       const _note3 = await this.teardownSiteLifecycle(_s3, _as3);
       const text3 = result3.content.map((c) => c.text).join('\n') + _note3;
 

@@ -326,36 +326,13 @@ describe('CLI Confirmation Prompts', () => {
     });
   });
 
-  describe('Push Files-Only Confirmation', () => {
-    // A files-only push (no --db/--db-only) used to go straight from argument
-    // parsing to the mutation call with zero confirmation -- unlike the
-    // database-push path, which always prompted. The resolver behind this
-    // mutation now always passes requireConfirmation: false to the underlying
-    // Tier-3 tool, trusting this lighter y/N prompt to be the one and only
-    // confirmation, so it must actually run on every push.
-    it('should prompt with a lightweight y/N question, not the heavyweight yes-ritual', () => {
-      const prompt = 'Push files to wpe:w7579/myinstall@production? [y/N] ';
-      expect(prompt).toContain('Push files to');
-      expect(prompt).toContain('[y/N]');
-      expect(prompt).not.toContain("Type 'yes'");
-    });
-
-    it('should accept y or yes (case-insensitive) to proceed', () => {
-      const acceptedAnswers = ['y', 'Y', 'yes', 'YES', 'Yes'];
-      for (const answer of acceptedAnswers) {
-        const normalized = answer.toLowerCase();
-        expect(normalized === 'y' || normalized === 'yes').toBe(true);
-      }
-    });
-
-    it('should treat anything else as a decline', () => {
-      const declinedAnswers = ['n', 'no', '', 'nah', 'maybe'];
-      for (const answer of declinedAnswers) {
-        const normalized = answer.toLowerCase();
-        expect(normalized === 'y' || normalized === 'yes').toBe(false);
-      }
-    });
-  });
+  // Push Files-Only Confirmation used to live here as three tests that only
+  // asserted string literals defined in the test itself (e.g.
+  // `expect('y'.toLowerCase() === 'y').toBe(true)`) -- they would have passed
+  // identically even if the real prompt in sync.ts were deleted. Real,
+  // exec-path coverage (driving the actual `push` action via commander,
+  // asserting the mutation is/isn't called) now lives in
+  // tests/unit/cli/commands/sync.test.ts.
 
   describe('Delete Site Confirmation', () => {
     it('should prompt for confirmation when deleting', () => {

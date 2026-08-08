@@ -91,6 +91,7 @@ syncCommand
   .option('--db-only', 'Push database only')
   .option('--files-only', 'Push files only')
   .option('--create', 'Create WPE install if does not exist')
+  .option('-y, --yes', 'Skip the confirmation prompt (required for non-interactive/scripted use)')
   .action(async (localSite, options) => {
     try {
       if (!localSite.endsWith('@local')) {
@@ -103,34 +104,48 @@ syncCommand
       const localSiteName = requireLocalTarget(localSite);
       const wpeTarget = requireWpeTarget(options.to);
 
+      // Every push -- db or files-only -- needs a real human yes before the
+      // Tier-3 tool behind this mutation executes with requireConfirmation:
+      // false (see the resolver comment in nexusSyncPush). Refuse outright on
+      // a non-TTY stdin without --yes rather than hanging on a readline
+      // question that can never be answered (e.g. piped/closed stdin in CI or
+      // an agent-driven invocation).
+      if (!options.yes && !process.stdin.isTTY) {
+        console.error(`\n❌ Refusing to push non-interactively without --yes.`);
+        console.error(`   Re-run with -y/--yes to confirm this push in a script or non-interactive shell.\n`);
+        process.exit(1);
+      }
+
       // Confirmation for database push
       if (options.db || options.dbOnly) {
-        console.log(`\n⚠️  WARNING: This will overwrite the database on ${options.to}`);
+        if (!options.yes) {
+          console.log(`\n⚠️  WARNING: This will overwrite the database on ${options.to}`);
 
-        if (wpeTarget.environment === 'production') {
-          console.log('⚠️⚠️⚠️  This is a PRODUCTION environment. Data loss is permanent.');
+          if (wpeTarget.environment === 'production') {
+            console.log('⚠️⚠️⚠️  This is a PRODUCTION environment. Data loss is permanent.');
+          }
+
+          // Prompt for confirmation
+          const readline = require('readline');
+          const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+          });
+
+          const answer = await new Promise<string>((resolve) => {
+            rl.question(`\nType 'yes' to confirm database push: `, resolve);
+          });
+
+          rl.close();
+
+          if (answer.toLowerCase() !== 'yes') {
+            console.log('\nCancelled.');
+            process.exit(0);
+          }
+
+          console.log('');
         }
-
-        // Prompt for confirmation
-        const readline = require('readline');
-        const rl = readline.createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-
-        const answer = await new Promise<string>((resolve) => {
-          rl.question(`\nType 'yes' to confirm database push: `, resolve);
-        });
-
-        rl.close();
-
-        if (answer.toLowerCase() !== 'yes') {
-          console.log('\nCancelled.');
-          process.exit(0);
-        }
-
-        console.log('');
-      } else {
+      } else if (!options.yes) {
         // Files-only push is a real write to WP Engine too, even though it can't
         // destroy data the way a database overwrite can -- still needs a real
         // human yes, not a silent execute. (The resolver behind this mutation

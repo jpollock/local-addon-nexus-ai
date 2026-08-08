@@ -333,4 +333,89 @@ describe('ChatService — Tier 3 approval', () => {
     expect(results.length).toBe(1);
     expect((results[0] as any).result).toContain('denied');
   }, 15000);
+
+  test('resolveApproval with approved=true actually executes the tool (not just returns a result)', async () => {
+    // Regression test: ChatService.handleToolCall's approved branch calls
+    // registry.call(..., 'mcp', false) -- requireConfirmation: false -- because
+    // the UI approval click IS the human confirmation. Before that fix, the
+    // Tier-3 gate now living in ToolRegistry.call() would intercept this call
+    // (no _confirmationToken is ever attached to a UI-approved chat call) and
+    // return the requiresConfirmation JSON instead of running the handler --
+    // silently doing nothing while looking like a real result. This test
+    // fails on that regression by asserting the underlying handler actually ran.
+    const registry = new ToolRegistry();
+    const execute = jest.fn(async (_args: Record<string, unknown>) => ({
+      content: [{ type: 'text' as const, text: 'deleted' }],
+    }));
+    registry.register({
+      definition: {
+        name: 'local_delete_site',
+        description: 'Delete a site',
+        inputSchema: {
+          type: 'object',
+          properties: { site: { type: 'string' } },
+          required: ['site'],
+        },
+      },
+      execute,
+    });
+
+    const deps: ChatServiceDeps = {
+      registry,
+      services: mockServices(),
+      sendToRenderer: () => {},
+    };
+    const events: ChatStreamEvent[] = [];
+    deps.sendToRenderer = (_c: string, ...args: unknown[]) => {
+      const sid = args[0] as string;
+      const event = args[1] as ChatStreamEvent;
+      if (sid === 'approval-approve-test' && event) events.push(event);
+    };
+
+    const service = new ChatService(deps);
+
+    let callCount = 0;
+    mockProviderInstance = {
+      id: 'mock',
+      displayName: 'Mock',
+      requiresApiKey: false,
+      defaultModels: ['m'],
+      streamChat: async function* () {
+        callCount++;
+        if (callCount === 1) {
+          yield { type: 'tool_call_start', id: 'tc_del2', name: 'local_delete_site' };
+          yield { type: 'tool_call_end', id: 'tc_del2', name: 'local_delete_site', arguments: { site: 'my-site' } };
+          yield { type: 'done', stopReason: 'tool_use' };
+        } else {
+          yield { type: 'token', text: 'Done, deleted it.' };
+          yield { type: 'done', stopReason: 'end_turn' };
+        }
+      },
+      listModels: async () => ['m'],
+      validateKey: async () => null,
+    };
+
+    const messagePromise = service.sendMessage('approval-approve-test', 'delete my-site', {
+      providerId: 'mock',
+      model: 'm',
+    });
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const approvalEvents = events.filter((e) => e.type === 'tool_call_approval_needed');
+    expect(approvalEvents.length).toBe(1);
+
+    // Approve this time.
+    service.resolveApproval('approval-approve-test', 'tc_del2', true);
+    await messagePromise;
+
+    // The actual handler must have run -- not just some JSON response.
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0]).toMatchObject({ site: 'my-site' });
+
+    const results = events.filter((e) => e.type === 'tool_call_result');
+    expect(results.length).toBe(1);
+    expect((results[0] as any).result).toBe('deleted');
+    expect((results[0] as any).isError).toBeFalsy();
+  }, 15000);
 });
