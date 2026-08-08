@@ -41,6 +41,13 @@ export interface ResolvedSshConfig {
   port: string;
   /** First path when ssh -G reports a space-separated list — the file ssh itself would write to. */
   userKnownHostsFile: string;
+  /**
+   * First path when ssh -G reports a space-separated list. Undefined when
+   * ssh -G reports none (the alias has no IdentityFile configured) — callers
+   * needing an interpolated value must fall back to a generic placeholder
+   * themselves rather than assuming one is always present.
+   */
+  identityFile?: string;
 }
 
 export const SSH_CONFIG_DUMP_TIMEOUT_MS = 5000;
@@ -70,10 +77,13 @@ export async function resolveSshConfig(
   const userKnownHostsFile = knownHostsField
     ? knownHostsField.split(/\s+/)[0]
     : path.join(os.homedir(), '.ssh', 'known_hosts');
+  const identityFileField = fields.get('identityfile');
+  const identityFile = identityFileField ? identityFileField.split(/\s+/)[0] : undefined;
   return {
     hostname: fields.get('hostname') || alias,
     user: fields.get('user') || '',
     port: fields.get('port') || '22',
     userKnownHostsFile,
+    identityFile,
   };
 }

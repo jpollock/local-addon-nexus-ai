@@ -27,6 +27,7 @@ describe('resolveSshConfig', () => {
     expect(cfg).toEqual({
       hostname: '203.0.113.10', user: 'deploy', port: '2222',
       userKnownHostsFile: `${require('os').homedir()}/.ssh/known_hosts`,
+      identityFile: '~/.ssh/id_ed25519',
     });
   });
 
@@ -98,6 +99,7 @@ describe('probeExternalHost — happy path', () => {
     expect(r.resolved).toEqual({
       hostname: '203.0.113.10', user: 'deploy', port: '2222',
       userKnownHostsFile: `${require('os').homedir()}/.ssh/known_hosts`,
+      identityFile: '~/.ssh/id_ed25519',
     });
   });
 
