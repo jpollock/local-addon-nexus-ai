@@ -1,4 +1,5 @@
 import { ExternalContentIndexService } from '../../../src/main/events/ExternalContentIndexService';
+import { vectorSiteId } from '../../../src/main/vector-store/vectorSiteId';
 
 function makeTransport(posts: any[]) {
   return {
@@ -53,10 +54,24 @@ describe('ExternalContentIndexService.indexOne', () => {
     expect(deps._upsertContentCalls).toHaveLength(2);
     expect(deps._upsertContentCalls[0].site_id).toBe('ssh:myhost');
     expect(deps._upsertCalls).toHaveLength(1);
-    expect(deps._upsertCalls[0].siteId).toBe('ssh_myhost'); // vectorSiteId translation
+    expect(deps._upsertCalls[0].siteId).toBe(vectorSiteId('ssh:myhost')); // vectorSiteId translation
     expect(deps._registryUpdates[0].siteId).toBe('ssh:myhost'); // real id, not translated
     expect(deps._registryUpdates[0].partial.state).toBe('indexed');
     expect(deps._registryUpdates[0].partial.documentCount).toBe(2);
+  });
+
+  it('completes without throwing for a real two-segment multi-site external id', async () => {
+    const deps = makeDeps();
+    const service = new ExternalContentIndexService(deps as any);
+    const transport = makeTransport([post(1), post(2)]);
+    const result = await service.indexOne(transport, 'ssh:myhost/mysite', 'myhost/mysite');
+
+    expect(result.documentCount).toBe(2);
+    expect(deps._registryUpdates[0].partial.state).toBe('indexed');
+    expect(deps._upsertCalls).toHaveLength(1);
+    const upsertMock = deps.vectorStore.upsert as jest.Mock;
+    expect(/^[a-zA-Z0-9_-]+$/.test(upsertMock.mock.calls[0][0])).toBe(true);
+    expect(upsertMock.mock.calls[0][0]).toBe(vectorSiteId('ssh:myhost/mysite'));
   });
 
   it('writes source: external in every vector document\'s metadata, never wpe', async () => {

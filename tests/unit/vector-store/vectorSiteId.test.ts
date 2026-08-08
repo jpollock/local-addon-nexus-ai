@@ -2,22 +2,39 @@ import { vectorSiteId } from '../../../src/main/vector-store/vectorSiteId';
 
 describe('vectorSiteId', () => {
   it('replaces colons with underscores', () => {
-    expect(vectorSiteId('ssh:hostinger-test')).toBe('ssh_hostinger-test');
+    // Implementation appends a stable 8-hex-char hash suffix unconditionally (F2),
+    // so the sanitized prefix is checked rather than an exact literal match.
+    expect(vectorSiteId('ssh:hostinger-test')).toMatch(/^ssh_hostinger-test_[0-9a-f]{8}$/);
   });
 
-  it('leaves an id with no colon unchanged', () => {
-    expect(vectorSiteId('wpe-abc123')).toBe('wpe-abc123');
-    expect(vectorSiteId('mmWgjXGRS')).toBe('mmWgjXGRS');
+  it('leaves the sanitized prefix of an id with no invalid character unchanged', () => {
+    expect(vectorSiteId('wpe-abc123')).toMatch(/^wpe-abc123_[0-9a-f]{8}$/);
+    expect(vectorSiteId('mmWgjXGRS')).toMatch(/^mmWgjXGRS_[0-9a-f]{8}$/);
   });
 
-  it('the translated id satisfies the real validation regex', () => {
-    // Import the actual regex source rather than copying it, so a future change
-    // to SqliteVecStore's rule is caught here too.
-    const translated = vectorSiteId('ssh:my-host_1');
+  it('translates a multi-site external id (alias/site) into a valid table name', () => {
+    const translated = vectorSiteId('ssh:hostinger-test/site-a');
     expect(/^[a-zA-Z0-9_-]+$/.test(translated)).toBe(true);
   });
 
-  it('handles multiple colons (defensive — aliases should never contain one, but do not crash if they do)', () => {
-    expect(vectorSiteId('ssh:a:b')).toBe('ssh_a_b');
+  it('the translated id satisfies the real validation regex for every case above', () => {
+    for (const id of ['ssh:my-host_1', 'ssh:hostinger-test/site-a', 'ssh:dotted.alias/site', 'wpe-abc123']) {
+      expect(/^[a-zA-Z0-9_-]+$/.test(vectorSiteId(id))).toBe(true);
+    }
+  });
+
+  it('does not collide two different ids that share the same character-class-replaced prefix', () => {
+    const a = vectorSiteId('ssh:a/b-c');
+    const b = vectorSiteId('ssh:a-b/c');
+    expect(a).not.toBe(b);
+  });
+
+  it('is deterministic — the same id always translates to the same value', () => {
+    expect(vectorSiteId('ssh:hostinger-test/site-a')).toBe(vectorSiteId('ssh:hostinger-test/site-a'));
+  });
+
+  it('handles multiple invalid characters (defensive — real ids should not have more than one slash)', () => {
+    const translated = vectorSiteId('ssh:a/b/c');
+    expect(/^[a-zA-Z0-9_-]+$/.test(translated)).toBe(true);
   });
 });

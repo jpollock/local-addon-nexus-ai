@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { SqliteVecStore } from '../../../src/main/vector-store/SqliteVecStore';
 import type { VectorDocument } from '../../../src/common/types';
 import { VECTOR_DIMENSIONS } from '../../../src/common/constants';
+import { vectorSiteId } from '../../../src/main/vector-store/vectorSiteId';
 
 function tmpDb(): string {
   return path.join(os.tmpdir(), `test-vec-${process.hrtime.bigint()}.db`);
@@ -61,6 +62,11 @@ describe('upsert + getSiteStats', () => {
 
   it('inserts a document without error', async () => {
     await expect(store.upsert('site-1', [makeDoc()])).resolves.not.toThrow();
+  });
+
+  it('accepts every id vectorSiteId can produce, including a multi-site external id', async () => {
+    const siteId = vectorSiteId('ssh:hostinger-test/site-a');
+    await expect(store.upsert(siteId, [])).resolves.not.toThrow();
   });
 
   it('is idempotent — same id twice yields count of 1', async () => {
