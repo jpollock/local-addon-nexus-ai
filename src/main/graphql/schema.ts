@@ -2186,6 +2186,13 @@ export const typeDefs = gql`
     report: NexusHostProbeReport
   }
 
+  "Result of verifying one site immediately after registering it. A verification failure does NOT roll back the registration -- the site row stays saved, just reported as unusable."
+  type NexusSiteVerificationResult {
+    site: String!
+    verified: Boolean!
+    error: String
+  }
+
   type NexusHostAddResult {
     success: Boolean!
     error: String
@@ -2193,6 +2200,8 @@ export const typeDefs = gql`
     registered: Boolean!
     "The environment actually used. Omitting the argument leaves an already-registered host's label alone, so this is not always what the caller passed."
     environment: String
+    "Per-site 'wp core version' verification run immediately after the site row was written. Empty when no site was registered by this call (e.g. multiple-wordpress, probe failure, validation error)."
+    siteVerification: [NexusSiteVerificationResult!]!
   }
 
   type NexusHostListResult {

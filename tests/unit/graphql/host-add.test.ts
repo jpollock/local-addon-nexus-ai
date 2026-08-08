@@ -17,6 +17,19 @@ jest.mock('../../../src/main/external/probeExternalHost', () => ({
   probeExternalHost: (...args: any[]) => probeMock(...args),
 }));
 
+// nexusHostAdd's post-registration verification step reuses the same
+// exec-based SSH primitive probeExternalHost itself uses (defaultSshExec),
+// via buildExternalSshArgs/buildExternalWpCliCommand -- so it is mocked here
+// the same way, independently of the probe mock above.
+const verifyExecMock = jest.fn();
+jest.mock('../../../src/main/external/sshExec', () => {
+  const actual = jest.requireActual('../../../src/main/external/sshExec');
+  return {
+    ...actual,
+    defaultSshExec: (...args: any[]) => verifyExecMock(...args),
+  };
+});
+
 import { createResolvers } from '../../../src/main/graphql/resolvers';
 import { STORAGE_KEYS } from '../../../src/common/constants';
 
@@ -100,7 +113,13 @@ function ctx() {
 
 const profiles = (store: Record<string, any>) => store[STORAGE_KEYS.EXTERNAL_SITE_PROFILES] ?? {};
 
-beforeEach(() => probeMock.mockReset());
+beforeEach(() => {
+  probeMock.mockReset();
+  verifyExecMock.mockReset();
+  // Default: verification succeeds, so existing tests that never set up
+  // verifyExecMock explicitly still see a healthy `wp core version` echo.
+  verifyExecMock.mockResolvedValue({ code: 0, stdout: '6.8.1', stderr: '', spawnError: undefined });
+});
 
 describe('nexusHostAdd — connection persists even when multiple sites are found', () => {
   it('a single discovered root registers one site with a domain-derived slug', async () => {
@@ -284,5 +303,66 @@ describe('nexusHostAdd — per-site environment fallback (C1)', () => {
     expect(result.registered).toBe(true);
     expect(result.environment).toBe('production');
     expect(c.upserted[0].environment).toBe('production');
+  });
+});
+
+describe('nexusHostAdd — post-registration verification (Task 5)', () => {
+  it('verifies each registered site after writing it, reporting per-site pass/fail', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'verify-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({ code: 0, stdout: '6.8.1', stderr: '', spawnError: undefined });
+    const first = await m.nexusHostAdd(
+      null, { alias: 'verify-host', path: '/home/u1/site-a', environment: 'production', site: 'site-a' },
+    );
+
+    expect(first.registered).toBe(true);
+    expect(first.siteVerification).toEqual([
+      { site: 'site-a', verified: true, error: null },
+    ]);
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'verify-host', wpPath: '/home/u1/site-b', siteUrl: 'https://site-b.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({
+      code: 255, stdout: '', stderr: 'wp: command not found', spawnError: undefined,
+    });
+    const second = await m.nexusHostAdd(
+      null, { alias: 'verify-host', path: '/home/u1/site-b', environment: 'production', site: 'site-b' },
+    );
+
+    expect(second.registered).toBe(true);
+    expect(second.siteVerification).toEqual([
+      { site: 'site-b', verified: false, error: expect.stringContaining('wp: command not found') },
+    ]);
+  });
+
+  it('still registers a site that fails verification, but reports it as unusable rather than dropping it silently', async () => {
+    const c = ctx();
+    const m = (createResolvers(c.context).Mutation as any);
+
+    probeMock.mockResolvedValueOnce(okReport({
+      alias: 'flaky-host', wpPath: '/home/u1/site-a', siteUrl: 'https://site-a.example.com',
+    }));
+    verifyExecMock.mockResolvedValueOnce({
+      code: 1, stdout: '', stderr: 'Error: This does not seem to be a WordPress installation.', spawnError: undefined,
+    });
+
+    const result = await m.nexusHostAdd(
+      null, { alias: 'flaky-host', path: '/home/u1/site-a', environment: 'production', site: 'site-a' },
+    );
+
+    // The write is not rolled back -- the site row still exists.
+    expect(result.registered).toBe(true);
+    expect(c.upserted).toHaveLength(1);
+    expect(c.upserted[0]).toEqual(expect.objectContaining({ id: 'ssh:flaky-host/site-a' }));
+
+    // But it is reported as unusable, not silently counted as connected.
+    expect(result.siteVerification).toEqual([
+      { site: 'site-a', verified: false, error: expect.stringContaining('WordPress installation') },
+    ]);
   });
 });

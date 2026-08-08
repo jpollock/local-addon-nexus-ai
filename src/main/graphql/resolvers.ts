@@ -33,6 +33,8 @@ import pLimit from 'p-limit';
 import { withQueue, parseTarget } from './resolver-utils';
 import { probeExternalHost } from '../external/probeExternalHost';
 import type { ProbeReport } from '../external/probeExternalHost';
+import { defaultSshExec } from '../external/sshExec';
+import { buildExternalSshArgs, buildExternalWpCliCommand, EXTERNAL_SSH_TIMEOUT_MS } from '../transport/ssh-args';
 import { resolveTargetArgs } from '../transport/resolveTargetArgs';
 import {
   externalSiteId, listExternalProfiles,
@@ -163,6 +165,38 @@ function toHostReport(r: ProbeReport) {
     candidates: r.candidates ?? null,
     failure: r.failure ?? null,
   };
+}
+
+/**
+ * Runs `wp core version` against a just-registered external site to confirm
+ * it is actually usable, rather than trusting the probe's earlier read of the
+ * discovered path blindly. Mirrors probeExternalHost's own exec pattern
+ * (buildExternalSshArgs/buildExternalWpCliCommand over defaultSshExec) so
+ * this resolver has exactly one way of reaching a remote host, not two.
+ *
+ * Never throws — a verification failure is reported in the returned object,
+ * not propagated, so it cannot turn a successful registration into an error
+ * result.
+ */
+async function verifyExternalSite(
+  alias: string,
+  siteSlug: string,
+  report: Pick<ProbeReport, 'wpPath' | 'wpCliPath'>,
+): Promise<{ site: string; verified: boolean; error: string | null }> {
+  try {
+    const cmd = buildExternalWpCliCommand(['core', 'version'], report.wpPath, report.wpCliPath);
+    const result = await defaultSshExec(
+      buildExternalSshArgs(alias, cmd, { connectTimeoutSec: 10 }),
+      EXTERNAL_SSH_TIMEOUT_MS,
+    );
+    if (result.code === 0 && result.stdout.trim().length > 0) {
+      return { site: siteSlug, verified: true, error: null };
+    }
+    const detail = (result.stderr || result.spawnError || 'wp core version failed').trim();
+    return { site: siteSlug, verified: false, error: detail };
+  } catch (e: any) {
+    return { site: siteSlug, verified: false, error: e?.message ?? String(e) };
+  }
 }
 
 /**
@@ -5482,6 +5516,7 @@ export function createResolvers(context: ResolverContext) {
               && !['production', 'staging', 'development'].includes(environment)) {
               return {
                 success: false, registered: false, report: null, environment: null,
+                siteVerification: [],
                 error: `Invalid environment '${environment}'. Expected production, staging or development.`,
               };
             }
@@ -5489,6 +5524,7 @@ export function createResolvers(context: ResolverContext) {
             if (!storage) {
               return {
                 success: false, registered: false, report: null, environment: null,
+                siteVerification: [],
                 error: 'Storage not available',
               };
             }
@@ -5516,7 +5552,7 @@ export function createResolvers(context: ResolverContext) {
               }
               return {
                 success: true, registered: false, report: toHostReport(report),
-                environment: requestedEnv, error: null,
+                environment: requestedEnv, siteVerification: [], error: null,
               };
             }
 
@@ -5565,13 +5601,25 @@ export function createResolvers(context: ResolverContext) {
               last_sync_at: now,
             });
 
+            // Verify the site we just wrote — the selection was only a
+            // probe's read of the discovered path; it must not be trusted
+            // blindly as "connected" without re-confirming WP-CLI can still
+            // reach it. A verification failure does NOT roll back the write
+            // above: the site stays registered, and is instead reported as
+            // unusable in the result. Reuses the same exec-based SSH
+            // primitive probeExternalHost itself uses
+            // (buildExternalSshArgs/buildExternalWpCliCommand over
+            // defaultSshExec), rather than a second SSH invocation pattern.
+            const siteVerification = [await verifyExternalSite(alias, siteSlug, report)];
+
             return {
               success: true, registered: true, report: toHostReport(report),
-              environment: validEnv, error: null,
+              environment: validEnv, siteVerification, error: null,
             };
           } catch (e: any) {
             return {
               success: false, registered: false, report: null, environment: null,
+              siteVerification: [],
               error: e?.message ?? String(e),
             };
           }
