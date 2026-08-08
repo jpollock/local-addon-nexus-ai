@@ -5671,116 +5671,163 @@ export function createResolvers(context: ResolverContext) {
         });
       },
 
-      // This is read-only from the remote host's perspective — every WP-CLI
-      // command collectExternalHostData issues is a read. The only mutation
-      // is the local graph write, which writeExternalHostData already owns.
-      // Not audited, same reasoning as nexusWpPluginList: nothing here can
-      // mutate the remote host.
+      // Opens SSH sessions to third-party production hosts, like every other
+      // SSH-spawning resolver in this file, so it is queued (withQueue) and
+      // audited (auditDirectOperation) the same way nexusHostProbe/nexusHostAdd
+      // are — the remote commands collectExternalHostData issues are reads,
+      // but the local graph write via writeExternalHostData is a mutation
+      // through services.graphService directly, which is exactly the class of
+      // call auditDirectOperation exists for.
       //
       // A connection can have N sites under it (Task 3's findExternalSites),
       // so this iterates every active site rather than the single row that
       // matched under the old one-row-per-alias model. `alias` accepts a bare
       // alias (every site) or `alias/site` (scoped to one).
       nexusHostRefresh: async (_parent: ResolverParent, { alias: aliasArg }: { alias: string }) => {
-        try {
-          const [alias, site] = aliasArg.includes('/') ? aliasArg.split('/', 2) : [aliasArg, undefined];
-          const db = services.graphService?.getDb?.();
-          const rows = findExternalSites(db, alias, site, 'id, name, environment');
-          if (rows.length === 0) {
-            return {
-              success: false,
-              error: site
+        return withQueue(async () => {
+          try {
+            const [alias, site] = aliasArg.includes('/') ? aliasArg.split('/', 2) : [aliasArg, undefined];
+            const db = services.graphService?.getDb?.();
+            const rows = findExternalSites(db, alias, site, 'id, name, environment');
+            if (rows.length === 0) {
+              const error = site
                 ? `No site "${site}" registered on connection "${alias}".`
-                : `"${alias}" is not a registered external host, or has no registered sites. Run \`nexus host add ${alias}\` first.`,
-              results: [],
-            };
-          }
-
-          const results = await Promise.all(rows.map(async (row: any) => {
-            try {
-              const target = `ssh:${alias}/${row.name}@${row.environment ?? 'production'}`;
-              const transport = await resolveTransport({ ssh_target: target }, services, 'wpcli_read');
-              if ('content' in transport) {
-                const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Could not reach host';
-                return { site: row.name, success: false, error: msg, wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null };
-              }
-              const data = await collectExternalHostData(transport as any, console);
-              await writeExternalHostData(services.graphService as any, row.id, row.name, data, Date.now(), console);
-              return {
-                site: row.name, success: true, error: null,
-                wpVersion: data.wpVersion ?? null, phpVersion: data.phpVersion ?? null,
-                pluginCount: data.plugins?.length ?? null, themeCount: data.themes?.length ?? null,
-              };
-            } catch (e: any) {
-              return { site: row.name, success: false, error: e?.message ?? String(e), wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null };
+                : `"${alias}" is not a registered external host, or has no registered sites. Run \`nexus host add ${alias}\` first.`;
+              auditDirectOperation(services, {
+                operation: 'external.host.refresh',
+                target: aliasArg,
+                parameters: { alias, site },
+                outcome: 'failure',
+                error,
+              });
+              return { success: false, error, results: [] };
             }
-          }));
 
-          return { success: true, error: null, results };
-        } catch (e: any) {
-          return { success: false, error: e?.message ?? String(e), results: [] };
-        }
+            const results = await Promise.all(rows.map(async (row: any) => {
+              try {
+                const target = `ssh:${alias}/${row.name}@${row.environment ?? 'production'}`;
+                const transport = await resolveTransport({ ssh_target: target }, services, 'wpcli_read');
+                if ('content' in transport) {
+                  const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Could not reach host';
+                  return { site: row.name, success: false, error: msg, wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null };
+                }
+                const data = await collectExternalHostData(transport as any, console);
+                await writeExternalHostData(services.graphService as any, row.id, row.name, data, Date.now(), console);
+                return {
+                  site: row.name, success: true, error: null,
+                  wpVersion: data.wpVersion ?? null, phpVersion: data.phpVersion ?? null,
+                  pluginCount: data.plugins?.length ?? null, themeCount: data.themes?.length ?? null,
+                };
+              } catch (e: any) {
+                return { site: row.name, success: false, error: e?.message ?? String(e), wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null };
+              }
+            }));
+
+            auditDirectOperation(services, {
+              operation: 'external.host.refresh',
+              target: aliasArg,
+              parameters: { alias, site, siteCount: rows.length },
+              outcome: 'success',
+            });
+
+            return { success: true, error: null, results };
+          } catch (e: any) {
+            const error = e?.message ?? String(e);
+            auditDirectOperation(services, {
+              operation: 'external.host.refresh',
+              target: aliasArg,
+              parameters: { alias: aliasArg },
+              outcome: 'failure',
+              error,
+            });
+            return { success: false, error, results: [] };
+          }
+        });
       },
 
-      // Same read-only-from-the-remote-host reasoning as nexusHostRefresh above:
-      // `wp post list` is the only remote command this path issues. The only
-      // mutation is local (graph `content` table, vector store, IndexRegistry),
-      // so this is not audited, matching nexusHostRefresh and nexusWpPluginList.
+      // Opens SSH sessions to third-party production hosts, like every other
+      // SSH-spawning resolver in this file, so it is queued (withQueue) and
+      // audited (auditDirectOperation) the same way nexusHostProbe/nexusHostAdd
+      // are — `wp post list` on the remote side is a read, but the local graph
+      // writes (`content` table, vector store, IndexRegistry, the
+      // content_indexed_at stamp) go through services.graphService directly,
+      // which is exactly the class of call auditDirectOperation exists for.
       //
       // Same connection-wide iteration as nexusHostRefresh — see its comment.
       nexusHostIndex: async (_parent: ResolverParent, { alias: aliasArg }: { alias: string }) => {
-        try {
-          const [alias, site] = aliasArg.includes('/') ? aliasArg.split('/', 2) : [aliasArg, undefined];
-          const db = services.graphService?.getDb?.();
-          const rows = findExternalSites(db, alias, site, 'id, name, environment');
-          if (rows.length === 0) {
-            return {
-              success: false,
-              error: site
+        return withQueue(async () => {
+          try {
+            const [alias, site] = aliasArg.includes('/') ? aliasArg.split('/', 2) : [aliasArg, undefined];
+            const db = services.graphService?.getDb?.();
+            const rows = findExternalSites(db, alias, site, 'id, name, environment');
+            if (rows.length === 0) {
+              const error = site
                 ? `No site "${site}" registered on connection "${alias}".`
-                : `"${alias}" is not a registered external host, or has no registered sites. Run \`nexus host add ${alias}\` first.`,
-              results: [],
-            };
-          }
-
-          const results = await Promise.all(rows.map(async (row: any) => {
-            try {
-              const target = `ssh:${alias}/${row.name}@${row.environment ?? 'production'}`;
-              const transport = await resolveTransport({ ssh_target: target }, services, 'wpcli_read');
-              if (transport && typeof transport === 'object' && 'content' in transport) {
-                const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Could not reach host';
-                return { site: row.name, success: false, error: msg, documentCount: null };
-              }
-
-              const indexService = new ExternalContentIndexService({
-                graphService: services.graphService as any,
-                embeddingService: services.embeddingService as any,
-                vectorStore: services.vectorStore as any,
-                indexRegistry: services.indexRegistry as any,
-                logger: console,
+                : `"${alias}" is not a registered external host, or has no registered sites. Run \`nexus host add ${alias}\` first.`;
+              auditDirectOperation(services, {
+                operation: 'external.host.index',
+                target: aliasArg,
+                parameters: { alias, site },
+                outcome: 'failure',
+                error,
               });
-              const result = await indexService.indexOne(transport as any, row.id, row.name);
-
-              // Stamp the same staleness column the scheduler reads, so a host
-              // indexed by hand is not redundantly re-indexed on the next cycle.
-              // The scheduler may never have run in this process (it is opt-in),
-              // so the column is ensured here rather than assumed.
-              try {
-                if (ensureContentIndexedAtColumn(db, console)) {
-                  db!.prepare('UPDATE sites SET content_indexed_at = ? WHERE id = ?').run(Date.now(), row.id);
-                }
-              } catch { /* best-effort staleness stamp, matches the scheduler's tolerance */ }
-
-              return { site: row.name, success: true, error: null, documentCount: result.documentCount };
-            } catch (e: any) {
-              return { site: row.name, success: false, error: e?.message ?? String(e), documentCount: null };
+              return { success: false, error, results: [] };
             }
-          }));
 
-          return { success: true, error: null, results };
-        } catch (e: any) {
-          return { success: false, error: e?.message ?? String(e), results: [] };
-        }
+            const results = await Promise.all(rows.map(async (row: any) => {
+              try {
+                const target = `ssh:${alias}/${row.name}@${row.environment ?? 'production'}`;
+                const transport = await resolveTransport({ ssh_target: target }, services, 'wpcli_read');
+                if (transport && typeof transport === 'object' && 'content' in transport) {
+                  const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Could not reach host';
+                  return { site: row.name, success: false, error: msg, documentCount: null };
+                }
+
+                const indexService = new ExternalContentIndexService({
+                  graphService: services.graphService as any,
+                  embeddingService: services.embeddingService as any,
+                  vectorStore: services.vectorStore as any,
+                  indexRegistry: services.indexRegistry as any,
+                  logger: console,
+                });
+                const result = await indexService.indexOne(transport as any, row.id, row.name);
+
+                // Stamp the same staleness column the scheduler reads, so a host
+                // indexed by hand is not redundantly re-indexed on the next cycle.
+                // The scheduler may never have run in this process (it is opt-in),
+                // so the column is ensured here rather than assumed.
+                try {
+                  if (ensureContentIndexedAtColumn(db, console)) {
+                    db!.prepare('UPDATE sites SET content_indexed_at = ? WHERE id = ?').run(Date.now(), row.id);
+                  }
+                } catch { /* best-effort staleness stamp, matches the scheduler's tolerance */ }
+
+                return { site: row.name, success: true, error: null, documentCount: result.documentCount };
+              } catch (e: any) {
+                return { site: row.name, success: false, error: e?.message ?? String(e), documentCount: null };
+              }
+            }));
+
+            auditDirectOperation(services, {
+              operation: 'external.host.index',
+              target: aliasArg,
+              parameters: { alias, site, siteCount: rows.length },
+              outcome: 'success',
+            });
+
+            return { success: true, error: null, results };
+          } catch (e: any) {
+            const error = e?.message ?? String(e);
+            auditDirectOperation(services, {
+              operation: 'external.host.index',
+              target: aliasArg,
+              parameters: { alias: aliasArg },
+              outcome: 'failure',
+              error,
+            });
+            return { success: false, error, results: [] };
+          }
+        });
       },
     },
 

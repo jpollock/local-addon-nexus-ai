@@ -41,7 +41,7 @@ describe('nexusHostIndex', () => {
     }
   });
 
-  function ctx() {
+  function ctx(overrides: { operationAuditLog?: { log: jest.Mock } } = {}) {
     return {
       services: {
         graphService,
@@ -53,6 +53,7 @@ describe('nexusHostIndex', () => {
           getSite: jest.fn().mockReturnValue(undefined),
           getSites: jest.fn().mockReturnValue({}),
         },
+        ...overrides,
       },
       registry: {},
     } as any;
@@ -253,5 +254,72 @@ describe('nexusHostIndex', () => {
       expect(result.error).toMatch(/no registered sites/i);
       expect(result.results).toEqual([]);
     });
+  });
+
+  it('audits the operation on both success and failure', async () => {
+    const auditMock = jest.fn();
+    const c = ctx({ operationAuditLog: { log: auditMock } });
+
+    // Failure path: alias is not a registered external host.
+    await (createResolvers(c).Mutation as any).nexusHostIndex(null, { alias: 'nope' });
+    expect(auditMock).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'external.host.index',
+      outcome: 'failure',
+    }));
+    auditMock.mockClear();
+
+    // Success path.
+    await graphService.upsertSite({
+      id: 'ssh:myhost/myhost',
+      name: 'myhost',
+      source: 'external',
+      host: 'external',
+      domain: 'myhost',
+      account_id: 'myhost',
+      environment: 'production',
+      is_active: true,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    } as any);
+    mockResolveTransport.mockResolvedValue({ siteRef: { kind: 'external', alias: 'myhost' } });
+    mockIndexOne.mockResolvedValue({ documentCount: 7 });
+
+    await (createResolvers(c).Mutation as any).nexusHostIndex(null, { alias: 'myhost' });
+    expect(auditMock).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'external.host.index',
+      outcome: 'success',
+    }));
+  });
+
+  it('serializes concurrent calls through the same queue every other host resolver uses', async () => {
+    // withQueue is imported from resolver-utils and used by every sibling host
+    // resolver (nexusHostProbe, nexusHostAdd, nexusHostRemove); this resolver's
+    // body must run inside it too. We don't re-verify withQueue's own
+    // serialization semantics here (covered elsewhere) -- just that calling
+    // the resolver twice concurrently still resolves both without throwing,
+    // exercising the withQueue wrapping added around the resolver body.
+    mockResolveTransport.mockResolvedValue({ siteRef: { kind: 'external', alias: 'myhost' } });
+    mockIndexOne.mockResolvedValue({ documentCount: 3 });
+    await graphService.upsertSite({
+      id: 'ssh:myhost/myhost',
+      name: 'myhost',
+      source: 'external',
+      host: 'external',
+      domain: 'myhost',
+      account_id: 'myhost',
+      environment: 'production',
+      is_active: true,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    } as any);
+
+    const c = ctx();
+    const resolver = (createResolvers(c).Mutation as any).nexusHostIndex;
+    const [r1, r2] = await Promise.all([
+      resolver(null, { alias: 'myhost' }),
+      resolver(null, { alias: 'myhost' }),
+    ]);
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
   });
 });
