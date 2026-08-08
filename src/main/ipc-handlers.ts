@@ -97,7 +97,8 @@ import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 import { vectorSiteId } from './vector-store/vectorSiteId';
 import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from './external/hostKeyTrust';
 import { resolveSshConfig, defaultSshExec } from './external/sshExec';
-import { detectCollision, writeHostBlock, generateHostKey } from './external/sshConfigWriter';
+import { detectCollision, writeHostBlock, generateHostKey, previewHostBlock } from './external/sshConfigWriter';
+import { listSshConfigHosts } from './external/sshConfigParser';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -1149,6 +1150,30 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     try {
       const key = generateHostKey(aliasSlug);
       return { success: true, error: null, privateKeyPath: key.privateKeyPath, publicKeyLine: key.publicKeyLine };
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? String(e) };
+    }
+  });
+
+  // Renderer-only. See constants.ts's comment on these channels for why.
+  safeHandle(IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS, async () => {
+    try {
+      const db = graphService.getDb();
+      const hosts = listSshConfigHosts(db);
+      return { success: true, hosts };
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? String(e) };
+    }
+  });
+
+  // Renderer-only. See constants.ts's comment on these channels for why.
+  safeHandle(IPC_CHANNELS.PREVIEW_SSH_HOST_ENTRY, async (_event: unknown, input: {
+    alias: string; hostname: string; user: string; port: string; identityFile: string;
+  }) => {
+    try {
+      const block = previewHostBlock(input);
+      const collision = detectCollision(input.alias);
+      return { success: true, block, collision };
     } catch (e: any) {
       return { success: false, error: e?.message ?? String(e) };
     }

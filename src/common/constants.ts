@@ -206,6 +206,10 @@ export const IPC_CHANNELS = {
   // matching GraphQL mutation or CLI command for either of these.
   WRITE_SSH_HOST_ENTRY: `${ADDON_PREFIX}:write-ssh-host-entry`,
   GENERATE_SSH_KEY: `${ADDON_PREFIX}:generate-ssh-key`,
+  // Read-only. Same IPC-only precedent as WRITE_SSH_HOST_ENTRY/GENERATE_SSH_KEY
+  // for consistency, even though read-only data is lower-risk over GraphQL.
+  LIST_SSH_CONFIG_HOSTS: `${ADDON_PREFIX}:list-ssh-config-hosts`,
+  PREVIEW_SSH_HOST_ENTRY: `${ADDON_PREFIX}:preview-ssh-host-entry`,
 
   // UI Navigation
   NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,
