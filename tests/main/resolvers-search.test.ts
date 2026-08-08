@@ -1,4 +1,5 @@
 import { createResolvers } from '../../src/main/graphql/resolvers';
+import { vectorSiteId } from '../../src/main/vector-store/vectorSiteId';
 
 function makeServices(overrides: any = {}) {
   const embed = jest.fn().mockResolvedValue(new Float32Array([0.1, 0.2, 0.3]));
@@ -6,11 +7,15 @@ function makeServices(overrides: any = {}) {
     { id: 'wp_site-a_10', title: 'About Us', content: 'Long form about page content body', postType: 'page', postId: 10, score: 0.87, metadata: '' },
     { id: 'wp_site-a_11', title: 'Contact',  content: 'Contact form and hours of operation',   postType: 'page', postId: 11, score: 0.71, metadata: '' },
   ]);
+  // The real vector store echoes back whatever (translated) site id it was
+  // given as the map key, so the mock must mirror that (vectorSiteId is
+  // deterministic — see src/main/vector-store/vectorSiteId.ts) rather than
+  // hardcoding the untranslated 'site-a'/'site-b' form.
   const searchAcrossSites = jest.fn().mockResolvedValue(new Map([
-    ['site-a', [
+    [vectorSiteId('site-a'), [
       { id: 'wp_site-a_10', title: 'About Us', content: 'Long form about page content body', postType: 'page', postId: 10, score: 0.87, metadata: '' },
     ]],
-    ['site-b', [
+    [vectorSiteId('site-b'), [
       { id: 'wp_site-b_5', title: 'Blog Intro', content: 'Welcome to the blog home page', postType: 'post', postId: 5, score: 0.64, metadata: '' },
     ]],
   ]));
@@ -54,7 +59,11 @@ describe('nexusFleetSearch resolver', () => {
     expect(services.vectorStore.searchAcrossSites).toHaveBeenCalledTimes(1);
     const [siteIds, vector, options, concurrency] = services.vectorStore.searchAcrossSites.mock.calls[0];
     expect(Array.isArray(siteIds)).toBe(true);
-    expect(siteIds).toEqual(expect.arrayContaining(['site-a', 'site-b']));
+    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
+    expect(siteIds).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^site-a_[0-9a-f]{8}$/),
+      expect.stringMatching(/^site-b_[0-9a-f]{8}$/),
+    ]));
     expect(vector).toBeInstanceOf(Float32Array);
     expect(options).toMatchObject({ queryText: 'about page' });
     expect(typeof concurrency).toBe('number');
@@ -110,7 +119,8 @@ describe('nexusContentSearch resolver', () => {
     expect(services.embeddingService.embed).toHaveBeenCalledWith('contact');
     expect(services.vectorStore.search).toHaveBeenCalledTimes(1);
     const [siteId, vector, options] = services.vectorStore.search.mock.calls[0];
-    expect(siteId).toBe('site-a');
+    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
+    expect(siteId).toMatch(/^site-a_[0-9a-f]{8}$/);
     expect(vector).toBeInstanceOf(Float32Array);
     expect(options).toMatchObject({ limit: 5 });
 
@@ -134,7 +144,8 @@ describe('nexusContentSearch resolver', () => {
 
     const [firstArg] = services.vectorStore.search.mock.calls[0];
     expect(typeof firstArg).toBe('string');
-    expect(firstArg).toBe('site-a');
+    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
+    expect(firstArg).toMatch(/^site-a_[0-9a-f]{8}$/);
   });
 
   it('returns site-not-found error for unknown target', async () => {

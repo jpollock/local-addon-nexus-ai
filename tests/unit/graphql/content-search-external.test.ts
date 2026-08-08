@@ -69,7 +69,12 @@ describe('nexusContentSearch — remote targets', () => {
     });
 
     expect(r.success).toBe(true);
-    expect(search).toHaveBeenCalledWith('ssh_myhost', expect.any(Array), expect.any(Object));
+    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
+    expect(search).toHaveBeenCalledWith(
+      expect.stringMatching(/^ssh_myhost_[0-9a-f]{8}$/),
+      expect.any(Array),
+      expect.any(Object),
+    );
   });
 
   it('resolves a wpe: target and leaves its (colon-free) id untouched', async () => {
@@ -81,7 +86,12 @@ describe('nexusContentSearch — remote targets', () => {
     });
 
     expect(r.success).toBe(true);
-    expect(search).toHaveBeenCalledWith('wpe-1234', expect.any(Array), expect.any(Object));
+    // vectorSiteId() appends a stable hash suffix at the vector-store boundary.
+    expect(search).toHaveBeenCalledWith(
+      expect.stringMatching(/^wpe-1234_[0-9a-f]{8}$/),
+      expect.any(Array),
+      expect.any(Object),
+    );
   });
 
   it('declines a name that matches more than one source rather than guessing', async () => {

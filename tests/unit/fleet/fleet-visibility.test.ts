@@ -173,7 +173,7 @@ describe('fleet queries include external sites', () => {
     // Verify the external site ID was included in the search
     const searchCall = vectorStore.searchAcrossSites.mock.calls[0];
     const siteIds = searchCall[0];
-    expect(siteIds).toContain('ssh_ext-host');
+    expect(siteIds.some((id: string) => /^ssh_ext-host_[0-9a-f]{8}$/.test(id))).toBe(true);
   });
 
   it('nexusSitesGet handles explicit ssh: targets', async () => {
@@ -213,7 +213,7 @@ describe('fleet queries include external sites', () => {
     expect(r.success).toBe(true);
     const searchCall = vectorStore.searchAcrossSites.mock.calls[0];
     const siteIds = searchCall[0];
-    expect(siteIds).toContain('ssh_ext-host');
+    expect(siteIds.some((id: string) => /^ssh_ext-host_[0-9a-f]{8}$/.test(id))).toBe(true);
   });
 
   it('nexusResolveTarget resolves a registered external alias', async () => {
@@ -349,7 +349,7 @@ describe('fleet queries include external sites', () => {
     // it that way, so the read path must ask for it that way.
     expect('content' in result).toBe(true);
     expect(context.services.vectorStore.search).toHaveBeenCalledWith(
-      'ssh_ext-host',
+      expect.stringMatching(/^ssh_ext-host_[0-9a-f]{8}$/),
       expect.any(Array),
       expect.any(Object)
     );
@@ -377,7 +377,7 @@ describe('fleet queries include external sites', () => {
 
     // Should succeed and call getAllDocuments with the external site ID
     expect('content' in result).toBe(true);
-    expect(context.services.vectorStore.getAllDocuments).toHaveBeenCalledWith('ssh_ext-host');
+    expect(context.services.vectorStore.getAllDocuments).toHaveBeenCalledWith(expect.stringMatching(/^ssh_ext-host_[0-9a-f]{8}$/));
 
     // Verify the result includes the field from the external site
     if ('content' in result) {

@@ -34,7 +34,7 @@ describe('get_all_site_documents — remote resolution', () => {
     const result = await getAllDocumentsHandler.execute({ site: 'hostinger-test' }, services);
 
     expect(result.isError).toBeUndefined();
-    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('ssh_hostinger-test');
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith(expect.stringMatching(/^ssh_hostinger-test_[0-9a-f]{8}$/));
   });
 
   it('still resolves a local site the same as before', async () => {
@@ -43,7 +43,7 @@ describe('get_all_site_documents — remote resolution', () => {
     const result = await getAllDocumentsHandler.execute({ site: 'mysite' }, services);
 
     expect(result.isError).toBeUndefined();
-    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('site-1');
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith(expect.stringMatching(/^site-1_[0-9a-f]{8}$/));
   });
 
   it('declines on a cross-source name collision', async () => {
@@ -76,8 +76,8 @@ describe('get_all_site_documents — qualified target strings', () => {
     const result = await getAllDocumentsHandler.execute({ site: 'ssh:hostinger-test@production' }, services);
 
     expect(result.isError).toBeUndefined();
-    // Same id the bare alias produces — colon translated for the vector store.
-    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('ssh_hostinger-test');
+    // Same id the bare alias produces — colon translated + hash-suffixed for the vector store.
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith(expect.stringMatching(/^ssh_hostinger-test_[0-9a-f]{8}$/));
   });
 
   it('accepts wpe:<account>/<install>@<env> and leaves the colon-free id untouched', async () => {
@@ -86,7 +86,7 @@ describe('get_all_site_documents — qualified target strings', () => {
     const result = await getAllDocumentsHandler.execute({ site: 'wpe:acct/myinstall@production' }, services);
 
     expect(result.isError).toBeUndefined();
-    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith('wpe-abc');
+    expect(services.vectorStore.getAllDocuments).toHaveBeenCalledWith(expect.stringMatching(/^wpe-abc_[0-9a-f]{8}$/));
   });
 
   it('errors cleanly (no throw) on an unknown qualified target', async () => {

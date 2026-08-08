@@ -75,12 +75,16 @@ describe.each([
     expect(searchAcrossSites).toHaveBeenCalled();
     const searchedIds: string[] = searchAcrossSites.mock.calls[0][0];
 
-    // vectorSiteId() rewrites `ssh:alias` -> `ssh_alias` at the vector-store
-    // boundary, so assert against the translated form.
-    expect(searchedIds).toContain('ssh_live-host');
-    expect(searchedIds).toContain('wpe-live');
-    expect(searchedIds).not.toContain('ssh_removed-host');
-    expect(searchedIds).not.toContain('ssh:removed-host');
-    expect(searchedIds).not.toContain('wpe-gone');
+    // vectorSiteId() rewrites `ssh:alias` -> `ssh_alias` and appends a stable
+    // hash suffix at the vector-store boundary, so assert against the
+    // translated-with-suffix form.
+    const matchesAny = (prefix: string) =>
+      searchedIds.some((id) => new RegExp(`^${prefix}_[0-9a-f]{8}$`).test(id));
+
+    expect(matchesAny('ssh_live-host')).toBe(true);
+    expect(matchesAny('wpe-live')).toBe(true);
+    expect(matchesAny('ssh_removed-host')).toBe(false);
+    expect(matchesAny('ssh_removed-host'.replace('_', ':'))).toBe(false);
+    expect(matchesAny('wpe-gone')).toBe(false);
   });
 });
