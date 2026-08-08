@@ -34,6 +34,34 @@ function mockReadlineAnswer(answer: string) {
   }));
 }
 
+/**
+ * jest.doMock registrations are NOT cleared by jest.resetModules() or
+ * jest.restoreAllMocks() -- once one test in this file calls
+ * mockReadlineAnswer(), that mock silently leaks into every LATER test that
+ * doesn't call it again, including tests meant to prove a prompt is never
+ * reached at all (--yes should skip it). Without a reset, such a test can't
+ * tell "the code correctly skipped the prompt" from "the code asked, and a
+ * stale mock from an earlier test answered it" -- proven empirically: deleting
+ * sync.ts's --yes check entirely left all of this file's tests passing.
+ *
+ * Call this at the start of every test (before any test-specific
+ * mockReadlineAnswer() override) so a prompt that shouldn't be reached fails
+ * loudly -- a thrown error inside the Promise executor rejects the answer
+ * promise, which sync.ts's own try/catch converts into a process.exit(1),
+ * which then fails the test's assertions on `mutate` / `exitCodes` -- rather
+ * than silently succeeding via a leftover answer from a different test.
+ */
+function resetReadlineMockToFailLoudly() {
+  jest.doMock('readline', () => ({
+    createInterface: () => ({
+      question: () => {
+        throw new Error('prompt should not have been reached -- --yes should have skipped it');
+      },
+      close: jest.fn(),
+    }),
+  }));
+}
+
 let out: string[];
 let err: string[];
 let exitCodes: number[];
@@ -50,6 +78,10 @@ beforeEach(() => {
     exitCodes.push(code ?? 0);
     throw new ExitError(code ?? 0);
   }) as any);
+  // Default to "fail loudly if reached" before every test. A test that needs
+  // a real answer calls mockReadlineAnswer() itself, AFTER this, to override
+  // it for that one test only.
+  resetReadlineMockToFailLoudly();
 });
 
 afterEach(() => {

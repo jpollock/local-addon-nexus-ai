@@ -118,13 +118,17 @@ syncCommand
 
       // Confirmation for database push
       if (options.db || options.dbOnly) {
+        // The warning is always printed, even with --yes -- a scripted push
+        // against production should never print nothing about the risk just
+        // because nobody was there to be asked. Only the interactive prompt
+        // itself is skipped by --yes.
+        console.log(`\n⚠️  WARNING: This will overwrite the database on ${options.to}`);
+
+        if (wpeTarget.environment === 'production') {
+          console.log('⚠️⚠️⚠️  This is a PRODUCTION environment. Data loss is permanent.');
+        }
+
         if (!options.yes) {
-          console.log(`\n⚠️  WARNING: This will overwrite the database on ${options.to}`);
-
-          if (wpeTarget.environment === 'production') {
-            console.log('⚠️⚠️⚠️  This is a PRODUCTION environment. Data loss is permanent.');
-          }
-
           // Prompt for confirmation
           const readline = require('readline');
           const rl = readline.createInterface({
