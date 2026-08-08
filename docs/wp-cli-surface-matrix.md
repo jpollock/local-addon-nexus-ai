@@ -26,8 +26,10 @@ Confusing these is what produced "~80 commands". There are 22.
 
 ## 2. CLI subcommands — how each is serviced
 
-`MCP-first` means the command tries `callMcpTool` and silently falls back to
-GraphQL if the MCP server is unreachable. `--json` **skips the MCP path by
+`MCP-first` means the command tries `callMcpTool` first. For plugin list,
+plugin update and core version this silently falls back to GraphQL
+(`nexusWpCommand`) if the MCP server is unreachable; `wp health` has no
+fallback and errors out instead — see below. `--json` **skips the MCP path by
 design** (`wp.ts:30` — "MCP returns markdown, not structured data").
 
 | # | Command | MCP tool tried | GraphQL path | Reaches external? |
@@ -52,24 +54,30 @@ design** (`wp.ts:30` — "MCP returns markdown, not structured data").
 | 18 | `wp post delete` | — | `nexusWpCommand` | **yes** |
 | 19 | `wp user-list` | — | `nexusWpCommand` | **yes** |
 | 20 | `wp option-get` | — | `nexusWpCommand` | **yes** |
-| 21 | `wp health` | `wp_site_health` | `nexusWpCommand` | **yes** (MCP-first) |
+| 21 | `wp health` | `wp_site_health` | none — no fallback | **yes** (MCP-only) |
 | 22 | `wp users` | — | `nexusSiteUsers` | n/a — reads the graph DB, not WP-CLI |
 
 **18 of 22 reach an external host** — every command routed through `nexusWpCommand`,
 which now delegates to `resolveTransport`. Four are MCP-first (plugin list, plugin
-update, core version, health), trying the MCP tool and falling back to `nexusWpCommand`
-when MCP is unreachable.
+update, core version, health), trying the MCP tool first. **Only three of them fall
+back to `nexusWpCommand`** when MCP is unreachable (plugin list, plugin update, core
+version). `wp health` does not: there is no WP-CLI/GraphQL command that replicates
+`wp_site_health`, so its `action()` prints "The wp health command requires the MCP
+server to be running" and exits 1 if the MCP call throws or errors — verified against
+`src/cli/commands/wp.ts`.
 
 **`wp health` used to fail with `Site "undefined" not found.`** because `wp_site_health`
 was local-only. It was ported onto `resolveTransport` in this change and now works on
-all three targets.
+all three targets (via `wp_site_health`, not via a GraphQL fallback).
 
 **The 4 that do not work:**
 - `db scan`, `db clean`, `db report` — local-only by design (separate resolvers)
 - `users` — reads the graph DB, not WP-CLI
 
-**Known defect, unrelated to external hosts:** `wp health` prints its error and
-exits **0**. A failing command must not report success to a script.
+**Previously-known defect, now fixed:** `wp health` used to print its error and exit
+**0**. It now exits **1** on a failed or unreachable MCP call
+(`src/cli/commands/wp.ts`'s `health` action checks `isError` / catches and calls
+`process.exit(1)`).
 
 ---
 

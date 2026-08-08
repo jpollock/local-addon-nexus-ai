@@ -37,24 +37,6 @@ export function listExternalProfiles(storage: Storage): ExternalConnectionProfil
 }
 
 /**
- * Why a profile is being written.
- *
- * - `'registration'` — `nexus host add`. The user named this host's
- *   environment on purpose (or accepted the default for a host that has none),
- *   so the incoming label wins. This is the only way to relabel a host.
- * - `'sighting'` — the lazy upsert in `ToolRegistry.call()`. It knows only the
- *   suffix on the target string of whatever command happened to run, and
- *   `nexus wp core version ssh:prod-box@development` is a *permitted read* on
- *   every environment. Letting that write the label would permanently relabel
- *   a production host as development, in the profile and in the fleet UI, as a
- *   side effect of a successful read.
- *
- * The default is `'sighting'` deliberately: a call site that forgets to say
- * gets the conservative behaviour rather than the destructive one.
- */
-export type ProfileWriteSource = 'registration' | 'sighting';
-
-/**
  * Merge a profile in and return the stored result.
  *
  * `firstSeenAt` is preserved from any existing record — it answers "when did
@@ -63,11 +45,20 @@ export type ProfileWriteSource = 'registration' | 'sighting';
  * sighting that never probed for the binary must not erase what registration
  * discovered.
  *
- * `environment` used to live here and be described as this type's write gate.
- * It no longer does — a connection can have multiple sites, each with its own
- * environment, so that field (and the sighting-vs-registration protection it
- * needed) moves to the site level in a later task. This function now merges
- * only connection-scoped fields.
+ * This function is connection-scoped only — it has no `source` /
+ * registration-vs-sighting parameter. `environment` used to live on this
+ * profile and be gated by such a parameter, but a connection can have
+ * multiple sites, each with its own environment, so that field — and the
+ * registration-vs-sighting protection it needs — moved to the site level:
+ * `nexusHostAdd` (registration) computes `environment ?? existingSite?.
+ * environment ?? 'production'` before calling `graphService.upsertSite`, and
+ * `maybeUpsertExternalSite` (the lazy sighting in `ToolRegistry.call()`)
+ * always passes the existing row's `environment` back unchanged. A `source`
+ * parameter used to exist here to express the same idea at the connection
+ * level, but nothing in this function ever read it — it was accepted and
+ * discarded at every one of its three call sites. It has been removed rather
+ * than left as a doc comment describing protection this function does not
+ * provide.
  *
  * The merged profile is returned so a caller can write a matching `sites` row
  * without re-deriving values the merge may have overridden.
@@ -75,7 +66,6 @@ export type ProfileWriteSource = 'registration' | 'sighting';
 export function upsertExternalProfile(
   storage: Storage,
   profile: ExternalConnectionProfile,
-  source: ProfileWriteSource = 'sighting',
 ): ExternalConnectionProfile {
   const all = readAll(storage);
   const existing = all[profile.alias];

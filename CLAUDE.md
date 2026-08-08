@@ -81,7 +81,7 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ## Scheduler Settings — Non-Reactivity
 
-**`HaltedSiteRefreshScheduler` and `WpeRefreshScheduler` read interval settings once at startup**, then become reactive via `onSettingsUpdated` callback (which calls `scheduler.restart(newIntervalMs)`). If you add a new scheduler with a settings-driven interval, wire it into the `onSettingsUpdated` block in `src/main/index.ts:~660`.
+**`HaltedSiteRefreshScheduler` and `WpeRefreshScheduler` read interval settings once at startup**, then become reactive via `onSettingsUpdated` callback (which calls `scheduler.restart(newIntervalMs)`). If you add a new scheduler with a settings-driven interval, wire it into the `onSettingsUpdated` block in `src/main/index.ts:523` (line drifts — grep for `const onSettingsUpdated = ` rather than trusting this number). As of this writing that function restarts/stops **six** schedulers: the opportunistic/local-content scheduler, halted-site refresh, WPE refresh, WPE content-index, external host refresh, and external content-index.
 
 **Default values for WPE sync settings:**
 - `wpeSyncAutoEnabled` — **false** (opt-in). The type comment used to say "default: true" — that was wrong.
@@ -143,10 +143,17 @@ Target syntax: `ssh:<alias>/<site>@<production|staging|development>`.
   (`mostRestrictiveEnvironment`, `mcp/utils/operation-permissions.ts`;
   `development` < `staging` < `production`). Gating on the target alone let a
   host registered `--env production` be written to by addressing it as
-  `ssh:<alias>@development`. For the same reason `upsertExternalProfile`'s
-  **lazy** writes (`source: 'sighting'`, the default) can never change a
-  registered environment — only `nexus host add` (`source: 'registration'`)
-  can. Omitting `--env` means *unspecified*: an existing host keeps its label,
+  `ssh:<alias>@development`. `environment` is a **site-level** field, not a
+  connection-level one (`upsertExternalProfile` in `externalSiteStore.ts` no
+  longer carries it or a `source` parameter at all — a connection can have
+  multiple sites, each with its own label). The actual registration-vs-sighting
+  protection lives at the two write sites: `nexusHostAdd` (registration)
+  computes `environment ?? existingSite?.environment ?? 'production'` before
+  calling `graphService.upsertSite`, so omitting `--env` never downgrades an
+  already-registered site; `maybeUpsertExternalSite` (the lazy sighting in
+  `ToolRegistry.call()`) always passes the existing row's `environment` straight
+  back, so a read can never relabel a site's environment as a side effect.
+  Omitting `--env` means *unspecified*: an existing host keeps its label,
   and only a new one defaults to `production`.
   **A `@staging` suffix on a target no longer loosens the permission gate** —
   it cannot override a host registered as `production`. This is deliberate: the
@@ -172,14 +179,22 @@ Target syntax: `ssh:<alias>/<site>@<production|staging|development>`.
   routed through `nexusWpCommand`), up from 3 before the unification.
   `nexusWpCommand` now delegates to `resolveTransport` via `resolveTargetArgs`,
   so an `ssh:` target works on all of them. Four are MCP-first (`wp plugin list`,
-  `wp plugin update`, `wp core version`, `wp health`), trying `callMcpTool` and
-  falling back to GraphQL when MCP is unreachable; the other 14 go straight through
+  `wp plugin update`, `wp core version`, `wp health`), trying `callMcpTool`
+  first. **Only three of those four fall back to GraphQL** (`nexusWpCommand`)
+  when MCP is unreachable — `wp plugin list`, `wp plugin update`, and `wp core
+  version` (`src/cli/commands/wp.ts`, each with a `// MCP server unreachable —
+  fall through to GraphQL` comment). `wp health` has no such fallback: its
+  `action()` calls `callMcpTool('wp_site_health', ...)` and, if that throws or
+  returns an error, prints "The wp health command requires the MCP server to be
+  running" and exits 1 — there is no WP-CLI/GraphQL equivalent of the health
+  check to fall back to. The other 14 go straight through
   `nexusWpCommand`. All `resolveTransport`-backed MCP tools now declare
   `ssh_target` and `wp_path` in their `inputSchema`, so agents can discover them.
   The 4 that do NOT work: `db scan/clean/report` (local-only by design, separate
   resolvers) and `users` (reads the graph DB, not WP-CLI). `wp health` used to
   fail with `Site "undefined" not found.` because `wp_site_health` was local-only;
-  it was ported onto `resolveTransport` and now works on all three targets.
+  it was ported onto `resolveTransport` and now works on all three targets — that
+  part of the claim is accurate; only the "falls back to GraphQL" part was not.
 - **The probe bypasses both `withPolicy(EXTERNAL_REMOTE_POLICY)` and
   `isOperationAllowed`.** `probeExternalHost` calls `sshExec` directly, so
   neither layer is in its path. This is accepted, not overlooked: its command
@@ -273,7 +288,15 @@ and `phpVersion` falls back to a fabricated `'8.0'`), and `calculateAllScores`
 uses the default all-five factor set, so maintenance and activity score 0 for
 those same entries — the exact defect the per-target factor list fixes in
 `nexusFleetSiteHealth`. Fixing this means giving `calculateAllScores` a
-per-target factor list too.
+per-target factor list too. **This is not unique to `nexusFleetHealth`** — the
+identical `indexRegistry.listAll()` + `siteData.getSites()` lookup-miss pattern,
+with the identical `|| '8.0'` fallback, also lives in
+`src/main/mcp/modules/fleet-intelligence/fleet-health-summary.ts` and in
+`src/main/ipc-handlers.ts`'s `DASHBOARD_V2_STATS` handler. Neither is fixed
+either; fixing one without the other two leaves the bug reachable from a
+different surface. (The *local*-path `|| '8.0'` fallback documented below is a
+separate, deliberately-left-alone case — Local's own store supplies a real
+version there.)
 
 **Measure, do not copy the numbers.** This section previously carried "71 Local
 sites" and "312 of 403", both stale, and both propagated into derived claims.
@@ -417,10 +440,15 @@ fabricated `'8.0'`. An alternative PHP-version source needs its own design.
 `nexusUpdateSettings` calls `services.onSettingsUpdated?.()` after a successful
 write (the same closure `src/main/index.ts` hands the IPC handler), so
 `nexus settings set externalRefreshAutoEnabled true` starts the scheduler
-immediately. Before that wiring, only the IPC path was reactive and the CLI —
-the *only* way to set this, as no renderer UI row exists — silently required a
-Local restart. A new settings-driven scheduler must be wired into
-`onSettingsUpdated`, not into one caller of it.
+immediately. Before that wiring, only the IPC path was reactive, so a renderer
+toggle worked but the CLI silently required a Local restart. **A renderer UI
+row for `externalRefreshAutoEnabled` now exists** (`SettingsTab.tsx`) — this
+section used to say none did, which was true at the time but is stale now.
+`externalContentIndexAutoEnabled` is the one that is genuinely CLI-only today
+(zero references in `SettingsTab.tsx`) — `nexus settings set
+externalContentIndexAutoEnabled true` remains the only way to enable it. A new
+settings-driven scheduler must be wired into `onSettingsUpdated`, not into one
+caller of it.
 
 **Batched calls get their own timeout.** `EXTERNAL_SSH_BATCH_TIMEOUT_MS` (60s)
 is separate from `EXTERNAL_SSH_TIMEOUT_MS` (20s, sized for one command): Batch A
@@ -436,10 +464,17 @@ that failed keeps its previous data — `writeExternalHostData` enforces both.
 Selection filters `is_active = 1`, because `nexusHostRemove` soft-deletes and a
 removed host must never be reconnected to.
 
-**L3 (content indexing) is now implemented for external hosts.** This section
-used to say it was not (Spec 4b) and that Data Completeness always showed 0%
-Searchable for them — that was true until the scheduler and manual command
-below shipped; it is stale now that a host has been indexed at least once.
+**L3 (content indexing) is now implemented for external hosts — but it did not
+actually work for every host until a later fix.** This section used to say
+indexing was entirely unimplemented (Spec 4b) and that Data Completeness
+always showed 0% Searchable — that was fixed by the scheduler and manual
+command below. But the fix itself had a bug: `vectorSiteId()` sanitized `ssh:
+`/`ssh_` but did nothing about `/`, so `ssh:a/b-c` and `ssh:a-b/c` (both real,
+multi-site-host ids) collided on the same sqlite-vec table name, silently
+losing one host's indexed content. A single-site external host — whose id has
+no `/` — was never affected. This is now fixed (see `vectorSiteId()` below);
+before that fix, content indexing was broken for any external connection with
+more than one registered site.
 
 **External hosts now content-index too, on their own opt-in schedule.**
 `ExternalContentIndexScheduler` (`src/main/startup/ExternalContentIndexScheduler.ts`) is
@@ -449,9 +484,18 @@ does for WP Engine. Gated on `externalContentIndexAutoEnabled` (**default false*
 `externalContentIndexIntervalHours` (default 24). `nexus host index <alias>` runs one host on
 demand regardless of the setting.
 
-**Vector-store site ids strip the colon.** `ssh:<alias>` fails `SqliteVecStore`'s
-`^[a-zA-Z0-9_-]+$` table-name validation; `vectorSiteId()` translates it to `ssh_<alias>` only
-at that boundary. The graph `content` table and `IndexRegistry` keep the real `ssh:<alias>` id.
+**Vector-store site ids strip disallowed characters, then append a hash.**
+`ssh:<alias>/<site>` fails `SqliteVecStore`'s `^[a-zA-Z0-9_-]+$` table-name
+validation (both `:` and `/` are illegal); `vectorSiteId()` sanitizes to
+`ssh_<alias>_<site>` only at that boundary, then appends an 8-char sha256 hash
+of the *original* id. A character-class replace alone is not enough — it
+creates real collisions (`ssh:a/b-c` and `ssh:a-b/c` both sanitize to
+`ssh_a_b_c`), which silently merged two hosts' indexed content into one
+sqlite-vec table until fixed. The hash suffix is applied uniformly, including
+to local/WPE ids that already satisfy the regex, rather than branching on
+whether an id needed sanitizing. The graph `content` table and `IndexRegistry`
+keep the real `ssh:<alias>/<site>` id; only the sqlite-vec table name is
+translated.
 
 **Vector document metadata says `source: 'external'`, never `'wpe'`.** Copying WP Engine's
 hardcoded constant here would silently mislabel every external host's indexed content — this is
@@ -558,7 +602,14 @@ WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates
 - `src/main/graphql/resolvers/wpe.ts` is instrumented but **currently
   unreferenced** — `createResolvers` in `resolvers.ts` wins module resolution
   for `./graphql/resolvers`. It is kept in sync so the in-progress split does
-  not silently lose the audit trail when it lands.
+  not silently lose the audit trail when it lands. **The same is true of
+  `resolvers/sites.ts` and `resolvers/twin.ts`** — all three are exported only
+  from `resolvers/index.ts`, which itself has zero production importers (only
+  test files reference it); grep for `from './resolvers'` / `from '../
+  resolvers'` in `src/main` outside tests to confirm before assuming otherwise.
+  `resolvers/wp-cli.ts` is the one file in that directory that is genuinely
+  live: `resolvers.ts` imports `createWpCliResolvers` from it directly
+  (`./resolvers/wp-cli`), not through the dead `resolvers/index.ts` barrel.
 - `nexusHostAdd`/`nexusHostRemove` write to the graph directly via
   `upsertSite` — the exact reasoning that justified auditing
   `nexusHostRefresh`/`nexusHostIndex` (fixed above) — yet remain unaudited
@@ -692,9 +743,11 @@ through it. (`wp_eval`'s `code` was the original motivating example; it is now
 withheld outright rather than masked.)
 
 Tier 1 (read-only) is deliberately not written to disk. Tier 2 is the **default**
-tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:223`) —
-`getToolSafety()` falls back to `TIER_OVERRIDES[toolName] ?? 2` — so new tools are
-audited by default unless explicitly marked Tier 1.
+tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:285` —
+grep for `TIER_OVERRIDES\[toolName\] ?? 2` rather than trusting this line number,
+it has drifted before) — `getToolSafety()` falls back to
+`TIER_OVERRIDES[toolName] ?? 2` — so new tools are audited by default unless
+explicitly marked Tier 1.
 
 **Never throw from an audit path.** `OperationAuditLog.log()` builds the entry
 inside its try (`randomUUID()` and the recursive redaction walk can both throw);

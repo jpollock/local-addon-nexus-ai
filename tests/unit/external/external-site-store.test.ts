@@ -31,7 +31,7 @@ describe('ExternalConnectionProfile — connection-only fields', () => {
       wpCliPath: '/usr/bin/wp',
       firstSeenAt: 1000,
       lastSeenAt: 1000,
-    } as any, 'registration');
+    } as any);
     expect(stored).not.toHaveProperty('wpPath');
     expect(stored).not.toHaveProperty('environment');
   });

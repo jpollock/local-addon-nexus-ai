@@ -514,8 +514,10 @@ export default function main(context: any): void {
    *
    * Before (2) existed, `nexus settings set externalRefreshAutoEnabled true`
    * wrote the value and returned success while no scheduler ever started, so the
-   * only way to enable external host refresh was to restart Local. There is no
-   * renderer UI row for it, so the CLI is currently the *only* way to set it.
+   * only way to enable external host refresh was to restart Local. A renderer
+   * UI row for `externalRefreshAutoEnabled` exists (SettingsTab.tsx); the CLI
+   * is the only way to set `externalContentIndexAutoEnabled`, which has no
+   * renderer row.
    *
    * Each scheduler is guarded: this can now be invoked before the async init IIFE
    * has constructed them.

@@ -136,10 +136,8 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
 
   // Tier 2 — New writes (offload + composite actions)
   wpe_update_offload_settings: 2,
-  wpe_configure_offload_settings: 2,
   wpe_backup_and_verify: 2,
   wpe_prepare_go_live: 2,
-  wpe_copy_install: 2,
   wpe_add_user_to_accounts: 2,
 
   // Tier 3 — Destructive (existing)

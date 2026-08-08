@@ -75,7 +75,7 @@ export async function maybeUpsertExternalSite(
       alias: parsed.alias,
       firstSeenAt: now,
       lastSeenAt: now,
-    } as any, 'sighting');
+    } as any);
   } catch {
     // Never let a sighting failure affect the caller's actual result.
   }

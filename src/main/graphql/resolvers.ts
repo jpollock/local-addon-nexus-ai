@@ -5512,7 +5512,7 @@ export function createResolvers(context: ResolverContext) {
                   wpCliPath: report.wpCliPath,
                   firstSeenAt: now,
                   lastSeenAt: now,
-                }, 'registration');
+                });
               }
               return {
                 success: true, registered: false, report: toHostReport(report),
@@ -5526,7 +5526,7 @@ export function createResolvers(context: ResolverContext) {
               wpCliPath: report.wpCliPath,
               firstSeenAt: now,
               lastSeenAt: now,
-            }, 'registration');
+            });
 
             let domain = alias;
             if (report.siteUrl) {
