@@ -100,18 +100,22 @@ describe('ctx.log → EventLog', () => {
     expect(out).toMatch(/ERROR.*test-agent.*error message/);
   });
 
-  it('emits action() with result and duration fields', () => {
+  it('emits action() with action event name and result/duration fields', () => {
     const { ctx, file } = build();
     ctx.log.action({ label: 'cleanup', result: 'ok', durationMs: 1500 });
     const out = fs.readFileSync(file, 'utf-8');
-    expect(out).toContain('phase action=cleanup result=ok dur=1500');
+    expect(out).toContain('action action=cleanup result=ok dur=1500');
+    // Verify it is NOT tagged as 'phase' — this test catches silent reversion to phase
+    expect(out).not.toMatch(/phase.*action=cleanup/);
   });
 
-  it('emits siteStatus() with site and status fields', () => {
+  it('emits siteStatus() with site event name and status fields', () => {
     const { ctx, file } = build();
     ctx.log.siteStatus('mysite', 'clean');
     const out = fs.readFileSync(file, 'utf-8');
-    expect(out).toContain('phase site=mysite status=clean');
+    expect(out).toContain('site site=mysite status=clean');
+    // Verify it is NOT tagged as 'phase' — this test catches silent reversion to phase
+    expect(out).not.toMatch(/phase.*site=mysite/);
   });
 
   it('records a mutation with ok: false as WARN level', () => {

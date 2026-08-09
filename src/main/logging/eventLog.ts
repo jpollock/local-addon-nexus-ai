@@ -8,7 +8,7 @@ export type LogLevelName = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
  */
 export type EventName =
   | 'run.start' | 'run.end' | 'run.skip'
-  | 'phase' | 'finding' | 'mutation'
+  | 'phase' | 'action' | 'site' | 'finding' | 'mutation'
   | 'llm.call' | 'llm.error'
   | 'tool.call'
   | 'credential';
