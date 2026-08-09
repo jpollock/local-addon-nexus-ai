@@ -557,10 +557,17 @@ describe('ctx.log → EventLog', () => {
   });
 
   it('still accumulates findings for AgentResult', () => {
-    const { ctx } = build();
-    ctx.log.finding({ id: 'A', severity: 'low', title: 't' } as any);
-    // Accumulators feed AgentResult.findings; routing logs elsewhere must not break that.
-    expect(true).toBe(true); // asserted via AgentRunner tests; guard against a silent regression here
+    // Routing logs to a new destination must not break the accumulators that populate
+    // AgentResult.findings — the Approvals tab and the run record both read them.
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: () => new Date('2026-08-09T10:00:00Z') });
+    const built = buildAgentContext({
+      agent: makeAgent() as any, toolRegistry: {} as any, services: {} as any,
+      stateStore: { buildHandle: () => ({ get: () => undefined, set: () => {} }) } as any,
+      resolvedProvider: undefined as any, logDir, eventLog, runId: 'r_acc',
+    } as any);
+    built.ctx.log.finding({ id: 'A', severity: 'low', title: 't' } as any);
+    expect(built.accFindings).toHaveLength(1);
+    expect(built.accFindings[0].id).toBe('A');
   });
 });
 ```
