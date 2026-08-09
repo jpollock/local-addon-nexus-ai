@@ -4848,7 +4848,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
             siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
           };
-          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName });
+          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
         }
       } catch (err: any) {
         if (!signal.aborted) {

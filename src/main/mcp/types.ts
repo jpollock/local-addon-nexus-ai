@@ -146,6 +146,9 @@ export interface NexusServices {
   contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
   /** Agent dispatcher — routes contributed tool calls to agent handlers */
   dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
+  /** Process-wide structured run log — shared by AgentRunner and (later) the IPC gate wrapper so
+   *  both write to the same file rather than each constructing their own EventLog instance. */
+  eventLog?: import('../logging/eventLog').EventLog;
   gatewayUrl?: string;
   gatewayAuthToken?: string;
   /** Credential manager for OAuth flows. Added in Task 9 — optional for backward compat. */

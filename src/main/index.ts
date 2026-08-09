@@ -607,7 +607,7 @@ export default function main(context: any): void {
                 agentEventBus.subscribe(trigger.pattern, async (event) => {
                   // `enabled` too — see canAutoRun. A disabled agent must not run on an event.
                   if (!canAutoRun(agent.name, 'event')) return;
-                  await agentRunner.run(agent, event).catch((err: Error) => {
+                  await agentRunner.run(agent, event, { trigger: 'event' }).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" event trigger failed: ${err.message}`);
                   });
                 }),
@@ -615,7 +615,7 @@ export default function main(context: any): void {
             } else if (trigger.type === 'webhook') {
               unsubs.push(
                 agentEventBus.subscribe(`webhook:${trigger.path ?? '*'}`, async (event) => {
-                  await agentRunner.run(agent, event).catch((err: Error) => {
+                  await agentRunner.run(agent, event, { trigger: 'event' }).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" webhook trigger failed: ${err.message}`);
                   });
                 }),
@@ -685,11 +685,10 @@ export default function main(context: any): void {
         nexusServices.agentReload = agentReload;
         nexusServices.contributedRegistry = contributedRegistry;
         nexusServices.dispatcher = dispatcher;
-        // Not a declared NexusServices field (out of scope for this task to add — see
-        // mcp/types.ts) — reached the same way agentRunner/dispatcher are, via `as any`, so a
-        // future gate wrapper (e.g. the IPC AGENT_RUN_NOW handler) can write to the same
-        // EventLog instance without constructing a second one.
-        (nexusServices as any).eventLog = eventLog;
+        // Declared field on NexusServices (src/main/mcp/types.ts) — reached the same way
+        // agentRunner/dispatcher are, so a future gate wrapper (e.g. the IPC AGENT_RUN_NOW
+        // handler) can write to the same EventLog instance without constructing a second one.
+        nexusServices.eventLog = eventLog;
 
         // safeStorage.isEncryptionAvailable() can still be false this early in Local's addon
         // startup (confirmed live: false at the exact moment getAIProvider() ran above). When

@@ -40,7 +40,7 @@ export class AgentScheduler {
         }
         logger.info(`AgentScheduler: firing "${agent.name}" (cron: ${trigger.expression})`);
         try {
-          await this.runner.run(agent);
+          await this.runner.run(agent, undefined, { trigger: 'cron' });
         } catch (err: unknown) {
           logger.error(`AgentScheduler: unhandled error from runner for "${agent.name}": ${err instanceof Error ? err.message : String(err)}`);
         }

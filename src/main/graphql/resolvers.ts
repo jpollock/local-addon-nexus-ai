@@ -5341,7 +5341,7 @@ export function createResolvers(context: ResolverContext) {
         }
         const agent = registry.get(name);
         if (!agent) throw new Error(`Agent "${name}" not found`);
-        const result = await runner.run(agent);
+        const result = await runner.run(agent, undefined, { trigger: 'manual' });
         return {
           agentName:  result.agentName,
           status:     result.status,
