@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { EventLog } from '../../../src/main/logging/eventLog';
+import { LogLevel } from '../../../src/main/logging/Logger';
 
 let root: string;
 beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-eventlog-')); });
@@ -68,5 +69,113 @@ describe('EventLog', () => {
     // Logging must never be able to fail a run.
     const log = new EventLog({ root: '/proc/nonexistent/nope', now: () => AT });
     expect(() => log.write({ level: 'ERROR', source: 'a', message: 'x' })).not.toThrow();
+  });
+
+  it('sanitizes source name to prevent directory traversal', () => {
+    const log = new EventLog({ root, now: () => AT });
+    log.write({ level: 'INFO', source: '../../../etc/passwd', sourceKind: 'agent', message: 'bad' });
+    // File should be inside root/agents, not outside
+    const files = fs.readdirSync(path.join(root, 'agents'), { recursive: true }) as string[];
+    expect(files.length).toBeGreaterThan(0);
+    // All files should be inside root/agents
+    for (const file of files) {
+      const fullPath = path.join(root, 'agents', file);
+      expect(fullPath.startsWith(path.join(root, 'agents'))).toBe(true);
+    }
+    // The sanitized filename should replace slashes with underscores
+    expect(files.some((f: string) => f.includes('_') && !f.includes('..'))).toBe(true);
+  });
+
+  it('sanitizes source name containing forward slashes', () => {
+    const log = new EventLog({ root, now: () => AT });
+    log.write({ level: 'INFO', source: 'agent/name/with/slashes', sourceKind: 'agent', message: 'test' });
+    const agentDir = path.join(root, 'agents');
+    const files = fs.readdirSync(agentDir);
+    expect(files.length).toBeGreaterThan(0);
+    // The filename should have slashes replaced with underscores
+    expect(files[0]).toContain('agent_name_with_slashes');
+  });
+
+  it('applies 0600 mode to combined log file', () => {
+    const log = new EventLog({ root, now: () => AT });
+    log.write({ level: 'INFO', source: 'a', message: 'test' });
+    const combined = path.join(root, 'nexus-2026-08-09.log');
+    const stat = fs.statSync(combined);
+    // Check that mode is 0600 (owner read+write only)
+    expect((stat.mode & 0o777)).toBe(0o600);
+  });
+
+  it('applies 0600 mode to agent log file', () => {
+    const log = new EventLog({ root, now: () => AT });
+    log.write({ level: 'INFO', source: 'agent-x', sourceKind: 'agent', message: 'test' });
+    const agent = path.join(root, 'agents', 'agent-x-2026-08-09.log');
+    const stat = fs.statSync(agent);
+    // Check that mode is 0600 (owner read+write only)
+    expect((stat.mode & 0o777)).toBe(0o600);
+  });
+
+  it('preserves 0600 mode when appending to existing file', () => {
+    const log = new EventLog({ root, now: () => AT });
+    const combined = path.join(root, 'nexus-2026-08-09.log');
+
+    // Write first event
+    log.write({ level: 'INFO', source: 'a', message: 'line1' });
+    let stat = fs.statSync(combined);
+    expect((stat.mode & 0o777)).toBe(0o600);
+
+    // Write second event to existing file
+    log.write({ level: 'INFO', source: 'a', message: 'line2' });
+    stat = fs.statSync(combined);
+    // Mode should still be 0600
+    expect((stat.mode & 0o777)).toBe(0o600);
+  });
+
+  it('pathsFor returns the correct shape for agent events', () => {
+    const log = new EventLog({ root, now: () => AT });
+    const paths = log.pathsFor({
+      level: 'INFO',
+      source: 'test-agent',
+      sourceKind: 'agent',
+      at: AT,
+    });
+    expect(paths.combined).toBe(path.join(root, 'nexus-2026-08-09.log'));
+    expect(paths.agent).toBe(path.join(root, 'agents', 'test-agent-2026-08-09.log'));
+  });
+
+  it('pathsFor returns undefined agent path for system events', () => {
+    const log = new EventLog({ root, now: () => AT });
+    const paths = log.pathsFor({
+      level: 'INFO',
+      source: 'gateway',
+      sourceKind: 'system',
+      at: AT,
+    });
+    expect(paths.combined).toBe(path.join(root, 'nexus-2026-08-09.log'));
+    expect(paths.agent).toBeUndefined();
+  });
+
+  it('pathsFor sanitizes source name in agent path', () => {
+    const log = new EventLog({ root, now: () => AT });
+    const paths = log.pathsFor({
+      level: 'INFO',
+      source: '../bad/source',
+      sourceKind: 'agent',
+      at: AT,
+    });
+    // The agent path should have slashes replaced with underscores
+    expect(paths.agent).toContain('_bad_source-2026-08-09.log');
+    expect(paths.agent).not.toContain('..');
+    expect(paths.agent).not.toContain('/bad');
+  });
+
+  it('pathsFor handles invalid dates gracefully', () => {
+    const log = new EventLog({ root, now: () => AT });
+    expect(() => {
+      log.pathsFor({
+        level: 'INFO',
+        source: 'test',
+        at: new Date('invalid'),
+      });
+    }).not.toThrow();
   });
 });

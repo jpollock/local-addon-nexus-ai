@@ -126,8 +126,7 @@ export function formatLine(e: LogEvent): string {
 import * as fs from 'fs';
 import * as path from 'path';
 import { rotateIfNeeded, DEFAULT_MAX_BYTES } from './rotate';
-
-const ORDER: Record<LogLevelName, number> = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
+import { LogLevel } from './Logger';
 
 export interface EventLogOptions {
   root: string;
@@ -135,6 +134,15 @@ export interface EventLogOptions {
   maxBytes?: number;
   /** Injectable clock, so the midnight-rollover test does not need to wait for midnight. */
   now?: () => Date;
+}
+
+/**
+ * Sanitize a source name to a safe filename segment.
+ * Removes path separators and directory-traversal sequences to prevent escaping root/agents.
+ */
+function sanitizeSourceName(source: string): string {
+  // Remove path separators and .. segments
+  return source.replace(/[\/\\\.]/g, '_');
 }
 
 /**
@@ -157,18 +165,23 @@ export class EventLog {
   }
 
   pathsFor(e: LogEvent): { combined: string; agent?: string } {
-    const day = (e.at ?? this.now()).toISOString().slice(0, 10);
-    return {
-      combined: path.join(this.root, `nexus-${day}.log`),
-      agent: e.sourceKind === 'agent'
-        ? path.join(this.root, 'agents', `${e.source}-${day}.log`)
-        : undefined,
-    };
+    try {
+      const day = (e.at ?? this.now()).toISOString().slice(0, 10);
+      return {
+        combined: path.join(this.root, `nexus-${day}.log`),
+        agent: e.sourceKind === 'agent'
+          ? path.join(this.root, 'agents', `${sanitizeSourceName(e.source)}-${day}.log`)
+          : undefined,
+      };
+    } catch {
+      // Guard against invalid dates or other unexpected values
+      return { combined: path.join(this.root, 'nexus-unknown.log') };
+    }
   }
 
   write(e: LogEvent): void {
     try {
-      if (ORDER[e.level] > ORDER[this.minLevel]) return;
+      if (LogLevel[e.level] > LogLevel[this.minLevel]) return;
       const at = e.at ?? this.now();
       const line = formatLine({ ...e, at }) + '\n';
       const { combined, agent } = this.pathsFor({ ...e, at });
@@ -182,6 +195,10 @@ export class EventLog {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       rotateIfNeeded(file, this.maxBytes);
       fs.appendFileSync(file, line);
+      // Apply 0600 mode after write (best-effort; chmod failure must not fail the write)
+      try {
+        fs.chmodSync(file, 0o600);
+      } catch { /* best-effort mode setting */ }
     } catch { /* one unwritable destination must not stop the other */ }
   }
 }
