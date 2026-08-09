@@ -1493,7 +1493,7 @@ Expected: PASS — 12 tests. The coverage test (`every condition is treatable`) 
 - Consumes: `CONDITION_CATALOG`, `TREATMENT_CATALOG`, `conditionSlug`, `treatmentSlug` from `../reference/catalogs.js` (Task 5); `Condition`, `Treatment`, `ConditionSchema`, `TreatmentSchema`, `Location` from `../domain.js`; `createRng` from `@canonical-demos/shared`.
 - Produces:
   - `buildConditionPrompt(entry: ConditionEntry): string` and `buildTreatmentPrompt(entry: TreatmentEntry): string`
-  - `planConditions(seed: number): ConditionPlan[]` where `ConditionPlan = { uid: string; slug: string; entry: ConditionEntry; relatedTreatments: string[]; prompt: string }`
+  - `planConditions(): ConditionPlan[]` where `ConditionPlan = { uid: string; slug: string; entry: ConditionEntry; relatedTreatments: string[]; prompt: string }`
   - `finishCondition(plan: ConditionPlan, description: string): Condition`
   - `planTreatments(seed: number, locations: readonly Location[]): TreatmentPlan[]` where `TreatmentPlan = { uid: string; slug: string; entry: TreatmentEntry; conditionsTreated: string[]; typicalDurationMinutes: number; downtimeDays: number; priceRangeByLocation: Array<{ location: string; low: number; high: number }>; prompt: string }`
   - `finishTreatment(plan: TreatmentPlan, description: string): Treatment`
@@ -1515,22 +1515,22 @@ const locations = generateLocations(20260809, 25);
 
 describe('planConditions', () => {
   it('plans one per catalog entry', () => {
-    expect(planConditions(20260809)).toHaveLength(CONDITION_CATALOG.length);
+    expect(planConditions()).toHaveLength(CONDITION_CATALOG.length);
   });
 
-  it('is deterministic', () => {
-    expect(planConditions(5)).toEqual(planConditions(5));
+  it('is deterministic across calls', () => {
+    expect(planConditions()).toEqual(planConditions());
   });
 
   it('links each condition only to treatments that actually treat it', () => {
-    for (const plan of planConditions(20260809)) {
+    for (const plan of planConditions()) {
       const expected = TREATMENT_CATALOG.filter((t) => t.treats.includes(plan.entry.name));
       expect(plan.relatedTreatments.length).toBe(expected.length);
     }
   });
 
   it('builds a prompt naming the condition and its ICD-10 code', () => {
-    const plan = planConditions(20260809)[0]!;
+    const plan = planConditions()[0]!;
     expect(plan.prompt).toContain(plan.entry.name);
     expect(plan.prompt).toContain(plan.entry.icd10);
   });
@@ -1538,20 +1538,20 @@ describe('planConditions', () => {
 
 describe('finishCondition', () => {
   it('returns a record satisfying ConditionSchema', () => {
-    const plan = planConditions(20260809)[0]!;
+    const plan = planConditions()[0]!;
     const condition = finishCondition(plan, 'Acne vulgaris is a chronic inflammatory disorder.');
     expect(() => ConditionSchema.parse(condition)).not.toThrow();
     expect(condition.slug).toBe(conditionSlug(plan.entry.name));
   });
 
   it('ships unreviewed with null provenance', () => {
-    const condition = finishCondition(planConditions(20260809)[0]!, 'Text.');
+    const condition = finishCondition(planConditions()[0]!, 'Text.');
     expect(condition.reviewStatus).toBe('unreviewed');
     expect(condition.reviewedBy).toBeNull();
   });
 
   it('rejects an empty description', () => {
-    expect(() => finishCondition(planConditions(20260809)[0]!, '  ')).toThrow(/description/i);
+    expect(() => finishCondition(planConditions()[0]!, '  ')).toThrow(/description/i);
   });
 });
 
@@ -1659,7 +1659,6 @@ export function buildTreatmentPrompt(entry: TreatmentEntry): string {
 
 ```typescript
 // cedar-vale-health-demo/scripts/src/generators/conditions.ts
-import { createRng } from '@canonical-demos/shared';
 import { ConditionSchema, type Condition } from '../domain.js';
 import { buildConditionPrompt } from '../prompts/clinical-prompts.js';
 import {
@@ -1678,11 +1677,10 @@ export interface ConditionPlan {
   prompt: string;
 }
 
-export function planConditions(seed: number): ConditionPlan[] {
-  // The rng is constructed for symmetry with the other planners and to keep the
-  // signature stable if condition ordering ever needs shuffling.
-  createRng(seed);
-
+export function planConditions(): ConditionPlan[] {
+  // No seed parameter: conditions are fully determined by the catalog, so there is
+  // nothing random to seed. The other planners take a seed because they genuinely
+  // sample; this one would only carry dead code.
   return CONDITION_CATALOG.map((entry) => ({
     uid: `condition:${conditionSlug(entry.name)}`,
     slug: conditionSlug(entry.name),
@@ -1850,7 +1848,7 @@ import { buildCompositePost, finishHeroPost, planPosts } from './posts.js';
 import { finishTreatment, planTreatments } from './treatments.js';
 
 const locations = generateLocations(20260809, 25);
-const conditions = planConditions(20260809).map((p) => finishCondition(p, 'Condition copy.'));
+const conditions = planConditions().map((p) => finishCondition(p, 'Condition copy.'));
 const treatments = planTreatments(20260809, locations).map((p) => finishTreatment(p, 'Treatment copy.'));
 
 const plans = planPosts(20260809, 215, 385, conditions, treatments);
@@ -2421,7 +2419,7 @@ import { PROVENANCE_MIX, assignProvenance, linkLocations } from './relationships
 function buildCorpus(): Corpus {
   const locations = generateLocations(20260809, 25);
   const providers = planProviders(20260809, 60, locations).map((p) => finishProvider(p, 'Bio.'));
-  const conditions = planConditions(20260809).map((p) => finishCondition(p, 'Condition copy.'));
+  const conditions = planConditions().map((p) => finishCondition(p, 'Condition copy.'));
   const treatments = planTreatments(20260809, locations).map((p) => finishTreatment(p, 'Treatment copy.'));
   const posts = planPosts(20260809, 20, 20, conditions, treatments).map((plan) =>
     plan.tier === 'hero' ? finishHeroPost(plan, 'Body copy.') : buildCompositePost(plan, 20260809),
@@ -2660,7 +2658,7 @@ import { ACF_FIELD_NAMES, mapCondition, mapCorpus, mapLocation, mapProvider } fr
 
 const locations = generateLocations(20260809, 25);
 const providers = planProviders(20260809, 60, locations).map((p) => finishProvider(p, 'Bio.'));
-const conditions = planConditions(20260809).map((p) => finishCondition(p, 'Copy.'));
+const conditions = planConditions().map((p) => finishCondition(p, 'Copy.'));
 const treatments = planTreatments(20260809, locations).map((p) => finishTreatment(p, 'Copy.'));
 const posts = planPosts(20260809, 0, 12, conditions, treatments).map((p) =>
   buildCompositePost(p, 20260809),
@@ -3423,7 +3421,7 @@ export async function buildCorpus(options: BuildOptions): Promise<Corpus> {
 
   // Conditions and treatments come from fixed catalogs whose sizes Task 5 pins to
   // the manifest, so their counts are not passed in.
-  const conditionPlans = planConditions(seed);
+  const conditionPlans = planConditions();
   const treatmentPlans = planTreatments(seed, locations);
   const providerPlans = planProviders(seed, declared(manifest, 'provider'), locations);
 
