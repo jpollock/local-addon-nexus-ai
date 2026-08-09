@@ -66,3 +66,66 @@ export function formatLine(e: LogEvent): string {
   }
   return line;
 }
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { rotateIfNeeded, DEFAULT_MAX_BYTES } from './rotate';
+
+const ORDER: Record<LogLevelName, number> = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
+
+export interface EventLogOptions {
+  root: string;
+  minLevel?: LogLevelName;
+  maxBytes?: number;
+  /** Injectable clock, so the midnight-rollover test does not need to wait for midnight. */
+  now?: () => Date;
+}
+
+/**
+ * Owns the log directory: the daily filename, the dual write, and the size guard.
+ *
+ * Callers hand it an event and know nothing about paths — which is what keeps agents out of the
+ * filesystem entirely, and what makes the layout changeable in one place.
+ */
+export class EventLog {
+  private readonly root: string;
+  private readonly minLevel: LogLevelName;
+  private readonly maxBytes: number;
+  private readonly now: () => Date;
+
+  constructor(opts: EventLogOptions) {
+    this.root = opts.root;
+    this.minLevel = opts.minLevel ?? 'INFO';
+    this.maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+    this.now = opts.now ?? (() => new Date());
+  }
+
+  pathsFor(e: LogEvent): { combined: string; agent?: string } {
+    const day = (e.at ?? this.now()).toISOString().slice(0, 10);
+    return {
+      combined: path.join(this.root, `nexus-${day}.log`),
+      agent: e.sourceKind === 'agent'
+        ? path.join(this.root, 'agents', `${e.source}-${day}.log`)
+        : undefined,
+    };
+  }
+
+  write(e: LogEvent): void {
+    try {
+      if (ORDER[e.level] > ORDER[this.minLevel]) return;
+      const at = e.at ?? this.now();
+      const line = formatLine({ ...e, at }) + '\n';
+      const { combined, agent } = this.pathsFor({ ...e, at });
+      this.append(combined, line);
+      if (agent) this.append(agent, line);
+    } catch { /* logging must never break a run */ }
+  }
+
+  private append(file: string, line: string): void {
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      rotateIfNeeded(file, this.maxBytes);
+      fs.appendFileSync(file, line);
+    } catch { /* one unwritable destination must not stop the other */ }
+  }
+}
