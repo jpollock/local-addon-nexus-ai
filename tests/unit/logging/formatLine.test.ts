@@ -92,4 +92,41 @@ describe('formatLine', () => {
     expect(line).not.toContain('sk_test_abcdefghijk1234567');
     expect(line).toContain('normal_key=data');
   });
+
+  it('outer guard: never throws on pathological e.source (toString explodes)', () => {
+    // This test verifies the outer try/catch is necessary. Without it, this throws.
+    const evilSource = { toString: () => { throw new Error('source toString explodes'); } };
+    const line = formatLine({
+      at: AT, level: 'INFO', source: evilSource as any,
+    });
+    // Should produce a fallback line with event=log.error, not throw
+    expect(line).toContain('event=log.error');
+    expect(line).toContain('Failed to format event');
+    expect(line).not.toContain('\n');
+  });
+
+  it('outer guard: never throws on invalid e.at (toISOString fails)', () => {
+    // This test verifies the outer try/catch is necessary. Without it, this throws.
+    // new Date('invalid') produces an Invalid Date; accessing its toISOString() throws.
+    const invalidDate = new Date('invalid');
+    const line = formatLine({
+      at: invalidDate, level: 'INFO', source: 'test',
+    });
+    // Should produce a fallback line, not throw
+    expect(line).toContain('event=log.error');
+    expect(line).toContain('Failed to format event');
+    expect(line).not.toContain('\n');
+  });
+
+  it('outer guard: never throws on pathological e.level (padEnd fails)', () => {
+    // This test verifies the outer try/catch is necessary. Without it, this throws.
+    const evilLevel = { toString: () => { throw new Error('level toString explodes'); } };
+    const line = formatLine({
+      at: AT, level: evilLevel as any, source: 'test',
+    });
+    // Should produce a fallback line, not throw
+    expect(line).toContain('event=log.error');
+    expect(line).toContain('Failed to format event');
+    expect(line).not.toContain('\n');
+  });
 });

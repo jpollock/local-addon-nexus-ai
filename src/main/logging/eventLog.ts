@@ -33,6 +33,33 @@ function timeOf(at: Date): string {
   return at.toISOString().slice(11, 23);
 }
 
+/**
+ * Safely convert any value to a string, even if toString() throws.
+ * Used in the fallback handler to ensure the fallback line never throws.
+ */
+function safeString(v: unknown, fallback: string = 'unknown'): string {
+  try {
+    return String(v ?? fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Safely extract time from a potentially invalid Date.
+ * Used in the fallback handler to ensure the fallback line never throws.
+ */
+function safeTimeOf(at: unknown): string {
+  try {
+    if (at instanceof Date && !isNaN(at.getTime())) {
+      return at.toISOString().slice(11, 23);
+    }
+    return 'HH:MM:SS.SSS'; // constant placeholder for invalid/missing time
+  } catch {
+    return 'HH:MM:SS.SSS';
+  }
+}
+
 function renderValue(v: unknown): string {
   try {
     const s = maskSecretsInString(String(v ?? ''));
@@ -87,9 +114,12 @@ export function formatLine(e: LogEvent): string {
     return line;
   } catch (err) {
     // Losing detail beats losing the record that something happened.
-    const fallbackAt = e.at ?? new Date();
-    const fallbackMsg = String(err instanceof Error ? err.message : 'unknown error');
-    return `${timeOf(fallbackAt)} ERROR ${e.source ?? 'unknown'} event=log.error  Failed to format event: ${fallbackMsg}`;
+    // The fallback path must never access e properties without protection, as they
+    // may contain pathological values (throwing toString(), invalid Date, etc).
+    const timeStr = safeTimeOf(e?.at);
+    const source = safeString(e?.source, 'unknown');
+    const errorMsg = safeString(err instanceof Error ? err.message : 'unknown error', 'format failed');
+    return `${timeStr} ERROR ${source} event=log.error  Failed to format event: ${errorMsg}`;
   }
 }
 
