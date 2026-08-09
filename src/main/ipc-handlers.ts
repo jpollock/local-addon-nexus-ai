@@ -268,6 +268,7 @@ async function withSiteRunning<T>(
 }
 
 import { canAutoRunWith, AutoRunKind } from './agent-runtime/auto-run-gate';
+import { newRunId } from './logging/runId';
 
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
@@ -277,15 +278,40 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
 }
 
 /**
+ * Reach the process-wide EventLog through the same deps object `__agentSettingsCache` is
+ * reached through. `nexusServices.eventLog` is a declared-but-optional field (src/main/mcp/
+ * types.ts) assigned in src/main/index.ts inside an `if (agentDb)` block — it can legitimately
+ * be undefined (agentDb missing, or called before that block runs), so every caller must
+ * optional-chain rather than assume it exists. A missing log must never break the gate itself.
+ */
+function getEventLog(): import('./logging/eventLog').EventLog | undefined {
+  return (_agentSettingsDepsRef as any)?.nexusServices?.eventLog;
+}
+
+/**
  * May an automatic trigger start this agent right now?
  *
  * Thin wrapper: reads the settings cache and delegates to the pure predicate in
  * agent-runtime/auto-run-gate.ts, where the reasoning lives. Both the cron path
- * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart.
+ * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart —
+ * which is also why the refusal is logged here, once, instead of at each trigger site.
  */
 export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
-  return canAutoRunWith(cache?.get(agentId), kind);
+  const decision = canAutoRunWith(cache?.get(agentId), kind);
+  if (!decision.allowed) {
+    // "The agent didn't run" is the first thing a user reports — before this, a refused
+    // scheduled or event-triggered run produced zero bytes anywhere. write() never throws.
+    getEventLog()?.write({
+      level: 'INFO',
+      source: agentId,
+      sourceKind: 'agent',
+      runId: newRunId('agent'),
+      event: 'run.skip',
+      fields: { trigger: kind, reason: decision.reason },
+    });
+  }
+  return decision.allowed;
 }
 
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {

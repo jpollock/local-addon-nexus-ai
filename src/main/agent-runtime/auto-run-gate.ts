@@ -24,6 +24,17 @@ export interface AgentTriggerSettings {
 export type AutoRunKind = 'schedule' | 'event';
 
 /**
+ * Why an automatic trigger was, or was not, allowed to start an agent.
+ *
+ * `reason` is only present on refusal — the two values are exactly the two switches
+ * `canAutoRunWith` consults, so a caller can log or display which one fired without
+ * re-deriving it from the settings object.
+ */
+export type AutoRunDecision =
+  | { allowed: true }
+  | { allowed: false; reason: 'agent-disabled' | 'trigger-disabled' };
+
+/**
  * @param settings the agent's persisted settings, or undefined when nothing is known.
  *
  * An explicit `false` on EITHER the master switch or the per-trigger switch blocks the run.
@@ -31,8 +42,14 @@ export type AutoRunKind = 'schedule' | 'event';
  * the cache is pre-populated from disk at startup so that window should never open, and
  * narrowing it here would silently change behaviour for every agent rather than fix this bug.
  */
-export function canAutoRunWith(settings: AgentTriggerSettings | undefined, kind: AutoRunKind): boolean {
-  if (settings?.enabled === false) return false;
+export function canAutoRunWith(
+  settings: AgentTriggerSettings | undefined,
+  kind: AutoRunKind,
+): AutoRunDecision {
+  // Order matters: with both switches off, the master switch is the fact worth reporting —
+  // it is the one the user set most recently and the one that explains every trigger at once.
+  if (settings?.enabled === false) return { allowed: false, reason: 'agent-disabled' };
   const perTrigger = kind === 'schedule' ? settings?.scheduleEnabled : settings?.eventsEnabled;
-  return perTrigger !== false;
+  if (perTrigger === false) return { allowed: false, reason: 'trigger-disabled' };
+  return { allowed: true };
 }
