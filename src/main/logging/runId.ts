@@ -21,6 +21,13 @@ const PREFIX: Record<RunKind, string> = { agent: 'r', chat: 'c', gateway: 'g' };
 // per Electron main process, so this counter is process-global and remains valid across all
 // callers. Do not refactor to make this configurable or request-scoped — the scope is the
 // process, and that is the scope that matters for log correlation.
+//
+// The tail is normally 2 characters (base36: 0-z), but grows if more than 1295 ids are minted
+// in a single millisecond: at seq=1296 (36²), padStart(2) no longer truncates and the tail
+// becomes 3 characters. Uniqueness holds by construction regardless (toString(36) is injective);
+// the 16-character budget survives even at 46,656 same-millisecond calls (13 chars total).
+// Only intra-millisecond lexicographic ordering degrades, which nothing depends on — the sort
+// guarantee is by time prefix, not counter.
 let lastMs = 0;
 let seq = 0;
 

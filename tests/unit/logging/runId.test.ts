@@ -38,6 +38,9 @@ describe('newRunId', () => {
       const timePrefix = ids.values().next().value?.slice(2, 10);
       for (const id of ids) {
         expect(id.slice(2, 10)).toBe(timePrefix);
+        // Verify all ids stay within the 16-character budget, even at 5000 same-millisecond
+        // calls (which pushes the counter tail to 3 characters at seq=1296).
+        expect(id.length).toBeLessThanOrEqual(16);
       }
     } finally {
       dateNowSpy.mockRestore();
