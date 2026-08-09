@@ -25,6 +25,47 @@
   --ag-amber: #f5b544;
   --ag-red: #f4685f;
   --ag-purple: #7b8cff;
+  --ag-pink: #e07acc;
+
+  /*
+   * Site picker (SitePicker/AgentRunModal/AgentWorkspaceSettings' scope editor) — a separate
+   * token set, not aliases of the ones above. Design_handoff_site_picker's v2 spec pins its own
+   * exact hex values (e.g. teal #35e0c5, not the dashboard's #35d0c5) and its own background/
+   * border/text scale; giving it its own `--ag-picker-*` namespace keeps that spec traceable
+   * instead of silently drifting if the dashboard tokens above ever change independently.
+   */
+  --ag-picker-bg-page: #0b0e14;
+  --ag-picker-bg-surface: #111621;
+  --ag-picker-bg-raised: #0f141d;
+  --ag-picker-bg-sunken: #0e131c;
+  --ag-picker-bg-footer: #0d1119;
+  --ag-picker-border-strong: #232c38;
+  --ag-picker-border: #1f2732;
+  --ag-picker-border-subtle: #1c232e;
+  --ag-picker-border-faint: #161d27;
+  --ag-picker-control-border: #2a3441;
+  --ag-picker-dashed-border: #35404f;
+  --ag-picker-addbox-border: #3a4553;
+  --ag-picker-text-primary: #f2f5f8;
+  --ag-picker-text-strong: #e6ebf1;
+  --ag-picker-text-secondary: #cdd5df;
+  --ag-picker-text-muted: #aeb7c4;
+  --ag-picker-text-dim: #9aa4b2;
+  --ag-picker-text-dimmer: #7b8593;
+  --ag-picker-text-faint: #6b7684;
+  --ag-picker-text-faint-alt: #8a94a2;
+  --ag-picker-text-faintest: #5c6675;
+  --ag-picker-disabled-fill: #1c232e;
+  --ag-picker-disabled-text: #59626f;
+  --ag-picker-teal: #35e0c5;
+  --ag-picker-on-teal: #0b0e14;
+  --ag-picker-danger: #ff8a95;
+  --ag-picker-danger-dot: #ff6b7a;
+  --ag-picker-danger-locked-text: #f0c6ca;
+  --ag-picker-warning: #f0b52e;
+  --ag-picker-info: #7cb6ff;
+  --ag-picker-violet: #b79bff;
+  --ag-picker-success: #22c088;
 }
 
 /*
@@ -64,6 +105,41 @@
   --ag-amber: #a3690a;
   --ag-red: #c93f37;
   --ag-purple: #4c5cd6;
+  --ag-pink: #a83e93;
+
+  /* Site picker — see the dark-mode block's comment for why this is its own token set. */
+  --ag-picker-bg-page: #f4f5f7;
+  --ag-picker-bg-surface: #ffffff;
+  --ag-picker-bg-raised: #ffffff;
+  --ag-picker-bg-sunken: #eef0f3;
+  --ag-picker-bg-footer: #eef0f3;
+  --ag-picker-border-strong: #d2d7de;
+  --ag-picker-border: #dde1e7;
+  --ag-picker-border-subtle: #e6e9ee;
+  --ag-picker-border-faint: #edeff3;
+  --ag-picker-control-border: #d2d7de;
+  --ag-picker-dashed-border: #c7cdd6;
+  --ag-picker-addbox-border: #c7cdd6;
+  --ag-picker-text-primary: #1a1d23;
+  --ag-picker-text-strong: #14171c;
+  --ag-picker-text-secondary: #333a44;
+  --ag-picker-text-muted: #4b5563;
+  --ag-picker-text-dim: #5b6472;
+  --ag-picker-text-dimmer: #6b7280;
+  --ag-picker-text-faint: #7c8697;
+  --ag-picker-text-faint-alt: #6b7280;
+  --ag-picker-text-faintest: #98a1ae;
+  --ag-picker-disabled-fill: #eef0f3;
+  --ag-picker-disabled-text: #a3abb7;
+  --ag-picker-teal: #0e8f83;
+  --ag-picker-on-teal: #ffffff;
+  --ag-picker-danger: #c93f37;
+  --ag-picker-danger-dot: #d1453d;
+  --ag-picker-danger-locked-text: #8a4a4a;
+  --ag-picker-warning: #a3690a;
+  --ag-picker-info: #2f6fd6;
+  --ag-picker-violet: #6a4fc9;
+  --ag-picker-success: #1f8f56;
 }
 
 /* Typography helpers */

@@ -75,21 +75,21 @@ export async function fetchScopeSites(electron: any): Promise<ScopeSite[]> {
 
 /**
  * log-processor's site scope is a subset of "the fleet" that isn't meaningful the way it is for
- * security-sentinel: a site must already have a bound S3 log source (via its connect_log_source
- * tool) before including it in scope does anything — the nightly cron skips any scoped site with
- * no source (see agents/log-processor/agent.ts's run()). So this agent's picker offers only
- * already-connected sites, not the full fleet fetchScopeSites() returns.
+ * security-sentinel: an install is processable only if it has apache-style objects in the
+ * account's connected S3 bucket, which the nightly cron re-checks before doing anything (see
+ * agents/log-processor/agent.ts's run()). So Run Now offers only installs with logs, not the full
+ * fleet fetchScopeSites() returns — an ineligible target would produce a run that reads nothing.
  *
- * `id` here is the site's NAME, not fetchScopeSites()'s usual graph.db id — log-processor's own
- * `sources` table keys everything by the install name it was given at connect time (there is no
- * graph.db access to resolve a name back to an id), so using the name as `id` lets `scope.siteIds`
- * round-trip through this agent's runtime with zero extra resolution step. This is a deliberate,
- * agent-local exception to the id convention; the generic SitePicker only requires `id` to be a
- * stable unique string, not a particular id scheme.
+ * `id` here is the install NAME, not fetchScopeSites()'s usual graph.db id — the whole model
+ * joins on the install name embedded in each log filename, so using the name as `id` lets
+ * `scope.siteIds` round-trip through this agent's runtime with zero extra resolution step. This
+ * is a deliberate, agent-local exception to the id convention; the generic SitePicker only
+ * requires `id` to be a stable unique string, not a particular id scheme.
  *
- * Cross-references fetchScopeSites() purely for display (environment/platform/createdAt) — a
- * connected site with no fleet match (e.g. removed from the account since connecting) still
- * appears, since it is still a fact about what log-processor has stored.
+ * Cross-references fetchScopeSites() purely for display (environment/platform/createdAt). An
+ * install in the bucket with no fleet match is deliberately NOT dropped here — it is still a fact
+ * about what the bucket holds — but the Sites tab surfaces that case as a grey informational line
+ * rather than a row, because it cannot be switched on.
  */
 export async function fetchConnectedLogSites(electron: any): Promise<ScopeSite[]> {
   const ipc = electron?.ipcRenderer;

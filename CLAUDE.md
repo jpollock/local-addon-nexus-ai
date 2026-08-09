@@ -358,6 +358,71 @@ completeness claim here is worse than no claim at all.
 
 ---
 
+## log-processor — one bucket, joined by install name
+
+**WP Engine writes every install of an account into ONE flat S3 prefix** —
+`s3://<bucket>/wpe_logs/nginx/` — and separates them by filename:
+
+```
+20260807-0016-jeremypollock2.apachestyle.log.gz
+202607210625-localwpe.apachestyle.log.gz          ← second live shape: date+hhmm concatenated
+```
+
+There is no per-site prefix. Asking a user for one asks them to invent a fact
+that does not exist, which is why `connect_log_source`, `disconnect_log_source`
+and `set_log_processing` are gone; `set_log_bucket` + `rescan_log_bucket`
+replace them, and the whole design rationale (including two models that were
+built and rejected) is in the designer's `handoff_log_sources_v3/DECISIONS.md`.
+
+- **`parseInstallIdFromKey` (`access-logs.ts`) is the join.** Both filename
+  shapes above are live in real buckets; a parser handling only one silently
+  drops every object of the other, which reads as "that install has no logs".
+  It returns `null` rather than guessing — a wrong guess folds one install's
+  traffic into another's aggregates.
+- **Only `*.apachestyle.log.gz` is ingested.** `*.access.log.gz` sit in the same
+  folder and are roughly half the objects, so every count shown to a user must
+  say **apache-style** or the number reads as data loss.
+- **The unit of ingestion work is a FILE-DATE, not a site.** `runBatchSync`
+  lists `prefix + YYYYMMDD` once and routes each object to a site by its parsed
+  filename. The per-site `runSync` it replaces listed that same shared prefix
+  and attributed **every** apache-style object to whichever single site the call
+  was made for — so aggregates were cross-contaminated across installs, and the
+  same objects were downloaded once per site in scope. `fetch_log_window` had
+  the identical defect and is fixed the same way.
+- **Aggregates and the ledger are written together or not at all.** A site whose
+  stream errored keeps its previous rows and stays un-ledgered. Saving a partial
+  fold while withholding the ledger entry — what this used to do — double-counts
+  every line of that date on the retry.
+- **The migration off the per-site `sources` table wipes `aggregates` and
+  `ledger`** (`migrateFromPerSiteSources`, guarded by a `meta` marker so it runs
+  once). Not housekeeping: every row was computed by the mis-attributing sync.
+  Re-pointing at a different bucket wipes them too, because the ledger records
+  which file-dates were processed *against a specific bucket*.
+- **`scope.siteIds` is the only "which installs run" list.** The switch on each
+  row of the agent's Sites tab writes it directly; there is no separate sources
+  table and no basket-style scope picker for this agent. An install with no
+  objects cannot be switched on, which is why no "in scope but nothing to read"
+  warning exists anywhere — the state is unreachable.
+- **The Sites list defaults to installs with logs — see BEHAVIOR §4. A
+  500-install account must never render 500 rows.** 500 installs with three in
+  the bucket is the normal shape, not the edge case. The fleet stays reachable
+  through the `All installs` filter and through search, which covers every
+  install regardless of the active filter so a missing site is explained rather
+  than absent. Rows page at 25; filter counts are derived per render, never
+  cached; bulk switching is offered only where "all" is unambiguous (the `With
+  logs` view, no active search, something still off).
+- **Every count is derived, never independently computed.** Tab badge, header
+  line, footnote, Run Now enabled state and Run Now's prefill all come from
+  `runnableSiteIds(deriveLogSiteRows(...))` (`logSourcesModel.ts`). Each
+  contradiction found in design review came from a consumer keeping its own copy.
+- **Open question, not yet answered:** whether WP Engine ever truncates the
+  install-name segment in a filename (install names cap at 14 chars, so
+  `theawfulproduc` may be the id itself rather than a shortened form). The join
+  assumes the segment **is** the id. If that proves false it needs a real
+  mapping table, not fuzzy matching.
+
+---
+
 ## Known Pitfalls
 
 - [Smart Search MU plugin pitfalls](feedback_smart_search_mu_plugin.md) — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI.

@@ -1,0 +1,126 @@
+name: web-analytics
+version: 0.2.0
+description: >-
+  Google Analytics 4 connector — traffic summaries, anomaly scans, and page
+  performance for mapped sites.
+permissions:
+  tier: 1
+credentials:
+  - provider: google
+    scopes:
+      - https://www.googleapis.com/auth/analytics.readonly
+    optional: true
+    reason: >-
+      Reads Google Analytics traffic data to diagnose site problems and report
+      performance
+triggers:
+  - type: cron
+    expression: 0 8 * * 1
+contributes:
+  tools:
+    - name: list_properties
+      description: >-
+        List Google Analytics 4 properties available on the connected Google
+        account. Use before map_property. Pass format="json" for the structured
+        payload the Sites tab renders.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          format:
+            type: string
+            enum: [text, json]
+            default: text
+    - name: map_property
+      description: >-
+        Bind a GA4 property to a site. Required before traffic_summary,
+        anomaly_scan, and page_performance. Call without propertyId to list
+        available properties; pass the site domain to highlight the likely
+        match.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: Local site name the property belongs to
+          propertyId:
+            type: string
+            description: >-
+              GA4 property (e.g. "properties/123456" or bare "123456"). Omit to
+              list options.
+          domain:
+            type: string
+            description: Site domain, used to highlight the likely matching property
+          unbind:
+            type: boolean
+            default: false
+            description: >-
+              Forget this site's binding. Nothing is changed in Google Analytics.
+          format:
+            type: string
+            enum: [text, json]
+            default: text
+        required:
+          - siteId
+    - name: traffic_summary
+      description: >-
+        Traffic totals (sessions, users, pageviews, key events) for a mapped
+        site over a window, with prior-period comparison and per-day breakdown.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: Local site name (must be mapped via map_property)
+          days:
+            type: number
+            default: 7
+            description: Window size in days (compared against the prior window)
+        required:
+          - siteId
+    - name: anomaly_scan
+      description: >-
+        Scan a mapped site for significant traffic changes vs. the prior period
+        — by channel and by page. The primary GA4 evidence source for
+        diagnosing site problems.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: Local site name (must be mapped via map_property)
+          days:
+            type: number
+            default: 7
+            description: Window size in days
+          thresholdPct:
+            type: number
+            default: 25
+            description: Flag changes of at least this magnitude (%)
+        required:
+          - siteId
+    - name: page_performance
+      description: >-
+        Per-page GA4 drill-down for a mapped site — sessions, users, pageviews,
+        key events by pagePath. Use as a follow-up after anomaly_scan flags a
+        page.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: Local site name (must be mapped via map_property)
+          days:
+            type: number
+            default: 28
+            description: Window size in days
+          limit:
+            type: number
+            default: 20
+            description: Max pages to return
+        required:
+          - siteId

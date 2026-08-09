@@ -160,6 +160,41 @@ describe('SitePicker — platform tabs hide when a platform has zero sites', () 
   });
 });
 
+function flattenText(node: any): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(flattenText).join(' ');
+  if (node?.props?.children !== undefined) return flattenText(node.props.children);
+  return '';
+}
+
+describe('SitePicker — a selected id that no longer resolves to a known site', () => {
+  it('surfaces it in a "NOT FOUND" basket group instead of silently dropping it', () => {
+    const { instance } = makePicker({ selection: new Set(['s1', 'ghost-id']) });
+    const text = flattenText(instance.render());
+    expect(text).toContain('NOT FOUND');
+    expect(text).toContain('ghost-id');
+  });
+
+  it('is still counted in "In scope" — the header and the basket never disagree', () => {
+    const { instance } = makePicker({ selection: new Set(['s1', 'ghost-id']) });
+    const text = flattenText(instance.render());
+    expect(text).toContain('In scope');
+    expect(text).toContain('2'); // header count includes the unresolved id
+  });
+
+  it('removeSite on an unresolved id removes it from the selection like any other', () => {
+    const { instance } = makePicker({ selection: new Set(['s1', 'ghost-id']) });
+    instance['removeSite']('ghost-id');
+    expect(instance.props.selection).toEqual(new Set(['s1']));
+  });
+
+  it('does not render a NOT FOUND group when every selected id resolves', () => {
+    const { instance } = makePicker({ selection: new Set(['s1']) });
+    expect(flattenText(instance.render())).not.toContain('NOT FOUND');
+  });
+});
+
 describe('SitePicker — render() smoke tests', () => {
   it('renders without throwing in every prop combination exercised elsewhere', () => {
     const { instance: basic } = makePicker();

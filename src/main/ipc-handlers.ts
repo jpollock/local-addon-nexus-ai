@@ -585,12 +585,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  // Sites log-processor already has a bound S3 source for (agents/log-processor/db.ts's
-  // `sources` table). The site scope picker for this agent only offers these — a site in scope
-  // with no bound source would silently do nothing on the nightly cron (see run()'s
-  // `getSource(db, siteId)` check). Reads the agent's own sqlite file directly and read-only,
-  // the same way GET_SITES reads graph.db directly above, rather than routing through the agent
-  // runtime for a plain SELECT.
+  // Installs with apache-style objects in log-processor's connected bucket. Run Now offers only
+  // these — an install with nothing to read cannot be a run target. Reads the agent's own sqlite
+  // file directly and read-only, the same way GET_SITES reads graph.db directly above, rather
+  // than routing through the agent runtime for a plain SELECT.
   safeHandle(IPC_CHANNELS.AGENT_LOG_PROCESSOR_CONNECTED_SITES, () => {
     try {
       const { AGENTS_DIR } = require('./agent-runtime/AgentRegistry') as typeof import('./agent-runtime/AgentRegistry');
@@ -599,6 +597,46 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     } catch (err) {
       localLogger.error('[NexusAI] log-processor connected-sites failed:', (err as Error).message);
       return [];
+    }
+  });
+
+  // web-analytics' Sites tab payload — which site is bound to which GA4 property. Read-only:
+  // binding and unbinding go through the agent's own tool so they stay on the audited chokepoint.
+  safeHandle(IPC_CHANNELS.AGENT_WEB_ANALYTICS_STATE, () => {
+    try {
+      const { getWebAnalyticsState } = require('./agent-runtime/web-analytics-sites') as typeof import('./agent-runtime/web-analytics-sites');
+      return getWebAnalyticsState(graphService?.getDb?.());
+    } catch (err) {
+      localLogger.error('[NexusAI] web-analytics state failed:', (err as Error).message);
+      return { bindings: {} };
+    }
+  });
+
+  // The Sites tab's whole payload: the one account-level bucket plus every install found in it.
+  safeHandle(IPC_CHANNELS.AGENT_LOG_PROCESSOR_STATE, () => {
+    try {
+      const { AGENTS_DIR } = require('./agent-runtime/AgentRegistry') as typeof import('./agent-runtime/AgentRegistry');
+      const { getLogProcessorState } = require('./agent-runtime/log-processor-sites') as typeof import('./agent-runtime/log-processor-sites');
+      return getLogProcessorState(AGENTS_DIR);
+    } catch (err) {
+      localLogger.error('[NexusAI] log-processor state failed:', (err as Error).message);
+      return { bucket: null, installs: [] };
+    }
+  });
+
+  // Generic contributed-tool invocation for renderer-driven flows that need a tool's actual
+  // return value (not just "fire and let Activity show the result") — e.g. the Connect the log
+  // bucket modal parsing set_log_bucket's structured JSON. Routes through the same
+  // AgentDispatcher.dispatch() chokepoint chat/MCP calls use, so this is audited and
+  // settings-aware identically to a chat-issued command; no new audit path needed.
+  safeHandle(IPC_CHANNELS.AGENT_TOOL_INVOKE, async (_event, { agentId, toolName, args }: { agentId: string; toolName: string; args?: Record<string, unknown> }) => {
+    const dispatcher = (deps as any).nexusServices?.dispatcher;
+    if (!dispatcher) return { content: [{ type: 'text', text: 'Agent runtime not ready.' }], isError: true };
+    try {
+      return await dispatcher.dispatch(agentId, toolName, args ?? {});
+    } catch (err) {
+      localLogger.error(`[NexusAI] agent tool invoke failed (${agentId}/${toolName}):`, (err as Error).message);
+      return { content: [{ type: 'text', text: `⚠ ${(err as Error).message}` }], isError: true };
     }
   });
 
@@ -5059,17 +5097,37 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
   // ── Credential Manager ────────────────────────────────────────────────────
 
-  safeHandle(IPC_CHANNELS.CREDENTIAL_STATUS, async () => {
+  // `connections` is account-wide; `agentStatus` answers the *per-agent* question, which is the
+  // one that actually gates a tool call. They differ routinely and the difference is not a bug:
+  // an OAuth connection is one Google account, but access is granted per agent, so an agent does
+  // not silently inherit what another agent authorised. A UI that gates on `connections` alone
+  // reports "connected" for an agent the runtime will refuse — which is exactly what
+  // web-analytics' Sites tab did before this argument existed.
+  safeHandle(IPC_CHANNELS.CREDENTIAL_STATUS, async (_event: any, args?: { provider?: string; agentId?: string }) => {
     const mgr = deps.nexusServices?.credentialManager;
-    if (!mgr) return { connections: [], grants: [] };
-    return { connections: mgr.listConnections() };
+    if (!mgr) return { connections: [], agentStatus: null };
+    const connections = mgr.listConnections();
+    let agentStatus: string | null = null;
+    if (args?.agentId && args?.provider) {
+      try {
+        agentStatus = await mgr.getStatusForAgent(args.provider, args.agentId, '');
+      } catch {
+        agentStatus = null;
+      }
+    }
+    return { connections, agentStatus };
   });
 
   safeHandle(IPC_CHANNELS.CREDENTIAL_CONNECT, async (_event: any, args: { provider: string; agentId: string; siteId: string; scopes: string[] }) => {
     const mgr = deps.nexusServices?.credentialManager;
     if (!mgr) throw new Error('Credential manager not available');
-    await mgr.connect(args.provider, args.agentId, args.siteId, args.scopes);
-    return { ok: true };
+    // Report what actually happened. This used to answer `{ok:true}` unconditionally, so a failed
+    // token exchange and a completed connection were the same value to every caller.
+    const result = await mgr.connect(args.provider, args.agentId, args.siteId, args.scopes);
+    if (!result.ok) {
+      localLogger.warn(`[NexusAI] credential connect (${args.provider}/${args.agentId}) did not complete: ${result.reason}${result.message ? ` — ${result.message}` : ''}`);
+    }
+    return result;
   });
 
   safeHandle(IPC_CHANNELS.CREDENTIAL_DISCONNECT, async (_event: any, args: { connectionId: string }) => {

@@ -144,6 +144,26 @@ export interface AgentDefinition {
    * remediation action must update this at the same time.
    */
   effect?: 'readonly' | 'writes';
+  /**
+   * Whether this agent ever creates review-status activity — a finding or action the user must
+   * explicitly approve, dismiss, or act on. Default false: the safer failure mode is an agent
+   * with something to show missing its Approvals tab (rare, quickly noticed) rather than every
+   * agent getting a tab that's permanently empty (the status quo before this field existed).
+   * This is a capability declaration, not a live prediction — an agent set to fully-autonomous
+   * ('auto') might not actually pause for approval on a given run even with this true.
+   */
+  producesApprovals?: boolean;
+  /**
+   * Whether this agent produces a standalone report/artifact meant to be read on its own —
+   * e.g. seo-insights' Site Content Report — as opposed to a terse pass/fail activity line.
+   * Default false. Distinct from producesApprovals: a report needs no sign-off, just a place to
+   * read it. Today reports are folded into AgentResult.summary on a regular activity entry, with
+   * no dedicated browsing surface — a real "Reports" tab / artifact viewer is a separate,
+   * deliberately deferred piece of work (see SDK_requirements.md's artifact-model item). This
+   * field only distinguishes "this agent produces browsable reports" from "it doesn't" for
+   * whenever that surface exists; it does not build the surface itself.
+   */
+  producesReports?: boolean;
 }
 
 export interface AgentResult {

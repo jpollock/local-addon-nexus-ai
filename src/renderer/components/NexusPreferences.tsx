@@ -10,6 +10,7 @@ import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import type { AIProvider, NexusSettings } from '../../common/types';
 import { injectThemeVars } from '../utils/theme';
+import { ConnectionsPanel } from './credentials/ConnectionsPanel';
 
 interface NexusPreferencesProps {
   electron: any;
@@ -1427,6 +1428,18 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         : null,
     );
 
+    // Section 4b: Connected accounts — OAuth connections, next to the AWS key above.
+    //
+    // These used to live on a *separate* top-level Preferences page registered alongside
+    // "Nexus AI", so the two credential types had two unrelated homes and neither page answered
+    // "where do my connections live?". Folded in here; the standalone entry is gone.
+    const section4b = React.createElement('div', { style: sectionStyle },
+      this.renderSectionHeader('connected-accounts', 'Connected Accounts'),
+      expandedSections.has('connected-accounts')
+        ? React.createElement(ConnectionsPanel, { electron: this.props.electron })
+        : null,
+    );
+
     // Section 5: Chat History
     const panelEnabled = settings.dockedPanelEnabled !== false;
     const section5 = React.createElement('div', { style: sectionStyle },
@@ -1485,6 +1498,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       section2,
       section3,
       section4,
+      section4b,
       section5,
     );
   }

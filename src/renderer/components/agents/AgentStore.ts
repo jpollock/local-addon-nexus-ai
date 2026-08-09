@@ -23,6 +23,19 @@ export interface AgentStatus {
   supportsFullRun: boolean;
   allowsProduction: boolean;
   effect: 'readonly' | 'writes';
+  producesApprovals: boolean;
+  producesReports: boolean;
+  /** What the agent itself declares it needs. Empty when the query predates this field. */
+  credentials?: AgentCredentialDecl[];
+}
+
+/** Straight from the agent definition — never a renderer-side constant. */
+export interface AgentCredentialDecl {
+  provider: string;
+  type?: string;
+  scopes?: string[];
+  optional?: boolean;
+  reason?: string | null;
 }
 
 export interface AgentRunRecord {
@@ -216,6 +229,30 @@ class AgentStore {
       });
     }
     return this.state.agentSettings[agentId];
+  }
+
+  /**
+   * Replace the agent list, always sorted by name.
+   *
+   * The `agentStatus` query returns agents in whatever order the registry scanned their
+   * directories, which is neither stable nor meaningful — the hub grid reshuffled between loads.
+   * Sorting here rather than in the grid means every consumer of `statuses` gets the same order
+   * for free, and a new surface cannot forget to sort.
+   */
+  setStatuses(statuses: AgentStatus[]): void {
+    this.setState({
+      statuses: [...statuses].sort((a, b) => a.name.localeCompare(b.name)),
+    });
+  }
+
+  /** Merge a patch into one agent's settings. The Settings panel has always done this inline;
+   * it lives here so a second editing surface (log-processor's Sites tab) writes the same field
+   * the same way instead of reaching into `agentSettings` itself. */
+  updateSettings(agentId: string, patch: Partial<AgentSettings>): void {
+    const current = this.getOrInitSettings(agentId);
+    this.setState({
+      agentSettings: { ...this.state.agentSettings, [agentId]: { ...current, ...patch } },
+    });
   }
 }
 

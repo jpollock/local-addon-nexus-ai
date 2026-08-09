@@ -55,60 +55,70 @@ export class ConnectionsPanel extends React.Component<Props, State> {
     const { connections, loading, disconnecting } = this.state;
 
     if (loading) {
-      return React.createElement('div', { style: { padding: 16, color: '#bbb' } }, 'Loading…');
+      return React.createElement('div', { style: { padding: '8px 0', color: 'var(--ag-text-muted)', fontSize: 13 } }, 'Loading…');
     }
 
     if (connections.length === 0) {
-      return React.createElement(
-        'div',
-        { style: { padding: 16 } },
-        React.createElement('p', { style: { color: '#888', margin: 0, fontSize: 14 } },
-          'No Google accounts connected. Agents that need Google access will prompt you to connect.',
+      return React.createElement('div', { style: { padding: '4px 0 8px' } },
+        React.createElement('p', { style: { color: 'var(--ag-text-secondary)', margin: 0, fontSize: 13, lineHeight: 1.55 } },
+          'No accounts connected.',
+        ),
+        // Naming the real path matters: this panel deliberately has no Connect button. Which
+        // Google APIs to authorise is the agent's decision — it declares the scopes it needs, and
+        // asking for more from here would over-authorise, or guess wrong and fail on first use.
+        React.createElement('p', {
+          style: { color: 'var(--ag-text-muted)', margin: '8px 0 0', fontSize: 12.5, lineHeight: 1.55 },
+        },
+          'Connect from an agent\'s Settings tab — Agents → the agent → Settings → Connected Accounts. ' +
+          'The agent asks for exactly the access it needs, and the connection is then shared with every agent.',
         ),
       );
     }
 
-    const rows = connections.map(conn =>
-      React.createElement(
-        'li',
-        {
-          key: conn.id,
-          className: 'TableListRow',
-          style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    const rows = connections.map(conn => {
+      const revoked = conn.status === 'revoked';
+      return React.createElement('div', {
+        key: conn.id,
+        style: {
+          display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+          borderRadius: 8, marginBottom: 8,
+          background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border-subtle)',
         },
-        React.createElement(
-          'div',
-          null,
-          React.createElement('strong', null, conn.accountLabel),
-          React.createElement(
-            'div',
-            { style: { fontSize: 12, color: conn.status === 'revoked' ? '#ef4444' : '#888', marginTop: 2 } },
-            conn.status === 'revoked'
-              ? 'Revoked — reconnect to restore access'
-              : `Google · ${conn.grantedScopes.length} scope${conn.grantedScopes.length !== 1 ? 's' : ''}`,
-          ),
-        ),
-        React.createElement(
-          'button',
-          {
-            onClick: () => this.handleDisconnect(conn.id),
-            disabled: disconnecting.has(conn.id),
-            style: {
-              padding: '4px 12px', fontSize: 12,
-              background: 'transparent', border: '1px solid #555',
-              borderRadius: 4, color: '#bbb', cursor: 'pointer',
-            },
+      },
+        React.createElement('span', {
+          style: {
+            flex: 'none', width: 8, height: 8, borderRadius: '50%',
+            background: revoked ? 'var(--ag-red)' : 'var(--ag-green)',
           },
-          disconnecting.has(conn.id) ? 'Disconnecting…' : 'Disconnect',
+        }),
+        React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+          React.createElement('div', {
+            style: { fontSize: 13, fontWeight: 500, color: 'var(--ag-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+          }, conn.accountLabel),
+          React.createElement('div', {
+            style: { fontSize: 12, color: revoked ? 'var(--ag-red)' : 'var(--ag-text-muted)', marginTop: 2 },
+          }, revoked
+            ? 'Revoked — reconnect from the agent that needs it'
+            : `Google · ${conn.grantedScopes.length} scope${conn.grantedScopes.length !== 1 ? 's' : ''}`),
         ),
-      ),
-    );
+        React.createElement('button', {
+          onClick: () => this.handleDisconnect(conn.id),
+          disabled: disconnecting.has(conn.id),
+          style: {
+            flex: 'none', padding: '6px 13px', fontSize: 12,
+            background: 'transparent', border: '1px solid var(--ag-border-control)',
+            borderRadius: 6, color: 'var(--ag-text-secondary)',
+            cursor: disconnecting.has(conn.id) ? 'wait' : 'pointer',
+          },
+        }, disconnecting.has(conn.id) ? 'Disconnecting…' : 'Disconnect'),
+      );
+    });
 
-    return React.createElement(
-      'div',
-      { style: { padding: '0 16px 16px' } },
-      React.createElement('h4', { style: { margin: '0 0 12px', fontSize: 14, color: '#fff' } }, 'Connected accounts'),
-      React.createElement('ul', { className: 'TableList' }, ...rows),
+    return React.createElement('div', { style: { padding: '4px 0 8px' } },
+      ...rows,
+      React.createElement('div', {
+        style: { fontSize: 12, color: 'var(--ag-text-muted)', marginTop: 4, lineHeight: 1.55 },
+      }, 'Disconnecting revokes access for every agent. Anything already collected is kept.'),
     );
   }
 }

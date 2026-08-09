@@ -2006,6 +2006,26 @@ export const typeDefs = gql`
     allowsProduction: Boolean
     "Whether this agent only investigates ('readonly') or writes to the sites it runs on ('writes'). Drives the production-warning verb in the site scope picker."
     effect: String
+    "Whether this agent ever creates review-status activity requiring user sign-off"
+    producesApprovals: Boolean
+    "Whether this agent produces a standalone report/artifact (e.g. seo-insights' Site Content Report)"
+    producesReports: Boolean
+    "OAuth/API-key providers this agent declares. Drives which connect card its Settings tab shows, and which scopes that card requests."
+    credentials: [AgentCredentialDecl!]
+  }
+
+  "A credential an agent declares it needs, straight from its own definition."
+  type AgentCredentialDecl {
+    "Provider id, e.g. 'google' or 'aws'"
+    provider: String!
+    "'oauth' (default) or 'api_key'"
+    type: String
+    "OAuth scopes this agent needs. Requested verbatim — never a UI-side constant."
+    scopes: [String!]
+    "When true the agent still runs without it, with reduced capability"
+    optional: Boolean
+    "Plain-language reason, shown to the user before they authorise"
+    reason: String
   }
 
   type AgentRunRecord {
