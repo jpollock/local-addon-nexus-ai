@@ -278,14 +278,16 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
 }
 
 /**
- * Reach the process-wide EventLog through the same deps object `__agentSettingsCache` is
- * reached through. `nexusServices.eventLog` is a declared-but-optional field (src/main/mcp/
- * types.ts) assigned in src/main/index.ts inside an `if (agentDb)` block — it can legitimately
- * be undefined (agentDb missing, or called before that block runs), so every caller must
- * optional-chain rather than assume it exists. A missing log must never break the gate itself.
+ * Reach the process-wide EventLog via `deps.nexusServices` — a declared field on
+ * `IpcHandlerDeps` (unlike `__agentSettingsCache`, which is not, hence the `as any` on that one
+ * below), so no fresh cast is needed here. `nexusServices.eventLog` is itself a declared-but-
+ * optional field on `NexusServices` (src/main/mcp/types.ts), assigned in src/main/index.ts
+ * inside an `if (agentDb)` block — it can legitimately be undefined (agentDb missing, or called
+ * before that block runs), so every caller must optional-chain rather than assume it exists.
+ * A missing log must never break the gate itself.
  */
 function getEventLog(): import('./logging/eventLog').EventLog | undefined {
-  return (_agentSettingsDepsRef as any)?.nexusServices?.eventLog;
+  return _agentSettingsDepsRef?.nexusServices?.eventLog;
 }
 
 /**
