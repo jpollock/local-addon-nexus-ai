@@ -271,9 +271,27 @@ export function toKnowledgeRung(
   source: 'local' | 'wpe' | 'external',
 ): KnowledgeRung {
   const rung = (completeness && FROM_COMPLETENESS[completeness]) || 'nothing';
-  const ceiling = SOURCE_CEILING[source] ?? 'searchable';
+  // Fail closed. An unrecognised source must never receive the most permissive
+  // ceiling — that silently overstates what Nexus knows about a site type the
+  // ladder was never designed to score. Matches this module's treatment of an
+  // unrecognised `completeness`, and the project's rule against queries that
+  // silently absorb a future source (CLAUDE.md, source-semantics.test.ts).
+  const ceiling = SOURCE_CEILING[source] ?? 'nothing';
   return RUNG_ORDER.indexOf(rung) > RUNG_ORDER.indexOf(ceiling) ? ceiling : rung;
 }
+```
+
+Two further tests are required beyond the four above, because the four cannot fail on these branches:
+
+```typescript
+  test('a WP Engine install is not capped — it can reach searchable', () => {
+    expect(toKnowledgeRung('indexed', 'wpe')).toBe('searchable');
+    expect(toKnowledgeRung('metadata', 'wpe')).toBe('detailed');
+  });
+
+  test('an unrecognised source fails closed, never to the most permissive ceiling', () => {
+    expect(toKnowledgeRung('indexed', 'staging-mirror' as never)).toBe('nothing');
+  });
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
