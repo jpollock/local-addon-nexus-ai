@@ -7,8 +7,11 @@ let root: string;
 beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-runner-')); });
 afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
-const combined = () => fs.readFileSync(path.join(root, 'nexus-2026-08-09.log'), 'utf-8');
 const AT = () => new Date('2026-08-09T10:00:00Z');
+// The file is named for the LOCAL day (see eventLog.ts `localDay`), so derive it rather than
+// hardcoding this instant's UTC rendering — the two differ in most timezones.
+const day = () => AT().toLocaleDateString('en-CA');
+const combined = () => fs.readFileSync(path.join(root, `nexus-${day()}.log`), 'utf-8');
 
 function makeRunner(agentRun: (ctx?: any) => Promise<any>) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports

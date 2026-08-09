@@ -27,10 +27,46 @@ export interface LogEvent {
   sourceKind?: 'agent' | 'system';
 }
 
+function pad(n: number, width = 2): string {
+  return String(n).padStart(width, '0');
+}
+
+/**
+ * LOCAL time, not UTC.
+ *
+ * The reader is a person looking at a terminal clock, and the line carries no `Z` and no offset
+ * to warn them otherwise — a UTC stamp is simply the wrong time by the length of the offset.
+ * The filename (`localDay`) is local for the same reason, and the two must not disagree.
+ *
+ * Time only — the date is in the filename, and repeating it spends ten columns of terminal
+ * width on information the reader already has.
+ *
+ * Throws on an invalid Date, exactly as the `toISOString()` this replaced did, so `formatLine`'s
+ * outer guard still turns one into a `log.error` line instead of `NaN:NaN:NaN.NaN`.
+ */
 function timeOf(at: Date): string {
-  // Time only — the date is in the filename, and repeating it spends ten columns of terminal
-  // width on information the reader already has.
-  return at.toISOString().slice(11, 23);
+  if (!Number.isFinite(at.getTime())) throw new RangeError('Invalid time value');
+  return `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}.${pad(at.getMilliseconds(), 3)}`;
+}
+
+/**
+ * The log's day boundary, in the reader's own timezone.
+ *
+ * This is what makes the documented `tail -f nexus-$(date +%F).log` correct as written. Under a
+ * UTC filename, every evening west of Greenwich that command follows a file nothing will ever
+ * append to again — succeeding silently and showing nothing, during exactly the hours someone
+ * is asking "why didn't my agent run tonight?".
+ *
+ * `en-CA` renders `YYYY-MM-DD`. The regex guard is not decoration: on a runtime built without
+ * full ICU the locale falls back to `en-US` and yields `8/9/2026`, whose `/` is a path
+ * separator, and an invalid Date yields the literal `Invalid Date`, whose space would land in a
+ * filename. Both fall back to local date components, and an unusable clock to `unknown`.
+ */
+function localDay(at: Date): string {
+  if (!Number.isFinite(at.getTime())) return 'unknown';
+  const day = at.toLocaleDateString('en-CA');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 }
 
 /**
@@ -52,7 +88,7 @@ function safeString(v: unknown, fallback: string = 'unknown'): string {
 function safeTimeOf(at: unknown): string {
   try {
     if (at instanceof Date && !isNaN(at.getTime())) {
-      return at.toISOString().slice(11, 23);
+      return timeOf(at);
     }
     return 'HH:MM:SS.SSS'; // constant placeholder for invalid/missing time
   } catch {
@@ -60,9 +96,22 @@ function safeTimeOf(at: unknown): string {
   }
 }
 
+/**
+ * Quotes only — it must NOT mask.
+ *
+ * Every value reaching here has already been through `redactParams`, which applies the same
+ * value-shape masking WITH key context. A second, key-blind pass undoes the one carve-out that
+ * context buys: `redactParams` deliberately preserves `target` / `install_name` when the whole
+ * value is a legal WP Engine install name, and masking again turned
+ * `mutation op=wp_plugin_update target=acmeprod2026staging1` into `target=[REDACTED]` — losing
+ * the one field that says which production install was operated on.
+ *
+ * `message` still goes through `maskSecretsInString` in `formatLine`, because it is raw text
+ * that never passes through `redactParams` at all.
+ */
 function renderValue(v: unknown): string {
   try {
-    const s = maskSecretsInString(String(v ?? ''));
+    const s = String(v ?? '');
     // A bare space or '=' would break key=value parsing on the way back out.
     return /[\s="]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
   } catch {
@@ -88,11 +137,18 @@ function renderKey(k: string): string {
  *
  * Never throws — a failed format must not break a run. Returns a line describing the failure
  * so the event is not silently lost.
+ *
+ * THE LEVEL IS NOT PADDED, deliberately. Padding `INFO` and `WARN` to five columns emitted two
+ * spaces after them and one after `DEBUG`/`ERROR`, so `awk -F'  ' '{print $2}'` returned the
+ * message on a DEBUG line and the whole body on an INFO line. "Message separated by two spaces,
+ * everything else by one" and "level padded to five" cannot both hold for a four-character
+ * level; the two-space rule is the one a reader parses with, so it wins. The cost is column
+ * alignment, and only that.
  */
 export function formatLine(e: LogEvent): string {
   try {
     const at = e.at ?? new Date();
-    const parts: string[] = [timeOf(at), String(e.level ?? 'INFO').padEnd(5), e.source];
+    const parts: string[] = [timeOf(at), String(e.level ?? 'INFO'), e.source];
 
     if (e.runId) parts.push(`run=${e.runId}`);
     if (e.event) parts.push(e.event);
@@ -126,7 +182,7 @@ export function formatLine(e: LogEvent): string {
 import * as fs from 'fs';
 import * as path from 'path';
 import { rotateIfNeeded, DEFAULT_MAX_BYTES } from './rotate';
-import { LogLevel } from './Logger';
+import { LogLevel, createLogger } from './Logger';
 
 export interface EventLogOptions {
   root: string;
@@ -138,11 +194,17 @@ export interface EventLogOptions {
 
 /**
  * Sanitize a source name to a safe filename segment.
- * Removes path separators and directory-traversal sequences to prevent escaping root/agents.
+ *
+ * Collapses path separators only. A `.` is a legal filename character and is LEFT ALONE:
+ * collapsing it too made `a.b`, `a/b` and `a\b` share one log file, and `defineAgent({ name:
+ * 'my.agent' })` registers cleanly — `VALID_AGENT_NAME` is applied in `loadManifest()`, while
+ * `loadAgent()` registers on `def?.name && def?.run` alone, so a dotted source is reachable.
+ *
+ * Traversal is still impossible: separators are gone, so the result is one filename segment, and
+ * the `-YYYY-MM-DD.log` suffix means it can never BE a bare `..`.
  */
 function sanitizeSourceName(source: string): string {
-  // Remove path separators and .. segments
-  return source.replace(/[\/\\\.]/g, '_');
+  return source.replace(/[\/\\]/g, '_');
 }
 
 /**
@@ -156,6 +218,12 @@ export class EventLog {
   private readonly minLevel: LogLevelName;
   private readonly maxBytes: number;
   private readonly now: () => Date;
+  /**
+   * Paths already reported as unwritable. Keyed by path so a broken agent file and a broken
+   * combined file each get their own line, and so a new day's file is reported afresh.
+   * Bounded in practice by (days x sources) within one process lifetime.
+   */
+  private readonly reportedFailures = new Set<string>();
 
   constructor(opts: EventLogOptions) {
     this.root = opts.root;
@@ -166,7 +234,8 @@ export class EventLog {
 
   pathsFor(e: LogEvent): { combined: string; agent?: string } {
     try {
-      const day = (e.at ?? this.now()).toISOString().slice(0, 10);
+      // Local, so the file a person opens is the one `date +%F` names. See `localDay`.
+      const day = localDay(e.at ?? this.now());
       return {
         combined: path.join(this.root, `nexus-${day}.log`),
         agent: e.sourceKind === 'agent'
@@ -199,6 +268,30 @@ export class EventLog {
       try {
         fs.chmodSync(file, 0o600);
       } catch { /* best-effort mode setting */ }
-    } catch { /* one unwritable destination must not stop the other */ }
+    } catch (err) {
+      // One unwritable destination must not stop the other — but it must not be invisible
+      // either. A silent total failure is indistinguishable from "the agent never ran", which
+      // is the exact question this log exists to answer.
+      this.reportAppendFailure(file, err);
+    }
+  }
+
+  /**
+   * Report the FIRST append failure per path, to the console logger, once.
+   *
+   * Rate-limited because the alternative is a stack trace per log line — a failing log that
+   * floods the very console someone is reading to find out why it is failing. `createLogger`
+   * is console-based and has no EventLog dependency, so this cannot recurse. Never throws and
+   * returns nothing: `append` must behave identically whether or not this fires.
+   */
+  private reportAppendFailure(file: string, err: unknown): void {
+    try {
+      if (this.reportedFailures.has(file)) return;
+      this.reportedFailures.add(file);
+      const reason = err instanceof Error ? err.message : String(err);
+      createLogger('EventLog').error(
+        `Cannot append to ${file} — events for this file are being lost (reported once per file): ${reason}`,
+      );
+    } catch { /* the failure reporter must never become the failure */ }
   }
 }

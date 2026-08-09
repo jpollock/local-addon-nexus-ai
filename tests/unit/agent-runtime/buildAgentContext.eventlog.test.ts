@@ -27,12 +27,17 @@ beforeEach(() => {
 });
 afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
+const AT = () => new Date('2026-08-09T10:00:00Z');
+// The file is named for the LOCAL day (see eventLog.ts `localDay`), so derive it rather than
+// hardcoding this instant's UTC rendering — the two differ in most timezones.
+const agentFile = () => path.join(root, 'agents', `test-agent-${AT().toLocaleDateString('en-CA')}.log`);
+
 function build(runId = 'r_test1') {
-  const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: () => new Date('2026-08-09T10:00:00Z') });
+  const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
   const { ctx } = buildAgentContext({
     agent: makeAgent() as any, logDir, eventLog, runId, ...makeStubs(),
   } as any);
-  return { ctx, file: path.join(root, 'agents', 'test-agent-2026-08-09.log') };
+  return { ctx, file: agentFile() };
 }
 
 describe('ctx.log → EventLog', () => {
@@ -63,13 +68,13 @@ describe('ctx.log → EventLog', () => {
   it('honours the level on the FILE, not just the console', () => {
     // ctx.log.debug() previously appended unconditionally, which is why the level knob meant
     // nothing in practice.
-    const eventLog = new EventLog({ root, minLevel: 'INFO', now: () => new Date('2026-08-09T10:00:00Z') });
+    const eventLog = new EventLog({ root, minLevel: 'INFO', now: AT });
     const { ctx } = buildAgentContext({
       agent: makeAgent() as any, logDir, eventLog, runId: 'r_x', ...makeStubs(),
     } as any);
     ctx.log.debug('noisy');
     ctx.log.info('kept');
-    const out = fs.readFileSync(path.join(root, 'agents', 'test-agent-2026-08-09.log'), 'utf-8');
+    const out = fs.readFileSync(agentFile(), 'utf-8');
     expect(out).not.toContain('noisy');
     expect(out).toContain('kept');
   });
@@ -77,7 +82,7 @@ describe('ctx.log → EventLog', () => {
   it('still accumulates findings for AgentResult', () => {
     // Routing logs to a new destination must not break the accumulators that populate
     // AgentResult.findings — the Approvals tab and the run record both read them.
-    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: () => new Date('2026-08-09T10:00:00Z') });
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
     const built = buildAgentContext({
       agent: makeAgent() as any, logDir, eventLog, runId: 'r_acc', ...makeStubs(),
     } as any);
@@ -128,12 +133,12 @@ describe('ctx.log → EventLog', () => {
 
   it('writes DEBUG level to file when minLevel is DEBUG', () => {
     // Positive assertion: DEBUG appears when the level is set to DEBUG
-    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: () => new Date('2026-08-09T10:00:00Z') });
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
     const { ctx } = buildAgentContext({
       agent: makeAgent() as any, logDir, eventLog, runId: 'r_debug', ...makeStubs(),
     } as any);
     ctx.log.debug('debug message');
-    const out = fs.readFileSync(path.join(root, 'agents', 'test-agent-2026-08-09.log'), 'utf-8');
+    const out = fs.readFileSync(agentFile(), 'utf-8');
     expect(out).toContain('debug message');
   });
 

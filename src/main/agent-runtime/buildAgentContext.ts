@@ -131,8 +131,12 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const accSites: Record<string, { status: string; findings: Finding[] }> = {};
 
   const emit = (level: LogLevelName, e: Partial<LogEvent>): void => {
+    // `...e` FIRST: attribution is the log's contract, not a default. With the spread last, a
+    // caller passing `source` or `runId` inside `e` would silently reattribute its line to
+    // another agent or another run. No current call site does — which is precisely when to
+    // make it structurally impossible rather than to rely on it staying that way.
     eventLog?.write({
-      level, source: agentName, sourceKind: 'agent', runId, ...e,
+      ...e, level, source: agentName, sourceKind: 'agent', runId,
     } as LogEvent);
   };
 
