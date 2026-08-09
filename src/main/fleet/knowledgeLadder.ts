@@ -41,6 +41,11 @@ export function toKnowledgeRung(
   source: 'local' | 'wpe' | 'external',
 ): KnowledgeRung {
   const rung = (completeness && FROM_COMPLETENESS[completeness]) || 'nothing';
-  const ceiling = SOURCE_CEILING[source] ?? 'searchable';
+  // Fail closed. An unrecognised source must never receive the most permissive
+  // ceiling — that silently overstates what Nexus knows about a site type the
+  // ladder was never designed to score. Matches the module's own treatment of
+  // an unrecognised `completeness`, and the project's rule against queries that
+  // silently absorb a future source.
+  const ceiling = SOURCE_CEILING[source] ?? 'nothing';
   return RUNG_ORDER.indexOf(rung) > RUNG_ORDER.indexOf(ceiling) ? ceiling : rung;
 }

@@ -26,4 +26,13 @@ describe('toKnowledgeRung', () => {
     expect(KNOWLEDGE_LABELS.detailed).toBe('Detailed');
     expect(KNOWLEDGE_LABELS.searchable).toBe('Searchable');
   });
+
+  test('a WP Engine install is not capped — it can reach searchable', () => {
+    expect(toKnowledgeRung('indexed', 'wpe')).toBe('searchable');
+    expect(toKnowledgeRung('metadata', 'wpe')).toBe('detailed');
+  });
+
+  test('an unrecognised source fails closed, never to the most permissive ceiling', () => {
+    expect(toKnowledgeRung('indexed', 'staging-mirror' as never)).toBe('nothing');
+  });
 });
