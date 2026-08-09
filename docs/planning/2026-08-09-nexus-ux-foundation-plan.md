@@ -17,7 +17,7 @@
 - **`unknown` is never swallowed.** An input that cannot be read reports `unknown`, and the overall health degrades to `unknown` rather than green.
 - **Green requires every input to have actually answered.** A missing input can never produce green.
 - **The `event_queue` signal may contribute red but can never produce green on its own** — its only writer is the MU-plugin webhook, which exists only on Local sites.
-- **Never fabricate a version to keep a metric computable.** No `|| '8.0'`. Pass `undefined` and let the consumer say "unknown".
+- **Never fabricate a version for a site whose real version was not read.** Pass `undefined` and let the consumer say "unknown". This binds every path that reads a *remote* row (WPE, external), where `php_version` is genuinely absent. It does **not** bind `src/main/ipc-handlers.ts:2623`, which is guarded by `if (site)` and therefore only ever fires for a local site found in Local's own store, where a real version is supplied — CLAUDE.md documents that one as deliberately kept. Task 6 states this explicitly.
 - **The knowledge ladder has four rungs:** `nothing` → `basic` → `detailed` → `searchable`. External hosts cap at `detailed`.
 - **No new numbers in string literals.** Every derived label reads from `computeFleetCounts`.
 - **Naming deviation from the spec:** the spec called the health module `FleetHealth`. A `nexusFleetHealth` resolver already exists (`src/main/graphql/resolvers.ts:2601`) for *per-site* health scoring across the fleet. To avoid that collision the module is **`SystemHealth`** — it answers "is Nexus working?", not "is this site healthy?".
@@ -654,39 +654,111 @@ The spec requires all four computation sites to collapse. Tasks 5 and 6 covered 
 
 This pins the rule that produced the bug, independent of any one call site.
 
+This drives a real function. `completenessRatio` is what the widget and `fleet_overview` both need, and it is the thing that was wrong.
+
 ```typescript
 import { computeFleetCounts } from '../../../src/main/fleet/FleetCounts';
+import { completenessRatio } from '../../../src/main/fleet/coverageMetric';
 
-describe('coverage metrics span one source set', () => {
+describe('completenessRatio', () => {
+  // A fleet where local and installs deliberately differ, so a wrong
+  // denominator produces a different number rather than the same one.
   const counts = computeFleetCounts({
     localSiteIds: ['l1', 'l2'],
     graphRows: [
       { id: 'w1', source: 'wpe' as const, wpeSiteId: 'a' },
+      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'b' },
       { id: 'e1', source: 'external' as const, wpeSiteId: null },
     ],
   });
 
-  test('a local-only numerator must not be divided by the fleet total', () => {
-    // The bug: completeness was measured over local twins only, then rendered
-    // against local + wpe + external, producing "370/370" beside "367 sites".
-    const localOnlyNumerator = 2;
-    expect(localOnlyNumerator).toBeLessThanOrEqual(counts.local.count);
-    expect(localOnlyNumerator).not.toBe(counts.installs.count);
+  test('a local-scoped numerator divides by the local denominator', () => {
+    // 2 local sites, 5 installs. Measuring 1 local site is 50%, not 20%.
+    const r = completenessRatio({ measured: 1, scope: 'local' }, counts);
+    expect(r.denominator).toBe(2);
+    expect(r.percent).toBe(50);
   });
 
-  test('every population exposes its own denominator', () => {
-    expect(counts.local.count).toBe(2);
-    expect(counts.wpe.count).toBe(1);
-    expect(counts.external.count).toBe(1);
-    expect(counts.installs.count).toBe(counts.local.count + counts.wpe.count + counts.external.count);
+  test('a fleet-scoped numerator divides by the fleet total', () => {
+    const r = completenessRatio({ measured: 1, scope: 'installs' }, counts);
+    expect(r.denominator).toBe(5);
+    expect(r.percent).toBe(20);
+  });
+
+  test('throws when the numerator exceeds its own denominator', () => {
+    // This is the "370/370 beside 367 sites" shape — a local-scoped count
+    // larger than the local population means the scopes were mismatched.
+    expect(() => completenessRatio({ measured: 4, scope: 'local' }, counts))
+      .toThrow(/exceeds/i);
+  });
+
+  test('an empty population is 0%, not a division by zero', () => {
+    const empty = computeFleetCounts({ localSiteIds: [], graphRows: [] });
+    const r = completenessRatio({ measured: 0, scope: 'local' }, empty);
+    expect(r.percent).toBe(0);
+    expect(Number.isFinite(r.percent)).toBe(true);
   });
 });
 ```
 
-- [ ] **Step 2: Run test to verify it passes**
+- [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx jest tests/unit/fleet/coverage-metric.test.ts`
-Expected: PASS, 2 tests — this one documents an invariant rather than driving new code, so it passes immediately against Task 1's module.
+Expected: FAIL — `Cannot find module '../../../src/main/fleet/coverageMetric'`
+
+- [ ] **Step 2b: Write the implementation**
+
+Create `src/main/fleet/coverageMetric.ts`:
+
+```typescript
+import { FleetCounts } from './FleetCounts';
+
+/** Which population a measurement was taken over. */
+export type CoverageScope = 'local' | 'wpe' | 'external' | 'installs';
+
+export interface CoverageInput {
+  /** How many members of `scope` were measured. */
+  measured: number;
+  scope: CoverageScope;
+}
+
+export interface CoverageRatio {
+  numerator: number;
+  denominator: number;
+  percent: number;
+  /** The scope label, so the number can never be rendered bare. */
+  label: string;
+}
+
+/**
+ * A coverage metric's numerator and denominator must span the same source set.
+ * Measuring completeness over local sites and dividing by the fleet total is
+ * what rendered "370/370" beside "367 sites".
+ */
+export function completenessRatio(input: CoverageInput, counts: FleetCounts): CoverageRatio {
+  const population = counts[input.scope];
+  const denominator = population.count;
+
+  if (input.measured > denominator) {
+    throw new Error(
+      `Coverage numerator (${input.measured}) exceeds its own population ` +
+        `"${input.scope}" (${denominator}) — the scopes do not match.`,
+    );
+  }
+
+  return {
+    numerator: input.measured,
+    denominator,
+    percent: denominator === 0 ? 0 : Math.round((input.measured / denominator) * 100),
+    label: population.scope,
+  };
+}
+```
+
+- [ ] **Step 2c: Run test to verify it passes**
+
+Run: `npx jest tests/unit/fleet/coverage-metric.test.ts`
+Expected: PASS, 4 tests
 
 - [ ] **Step 3: Point `nexusFleetSummary` at FleetCounts**
 
