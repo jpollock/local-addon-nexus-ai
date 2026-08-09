@@ -630,7 +630,7 @@ Destructure them alongside the rest (~line 41), then replace the `agentLog` defi
       accActions.push(action);
       const level: LogLevelName = action.result === 'failed' ? 'WARN' : 'INFO';
       appendLog(level, `[action] ${action.label}${action.result ? ` — ${action.result}` : ''}${action.durationMs ? ` (${action.durationMs}ms)` : ''}`);
-      emit(level, { event: 'phase', fields: { action: action.label, result: action.result, dur: action.durationMs }, message: action.label });
+      emit(level, { event: 'action', fields: { action: action.label, result: action.result, dur: action.durationMs }, message: action.label });
     },
     phase: (name: string, description?: string) => {
       appendLog('INFO', `[phase] ${name}${description ? ': ' + description : ''}`);
@@ -641,7 +641,7 @@ Destructure them alongside the rest (~line 41), then replace the `agentLog` defi
       else accSites[site].status = status;
       const icon = status === 'clean' ? '✓' : status === 'escalated' ? '↑' : status === 'error' ? '✗' : '→';
       appendLog('INFO', `[site] ${site} — ${icon} ${status}`);
-      emit('INFO', { event: 'phase', fields: { site, status } });
+      emit('INFO', { event: 'site', fields: { site, status } });
     },
     mutation: (m) => {
       appendLog(m.ok === false ? 'WARN' : 'INFO', `[mutation] ${m.op} ${m.target} ${m.before ?? ''}→${m.after ?? ''}`);

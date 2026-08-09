@@ -86,12 +86,19 @@ Small and fixed. Anything outside it is a free-text `info`/`warn`/`error`/`debug
 | `run.end` | status, duration, findings, total cost |
 | `run.skip` | **why a run did not happen** — disabled, empty scope, load failure |
 | `phase` | name, optional detail |
+| `action` | label, result, duration |
+| `site` | site, status |
 | `llm.call` | model, turn, in/out tokens, cost, duration, transcript ref |
 | `llm.error` | model, turn, error |
 | `tool.call` | name, target, tier, duration, ok/error |
 | `mutation` | operation, target, **before→after** |
 | `finding` | severity, id, site |
 | `credential` | provider, action — never values |
+
+`action` and `site` are separate events rather than three shapes sharing `phase`. The point of a
+closed vocabulary is that `grep event=phase` returns one field shape; collapsing `{name,detail}`,
+`{action,result,dur}` and `{site,status}` under a single word costs exactly the property the
+vocabulary exists to provide. One word, one shape.
 
 `run.skip` closes the one case that currently produces zero bytes: `auto-run-gate` returns a bare
 `false`, so a scheduled run that was skipped is invisible. "The agent didn't run" is the first
