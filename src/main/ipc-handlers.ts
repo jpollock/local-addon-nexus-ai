@@ -267,8 +267,9 @@ async function withSiteRunning<T>(
   }
 }
 
-import { canAutoRunWith, AutoRunKind } from './agent-runtime/auto-run-gate';
+import { canAutoRunWith, AutoRunKind, AutoRunDecision } from './agent-runtime/auto-run-gate';
 import { newRunId } from './logging/runId';
+import type { EventLog } from './logging/eventLog';
 
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
@@ -286,8 +287,42 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
  * before that block runs), so every caller must optional-chain rather than assume it exists.
  * A missing log must never break the gate itself.
  */
-function getEventLog(): import('./logging/eventLog').EventLog | undefined {
+function getEventLog(): EventLog | undefined {
   return _agentSettingsDepsRef?.nexusServices?.eventLog;
+}
+
+/**
+ * Write the `run.skip` event for a refused automatic trigger, or do nothing when the run was
+ * allowed.
+ *
+ * Extracted out of `canAutoRun` so this — the actual behaviour this task adds — can be
+ * exercised by a real test. `_agentSettingsDepsRef` is populated only inside
+ * `registerIpcHandlers()`, which needs Electron and does far more startup work than a unit test
+ * should have to run just to reach this one side effect; taking `log` as a parameter instead of
+ * reading it off module state lets a test hand in a fake and assert on it directly, with no
+ * Electron or IPC-registration machinery involved.
+ *
+ * `log` is optional and un-thrown-on: it is `undefined` by default in every environment until
+ * the `if (agentDb)` block in `src/main/index.ts` runs (see `getEventLog` above), and that must
+ * never be the thing that breaks the gate.
+ */
+export function emitRunSkip(
+  agentId: string,
+  kind: AutoRunKind,
+  decision: AutoRunDecision,
+  log?: EventLog,
+): void {
+  if (decision.allowed) return;
+  // "The agent didn't run" is the first thing a user reports — before this, a refused
+  // scheduled or event-triggered run produced zero bytes anywhere. write() never throws.
+  log?.write({
+    level: 'INFO',
+    source: agentId,
+    sourceKind: 'agent',
+    runId: newRunId('agent'),
+    event: 'run.skip',
+    fields: { trigger: kind, reason: decision.reason },
+  });
 }
 
 /**
@@ -301,18 +336,7 @@ function getEventLog(): import('./logging/eventLog').EventLog | undefined {
 export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
   const decision = canAutoRunWith(cache?.get(agentId), kind);
-  if (!decision.allowed) {
-    // "The agent didn't run" is the first thing a user reports — before this, a refused
-    // scheduled or event-triggered run produced zero bytes anywhere. write() never throws.
-    getEventLog()?.write({
-      level: 'INFO',
-      source: agentId,
-      sourceKind: 'agent',
-      runId: newRunId('agent'),
-      event: 'run.skip',
-      fields: { trigger: kind, reason: decision.reason },
-    });
-  }
+  emitRunSkip(agentId, kind, decision, getEventLog());
   return decision.allowed;
 }
 
