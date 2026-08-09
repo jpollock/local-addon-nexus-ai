@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
 import { rotateIfNeeded, pruneOldFiles } from '../logging/rotate';
+import { EventLog, LogEvent, LogLevelName } from '../logging/eventLog';
 import { getAgentAutonomy, getAgentSettings } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
@@ -29,6 +30,10 @@ export interface AgentContextDeps {
   fullRun?: boolean;
   /** Per-run log filename (e.g. "run-1753276539000.log"). Defaults to "agent.log". */
   logFileName?: string;
+  /** When present, ctx.log writes structured events here. */
+  eventLog?: EventLog;
+  /** Correlation id stamped on every line this run produces. */
+  runId?: string;
 }
 
 export function buildAgentContext(deps: AgentContextDeps): {
@@ -38,7 +43,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accActions: AgentAction[];
   accSites: Record<string, { status: string; findings: Finding[] }>;
 } {
-  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName } = deps;
+  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId } = deps;
   const agentName = agent.name;
 
   const toolProvider = new NexusToolProvider(
@@ -125,29 +130,53 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const accActions: AgentAction[] = [];
   const accSites: Record<string, { status: string; findings: Finding[] }> = {};
 
+  const emit = (level: LogLevelName, e: Partial<LogEvent>): void => {
+    const fields = e.fields ? Object.fromEntries(
+      Object.entries(e.fields).filter(([, v]) => v !== undefined)
+    ) : undefined;
+    eventLog?.write({
+      level, source: agentName, sourceKind: 'agent', runId, ...e, fields,
+    } as LogEvent);
+  };
+
   const agentLog: AgentLogger = {
-    info:  (msg: string) => { appLog.info(msg);  appendLog('INFO',  msg); },
-    warn:  (msg: string) => { appLog.warn(msg);  appendLog('WARN',  msg); },
-    error: (msg: string) => { appLog.error(msg); appendLog('ERROR', msg); },
-    debug: (msg: string) => { appLog.debug(msg); appendLog('DEBUG', msg); },
+    info:  (msg: string) => { appLog.info(msg);  appendLog('INFO',  msg); emit('INFO',  { message: msg }); },
+    warn:  (msg: string) => { appLog.warn(msg);  appendLog('WARN',  msg); emit('WARN',  { message: msg }); },
+    error: (msg: string) => { appLog.error(msg); appendLog('ERROR', msg); emit('ERROR', { message: msg }); },
+    debug: (msg: string) => { appLog.debug(msg); appendLog('DEBUG', msg); emit('DEBUG', { message: msg }); },
     finding: (finding: Finding) => {
       accFindings.push(finding);
       const sev = finding.severity === 'critical' || finding.severity === 'high' ? 'WARN' : 'INFO';
       appendLog(sev, `[${finding.severity.toUpperCase()}] ${finding.id}: ${finding.title}${finding.site ? ` (${finding.site})` : ''}`);
+      emit(sev as LogLevelName, {
+        event: 'finding',
+        fields: { sev: finding.severity, id: finding.id, site: finding.site },
+        message: finding.title,
+      });
     },
     action: (action: AgentAction) => {
       accActions.push(action);
-      appendLog(action.result === 'failed' ? 'WARN' : 'INFO',
-        `[action] ${action.label}${action.result ? ` — ${action.result}` : ''}${action.durationMs ? ` (${action.durationMs}ms)` : ''}`);
+      const level: LogLevelName = action.result === 'failed' ? 'WARN' : 'INFO';
+      appendLog(level, `[action] ${action.label}${action.result ? ` — ${action.result}` : ''}${action.durationMs ? ` (${action.durationMs}ms)` : ''}`);
+      emit(level, { event: 'phase', fields: { action: action.label, result: action.result, dur: action.durationMs }, message: action.label });
     },
     phase: (name: string, description?: string) => {
       appendLog('INFO', `[phase] ${name}${description ? ': ' + description : ''}`);
+      emit('INFO', { event: 'phase', fields: { name, detail: description } });
     },
     siteStatus: (site: string, status: string) => {
       if (!accSites[site]) accSites[site] = { status, findings: [] };
       else accSites[site].status = status;
       const icon = status === 'clean' ? '✓' : status === 'escalated' ? '↑' : status === 'error' ? '✗' : '→';
       appendLog('INFO', `[site] ${site} — ${icon} ${status}`);
+      emit('INFO', { event: 'phase', fields: { site, status } });
+    },
+    mutation: (m) => {
+      appendLog(m.ok === false ? 'WARN' : 'INFO', `[mutation] ${m.op} ${m.target} ${m.before ?? ''}→${m.after ?? ''}`);
+      emit(m.ok === false ? 'WARN' : 'INFO', {
+        event: 'mutation',
+        fields: { op: m.op, target: m.target, before: m.before, after: m.after, ok: m.ok },
+      });
     },
   };
 

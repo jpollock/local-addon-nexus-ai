@@ -60,6 +60,13 @@ export interface AgentLogger {
   action(action: AgentAction): void;
   phase(name: string, description?: string): void;
   siteStatus(site: string, status: 'running' | 'clean' | 'findings' | 'escalated' | 'error' | string): void;
+  /**
+   * A change this agent made to a site, with what it changed from and to.
+   *
+   * Logging the intent ("ran wp plugin update") does not answer "what did it change?". The
+   * before/after pair is what makes an unexpected modification auditable from the log alone.
+   */
+  mutation(m: { op: string; target: string; before?: string; after?: string; ok?: boolean }): void;
 }
 
 export interface AIClient {
