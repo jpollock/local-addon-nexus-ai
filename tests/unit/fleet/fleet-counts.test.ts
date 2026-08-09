@@ -35,4 +35,18 @@ describe('computeFleetCounts', () => {
     expect(c.installs.count).toBe(0);
     expect(c.installs.scope.length).toBeGreaterThan(0);
   });
+
+  test('WPE rows with no parent site each count as their own site', () => {
+    const c = computeFleetCounts({
+      localSiteIds: [],
+      graphRows: [
+        { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA' },
+        { id: 'w2', source: 'wpe' as const, wpeSiteId: null },
+        { id: 'w3', source: 'wpe' as const, wpeSiteId: null },
+      ],
+    });
+    // One real parent + two unparented rows that must NOT collapse together.
+    expect(c.wpeSites.count).toBe(3);
+    expect(c.wpe.count).toBe(3);
+  });
 });
