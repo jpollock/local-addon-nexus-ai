@@ -54,4 +54,42 @@ describe('formatLine', () => {
     });
     expect(line).not.toContain('sk-abcdefghijklmnopqrstuvwx');
   });
+
+  it('never throws; pathological field values produce a fallback line', () => {
+    const evil = {
+      toString: () => { throw new Error('toString explodes'); },
+    };
+    const line = formatLine({
+      at: AT, level: 'INFO', source: 'a', event: 'mutation',
+      fields: { badValue: evil },
+    });
+    expect(line).toContain('badValue=[UNPRINTABLE]');
+    expect(line).toContain('mutation');
+  });
+
+  it('quotes field keys containing a space', () => {
+    const line = formatLine({
+      at: AT, level: 'INFO', source: 'a',
+      fields: { 'field name': 'value' },
+    });
+    expect(line).toContain('"field name"=value');
+  });
+
+  it('quotes field keys containing an equals sign', () => {
+    const line = formatLine({
+      at: AT, level: 'INFO', source: 'a',
+      fields: { 'before=after': 'value' },
+    });
+    expect(line).toContain('"before=after"=value');
+  });
+
+  it('redacts secrets embedded in field key names', () => {
+    const line = formatLine({
+      at: AT, level: 'INFO', source: 'a',
+      fields: { 'sk_test_abcdefghijk1234567': 'value', 'normal_key': 'data' },
+    });
+    // The secret-shaped key should be masked by maskSecretsInString
+    expect(line).not.toContain('sk_test_abcdefghijk1234567');
+    expect(line).toContain('normal_key=data');
+  });
 });

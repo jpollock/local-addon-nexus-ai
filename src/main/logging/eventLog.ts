@@ -34,37 +34,63 @@ function timeOf(at: Date): string {
 }
 
 function renderValue(v: unknown): string {
-  const s = maskSecretsInString(String(v ?? ''));
-  // A bare space or '=' would break key=value parsing on the way back out.
-  return /[\s="]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
+  try {
+    const s = maskSecretsInString(String(v ?? ''));
+    // A bare space or '=' would break key=value parsing on the way back out.
+    return /[\s="]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
+  } catch {
+    // Pathological toString() or Symbol.toPrimitive; return a safe placeholder
+    return '[UNPRINTABLE]';
+  }
+}
+
+function renderKey(k: string): string {
+  try {
+    // Keys must be masked and quoted like values
+    const masked = maskSecretsInString(k);
+    return /[\s="]/.test(masked) ? `"${masked.replace(/"/g, '\\"')}"` : masked;
+  } catch {
+    return '[UNPRINTABLE]';
+  }
 }
 
 /**
  * One event, one line. Newlines are collapsed rather than escaped: a multi-line payload belongs
  * in a transcript sidecar (Phase 2), and allowing one here would break every `tail`-based
  * assumption in this design.
+ *
+ * Never throws — a failed format must not break a run. Returns a line describing the failure
+ * so the event is not silently lost.
  */
 export function formatLine(e: LogEvent): string {
-  const at = e.at ?? new Date();
-  const parts: string[] = [timeOf(at), e.level.padEnd(5), e.source];
+  try {
+    const at = e.at ?? new Date();
+    const parts: string[] = [timeOf(at), String(e.level ?? 'INFO').padEnd(5), e.source];
 
-  if (e.runId) parts.push(`run=${e.runId}`);
-  if (e.event) parts.push(e.event);
+    if (e.runId) parts.push(`run=${e.runId}`);
+    if (e.event) parts.push(e.event);
 
-  if (e.fields) {
-    const safe = redactParams(e.fields);
-    for (const [k, v] of Object.entries(safe)) {
-      if (v === undefined || v === null) continue;
-      parts.push(`${k}=${renderValue(v)}`);
+    if (e.fields) {
+      const safe = redactParams(e.fields);
+      for (const [k, v] of Object.entries(safe)) {
+        if (v === undefined || v === null) continue;
+        const renderedKey = renderKey(k);
+        parts.push(`${renderedKey}=${renderValue(v)}`);
+      }
     }
-  }
 
-  let line = parts.join(' ');
-  if (e.message) {
-    const msg = maskSecretsInString(e.message).replace(/\s*\n\s*/g, ' ').trim();
-    if (msg) line += `  ${msg}`;
+    let line = parts.join(' ');
+    if (e.message) {
+      const msg = maskSecretsInString(e.message).replace(/\s*\n\s*/g, ' ').trim();
+      if (msg) line += `  ${msg}`;
+    }
+    return line;
+  } catch (err) {
+    // Losing detail beats losing the record that something happened.
+    const fallbackAt = e.at ?? new Date();
+    const fallbackMsg = String(err instanceof Error ? err.message : 'unknown error');
+    return `${timeOf(fallbackAt)} ERROR ${e.source ?? 'unknown'} event=log.error  Failed to format event: ${fallbackMsg}`;
   }
-  return line;
 }
 
 import * as fs from 'fs';
