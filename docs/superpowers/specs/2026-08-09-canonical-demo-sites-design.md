@@ -438,6 +438,8 @@ folklore.
 
 | Dependency | Owner | Blocks |
 |---|---|---|
+| ~~ACF Pro installer~~ | ~~Jeremy~~ | **Resolved 2026-08-09** — `~/Downloads/plugins/advanced-custom-fields-pro.zip`, **v6.8.6**, the same version live on Alpine Outfitters. Version parity matters: Plan 1c's `acf-json` field groups must load against it. Alpine's `install-plugins.sh` already treats that path as the convention. |
+| A Local site for `cedarvale.local` | Jeremy | Plan 1c (plugin activation) and Plan 1d (import) |
 | Two real domains (or subdomains of an owned domain), DNS-verifiable | Jeremy | M5 — GA4 property and Search Console verification |
 | HubSpot developer account | Jeremy | M5 — the backdatable CRM history |
 | Token budget approval for ~1,300 AI-written pieces | Jeremy | M3, M4 |

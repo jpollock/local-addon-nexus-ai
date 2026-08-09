@@ -3586,3 +3586,10 @@ Plan 1c (seeder plugin + ACF field groups) consumes two artifacts from this plan
 - **The `NormalizedItem` envelope** — `{slug, post_type, post_title, post_content, post_status, acf, relationships}`, where `relationships` holds **slugs**. Pass 2 of the importer resolves slugs to post IDs; nothing upstream knows a WordPress ID.
 
 The six post types to register are `location`, `provider`, `treatment`, `condition`, `insurance_plan` (plus core `post`), and the taxonomies are `metro`, `body_area`, `condition_category`, `treatment_category`, `provider_specialty`, `language_spoken`, `review_status` (spec §3.1).
+
+**ACF Pro is available and version-pinned.** The installer is at
+`~/Downloads/plugins/advanced-custom-fields-pro.zip`, **v6.8.6** — the same version
+running on Alpine Outfitters. Author the `acf-json` field groups against 6.8.6 rather
+than against whatever a fresh download provides, so a group exported from one site
+imports cleanly into the other. Alpine's `scripts/install-plugins.sh` already documents
+that path as the project convention for the manual upload step.
