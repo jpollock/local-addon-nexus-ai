@@ -37,6 +37,7 @@ import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
 import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing } from './ipc-handlers';
+import { EventLog } from './logging/eventLog';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -567,8 +568,18 @@ export default function main(context: any): void {
         );
         const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager);
 
+        // One EventLog per process, shared by every agent run — this is what lets `grep run=r_…`
+        // reassemble a run across the combined stream, the per-agent file and (later) the audit
+        // trail. Exposed on nexusServices.eventLog (below) so IPC handlers can reach it too.
+        const nexusLogRoot = path.join(
+          os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'logs',
+        );
+        const eventLog = new EventLog({ root: nexusLogRoot });
+
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
-        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager);
+        const agentRunner = new AgentRunner(
+          agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager, eventLog,
+        );
         agentScheduler = new AgentScheduler(agentRunner);
         daemonManager = new DaemonManager(agentEventBus);
 
@@ -674,6 +685,11 @@ export default function main(context: any): void {
         nexusServices.agentReload = agentReload;
         nexusServices.contributedRegistry = contributedRegistry;
         nexusServices.dispatcher = dispatcher;
+        // Not a declared NexusServices field (out of scope for this task to add — see
+        // mcp/types.ts) — reached the same way agentRunner/dispatcher are, via `as any`, so a
+        // future gate wrapper (e.g. the IPC AGENT_RUN_NOW handler) can write to the same
+        // EventLog instance without constructing a second one.
+        (nexusServices as any).eventLog = eventLog;
 
         // safeStorage.isEncryptionAvailable() can still be false this early in Local's addon
         // startup (confirmed live: false at the exact moment getAIProvider() ran above). When

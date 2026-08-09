@@ -190,6 +190,8 @@ export interface AgentResult {
   logFile?: string;
   /** Absolute path to this run's report file (AgentResult.summary written to disk). */
   reportFile?: string;
+  /** Correlation id for this run — brackets every line this run produced with run.start/run.end. */
+  runId?: string;
 }
 
 // ─── Domain output types ──────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
+import { newRunId } from '../logging/runId';
+import { EventLog } from '../logging/eventLog';
 
 const logger = createLogger('AgentRunner');
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -32,6 +34,7 @@ export class AgentRunner {
     services: NexusServices,
     resolvedProvider: ResolvedAIProvider,
     dbManager?: AgentDbManager,
+    private readonly eventLog?: EventLog,
   ) {
     this.stateStore = stateStore;
     this.toolRegistry = toolRegistry;
@@ -54,6 +57,14 @@ export class AgentRunner {
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const agentName = agent.name;
 
+    const runId = newRunId('agent');
+    const trigger = event ? 'event' : options?.logFileName ? 'manual' : 'cron';
+
+    this.eventLog?.write({
+      level: 'INFO', source: agentName, sourceKind: 'agent', runId,
+      event: 'run.start', fields: { trigger, fullRun: options?.fullRun ?? false },
+    });
+
     const { ctx, agentLog, accFindings, accActions, accSites } = buildAgentContext({
       agent,
       event,
@@ -65,6 +76,8 @@ export class AgentRunner {
       dbManager: this.dbManager,
       fullRun: options?.fullRun ?? false,
       logFileName: options?.logFileName,
+      eventLog: this.eventLog,
+      runId,
     });
 
     let status: AgentResult['status'] = 'success';
@@ -105,7 +118,7 @@ export class AgentRunner {
       }
     }
 
-    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error };
+    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error, runId };
 
     // Merge structured log events accumulated during the run
     if (accFindings.length > 0) result.findings = accFindings;
@@ -143,6 +156,14 @@ export class AgentRunner {
         } catch { /* non-fatal — report still accessible via DB summary */ }
       }
     }
+
+    this.eventLog?.write({
+      level: status === 'success' ? 'INFO' : 'ERROR',
+      source: agentName, sourceKind: 'agent', runId,
+      event: 'run.end',
+      fields: { status, dur: `${result.finishedAt - result.startedAt}ms`, findings: result.findings?.length ?? 0 },
+      message: error,
+    });
 
     this.stateStore.recordRun(result);
     return result;
