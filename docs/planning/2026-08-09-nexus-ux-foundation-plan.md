@@ -415,15 +415,17 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
   try {
     const db = deps.getDb();
     if (db) {
-      graphRows = db
+      // The graph column is snake_case; FleetCounts takes camelCase. Map once,
+      // on the way out of the database, so nothing downstream sees both shapes.
+      const rows = db
         .prepare(
           "SELECT id, source, wpe_site_id FROM sites WHERE source IN ('wpe','external') AND is_active = 1",
         )
-        .all() as Array<{ id: string; source: 'wpe'; wpeSiteId: string | null }>;
-      graphRows = (graphRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+        .all() as Array<{ id: unknown; source: unknown; wpe_site_id: unknown }>;
+      graphRows = rows.map((r) => ({
         id: String(r.id),
         source: r.source as 'wpe' | 'external',
-        wpeSiteId: (r.wpe_site_id as string | null) ?? null,
+        wpeSiteId: r.wpe_site_id == null ? null : String(r.wpe_site_id),
       }));
     }
   } catch {
