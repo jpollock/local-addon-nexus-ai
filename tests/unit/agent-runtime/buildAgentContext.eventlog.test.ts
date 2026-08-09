@@ -85,4 +85,60 @@ describe('ctx.log → EventLog', () => {
     expect(built.accFindings).toHaveLength(1);
     expect(built.accFindings[0].id).toBe('A');
   });
+
+  it('emits warn() with WARN level to the event log', () => {
+    const { ctx, file } = build();
+    ctx.log.warn('warning message');
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toMatch(/WARN.*test-agent.*warning message/);
+  });
+
+  it('emits error() with ERROR level to the event log', () => {
+    const { ctx, file } = build();
+    ctx.log.error('error message');
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toMatch(/ERROR.*test-agent.*error message/);
+  });
+
+  it('emits action() with result and duration fields', () => {
+    const { ctx, file } = build();
+    ctx.log.action({ label: 'cleanup', result: 'ok', durationMs: 1500 });
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toContain('phase action=cleanup result=ok dur=1500');
+  });
+
+  it('emits siteStatus() with site and status fields', () => {
+    const { ctx, file } = build();
+    ctx.log.siteStatus('mysite', 'clean');
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toContain('phase site=mysite status=clean');
+  });
+
+  it('records a mutation with ok: false as WARN level', () => {
+    const { ctx, file } = build();
+    ctx.log.mutation({ op: 'wp_plugin_update', target: 'failedsite', before: 'old 1.0', after: 'new 2.0', ok: false });
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toMatch(/WARN.*mutation/);
+    expect(out).toContain('ok=false');
+  });
+
+  it('writes DEBUG level to file when minLevel is DEBUG', () => {
+    // Positive assertion: DEBUG appears when the level is set to DEBUG
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: () => new Date('2026-08-09T10:00:00Z') });
+    const { ctx } = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, runId: 'r_debug', ...makeStubs(),
+    } as any);
+    ctx.log.debug('debug message');
+    const out = fs.readFileSync(path.join(root, 'agents', 'test-agent-2026-08-09.log'), 'utf-8');
+    expect(out).toContain('debug message');
+  });
+
+  it('omits site key from finding when site is not provided', () => {
+    // Confirms formatLine handles undefined fields correctly: no bare site= in output
+    const { ctx, file } = build();
+    ctx.log.finding({ id: 'NO-SITE', severity: 'low', title: 'issue without site' } as any);
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toContain('finding sev=low id=NO-SITE');
+    expect(out).not.toContain('site=');
+  });
 });

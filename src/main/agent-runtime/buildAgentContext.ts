@@ -131,11 +131,8 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const accSites: Record<string, { status: string; findings: Finding[] }> = {};
 
   const emit = (level: LogLevelName, e: Partial<LogEvent>): void => {
-    const fields = e.fields ? Object.fromEntries(
-      Object.entries(e.fields).filter(([, v]) => v !== undefined)
-    ) : undefined;
     eventLog?.write({
-      level, source: agentName, sourceKind: 'agent', runId, ...e, fields,
+      level, source: agentName, sourceKind: 'agent', runId, ...e,
     } as LogEvent);
   };
 
