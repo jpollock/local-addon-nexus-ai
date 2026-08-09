@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #f4f2ee; -webkit-font-smoothing: antialiased; }
+  a { color: #0d7c74; }
+  a:hover { color: #095e58; }
+</style>
+</helmet>
+
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1b1f1e; background: #f4f2ee; padding: 64px 32px 120px; display: flex; justify-content: center;">
+<div style="width: 100%; max-width: 880px; display: flex; flex-direction: column; gap: 56px;">
+
+  <div style="display: flex; flex-direction: column; gap: 18px; border-bottom: 2px solid #1b1f1e; padding-bottom: 28px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #6c7370;">UX Review · Local Add-on · August 2026</div>
+    <h1 style="margin: 0; font-size: 52px; line-height: 1.02; font-weight: 600; letter-spacing: -0.025em;">Nexus AI feels sprawling because it is organized around itself</h1>
+    <p style="margin: 0; font-size: 19px; line-height: 1.55; color: #3d4441; max-width: 640px; text-wrap: pretty;">Read against 14 screenshots and the <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;">local-addon-nexus-ai</span> source. Four structural problems, seventeen findings, a proposed information architecture, and a sequence to get there.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 20px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #6c7370;">The short version</div>
+    <p style="margin: 0; font-size: 20px; line-height: 1.6; font-weight: 500; text-wrap: pretty;">Nexus is built around its subsystems — indexers, sync jobs, credential stores, an MCP server, a proxy, five agents — and the UI is a faithful map of that architecture. But a user has two jobs: ask questions about their fleet, and decide on what the agents found. Neither has a home. Both are scattered across six tabs, three chat surfaces, two settings pages, and a floating button.</p>
+    <p style="margin: 0; font-size: 17px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">The sprawl is not primarily a visual-density problem. Cutting cards and tightening spacing would leave the same app. The fix is to decide what Nexus is <em>for</em>, promote those two jobs to the top level, and demote everything else — ports, token counts, index progress, sync intervals — to places you visit when something is wrong.</p>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #d8d4cc; border: 1px solid #d8d4cc; margin-top: 8px;">
+      <div style="background: #faf9f7; padding: 18px 16px; display: flex; flex-direction: column; gap: 4px;"><div style="font-size: 30px; font-weight: 600; letter-spacing: -0.02em;">6 → 4</div><div style="font-size: 13px; line-height: 1.4; color: #6c7370;">top-level tabs</div></div>
+      <div style="background: #faf9f7; padding: 18px 16px; display: flex; flex-direction: column; gap: 4px;"><div style="font-size: 30px; font-weight: 600; letter-spacing: -0.02em;">3 → 1</div><div style="font-size: 13px; line-height: 1.4; color: #6c7370;">chat surfaces</div></div>
+      <div style="background: #faf9f7; padding: 18px 16px; display: flex; flex-direction: column; gap: 4px;"><div style="font-size: 30px; font-weight: 600; letter-spacing: -0.02em;">2 → 1</div><div style="font-size: 13px; line-height: 1.4; color: #6c7370;">settings homes</div></div>
+      <div style="background: #faf9f7; padding: 18px 16px; display: flex; flex-direction: column; gap: 4px;"><div style="font-size: 30px; font-weight: 600; letter-spacing: -0.02em;">6 → 3</div><div style="font-size: 13px; line-height: 1.4; color: #6c7370;">words for "how much we know"</div></div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px; background: #fff; border: 1px solid #ddd9d1; padding: 28px 30px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #6c7370;">Where Nexus currently lives</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+      <div style="font-size: 14px; padding: 7px 12px; background: #f1efea; border: 1px solid #ddd9d1;">Left rail icon → Nexus AI Dashboard (6 tabs)</div>
+      <div style="font-size: 14px; padding: 7px 12px; background: #f1efea; border: 1px solid #ddd9d1;">Floating ✦ button → docked chat</div>
+      <div style="font-size: 14px; padding: 7px 12px; background: #f1efea; border: 1px solid #ddd9d1;">Preferences → Nexus AI (6 sections)</div>
+      <div style="font-size: 14px; padding: 7px 12px; background: #f1efea; border: 1px solid #ddd9d1;">Per-site → Nexus AI section</div>
+      <div style="font-size: 14px; padding: 7px 12px; background: #f1efea; border: 1px solid #ddd9d1;">MCP server / CLI</div>
+    </div>
+    <p style="margin: 4px 0 0; font-size: 15px; line-height: 1.6; color: #3d4441;">Five front doors, each with its own model of the product. A new user has no way to learn which one to open, and the app never tells them — except once, on Ask/Tell, where it recommends leaving for the CLI.</p>
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #b5502a;">Problem A</div>
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">Too many front doors, and the good one is hidden</h2>
+    <p style="margin: 0; font-size: 17px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">The same capability is reachable three or four different ways, at three or four different qualities. Users pick whichever one they stumble into first, which is rarely the best one.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 32px;">
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">01</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Three chat surfaces, and the product apologizes for one of them</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">There is an "Ask Nexus AI" box on Dashboard, an Ask/Tell tab, and the docked panel. The docked panel is clearly the real product — session history, context selector, rich formatted answers, follows you across tabs. Ask/Tell is an empty box under a banner that reads "Ask/Tell is a quick way to try Nexus AI. For a richer experience with full tool support, use the MCP server or CLI." A tab whose own copy says to go use something else should not be a tab.</p>
+      <div style="margin-left: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.22.55%20PM.png" style="width: 100%; display: block;" alt="Ask/Tell empty state" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">Ask/Tell — an empty tab that recommends the CLI</div></div>
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.23.01%20PM.png" style="width: 100%; display: block;" alt="Docked Nexus chat panel" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">The docked panel — the actual product, behind a floating button</div></div>
+      </div>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> delete Ask/Tell and the dashboard prompt box. Promote the docked panel to a first-class destination that can also open full-width. One chat, one history, one quality bar.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">02</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Settings has two homes that each know about the other</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Preferences → Nexus AI holds AI provider, gateway, WPE credentials, AWS S3, connected accounts, chat history, external SSH hosts. Dashboard → Settings holds auto-indexing, sync schedule, WPE access &amp; permissions. Neither is a subset of the other, and the code shows the seam: the Settings tab renders "Manage in Preferences → Nexus AI" as a hint, and <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;">SettingsTab.tsx</span> keeps state "not just in NexusPreferences" so its permissions section can render. Access &amp; Permissions appears in both.</p>
+      <div style="margin-left: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.24.11%20PM.png" style="width: 100%; display: block;" alt="Preferences Nexus AI" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">Preferences → Nexus AI</div></div>
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.23.53%20PM.png" style="width: 100%; display: block;" alt="Dashboard settings tab" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">Dashboard → Settings</div></div>
+      </div>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> one home. Everything configuration-shaped goes to Preferences → Nexus AI; the Settings tab disappears. If a setting is needed in flow, surface it as a link back, never as a second copy.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">03</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Six background jobs, each configured independently, none priced</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Content index interval, offline site scan, metadata sync, site info updates, content index for WPE — five checkbox-plus-hours rows, plus per-agent schedules, plus a Schedule button on Dashboard. The real cost is buried in body copy: "Opens one SSH connection per install," "Also uses one SSH connection per install," "no extra connection cost." At 333 installs those sentences are the whole decision, and nobody reads them.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> one "Background work" page with a master switch and a plain-language consequence per row — "≈333 SSH connections every 4 hours, last run took 11 min." Make the cost the value in the row, not a sentence under it.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">04</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Naming assumes the reader built the system</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Ask/Tell, Preflight, Local Twins, Deep Scan Scope, Fleet Intelligence, Data Completeness, Auto One-Click Admin, Nexus itself. Several are internal shorthand promoted to UI labels. "Ask/Tell" in particular is a distinction only the implementer cares about — the user just talks to it.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> rename to what the user would say. Ask, Sites, Agents, Inbox. Reserve invented nouns for things that genuinely have no plain name.</div>
+    </div>
+
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #b5502a;">Problem B</div>
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">The dashboard reports on the software, not the fleet</h2>
+    <p style="margin: 0; font-size: 17px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">The landing surface answers "is Nexus working?" A user opens it wanting to know "is anything wrong with my 367 sites?"</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 32px;">
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">05</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">The first screen is an install log</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Above the fold: a prompt box, a terminal command to paste into Claude Code, MCP server port 10801, 201 tools, v0.1.0. Then three progress bars, a WordPress-version histogram, two "Running" service cards with port numbers, and a gateway cost readout showing $0.0000. Setup instructions and process health are permanent furniture on the most-visited screen. Nothing here changes what the user does next.</p>
+      <div style="margin-left: 32px; border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.22.38%20PM.png" style="width: 100%; display: block;" alt="Dashboard top" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">Dashboard, above the fold — MCP setup commands and port numbers</div></div>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> move connection instructions into a one-time setup flow plus a Preferences page. Move service health into a single status line that turns red when it isn't green. Give the space back to what needs a human.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #c0392b;">06</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">The site counts do not reconcile — this is the biggest trust problem in the set</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Across four screens the same fleet is described as: 367 sites (37 local · 330 WPE); Remote Sites 330 with "29 linked · 301 not linked"; WPE-connected 19; Data Completeness 370/370; WP Engine 333 installs; "11 of 14 accounts"; and Agents settings "11 accounts". Six different totals. Some of these are legitimately different quantities, but the UI gives no way to tell which — so the reasonable conclusion is that the numbers are unreliable, which poisons everything else on the page.</p>
+      <div style="margin-left: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.22.43%20PM.png" style="width: 100%; display: block;" alt="Data completeness and fleet intelligence" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">370/370 and 367 sites, same screen</div></div>
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.23.08%20PM.png" style="width: 100%; display: block;" alt="Operations tab site status" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">333 installs, 11 of 14 accounts</div></div>
+      </div>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> define one canonical fleet count and one canonical scope, compute both in one place, and render them identically everywhere. Where a number is scoped differently, say so in the label ("333 installs in 11 included accounts"), never silently.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">07</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Six vocabularies for one idea</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">"How much does Nexus know about this site?" is expressed as Scanned / Configured / Searchable, as indexed / metadata / filesystem, as fresh / stale, as synced / needs SSH sync, as a three-dot meter, and as a percentage bar. They overlap but do not map cleanly onto each other, so no amount of use builds a model.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> one ladder, one name, three rungs — <span style="font-weight:600;">Basic → Detailed → Searchable</span> — with freshness as a separate timestamp, not a second vocabulary. Use the same three words in the site table, the fleet summary, and the agent scope picker.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">08</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Big numbers spent on small facts</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Activity leads with three hero cards: 104 total events, 0 today, All Systems Healthy. The largest type on the screen is a zero. Meanwhile "31 actions need your review" — the only number that implies work — is a banner on a different tab.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> size type by consequence. Pending reviews and failing agents get the hero treatment; lifetime event counts get a caption.</div>
+    </div>
+
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #b5502a;">Problem C</div>
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">Nothing is triaged, so everything looks equally urgent</h2>
+    <p style="margin: 0; font-size: 17px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Lists are rendered in arrival order at uniform weight. The app has plenty of signal about what matters and uses none of it to sort.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 32px;">
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #c0392b;">09</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">"All Systems Healthy" while an agent fails every twenty minutes</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">The Activity tab shows a green "All Systems Healthy" and a Top Issues panel with a checkmark and "No issues detected." On the Agents tab at the same moment: security-sentinel has a red last-status, 17 items need review, and its activity log shows five identical failures between 15:17 and 18:00. Health is being computed from the wrong inputs, and a health indicator that can be confidently wrong is worse than none.</p>
+      <div style="margin-left: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.23.29%20PM.png" style="width: 100%; display: block;" alt="Activity tab all systems healthy" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">Activity: no issues detected</div></div>
+        <div style="border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.23.47%20PM.png" style="width: 100%; display: block;" alt="Agent failures" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">Same period: five consecutive sweep failures</div></div>
+      </div>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> health rolls up agent run status, stale syncs, and credential failures. If any input is unknown, say "unknown" rather than green.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #c0392b;">10</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Errors are printed, not handled</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">One entry is a 500-character shell command with absolute paths and inline PHP. Four others read "(s.evidence || []).map is not a function" — an internal type error shown verbatim to the user, four times, with no aggregation, no cause, no action. A row labelled "sweep complete" says "No summary available." The log is a transcript of the implementation rather than an account of what happened.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> collapse repeats into one row — "Sweep failed 5× since 15:17" — with a plain-language cause, a Retry, a Mute, and raw detail behind a disclosure. Auto-pause an agent after N consecutive identical failures and raise it to the inbox.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">11</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Approval debt is a badge, not a place</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">31 pending decisions are announced in a banner on Agents, split as 17 on one agent's sub-tab and the rest elsewhere. Reviewing agent proposals is plausibly the single most frequent recurring task in this product, and it has no destination — you reach it through two levels of tab.</p>
+      <div style="margin-left: 32px; border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.23.36%20PM.png" style="width: 100%; display: block;" alt="Agents hub" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">The review queue as a banner above five agent cards</div></div>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> make Inbox the first destination and the default landing view, aggregating approvals, findings, and failures across all agents. Badge it in Local's left rail so it is visible without opening Nexus.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">12</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Operations is 37 identical rows and four equally-weighted buttons</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Every row reads "halted · Searchable · 7h ago." Nothing is sorted by staleness or by problem, so scanning is pointless and the only usable interaction is expanding a row you already knew to look for. Above it, four full-width teal buttons compete at identical weight, and an empty Bulk Operations panel occupies roughly 200px to say "No bulk operations yet."</p>
+      <div style="margin-left: 32px; border: 1px solid #ddd9d1; background: #fff;"><img src="uploads/Screenshot%202026-08-09%20at%201.23.14%20PM.png" style="width: 100%; display: block;" alt="Operations site list" /><div style="font-size: 12px; padding: 8px 10px; color: #6c7370; border-top: 1px solid #eee9e1;">Twenty-three rows of the same three facts</div></div>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> fold this into a single Sites table — sortable, filterable, searchable, with selection. Operations become actions on a selection rather than a separate tab, which also removes the "which list am I in" problem between Dashboard, Operations, and agent scope pickers.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">13</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">The event timeline is mostly auto-drafts and the word UNKNOWN</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Seven of eight visible rows are auto-draft creation and deletion, every one tagged UNKNOWN. This is WordPress background churn, recorded faithfully and surfaced at full weight. It teaches users that the timeline is not worth reading.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> filter auto-drafts and revisions by default. If actor is unresolvable, omit the field rather than print UNKNOWN.</div>
+    </div>
+
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #b5502a;">Problem D</div>
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">Craft debt that makes it feel heavier than it is</h2>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 32px;">
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">14</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">One column at 1500px</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Every screen is a stack of full-width white cards. Settings rows put a label at x=140 and its control at x=1450, with a thousand pixels of nothing between them — the checkbox and the thing it controls are as far apart as the layout allows. Buttons stretch to 700px. The eye has no anchor and the page reads as endless.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> cap content at ~1100px, size buttons to their labels, and keep a control within a few hundred pixels of its label.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">15</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Two visual systems in one product</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">The docked chat is dark with cyan accents; the dashboard is white with teal; the agent workspace uses a third, deeper teal with pill buttons; Preferences uses Local's native grey chrome. Four looks, reachable within two clicks of each other.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> adopt Local's chrome everywhere and keep exactly one accent. The chat panel should follow the app's light/dark setting, not impose its own.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">16</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Empty states are dead ends</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">"No bulk operations yet." "No AI requests in this time period." "No summary available." "Last run: Never run" on two of five agents. Each is a large reserved area that states a negative and offers nothing.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> either collapse the panel entirely, or make the empty state the invitation — a never-run agent should show "Run now" as its primary content.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">17</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Four levels of nesting inside one tab</h3>
+      </div>
+      <p style="margin: 0 0 0 32px; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Dashboard tab → Agents → an agent → Settings/Approvals/Activity/Tools/Docs → an approval drawer. The only wayfinding is a small "‹ All agents" link, and the outer tab bar stays highlighted on "Agents" the whole time so the header never tells you where you are. Each tab keeps its own scroll position, so returning to Operations drops you mid-list.</p>
+      <div style="margin-left: 32px; font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> a real breadcrumb at every depth, and reset scroll to top on tab entry unless the user is returning from a detail view.</div>
+    </div>
+
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #b5502a;">After your answers</div>
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">Three of your answers change the diagnosis</h2>
+    <p style="margin: 0; font-size: 17px; line-height: 1.65; color: #3d4441; max-width: 640px; text-wrap: pretty;">Everything above still holds, but the target user you described makes two of the problems much larger and one of them smaller.</p>
+
+    <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #c0392b; padding: 26px 30px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #c0392b;">A</span><h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Content strategists and marketing PMs cannot read this product today</h3></div>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">If the vision is the tool for non-developers managing sites, the current surface is the wrong language nearly everywhere. On the four most-visited screens a non-dev encounters: an MCP server port, a <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;">claude mcp add</span> terminal command, "201 tools available", "77 unknown (need SSH sync)", "Opens one SSH connection per install", a vector database size in megabytes, a raw wp-cli invocation with absolute paths, and a JavaScript type error. None of these are things a marketing PM can act on, and several are the largest text on their screen.</p>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">This is bigger than renaming, and — since you don't want a dual mode — it has to be settled in the single surface rather than gated behind a toggle. That is the harder and better answer: anything requiring a mental model of SSH, CLI, indexes, embeddings, or ports either gets translated into consequences a non-developer can act on, or it leaves the main surface entirely for Preferences → Advanced. "77 unknown (need SSH sync)" becomes "77 sites we haven't looked inside yet — Sync now." Port numbers and tool counts become one health line. A vector database size becomes nothing at all.</p>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">The test for each item is whether a developer would miss it. Most of this material is reassurance that the machinery is running, not something anyone acts on — which is why one surface can serve both audiences without a mode.</p>
+      <div style="font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Test for it:</span> take any screen and ask whether a web PM could explain, in one sentence, what it is telling them and what they should do. Dashboard, Operations, and Activity all fail that test right now.</div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #b5502a; padding: 26px 30px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">B</span><h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">"Lightweight path" and "THE tool for non-devs" are different products</h3></div>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">A lightweight path can afford to be a text box that hands off to the CLI when things get real. The tool for non-devs cannot hand off to anything — chat is the entire interface, because it is the only surface where a content strategist can express intent without learning the fleet vocabulary. That hedge is precisely what produced three chat surfaces of three different qualities.</p>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">If you commit to the non-dev vision, chat needs what the docked panel doesn't have yet: suggested openers grounded in that user's actual fleet, results rendered as UI rather than markdown tables, and every action shown as a preview with an undo before it runs. Right now a good answer is a wall of prose the user has to re-read to act on.</p>
+      <div style="font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Landing rule:</span> open on Inbox when anything is waiting on a decision, otherwise open on Ask. Agency operators will nearly always land on Inbox; a marketing PM with no pending approvals lands where they can just ask.</div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #b5502a; padding: 26px 30px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #b5502a;">C</span><h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">If Dashboard is a health check, it is a pill — not a tab</h3></div>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">"Is this thing working?" is one bit of information, checked often and briefly. It currently costs a full tab, roughly three screens of scroll, and it answers the question wrong — Activity says all systems healthy while an agent fails hourly. A question asked that often deserves a persistent indicator in the header: green with a timestamp, red with the one thing that's broken and a way to fix it. Click it for the port numbers and service versions.</p>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">This also makes the fix for finding 09 non-optional. A health pill that can be confidently wrong is worse than the current tab, because people will stop opening the tab and start trusting the pill.</p>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #6c7370; padding: 26px 30px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #6c7370;">D</span><h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">First run, for someone with 300 sites and no terminal</h3></div>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">You named first-time users with lots of sites as a target, and the current first-run experience is a dashboard whose most prominent content is a command to paste into a terminal, above three progress bars that will read 0%. Nothing invites the first useful action, and the initial sync across hundreds of installs is invisible work that takes real time.</p>
+      <div style="font-size: 16px; line-height: 1.6; padding: 12px 16px; background: #edf5f3; border-left: 3px solid #0d7c74;"><span style="font-weight: 600;">Fix:</span> a first-run that connects accounts, shows the fleet appearing as it syncs, and ends on one answered question about their own sites. Defer every agent, credential, and schedule until after that moment.</div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #6c7370; padding: 26px 30px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #6c7370;">E</span><h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">On the six site counts: "not sure" is the finding</h3></div>
+      <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">If the person who built it can't say from the screenshots whether 367, 370, 333, 330, 29, and 19 are consistent, no user can. Worth an hour: write down what each number is scoped to, find which ones disagree, and put the definition in the label.</p>
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #b5502a;">The vision frames</div>
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">Four ideas worth taking now, three worth resisting</h2>
+    <p style="margin: 0; font-size: 17px; line-height: 1.65; color: #3d4441; max-width: 640px; text-wrap: pretty;">Read carefully, the mockups are not a redesigned Nexus. They are a redesigned Local, with Nexus dissolved into it — new top-level nav, a new object model, a persistent assistant panel. That is a much larger commitment than fixing the add-on, and you said you are not looking to do all of it. The useful move is to separate the ideas from the scope.</p>
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="background: #0d7c74; color: #fff; padding: 26px 30px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #a8ded9;">Take it — highest value, smallest blast radius</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600;">The right-hand Insights / Chat panel</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #e4f4f2; text-wrap: pretty;">One panel, two tabs, always present, contextual to whatever is on screen. It resolves three separate findings at once: it is the single chat surface (finding 01), it is the health pill with somewhere to expand into (finding 05 and C), and Insights — broken links, server errors, the publishing checklist, an agent finding with a <span style="font-weight:600;">Review →</span> — is the Inbox, delivered where the user already is instead of as a tab they must remember to open. Almost everything it displays already exists in Nexus. This is mostly repackaging, and I would build it before anything else.</p>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 26px 30px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74;">Take it</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600;">Agents become Workflows, named by outcome and grouped by goal</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">"Automations and agents that do real work on your site. Pick one and run it," then For Content / For Performance / For Search / For Security, each card one sentence and one button. Compare with today: five agents named after their mechanism, each opening into five sub-tabs of autonomy levels, event triggers, and site scope. A content strategist can choose "Redirect Manager" from its description. Nobody outside the team can choose "security-sentinel" with an autonomy level of Suggest only.</p>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">The detail page is the other half of it: two configuration fields on the left, a numbered "What it does" on the right. That five-line list is better documentation than the Docs sub-tab, and it is what makes running an unfamiliar automation feel safe. Today's configuration doesn't have to disappear — put it behind an Advanced link.</p>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 26px 30px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74;">Take it</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600;">Approvals as inline numbered cards, not a queue</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">"Add 'is best' here to aid organic SEO/AEO — 1 of 2" with Approve / Deny / Skip / Chat, while the affected text is highlighted in the editor beside it. The decision arrives with its evidence attached and costs one keystroke. That is the right answer to 31 pending actions: not a better-organized backlog, but a delivery mechanism that keeps the backlog from forming. It also directly answers your first reply — agents belong, and this is how they belong for a non-developer.</p>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 26px 30px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74;">Take it</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600;">Runs shown as a live checklist, in plain language</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Connected to Google Drive ✓ · Read the doc ✓ · Generating WordPress draft, 2,847 words imported · Detect categories &amp; tags · Create Asana task. Five lines anyone can read, with a Cancel. Set that against the current activity log's 500-character shell command. Same underlying events, opposite legibility. Adopting this format alone fixes most of finding 10.</p>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 8px;">
+      <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #c0392b; padding: 26px 30px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #c0392b;">Careful — the gap</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600;">There are four sites in every frame. Your user has 367.</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Home lists sites as four cards across the top. Projects lists four in a sidebar. The chat asks "Which site is this for?" and offers a list of four. None of this survives contact with an agency fleet — there is no table, no filter, no search, no selection, no bulk action, no notion of a site you have never opened. You named agency customers with 300+ installs as target one, and this vision currently has no answer for them. That is the biggest thing to resolve before these frames become the plan, and it is exactly where the Sites table from the previous section slots in.</p>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #c0392b; padding: 26px 30px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #c0392b;">Careful — the risk</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600;">The assistant commits real changes on a client's live site</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Across these frames chat creates a WordPress post, edits body copy, adds schema, writes an Nginx deny rule, schedules a publish for 9am, posts to a client's Slack, and emails a client for approval. The instincts are good — "Block it. Stage it first," then "Staged ✓ ... Test it, then I'll push to prod." But that safety is currently a property of how the conversation happened to go, not of the system. For a marketing PM operating on a client site, staging and revert have to be structural: every write produces a staged diff, the panel always shows what is staged versus live, and one control reverts it. Get that right and the non-dev vision is defensible. Leave it conversational and one bad turn ends the pilot.</p>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #ddd9d1; border-left: 4px solid #b5502a; padding: 26px 30px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #b5502a;">Careful — the regression</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600;">The agent picker puts the mechanism back in the composer</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Under the message box: Auto · Content · SEO · Site health · Orchestrator · Page builder · Search Visibility. Choosing correctly requires knowing how the system is decomposed — the same demand today's UI makes, relocated. If Auto works, show only Auto and let the panel state which specialist answered after the fact ("Switched to Productivity agent" already does this well). If Auto doesn't work reliably, that is a routing problem to solve rather than a menu to expose.</p>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3d4441; text-wrap: pretty;">Two smaller notes in the same spirit: a running workflow appears as a checklist in one frame and as chat messages in another — pick one representation. And Blueprints and Add-ons don't explain themselves from these frames; a nav item whose meaning isn't obvious costs more than it saves.</p>
+      </div>
+    </div>
+
+    <div style="background: #1b1f1e; color: #f4f2ee; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #8a918d;">The decision underneath all of it</div>
+      <p style="margin: 0; font-size: 17px; line-height: 1.6; text-wrap: pretty;">These frames and today's Nexus disagree about who owns the surface. In the vision, Nexus disappears into Local as a panel and a nav item — there is no Nexus dashboard at all. Today it is a destination you visit. Both are defensible; you cannot build toward both. Deciding it determines whether the next six months is an add-on that gets simpler or a product direction for Local, and every question below it — where settings live, whether the health check is a tab or a pill, whether agents are configured or picked — falls out of that one answer.</p>
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">Proposed structure</h2>
+    <p style="margin: 0; font-size: 17px; line-height: 1.65; color: #3d4441; max-width: 640px; text-wrap: pretty;">Four destinations, ordered by how often a person needs them. Everything removed from the top level still exists — it moves to where it is relevant, or to Preferences.</p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 24px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6c7370; margin-bottom: 16px;">Today</div>
+        <div style="display: flex; flex-direction: column; gap: 9px; font-size: 15px;">
+          <div style="padding: 9px 12px; background: #f4f2ee;">Dashboard <span style="color:#8a918d;">— ports, setup, progress bars</span></div>
+          <div style="padding: 9px 12px; background: #f4f2ee;">Ask/Tell <span style="color:#8a918d;">— degraded chat</span></div>
+          <div style="padding: 9px 12px; background: #f4f2ee;">Operations <span style="color:#8a918d;">— 37 rows + bulk jobs</span></div>
+          <div style="padding: 9px 12px; background: #f4f2ee;">Activity <span style="color:#8a918d;">— event log + storage</span></div>
+          <div style="padding: 9px 12px; background: #f4f2ee;">Agents <span style="color:#8a918d;">— 5 agents × 5 sub-tabs</span></div>
+          <div style="padding: 9px 12px; background: #f4f2ee;">Settings <span style="color:#8a918d;">— overlaps Preferences</span></div>
+          <div style="padding: 9px 12px; background: #f4f2ee; border-top: 1px dashed #ccc6bb;">✦ floating chat · Preferences → Nexus AI · per-site section</div>
+        </div>
+      </div>
+      <div style="background: #0d7c74; color: #fff; border: 1px solid #0d7c74; padding: 24px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #a8ded9; margin-bottom: 16px;">Proposed</div>
+        <div style="display: flex; flex-direction: column; gap: 9px; font-size: 15px;">
+          <div style="padding: 9px 12px; background: rgba(255,255,255,0.14);"><span style="font-weight: 600;">Inbox</span> <span style="color:#bfe6e2;">— approvals, findings, failures. Default view.</span></div>
+          <div style="padding: 9px 12px; background: rgba(255,255,255,0.14);"><span style="font-weight: 600;">Ask</span> <span style="color:#bfe6e2;">— the docked panel, promoted; sessions on the left</span></div>
+          <div style="padding: 9px 12px; background: rgba(255,255,255,0.14);"><span style="font-weight: 600;">Sites</span> <span style="color:#bfe6e2;">— one table for all 367; operations act on a selection</span></div>
+          <div style="padding: 9px 12px; background: rgba(255,255,255,0.14);"><span style="font-weight: 600;">Agents</span> <span style="color:#bfe6e2;">— cards → workspace; failures escalate to Inbox</span></div>
+          <div style="padding: 9px 12px; background: rgba(255,255,255,0.09); border-top: 1px dashed rgba(255,255,255,0.3); color:#bfe6e2;">Health pill in the header · everything configurable in Preferences → Nexus AI · MCP, ports, SSH diagnostics and index internals moved to Preferences → Advanced, not a mode toggle</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #ddd9d1; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6c7370;">Where the removed surfaces go</div>
+      <div style="display: grid; grid-template-columns: 200px 1fr; gap: 10px 20px; font-size: 15px; line-height: 1.5;">
+        <div style="font-weight: 600;">Dashboard</div><div style="color: #3d4441;">Fleet summary becomes the header of Sites. Setup commands become a one-time flow. Ports and versions collapse into the header health pill, with detail on click.</div>
+        <div style="font-weight: 600;">Ask/Tell</div><div style="color: #3d4441;">Deleted.</div>
+        <div style="font-weight: 600;">Operations</div><div style="color: #3d4441;">Becomes a bulk-action bar on Sites, plus a Running jobs tray.</div>
+        <div style="font-weight: 600;">Activity</div><div style="color: #3d4441;">Agent runs move to Inbox history; WordPress events become a filter on Sites; storage health moves to Preferences → Advanced.</div>
+        <div style="font-weight: 600;">Settings tab</div><div style="color: #3d4441;">Merges into Preferences → Nexus AI, with a single Background work page.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #d8d4cc;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <h2 style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;">Sequence</h2>
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74; font-weight: 600;">First</span><span style="font-size: 18px; font-weight: 600;">Stop the bleeding — days, not weeks</span></div>
+        <div style="font-size: 15px; line-height: 1.7; color: #3d4441;">Fix the health calculation so it accounts for agent failures. Aggregate repeated errors and hide raw commands behind a disclosure. Delete Ask/Tell. Filter auto-drafts out of the timeline. Sort Operations by what is stale or failing. Put the pending-review count on the rail icon.</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74; font-weight: 600;">Then</span><span style="font-size: 18px; font-weight: 600;">One vocabulary, one number</span></div>
+        <div style="font-size: 15px; line-height: 1.7; color: #3d4441;">Collapse the six knowledge vocabularies to Basic / Detailed / Searchable. Define the canonical fleet count and scope once and render it identically everywhere. This is mostly naming and a shared selector, and it unblocks everything after it.</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74; font-weight: 600;">Then</span><span style="font-size: 18px; font-weight: 600;">Build the Inbox and the Sites table</span></div>
+        <div style="font-size: 15px; line-height: 1.7; color: #3d4441;">The two real destinations. Inbox absorbs approvals and failures; Sites absorbs Operations and the fleet cards. Once both exist, Dashboard, Operations, and Activity can be retired rather than redesigned.</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #ddd9d1; padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74; font-weight: 600;">Last</span><span style="font-size: 18px; font-weight: 600;">Unify settings and chrome</span></div>
+        <div style="font-size: 15px; line-height: 1.7; color: #3d4441;">Merge the two settings homes, build the Background work page with real cost estimates, and bring the docked panel onto Local's theme.</div>
+      </div>
+      <div style="background: #edf5f3; border: 1px solid #bcdcd7; padding: 22px 26px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #0d7c74; font-weight: 600;">Reading the vision in</span><span style="font-size: 18px; font-weight: 600;">Where the mockups fit this sequence</span></div>
+        <div style="font-size: 15px; line-height: 1.7; color: #3d4441;">The Insights / Chat panel replaces the "then" step above — build the panel rather than a separate Inbox destination, and Inbox becomes its Insights tab. Renaming Agents to Workflows and adding the one-line "what it does" is cheap and can ride along with the first step. Inline approval cards and the run checklist land with the panel. Everything else in those frames — the Local nav, Projects, Blueprints, Live Link sharing, the org switcher — is a separate decision, and none of the above depends on it.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: #1b1f1e; color: #f4f2ee; padding: 32px 34px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #8a918d;">Still open</div>
+    <div style="display: flex; flex-direction: column; gap: 12px; font-size: 16px; line-height: 1.6;">
+      <div style="display: flex; gap: 12px;"><span style="color: #6ec9c1;">01</span><span>Do agents belong to the non-dev product at all, or are they an operator feature? A content strategist approving a plugin update on production is a different risk conversation than an agency operator doing it.</span></div>
+      <div style="display: flex; gap: 12px;"><span style="color: #6ec9c1;">02</span><span>What are the six site counts actually scoped to? Worth writing down before anything else is built on them.</span></div>
+      <div style="display: flex; gap: 12px;"><span style="color: #6ec9c1;">03</span><span>Does Nexus stay a destination inside Local, or become the panel and nav item the vision frames imply? One surface, no dev mode, makes this the load-bearing decision — nearly everything else follows from it.</span></div>
+      <div style="display: flex; gap: 12px;"><span style="color: #6ec9c1;">04</span><span>For a marketing PM, what are the three questions they'd ask in week one? Those should be the suggested openers in Ask, and they're the fastest way to test whether the non-dev vision holds.</span></div>
+    </div>
+  </div>
+
+</div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,600;0,6..12,700;0,6..12,800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #dfe3e6; -webkit-font-smoothing: antialiased; }
+  a { color: #0a8189; }
+  a:hover { color: #076b71; }
+  @keyframes nxfade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</helmet>
+
+<div style="font-family: 'Nunito Sans', system-ui, sans-serif; color: #111827; padding: 20px; display: block; overflow-x: auto;">
+
+  <div style="width: 100%; min-width: 1300px; max-width: 1500px; margin: 0 auto 14px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+    <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #6b7280;">Nexus prototype</div>
+    <div style="display: flex; gap: 4px; background: #cdd3d8; padding: 3px; border-radius: 8px;">
+      <div onClick="{{ goFirstRun }}" style="{{ tabFirstRun }}">First run</div>
+      <div onClick="{{ goInbox }}" style="{{ tabInbox }}">Inbox</div>
+      <div onClick="{{ goAsk }}" style="{{ tabAsk }}">Ask</div>
+      <div onClick="{{ goSites }}" style="{{ tabSites }}">Sites</div>
+      <div onClick="{{ goAgents }}" style="{{ tabAgents }}">Agents</div>
+      <div onClick="{{ goSettings }}" style="{{ tabSettings }}">Settings</div>
+      <div onClick="{{ goLocal }}" style="{{ tabLocal }}">Anywhere in Local</div>
+    </div>
+    <div style="font-size: 13px; color: #6b7280;">{{ screenNote }}</div>
+  </div>
+
+  <div style="position: relative; width: 100%; min-width: 1300px; max-width: 1500px; margin: 0 auto; height: 940px; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 18px 50px rgba(20,30,40,0.18); display: flex;">
+
+    <div style="width: 64px; background: linear-gradient(180deg, #56c46b 0%, #3ea95c 100%); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 18px; flex-shrink: 0;">
+      <div style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.28);"></div>
+      <div style="width: 38px; height: 38px; border-radius: 9px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center;">
+        <div style="width: 17px; height: 17px; border-radius: 4px; background: rgba(255,255,255,0.92);"></div>
+      </div>
+      <div style="width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center;">
+        <div style="width: 17px; height: 17px; border-radius: 4px; background: rgba(255,255,255,0.4);"></div>
+      </div>
+      <div style="width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center;">
+        <div style="width: 17px; height: 17px; border-radius: 4px; background: rgba(255,255,255,0.4);"></div>
+      </div>
+      <div style="position: relative; width: 38px; height: 38px; border-radius: 9px; background: #fff; display: flex; align-items: center; justify-content: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#05262e"><path d="M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8z"></path></svg>
+        <div style="position: absolute; top: -5px; right: -8px; min-width: 18px; height: 15px; padding: 0 4px; border-radius: 3px; background: #0ECAD4; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #4bb463;">{{ pendingLabel }}</div>
+      </div>
+      <div style="flex: 1;"></div>
+      <div style="width: 38px; height: 38px; border-radius: 50%; background: #fff; color: #3ea95c; font-size: 22px; display: flex; align-items: center; justify-content: center;">+</div>
+    </div>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #f9fafb;">
+
+      <sc-if value="{{ chromeNexus }}" hint-placeholder-val="{{ true }}">
+      <div style="position: relative; padding: 14px 24px; display: flex; align-items: center; gap: 16px; background: #fff;">
+        <div style="font-size: 20px; font-weight: 800; letter-spacing: -0.01em;">Nexus</div>
+        <div onClick="{{ toggleHealth }}" style="{{ healthPillStyle }}">
+          <span style="{{ healthDotStyle }}"></span>
+          <span>{{ healthLabel }}</span>
+          <span style="opacity: 0.65; font-weight: 600;">checked 2m ago</span>
+        </div>
+        <sc-if value="{{ healthOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; top: 100%; left: 96px; margin-top: 6px; width: 330px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 12px 32px rgba(17,24,39,0.16); padding: 14px 16px; z-index: 30; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">What this is checking</div>
+            <sc-for list="{{ healthChecks }}" as="c" hint-placeholder-count="4">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; padding: 5px 0; border-bottom: 1px solid #f3f4f6;">
+                <span>{{ c.label }}</span>
+                <span style="{{ c.valueStyle }}">{{ c.value }}</span>
+              </div>
+            </sc-for>
+            <div style="font-size: 12px; color: #9ca3af; font-family: 'IBM Plex Mono', monospace; padding-top: 2px;">MCP 10801 · proxy 13100 · v0.1.0</div>
+          </div>
+        </sc-if>
+        <div style="flex: 1;"></div>
+        <div style="font-size: 13px; color: #6b7280;">{{ fleetLabel }}</div>
+      </div>
+
+      <div style="padding: 0 24px; display: flex; gap: 2px; background: #fff; border-bottom: 1px solid #e5e7eb;">
+        <div onClick="{{ goInbox }}" style="{{ navInbox }}">Inbox <span style="padding: 1px 7px; border-radius: 9px; background: #fffbeb; color: #b45309; font-size: 11.5px; font-weight: 800;">{{ pendingLabel }}</span></div>
+        <div onClick="{{ goAsk }}" style="{{ navAsk }}">Ask</div>
+        <div onClick="{{ goSites }}" style="{{ navSites }}">Sites</div>
+        <div onClick="{{ goAgents }}" style="{{ navAgents }}">Agents <span style="{{ agentAlertStyle }}">{{ agentAlert }}</span></div>
+        <div onClick="{{ goSettings }}" style="{{ navSettings }}">Settings</div>
+      </div>
+
+      </sc-if>
+
+      <div style="flex: 1; min-height: 0; display: flex;">
+
+        <div style="flex: 1; min-width: 0; overflow-y: auto;">
+
+          <sc-if value="{{ isLocal }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; min-height: 100%;">
+              <div style="width: 232px; flex-shrink: 0; border-right: 1px solid #e5e7eb; background: #fff; display: flex; flex-direction: column;">
+                <div style="padding: 14px 16px 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #9ca3af;">Sites</div>
+                <sc-for list="{{ localSites }}" as="l" hint-placeholder-count="5">
+                  <div style="{{ l.rowStyle }}">
+                    <span style="{{ l.dotStyle }}"></span>
+                    <span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ l.name }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="flex: 1; min-width: 0; padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 18px;">
+                <div style="display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+                  <div style="min-width: 240px;">
+                    <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.015em;">Good Aesthetic Club</div>
+                    <div style="font-size: 13.5px; color: #6b7280; margin-top: 4px;">good-aesthetic.local · running</div>
+                  </div>
+                  <div style="flex: 1;"></div>
+                  <div style="display: flex; gap: 8px;">
+                    <div style="padding: 9px 16px; border-radius: 7px; border: 1px solid #d1d5db; background: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="border-color: #9ca3af;">Stop site</div>
+                    <div style="padding: 9px 16px; border-radius: 7px; background: #51c356; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="background: #45ad4a;">Open site</div>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 2px; border-bottom: 1px solid #e5e7eb;">
+                  <div style="padding: 10px 14px; font-size: 14px; font-weight: 700; color: #111827; border-bottom: 3px solid #51c356;">Overview</div>
+                  <div style="padding: 10px 14px; font-size: 14px; font-weight: 700; color: #9ca3af; border-bottom: 3px solid transparent;">Database</div>
+                  <div style="padding: 10px 14px; font-size: 14px; font-weight: 700; color: #9ca3af; border-bottom: 3px solid transparent;">Tools</div>
+                  <div style="padding: 10px 14px; font-size: 14px; font-weight: 700; color: #9ca3af; border-bottom: 3px solid transparent;">Utilities</div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px;">
+                  <sc-for list="{{ localCards }}" as="c" hint-placeholder-count="4">
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+                      <div style="font-size: 15px; font-weight: 800;">{{ c.title }}</div>
+                      <sc-for list="{{ c.rows }}" as="r" hint-placeholder-count="3">
+                        <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px;">
+                          <span style="color: #6b7280;">{{ r.k }}</span>
+                          <span style="font-weight: 700;">{{ r.v }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <div style="font-size: 13px; color: #9ca3af; line-height: 1.6; max-width: 620px;">This is an ordinary Local screen — no Nexus navigation anywhere on it. The panel on the right is the same panel, mounted above the whole app, so it follows you here and knows which site you are looking at.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isFirstRun }}" hint-placeholder-val="{{ true }}">
+            <div style="padding: 56px 48px; display: flex; justify-content: center;">
+              <div style="width: 100%; max-width: 620px; display: flex; flex-direction: column; gap: 28px;">
+
+                <sc-if value="{{ frIntro }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; flex-direction: column; gap: 18px; animation: nxfade 0.3s ease;">
+                    <div style="font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15;">Let's find your sites.</div>
+                    <div style="font-size: 16px; line-height: 1.6; color: #4b5563;">Connect the accounts your sites live in. Nexus will look them over in the background — you don't have to wait for it, and nothing changes on any site.</div>
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+                      <div style="display: flex; align-items: center; gap: 12px; padding: 16px 18px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;">
+                        <div style="width: 34px; height: 34px; border-radius: 8px; background: #0f2d38; color: #fff; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center;">W</div>
+                        <div style="flex: 1; min-width: 0;">
+                          <div style="font-size: 15px; font-weight: 700;">WP Engine</div>
+                          <div style="font-size: 13px; color: #6b7280;">Sites you host with WP Engine</div>
+                        </div>
+                        <div onClick="{{ startSync }}" style="padding: 9px 18px; border-radius: 7px; background: #0a8189; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="background: #076b71;">Connect</div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 12px; padding: 16px 18px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;">
+                        <div style="width: 34px; height: 34px; border-radius: 8px; background: #ecfcfd; color: #0a8189; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center;">↗</div>
+                        <div style="flex: 1; min-width: 0;">
+                          <div style="font-size: 15px; font-weight: 700;">Another host</div>
+                          <div style="font-size: 13px; color: #6b7280;">Kinsta, Cloudways, DigitalOcean, or anywhere you can reach over SSH</div>
+                        </div>
+                        <div onClick="{{ startExternal }}" style="{{ externalBtnStyle }}">{{ externalBtnLabel }}</div>
+                      </div>
+                      <sc-if value="{{ externalOpen }}" hint-placeholder-val="{{ false }}">
+                        <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; animation: nxfade 0.22s ease;">
+                          <div style="font-size: 13.5px; color: #4b5563; line-height: 1.55;">Nexus reads these over SSH. It can see what WordPress is installed and read content, but it can't manage the hosting itself.</div>
+                          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <input placeholder="you@yourhost.com" style="flex: 1; min-width: 200px; padding: 10px 13px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; background: #fff;" style-focus="border-color: #0ECAD4;" />
+                            <input placeholder="Path to WordPress" style="flex: 1; min-width: 180px; padding: 10px 13px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; background: #fff;" style-focus="border-color: #0ECAD4;" />
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <div onClick="{{ addExternal }}" style="padding: 9px 16px; border-radius: 7px; background: #0a8189; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="background: #076b71;">Add host</div>
+                            <span style="font-size: 13px; color: #9ca3af;">Uses the SSH key already on this Mac. Nothing is changed on the server.</span>
+                          </div>
+                        </div>
+                      </sc-if>
+                      <div style="display: flex; align-items: center; gap: 12px; padding: 16px 18px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb;">
+                        <div style="width: 34px; height: 34px; border-radius: 8px; background: #f3f4f6; color: #9ca3af; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center;">L</div>
+                        <div style="flex: 1; min-width: 0;">
+                          <div style="font-size: 15px; font-weight: 700; color: #374151;">Sites already on this Mac</div>
+                          <div style="font-size: 13px; color: #9ca3af;">{{ localFoundLabel }}</div>
+                        </div>
+                        <div style="font-size: 13px; font-weight: 700; color: #51c356;">Ready</div>
+                      </div>
+                    </div>
+                    <div style="font-size: 13px; color: #9ca3af;">You can add more accounts later. Nothing here needs the terminal.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ frSyncing }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 22px; animation: nxfade 0.3s ease;">
+                    <div style="font-size: 30px; font-weight: 800; letter-spacing: -0.02em;">{{ syncHeadline }}</div>
+                    <div style="display: flex; align-items: baseline; gap: 12px;">
+                      <div style="font-size: 60px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: #0a8189; font-variant-numeric: tabular-nums;">{{ syncCount }}</div>
+                      <div style="font-size: 16px; color: #6b7280;">sites so far</div>
+                    </div>
+                    <div style="height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden;">
+                      <div style="{{ syncBarStyle }}"></div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 6px 0;">
+                      <sc-for list="{{ syncAccounts }}" as="a" hint-placeholder-count="5">
+                        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 14px;">
+                          <span style="{{ a.markStyle }}">{{ a.mark }}</span>
+                          <span style="flex: 1; min-width: 0; font-weight: 600;">{{ a.name }}</span>
+                          <span style="color: #9ca3af; font-size: 13px;">{{ a.detail }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="font-size: 14px; color: #6b7280; line-height: 1.6;">This keeps running on its own. Ask a question whenever you like — answers get better as more sites come in.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ frAsk }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 20px; animation: nxfade 0.3s ease;">
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: #3d9c52;">
+                      <span style="width: 22px; height: 22px; border-radius: 50%; background: #51c356; color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center;">✓</span>
+                      {{ foundSummary }}
+                    </div>
+                    <div style="font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15;">Ask it something about them.</div>
+                    <div style="font-size: 16px; line-height: 1.6; color: #4b5563;">These are grounded in what Nexus already knows about your fleet.</div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      <sc-for list="{{ starterQuestions }}" as="q" hint-placeholder-count="3">
+                        <div onClick="{{ q.onPick }}" style="padding: 14px 18px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; gap: 12px;" style-hover="border-color: #0ECAD4; background: #ecfcfd;">
+                          <span>{{ q.text }}</span>
+                          <span style="color: #0a8189; font-weight: 800;">→</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <sc-if value="{{ frAnswered }}" hint-placeholder-val="{{ false }}">
+                      <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; overflow: hidden; animation: nxfade 0.35s ease;">
+                        <div style="padding: 14px 18px; border-bottom: 1px solid #f3f4f6; font-size: 15px; line-height: 1.55;">{{ frAnswerText }}</div>
+                        <sc-for list="{{ frAnswerRows }}" as="r" hint-placeholder-count="4">
+                          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid #f3f4f6; font-size: 14px;">
+                            <span style="flex: 1; min-width: 0; font-weight: 600;">{{ r.name }}</span>
+                            <span style="color: #6b7280;">{{ r.meta }}</span>
+                          </div>
+                        </sc-for>
+                        <div style="padding: 13px 18px; display: flex; gap: 10px; align-items: center;">
+                          <div style="padding: 8px 16px; border-radius: 7px; background: #0a8189; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="background: #076b71;">{{ frAnswerAction }}</div>
+                          <div style="font-size: 13px; color: #9ca3af;">{{ frAnswerBy }}</div>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isInbox }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 18px;">
+
+              <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
+                <div style="min-width: 260px;">
+                  <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.015em;">{{ inboxHeadline }}</div>
+                  <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">{{ inboxSub }}</div>
+                </div>
+                <div style="flex: 1;"></div>
+                <div style="display: flex; gap: 4px; background: #f3f4f6; padding: 3px; border-radius: 8px;">
+                  <div onClick="{{ filterAll }}" style="{{ fAll }}">Everything</div>
+                  <div onClick="{{ filterDecide }}" style="{{ fDecide }}">Needs a decision</div>
+                  <div onClick="{{ filterProblem }}" style="{{ fProblem }}">Problems</div>
+                </div>
+              </div>
+
+              <sc-if value="{{ hasUndo }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; align-items: center; gap: 14px; padding: 11px 16px; border-radius: 9px; background: #111827; color: #fff; animation: nxfade 0.2s ease;">
+                  <span style="font-size: 14px; flex: 1; min-width: 0;">{{ undoText }}</span>
+                  <span onClick="{{ undo }}" style="font-size: 14px; font-weight: 800; color: #4fd8e2; cursor: pointer;">Undo</span>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 70px 20px; text-align: center; border: 1px dashed #d1d5db; border-radius: 12px; background: #fff;">
+                  <div style="font-size: 20px; font-weight: 800; margin-bottom: 8px;">Nothing needs you right now.</div>
+                  <div style="font-size: 15px; color: #6b7280;">Workflows will drop new findings here as they run.</div>
+                </div>
+              </sc-if>
+
+              <sc-for list="{{ inboxGroups }}" as="g" hint-placeholder-count="3">
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: #374151;">{{ g.title }}</div>
+                    <div style="height: 1px; flex: 1; background: #e5e7eb;"></div>
+                    <div style="font-size: 13px; color: #9ca3af;">{{ g.countLabel }}</div>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+                    <div style="{{ it.cardStyle }}">
+                      <div style="display: flex; gap: 14px; padding: 16px 18px;">
+                        <div style="{{ it.iconStyle }}">{{ it.icon }}</div>
+                        <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 5px;">
+                          <div style="font-size: 15px; font-weight: 700; line-height: 1.35;">{{ it.title }}</div>
+                          <div style="font-size: 14px; line-height: 1.5; color: #4b5563;">{{ it.detail }}</div>
+                          <div style="display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: #9ca3af; margin-top: 2px; flex-wrap: wrap;">
+                            <span style="font-weight: 700; color: #6b7280;">{{ it.scope }}</span>
+                            <span>·</span>
+                            <span>{{ it.source }}</span>
+                            <span>·</span>
+                            <span>{{ it.when }}</span>
+                          </div>
+                          <sc-if value="{{ it.hasEvidence }}" hint-placeholder-val="{{ false }}">
+                            <div style="margin-top: 6px; padding: 10px 12px; border-radius: 7px; background: #f3f4f6; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #4b5563; line-height: 1.5; white-space: pre-wrap;">{{ it.evidence }}</div>
+                          </sc-if>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 7px; width: 172px; flex-shrink: 0;">
+                          <div onClick="{{ it.onPrimary }}" style="{{ it.primaryStyle }}">{{ it.primaryLabel }}</div>
+                          <div onClick="{{ it.onSecondary }}" style="padding: 8px 12px; border-radius: 7px; border: 1px solid #d1d5db; background: #fff; color: #374151; font-size: 13.5px; font-weight: 700; text-align: center; cursor: pointer;" style-hover="border-color: #9ca3af;">{{ it.secondaryLabel }}</div>
+                          <div onClick="{{ it.onSkip }}" style="padding: 4px; font-size: 13px; color: #9ca3af; text-align: center; cursor: pointer;" style-hover="color: #4b5563;">{{ it.skipLabel }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isSites }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 16px;">
+
+              <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
+                <div style="min-width: 200px;">
+                  <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.015em;">Sites</div>
+                  <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">{{ sitesSub }}</div>
+                </div>
+                <div style="flex: 1;"></div>
+                <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="{{ searchPlaceholder }}" style="width: 240px; padding: 9px 13px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; background: #fff;" style-focus="border-color: #0ECAD4;" />
+              </div>
+
+              <div style="display: flex; gap: 4px; background: #f3f4f6; padding: 3px; border-radius: 8px; align-self: flex-start;">
+                <div onClick="{{ sfNeeds }}" style="{{ sfNeedsStyle }}">{{ sfNeedsLabel }}</div>
+                <div onClick="{{ sfAll }}" style="{{ sfAllStyle }}">{{ sfAllLabel }}</div>
+                <div onClick="{{ sfLocal }}" style="{{ sfLocalStyle }}">{{ sfLocalLabel }}</div>
+                <div onClick="{{ sfWpe }}" style="{{ sfWpeStyle }}">{{ sfWpeLabel }}</div>
+                <div onClick="{{ sfExternal }}" style="{{ sfExternalStyle }}">{{ sfExternalLabel }}</div>
+              </div>
+
+              <sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-radius: 9px; background: #0a8189; color: #fff; animation: nxfade 0.2s ease;">
+                  <span style="font-size: 14px; font-weight: 700;">{{ selectionLabel }}</span>
+                  <div style="flex: 1;"></div>
+                  <div style="padding: 7px 14px; border-radius: 7px; background: rgba(255,255,255,0.18); font-size: 13.5px; font-weight: 700; cursor: pointer;" style-hover="background: rgba(255,255,255,0.3);">Look them over now</div>
+                  <div style="padding: 7px 14px; border-radius: 7px; background: rgba(255,255,255,0.18); font-size: 13.5px; font-weight: 700; cursor: pointer;" style-hover="background: rgba(255,255,255,0.3);">Run a workflow</div>
+                  <span onClick="{{ clearSelection }}" style="font-size: 13.5px; font-weight: 700; cursor: pointer; opacity: 0.85;">Clear</span>
+                </div>
+              </sc-if>
+
+              <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #6b7280;">
+                  <div style="width: 18px; flex-shrink: 0;"></div>
+                  <div style="flex: 1; min-width: 150px;">Site</div>
+                  <div style="width: 140px; flex-shrink: 0;">Where</div>
+                  <div style="width: 116px; flex-shrink: 0;">What we know</div>
+                  <div style="width: 92px; flex-shrink: 0;">Last looked</div>
+                  <div style="width: 84px; flex-shrink: 0; text-align: right;">Waiting</div>
+                </div>
+                <sc-for list="{{ pageRows }}" as="s" hint-placeholder-count="12">
+                  <div onClick="{{ s.onToggle }}" style="{{ s.rowStyle }}">
+                    <div style="{{ s.checkStyle }}">{{ s.check }}</div>
+                    <div style="flex: 1; min-width: 150px; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.name }}</div>
+                    <div style="width: 140px; flex-shrink: 0; font-size: 13.5px; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.where }}</div>
+                    <div style="width: 116px; flex-shrink: 0; display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: #374151;">
+                      <span style="{{ s.dotStyle }}"></span>{{ s.knowledge }}
+                    </div>
+                    <div style="width: 92px; flex-shrink: 0; font-size: 13.5px; color: #9ca3af;">{{ s.lastLooked }}</div>
+                    <div style="width: 84px; flex-shrink: 0; text-align: right;"><span style="{{ s.needsStyle }}">{{ s.needs }}</span></div>
+                  </div>
+                </sc-for>
+                <div style="display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb;">
+                  <div style="font-size: 13.5px; color: #6b7280;">{{ pageLabel }}</div>
+                  <div style="flex: 1;"></div>
+                  <div onClick="{{ prevPage }}" style="padding: 7px 13px; border: 1px solid #d1d5db; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; background: #fff;" style-hover="border-color: #9ca3af;">Previous</div>
+                  <div onClick="{{ nextPage }}" style="padding: 7px 13px; border: 1px solid #d1d5db; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; background: #fff;" style-hover="border-color: #9ca3af;">Next</div>
+                </div>
+              </div>
+
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isAsk }}" hint-placeholder-val="{{ false }}">
+            <div style="min-height: 100%; display: flex; flex-direction: column; align-items: center; padding: 0 32px;">
+              <div style="width: 100%; max-width: 720px; flex: 1; display: flex; flex-direction: column;">
+
+                <sc-if value="{{ heroEmpty }}" hint-placeholder-val="{{ true }}">
+                  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 24px; padding: 40px 0;">
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                      <div style="font-size: 34px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.1;">What do you want to know?</div>
+                      <div style="font-size: 16px; line-height: 1.6; color: #6b7280;">{{ heroSub }}</div>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                      <input value="{{ draft }}" onChange="{{ onDraft }}" placeholder="Ask about your sites" style="flex: 1; min-width: 0; padding: 15px 17px; border: 1px solid #d1d5db; border-radius: 11px; font-size: 16px; font-family: inherit; outline: none; background: #fff;" style-focus="border-color: #0ECAD4;" />
+                      <div onClick="{{ sendChat }}" style="width: 50px; height: 50px; flex-shrink: 0; border-radius: 11px; background: #0a8189; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 800; cursor: pointer;" style-hover="background: #076b71;">↑</div>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                      <sc-for list="{{ chatSuggestions }}" as="s" hint-placeholder-count="3">
+                        <div onClick="{{ s.onPick }}" style="padding: 10px 15px; border: 1px solid #e5e7eb; border-radius: 20px; background: #fff; font-size: 14px; font-weight: 600; cursor: pointer;" style-hover="border-color: #0ECAD4; background: #ecfcfd;">{{ s.text }}</div>
+                      </sc-for>
+                    </div>
+                    <div style="font-size: 13.5px; color: #9ca3af; line-height: 1.55;">Nothing on a site changes until you approve it. Answers come back as things you can act on, not a wall of text.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ heroHasTurns }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 28px 0 20px;">
+                    <sc-for list="{{ chatTurns }}" as="t" hint-placeholder-count="2">
+                      <div style="{{ t.heroWrapStyle }}">
+                        <div style="{{ t.heroBubbleStyle }}">{{ t.text }}</div>
+                        <sc-if value="{{ t.hasRows }}" hint-placeholder-val="{{ false }}">
+                          <div style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; width: 100%; background: #fff;">
+                            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="3">
+                              <div style="display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 14px;">
+                                <span style="flex: 1; min-width: 0; font-weight: 600;">{{ r.name }}</span>
+                                <span style="color: #6b7280;">{{ r.meta }}</span>
+                              </div>
+                            </sc-for>
+                            <div style="padding: 13px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                              <div style="padding: 8px 15px; border-radius: 7px; background: #0a8189; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="background: #076b71;">{{ t.action }}</div>
+                              <span style="font-size: 13px; color: #9ca3af;">Staged first — nothing goes live until you say so</span>
+                            </div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ t.hasBy }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size: 12.5px; color: #9ca3af;">{{ t.by }}</div>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="position: sticky; bottom: 0; background: #f9fafb; padding: 12px 0 24px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                      <input value="{{ draft }}" onChange="{{ onDraft }}" placeholder="Ask a follow-up" style="flex: 1; min-width: 0; padding: 13px 16px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 15px; font-family: inherit; outline: none; background: #fff;" style-focus="border-color: #0ECAD4;" />
+                      <div onClick="{{ sendChat }}" style="width: 46px; height: 46px; flex-shrink: 0; border-radius: 10px; background: #0a8189; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; cursor: pointer;" style-hover="background: #076b71;">↑</div>
+                    </div>
+                    <div style="font-size: 12.5px; color: #9ca3af;">{{ heroFooter }}</div>
+                  </div>
+                </sc-if>
+
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; min-height: 100%;">
+              <div style="width: 232px; flex-shrink: 0; border-right: 1px solid #e5e7eb; background: #fff; padding: 18px 0;">
+                <div style="padding: 0 18px 12px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #9ca3af;">Settings</div>
+                <sc-for list="{{ settingsNav }}" as="n" hint-placeholder-count="4">
+                  <div onClick="{{ n.onPick }}" style="{{ n.style }}">
+                    <span style="flex: 1; min-width: 0;">{{ n.label }}</span>
+                    <span style="{{ n.noteStyle }}">{{ n.note }}</span>
+                  </div>
+                </sc-for>
+                <div style="margin: 16px 18px 0; padding-top: 14px; border-top: 1px solid #f3f4f6; font-size: 12.5px; color: #9ca3af; line-height: 1.55;">Everything Nexus can be configured with is here. There is no second settings page.</div>
+              </div>
+
+              <div style="flex: 1; min-width: 0; padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 18px;">
+
+                <sc-if value="{{ setConnections }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; flex-direction: column; gap: 16px; max-width: 720px;">
+                    <div>
+                      <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.015em;">Connections</div>
+                      <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">Everything Nexus connects to, grouped by what it gets you.</div>
+                    </div>
+                    <sc-for list="{{ connGroups }}" as="g" hint-placeholder-count="3">
+                      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                        <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #374151;">{{ g.title }}</div>
+                        <div style="font-size: 13.5px; color: #6b7280; line-height: 1.5; margin-bottom: 2px;">{{ g.hint }}</div>
+                        <sc-for list="{{ g.items }}" as="c" hint-placeholder-count="2">
+                          <div style="{{ c.rowStyle }}">
+                            <div style="{{ c.badgeStyle }}">{{ c.badge }}</div>
+                            <div style="flex: 1; min-width: 200px;">
+                              <div style="font-size: 15px; font-weight: 700;">{{ c.name }}</div>
+                              <div style="font-size: 13.5px; color: #6b7280; margin-top: 3px; line-height: 1.5;">{{ c.detail }}</div>
+                              <sc-if value="{{ c.hasNote }}" hint-placeholder-val="{{ false }}">
+                                <div style="font-size: 12.5px; color: #9ca3af; margin-top: 6px; line-height: 1.5;">{{ c.note }}</div>
+                              </sc-if>
+                            </div>
+                            <sc-if value="{{ c.isToggle }}" hint-placeholder-val="{{ false }}">
+                              <div onClick="{{ c.onToggle }}" style="{{ c.switchStyle }}"><span style="{{ c.knobStyle }}"></span></div>
+                            </sc-if>
+                            <sc-if value="{{ c.isAction }}" hint-placeholder-val="{{ true }}">
+                              <div style="{{ c.statusStyle }}">{{ c.status }}</div>
+                            </sc-if>
+                            <sc-if value="{{ c.isAction }}" hint-placeholder-val="{{ true }}">
+                              <div style="{{ c.actionStyle }}">{{ c.action }}</div>
+                            </sc-if>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ setChat }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 16px; max-width: 720px;">
+                    <div>
+                      <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.015em;">Chat</div>
+                      <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">The panel that follows you across Local, and what it remembers.</div>
+                    </div>
+
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 16px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                      <div onClick="{{ toggleChatPanel }}" style="{{ chatPanelSwitchStyle }}"><span style="{{ chatPanelKnobStyle }}"></span></div>
+                      <div style="flex: 1; min-width: 220px;">
+                        <div style="font-size: 15px; font-weight: 700;">{{ chatPanelLabel }}</div>
+                        <div style="font-size: 13.5px; color: #6b7280; margin-top: 3px; line-height: 1.5;">{{ chatPanelSub }}</div>
+                      </div>
+                    </div>
+
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+                      <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 220px;">
+                          <div style="font-size: 15px; font-weight: 700;">Keep past chats for</div>
+                          <div style="font-size: 13.5px; color: #6b7280; margin-top: 3px; line-height: 1.5;">Chats stay on this Mac. Older ones are deleted automatically.</div>
+                        </div>
+                        <div style="display: flex; gap: 4px; background: #f3f4f6; padding: 3px; border-radius: 8px;">
+                          <sc-for list="{{ retentionOptions }}" as="r" hint-placeholder-count="4">
+                            <div onClick="{{ r.onPick }}" style="{{ r.style }}">{{ r.label }}</div>
+                          </sc-for>
+                        </div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px solid #f3f4f6; flex-wrap: wrap;">
+                        <div style="padding: 8px 14px; border-radius: 7px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; font-size: 13.5px; font-weight: 700; cursor: pointer;">Delete all chats</div>
+                        <span style="font-size: 13px; color: #9ca3af;">{{ historyNote }}</span>
+                      </div>
+                    </div>
+
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 16px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                      <div style="flex: 1; min-width: 220px;">
+                        <div style="font-size: 15px; font-weight: 700;">Sites using a different AI</div>
+                        <div style="font-size: 13.5px; color: #6b7280; margin-top: 3px; line-height: 1.5;">Three sites are set to their own provider instead of the one under Connections.</div>
+                      </div>
+                      <div style="padding: 8px 14px; border-radius: 7px; border: 1px solid #d1d5db; background: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; flex-shrink: 0;" style-hover="border-color: #9ca3af;">Review the 3</div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ setBackground }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 16px; max-width: 760px;">
+                    <div>
+                      <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.015em;">Background work</div>
+                      <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">What Nexus does on its own so answers stay current. All of it costs connections to your host.</div>
+                    </div>
+
+                    <div style="{{ loadCardStyle }}">
+                      <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                        <div onClick="{{ toggleBackground }}" style="{{ masterSwitchStyle }}"><span style="{{ masterKnobStyle }}"></span></div>
+                        <div style="flex: 1; min-width: 220px;">
+                          <div style="font-size: 15px; font-weight: 800;">{{ masterLabel }}</div>
+                          <div style="font-size: 13.5px; color: #6b7280; margin-top: 3px;">{{ masterSub }}</div>
+                        </div>
+                      </div>
+                      <div style="display: flex; gap: 28px; flex-wrap: wrap; padding-top: 14px; margin-top: 14px; border-top: 1px solid #f3f4f6;">
+                        <div>
+                          <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">{{ loadPerDay }}</div>
+                          <div style="font-size: 12.5px; color: #6b7280; margin-top: 2px;">connections a day to WP Engine</div>
+                        </div>
+                        <div>
+                          <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">{{ loadMinutes }}</div>
+                          <div style="font-size: 12.5px; color: #6b7280; margin-top: 2px;">minutes of work a day</div>
+                        </div>
+                        <div>
+                          <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">{{ loadNext }}</div>
+                          <div style="font-size: 12.5px; color: #6b7280; margin-top: 2px;">until the next pass</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; overflow: hidden;">
+                      <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="5">
+                        <div style="{{ j.rowStyle }}">
+                          <div onClick="{{ j.onToggle }}" style="{{ j.switchStyle }}"><span style="{{ j.knobStyle }}"></span></div>
+                          <div style="flex: 1; min-width: 220px;">
+                            <div style="font-size: 14.5px; font-weight: 700;">{{ j.name }}</div>
+                            <div style="font-size: 13px; color: #6b7280; margin-top: 3px; line-height: 1.5;">{{ j.what }}</div>
+                          </div>
+                          <div style="width: 190px; flex-shrink: 0; text-align: right;">
+                            <div style="{{ j.costStyle }}">{{ j.cost }}</div>
+                            <div style="font-size: 12.5px; color: #9ca3af; margin-top: 3px;">{{ j.lastRun }}</div>
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 7px; flex-shrink: 0;">
+                            <span onClick="{{ j.slower }}" style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; cursor: pointer; color: #6b7280;" style-hover="border-color: #9ca3af; color: #111827;">−</span>
+                            <span style="min-width: 74px; text-align: center; font-size: 13px; font-weight: 700;">{{ j.every }}</span>
+                            <span onClick="{{ j.faster }}" style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; cursor: pointer; color: #6b7280;" style-hover="border-color: #9ca3af; color: #111827;">+</span>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="font-size: 13px; color: #9ca3af; line-height: 1.6;">Turning something off does not delete anything Nexus already knows — it just stops refreshing it, and the site list will start showing older timestamps.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ setPermissions }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 16px; max-width: 760px;">
+                    <div>
+                      <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.015em;">What agents may do</div>
+                      <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">Applies to every agent and to anything you ask for in chat. Click a box to allow or block it.</div>
+                    </div>
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; overflow: hidden;">
+                      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 18px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #6b7280;">
+                        <div style="flex: 1; min-width: 200px;">Action</div>
+                        <div style="width: 96px; flex-shrink: 0; text-align: center;">Local</div>
+                        <div style="width: 96px; flex-shrink: 0; text-align: center;">Staging</div>
+                        <div style="width: 96px; flex-shrink: 0; text-align: center;">Production</div>
+                      </div>
+                      <sc-for list="{{ permRows }}" as="p" hint-placeholder-count="5">
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #f3f4f6;">
+                          <div style="flex: 1; min-width: 200px;">
+                            <div style="font-size: 14.5px; font-weight: 700;">{{ p.name }}</div>
+                            <div style="font-size: 13px; color: #6b7280; margin-top: 3px;">{{ p.what }}</div>
+                          </div>
+                          <sc-for list="{{ p.cells }}" as="c" hint-placeholder-count="3">
+                            <div onClick="{{ c.onToggle }}" style="{{ c.style }}">{{ c.label }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb;">
+                      <span style="font-size: 15px;">🔒</span>
+                      <div style="font-size: 13.5px; color: #4b5563; line-height: 1.6;">Reading is always allowed and cannot be switched off — that is how Nexus answers questions at all. Everything that changes a site is off on production until you turn it on here.</div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ setAdvanced }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 16px; max-width: 720px;">
+                    <div>
+                      <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.015em;">Advanced</div>
+                      <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">You should not need anything on this page unless something has gone wrong or you are wiring Nexus into your own tools.</div>
+                    </div>
+                    <sc-for list="{{ advancedRows }}" as="a" hint-placeholder-count="4">
+                      <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 16px 18px; display: flex; align-items: center; gap: 14px;">
+                        <div style="flex: 1; min-width: 200px;">
+                          <div style="font-size: 15px; font-weight: 700;">{{ a.name }}</div>
+                          <div style="font-size: 13.5px; color: #6b7280; margin-top: 3px; line-height: 1.5;">{{ a.what }}</div>
+                        </div>
+                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #6b7280; flex-shrink: 0;">{{ a.value }}</div>
+                        <div style="{{ a.actionStyle }}">{{ a.action }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isAgents }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 18px;">
+
+              <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
+                <div style="min-width: 240px;">
+                  <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.015em;">Agents</div>
+                  <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">{{ agentsSub }}</div>
+                </div>
+                <div style="flex: 1;"></div>
+                <div style="padding: 9px 16px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="border-color: #9ca3af;">New agent</div>
+              </div>
+
+              <sc-if value="{{ agentsPaused }}" hint-placeholder-val="{{ true }}">
+                <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px;">
+                  <div style="width: 26px; height: 26px; flex-shrink: 0; border-radius: 7px; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800;">!</div>
+                  <div style="flex: 1; min-width: 200px;">
+                    <div style="font-size: 15px; font-weight: 800; color: #b45309;">{{ pausedTitle }}</div>
+                    <div style="font-size: 13.5px; color: #92400e; margin-top: 2px;">{{ pausedSub }}</div>
+                  </div>
+                  <div onClick="{{ goInbox }}" style="padding: 8px 15px; border-radius: 7px; background: #d97706; color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; flex-shrink: 0;" style-hover="background: #b45309;">See what happened</div>
+                </div>
+              </sc-if>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px;">
+                <sc-for list="{{ agents }}" as="a" hint-placeholder-count="5">
+                  <div style="{{ a.cardStyle }}">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                      <div style="{{ a.avatarStyle }}">{{ a.initial }}</div>
+                      <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                          <span style="font-size: 16px; font-weight: 800;">{{ a.name }}</span>
+                          <span style="{{ a.statusStyle }}">{{ a.status }}</span>
+                        </div>
+                        <div style="font-size: 13.5px; line-height: 1.5; color: #4b5563; margin-top: 5px;">{{ a.what }}</div>
+                      </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 7px; padding: 12px 0; margin-top: 12px; border-top: 1px solid #f3f4f6;">
+                      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;">
+                        <span style="color: #6b7280;">Runs</span>
+                        <span style="font-weight: 700;">{{ a.schedule }}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;">
+                        <span style="color: #6b7280;">On its own?</span>
+                        <span style="font-weight: 700;">{{ a.autonomy }}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;">
+                        <span style="color: #6b7280;">Covers</span>
+                        <span style="font-weight: 700;">{{ a.scope }}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;">
+                        <span style="color: #6b7280;">Last run</span>
+                        <span style="{{ a.lastStyle }}">{{ a.last }}</span>
+                      </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <div style="{{ a.primaryStyle }}">{{ a.primary }}</div>
+                      <div style="padding: 8px 14px; border-radius: 7px; border: 1px solid #d1d5db; background: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer;" style-hover="border-color: #9ca3af;">Settings</div>
+                      <div style="flex: 1;"></div>
+                      <sc-if value="{{ a.hasPending }}" hint-placeholder-val="{{ false }}">
+                        <div onClick="{{ goInbox }}" style="font-size: 13px; font-weight: 700; color: #b45309; cursor: pointer; white-space: nowrap;" style-hover="color: #92400e;">{{ a.pendingLabel }}</div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+
+            </div>
+          </sc-if>
+
+        </div>
+
+        <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ panelShellStyle }}">
+
+            <div style="display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #e5e7eb;">
+              <div style="display: flex; gap: 3px; background: #f3f4f6; padding: 3px; border-radius: 8px;">
+                <div onClick="{{ showInsights }}" style="{{ ptInsights }}">Insights</div>
+                <div onClick="{{ showChat }}" style="{{ ptChat }}">Chat</div>
+              </div>
+              <div style="flex: 1;"></div>
+              <div onClick="{{ widenPanel }}" style="{{ widenStyle }}" title="Make it wider">{{ widenIcon }}</div>
+              <div onClick="{{ maximizePanel }}" style="width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="background: #f3f4f6;" title="Maximize">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#868d98" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H3v6M21 9V3h-6M9 21H3v-6M15 21h6v-6"></path></svg>
+              </div>
+              <div onClick="{{ closePanel }}" style="width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #9ca3af; cursor: pointer; font-size: 15px;" style-hover="background: #f3f4f6;">›</div>
+            </div>
+
+            <sc-if value="{{ panelInsights }}" hint-placeholder-val="{{ true }}">
+              <div style="flex: 1; overflow-y: auto; padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 18px;">
+
+                <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">{{ panelContextLabel }}</div>
+
+                <sc-if value="{{ showPendingCard }}" hint-placeholder-val="{{ true }}">
+                  <div style="border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 9px;">
+                    <div style="font-size: 15px; font-weight: 800; color: #b45309;">{{ panelPendingTitle }}</div>
+                    <div style="font-size: 13.5px; line-height: 1.5; color: #92400e;">{{ panelPendingSub }}</div>
+                    <div onClick="{{ goInbox }}" style="align-self: flex-start; padding: 7px 14px; border-radius: 7px; background: #d97706; color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer;" style-hover="background: #b45309;">Open inbox →</div>
+                  </div>
+                </sc-if>
+
+                <div style="display: flex; flex-direction: column; gap: 9px;">
+                  <div style="font-size: 14px; font-weight: 800;">How the fleet looks</div>
+                  <sc-for list="{{ panelStats }}" as="p" hint-placeholder-count="4">
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 13px; border: 1px solid #e5e7eb; border-radius: 9px;">
+                      <span style="{{ p.iconStyle }}">{{ p.icon }}</span>
+                      <span style="flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600;">{{ p.label }}</span>
+                      <span style="{{ p.valueStyle }}">{{ p.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 9px;">
+                  <div style="font-size: 14px; font-weight: 800;">Running on its own</div>
+                  <div style="border: 1px solid #e5e7eb; border-radius: 9px; padding: 12px 13px; display: flex; flex-direction: column; gap: 8px;">
+                    <sc-for list="{{ panelJobs }}" as="j" hint-placeholder-count="3">
+                      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13.5px;">
+                        <span style="font-weight: 600;">{{ j.name }}</span>
+                        <span style="{{ j.style }}">{{ j.status }}</span>
+                      </div>
+                    </sc-for>
+                    <div style="font-size: 12.5px; color: #9ca3af; line-height: 1.5; padding-top: 4px; border-top: 1px solid #f3f4f6;">{{ panelJobsNote }}</div>
+                  </div>
+                </div>
+
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ panelChat }}" hint-placeholder-val="{{ false }}">
+              <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                <div style="flex: 1; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 12px;">
+                  <sc-if value="{{ chatEmpty }}" hint-placeholder-val="{{ true }}">
+                    <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 8px;">
+                      <div style="font-size: 13.5px; color: #6b7280; line-height: 1.55;">{{ chatIntro }}</div>
+                      <sc-for list="{{ chatSuggestions }}" as="s" hint-placeholder-count="3">
+                        <div onClick="{{ s.onPick }}" style="padding: 11px 13px; border: 1px solid #e5e7eb; border-radius: 9px; font-size: 13.5px; font-weight: 600; cursor: pointer; line-height: 1.4;" style-hover="border-color: #0ECAD4; background: #ecfcfd;">{{ s.text }}</div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <sc-for list="{{ chatTurns }}" as="t" hint-placeholder-count="0">
+                    <div style="{{ t.wrapStyle }}">
+                      <div style="{{ t.bubbleStyle }}">{{ t.text }}</div>
+                      <sc-if value="{{ t.hasRows }}" hint-placeholder-val="{{ false }}">
+                        <div style="border: 1px solid #e5e7eb; border-radius: 9px; overflow: hidden; width: 100%;">
+                          <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="3">
+                            <div style="display: flex; gap: 10px; padding: 9px 12px; border-bottom: 1px solid #f3f4f6; font-size: 13px;">
+                              <span style="flex: 1; min-width: 0; font-weight: 600;">{{ r.name }}</span>
+                              <span style="color: #6b7280;">{{ r.meta }}</span>
+                            </div>
+                          </sc-for>
+                          <div style="padding: 10px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <div style="padding: 6px 12px; border-radius: 6px; background: #0a8189; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;" style-hover="background: #076b71;">{{ t.action }}</div>
+                            <span style="font-size: 12px; color: #9ca3af;">Staged first — nothing goes live until you say so</span>
+                          </div>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ t.hasBy }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size: 12px; color: #9ca3af;">{{ t.by }}</div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="padding: 12px 14px 14px; border-top: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 8px;">
+                  <div style="display: flex; gap: 8px; align-items: flex-end;">
+                    <input value="{{ draft }}" onChange="{{ onDraft }}" placeholder="Ask about your sites" style="flex: 1; min-width: 0; padding: 11px 13px; border: 1px solid #d1d5db; border-radius: 9px; font-size: 14px; font-family: inherit; outline: none;" style-focus="border-color: #0ECAD4;" />
+                    <div onClick="{{ sendChat }}" style="width: 38px; height: 38px; flex-shrink: 0; border-radius: 9px; background: #0a8189; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; cursor: pointer;" style-hover="background: #076b71;">↑</div>
+                  </div>
+                  <div style="font-size: 12px; color: #9ca3af;">Anything that changes a site is staged and shown to you first.</div>
+                </div>
+              </div>
+            </sc-if>
+
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ panelMax }}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; inset: 0; z-index: 60; background: #f9fafb; display: flex; flex-direction: column; animation: nxfade 0.18s ease;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: #fff; border-bottom: 1px solid #e5e7eb;">
+              <div style="display: flex; gap: 3px; background: #f3f4f6; padding: 3px; border-radius: 8px;">
+                <div onClick="{{ showInsights }}" style="{{ ptInsights }}">Insights</div>
+                <div onClick="{{ showChat }}" style="{{ ptChat }}">Chat</div>
+              </div>
+              <div style="font-size: 13.5px; color: #6b7280;">{{ panelContextLabel }}</div>
+              <div style="flex: 1;"></div>
+              <div onClick="{{ restorePanel }}" style="display: flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 7px; border: 1px solid #d1d5db; background: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer;" style-hover="border-color: #9ca3af;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#868d98" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h6V3M21 15h-6v6M15 3v6h6M9 21v-6H3"></path></svg>
+                Back to the side
+              </div>
+            </div>
+            <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; padding: 0 32px;">
+              <div style="width: 100%; max-width: 760px; display: flex; flex-direction: column;">
+
+                <sc-if value="{{ heroEmpty }}" hint-placeholder-val="{{ true }}">
+                  <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; padding: 40px 0;">
+                    <div style="font-size: 32px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.12;">What do you want to know?</div>
+                    <div style="font-size: 15.5px; line-height: 1.6; color: #6b7280;">{{ heroSub }}</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                      <sc-for list="{{ chatSuggestions }}" as="s" hint-placeholder-count="3">
+                        <div onClick="{{ s.onPick }}" style="padding: 10px 15px; border: 1px solid #e5e7eb; border-radius: 20px; background: #fff; font-size: 14px; font-weight: 600; cursor: pointer;" style-hover="border-color: #0ECAD4; background: #ecfcfd;">{{ s.text }}</div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ heroHasTurns }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 16px; padding: 28px 0 12px;">
+                    <sc-for list="{{ chatTurns }}" as="t" hint-placeholder-count="2">
+                      <div style="{{ t.heroWrapStyle }}">
+                        <div style="{{ t.heroBubbleStyle }}">{{ t.text }}</div>
+                        <sc-if value="{{ t.hasRows }}" hint-placeholder-val="{{ false }}">
+                          <div style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; width: 100%; background: #fff;">
+                            <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="3">
+                              <div style="display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 14px;">
+                                <span style="flex: 1; min-width: 0; font-weight: 600;">{{ r.name }}</span>
+                                <span style="color: #6b7280;">{{ r.meta }}</span>
+                              </div>
+                            </sc-for>
+                            <div style="padding: 13px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                              <div style="padding: 8px 15px; border-radius: 7px; background: #0a8189; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="background: #076b71;">{{ t.action }}</div>
+                              <span style="font-size: 13px; color: #9ca3af;">Staged first — nothing goes live until you say so</span>
+                            </div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ t.hasBy }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size: 12.5px; color: #9ca3af;">{{ t.by }}</div>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+              </div>
+            </div>
+            <div style="background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; justify-content: center; padding: 14px 32px 20px;">
+              <div style="width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                  <input value="{{ draft }}" onChange="{{ onDraft }}" placeholder="Ask about your sites" style="flex: 1; min-width: 0; padding: 14px 17px; border: 1px solid #d1d5db; border-radius: 11px; font-size: 15.5px; font-family: inherit; outline: none; background: #fff;" style-focus="border-color: #0ECAD4;" />
+                  <div onClick="{{ sendChat }}" style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 11px; background: #0a8189; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; cursor: pointer;" style-hover="background: #076b71;">↑</div>
+                </div>
+                <div style="font-size: 12.5px; color: #9ca3af;">{{ heroFooter }}</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ panelClosed }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ openPanel }}" style="width: 46px; flex-shrink: 0; border-left: 1px solid #e5e7eb; background: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 10px; cursor: pointer;">
+            <div style="width: 28px; height: 28px; border-radius: 7px; background: #ecfcfd; color: #0a8189; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800;">‹</div>
+            <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #9ca3af; writing-mode: vertical-rl;">INSIGHTS</div>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1540, &quot;height&quot;: 1020}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'inbox',
+    panelTab: 'insights',
+    panelOpen: true,
+    panelSize: 'docked',
+    healthOpen: false,
+    gatewayOn: true,
+    googleOn: true,
+    wpeApiOn: true,
+    s3On: false,
+    chatPanelOn: true,
+    retention: 30,
+    externalOpen: false,
+    externalAdded: 0,
+    setSection: 'background',
+    backgroundOn: true,
+    jobState: { meta: { on: true, hours: 4 }, details: { on: false, hours: 8 }, index: { on: true, hours: 12 }, localIndex: { on: true, hours: 4 }, scan: { on: true, hours: 1 } },
+    perms: { pull: [1, 1, 1], read: [1, 1, 1], write: [1, 1, 0], push: [1, 1, 0], destroy: [1, 0, 0] },
+    frStep: 0,
+    syncCount: 0,
+    frAnswer: null,
+    inboxFilter: 'all',
+    decided: {},
+    undo: null,
+    sitesFilter: 'needs',
+    query: '',
+    page: 0,
+    selected: {},
+    chatTurns: [],
+    draft: '',
+  };
+
+  componentWillUnmount() { if (this._t) clearInterval(this._t); }
+
+  // ── data ────────────────────────────────────────────────────────────────
+  allItems() {
+    return [
+      { id: 'a1', kind: 'decide', title: 'Add FAQ answers to the Services page', detail: 'Three questions people search for are answered on this page, but not in a way search engines can read.', scope: 'Good Aesthetic Club', source: 'Search Visibility', when: '3:42 AM', primary: 'Approve', secondary: 'See the change', skip: 'Not now' },
+      { id: 'a2', kind: 'decide', title: 'Block a range of automated traffic', detail: '4,200 requests an hour are hitting your login page from one network. The rule is written and staged — nothing is live yet.', scope: 'Good Aesthetic Club', source: 'Security', when: '22m ago', primary: 'Put it live', secondary: 'Keep it staged', skip: 'Dismiss', evidence: '185.220.0.0/16 → 403 on /wp-login.php, /xmlrpc.php\nTested on the local copy · no legitimate traffic affected' },
+      { id: 'a3', kind: 'decide', title: 'Update Contact Form 7 on 12 sites', detail: 'Tested against a local copy of each site first. 12 passed cleanly; 2 broke and were left alone.', scope: '12 sites', source: 'Dependency Updater', when: '2h ago', primary: 'Update the 12', secondary: 'See the 2 that failed', skip: 'Not now' },
+      { id: 'a4', kind: 'decide', title: 'Redirect 3 deleted pages that still have links pointing at them', detail: 'These URLs are getting traffic from other sites and returning nothing.', scope: 'Meridian', source: 'Redirect Manager', when: 'Yesterday', primary: 'Add redirects', secondary: 'Review each', skip: 'Not now' },
+      { id: 'a5', kind: 'decide', title: 'Write alt text for 6 images', detail: 'Six images have no description. Drafts are ready for each.', scope: 'Wanderline', source: 'Search Visibility', when: 'Yesterday', primary: 'Use the drafts', secondary: 'Read them first', skip: 'Not now' },
+      { id: 'b1', kind: 'problem', title: 'A security sweep has failed 5 times since 3:17 PM', detail: "The workflow reported its findings in a format Nexus couldn't read, so the run was thrown away each time. It has been paused.", scope: '2 sites', source: 'Security', when: 'Paused 18:00', primary: 'Try again', secondary: 'Report this', skip: 'Mute for today', evidence: 'Expected a list of findings, got a single value instead.\nLast 5 runs · 15:17, 15:50, 16:02, 17:45, 18:00' },
+      { id: 'b2', kind: 'problem', title: 'Meridian has been stopped for 6 days', detail: 'Nothing has run against it since Aug 3, so anything Nexus tells you about it is out of date.', scope: 'Meridian', source: 'Fleet', when: '6d', primary: 'Start it', secondary: 'Leave it stopped', skip: 'Hide' },
+      { id: 'b3', kind: 'problem', title: "44 WP Engine sites haven't been looked inside", detail: "Nexus knows they exist but hasn't been able to read what's installed on them. Usually a missing SSH key.", scope: '44 sites', source: 'Fleet', when: '9d', primary: 'Fix access', secondary: 'Show me which', skip: 'Later' },
+      { id: 'c1', kind: 'know', title: 'Traffic to advancedcustomfields.com is down 13% over 28 days', detail: 'Three pages dropped to zero sessions and account for most of it. Conversions held steady.', scope: 'ACF Production', source: 'Web Analytics', when: 'This morning', primary: 'Look into it', secondary: 'Open the report', skip: 'Dismiss' },
+      { id: 'c2', kind: 'know', title: '6 broken links appeared this week', detail: 'All on pages that were edited in the last 10 days.', scope: '4 sites', source: 'Site Health', when: '2d', primary: 'Fix them', secondary: 'See the list', skip: 'Dismiss' },
+    ];
+  }
+
+  buildSites() {
+    const roots = ['acf', 'bloom-supply', 'wanderline', 'meridian', 'golden-ecomm', 'nitropack', 'atlas-portfolio', 'harbor-goods', 'pixel-forge', 'summit-outdoors', 'juniper-press', 'cobalt-labs', 'marigold-co', 'tidal-studio', 'verso-books', 'quill-and-co', 'northwind', 'lantern-media', 'plume-agency', 'orchard-house'];
+    const tails = ['', '-prod', '-stg', '-blog', '-shop', '2026', '-labs', '-dev'];
+    const out = [];
+    for (let i = 0; i < 367; i++) {
+      const root = roots[i % roots.length];
+      const tail = tails[Math.floor(i / roots.length) % tails.length];
+      const local = i % 10 === 3;
+      const external = !local && i % 27 === 11;
+      const k = external ? (i % 2 === 0 ? 'Detailed' : 'Basic') : i % 13 === 0 ? 'Basic' : i % 7 === 0 ? 'Detailed' : 'Searchable';
+      const needs = i % 16 === 5 ? (i % 3) + 1 : 0;
+      out.push({
+        id: 'p' + i,
+        name: root + tail + (i > 159 ? '-' + (i % 40) : ''),
+        where: local ? 'This Mac' : external ? 'External' : 'WP Engine',
+        host: external ? ['Kinsta', 'Cloudways', 'DigitalOcean', 'Pantheon'][i % 4] : '',
+        local,
+        external,
+        knowledge: k,
+        lastLooked: k === 'Basic' ? '9d ago' : ((i % 11) + 1) + 'h ago',
+        needs,
+      });
+    }
+    return out;
+  }
+
+  /** Every count in the UI comes from here — one definition, rendered everywhere. */
+  visibleSites(withExternal) {
+    return this._sites.filter(r => withExternal || !r.external);
+  }
+  counts(withExternal) {
+    const key = withExternal ? 'y' : 'n';
+    if (!this._countsCache) this._countsCache = {};
+    if (!this._countsCache[key]) {
+      const s = this.visibleSites(withExternal);
+      const wpe = s.filter(r => !r.local && !r.external).length;
+      // Four WP Engine accounts that add up to wpe exactly — never restated by hand.
+      const a = Math.round(wpe * 0.265);
+      const b = Math.round(wpe * 0.34);
+      const c = Math.round(wpe * 0.23);
+      this._countsCache[key] = {
+        total: s.length,
+        local: s.filter(r => r.local).length,
+        wpe,
+        external: s.filter(r => r.external).length,
+        needs: s.filter(r => r.needs > 0).length,
+        searchable: s.filter(r => r.knowledge === 'Searchable').length,
+        accounts: [a, b, c, wpe - a - b - c],
+      };
+    }
+    return this._countsCache[key];
+  }
+
+  // ── helpers ─────────────────────────────────────────────────────────────
+  seg(active) {
+    return 'padding: 6px 13px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; ' +
+      (active ? 'background: #fff; color: #111827; box-shadow: 0 1px 2px rgba(17,24,39,0.1);' : 'color: #6b7280;');
+  }
+  navTab(active) {
+    return 'padding: 12px 14px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 7px; ' +
+      (active ? 'color: #111827; border-bottom: 3px solid #0ECAD4;' : 'color: #9ca3af; border-bottom: 3px solid transparent;');
+  }
+  liveItems() {
+    const d = this.state.decided;
+    return this.allItems().filter(i => !d[i.id]);
+  }
+
+  // ── actions ─────────────────────────────────────────────────────────────
+  decide = (item, verb) => {
+    this.setState(s => ({
+      decided: Object.assign({}, s.decided, { [item.id]: verb }),
+      undo: { id: item.id, text: verb + ' — ' + item.title },
+    }));
+  };
+  undoLast = () => {
+    this.setState(s => {
+      const d = Object.assign({}, s.decided);
+      if (s.undo) delete d[s.undo.id];
+      return { decided: d, undo: null };
+    });
+  };
+
+  startSync = () => {
+    const total = this.counts(this.state.externalAdded > 0).total;
+    this.setState({ frStep: 1, syncCount: 0 });
+    if (this._t) clearInterval(this._t);
+    this._t = setInterval(() => {
+      this.setState(s => {
+        const next = Math.min(total, s.syncCount + Math.ceil((total - s.syncCount) / 9) + 3);
+        if (next >= total) { clearInterval(this._t); this._t = null; setTimeout(() => this.setState({ frStep: 2 }), 700); }
+        return { syncCount: next };
+      });
+    }, 130);
+  };
+
+  pickStarter = (a) => this.setState({ frAnswer: a });
+
+  askChat = (q) => {
+    const scripts = {
+      php: {
+        text: 'Five sites are still on PHP 7.4. They stopped getting security fixes, so these are the ones to move first.',
+        rows: [
+          { name: 'atlas-portfolio-stg', meta: 'WP Engine' },
+          { name: 'quill-and-co-blog', meta: 'WP Engine' },
+          { name: 'lantern-media', meta: 'WP Engine' },
+          { name: 'tidal-studio-dev', meta: 'This Mac' },
+          { name: 'orchard-house-shop', meta: 'WP Engine' },
+        ],
+        action: 'Stage an upgrade on all 5',
+        by: 'Answered in 2.1s · Fleet',
+      },
+      sec: {
+        text: 'It ran at 3:42 AM across 2 sites and found 4 things. Two are waiting for you in the inbox; it fixed the other two itself.',
+        rows: [
+          { name: 'Plugin with a known exploit', meta: 'needs you' },
+          { name: 'Login page open to bots', meta: 'needs you' },
+          { name: 'Debug log left readable', meta: 'fixed' },
+          { name: 'Weak security salts', meta: 'fixed' },
+        ],
+        action: 'Open the two decisions',
+        by: 'Answered in 1.4s · Security',
+      },
+      slow: {
+        text: 'Bloom Supply. Its homepage takes 4.1 seconds to become usable, mostly three very large images.',
+        rows: [
+          { name: 'hero-summer.png', meta: '2.4 MB → 180 KB' },
+          { name: 'lookbook-01.jpg', meta: '1.9 MB → 140 KB' },
+          { name: 'banner-wide.png', meta: '1.6 MB → 120 KB' },
+        ],
+        action: 'Stage compressed versions',
+        by: 'Answered in 3.0s · Performance',
+      },
+    };
+    const s = scripts[q.key] || scripts.php;
+    this.setState(st => ({
+      draft: '',
+      chatTurns: st.chatTurns.concat([
+        { id: 'u' + st.chatTurns.length, me: true, text: q.text },
+        { id: 'a' + st.chatTurns.length, me: false, text: s.text, rows: s.rows, action: s.action, by: s.by },
+      ]),
+    }));
+  };
+
+  sendDraft = () => {
+    const d = (this.state.draft || '').trim();
+    if (!d) return;
+    const key = /php|version/i.test(d) ? 'php' : /slow|speed|perform/i.test(d) ? 'slow' : 'sec';
+    this.askChat({ key, text: d });
+  };
+
+  bumpJob = (key, dir) => {
+    const steps = [1, 2, 4, 8, 12, 24];
+    this.setState(s => {
+      const j = s.jobState[key];
+      let idx = steps.indexOf(j.hours);
+      if (idx === -1) idx = 2;
+      idx = Math.max(0, Math.min(steps.length - 1, idx + dir));
+      return { jobState: Object.assign({}, s.jobState, { [key]: { on: j.on, hours: steps[idx] } }) };
+    });
+  };
+  toggleJob = (key) => {
+    this.setState(s => {
+      const j = s.jobState[key];
+      return { jobState: Object.assign({}, s.jobState, { [key]: { on: !j.on, hours: j.hours } }) };
+    });
+  };
+  togglePerm = (key, i) => {
+    this.setState(s => {
+      const row = s.perms[key].slice();
+      row[i] = row[i] ? 0 : 1;
+      return { perms: Object.assign({}, s.perms, { [key]: row }) };
+    });
+  };
+
+  toggleRow = (id) => {
+    this.setState(s => {
+      const sel = Object.assign({}, s.selected);
+      if (sel[id]) delete sel[id]; else sel[id] = true;
+      return { selected: sel };
+    });
+  };
+
+  // ── render values ───────────────────────────────────────────────────────
+  renderVals() {
+    if (!this._sites) this._sites = this.buildSites();
+    const st = this.state;
+    const hasExt = st.externalAdded > 0;
+    const C = this.counts(hasExt);
+    const screen = st.screen;
+    const live = this.liveItems();
+    const pending = live.length;
+    const bySource = {};
+    live.forEach(i => { bySource[i.source] = (bySource[i.source] || 0) + 1; });
+
+    const degraded = live.some(i => i.id === 'b1');
+    const healthBg = degraded ? '#fffbeb' : '#f0fdf4';
+    const healthFg = degraded ? '#b45309' : '#3d9c52';
+    const healthBd = degraded ? '#fde68a' : '#bbf7d0';
+
+    const filt = st.inboxFilter;
+    const shown = live.filter(i => filt === 'all' || (filt === 'decide' && i.kind === 'decide') || (filt === 'problem' && i.kind === 'problem'));
+    const groupDefs = [
+      { key: 'decide', title: 'Needs a decision', accent: '#0ECAD4', icon: '?', iconBg: '#ecfcfd', iconFg: '#0a8189', primaryBg: '#0a8189' },
+      { key: 'problem', title: 'Something is stuck', accent: '#f59e0b', icon: '!', iconBg: '#fffbeb', iconFg: '#b45309', primaryBg: '#d97706' },
+      { key: 'know', title: 'Worth knowing', accent: '#9ca3af', icon: 'i', iconBg: '#f3f4f6', iconFg: '#6b7280', primaryBg: '#374151' },
+    ];
+    const inboxGroups = groupDefs.map(g => {
+      const items = shown.filter(i => i.kind === g.key).map(it => ({
+        title: it.title,
+        detail: it.detail,
+        scope: it.scope,
+        source: it.source,
+        when: it.when,
+        hasEvidence: !!it.evidence,
+        evidence: it.evidence || '',
+        icon: g.icon,
+        iconStyle: 'width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; background: ' + g.iconBg + '; color: ' + g.iconFg + ';',
+        cardStyle: 'border: 1px solid #e5e7eb; border-left: 3px solid ' + g.accent + '; border-radius: 10px; background: #fff;',
+        primaryLabel: it.primary,
+        primaryStyle: 'padding: 8px 12px; border-radius: 7px; background: ' + g.primaryBg + '; color: #fff; font-size: 13.5px; font-weight: 700; text-align: center; cursor: pointer;',
+        secondaryLabel: it.secondary,
+        skipLabel: it.skip,
+        onPrimary: () => this.decide(it, it.primary),
+        onSecondary: () => this.decide(it, it.secondary),
+        onSkip: () => this.decide(it, it.skip),
+      }));
+      return { title: g.title, items, countLabel: items.length === 1 ? '1 item' : items.length + ' items' };
+    }).filter(g => g.items.length > 0);
+
+    const q = (st.query || '').toLowerCase();
+    let rows = this.visibleSites(hasExt);
+    if (st.sitesFilter === 'needs') rows = rows.filter(r => r.needs > 0);
+    else if (st.sitesFilter === 'local') rows = rows.filter(r => r.local);
+    else if (st.sitesFilter === 'wpe') rows = rows.filter(r => !r.local && !r.external);
+    else if (st.sitesFilter === 'external') rows = rows.filter(r => r.external);
+    if (q) rows = rows.filter(r => r.name.toLowerCase().indexOf(q) !== -1);
+    const perPage = 12;
+    const maxPage = Math.max(0, Math.ceil(rows.length / perPage) - 1);
+    const page = Math.min(st.page, maxPage);
+    const slice = rows.slice(page * perPage, page * perPage + perPage);
+    const dot = { Searchable: '#0ECAD4', Detailed: '#8b5cf6', Basic: '#d97706' };
+    const selCount = Object.keys(st.selected).length;
+
+    const pageRows = slice.map(s => ({
+      name: s.name,
+      where: s.external ? 'External · ' + s.host : s.where,
+      knowledge: s.knowledge,
+      lastLooked: s.lastLooked,
+      needs: s.needs > 0 ? String(s.needs) : '—',
+      needsStyle: s.needs > 0
+        ? 'display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 10px; background: #fffbeb; color: #b45309; font-size: 12.5px; font-weight: 800;'
+        : 'font-size: 13.5px; color: #d1d5db;',
+      dotStyle: 'width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: ' + dot[s.knowledge] + ';',
+      check: st.selected[s.id] ? '✓' : '',
+      checkStyle: 'width: 18px; height: 18px; flex-shrink: 0; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; ' +
+        (st.selected[s.id] ? 'background: #0a8189; color: #fff; border: 1px solid #0a8189;' : 'border: 1px solid #d1d5db;'),
+      rowStyle: 'display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; ' +
+        (st.selected[s.id] ? 'background: #ecfcfd;' : ''),
+      onToggle: () => this.toggleRow(s.id),
+    }));
+
+    const onSite = screen === 'local';
+    const contextLabel = onSite
+      ? 'Good Aesthetic Club'
+      : screen === 'sites'
+      ? (selCount > 0 ? selCount + ' sites selected' : 'Across all ' + C.total + ' sites')
+      : screen === 'firstrun' ? 'Getting set up' : 'Across all ' + C.total + ' sites';
+
+    const suggestions = [
+      { key: 'php', text: 'Which sites are still on an old version of PHP?' },
+      { key: 'sec', text: 'What did the security workflow find last night?' },
+      { key: 'slow', text: 'Which of my live sites is slowest?' },
+    ];
+
+    const chatTurns = st.chatTurns.map(t => ({
+      text: t.text,
+      wrapStyle: 'display: flex; flex-direction: column; gap: 7px; align-items: ' + (t.me ? 'flex-end' : 'flex-start') + ';',
+      bubbleStyle: t.me
+        ? 'max-width: 88%; padding: 10px 13px; border-radius: 11px; background: #e0f2fe; font-size: 13.5px; line-height: 1.5;'
+        : 'max-width: 100%; padding: 10px 13px; border-radius: 11px; background: #f3f4f6; font-size: 13.5px; line-height: 1.55;',
+      hasRows: !!t.rows,
+      rows: t.rows || [],
+      action: t.action || '',
+      hasBy: !!t.by,
+      by: t.by || '',
+      heroWrapStyle: 'display: flex; flex-direction: column; gap: 9px; align-items: ' + (t.me ? 'flex-end' : 'flex-start') + ';',
+      heroBubbleStyle: t.me
+        ? 'max-width: 78%; padding: 13px 17px; border-radius: 13px; background: #e0f2fe; font-size: 15px; line-height: 1.55;'
+        : 'max-width: 100%; padding: 13px 17px; border-radius: 13px; background: #f3f4f6; font-size: 15px; line-height: 1.6;',
+    }));
+
+    const starters = [
+      { key: 'php', text: 'Which sites are still on an old version of PHP?' },
+      { key: 'sec', text: 'Which sites have plugins with known problems?' },
+      { key: 'slow', text: 'Which of my live sites is slowest?' },
+    ];
+    const answers = {
+      php: { text: 'Five of your ' + C.total + ' sites are still on PHP 7.4 — they stopped getting security fixes, so these are the ones to move first.', rows: [ { name: 'atlas-portfolio-stg', meta: 'WP Engine' }, { name: 'quill-and-co-blog', meta: 'WP Engine' }, { name: 'lantern-media', meta: 'WP Engine' }, { name: 'tidal-studio-dev', meta: 'This Mac' }, { name: 'orchard-house-shop', meta: 'WP Engine' } ], action: 'Stage an upgrade on all 5', by: 'Answered in 2.1s' },
+      sec: { text: 'Nine sites are running a plugin with a known active exploit. All nine have a tested update available.', rows: [ { name: 'golden-ecomm', meta: 'Contact Form 7' }, { name: 'bloom-supply', meta: 'Contact Form 7' }, { name: 'harbor-goods-shop', meta: 'WP Rocket' }, { name: '+6 more', meta: 'same two plugins' } ], action: 'Stage updates on all 9', by: 'Answered in 2.6s' },
+      slow: { text: 'Bloom Supply. Its homepage takes 4.1 seconds to become usable, mostly three very large images.', rows: [ { name: 'hero-summer.png', meta: '2.4 MB' }, { name: 'lookbook-01.jpg', meta: '1.9 MB' }, { name: 'banner-wide.png', meta: '1.6 MB' } ], action: 'Stage compressed versions', by: 'Answered in 3.0s' },
+    };
+    const ans = st.frAnswer ? answers[st.frAnswer] : null;
+
+    // ── settings: every cost figure below is derived from the same job state ──
+    const per = (h) => Math.round(24 / h);
+    const jobDefs = [
+      { key: 'meta', name: 'Check WP Engine sites', what: 'Reads which plugins, themes and versions are on each install. This is the expensive one.', heavy: true, mins: 11, conn: true, last: 'ran 22m ago · took 11 min',
+        cost: (h) => per(h) + ' passes a day · ' + (per(h) * C.wpe).toLocaleString() + ' connections' },
+      { key: 'details', name: 'Refresh site details', what: 'URLs, admin emails and post counts. Opens its own connection to each install.', heavy: true, mins: 7, conn: true, last: 'never run',
+        cost: (h) => per(h) + ' passes a day · ' + (per(h) * C.wpe).toLocaleString() + ' connections' },
+      { key: 'index', name: 'Make content searchable', what: 'Indexes page and post text. Rides along with the check above, so it costs no extra connections.', mins: 26, last: 'ran 3h ago · took 26 min',
+        cost: (h) => per(h) + ' passes a day · no extra connections' },
+      { key: 'localIndex', name: 'Index sites on this Mac', what: 'Starts a stopped site, reads its content, stops it again.', mins: 4, last: 'ran 1h ago',
+        cost: (h) => per(h) + ' passes a day · ' + C.local + ' local sites' },
+      { key: 'scan', name: 'Look over stopped local sites', what: 'Reads files on disk. Nothing starts up and nothing connects anywhere.', mins: 1, last: 'ran 12m ago',
+        cost: () => 'free' },
+    ];
+    let connPerDay = 0;
+    let minsPerDay = 0;
+    let nextHours = null;
+    jobDefs.forEach(j => {
+      const s = st.jobState[j.key];
+      if (!s.on || !st.backgroundOn) return;
+      if (j.conn) connPerDay += per(s.hours) * C.wpe;
+      minsPerDay += per(s.hours) * j.mins;
+      nextHours = nextHours === null ? s.hours : Math.min(nextHours, s.hours);
+    });
+    minsPerDay = Math.round(minsPerDay);
+    const nextIn = nextHours === null ? '—' : nextHours === 1 ? 'under 1h' : 'about ' + nextHours + 'h';
+    const jobsOn = jobDefs.filter(j => st.jobState[j.key].on).length;
+    const bgNote = st.backgroundOn ? jobsOn + ' on' : 'paused';
+    const connGroupDefs = [
+      { title: 'Where your sites are', hint: 'These are what make sites show up in Nexus.', items: [
+        { name: 'WP Engine', detail: '11 of 14 accounts · ' + C.wpe + ' sites', badge: 'W', ok: true, status: 'Connected', action: 'Manage' },
+        { name: 'Other hosts', detail: hasExt ? C.external + ' sites over SSH · Kinsta, Cloudways, DigitalOcean, Pantheon' : 'Anywhere you can reach over SSH. Nexus can read these sites but not manage the hosting.', badge: '↗', ok: hasExt, status: hasExt ? 'Connected' : 'None yet', action: hasExt ? 'Manage' : 'Add a host' },
+      ] },
+      { title: 'How Nexus answers you', hint: 'The model behind chat, agents and everything Nexus writes.', items: [
+        { name: 'WP Engine Power', detail: 'claude-sonnet-5 · key ending NsqF', badge: 'AI', ok: true, status: 'Working', action: 'Change' },
+        { name: 'Let WordPress sites use it too', detail: 'Sites on this Mac send their AI requests through Nexus instead of needing their own key.', badge: '⇄', ok: true, toggle: true, indent: true },
+      ] },
+      { title: 'What else Nexus can do', hint: 'Each of these unlocks one thing. Set them up when you want that thing, not before.', items: [
+        { name: 'Traffic and search data', detail: st.googleOn ? 'jeremy.pollock@wpengine.com · Analytics and Search Console' : 'Connect Google so Nexus can answer questions about visitors, rankings and page performance.', note: st.googleOn ? 'Disconnecting takes this away from every agent at once. Anything already collected is kept.' : '', badge: 'G', ok: st.googleOn, status: st.googleOn ? 'On' : 'Off', action: st.googleOn ? 'Disconnect' : 'Connect Google', danger: st.googleOn },
+        { name: 'Backups', detail: st.wpeApiOn ? 'Using an API key from my.wpengine.com' : 'Needs a WP Engine API key, which is separate from the login above — you generate it at my.wpengine.com.', badge: 'B', ok: st.wpeApiOn, status: st.wpeApiOn ? 'On' : 'Off', action: st.wpeApiOn ? 'Change key' : 'Add a key' },
+        { name: 'Reading access logs', detail: st.s3On ? 'Read-only S3 key, kept in your Mac keychain' : 'Needs a read-only Amazon S3 key. This is how Nexus spots unusual traffic before it becomes a problem.', note: st.s3On ? 'Raw logs are never stored on this Mac — only the summaries Nexus works out from them.' : '', badge: 'S3', ok: st.s3On, status: st.s3On ? 'On' : 'Off', action: st.s3On ? 'Disconnect' : 'Set it up' },
+      ] },
+    ];
+    const connAll = [];
+    connGroupDefs.forEach(g => g.items.forEach(i => { if (!i.toggle) connAll.push(i); }));
+    const connNote = connAll.filter(c => c.ok).length + ' of ' + connAll.length + ' on';
+    const prodOpen = ['write', 'push', 'destroy'].filter(k => st.perms[k][2]).length;
+    const permNote = prodOpen === 0 ? 'production safe' : prodOpen + ' open on prod';
+
+    return {
+      goFirstRun: () => this.setState({ screen: 'firstrun', frStep: 0, syncCount: 0, frAnswer: null }),
+      goInbox: () => this.setState({ screen: 'inbox' }),
+      goAsk: () => this.setState({ screen: 'ask' }),
+      goSites: () => this.setState({ screen: 'sites' }),
+      goAgents: () => this.setState({ screen: 'agents' }),
+      goLocal: () => this.setState({ screen: 'local' }),
+      goSettings: () => this.setState({ screen: 'settings' }),
+      tabSettings: this.seg(screen === 'settings'),
+      navSettings: this.navTab(screen === 'settings'),
+      isSettings: screen === 'settings',
+      settingsNav: [
+        { key: 'connections', label: 'Connections', note: connNote },
+        { key: 'chat', label: 'Chat', note: st.chatPanelOn ? 'panel on' : 'panel off' },
+        { key: 'background', label: 'Background work', note: bgNote },
+        { key: 'permissions', label: 'What agents may do', note: permNote },
+        { key: 'advanced', label: 'Advanced', note: '' },
+      ].map(n => ({
+        label: n.label,
+        note: n.note,
+        noteStyle: 'font-size: 12px; color: #9ca3af; flex-shrink: 0;',
+        style: 'display: flex; align-items: center; gap: 8px; padding: 10px 18px; font-size: 14px; font-weight: 700; cursor: pointer; border-left: 3px solid ' +
+          (st.setSection === n.key ? '#0ECAD4; background: #f3f4f6; color: #111827;' : 'transparent; color: #4b5563;'),
+        onPick: () => this.setState({ setSection: n.key }),
+      })),
+      setConnections: st.setSection === 'connections',
+      setChat: st.setSection === 'chat',
+      toggleChatPanel: () => this.setState(s => ({ chatPanelOn: !s.chatPanelOn })),
+      chatPanelLabel: st.chatPanelOn ? 'The chat panel is on' : 'The chat panel is off',
+      chatPanelSub: st.chatPanelOn
+        ? 'It sits at the edge of every screen in Local, including screens Nexus does not own.'
+        : 'Nexus is only reachable from its own screens. Nothing else changes.',
+      chatPanelSwitchStyle: 'width: 46px; height: 26px; flex-shrink: 0; border-radius: 13px; padding: 3px; cursor: pointer; display: flex; background: ' + (st.chatPanelOn ? '#0a8189' : '#d1d5db') + '; justify-content: ' + (st.chatPanelOn ? 'flex-end' : 'flex-start') + ';',
+      chatPanelKnobStyle: 'width: 20px; height: 20px; border-radius: 50%; background: #fff;',
+      retentionOptions: [7, 30, 90, 0].map(d => ({
+        label: d === 0 ? 'Forever' : d + ' days',
+        style: this.seg(st.retention === d),
+        onPick: () => this.setState({ retention: d }),
+      })),
+      historyNote: st.retention === 0
+        ? 'Nothing is deleted automatically.'
+        : 'Chats older than ' + st.retention + ' days are removed on their own.',
+      setBackground: st.setSection === 'background',
+      setPermissions: st.setSection === 'permissions',
+      setAdvanced: st.setSection === 'advanced',
+
+      connGroups: connGroupDefs.map(g => ({
+        title: g.title,
+        hint: g.hint,
+        items: g.items.map(c => ({
+          name: c.name,
+          detail: c.detail,
+          hasNote: !!c.note,
+          note: c.note || '',
+          badge: c.badge,
+          rowStyle: 'border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 16px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;' +
+            (c.indent ? ' margin-left: 28px; background: #f9fafb;' : ''),
+          badgeStyle: 'width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 800; background: ' + (c.ok ? '#ecfcfd' : '#f3f4f6') + '; color: ' + (c.ok ? '#0a8189' : '#9ca3af') + ';',
+          isToggle: !!c.toggle,
+          isAction: !c.toggle,
+          onToggle: () => this.setState(s => ({ gatewayOn: !s.gatewayOn })),
+          switchStyle: 'width: 46px; height: 26px; flex-shrink: 0; border-radius: 13px; padding: 3px; cursor: pointer; display: flex; background: ' + (st.gatewayOn ? '#0a8189' : '#d1d5db') + '; justify-content: ' + (st.gatewayOn ? 'flex-end' : 'flex-start') + ';',
+          knobStyle: 'width: 20px; height: 20px; border-radius: 50%; background: #fff;',
+          status: c.status,
+          statusStyle: 'padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 800; flex-shrink: 0; background: ' + (c.ok ? '#f0fdf4' : '#f3f4f6') + '; color: ' + (c.ok ? '#3d9c52' : '#6b7280') + ';',
+          action: c.action,
+          actionStyle: 'padding: 8px 14px; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; flex-shrink: 0; ' +
+            (c.ok ? 'border: 1px solid #d1d5db; background: #fff; color: #374151;' : 'border: 1px solid #0a8189; background: #0a8189; color: #fff;'),
+        })),
+      })),
+
+      toggleBackground: () => this.setState(s => ({ backgroundOn: !s.backgroundOn })),
+      masterLabel: st.backgroundOn ? 'Nexus is keeping itself up to date' : 'Background work is paused',
+      masterSub: st.backgroundOn
+        ? 'Turn this off and nothing runs on a schedule — you can still run anything by hand.'
+        : 'Nothing is running on a schedule. What Nexus knows will go stale.',
+      masterSwitchStyle: 'width: 46px; height: 26px; flex-shrink: 0; border-radius: 13px; padding: 3px; cursor: pointer; display: flex; background: ' + (st.backgroundOn ? '#0a8189' : '#d1d5db') + '; justify-content: ' + (st.backgroundOn ? 'flex-end' : 'flex-start') + ';',
+      masterKnobStyle: 'width: 20px; height: 20px; border-radius: 50%; background: #fff;',
+      loadCardStyle: 'border: 1px solid ' + (st.backgroundOn ? '#e5e7eb' : '#fde68a') + '; border-radius: 10px; background: ' + (st.backgroundOn ? '#fff' : '#fffbeb') + '; padding: 16px 18px;',
+      loadPerDay: st.backgroundOn ? connPerDay.toLocaleString() : '0',
+      loadMinutes: st.backgroundOn ? String(minsPerDay) : '0',
+      loadNext: st.backgroundOn ? nextIn : '—',
+      jobs: jobDefs.map(j => {
+        const s = st.jobState[j.key];
+        const on = s.on && st.backgroundOn;
+        return {
+          name: j.name,
+          what: j.what,
+          every: s.hours === 1 ? 'every hour' : 'every ' + s.hours + 'h',
+          cost: on ? j.cost(s.hours) : 'nothing while off',
+          costStyle: 'font-size: 13px; font-weight: 700; color: ' + (on ? (j.heavy && s.hours <= 2 ? '#b45309' : '#374151') : '#9ca3af') + ';',
+          lastRun: on ? j.last : 'paused',
+          rowStyle: 'display: flex; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid #f3f4f6; ' + (on ? '' : 'background: #fbfbfc;'),
+          switchStyle: 'width: 40px; height: 23px; flex-shrink: 0; border-radius: 12px; padding: 3px; cursor: pointer; display: flex; background: ' + (on ? '#0a8189' : '#d1d5db') + '; justify-content: ' + (on ? 'flex-end' : 'flex-start') + ';',
+          knobStyle: 'width: 17px; height: 17px; border-radius: 50%; background: #fff;',
+          onToggle: () => this.toggleJob(j.key),
+          slower: () => this.bumpJob(j.key, 1),
+          faster: () => this.bumpJob(j.key, -1),
+        };
+      }),
+
+      permRows: [
+        { key: 'pull', name: 'Copy a site down to this Mac', what: 'Files and database, one way' },
+        { key: 'read', name: 'Read what is installed', what: 'Plugins, themes, versions, users' },
+        { key: 'write', name: 'Install or update things', what: 'Plugin and theme updates, core updates' },
+        { key: 'push', name: 'Push local changes up', what: 'Overwrites the remote files and database' },
+        { key: 'destroy', name: 'Delete or promote an environment', what: 'Cannot be undone' },
+      ].map(p => ({
+        name: p.name,
+        what: p.what,
+        cells: [0, 1, 2].map(i => {
+          const allowed = !!st.perms[p.key][i];
+          const risky = i === 2 && (p.key === 'write' || p.key === 'push' || p.key === 'destroy');
+          return {
+            label: allowed ? 'Allowed' : 'Blocked',
+            style: 'width: 96px; flex-shrink: 0; text-align: center; padding: 6px 0; border-radius: 7px; font-size: 12.5px; font-weight: 800; cursor: pointer; background: ' +
+              (allowed ? (risky ? '#fffbeb' : '#f0fdf4') : '#f3f4f6') + '; color: ' + (allowed ? (risky ? '#b45309' : '#3d9c52') : '#9ca3af') + ';',
+            onToggle: () => this.togglePerm(p.key, i),
+          };
+        }),
+      })),
+
+      advancedRows: [
+        { name: 'Connect your own AI tools', what: 'Lets Claude Code, Cursor or anything else drive Nexus', value: 'port 10801', action: 'Copy command', plain: true },
+        { name: 'AI gateway', what: 'Routes model requests and records what they cost', value: 'port 13100', action: 'View usage', plain: true },
+        { name: 'Search index', what: 'What makes site content searchable · ' + C.searchable + ' sites indexed', value: '846 MB', action: 'Rebuild', plain: true },
+        { name: 'Start over', what: 'Forgets everything Nexus has learned and re-reads every site', value: '', action: 'Reset', plain: false },
+      ].map(a => ({
+        name: a.name,
+        what: a.what,
+        value: a.value,
+        action: a.action,
+        actionStyle: 'padding: 8px 14px; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; flex-shrink: 0; ' +
+          (a.plain ? 'border: 1px solid #d1d5db; background: #fff; color: #374151;' : 'border: 1px solid #fecaca; background: #fef2f2; color: #ef4444;'),
+      })),
+      tabLocal: this.seg(screen === 'local'),
+      isLocal: screen === 'local',
+      chromeNexus: screen !== 'local',
+      localSites: [
+        { name: 'Good Aesthetic Club', on: true, active: true },
+        { name: 'Wanderline', on: true },
+        { name: 'Meridian', on: false },
+        { name: 'Bloom Supply', on: true },
+        { name: 'acf-recipes', on: false },
+      ].map(l => ({
+        name: l.name,
+        rowStyle: 'display: flex; align-items: center; gap: 9px; padding: 9px 16px; cursor: pointer; ' + (l.active ? 'background: #f3f4f6;' : ''),
+        dotStyle: 'width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: ' + (l.on ? '#51c356' : '#d1d5db') + ';',
+      })),
+      localCards: [
+        { title: 'Site', rows: [{ k: 'Domain', v: 'good-aesthetic.local' }, { k: 'SSL', v: 'Trusted' }, { k: 'Multisite', v: 'No' }] },
+        { title: 'Environment', rows: [{ k: 'PHP', v: '8.2.29' }, { k: 'Web server', v: 'nginx' }, { k: 'Database', v: 'MySQL 8.4' }] },
+        { title: 'WordPress', rows: [{ k: 'Version', v: '7.0.1' }, { k: 'Plugins', v: '14 active' }, { k: 'One-click admin', v: 'On' }] },
+        { title: 'Connected to', rows: [{ k: 'Host', v: 'WP Engine' }, { k: 'Environment', v: 'Production' }, { k: 'Last pull', v: '2 days ago' }] },
+      ],
+      tabFirstRun: this.seg(screen === 'firstrun'),
+      tabInbox: this.seg(screen === 'inbox'),
+      tabAsk: this.seg(screen === 'ask'),
+      tabSites: this.seg(screen === 'sites'),
+      tabAgents: this.seg(screen === 'agents'),
+      screenNote: {
+        firstrun: 'Someone opening Nexus for the first time with 300+ installs',
+        inbox: 'Every decision, finding and failure in one place — plain language, one keystroke each',
+        ask: 'The same conversation as the side panel, given the whole window',
+        sites: 'One table for the whole fleet — this Mac, WP Engine, and external hosts',
+        agents: 'Today\u2019s agents view, rewritten so the cards answer what it does and whether it needs you',
+        settings: 'One settings home instead of two — with what the background work actually costs, in numbers',
+        local: 'A plain Local screen with no Nexus nav — the panel is mounted above the whole app and follows you here',
+      }[screen],
+
+      isFirstRun: screen === 'firstrun',
+      isInbox: screen === 'inbox',
+      isAsk: screen === 'ask',
+      isSites: screen === 'sites',
+      isAgents: screen === 'agents',
+
+      pendingLabel: String(pending),
+      fleetLabel: C.total + ' sites · ' + C.local + ' on this Mac · ' + C.wpe + ' at WP Engine' + (hasExt ? ' · ' + C.external + ' external' : ''),
+      healthPillStyle: 'display: flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 20px; font-size: 13px; font-weight: 700; cursor: pointer; background: ' + healthBg + '; color: ' + healthFg + '; border: 1px solid ' + healthBd + ';',
+      healthDotStyle: 'width: 7px; height: 7px; border-radius: 50%; background: ' + healthFg + ';',
+      healthLabel: degraded ? '1 workflow paused' : 'Everything running',
+      healthOpen: st.healthOpen,
+      toggleHealth: () => this.setState(s => ({ healthOpen: !s.healthOpen })),
+      healthChecks: [
+        { label: 'Workflows', value: degraded ? '1 paused' : 'All running', valueStyle: 'font-weight: 700; color: ' + (degraded ? '#b45309' : '#3d9c52') + ';' },
+        { label: 'Connection to WP Engine', value: 'Good', valueStyle: 'font-weight: 700; color: #3d9c52;' },
+        { label: 'Background work', value: 'On schedule', valueStyle: 'font-weight: 700; color: #3d9c52;' },
+        { label: 'Assistant', value: 'Ready', valueStyle: 'font-weight: 700; color: #3d9c52;' },
+      ],
+      navInbox: this.navTab(screen === 'inbox'),
+      navAsk: this.navTab(screen === 'ask'),
+      navSites: this.navTab(screen === 'sites'),
+      navAgents: this.navTab(screen === 'agents'),
+      agentAlert: degraded ? '1 paused' : '',
+      agentAlertStyle: degraded
+        ? 'padding: 1px 7px; border-radius: 9px; background: #fffbeb; color: #b45309; font-size: 11.5px; font-weight: 800;'
+        : 'display: none;',
+
+      // first run
+      frIntro: st.frStep === 0,
+      frSyncing: st.frStep === 1,
+      frAsk: st.frStep === 2,
+      startSync: this.startSync,
+      externalOpen: st.externalOpen,
+      startExternal: () => this.setState(s => ({ externalOpen: !s.externalOpen })),
+      addExternal: () => this.setState(s => ({ externalAdded: s.externalAdded + 1, externalOpen: false })),
+      externalBtnLabel: st.externalAdded > 0
+        ? (st.externalAdded === 1 ? '1 host added' : st.externalAdded + ' hosts added')
+        : 'Add a host',
+      externalBtnStyle: st.externalAdded > 0
+        ? 'padding: 9px 18px; border-radius: 7px; background: #f0fdf4; color: #3d9c52; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0;'
+        : 'padding: 9px 18px; border-radius: 7px; border: 1px solid #d1d5db; background: #fff; color: #374151; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0;',
+      localFoundLabel: C.local + ' found · included automatically',
+      foundSummary: C.total + ' sites found · ' + C.local + ' on this Mac, ' + C.wpe + ' at WP Engine' + (hasExt ? ', ' + C.external + ' on other hosts' : ''),
+      syncCount: String(st.syncCount),
+      syncHeadline: st.syncCount < C.total ? 'Looking through your accounts…' : 'Found them all.',
+      syncBarStyle: 'height: 100%; background: #0ECAD4; border-radius: 3px; transition: width 0.25s ease; width: ' + Math.round((st.syncCount / C.total) * 100) + '%;',
+      syncAccounts: [
+        { name: 'This Mac', detail: C.local + ' sites', done: true },
+        { name: 'Other hosts', detail: hasExt ? C.external + ' sites' : 'none added', done: true },
+        { name: 'btwpe', detail: st.syncCount > C.total * 0.17 ? C.accounts[0] + ' sites' : 'reading…', done: st.syncCount > C.total * 0.17 },
+        { name: 'devrel', detail: st.syncCount > C.total * 0.42 ? C.accounts[1] + ' sites' : 'reading…', done: st.syncCount > C.total * 0.42 },
+        { name: 'Golden Ecomm', detail: st.syncCount > C.total * 0.72 ? C.accounts[2] + ' sites' : 'reading…', done: st.syncCount > C.total * 0.72 },
+        { name: 'jpollock911', detail: st.syncCount > C.total * 0.92 ? C.accounts[3] + ' sites' : 'reading…', done: st.syncCount > C.total * 0.92 },
+      ].map(a => ({
+        name: a.name,
+        detail: a.detail,
+        mark: a.done ? '✓' : '·',
+        markStyle: 'width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; ' +
+          (a.done ? 'background: #51c356; color: #fff;' : 'background: #f3f4f6; color: #9ca3af;'),
+      })),
+      starterQuestions: starters.map(s => ({ text: s.text, onPick: () => this.pickStarter(s.key) })),
+      frAnswered: !!ans,
+      frAnswerText: ans ? ans.text : '',
+      frAnswerRows: ans ? ans.rows : [],
+      frAnswerAction: ans ? ans.action : '',
+      frAnswerBy: ans ? ans.by : '',
+
+      // inbox
+      inboxHeadline: live.length === 0 ? 'Inbox' : pending + ' things are waiting on you',
+      inboxSub: 'Across ' + C.total + ' sites · nothing here changes anything until you approve it',
+      filterAll: () => this.setState({ inboxFilter: 'all' }),
+      filterDecide: () => this.setState({ inboxFilter: 'decide' }),
+      filterProblem: () => this.setState({ inboxFilter: 'problem' }),
+      fAll: this.seg(filt === 'all'),
+      fDecide: this.seg(filt === 'decide'),
+      fProblem: this.seg(filt === 'problem'),
+      inboxGroups,
+      inboxEmpty: inboxGroups.length === 0,
+      hasUndo: !!st.undo,
+      undoText: st.undo ? st.undo.text : '',
+      undo: this.undoLast,
+
+      // sites
+      sitesSub: rows.length + ' shown · ' + selCount + ' selected',
+      searchPlaceholder: 'Search ' + C.total + ' sites',
+      query: st.query,
+      onQuery: (e) => this.setState({ query: e.target.value, page: 0 }),
+      sfNeeds: () => this.setState({ sitesFilter: 'needs', page: 0 }),
+      sfAll: () => this.setState({ sitesFilter: 'all', page: 0 }),
+      sfLocal: () => this.setState({ sitesFilter: 'local', page: 0 }),
+      sfWpe: () => this.setState({ sitesFilter: 'wpe', page: 0 }),
+      sfExternal: () => this.setState({ sitesFilter: 'external', page: 0 }),
+      sfNeedsLabel: 'Needs attention ' + C.needs,
+      sfAllLabel: 'All ' + C.total,
+      sfLocalLabel: 'On this Mac ' + C.local,
+      sfWpeLabel: 'WP Engine ' + C.wpe,
+      sfExternalLabel: 'External ' + C.external,
+      sfNeedsStyle: this.seg(st.sitesFilter === 'needs'),
+      sfAllStyle: this.seg(st.sitesFilter === 'all'),
+      sfLocalStyle: this.seg(st.sitesFilter === 'local'),
+      sfWpeStyle: this.seg(st.sitesFilter === 'wpe'),
+      sfExternalStyle: this.seg(st.sitesFilter === 'external'),
+      pageRows,
+      pageLabel: rows.length === 0 ? 'No sites match' : 'Showing ' + (page * perPage + 1) + '–' + Math.min(rows.length, page * perPage + perPage) + ' of ' + rows.length,
+      prevPage: () => this.setState(s => ({ page: Math.max(0, s.page - 1) })),
+      nextPage: () => this.setState({ page: Math.min(maxPage, page + 1) }),
+      hasSelection: selCount > 0,
+      selectionLabel: selCount + (selCount === 1 ? ' site selected' : ' sites selected'),
+      clearSelection: () => this.setState({ selected: {} }),
+
+      // panel
+      panelOpen: st.panelOpen && st.panelSize !== 'full',
+      panelClosed: !st.panelOpen,
+      panelMax: st.panelOpen && st.panelSize === 'full',
+      panelShellStyle: 'width: ' + (st.panelSize === 'wide' ? 620 : 380) + 'px; flex-shrink: 0; border-left: 1px solid #e5e7eb; background: #fff; display: flex; flex-direction: column;',
+      widenPanel: () => this.setState(s => ({ panelSize: s.panelSize === 'wide' ? 'docked' : 'wide' })),
+      widenIcon: st.panelSize === 'wide' ? '›|' : '|‹',
+      widenStyle: 'width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; font-weight: 800; color: ' + (st.panelSize === 'wide' ? '#0a8189' : '#9ca3af') + ';',
+      maximizePanel: () => this.setState({ panelSize: 'full', panelTab: 'chat' }),
+      restorePanel: () => this.setState({ panelSize: 'docked' }),
+      closePanel: () => this.setState({ panelOpen: false }),
+      openPanel: () => this.setState({ panelOpen: true, panelSize: 'docked' }),
+      panelInsights: st.panelTab === 'insights',
+      panelChat: st.panelTab === 'chat',
+      showInsights: () => this.setState({ panelTab: 'insights' }),
+      showChat: () => this.setState({ panelTab: 'chat' }),
+      ptInsights: this.seg(st.panelTab === 'insights'),
+      ptChat: this.seg(st.panelTab === 'chat'),
+      panelContextLabel: contextLabel,
+      showPendingCard: screen !== 'inbox' && pending > 0,
+      panelPendingTitle: onSite ? '2 things on this site need you' : pending + ' things are waiting on you',
+      panelPendingSub: onSite
+        ? 'A blocked traffic rule is staged and waiting, and the Services page has three unanswered questions.'
+        : live.filter(i => i.kind === 'decide').length + ' decisions, ' + live.filter(i => i.kind === 'problem').length + ' problems, and some findings worth a look.',
+      panelStats: onSite ? [
+        { label: 'What we know', value: 'Searchable', icon: '✓', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #ecfcfd; color: #0a8189; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #374151;' },
+        { label: 'Broken links', value: '2', icon: '↗', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #fef2f2; color: #ef4444; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #ef4444;' },
+        { label: 'Pages returning errors', value: '1', icon: '×', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #fef2f2; color: #ef4444; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #ef4444;' },
+        { label: 'Last looked at', value: '3h ago', icon: '◷', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #374151;' },
+      ] : [
+        { label: 'Sites with something wrong', value: String(C.needs), icon: '!', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #fffbeb; color: #b45309; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #b45309;' },
+        { label: 'Broken links', value: '6', icon: '↗', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #fef2f2; color: #ef4444; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #ef4444;' },
+        { label: 'Pages returning errors', value: '6', icon: '×', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #fef2f2; color: #ef4444; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #ef4444;' },
+        { label: 'Sites we can fully search', value: C.searchable + ' of ' + C.total, icon: '✓', iconStyle: 'width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #ecfcfd; color: #0a8189; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;', valueStyle: 'font-size: 14px; font-weight: 800; color: #374151;' },
+      ],
+      panelJobs: jobDefs.slice(0, 3).map(j => {
+        const s = st.jobState[j.key];
+        const on = s.on && st.backgroundOn;
+        return {
+          name: j.name,
+          status: on ? (s.hours === 1 ? 'every hour' : 'every ' + s.hours + 'h') : 'paused',
+          style: on ? 'color: #9ca3af;' : 'color: #b45309; font-weight: 700;',
+        };
+      }).concat([{ name: 'Security sweep', status: 'paused', style: 'color: #b45309; font-weight: 700;' }]),
+      panelJobsNote: st.backgroundOn
+        ? (connPerDay > 0
+            ? 'About ' + connPerDay.toLocaleString() + ' connections a day to WP Engine. Change this under Settings → Background work.'
+            : 'Nothing is connecting to WP Engine on a schedule right now.')
+        : 'Background work is paused, so nothing is refreshing on its own.',
+
+      // hero chat
+      heroEmpty: st.chatTurns.length === 0,
+      heroHasTurns: st.chatTurns.length > 0,
+      heroSub: 'Nexus can see all ' + C.total + ' of your sites — ' + C.local + ' on this Mac, ' + C.wpe + ' at WP Engine, ' + C.external + ' on other hosts.',
+      heroFooter: 'Answers cover all ' + C.total + ' sites. Anything that changes a site is staged and shown to you first.',
+
+      // agents
+      agentsSub: 'Five agents · ' + pending + ' findings waiting on you across all sources',
+      agentsPaused: degraded,
+      pausedTitle: 'Security has been paused',
+      pausedSub: 'It failed 5 times in a row this afternoon, so Nexus stopped running it rather than keep trying.',
+      agents: [
+        { name: 'Security', initial: 'S', what: 'Looks for signs a site has been broken into, and for weak spots before that happens.', status: 'Paused', schedule: 'Every 6 hours', autonomy: 'Asks first', scope: '2 sites', last: 'Failed 5× — paused', bad: true, pending: bySource['Security'] || 0, primary: 'Try again' },
+        { name: 'Search Visibility', initial: 'V', what: 'Checks published pages for missing titles, descriptions and structured data.', status: 'On', schedule: 'Every 12 hours', autonomy: 'Fixes small things itself', scope: '14 sites', last: '3:42 AM · 4 findings', pending: bySource['Search Visibility'] || 0, primary: 'Run now' },
+        { name: 'Log Processor', initial: 'L', what: 'Reads your WP Engine access logs so the other agents can spot unusual traffic.', status: 'On', schedule: 'Daily', autonomy: 'Runs on its own', scope: '3 sites with logs', last: '10h ago · clean', pending: 0, primary: 'Run now' },
+        { name: 'Web Analytics', initial: 'W', what: 'Pulls traffic summaries and flags unusual drops on sites linked to Google Analytics.', status: 'On', schedule: 'Every 6 hours', autonomy: 'Asks first', scope: '6 sites', last: 'This morning · 1 finding', pending: bySource['Web Analytics'] || 0, primary: 'Run now' },
+        { name: 'Content', initial: 'C', what: 'Turns docs and briefs into WordPress drafts, and keeps categories and tags tidy.', status: 'Off', schedule: 'Not scheduled', autonomy: 'Asks first', scope: 'No sites yet', last: 'Never run', off: true, pending: 0, primary: 'Turn it on' },
+      ].map(a => ({
+        name: a.name,
+        initial: a.initial,
+        what: a.what,
+        status: a.status,
+        schedule: a.schedule,
+        autonomy: a.autonomy,
+        scope: a.scope,
+        last: a.last,
+        cardStyle: 'border: 1px solid ' + (a.bad ? '#fde68a' : '#e5e7eb') + '; border-radius: 11px; background: #fff; padding: 16px 18px; display: flex; flex-direction: column;',
+        avatarStyle: 'width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background: ' + (a.bad ? '#fffbeb' : a.off ? '#f3f4f6' : '#ecfcfd') + '; color: ' + (a.bad ? '#b45309' : a.off ? '#9ca3af' : '#0a8189') + ';',
+        statusStyle: 'padding: 2px 9px; border-radius: 10px; font-size: 11.5px; font-weight: 800; background: ' + (a.bad ? '#fffbeb' : a.off ? '#f3f4f6' : '#f0fdf4') + '; color: ' + (a.bad ? '#b45309' : a.off ? '#6b7280' : '#3d9c52') + ';',
+        lastStyle: 'font-weight: 700; color: ' + (a.bad ? '#b45309' : '#111827') + ';',
+        primary: a.primary,
+        primaryStyle: 'padding: 8px 14px; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; color: #fff; background: ' + (a.bad ? '#d97706' : a.off ? '#374151' : '#0a8189') + ';',
+        hasPending: a.pending > 0,
+        pendingLabel: a.pending + ' waiting →',
+      })),
+
+      // chat
+      chatEmpty: st.chatTurns.length === 0,
+      chatIntro: 'Ask about any of your ' + C.total + ' sites. Try one of these:',
+      chatSuggestions: suggestions.map(s => ({ text: s.text, onPick: () => this.askChat(s) })),
+      chatTurns,
+      draft: st.draft,
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      sendChat: this.sendDraft,
+    };
+  }
+}
+</script>
+</body>
+</html>
