@@ -191,7 +191,7 @@ git commit -m "chore: scaffold canonical-demos monorepo with shared package"
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `createRng(seed: number): Rng` where `Rng = { next(): number; int(min: number, max: number): number; pick<T>(items: readonly T[]): T; shuffle<T>(items: readonly T[]): T[]; weighted<T>(entries: readonly [T, number][]): T }`
+  - `createRng(seed: number): Rng` where `Rng = { next(): number; int(min: number, max: number): number; pick<T>(items: readonly T[]): T; shuffle<T>(items: readonly T[]): T[]; weighted<T>(entries: readonly (readonly [T, number])[]): T }` — note the inner `readonly` on the tuple; it is the only form that typechecks against the test's `as const` literal
   - `seededFaker(seed: number): Faker`
   - `int` is inclusive of `min`, exclusive of `max`.
 
@@ -565,6 +565,17 @@ git commit -m "feat(shared): manifest schema and count gate"
   - `class Checkpoint` with `constructor(filePath: string)`, `loadCompleted(): Set<string>`, `record(uid: string, at?: string): void`, `count(): number`
   - Corrupt lines are skipped, and the count of skipped lines is returned by `loadCorruptCount(): number`.
 
+> **Amended during execution (2026-08-09).** Review found that the Step 3 code
+> below carries a silent-wrong-answer hazard: `loadCorruptCount()` returned `0`
+> before `loadCompleted()` had ever run — indistinguishable from a confirmed zero
+> — and `count()` called `loadCompleted()` internally, resetting the corrupt
+> counter as a side effect. Ruled: harden. The shipped implementation adds a
+> private `readEntries(): { completed: Set<string>; corrupt: number }` that
+> parses without mutating; `loadCompleted()` stores the count and marks the
+> instance loaded; `count()` mutates nothing; and `loadCorruptCount()` **throws**
+> if `loadCompleted()` has not run. `loadCompleted()`'s signature is unchanged,
+> so Task 8 is unaffected. Git is the source of truth for the final code.
+
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
@@ -695,7 +706,7 @@ export class Checkpoint {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd ~/development/wpengine/canonical-demos/shared && npx vitest run src/checkpoint.test.ts`
-Expected: PASS — 6 tests. Note `loadCorruptCount()` is only meaningful after `loadCompleted()`; the test calls them in that order.
+Expected: PASS — 6 tests. (Amended during execution: the shipped suite is larger, adding coverage for `count()`, `count()`'s non-interference with a pending corrupt-count read, `loadCorruptCount()` throwing before `loadCompleted()`, non-accumulation across repeated loads, parent-directory creation, default-timestamp format, and temp-dir cleanup.)
 
 - [ ] **Step 5: Commit**
 
@@ -880,6 +891,18 @@ This is the fix for what actually killed Alpine's run: an hour of work lost to a
   - `interface CompletionClient { complete(req: CompletionRequest): Promise<CompletionResult> }`
   - `class ModelPreflightError extends Error` with `.model`
   - `class AiClient` with `constructor(client: CompletionClient, budget: TokenBudget)`, `preflight(model: string): Promise<void>`, `generate(req: CompletionRequest): Promise<CompletionResult>`
+
+> **Amended during execution (2026-08-09).** The Step 3 code below wraps *any*
+> error from `generate()` into `ModelPreflightError`, including
+> `BudgetExceededError` — so `preflight()` on an exhausted budget reports a bad
+> model id, a confident wrong diagnosis of a different problem, which is the very
+> failure mode this module exists to prevent. Ruled: fix. The shipped
+> `preflight()` re-throws `BudgetExceededError` unwrapped (requiring a value
+> import, `import { BudgetExceededError, type TokenBudget } from './budget.js'` —
+> a type-only import cannot satisfy `instanceof`), and the unreachable
+> `if (error instanceof ModelPreflightError) throw error;` guard was **deleted**
+> rather than commented, since `generate()` has no path that constructs one.
+> Git is the source of truth for the final code.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1241,7 +1264,7 @@ export function createAnthropicClient(apiKey: string): AnthropicCompletionClient
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd ~/development/wpengine/canonical-demos/shared && npx vitest run src/anthropic-client.test.ts`
-Expected: PASS — 5 tests. No network call occurs; the SDK is only constructed inside `createAnthropicClient`, which the tests never invoke.
+Expected: PASS — 5 tests. (Amended during execution: the shipped suite is 9 tests. The standing coverage rule added `createAnthropicClient`'s empty-key and whitespace-key guards, its happy path, and a response with `usage` absent. The happy path *does* construct the SDK client — which performs no network I/O, only object construction — and never calls `.complete()`, so the no-network constraint still holds.)
 
 - [ ] **Step 5: Commit**
 
@@ -1699,7 +1722,7 @@ export class WpCli {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd ~/development/wpengine/canonical-demos/shared && npx vitest run src/wp-cli.test.ts`
-Expected: PASS — 12 tests. No process is spawned: every test injects a fake `WpRunner`, and `NodeWpRunner` is never constructed because `WpCli`'s default parameter is only evaluated when omitted.
+Expected: PASS — **11** tests (this plan originally said 12; the test file above contains 11 `it()` blocks — `WpCli` has 5 cases, not 6). No process is spawned: every test injects a fake `WpRunner`, and `NodeWpRunner` is never constructed because `WpCli`'s default parameter is only evaluated when omitted. `NodeWpRunner` is therefore a deliberate, documented coverage exclusion — testing it would spawn a process, which the Definition of Done forbids.
 
 - [ ] **Step 5: Commit**
 
@@ -2022,7 +2045,11 @@ npx vitest run
 npm run typecheck
 ```
 
-Expected: all tests pass (**70 across 10 files** — 7 seed, 10 manifest, 6 checkpoint, 9 budget, 7 ai-client, 5 anthropic, 6 runner, 12 wp-cli, 6 verify, 2 determinism) and `tsc --noEmit` reports no errors.
+Expected: all tests pass and `tsc --noEmit` reports no errors.
+
+As-planned this file's tally was 69 across 10 files (7 seed, 10 manifest, 6 checkpoint, 9 budget, 7 ai-client, 5 anthropic, 6 runner, 11 wp-cli, 6 verify, 2 determinism) — note the plan twice mis-stated this total, first as 68 and then as 70, both times from counting `wp-cli` at 12 instead of 11.
+
+**Actual shipped counts are higher**, because the standing coverage rule added tests during execution. Measured after Task 9: 82 passing across 8 files — 14 seed, 10 manifest, 12 checkpoint, 11 budget, 9 ai-client, 9 anthropic, 6 runner, 11 wp-cli. With Task 10's 6 and Task 11's 2, expect **90 across 10 files**. Re-measure rather than trusting this number.
 
 - [ ] **Step 5: Commit**
 
@@ -2041,7 +2068,78 @@ git commit -m "feat(shared): public exports and determinism guard"
 - [ ] No test performs network I/O, spawns a process, or requires WordPress.
 - [ ] `alpine-outfitters-demo/` has no new files and no `node_modules/`, and remains its own git repo.
 - [ ] `grep -rn 'Math.random' shared/src --include='*.ts' | grep -v test` returns nothing.
-- [ ] Eleven commits, one per task, none pushed.
+- [ ] One commit per task, none pushed. (Shipped as **21**: 11 task commits + 5 task-review fix commits + 5 final-review fix-wave commits. The original line said "eleven"; the intent — a commit per unit of reviewed work, nothing pushed — is met.)
+
+---
+
+## Post-Merge Follow-Ups
+
+Adjudicated after the final whole-branch review and its single fix wave. All 11 review
+findings were addressed; these are the residuals, parked with rulings rather than
+churned on. None is load-bearing for this plan. Recorded here because the SDD
+scratch workspace is disposable and these would otherwise be lost.
+
+**Carry into Plan 1b — these affect the code that will consume `shared/`:**
+
+1. **`assertReport` has no caller.** The fail-closed verification path exists
+   (`verify.ts`) but nothing in the library invokes it — `verifySite` still returns a
+   report. Spec §6's central rule ("`verify` **fails** when actual ≠ manifest") is
+   therefore enforced only by whoever writes Plan 1b's import script. **Plan 1b must
+   call `assertReport`**, not merely print `formatReport`.
+2. **`expectedCounts` returns a null-prototype object across the public API boundary**
+   (`manifest.ts`). Its declared type is still `Record<string, number>`, so a consumer
+   calling `.hasOwnProperty()` / `.toString()` on it, or `toStrictEqual`-ing it against
+   an object literal, will throw or fail. Deliberate — it closes a fail-open
+   `__proto__` hole — but it is a contract a consumer must know about.
+3. **The hard budget can overshoot by one call's real input usage.** A consequence of
+   the ruled authorize/record split: `assertAffordable` bounds `maxTokens` (output)
+   only, so a long prompt's input tokens can push `used` past `limit`, with the abort
+   arriving on the *next* `assertAffordable`. It fails closed, and `preflight()` can now
+   silently push `used` past `limit` where it previously threw. No test exercises the
+   abort-on-next-call sequel.
+4. **`verifyCounts`/`assertCounts` remain exposed to the `__proto__` read hazard** when
+   a *caller* passes a plain-object `actual` map (`manifest.ts`): `actual['__proto__']
+   ?? 0` yields `Object.prototype`, which flows into a `CountMismatch.actual` typed
+   `number` and prints `[object Object]`. Fails closed. The wave's own tests pass
+   `Object.create(null)` to work around it, which is the tell.
+
+**Library hygiene, no consumer impact:**
+
+5. `generate-runner.ts` gates `tokensRecorded` accumulation on `typeof tokens ===
+   'number'` while `checkpoint.ts` gates the persisted field on finite-and-non-negative.
+   A `tokensFor` returning `NaN` (realistically, summing an absent `usage`) poisons
+   `summary.tokensRecorded` while the checkpoint reports 0. Same NaN-poisons-a-total
+   shape as the budget bug, one layer up. **The two predicates should be one shared
+   predicate.**
+6. Three tests are weaker than their names claim, though each underlying property is
+   confirmed in source: `wp-cli.test.ts`'s "defaults to the real execFileAsync" only
+   asserts construction doesn't throw (tautological); `checkpoint.test.ts`'s "mutates no
+   instance state" would still pass under an idempotent assignment, catching only
+   accumulating mutation; `generate-runner.test.ts`'s duplicate-uid test does not pin the
+   pre-pass *position* — a check placed inside the loop after the skip would pass every
+   test in the file yet fail to refuse a duplicate whose uid is already checkpointed.
+   A test with all uids pre-recorded plus a duplicate in `items` closes the last one.
+7. `assertAffordable(Infinity)` now throws where it previously succeeded against an
+   `Infinity` limit. Correct by intent, unreachable today, unnamed by any finding.
+8. `integration.test.ts` and `generate-runner.test.ts` leak one `mkdtempSync` dir per
+   run; `checkpoint.test.ts` is the only file that does `rmSync`.
+9. `determinism.test.ts` uses `new URL('.', import.meta.url).pathname`, which breaks on
+   Windows (`fileURLToPath` is portable), and its `readdirSync` scan is non-recursive —
+   harmless while `src/` is flat, silently uncovering any future nested module.
+10. A `uid: ''` item passes the duplicate pre-pass, is recorded, then classified corrupt
+    on read, so it regenerates on every resume. Pre-existing.
+11. `manifest.ts`'s `seed` accepts negatives and values ≥ 2³², but `createRng` does
+    `seed >>> 0` while `seededFaker` does not truncate — two seeds differing only above
+    2³² give identical RNG streams and different faker streams. Constrain the schema.
+12. `tier` is declared on manifest entries and never read; `expectedCounts` sums across
+    tiers, so the gate cannot detect "600 posts exist but all composite when 215 should
+    be hero." Needs a meta key to fix, so it plausibly belongs with Plan 1b's importer.
+13. `tsconfig.base.json` sets `declaration` and `sourceMap` but there is no build script
+    and `exports` points at TS source — dead config.
+14. `createAnthropicClient` does not expose `maxRetries`/`timeout`, so runs inherit the
+    SDK defaults (2 retries) invisibly. The SDK is used as an HTTP transport plus retry
+    policy, not as a type source — worth a comment, since a future reader will otherwise
+    "fix" the `as AnthropicMessagesApi` cast that keeps the adapter testable.
 
 ## What This Plan Deliberately Does Not Do
 

@@ -296,6 +296,42 @@ inputs here, not trivia.
 - **Import reuses Alpine's proven shape** — seeder-plugin WP-CLI commands,
   Pass 1 posts + ACF, Pass 2 relationships, `syncterms`, then the `verify` gate.
 
+### 6.1 Known limitation carried into Plan 1b: undeclared content is not detected
+
+`verifyCounts` (shipped in `shared/`) reports undeclared content as a mismatch
+(`expected: 0, actual: N`), and its tests cover that direction. But `verifySite`
+— the only production caller — builds its actual-counts map by asking the site
+**only about post types the manifest declares**, so that capability is currently
+unreachable: a site carrying 40 posts of an undeclared type passes verification
+silently. Under-count drift (the 300-vs-60 case) is caught; over-count and stray
+content are not.
+
+**Three further obligations Plan 1b inherits from `shared/`** (full list in the
+library plan's Post-Merge Follow-Ups):
+
+- **Plan 1b's import script must call `assertReport`**, the fail-closed
+  verification entry point. `verifySite` returns a report and never throws, so
+  the rule above ("`verify` **fails** when actual ≠ manifest") is enforced only
+  by the caller. An importer that prints `formatReport` and proceeds ships
+  exactly the drift the gate exists to prevent.
+- **`expectedCounts` returns a null-prototype object** — deliberate, to close a
+  fail-open `__proto__` hole — so do not call `.hasOwnProperty()` or
+  `.toString()` on it, and do not `toStrictEqual` it against an object literal.
+- **The token budget can overshoot by one call's real input usage.**
+  `assertAffordable` bounds output tokens (`maxTokens`) only, so a long prompt
+  can push spend past the limit with the abort arriving on the next call. It
+  fails closed. Resume correctness requires constructing
+  `new TokenBudget(limit, checkpoint.loadSpentTokens())`.
+
+Ruled on 2026-08-09: **defer to Plan 1b**, where the importer lives — "did we
+create anything we didn't declare" belongs beside the code that creates things.
+Closing it needs a post-type enumeration call plus an exclusion filter for
+WordPress built-ins (`attachment`, `revision`, `nav_menu_item`, `wp_block`,
+`wp_template`, `wp_global_styles`, …). That exclusion list is a design decision
+that will drift with WordPress releases, not a one-line addition, and getting it
+wrong makes every site report spurious mismatches. A `strict?: boolean` gate on
+`verifySite` is one candidate shape.
+
 **Generation split:** AI-written ≈ 900 pieces on Meridian (300 hero articles, all
 400 docs, 120 glossary, 60 integrations, 24 case studies) and ≈ 400 on Cedar (60
 providers, 45 treatments, 80 conditions, plus ~215 hero patient-education posts;
