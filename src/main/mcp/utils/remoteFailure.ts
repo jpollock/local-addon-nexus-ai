@@ -38,6 +38,19 @@
  */
 export const REMOTE_SSH_TIMEOUT_MS = 60_000;
 
+/**
+ * How long the multiplexed SSH socket outlives its last command.
+ *
+ * Was 30s, which is shorter than every agent cadence in this codebase — an agent on a 2-minute
+ * schedule found the socket already gone and paid the full 13-30s WP Engine cold start on every
+ * single call, which is how calls were reaching the timeout ceiling at all.
+ *
+ * The cost of raising it is an authenticated socket to a production server staying open longer,
+ * which is why this is 10 minutes rather than an hour: long enough that a scheduled agent reuses
+ * it, short enough that an idle machine is not holding connections indefinitely.
+ */
+export const SSH_CONTROL_PERSIST = '600s';
+
 export interface RemoteFailure {
   /** Process exit code; null when the process was killed by a signal. */
   code: number | null;

@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS } from './utils/remoteFailure';
+import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS, SSH_CONTROL_PERSIST } from './utils/remoteFailure';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -861,7 +861,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         // ControlMaster: reuse SSH connections to reduce overhead
         '-o', 'ControlMaster=auto',
         '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-        '-o', 'ControlPersist=30s',
+        '-o', `ControlPersist=${SSH_CONTROL_PERSIST}`,
         '-i', sshKeyPath,
         `${username}@${host}`,
         wpCommand,

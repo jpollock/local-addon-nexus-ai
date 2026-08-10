@@ -3,7 +3,7 @@ import * as os from 'os';
 import { spawn } from 'child_process';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { createLogger } from '../logging/Logger';
-import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS } from '../mcp/utils/remoteFailure';
+import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS, SSH_CONTROL_PERSIST } from '../mcp/utils/remoteFailure';
 
 const logger = createLogger('SentinelExecutor');
 
@@ -33,7 +33,7 @@ async function remoteSshRaw(installName: string, sshCommand: string): Promise<{ 
     '-o', 'StrictHostKeyChecking=accept-new',
     '-o', 'ControlMaster=auto',
     '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-    '-o', 'ControlPersist=30s',
+    '-o', `ControlPersist=${SSH_CONTROL_PERSIST}`,
     '-i', sshKeyPath,
     `${username}@${host}`,
     sshCommand,
