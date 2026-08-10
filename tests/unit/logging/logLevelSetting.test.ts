@@ -27,6 +27,14 @@ describe('resolveLogLevel', () => {
   it('accepts a level in any case', () => {
     expect(resolveLogLevel({}, { NEXUS_LOG_LEVEL: 'debug' })).toBe('DEBUG');
   });
+
+  it('env var wins over invalid stored setting', () => {
+    expect(resolveLogLevel({ logLevel: 'nonsense' as any }, { NEXUS_LOG_LEVEL: 'ERROR' })).toBe('ERROR');
+  });
+
+  it('falls back to INFO when both layers are invalid', () => {
+    expect(resolveLogLevel({ logLevel: 'LOUD' as any }, { NEXUS_LOG_LEVEL: 'QUIET' })).toBe('INFO');
+  });
 });
 
 describe('UpdateSettingsSchema', () => {
@@ -35,5 +43,12 @@ describe('UpdateSettingsSchema', () => {
     // logLevel was added to the schema and is not being stripped.
     const result = UpdateSettingsSchema.parse({ logLevel: 'DEBUG' });
     expect(result.logLevel).toBe('DEBUG');
+  });
+
+  it('rejects a value that is not a level', () => {
+    // Not decoration: `toBe('DEBUG')` above passes just as happily under
+    // `z.string().optional()`, which would let 'LOUD' persist and defeat the asLevel guard.
+    // Rejection is the only assertion that distinguishes the enum from a bare string.
+    expect(() => UpdateSettingsSchema.parse({ logLevel: 'LOUD' })).toThrow();
   });
 });
