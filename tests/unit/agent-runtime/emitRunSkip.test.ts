@@ -31,7 +31,7 @@ jest.mock('electron', () => ({ ipcMain: mockIpc, shell: { openPath: jest.fn() },
 
 // ts-jest does not hoist jest.mock() above imports the way babel-jest does — this must come
 // after the mock setup above, or `require('electron')` resolves before `mockIpc` exists.
-import { registerIpcHandlers, canAutoRun, emitRunSkip } from '../../../src/main/ipc-handlers';
+import { registerIpcHandlers, canAutoRun, emitRunSkip, getAgentLogLevel } from '../../../src/main/ipc-handlers';
 import type { AutoRunDecision } from '../../../src/main/agent-runtime/auto-run-gate';
 
 /** A fake EventLog that only implements the one method emitRunSkip calls, and records every call. */
@@ -156,5 +156,59 @@ describe('canAutoRun wires emitRunSkip through the real settings cache', () => {
 
     expect(() => canAutoRun('emit-run-skip-test-no-log', 'schedule')).not.toThrow();
     expect(canAutoRun('emit-run-skip-test-no-log', 'schedule')).toBe(false);
+  });
+});
+
+describe('getAgentLogLevel returns undefined when no override is set', () => {
+  function registerWithServices(nexusServices: any = {}) {
+    const noop = () => {};
+    const deps: any = {
+      siteData: { getSite: () => null, getSites: () => ({}) },
+      localServicesBridge: {},
+      indexRegistry: { listAll: () => [], get: () => null, update: noop },
+      embeddingService: {},
+      contentPipeline: {},
+      vectorStore: {},
+      registryStorage: { get: () => null, set: () => {} },
+      localLogger: { info: noop, warn: noop, error: noop, debug: noop },
+      getMcpServer: () => null,
+      getStartupStatus: () => ({ ready: true, phase: 'ready' }),
+      graphService: { getDb: () => null },
+      eventProcessor: {},
+      vectorDbPath: '/tmp/nexus-test-vectors.db',
+      nexusServices,
+    };
+    registerIpcHandlers(deps);
+    return deps;
+  }
+
+  it('returns undefined when no cache entry exists for the agent', () => {
+    registerWithServices();
+    // No cache entry set at all — agent has never been seen by the renderer
+    const result = getAgentLogLevel('no-such-agent');
+    expect(result).toBeUndefined();
+  });
+
+  it('returns undefined when the cache entry has no logLevel field', () => {
+    const deps = registerWithServices();
+    // Set directly on the cache, deliberately not going through AGENT_SETTINGS_UPDATE (which would
+    // persist to the user's real agent-settings.json on disk; this test must not touch that file).
+    (deps as any).__agentSettingsCache.set('agent-with-no-override', {
+      enabled: true, scheduleEnabled: true,
+      // no logLevel field — no override set
+    });
+
+    const result = getAgentLogLevel('agent-with-no-override');
+    expect(result).toBeUndefined();
+  });
+
+  it('returns the override when logLevel is set', () => {
+    const deps = registerWithServices();
+    (deps as any).__agentSettingsCache.set('agent-with-override', {
+      enabled: true, scheduleEnabled: true, logLevel: 'DEBUG',
+    });
+
+    const result = getAgentLogLevel('agent-with-override');
+    expect(result).toBe('DEBUG');
   });
 });
