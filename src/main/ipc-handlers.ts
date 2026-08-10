@@ -340,6 +340,21 @@ function getEventLog(): EventLog | undefined {
  * the `if (agentDb)` block in `src/main/index.ts` runs (see `getEventLog` above), and that must
  * never be the thing that breaks the gate.
  */
+
+/**
+ * The last skip reason emitted for each agent, so a steady state is stated once rather than
+ * every tick. Keyed by agentId. Cleared only on process restart (bounded by agent count).
+ */
+const lastSkipReason = new Map<string, string>();
+
+/**
+ * Clear the skip-reason cache. For tests only — production never calls this.
+ * @internal
+ */
+export function resetRunSkipCache(): void {
+  lastSkipReason.clear();
+}
+
 export function emitRunSkip(
   agentId: string,
   kind: SkipTrigger,
@@ -347,6 +362,15 @@ export function emitRunSkip(
   log?: EventLog,
 ): void {
   if (decision.allowed) return;
+
+  // Emit on transition only: the first refusal for an agent, or when the reason changes.
+  // Without this, three disabled agents on 15-minute cadences produce ~288 identical lines
+  // a day in a log file the design tells you to `tail -f`.
+  const lastReason = lastSkipReason.get(agentId);
+  if (lastReason === decision.reason) return;
+
+  lastSkipReason.set(agentId, decision.reason);
+
   // "The agent didn't run" is the first thing a user reports — before this, a refused
   // scheduled or event-triggered run produced zero bytes anywhere. write() never throws.
   log?.write({

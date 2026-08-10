@@ -163,6 +163,12 @@ export function buildAgentContext(deps: AgentContextDeps): {
     // caller passing `source` or `runId` inside `e` would silently reattribute its line to
     // another agent or another run. No current call site does — which is precisely when to
     // make it structurally impossible rather than to rely on it staying that way.
+    //
+    // NO TEST: `AgentLogger` (the only caller-facing interface to this) gives no caller a way to
+    // reach `source` or `runId` — every method signature is `(msg: string)` or `(finding: Finding)`.
+    // A test written today would pass under either spread ordering, making it vacuous. The guard
+    // exists for a future caller that takes a full `Partial<LogEvent>`, and testing it requires
+    // exposing such a caller first.
     eventLog?.write({
       ...e, level, source: agentName, sourceKind: 'agent', runId,
     } as LogEvent);

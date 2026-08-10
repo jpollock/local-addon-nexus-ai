@@ -31,7 +31,7 @@ jest.mock('electron', () => ({ ipcMain: mockIpc, shell: { openPath: jest.fn() },
 
 // ts-jest does not hoist jest.mock() above imports the way babel-jest does — this must come
 // after the mock setup above, or `require('electron')` resolves before `mockIpc` exists.
-import { registerIpcHandlers, canAutoRun, emitRunSkip, getAgentLogLevel } from '../../../src/main/ipc-handlers';
+import { registerIpcHandlers, canAutoRun, emitRunSkip, getAgentLogLevel, resetRunSkipCache } from '../../../src/main/ipc-handlers';
 import type { AutoRunDecision } from '../../../src/main/agent-runtime/auto-run-gate';
 
 /** A fake EventLog that only implements the one method emitRunSkip calls, and records every call. */
@@ -41,6 +41,10 @@ function fakeLog() {
 }
 
 describe('emitRunSkip', () => {
+  beforeEach(() => {
+    resetRunSkipCache(); // Clear deduplication cache between tests
+  });
+
   it('writes one run.skip event when refused for the master switch', () => {
     const { calls, log } = fakeLog();
     const decision: AutoRunDecision = { allowed: false, reason: 'agent-disabled' };
@@ -96,6 +100,10 @@ describe('emitRunSkip', () => {
 });
 
 describe('canAutoRun wires emitRunSkip through the real settings cache', () => {
+  beforeEach(() => {
+    resetRunSkipCache(); // Clear deduplication cache between tests
+  });
+
   function registerWithServices(nexusServices: any = {}) {
     const noop = () => {};
     const deps: any = {
