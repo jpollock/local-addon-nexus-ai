@@ -246,6 +246,13 @@ export class EventLog {
    * of distinct directories written in one process lifetime (typically: root + agents/).
    */
   private readonly ensured = new Set<string>();
+  /**
+   * Files whose mode has been verified and corrected this process. Cached to avoid chmodSync
+   * on every append (the original per-append cost removed by Task 7). Keyed by absolute path.
+   * Bounded by the number of distinct log files written in one process lifetime (typically:
+   * one combined file per day + one agent file per day per agent).
+   */
+  private readonly modeEnsured = new Set<string>();
 
   constructor(opts: EventLogOptions) {
     this.root = opts.root;
@@ -336,11 +343,15 @@ export class EventLog {
       const isNew = !fs.existsSync(file);
       rotateIfNeeded(file, this.maxBytes);
       fs.appendFileSync(file, line, { mode: 0o600 });
-      // Only on creation: chmod on every line was the other half of the cost, and the mode
-      // cannot drift on a file nothing else touches.
-      if (isNew) {
+      // appendFileSync's mode applies only at creation — a pre-existing file with a loose mode
+      // stays loose. Correct it once per file per process (when first cached), not once per line.
+      // Placement: after the append succeeds, so a chmod that fails doesn't lose the line. Same
+      // best-effort pattern as OperationAuditLog.export(): "writeFileSync's mode applies only
+      // at creation, so exporting over an existing 0644 file leaves it 0644."
+      if (isNew || !this.modeEnsured.has(file)) {
         try {
           fs.chmodSync(file, 0o600);
+          this.modeEnsured.add(file);
         } catch { /* best-effort mode setting */ }
       }
       return true;

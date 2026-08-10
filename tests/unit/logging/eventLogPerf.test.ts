@@ -74,19 +74,29 @@ describe('EventLog append performance', () => {
   });
 
   it('maintains 0600 mode on pre-existing files', () => {
-    // Create a pre-existing log file with 0600, using the SAME day derivation as production.
+    // Create a pre-existing log file with LOOSE MODE (0644), using the SAME day derivation as production.
     // The previous implementation used toISOString() (UTC) while production uses localDay() (local),
     // so off UTC the test statted a file the code never opened.
+    //
+    // Task 7 moved chmod from every-append to creation-only, but appendFileSync's mode option
+    // applies ONLY at creation — a pre-existing file with loose mode stays loose. The fix corrects
+    // mode once per file per process (when first cached), so this test starts from 0644 (reachable
+    // via older build, different umask, or external recreation) and asserts correction to 0600.
     const { localDay } = require('../../../src/main/logging/eventLog');
     const today = localDay(new Date());
     const logPath = path.join(tmpDir, `nexus-${today}.log`);
-    fs.writeFileSync(logPath, 'existing content\n', { mode: 0o600 });
+    fs.writeFileSync(logPath, 'existing content\n', { mode: 0o644 });
+
+    // Verify it starts loose
+    let stat = fs.statSync(logPath);
+    // eslint-disable-next-line no-bitwise
+    expect(stat.mode & 0o777).toBe(0o644);
 
     // Append to the existing file
     log.write({ level: 'INFO', source: 'test', sourceKind: 'agent', message: 'append' });
 
-    // Verify mode is still 0600
-    const stat = fs.statSync(logPath);
+    // Verify mode is corrected to 0600
+    stat = fs.statSync(logPath);
     // eslint-disable-next-line no-bitwise
     expect(stat.mode & 0o777).toBe(0o600);
   });
