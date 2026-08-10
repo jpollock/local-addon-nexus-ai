@@ -14,6 +14,7 @@ import { AnalyticsSitesTab } from './AnalyticsSitesTab';
 import {
   AnalyticsState, EMPTY_ANALYTICS, loadAnalyticsState, deriveAnalyticsRows, boundSiteNames,
 } from './analyticsSitesModel';
+import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
 
 type WorkspaceTab = 'settings' | 'sites' | 'approvals' | 'activity' | 'tools' | 'docs';
 
@@ -25,14 +26,6 @@ type WorkspaceTab = 'settings' | 'sites' | 'approvals' | 'activity' | 'tools' | 
  * not get a different name per agent (Google's "property" belongs in the column, not the nav).
  */
 const AGENTS_WITH_SITES_TAB = new Set(['log-processor', 'web-analytics']);
-
-const CADENCE_PHRASES: Record<string, string> = {
-  '*/15 * * * *': 'every 15 minutes',
-  '0 * * * *': 'every hour',
-  '0 */6 * * *': 'every 6 hours',
-  '0 0 * * *': 'every day',
-  '0 0 * * 0': 'every week',
-};
 
 interface AgentToolEntry {
   toolName: string;
@@ -434,15 +427,11 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
 
     // Derived trigger summary from actual config
     const triggerParts: string[] = [];
-    if (settings.scheduleEnabled && settings.cadence) {
-      const CADENCE_LABELS: Record<string, string> = {
-        '*/15 * * * *': 'Runs every 15 minutes',
-        '0 * * * *': 'Runs hourly',
-        '0 */6 * * *': 'Runs every 6 hours',
-        '0 0 * * *': 'Runs daily',
-        '0 0 * * 0': 'Runs weekly',
-      };
-      triggerParts.push(CADENCE_LABELS[settings.cadence] ?? 'Runs on schedule');
+    // The schedule that actually runs: the agent's own manifest cron unless the user picked a
+    // cadence. Labelling settings.cadence alone stated a schedule the scheduler never used.
+    const effectiveCron = effectiveCadenceExpression(settings, this.state.status?.cronExpression);
+    if (settings.scheduleEnabled && effectiveCron) {
+      triggerParts.push(`Runs ${describeCron(effectiveCron).toLowerCase()}`);
     }
     if (settings.eventsEnabled) triggerParts.push('responds to events');
     triggerParts.push('ad-hoc');
@@ -454,7 +443,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     // it comes from the same derived set as the tab badge — never a separately-counted scope.
     const runnable = this.hasSitesTab() ? this.runnableLogSites() : null;
     if (runnable && !isDisabled) {
-      const cadence = CADENCE_PHRASES[settings.cadence ?? ''] ?? 'On schedule';
+      const cadence = effectiveCron ? describeCron(effectiveCron).toLowerCase() : 'on schedule';
       const sourceMissing = this.props.agentId === 'web-analytics'
         ? !this.state.analytics.google.connected
         : !this.state.logSources.bucket;
@@ -733,6 +722,19 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     );
   }
 
+  /**
+   * The schedule this agent actually runs on, as a lowercase phrase for inline copy.
+   *
+   * Reads the agent's manifest cron unless the user picked a cadence — the two disagreed, and
+   * every label here used to state the picked-or-seeded value regardless of what the scheduler
+   * did with it.
+   */
+  private cadencePhrase(): string {
+    const settings = agentStore.getOrInitSettings(this.props.agentId);
+    const expr = effectiveCadenceExpression(settings, this.state.status?.cronExpression);
+    return expr ? describeCron(expr).toLowerCase() : 'on schedule';
+  }
+
   render() {
     const { activeTab } = this.state;
     const { agentId, onReviewEvent } = this.props;
@@ -752,6 +754,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         agentId,
         electron: this.props.electron,
         allowsProduction: this.state.status?.allowsProduction ?? true,
+        cronExpression: this.state.status?.cronExpression,
         effect: this.state.status?.effect ?? 'writes',
         producesApprovals: this.state.status?.producesApprovals ?? true,
         credentials: this.state.status?.credentials ?? [],
@@ -766,7 +769,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         state: this.state.analytics,
         loading: this.state.analyticsLoading,
         cadenceLabel: settings.scheduleEnabled
-          ? (CADENCE_PHRASES[settings.cadence ?? ''] ?? 'on schedule')
+          ? this.cadencePhrase()
           : 'on ad-hoc runs',
         googleScopes: (this.state.status?.credentials ?? []).find(c => c.provider === 'google')?.scopes ?? [],
         onReload: this.reloadLogSources,
@@ -779,7 +782,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         // With the schedule off, "runs every 15 minutes" on a row would be a small lie — an
         // on install still runs, but only when someone asks.
         cadenceLabel: settings.scheduleEnabled
-          ? (CADENCE_PHRASES[settings.cadence ?? ''] ?? 'on schedule')
+          ? this.cadencePhrase()
           : 'on ad-hoc runs',
         onScopeChange: (siteIds: string[]) => {
           // Writes the same field the generic scope picker writes, so the schedule, Run Now and

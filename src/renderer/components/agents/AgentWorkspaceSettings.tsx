@@ -3,12 +3,19 @@ import { agentStore, AgentSettings, AgentCredentialDecl } from './AgentStore';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
 import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
+import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
 
 interface SettingsProps {
   agentId: string;
   electron?: any;
   /** From this agent's AgentStatus. Undefined while status is still loading upstream. */
   allowsProduction?: boolean;
+  /**
+   * The agent's own cron, from AgentStatus. This is what runs unless the user picks a cadence,
+   * so every schedule label here derives from it — labelling `settings.cadence` alone stated a
+   * schedule the scheduler never used.
+   */
+  cronExpression?: string | null;
   effect?: 'readonly' | 'writes';
   /** Gates the Autonomy level card — its copy is security-sentinel's own remediation model, not
    * generic, and it sets a value (settings.autonomy) only security-sentinel's runtime reads. */
@@ -329,7 +336,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const drifted = this.getDriftedSites();
     const allowsProduction = this.props.allowsProduction ?? true;
     const effect = this.props.effect ?? 'writes';
-    const cadence = CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.every ?? 'on the configured schedule';
+    const effectiveCron = effectiveCadenceExpression(settings, this.props.cronExpression);
+    const cadence = effectiveCron ? describeCron(effectiveCron).toLowerCase() : 'on the configured schedule';
 
     const draftProdCount = scopeDraftSelection ? selectedProductionCount(scopeSites, scopeDraftSelection) : 0;
 
@@ -422,15 +430,19 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const { cadence } = this.state.settings;
     const idx = CADENCE_OPTIONS.findIndex(o => o.value === cadence);
     const next = CADENCE_OPTIONS[(idx + 1) % CADENCE_OPTIONS.length];
-    this.updateSettings({ cadence: next.value });
+    // `cadenceSetAt` is what gives this value authority over the agent's own manifest schedule.
+    // Every agent carries a seeded `cadence` from getDefaultSettings that nobody picked; without
+    // this stamp the scheduler cannot tell those apart from a real choice, and honouring them
+    // would silently move agents to schedules their users never asked for.
+    this.updateSettings({ cadence: next.value, cadenceSetAt: Date.now() });
   }
 
   private getRunSummary(): string {
     const { settings } = this.state;
     if (!settings.enabled) return 'Disabled — not running';
     const parts: string[] = [];
-    const cadence = CADENCE_OPTIONS.find(o => o.value === settings.cadence);
-    if (settings.scheduleEnabled && cadence) parts.push(`Runs ${cadence.label.toLowerCase()}`);
+    const summaryCron = effectiveCadenceExpression(settings, this.props.cronExpression);
+    if (settings.scheduleEnabled && summaryCron) parts.push(`Runs ${describeCron(summaryCron).toLowerCase()}`);
     const catalog = EVENT_CATALOG[this.props.agentId] || [];
     const subCount = catalog.filter(e => settings.subscribedEvents[e.id] !== false).length;
     if (settings.eventsEnabled && subCount > 0) parts.push(`responds to ${subCount} event${subCount !== 1 ? 's' : ''}`);
@@ -552,7 +564,12 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
                 borderRadius: 7, padding: '5px 12px', fontSize: 12.5, color: 'var(--ag-text-primary)',
                 cursor: 'pointer', fontWeight: 500,
               },
-            }, CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.label || 'Every 15 minutes'),
+            }, (() => {
+              // The button shows what actually runs, so an untouched agent reads its manifest
+              // schedule rather than a cadence nobody picked. Clicking still cycles the picker.
+              const expr = effectiveCadenceExpression(settings, this.props.cronExpression);
+              return expr ? describeCron(expr) : 'Not scheduled';
+            })()),
           ),
 
           // Which sites the schedule may touch. Shown only when a schedule is on — it constrains

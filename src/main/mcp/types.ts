@@ -141,6 +141,10 @@ export interface NexusServices {
   agentRunner?: import('../agent-runtime/AgentRunner').AgentRunner;
   agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
   agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
+  /** Cron scheduler. Exposed so AGENT_SETTINGS_UPDATE can re-register an agent the moment its
+   *  cadence changes — a schedule that only takes effect after a restart is the same class of
+   *  dead setting as the cadence picker that nothing read. */
+  agentScheduler?: import('../agent-runtime/AgentScheduler').AgentScheduler;
   agentReload?: () => Promise<void>;
   /** Contributed tool registry — tracks tools registered by installed agents */
   contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;

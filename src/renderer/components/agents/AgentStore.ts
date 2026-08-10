@@ -104,6 +104,12 @@ export interface AgentSettings {
   enabled: boolean;
   scheduleEnabled: boolean;
   cadence: string;  // '*/15 * * * *' | '0 * * * *' | '0 */6 * * *' | '0 0 * * *' | '0 0 * * 0'
+  /**
+   * Unix ms of the moment the user actually picked `cadence`. Absent means `cadence` is the value
+   * getDefaultSettings seeded, which nobody chose — and the scheduler then runs the agent's own
+   * manifest schedule instead. Only an explicit choice outranks the agent author.
+   */
+  cadenceSetAt?: number;
   eventsEnabled: boolean;
   subscribedEvents: Record<string, boolean>;
   /** Persistent scope for scheduled runs and event triggers, shared by both, and the same field

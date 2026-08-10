@@ -268,6 +268,7 @@ async function withSiteRunning<T>(
 }
 
 import { canAutoRunWith, AutoRunKind, AutoRunDecision } from './agent-runtime/auto-run-gate';
+import type { CadenceSettings } from './agent-runtime/schedule';
 import { newRunId } from './logging/runId';
 import type { EventLog } from './logging/eventLog';
 
@@ -276,6 +277,20 @@ let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
 export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabled' | 'eventsEnabled'): boolean {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
   return cache?.get(agentId)?.[key] ?? true; // default true (permissive before settings sync)
+}
+
+/**
+ * The cadence the user picked for this agent, if they picked one.
+ *
+ * Read by `AgentScheduler` through `resolveAgentCron`, which decides whether it outranks the
+ * agent's manifest schedule. Returns undefined before the settings cache is seeded, which
+ * correctly means "no user choice" — the manifest schedule then applies.
+ */
+export function getAgentCadence(agentId: string): CadenceSettings | undefined {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const s = cache?.get(agentId);
+  if (!s) return undefined;
+  return { cadence: s.cadence, cadenceSetAt: s.cadenceSetAt };
 }
 
 /**
@@ -4824,8 +4839,25 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   } catch { /* file absent on first run — permissive defaults are correct */ }
 
   safeHandle(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, (_event, settings: Record<string, any>) => {
+    // Note which agents had their schedule changed, before the cache is overwritten — a cadence
+    // the user picks must take effect now, not at the next restart.
+    const rescheduled: string[] = [];
     for (const [agentId, s] of Object.entries(settings ?? {})) {
-      agentSettingsCache.set(agentId, withCoreDefaults(s));
+      const before = agentSettingsCache.get(agentId);
+      const next = withCoreDefaults(s);
+      if (before?.cadence !== next.cadence || before?.cadenceSetAt !== next.cadenceSetAt) {
+        rescheduled.push(agentId);
+      }
+      agentSettingsCache.set(agentId, next);
+    }
+
+    // Re-register after the cache is updated, so the scheduler reads the new cadence.
+    // `register()` unregisters any existing tasks for that agent first, so this is not additive.
+    for (const agentId of rescheduled) {
+      try {
+        const agent = deps.nexusServices?.agentRegistry?.get(agentId);
+        if (agent) deps.nexusServices?.agentScheduler?.register(agent);
+      } catch { /* a scheduling fault must not fail the settings write the user just made */ }
     }
     // Persist to disk so next startup respects user's saved toggle state
     try {

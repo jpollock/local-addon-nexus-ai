@@ -14,8 +14,10 @@ function spySetState(instance: any): void {
   });
 }
 
-function makeSettings(overrides: Partial<any> = {}) {
-  const instance: any = new AgentWorkspaceSettings({ agentId: 'security-sentinel', electron: undefined, effect: overrides.effect });
+function makeSettings(overrides: Partial<any> = {}, props: Partial<any> = {}) {
+  const instance: any = new AgentWorkspaceSettings({
+    agentId: 'security-sentinel', electron: undefined, effect: overrides.effect, ...props,
+  });
   spySetState(instance);
   instance.state.scopeSites = overrides.sites ?? SITES;
   const settings: any = {
@@ -183,12 +185,27 @@ describe('AgentWorkspaceSettings — v2 scope-sentence forms', () => {
 });
 
 describe('AgentWorkspaceSettings — v2 production warning under the picker', () => {
-  it('shows the agent-derived, cadence-aware warning sentence when the draft includes production', () => {
-    const { instance } = makeSettings({ scope: { siteIds: [] } });
-    instance.state.settings.cadence = '0 * * * *'; // Hourly
+  it('names the schedule the agent actually runs on, not the stored cadence', () => {
+    // `cadence` alone is not the schedule: the scheduler runs the agent's manifest cron unless the
+    // user explicitly picked one (cadenceSetAt). Warning "every hour" for an agent that in fact
+    // runs weekly would overstate the exposure of a production site by a factor of 168.
+    const { instance } = makeSettings({ scope: { siteIds: [] } }, { cronExpression: '0 7 * * 1' });
+    instance.state.settings.cadence = '0 * * * *';        // seeded, never chosen
+    instance.state.settings.cadenceSetAt = undefined;
     instance['openScopeEditor']();
     instance.state.scopeDraftSelection = new Set(['p1']);
-    expect(flattenText(instance['renderScanScope']())).toContain('1 live production site will be modified every hour.');
+    expect(flattenText(instance['renderScanScope']()))
+      .toContain('1 live production site will be modified mondays at 07:00.');
+  });
+
+  it('names the picked cadence once the user has picked one', () => {
+    const { instance } = makeSettings({ scope: { siteIds: [] } }, { cronExpression: '0 7 * * 1' });
+    instance.state.settings.cadence = '0 * * * *';
+    instance.state.settings.cadenceSetAt = 1_754_000_000_000; // an explicit choice
+    instance['openScopeEditor']();
+    instance.state.scopeDraftSelection = new Set(['p1']);
+    expect(flattenText(instance['renderScanScope']()))
+      .toContain('1 live production site will be modified hourly.');
   });
 
   it('shows no warning sentence when the draft has no production sites', () => {

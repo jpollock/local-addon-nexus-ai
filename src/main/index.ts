@@ -581,6 +581,9 @@ export default function main(context: any): void {
           agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager, eventLog,
         );
         agentScheduler = new AgentScheduler(agentRunner);
+        // Exposed so AGENT_SETTINGS_UPDATE can re-register an agent as soon as its cadence
+        // changes, rather than the new schedule waiting for a restart.
+        (nexusServices as any).agentScheduler = agentScheduler;
         daemonManager = new DaemonManager(agentEventBus);
 
         // Wire the wp-events bridge (releases the forward reference set at construction time)
