@@ -162,8 +162,8 @@ export class NexusToolProvider implements ToolProvider {
     // refused, which is what decides whether a `mutation` event is honest.
     reached.tool = true;
 
-    // Call the registry with 'agent' as the access method
-    const result = await this.registry.call(name, args, this.services, 'agent' as any);
+    // Call the registry with 'agent' as the access method and the run ID for audit trail joining
+    const result = await this.registry.call(name, args, this.services, 'agent' as any, this.events?.runId);
 
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
     const duration_ms = Date.now() - startTime;

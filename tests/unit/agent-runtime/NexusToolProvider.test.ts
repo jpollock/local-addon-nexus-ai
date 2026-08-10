@@ -19,7 +19,7 @@ describe('NexusToolProvider', () => {
     const provider = new NexusToolProvider(registry as any, fakeServices, ['nexus_list_sites']);
     const result = await provider.invoke('nexus_list_sites', {});
     expect(result).toEqual([{ name: 'mysite' }]);
-    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent');
+    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', undefined);
   });
 
   it('throws for an undeclared tool', async () => {
@@ -36,6 +36,21 @@ describe('NexusToolProvider', () => {
     const provider = new NexusToolProvider(registry as any, fakeServices, undefined);
     const result = await provider.invoke('wp_eval', {});
     expect(result).toBe('ok');
+  });
+
+  it('passes runId to registry.call when events context is provided', async () => {
+    const registry = makeRegistry({
+      nexus_list_sites: () => [{ name: 'mysite' }],
+    });
+    const provider = new NexusToolProvider(
+      registry as any,
+      fakeServices,
+      ['nexus_list_sites'],
+      { agentName: 'test-agent', runId: 'r_abc123' }
+    );
+    const result = await provider.invoke('nexus_list_sites', {});
+    expect(result).toEqual([{ name: 'mysite' }]);
+    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', 'r_abc123');
   });
 
   it('throws when tool returns isError=true', async () => {

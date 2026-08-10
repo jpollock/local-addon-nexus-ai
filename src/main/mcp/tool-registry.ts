@@ -55,12 +55,14 @@ export class ToolRegistry {
    * - GraphQL: Calls this directly (no confirmations needed)
    *
    * @param accessMethod - 'mcp' if called from MCP server, 'cli' if called from CLI/GraphQL
+   * @param runId - optional agent run identifier, joins operation-audit.log to the diagnostic log
    */
   async call(
     name: string,
     args: Record<string, unknown>,
     services: NexusServices,
     accessMethod?: 'mcp' | 'cli',
+    runId?: string,
   ): Promise<McpToolResult> {
     const startTime = Date.now();
     logger.debug(`call: name="${name}" via ${accessMethod || 'unknown'}`, { args });
@@ -111,6 +113,7 @@ export class ToolRegistry {
             parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
             outcome: result.isError ? 'failure' : 'success',
             error: result.isError ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+            runId,
           });
         }
       } catch { /* never throw from an audit path */ }
@@ -143,6 +146,7 @@ export class ToolRegistry {
             parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
             outcome: 'failure',
             error: message,
+            runId,
           });
         }
       } catch { /* never throw from an audit path */ }

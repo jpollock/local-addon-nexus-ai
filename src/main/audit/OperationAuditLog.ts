@@ -31,6 +31,7 @@ export interface AuditEntry {
   outcome: 'success' | 'failure' | 'pending';
   error?: string;
   userId?: string;        // machine username from os.userInfo()
+  runId?: string;         // agent run identifier from EventLog, joins to diagnostic log
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +128,8 @@ export class OperationAuditLog {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
         userId: this.currentUser(),
-        ...entry,
+        operation: entry.operation,
+        outcome: entry.outcome,
         // `target` was the one string field spread through unchanged. No
         // routine path puts a secret there today, but the guarantee this class
         // advertises is that a NEW call site cannot leak by forgetting — and
@@ -140,6 +142,9 @@ export class OperationAuditLog {
         parameters: redactParams(entry.parameters ?? {}),
         ...(entry.error !== undefined
           ? { error: maskSecretsInString(String(entry.error)) }
+          : {}),
+        ...(entry.runId !== undefined
+          ? { runId: maskSecretsInString(String(entry.runId)) }
           : {}),
       };
     } catch {
