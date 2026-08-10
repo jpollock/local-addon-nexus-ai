@@ -93,6 +93,62 @@ describe('NexusOverview → SitesTab wiring', () => {
   });
 });
 
+describe('bulk dispatch', () => {
+  function bulkShell(invokeImpl?: any) {
+    const invoke = jest.fn(invokeImpl ?? (async () => ({ success: true, opId: 'op1' })));
+    const shell: any = new NexusOverview({
+      NavLink: () => null,
+      electron: { ipcRenderer: { invoke, on: jest.fn(), removeListener: jest.fn() } },
+    } as any);
+    shell.setState = (patch: any) => Object.assign(shell.state, typeof patch === 'function' ? patch(shell.state) : patch);
+    shell.state.siteRows = ROWS;
+    shell.state.selectedSiteIds = ['L1'];
+    return { shell, invoke };
+  }
+
+  test('dispatches through BULK_EXECUTE with exactly the given ids', async () => {
+    // One audited bulk path. A second one would lose the audit trail.
+    const { shell, invoke } = bulkShell();
+    await shell.handleSiteBulk('reindex', ['L1']);
+    const call = invoke.mock.calls.find(c => c[0] === IPC_CHANNELS.BULK_EXECUTE);
+    expect(call).toBeDefined();
+    expect(call![1].type).toBe('reindex');
+    expect(call![1].siteIds).toEqual(['L1']);
+  });
+
+  test('carries the names of the selected sites, and only those', async () => {
+    const { shell, invoke } = bulkShell();
+    await shell.handleSiteBulk('sync-graph', ['ssh:hostinger/shop']);
+    const call = invoke.mock.calls.find(c => c[0] === IPC_CHANNELS.BULK_EXECUTE);
+    expect(call![1].siteNames).toEqual({ 'ssh:hostinger/shop': 'shop' });
+  });
+
+  test('an empty selection dispatches nothing, even here', async () => {
+    // Last line of defence before 369 sites. `disabled` is a UI guard only.
+    const { shell, invoke } = bulkShell();
+    await shell.handleSiteBulk('reindex', []);
+    expect(invoke.mock.calls.find(c => c[0] === IPC_CHANNELS.BULK_EXECUTE)).toBeUndefined();
+  });
+
+  test('clears the selection on success', async () => {
+    const { shell } = bulkShell();
+    await shell.handleSiteBulk('reindex', ['L1']);
+    expect(shell.state.selectedSiteIds).toEqual([]);
+  });
+
+  test('keeps the selection when the operation fails, so it can be retried', async () => {
+    const { shell } = bulkShell(async () => ({ success: false, error: 'nope' }));
+    await shell.handleSiteBulk('reindex', ['L1']);
+    expect(shell.state.selectedSiteIds).toEqual(['L1']);
+  });
+
+  test('a rejected invoke does not throw out of the handler', async () => {
+    const { shell } = bulkShell(async () => { throw new Error('ipc exploded'); });
+    await expect(shell.handleSiteBulk('reindex', ['L1'])).resolves.toBeUndefined();
+    expect(shell.state.selectedSiteIds).toEqual(['L1']);
+  });
+});
+
 describe('site selection', () => {
   function shellWith(selected: string[]) {
     const { shell } = makeShell({ success: true, rows: ROWS, total: TOTAL });

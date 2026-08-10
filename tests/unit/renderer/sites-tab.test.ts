@@ -160,3 +160,53 @@ describe('SitesTab', () => {
     ).toMatchSnapshot();
   });
 });
+
+describe('SitesTab selection', () => {
+  const twoRows = { rows: [row({ id: 'A' }), row({ id: 'B' })] };
+
+  test('an empty selection disables every bulk action', () => {
+    // A button that quietly fans out to 367 installs because nothing was ticked
+    // is the worst version of this feature.
+    const t = tree({ ...twoRows, selected: [] });
+    expect(t).toContain('"disabled":true');
+    // Stronger than the above on its own: `toContain('"disabled":true')` passes
+    // if ONE of several buttons is disabled. Nothing may be enabled.
+    expect(t).not.toContain('"disabled":false');
+  });
+
+  test('a non-empty selection enables them', () => {
+    const t = tree({ ...twoRows, selected: ['A'] });
+    expect(t).toContain('"disabled":false');
+    expect(t).not.toContain('"disabled":true');
+  });
+
+  test('a bulk action dispatches ONLY the selected ids', () => {
+    const onBulk = jest.fn();
+    const inst = new (SitesTab as any)(props({
+      rows: [row({ id: 'A' }), row({ id: 'B' }), row({ id: 'C' })],
+      selected: ['A', 'C'], onBulk,
+    }));
+    inst.handleBulk('reindex');
+    expect(onBulk).toHaveBeenCalledWith('reindex', ['A', 'C']);
+    // Not all three, and not the visible page.
+    expect(onBulk.mock.calls[0][1]).toHaveLength(2);
+  });
+
+  test('a bulk action on an empty selection dispatches nothing at all', () => {
+    // The disabled attribute is the UI guard; this is the behavioural one. A
+    // keyboard or programmatic call must not slip past a visual-only check.
+    const onBulk = jest.fn();
+    const inst = new (SitesTab as any)(props({ ...twoRows, selected: [], onBulk }));
+    inst.handleBulk('reindex');
+    expect(onBulk).not.toHaveBeenCalled();
+  });
+
+  test('the selection count renders with what it is scoped to', () => {
+    expect(tree({ ...twoRows, selected: ['A'] })).toContain('1 of 2');
+  });
+
+  test('the bulk bar does not appear when there is nothing to act on', () => {
+    // Failed and empty states have no rows; a bar reading "0 of 0" there is noise.
+    expect(tree({ rows: [], total: { count: 0, scope: 'x' } })).not.toContain('of 0');
+  });
+});

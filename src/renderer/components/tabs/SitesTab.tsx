@@ -56,6 +56,20 @@ const FILTERS: Array<{ key: HostFilter; label: string }> = [
 /** Unknown renders as an em dash. Never as a plausible-looking default. */
 const UNKNOWN = '—';
 
+/**
+ * Operations' zone 1 offered four buttons, but only two distinct operations —
+ * `Refresh metadata` and `Index content`, once per source. The source split
+ * disappears here because the selection carries it, so four collapse to two.
+ * (Task 5's prose says "the four actions"; its own mapping line gives these two.)
+ *
+ * These are BulkOpType values and go through BulkOperationManager, which is
+ * where the audit trail lives. Do not add a second bulk path.
+ */
+const BULK_ACTIONS: Array<{ type: string; label: string }> = [
+  { type: 'sync-graph', label: 'Refresh metadata' },
+  { type: 'reindex', label: 'Index content' },
+];
+
 const wrapStyle: React.CSSProperties = {
   padding: '4px 0',
 };
@@ -95,6 +109,35 @@ const filterBtnStyle = (active: boolean): React.CSSProperties => ({
   border: '1px solid var(--nxai-card-border)',
   backgroundColor: active ? 'var(--nxai-accent)' : 'var(--nxai-card-bg)',
   color: active ? 'var(--nxai-accent-text)' : 'var(--nxai-card-text)',
+});
+
+const bulkBarStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  padding: '8px 12px',
+  marginBottom: '12px',
+  borderRadius: '8px',
+  border: '1px solid var(--nxai-card-border)',
+  backgroundColor: 'var(--nxai-section-bg)',
+};
+
+const bulkCountStyle: React.CSSProperties = {
+  fontSize: '12px',
+  color: 'var(--nxai-card-sub)',
+  marginRight: 'auto',
+};
+
+const bulkBtnStyle = (enabled: boolean): React.CSSProperties => ({
+  padding: '5px 12px',
+  borderRadius: '6px',
+  border: 'none',
+  fontSize: '12px',
+  fontWeight: 500,
+  cursor: enabled ? 'pointer' : 'not-allowed',
+  opacity: enabled ? 1 : 0.5,
+  backgroundColor: 'var(--nxai-accent)',
+  color: 'var(--nxai-accent-text)',
 });
 
 const tableStyle: React.CSSProperties = {
@@ -173,6 +216,46 @@ export class SitesTab extends React.Component<SitesTabProps, SitesTabState> {
     const { filter } = this.state;
     if (filter === 'all') return this.props.rows;
     return this.props.rows.filter(r => r.source === filter);
+  }
+
+  /**
+   * Acts on the selection and nothing else. The empty check is duplicated here
+   * on purpose: `disabled` is a visual guard a keyboard or programmatic caller
+   * can walk straight past, and an empty selection must never be read as "all".
+   */
+  handleBulk = (type: string): void => {
+    const ids = this.props.selected;
+    if (ids.length === 0) return;
+    this.props.onBulk(type, ids);
+  };
+
+  private renderBulkBar(): React.ReactNode {
+    const enabled = this.props.selected.length > 0;
+    return React.createElement(
+      'div',
+      { style: bulkBarStyle },
+      React.createElement(
+        'span',
+        { style: bulkCountStyle },
+        // Scoped to the whole list, not the filtered view: the selection
+        // survives a filter change, so counting against visible rows would
+        // report "1 of 3" for a selection of five.
+        `${this.props.selected.length} of ${this.props.rows.length} selected`,
+      ),
+      BULK_ACTIONS.map(a =>
+        React.createElement(
+          'button',
+          {
+            key: a.type,
+            type: 'button',
+            disabled: !enabled,
+            style: bulkBtnStyle(enabled),
+            onClick: () => this.handleBulk(a.type),
+          },
+          a.label,
+        ),
+      ),
+    );
   }
 
   private renderFilters(): React.ReactNode {
@@ -326,6 +409,7 @@ export class SitesTab extends React.Component<SitesTabProps, SitesTabState> {
         ),
       ),
       this.renderFilters(),
+      this.renderBulkBar(),
       rows.length === 0
         ? React.createElement(
             'div',

@@ -134,6 +134,80 @@ exports[`SitesTab snapshot 1`] = `
     {
       "children": [
         {
+          "children": "0 of 1 selected",
+          "key": null,
+          "props": {
+            "style": {
+              "color": "var(--nxai-card-sub)",
+              "fontSize": "12px",
+              "marginRight": "auto",
+            },
+          },
+          "type": "span",
+        },
+        [
+          {
+            "children": "Refresh metadata",
+            "key": "sync-graph",
+            "props": {
+              "disabled": true,
+              "onClick": "[fn]",
+              "style": {
+                "backgroundColor": "var(--nxai-accent)",
+                "border": "none",
+                "borderRadius": "6px",
+                "color": "var(--nxai-accent-text)",
+                "cursor": "not-allowed",
+                "fontSize": "12px",
+                "fontWeight": 500,
+                "opacity": 0.5,
+                "padding": "5px 12px",
+              },
+              "type": "button",
+            },
+            "type": "button",
+          },
+          {
+            "children": "Index content",
+            "key": "reindex",
+            "props": {
+              "disabled": true,
+              "onClick": "[fn]",
+              "style": {
+                "backgroundColor": "var(--nxai-accent)",
+                "border": "none",
+                "borderRadius": "6px",
+                "color": "var(--nxai-accent-text)",
+                "cursor": "not-allowed",
+                "fontSize": "12px",
+                "fontWeight": 500,
+                "opacity": 0.5,
+                "padding": "5px 12px",
+              },
+              "type": "button",
+            },
+            "type": "button",
+          },
+        ],
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "backgroundColor": "var(--nxai-section-bg)",
+          "border": "1px solid var(--nxai-card-border)",
+          "borderRadius": "8px",
+          "display": "flex",
+          "gap": "10px",
+          "marginBottom": "12px",
+          "padding": "8px 12px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
           "children": {
             "children": [
               {

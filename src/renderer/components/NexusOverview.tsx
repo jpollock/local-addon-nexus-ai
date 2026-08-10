@@ -1443,6 +1443,34 @@ renderTabBar(): React.ReactNode {
     });
   };
 
+  /**
+   * Runs a bulk operation over exactly the ticked rows.
+   *
+   * Goes through BULK_EXECUTE — the one audited bulk path — never a second one.
+   * The empty guard is duplicated from SitesTab's `handleBulk` on purpose: an
+   * empty selection must never be re-interpreted as "the whole fleet", and this
+   * is the last place that could happen before 369 sites are dispatched.
+   */
+  handleSiteBulk = async (type: string, siteIds: string[]): Promise<void> => {
+    if (siteIds.length === 0) return;
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_EXECUTE, {
+        type,
+        siteIds,
+        siteNames: this.state.siteRows.reduce((acc: Record<string, string>, r) => {
+          if (siteIds.indexOf(r.id) !== -1) acc[r.id] = r.name;
+          return acc;
+        }, {}),
+        options: {},
+      });
+      // Only clear on success. Keeping the selection after a failure lets the
+      // user retry without re-ticking rows they already chose.
+      if (result?.success) this.setState({ selectedSiteIds: [] });
+    } catch (err) {
+      console.error('[NexusAI] bulk operation failed:', err);
+    }
+  };
+
   renderActiveTab(): React.ReactNode {
     const overviewProps = {
       electron: this.props.electron,
@@ -1467,8 +1495,8 @@ renderTabBar(): React.ReactNode {
         selected: this.state.selectedSiteIds,
         onToggle: this.toggleSiteSelection,
         onToggleAll: this.toggleAllSiteSelection,
-        // Task 5 builds the bulk bar that reaches these.
-        onBulk: () => undefined,
+        onBulk: (type: string, ids: string[]) => { void this.handleSiteBulk(type, ids); },
+        // Task 6 wires the per-host "Index content" row action.
         onIndexHost: () => undefined,
         onRetry: () => { void this.fetchAll(); },
       });
