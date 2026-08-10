@@ -1,5 +1,5 @@
 import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from '../chat/providers/types';
-import type { ChatMessage, ToolCallRequest, ProviderStreamEvent } from '../../common/chat-types';
+import type { ChatMessage, ToolCallRequest, ProviderStreamEvent, TokenUsage } from '../../common/chat-types';
 import type { AIClient } from '../agent-sdk/types';
 import { AgentAILoopError } from '../agent-sdk/types';
 import type { NexusToolProvider } from './NexusToolProvider';
@@ -7,6 +7,7 @@ import type { NexusToolProvider } from './NexusToolProvider';
 interface StreamResult {
   content: string;
   toolCalls: ToolCallRequest[];
+  usage?: TokenUsage;
 }
 
 /**
@@ -28,21 +29,27 @@ function unwrapOutputArguments(raw: Record<string, unknown> | undefined): Record
   return raw;
 }
 
-async function collectStream(gen: AsyncGenerator<ProviderStreamEvent>): Promise<StreamResult> {
+/** Exported for test: the usage plumbing is worth pinning directly, not only through a client. */
+export async function collectStream(gen: AsyncGenerator<ProviderStreamEvent>): Promise<StreamResult> {
   let content = '';
   const toolCalls: ToolCallRequest[] = [];
+  let usage: TokenUsage | undefined;
 
   for await (const event of gen) {
     if (event.type === 'token') {
       content += event.text;
     } else if (event.type === 'tool_call_end') {
       toolCalls.push({ id: event.id, name: event.name, arguments: event.arguments });
+    } else if (event.type === 'done') {
+      // Last one wins: a provider may emit several done-shaped events, and the final carries the
+      // completed counts.
+      if (event.usage) usage = event.usage;
     } else if (event.type === 'error') {
       throw new Error(`Provider error: ${event.message}`);
     }
   }
 
-  return { content, toolCalls };
+  return { content, toolCalls, usage };
 }
 
 export class AgentAIClient implements AIClient {
