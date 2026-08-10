@@ -1,0 +1,2060 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Overview tab — characterization renders empty fleet identically before and after extraction 1`] = `
+{
+  "children": [
+    null,
+    null,
+    {
+      "children": [
+        {
+          "children": [
+            "☁ Have WP Engine sites? ",
+            {
+              "children": "Connect via Local → Connect",
+              "key": null,
+              "props": {
+                "onClick": "[fn]",
+                "style": {
+                  "color": "#0ECAD4",
+                  "cursor": "pointer",
+                  "textDecoration": "underline",
+                },
+              },
+              "type": "span",
+            },
+            " to manage your full fleet.",
+          ],
+          "key": null,
+          "props": {},
+          "type": "span",
+        },
+        {
+          "children": "×",
+          "key": null,
+          "props": {
+            "data-testid": "wpe-not-connected-dismiss",
+            "onClick": "[fn]",
+            "style": {
+              "background": "transparent",
+              "border": "none",
+              "color": "var(--nxai-card-sub, #6b7280)",
+              "cursor": "pointer",
+              "fontFamily": "inherit",
+              "fontSize": 14,
+              "padding": "0 4px",
+            },
+          },
+          "type": "button",
+        },
+      ],
+      "key": null,
+      "props": {
+        "data-testid": "wpe-not-connected-banner",
+        "style": {
+          "alignItems": "center",
+          "backgroundColor": "var(--nxai-card-bg, #fff)",
+          "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+          "borderRadius": "10px",
+          "color": "var(--nxai-card-sub, #6b7280)",
+          "display": "flex",
+          "fontSize": 12,
+          "justifyContent": "space-between",
+          "marginBottom": 16,
+          "padding": "10px 16px",
+        },
+      },
+      "type": "div",
+    },
+    null,
+    {
+      "children": "MCP server not yet running. Waiting for initialization...",
+      "key": null,
+      "props": {
+        "style": {
+          "backgroundColor": "var(--nxai-card-bg, #fff)",
+          "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+          "borderRadius": "10px",
+          "color": "var(--nxai-card-sub)",
+          "marginBottom": "24px",
+          "padding": "24px",
+          "textAlign": "center",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "Fleet Intelligence",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-section-label, #374151)",
+          "fontSize": "13px",
+          "fontWeight": 600,
+          "marginBottom": "12px",
+          "marginTop": "8px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": "Local Sites",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": 0,
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#51c356",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                "0 running",
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {},
+                  "type": "br",
+                },
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#999",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                "0 halted",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "WPE-Connected",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": 0,
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "#0ECAD4",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "Local sites linked to",
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {},
+                  "type": "br",
+                },
+                "WP Engine environments",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Remote Sites",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "—",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub)",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "WPE not authenticated",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "grid",
+          "gap": "16px",
+          "gridTemplateColumns": "repeat(3, 1fr)",
+          "marginBottom": "24px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": {
+        "children": null,
+        "key": null,
+        "props": {
+          "electron": {
+            "ipcRenderer": {
+              "invoke": [MockFunction],
+              "on": [MockFunction],
+              "removeListener": [MockFunction],
+            },
+          },
+          "onIndexSites": "[fn]",
+          "onSchedule": "[fn]",
+        },
+        "type": "FleetCompletenessWidget",
+      },
+      "key": null,
+      "props": {
+        "style": {
+          "marginTop": 16,
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": {
+        "children": [
+          {
+            "children": "Fleet Summary",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-label, #6b7280)",
+                "fontSize": "11px",
+                "fontWeight": 600,
+                "letterSpacing": "0.8px",
+                "marginBottom": "12px",
+                "textTransform": "uppercase",
+              },
+            },
+            "type": "div",
+          },
+          {
+            "children": "Loading fleet data…",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-sub)",
+                "fontSize": "13px",
+              },
+            },
+            "type": "div",
+          },
+        ],
+        "key": null,
+        "props": {
+          "style": {
+            "backgroundColor": "var(--nxai-card-bg, #fff)",
+            "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+            "borderRadius": "10px",
+            "gridColumn": "1 / 3",
+            "padding": "20px",
+          },
+        },
+        "type": "div",
+      },
+      "key": null,
+      "props": {
+        "style": {
+          "marginTop": 16,
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "AI Integration",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-section-label, #374151)",
+          "fontSize": "13px",
+          "fontWeight": 600,
+          "marginBottom": "12px",
+          "marginTop": "8px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": "MCP Server",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#51c356",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                {
+                  "children": "Running",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "color": "var(--nxai-card-text)",
+                      "fontSize": "18px",
+                      "fontWeight": 600,
+                    },
+                  },
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "alignItems": "center",
+                  "display": "flex",
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "201 tools available",
+                {
+                  "children": [
+                    {
+                      "children": null,
+                      "key": null,
+                      "props": {},
+                      "type": "br",
+                    },
+                    "Port 10801",
+                  ],
+                  "key": null,
+                  "props": {},
+                  "type": "span",
+                },
+                {
+                  "children": [
+                    {
+                      "children": null,
+                      "key": null,
+                      "props": {},
+                      "type": "br",
+                    },
+                    "v0.2.3",
+                  ],
+                  "key": null,
+                  "props": {},
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "AI Proxy",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "var(--nxai-card-sub)",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                {
+                  "children": "Stopped",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "color": "var(--nxai-card-text)",
+                      "fontSize": "18px",
+                      "fontWeight": 600,
+                    },
+                  },
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "alignItems": "center",
+                  "display": "flex",
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "Not configured",
+                null,
+                null,
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "grid",
+          "gap": "16px",
+          "gridTemplateColumns": "repeat(2, 1fr)",
+          "marginBottom": "24px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": null,
+      "key": null,
+      "props": {
+        "electron": {
+          "ipcRenderer": {
+            "invoke": [MockFunction],
+            "on": [MockFunction],
+            "removeListener": [MockFunction],
+          },
+        },
+      },
+      "type": "AIGatewayPanel",
+    },
+  ],
+  "key": null,
+  "props": {},
+  "type": "div",
+}
+`;
+
+exports[`Overview tab — characterization renders populated identically before and after extraction 1`] = `
+{
+  "children": [
+    null,
+    null,
+    null,
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": "WP Engine connected — 330 installs",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "#0ECAD4",
+                  "fontSize": 13,
+                  "fontWeight": 700,
+                  "marginBottom": 8,
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "×",
+              "key": null,
+              "props": {
+                "data-testid": "wpe-banner-dismiss",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "cursor": "pointer",
+                  "fontFamily": "inherit",
+                  "fontSize": 16,
+                  "padding": "0 4px",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "flex-start",
+              "display": "flex",
+              "justifyContent": "space-between",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "● CAPI data (domain, PHP version, environment) syncs automatically — no SSH required.",
+              "key": null,
+              "props": {
+                "style": {
+                  "marginBottom": 4,
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "● WP version, plugins, and users require SSH sync — opt in via Settings → WP Engine Installs.",
+              "key": null,
+              "props": {},
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "color": "var(--nxai-card-sub, #6b7280)",
+              "fontSize": 12,
+              "lineHeight": 1.6,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": {
+            "children": "Open Settings",
+            "key": null,
+            "props": {
+              "onClick": "[fn]",
+              "style": {
+                "background": "rgba(14,202,212,.12)",
+                "border": "1px solid rgba(14,202,212,.3)",
+                "borderRadius": 5,
+                "color": "#0ECAD4",
+                "cursor": "pointer",
+                "fontFamily": "inherit",
+                "fontSize": 11,
+                "fontWeight": 600,
+                "padding": "4px 12px",
+              },
+            },
+            "type": "button",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "marginTop": 10,
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "data-testid": "wpe-onboarding-banner",
+        "style": {
+          "backgroundColor": "var(--nxai-card-bg, #fff)",
+          "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+          "borderColor": "#0ECAD4",
+          "borderLeftWidth": 4,
+          "borderRadius": "10px",
+          "marginBottom": 16,
+          "padding": "20px",
+          "position": "relative",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "MCP server not yet running. Waiting for initialization...",
+      "key": null,
+      "props": {
+        "style": {
+          "backgroundColor": "var(--nxai-card-bg, #fff)",
+          "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+          "borderRadius": "10px",
+          "color": "var(--nxai-card-sub)",
+          "marginBottom": "24px",
+          "padding": "24px",
+          "textAlign": "center",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "Fleet Intelligence",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-section-label, #374151)",
+          "fontSize": "13px",
+          "fontWeight": 600,
+          "marginBottom": "12px",
+          "marginTop": "8px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": "Local Sites",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": 37,
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#51c356",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                "4 running",
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {},
+                  "type": "br",
+                },
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#999",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                "33 halted",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "WPE-Connected",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": 19,
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "#0ECAD4",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "Local sites linked to",
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {},
+                  "type": "br",
+                },
+                "WP Engine environments",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Remote Sites",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": 330,
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "29 linked · 301 not linked",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "grid",
+          "gap": "16px",
+          "gridTemplateColumns": "repeat(3, 1fr)",
+          "marginBottom": "24px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": {
+        "children": null,
+        "key": null,
+        "props": {
+          "electron": {
+            "ipcRenderer": {
+              "invoke": [MockFunction],
+              "on": [MockFunction],
+              "removeListener": [MockFunction],
+            },
+          },
+          "onIndexSites": "[fn]",
+          "onSchedule": "[fn]",
+        },
+        "type": "FleetCompletenessWidget",
+      },
+      "key": null,
+      "props": {
+        "style": {
+          "marginTop": 16,
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": {
+        "children": [
+          {
+            "children": "Fleet Summary",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-label, #6b7280)",
+                "fontSize": "11px",
+                "fontWeight": 600,
+                "letterSpacing": "0.8px",
+                "marginBottom": "12px",
+                "textTransform": "uppercase",
+              },
+            },
+            "type": "div",
+          },
+          {
+            "children": "Loading fleet data…",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-sub)",
+                "fontSize": "13px",
+              },
+            },
+            "type": "div",
+          },
+        ],
+        "key": null,
+        "props": {
+          "style": {
+            "backgroundColor": "var(--nxai-card-bg, #fff)",
+            "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+            "borderRadius": "10px",
+            "gridColumn": "1 / 3",
+            "padding": "20px",
+          },
+        },
+        "type": "div",
+      },
+      "key": null,
+      "props": {
+        "style": {
+          "marginTop": 16,
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "AI Integration",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-section-label, #374151)",
+          "fontSize": "13px",
+          "fontWeight": 600,
+          "marginBottom": "12px",
+          "marginTop": "8px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": "MCP Server",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#51c356",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                {
+                  "children": "Running",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "color": "var(--nxai-card-text)",
+                      "fontSize": "18px",
+                      "fontWeight": 600,
+                    },
+                  },
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "alignItems": "center",
+                  "display": "flex",
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "201 tools available",
+                {
+                  "children": [
+                    {
+                      "children": null,
+                      "key": null,
+                      "props": {},
+                      "type": "br",
+                    },
+                    "Port 10801",
+                  ],
+                  "key": null,
+                  "props": {},
+                  "type": "span",
+                },
+                {
+                  "children": [
+                    {
+                      "children": null,
+                      "key": null,
+                      "props": {},
+                      "type": "br",
+                    },
+                    "v0.2.3",
+                  ],
+                  "key": null,
+                  "props": {},
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "AI Proxy",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "var(--nxai-card-sub)",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                {
+                  "children": "Stopped",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "color": "var(--nxai-card-text)",
+                      "fontSize": "18px",
+                      "fontWeight": 600,
+                    },
+                  },
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "alignItems": "center",
+                  "display": "flex",
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "Not configured",
+                null,
+                null,
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "grid",
+          "gap": "16px",
+          "gridTemplateColumns": "repeat(2, 1fr)",
+          "marginBottom": "24px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": null,
+      "key": null,
+      "props": {
+        "electron": {
+          "ipcRenderer": {
+            "invoke": [MockFunction],
+            "on": [MockFunction],
+            "removeListener": [MockFunction],
+          },
+        },
+      },
+      "type": "AIGatewayPanel",
+    },
+  ],
+  "key": null,
+  "props": {},
+  "type": "div",
+}
+`;
+
+exports[`Overview tab — characterization renders wpe not connected identically before and after extraction 1`] = `
+{
+  "children": [
+    null,
+    {
+      "children": [
+        {
+          "children": "🔒",
+          "key": null,
+          "props": {
+            "style": {
+              "flexShrink": 0,
+              "fontSize": "15px",
+              "lineHeight": 1,
+            },
+          },
+          "type": "span",
+        },
+        {
+          "children": [
+            {
+              "children": "Not connected to WP Engine.",
+              "key": null,
+              "props": {},
+              "type": "strong",
+            },
+            " Sign in to enable WPE site management, deep scans, backups, and content indexing.",
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "color": "var(--nxai-card-text)",
+              "flex": 1,
+              "fontSize": "13px",
+            },
+          },
+          "type": "span",
+        },
+        {
+          "children": "Connect",
+          "key": null,
+          "props": {
+            "onClick": "[fn]",
+            "style": {
+              "backgroundColor": "#0ECAD4",
+              "border": "none",
+              "borderRadius": "6px",
+              "color": "#fff",
+              "cursor": "pointer",
+              "flexShrink": 0,
+              "fontSize": "13px",
+              "fontWeight": 600,
+              "padding": "6px 14px",
+            },
+          },
+          "type": "button",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "backgroundColor": "rgba(59, 130, 246, 0.08)",
+          "border": "1px solid rgba(59, 130, 246, 0.35)",
+          "borderRadius": "8px",
+          "display": "flex",
+          "gap": "10px",
+          "marginBottom": "20px",
+          "padding": "12px 16px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            "☁ Have WP Engine sites? ",
+            {
+              "children": "Connect via Local → Connect",
+              "key": null,
+              "props": {
+                "onClick": "[fn]",
+                "style": {
+                  "color": "#0ECAD4",
+                  "cursor": "pointer",
+                  "textDecoration": "underline",
+                },
+              },
+              "type": "span",
+            },
+            " to manage your full fleet.",
+          ],
+          "key": null,
+          "props": {},
+          "type": "span",
+        },
+        {
+          "children": "×",
+          "key": null,
+          "props": {
+            "data-testid": "wpe-not-connected-dismiss",
+            "onClick": "[fn]",
+            "style": {
+              "background": "transparent",
+              "border": "none",
+              "color": "var(--nxai-card-sub, #6b7280)",
+              "cursor": "pointer",
+              "fontFamily": "inherit",
+              "fontSize": 14,
+              "padding": "0 4px",
+            },
+          },
+          "type": "button",
+        },
+      ],
+      "key": null,
+      "props": {
+        "data-testid": "wpe-not-connected-banner",
+        "style": {
+          "alignItems": "center",
+          "backgroundColor": "var(--nxai-card-bg, #fff)",
+          "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+          "borderRadius": "10px",
+          "color": "var(--nxai-card-sub, #6b7280)",
+          "display": "flex",
+          "fontSize": 12,
+          "justifyContent": "space-between",
+          "marginBottom": 16,
+          "padding": "10px 16px",
+        },
+      },
+      "type": "div",
+    },
+    null,
+    {
+      "children": "MCP server not yet running. Waiting for initialization...",
+      "key": null,
+      "props": {
+        "style": {
+          "backgroundColor": "var(--nxai-card-bg, #fff)",
+          "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+          "borderRadius": "10px",
+          "color": "var(--nxai-card-sub)",
+          "marginBottom": "24px",
+          "padding": "24px",
+          "textAlign": "center",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "Fleet Intelligence",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-section-label, #374151)",
+          "fontSize": "13px",
+          "fontWeight": 600,
+          "marginBottom": "12px",
+          "marginTop": "8px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": "Local Sites",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": 37,
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#51c356",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                "4 running",
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {},
+                  "type": "br",
+                },
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#999",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                "33 halted",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "WPE-Connected",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": 19,
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "#0ECAD4",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "Local sites linked to",
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {},
+                  "type": "br",
+                },
+                "WP Engine environments",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Remote Sites",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "—",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub)",
+                  "fontSize": "36px",
+                  "fontWeight": 700,
+                  "lineHeight": 1,
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "WPE not authenticated",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "grid",
+          "gap": "16px",
+          "gridTemplateColumns": "repeat(3, 1fr)",
+          "marginBottom": "24px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": {
+        "children": null,
+        "key": null,
+        "props": {
+          "electron": {
+            "ipcRenderer": {
+              "invoke": [MockFunction],
+              "on": [MockFunction],
+              "removeListener": [MockFunction],
+            },
+          },
+          "onIndexSites": "[fn]",
+          "onSchedule": "[fn]",
+        },
+        "type": "FleetCompletenessWidget",
+      },
+      "key": null,
+      "props": {
+        "style": {
+          "marginTop": 16,
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": {
+        "children": [
+          {
+            "children": "Fleet Summary",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-label, #6b7280)",
+                "fontSize": "11px",
+                "fontWeight": 600,
+                "letterSpacing": "0.8px",
+                "marginBottom": "12px",
+                "textTransform": "uppercase",
+              },
+            },
+            "type": "div",
+          },
+          {
+            "children": "Loading fleet data…",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-sub)",
+                "fontSize": "13px",
+              },
+            },
+            "type": "div",
+          },
+        ],
+        "key": null,
+        "props": {
+          "style": {
+            "backgroundColor": "var(--nxai-card-bg, #fff)",
+            "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+            "borderRadius": "10px",
+            "gridColumn": "1 / 3",
+            "padding": "20px",
+          },
+        },
+        "type": "div",
+      },
+      "key": null,
+      "props": {
+        "style": {
+          "marginTop": 16,
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "AI Integration",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-section-label, #374151)",
+          "fontSize": "13px",
+          "fontWeight": 600,
+          "marginBottom": "12px",
+          "marginTop": "8px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": "MCP Server",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "#51c356",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                {
+                  "children": "Running",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "color": "var(--nxai-card-text)",
+                      "fontSize": "18px",
+                      "fontWeight": 600,
+                    },
+                  },
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "alignItems": "center",
+                  "display": "flex",
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "201 tools available",
+                {
+                  "children": [
+                    {
+                      "children": null,
+                      "key": null,
+                      "props": {},
+                      "type": "br",
+                    },
+                    "Port 10801",
+                  ],
+                  "key": null,
+                  "props": {},
+                  "type": "span",
+                },
+                {
+                  "children": [
+                    {
+                      "children": null,
+                      "key": null,
+                      "props": {},
+                      "type": "br",
+                    },
+                    "v0.2.3",
+                  ],
+                  "key": null,
+                  "props": {},
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "AI Proxy",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-label, #6b7280)",
+                  "fontSize": "11px",
+                  "fontWeight": 600,
+                  "letterSpacing": "0.8px",
+                  "marginBottom": "12px",
+                  "textTransform": "uppercase",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "backgroundColor": "var(--nxai-card-sub)",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "height": "8px",
+                      "marginRight": "6px",
+                      "width": "8px",
+                    },
+                  },
+                  "type": "span",
+                },
+                {
+                  "children": "Stopped",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "color": "var(--nxai-card-text)",
+                      "fontSize": "18px",
+                      "fontWeight": 600,
+                    },
+                  },
+                  "type": "span",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "alignItems": "center",
+                  "display": "flex",
+                  "marginBottom": "8px",
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "Not configured",
+                null,
+                null,
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub, #6b7280)",
+                  "fontSize": "13px",
+                  "lineHeight": 1.6,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg, #fff)",
+              "border": "1px solid var(--nxai-card-border, #e5e7eb)",
+              "borderRadius": "10px",
+              "padding": "20px",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "grid",
+          "gap": "16px",
+          "gridTemplateColumns": "repeat(2, 1fr)",
+          "marginBottom": "24px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": null,
+      "key": null,
+      "props": {
+        "electron": {
+          "ipcRenderer": {
+            "invoke": [MockFunction],
+            "on": [MockFunction],
+            "removeListener": [MockFunction],
+          },
+        },
+      },
+      "type": "AIGatewayPanel",
+    },
+  ],
+  "key": null,
+  "props": {},
+  "type": "div",
+}
+`;
