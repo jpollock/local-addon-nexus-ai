@@ -5001,7 +5001,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames, fullRun }: { agentId: string; siteNames: string[]; fullRun?: boolean }) => {
-    const runId = `run-${Date.now()}`;
+    const correlationId = `run-${Date.now()}`;
     const logFileName = `run-${Date.now()}.log`;
     const logDir = require('path').join(
       require('os').homedir(),
@@ -5026,14 +5026,14 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       });
     };
 
-    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId, agentId, agentName, siteNames, logFile: logFilePath });
+    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId: correlationId, agentId, agentName, siteNames, logFile: logFilePath });
 
-    // Cancel support — register an AbortController keyed by runId
+    // Cancel support — register an AbortController keyed by correlationId
     const abortController = new AbortController();
     const { signal } = abortController;
     const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap ??
       ((deps as any).__runAbortMap = new Map());
-    runAbortMap.set(runId, abortController);
+    runAbortMap.set(correlationId, abortController);
 
     // Run agent directly via agentRunner — awaits actual completion, no log polling races.
     // Everything from here on is wraped in one try/catch whose catch ALWAYS broadcasts a
@@ -5046,7 +5046,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     (async () => {
       const runner = deps.nexusServices?.agentRunner;
       if (!runner || !agent) {
-        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 1, findingsSites: [] });
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], doneCount: 0, failedCount: 1, findingsSites: [] });
         return;
       }
 
@@ -5055,6 +5055,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const logPath = logFilePath;
       const lastSize = _fs.existsSync(logPath) ? _fs.statSync(logPath).size : 0;
 
+      const { collectRunIds } = require('../agent-runtime/runNowIds');
+      const runs: Array<{ site: string; result: any }> = [];
       let lastRunResult: unknown;
       try {
         // Run one site at a time via scoped event — agentRunner.run() resolves when done
@@ -5065,6 +5067,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
           };
           lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
+          runs.push({ site: siteName, result: lastRunResult || {} });
         }
       } catch (err: any) {
         if (!signal.aborted) {
@@ -5072,10 +5075,11 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         }
       }
 
-      runAbortMap.delete(runId);
+      const runIds = collectRunIds(runs);
+      runAbortMap.delete(correlationId);
 
       if (signal.aborted) {
-        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds, doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
         return;
       }
 
@@ -5089,7 +5093,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const outcomes = parseRunOutcomes(logContent, siteNames);
       try {
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-          runId,
+          runId: correlationId,
+          runIds,
           agentId,
           siteNames,
           doneCount: outcomes.doneCount,
@@ -5104,7 +5109,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         // Send a minimal payload so the UI at least exits the 'running' state.
         console.error('[AGENT_RUN_NOW] broadcast failed, sending minimal completion:', broadcastErr?.message);
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-          runId, agentId, siteNames,
+          runId: correlationId, runIds, agentId, siteNames,
           doneCount: outcomes.doneCount,
           failedCount: outcomes.failedCount,
           findingsSites: outcomes.findingsSites,
@@ -5115,11 +5120,11 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       // parseRunOutcomes itself). The run may well have finished on the backend — the UI must
       // still be told, or it spins forever with no way to recover short of a full reload.
       console.error('[AGENT_RUN_NOW] unhandled error in run pipeline:', err?.message);
-      runAbortMap.delete(runId);
-      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
+      runAbortMap.delete(correlationId);
+      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
     });
 
-    return { runId };
+    return { runId: correlationId };
   });
 
   // Remove an agent — deletes its directory and unloads from registry
