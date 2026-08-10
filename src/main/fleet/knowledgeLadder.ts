@@ -40,7 +40,9 @@ const FROM_COMPLETENESS: Record<string, KnowledgeRung> = {
  * host is searchable, and saying otherwise on the Sites table would be a
  * statement we know to be false.
  *
- * The map itself stays, and so does the `?? 'nothing'` fallback below: an
+ * The map itself stays — even though all three known sources now map to the
+ * same rung, so it caps nothing today — because it is where the next source
+ * declares its ceiling, and because of the `?? 'nothing'` fallback below: an
  * unrecognised source must still fail closed rather than inherit the most
  * permissive rung.
  */
