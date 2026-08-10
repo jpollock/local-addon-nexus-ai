@@ -129,17 +129,17 @@ requested, not merely that the component handles it.
 
 ### A defect this surfaces, and a decision needed
 
-**Run Now with zero sites selected currently runs zero times and reports success.** The
-loop iterates an empty array, `AGENT_RUN_COMPLETE` broadcasts `runIds: []`,
-`doneCount: 0`, `failedCount: 0`, and the drawer shows a completed run that never
-happened.
+**Run Now with zero sites is a silent no-op at the handler.** The loop iterates an empty
+array, `AGENT_RUN_COMPLETE` broadcasts `runIds: []`, `doneCount: 0`, `failedCount: 0`, and
+the result is indistinguishable from a successful run.
 
-That is a silent no-op today, independent of this change — and it is precisely the state a
-`siteScoped: false` agent would land in if the picker were merely emptied rather than
-bypassed. **Decide explicitly:** either refuse an empty selection with a message, or state
-plainly that nothing ran. Do not leave "success, 0 sites" as the answer. This is small and
-adjacent, but it is a separate defect from `siteScoped` and should be its own task so it
-can be judged on its own.
+**It is not reachable from the UI today** — `AgentRunModal`'s Run button is
+`disabled: selection.size === 0`. So this is defense-in-depth for the CLI and any other
+caller of the channel, not a live user-facing bug. (An earlier draft of this document
+called it user-visible; that was wrong.) It is still worth closing, because it is
+precisely the state a `siteScoped: false` agent would land in if the picker were merely
+emptied rather than bypassed. **Decide explicitly:** refuse, or state plainly that nothing
+ran — do not leave "success, 0 sites" as the answer. Separate defect, separate task.
 
 ## Scope boundary
 
