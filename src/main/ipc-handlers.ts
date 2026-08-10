@@ -14,7 +14,8 @@ import { getApiKey } from './security/KeyVault';
 import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
 import { recordRunToInbox } from './inbox/recordRun';
-import { pauseIfStuck, AUTO_PAUSED_KEY } from './inbox/autoPause';
+import { pauseIfStuck, AUTO_PAUSED_KEY, resumeAgent, isAutoPaused } from './inbox/autoPause';
+import type { InboxItem } from './inbox/types';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
@@ -5540,6 +5541,110 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap;
     if (runAbortMap) runAbortMap.get(runId)?.abort();
     return { ok: true };
+  });
+
+  // ---------------------------------------------------------------------------
+  // Agent Inbox — open items, decisions, resume
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_INBOX, async () => {
+    try {
+      const inboxStore = deps.nexusServices?.inboxStore;
+      const agentStateStore = deps.nexusServices?.agentStateStore;
+
+      // Missing store is NOT an empty inbox — it's a failure to read the inbox.
+      // The renderer must distinguish "nothing needs you" from "couldn't check".
+      if (!inboxStore) {
+        return {
+          success: false,
+          items: [],
+          total: 0,
+          counts: { decide: 0, problem: 0, know: 0 },
+          pendingBySource: {},
+          pausedSources: [],
+        };
+      }
+
+      const { items, total } = inboxStore.listOpen();
+      const counts = inboxStore.countsByKind();
+      const pendingBySource = inboxStore.pendingBySource();
+
+      // Which agents among the open items are currently auto-paused?
+      // Only check the sources that actually have pending items.
+      const pausedSources: string[] = [];
+      if (agentStateStore) {
+        const sources = new Set<string>(items.map((item: InboxItem) => item.source));
+        for (const source of sources) {
+          if (isAutoPaused(agentStateStore, source)) {
+            pausedSources.push(source);
+          }
+        }
+      }
+
+      return {
+        success: true,
+        items,
+        total,
+        counts,
+        pendingBySource,
+        pausedSources,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-inbox failed:', (err as Error).message);
+      return {
+        success: false,
+        items: [],
+        total: 0,
+        counts: { decide: 0, problem: 0, know: 0 },
+        pendingBySource: {},
+        pausedSources: [],
+      };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.INBOX_DECIDE, async (
+    _e: any,
+    { id, decision, status }: { id: number; decision: string; status: 'dismissed' | 'done' },
+  ) => {
+    try {
+      const inboxStore = deps.nexusServices?.inboxStore;
+      if (!inboxStore) {
+        return { success: false, error: 'Inbox store not available' };
+      }
+      inboxStore.decide(id, decision, status);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] inbox-decide failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.INBOX_REOPEN, async (_e: any, { id }: { id: number }) => {
+    try {
+      const inboxStore = deps.nexusServices?.inboxStore;
+      if (!inboxStore) {
+        return { success: false, error: 'Inbox store not available' };
+      }
+      inboxStore.reopen(id);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] inbox-reopen failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AGENT_RESUME, async (_e: any, { agentId }: { agentId: string }) => {
+    try {
+      const agentStateStore = deps.nexusServices?.agentStateStore;
+      if (!agentStateStore) {
+        return { success: false, error: 'Agent state store not available' };
+      }
+      resumeAgent(agentStateStore, agentId);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] agent-resume failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   // Sentinel Review UI: execute remediation commands on a WPE install via SSH

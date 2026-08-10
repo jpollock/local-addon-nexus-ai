@@ -252,6 +252,12 @@ export const IPC_CHANNELS = {
    * in scope would silently do nothing (see agents/log-processor/agent.ts's run()). */
   AGENT_LOG_PROCESSOR_CONNECTED_SITES: `${ADDON_PREFIX}:agent:log-processor:connected-sites`,
 
+  // Agent Inbox — open items, decisions, resume
+  GET_INBOX:      `${ADDON_PREFIX}:inbox:get`,
+  INBOX_DECIDE:   `${ADDON_PREFIX}:inbox:decide`,
+  INBOX_REOPEN:   `${ADDON_PREFIX}:inbox:reopen`,
+  AGENT_RESUME:   `${ADDON_PREFIX}:agent:resume`,
+
   // Ad-hoc SELECT query against graph DB (for KPI rendering from agent manifest)
   FLEET_SQL_QUERY: `${ADDON_PREFIX}:fleet-sql-query`,
 
