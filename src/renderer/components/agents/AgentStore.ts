@@ -25,6 +25,8 @@ export interface AgentStatus {
   effect: 'readonly' | 'writes';
   producesApprovals: boolean;
   producesReports: boolean;
+  /** False = this agent is not per-site: no picker, and Run Now performs exactly one run. */
+  siteScoped: boolean;
   /** What the agent itself declares it needs. Empty when the query predates this field. */
   credentials?: AgentCredentialDecl[];
 }

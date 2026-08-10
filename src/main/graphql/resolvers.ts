@@ -5504,6 +5504,7 @@ export function createResolvers(context: ResolverContext) {
             effect: (def as any).effect ?? 'writes',
             producesApprovals: (def as any).producesApprovals ?? false,
             producesReports: (def as any).producesReports ?? false,
+            siteScoped: (def as any).siteScoped ?? true,
             // Passed through verbatim from the agent's own definition. The renderer used to keep
             // its own hardcoded agent list and scope constant, which meant a new Google agent got
             // no connect button and the wrong scopes if it ever did.

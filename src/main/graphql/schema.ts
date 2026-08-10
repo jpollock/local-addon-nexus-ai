@@ -2010,6 +2010,8 @@ export const typeDefs = gql`
     producesApprovals: Boolean
     "Whether this agent produces a standalone report/artifact (e.g. seo-insights' Site Content Report)"
     producesReports: Boolean
+    "Whether this agent's work is per-site. False = no site picker on any surface, and Run Now performs exactly one run."
+    siteScoped: Boolean
     "OAuth/API-key providers this agent declares. Drives which connect card its Settings tab shows, and which scopes that card requests."
     credentials: [AgentCredentialDecl!]
   }

@@ -256,7 +256,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
   private async refreshAgents() {
     try {
       const result = await rendererGql<{ agentStatus: any[] }>(
-        `{ agentStatus { name version description cronExpression lastRunAt lastRunStatus lastRunDurationMs lastRunError supportsFullRun allowsProduction effect producesApprovals producesReports credentials { provider type scopes optional reason } } }`,
+        `{ agentStatus { name version description cronExpression lastRunAt lastRunStatus lastRunDurationMs lastRunError supportsFullRun allowsProduction effect producesApprovals producesReports siteScoped credentials { provider type scopes optional reason } } }`,
       );
       if (result?.agentStatus) {
         agentStore.setStatuses(result.agentStatus);

@@ -171,6 +171,21 @@ export interface AgentDefinition {
    * whenever that surface exists; it does not build the surface itself.
    */
   producesReports?: boolean;
+  /**
+   * Whether this agent's work is per-site. Default **true** — the conservative assumption,
+   * matching `effect`'s default of 'writes'.
+   *
+   * Set false for an agent whose `run()` ignores site scope entirely: it reads neither the site
+   * on `ctx.event` nor `settings.scope.siteIds`, and does the same thing regardless of which
+   * sites are selected. `auth-probe` is the worked example — a fleet-wide auth diagnostic making
+   * three fixed calls, for which the picker offered 404 sites and Run Now would have fired 166
+   * identical runs.
+   *
+   * When false: no surface offers a site picker, and Run Now performs exactly ONE run with no
+   * scoped event. Declaring false while actually reading a site from `ctx.event` means the agent
+   * silently receives `undefined` — the declaration must match what `run()` does.
+   */
+  siteScoped?: boolean;
 }
 
 export interface AgentResult {

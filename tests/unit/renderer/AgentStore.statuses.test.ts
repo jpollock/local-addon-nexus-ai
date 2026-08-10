@@ -14,6 +14,7 @@ const status = (name: string): AgentStatus => ({
   effect: 'writes',
   producesApprovals: false,
   producesReports: false,
+  siteScoped: true,
 });
 
 /**
