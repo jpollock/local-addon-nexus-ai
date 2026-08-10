@@ -133,4 +133,18 @@ describe('inbox writes are independent of the renderer', () => {
     expect(written).toBe(1);
     expect(store.listOpen().items[0].code).toBe('FS-01');
   });
+
+  test('a normal payload survives the round trip', () => {
+    // The cyclic-payload guard must drop ONLY what it cannot serialize.
+    // Without this, an encodePayload that returned null unconditionally
+    // would pass the cyclic test and silently discard every payload.
+    const normal = { id: 'FS-02', sev: 'high', title: 'Normal finding', plain: 'Why.' };
+
+    recordRunToInbox(store, {
+      agentId: 'security-sentinel',
+      sites: { 'Site A': { status: 'findings', findings: [normal] } },
+    }, 1000);
+
+    expect(store.listOpen().items[0].payload).toEqual(normal);
+  });
 });

@@ -5426,7 +5426,9 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         const inboxStore = deps.nexusServices?.inboxStore;
         if (inboxStore) {
           recordRunToInbox(inboxStore, {
-            agentId: agentId || 'security-sentinel',
+            // An unattributed run must not borrow a real agent's name — inbox items
+            // are keyed by source, and pendingBySource() drives per-agent badges.
+            agentId: agentId || 'unknown-agent',
             status: (lastRunResult as any)?.status,
             error:  (lastRunResult as any)?.error,
             sites:  (lastRunResult as any)?.sites,
