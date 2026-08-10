@@ -190,12 +190,17 @@ whole run across both streams.
   `write` are each guarded, verified by execution against pathological
   `toString`, invalid dates and a null event. A dropped event still emits a
   line saying so — a swallowed event is a lost event.
-- **`ctx.log.mutation()` exists and has no callers yet.** Phase 2 must emit it
-  from the runtime alongside `tool.call`, not rely on agents remembering —
-  design §8's own reasoning for why `llm.call` is runtime-emitted.
-- `agent_runs.run_id` is written but not yet read back by `getLastRun` /
-  `getRunHistory`; the UI's "Run Now" still mints its own unrelated
-  `run-${Date.now()}`, so the id a user can see never appears in a log line.
+- **`mutation` events are emitted by the runtime, not by agents.**
+  `NexusToolProvider.ts:92` emits `event: 'mutation'` for Tier 2/3 tool calls
+  that complete. `ctx.log.mutation()` exists but has no agent callers — agents
+  forgot to call it, which is exactly why the runtime emits it instead.
+- **`agent_runs.run_id` is written but not read back.** The column is populated
+  (`AgentRunner.ts` writes it), but `getLastRun()` and `getRunHistory()` in
+  `AgentStateStore.ts` both return types (`AgentResult`, `AgentRunRow`) that
+  exclude it — the `SELECT *` fetches it, the mapping drops it. The UI's Run
+  Now broadcasts the runner's real `r_…` ids (`runIds`, collected via
+  `runNowIds.ts` and rendered in `RunDrawer.tsx`), so a user can copy one, but
+  the historical runs list has no id column.
 - **`localDay` exists twice** — `src/main/logging/eventLog.ts` and
   `src/renderer/components/localDay.ts` — pinned by a shared case table in
   `tests/unit/renderer/localDay.test.ts`. Main and renderer do not share a
