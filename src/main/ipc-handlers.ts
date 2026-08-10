@@ -1859,22 +1859,58 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           });
         },
         // `refreshEnabled` says whether background refresh is actually
-        // switched on for THIS row's source — read from the real settings,
-        // never inferred/defaulted to true. wpeSyncAutoEnabled (CAPI sync) and
-        // wpeRefreshAutoEnabled (deeper SSH refresh) both write freshness
-        // timestamps for WPE sites (last_sync_at and ssh_last_sync_at
-        // respectively) so either one being on counts; externalRefreshAutoEnabled
-        // covers external SSH hosts (writes both columns together); local sites'
-        // background reindex is gated by localContentIndexAutoEnabled (the
-        // OpportunisticScheduler setting — NOT `autoIndex`, which gates
-        // per-lifecycle-event indexing, not the interval scheduler). All four
-        // settings default false, so on a default install every row reports
-        // refreshEnabled: false and the collector honestly reports 'unknown'
-        // rather than a false 'ok' or a false 'degraded'.
+        // switched on for THIS row's source. The rule: find what actually
+        // WRITES `sites.last_sync_at` (or `ssh_last_sync_at`) for that source
+        // on a recurring/automatic basis, and gate on the setting that
+        // controls THAT writer — never on a setting that merely sounds
+        // related. Manual, on-demand actions (a "sync now" button, `nexus
+        // host refresh <alias>`) are deliberately excluded even though they
+        // also write the column: they have no persistent "on" state to read,
+        // so they can't make a stale row "expected to be fresh" the way an
+        // enabled background schedule does.
+        //
+        //   - wpe: `wpeSyncAutoEnabled` gates `WPESyncService.syncContent`
+        //     (writes `last_sync_at` on its periodic CAPI sync);
+        //     `wpeRefreshAutoEnabled` gates `WpeRefreshScheduler` (writes
+        //     `ssh_last_sync_at` on its periodic SSH refresh — confirmed by
+        //     reading its `UPDATE sites SET ... ssh_last_sync_at = ?`, which
+        //     does not touch `last_sync_at`). Two independent schedulers writing
+        //     two different columns, so either one being on counts (OR).
+        //   - external: `externalRefreshAutoEnabled` gates
+        //     `ExternalRefreshScheduler` → `writeExternalHostData`, which
+        //     writes both columns together in the same cycle.
+        //   - local: `autoIndex` (NOT `localContentIndexAutoEnabled`, despite
+        //     the name sounding right) gates the `siteStarted` lifecycle hook
+        //     (`content/lifecycle-hooks.ts`, `settings?.autoIndex === false` →
+        //     skip; default true) — the ONLY writer of `last_sync_at` for
+        //     local sites that runs on a recurring basis (every site start).
+        //     `localContentIndexAutoEnabled` gates `OpportunisticScheduler`,
+        //     whose `executeReindex` op only calls `contentPipeline.indexSite`
+        //     and `graphService.updateSiteStats()` (post/user counts) — it
+        //     never calls `upsertSite` and never touches `last_sync_at` at all
+        //     (verified by reading `BulkOperationManager.executeReindex`).
+        //     `HaltedSiteRefreshScheduler` was also checked and ruled out: it
+        //     only calls `StartupSiteScanner.scanSite`, which writes the
+        //     in-memory `SiteMetadataCache`, never `graphService`/`sites`.
+        //     The lifecycle hook also skips a site individually when it's in
+        //     `excludedSiteIds` — same gate, same code path — so an excluded
+        //     site never gets `refreshEnabled: true` even if `autoIndex` is on.
+        //     `SYNC_GRAPH_ALL` (a manual "sync all to graph" IPC action,
+        //     `ipc/handlers/bulk.ts`'s `executeGraphSync`) does write
+        //     `last_sync_at` for local sites too, but has no gating setting at
+        //     all — excluded for the same "manual action" reason as above.
+        //
+        // All the settings actually used here default false EXCEPT `autoIndex`
+        // (default true) — that's real, not a bug: `autoIndex` predates the
+        // other three opt-in flags and already runs by default via the
+        // lifecycle hook, so a default install's local sites genuinely do get
+        // checked on every site start, unlike WPE/external which need explicit
+        // opt-in for anything to run in the background at all.
         getSyncAges: () => {
           const db = graphService.getDb();
           if (!db) throw new Error('graph not ready');
           const settings = (registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null) ?? DEFAULT_SETTINGS;
+          const excludedSiteIds = new Set(settings.excludedSiteIds ?? []);
           const rows = db.prepare(
             'SELECT id, source, last_sync_at, ssh_last_sync_at FROM sites WHERE is_active = 1'
           ).all() as Array<{ id: string; source: string | null; last_sync_at: number | null; ssh_last_sync_at: number | null }>;
@@ -1885,7 +1921,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
             } else if (r.source === 'external') {
               refreshEnabled = settings.externalRefreshAutoEnabled === true;
             } else if (r.source === 'local') {
-              refreshEnabled = settings.localContentIndexAutoEnabled === true;
+              refreshEnabled = settings.autoIndex !== false && !excludedSiteIds.has(r.id);
             }
             // WPE/external carry two freshness timestamps (the light sync and
             // the deeper SSH refresh); either one having run counts as checked.

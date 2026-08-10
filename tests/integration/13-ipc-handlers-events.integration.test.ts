@@ -70,6 +70,11 @@ describe('Event Tracking IPC Handlers (Sprint 1)', () => {
   let eventProcessor: EventProcessor;
   let vectorStore: SqliteVecStore;
   let embeddingService: EmbeddingService;
+  // Hoisted out of beforeAll (rather than a local const there) so individual
+  // tests can mutate it in place to prove the refreshEnabled *mapping* itself
+  // — not just a value that happens to move in lockstep with it. mockStorage.get
+  // below always returns this same object reference.
+  let mockSettings: Record<string, unknown>;
 
   beforeAll(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-ipc-events-'));
@@ -126,17 +131,30 @@ describe('Event Tracking IPC Handlers (Sprint 1)', () => {
     };
 
     // EVENTS_GET_STATS now rolls up four health signals (see collectSystemHealth),
-    // not just the event queue. `localContentIndexAutoEnabled: true` here makes
-    // the local `test-site` inserted by the tests below count as "refresh
-    // enabled" for the sync-staleness signal, so tests can reach an 'ok'
-    // baseline and isolate the event-queue-driven state changes they're
-    // actually about. Everything else in ipc-handlers.ts that reads
-    // STORAGE_KEYS.SETTINGS via this mock (none of the six handler groups
-    // exercised in this file do) is unaffected — non-SETTINGS keys still read null.
-    const mockSettings = {
+    // not just the event queue. `autoIndex: true` here is the REAL gate on the
+    // `siteStarted` lifecycle hook that writes `sites.last_sync_at` for local
+    // sites — it's what makes the local `test-site` inserted by the tests below
+    // count as "refresh enabled" for the sync-staleness signal, so tests can
+    // reach an 'ok' baseline and isolate the event-queue-driven state changes
+    // they're actually about.
+    //
+    // `localContentIndexAutoEnabled` is deliberately left `false` here, NOT
+    // because it should be off in practice, but so the baseline itself pins the
+    // mapping: `getSyncAges` in ipc-handlers.ts must read `autoIndex`, not
+    // `localContentIndexAutoEnabled` (which gates a different scheduler,
+    // `OpportunisticScheduler`, that never touches `last_sync_at` at all — see
+    // the comment above `getSyncAges`). If that mapping ever regresses back to
+    // `localContentIndexAutoEnabled`, refreshEnabled goes false for `test-site`
+    // and every test below that expects a clean 'ok'/'degraded'/'failing'
+    // baseline (not just the two dedicated mapping tests) fails immediately.
+    //
+    // Everything else in ipc-handlers.ts that reads STORAGE_KEYS.SETTINGS via
+    // this mock (none of the six handler groups exercised in this file do) is
+    // unaffected — non-SETTINGS keys still read null.
+    mockSettings = {
       autoIndex: true,
       excludedSiteIds: [],
-      localContentIndexAutoEnabled: true,
+      localContentIndexAutoEnabled: false,
     };
     const mockStorage = {
       get: (key: string) => (key === STORAGE_KEYS.SETTINGS ? mockSettings : null),
@@ -438,6 +456,65 @@ describe('Event Tracking IPC Handlers (Sprint 1)', () => {
       expect(result.success).toBe(true);
       expect(result.stats.byType.plugin_activated).toBe(2);
       expect(result.stats.byType.post_created).toBe(1);
+    });
+
+    // These two tests deliberately DIVERGE autoIndex and localContentIndexAutoEnabled
+    // (the shared baseline above keeps them apart on purpose, but these make the
+    // divergence the entire point of the assertion) — the review that prompted
+    // this fix round found that no existing test could distinguish "refreshEnabled
+    // is gated by autoIndex" from "gated by localContentIndexAutoEnabled" because
+    // every fixture moved the two together. These pin the mapping itself: each
+    // fails if getSyncAges in ipc-handlers.ts is reading the wrong setting.
+    describe('refreshEnabled mapping for local sites — pins autoIndex, not localContentIndexAutoEnabled', () => {
+      afterEach(() => {
+        // Restore the shared baseline so later tests in this file aren't affected.
+        mockSettings.autoIndex = true;
+        mockSettings.excludedSiteIds = [];
+        mockSettings.localContentIndexAutoEnabled = false;
+      });
+
+      test('real gate OFF + wrong-mapping gate ON -> unknown, not ok (would be ok under the old, wrong mapping)', async () => {
+        mockSettings.autoIndex = false; // real gate: off
+        mockSettings.localContentIndexAutoEnabled = true; // wrong-mapping gate: on
+
+        // test-site's last_sync_at is fresh (stamped Date.now() in this describe's
+        // beforeEach) — under the WRONG mapping (localContentIndexAutoEnabled) this
+        // would read refreshEnabled: true and syncStaleness: 'ok'. Under the correct
+        // mapping (autoIndex) it must read unknown: nobody's actually refreshing it.
+        const result = await mockIpc.invokeHandler(IPC_CHANNELS.EVENTS_GET_STATS);
+
+        expect(result.stats.systemHealth.inputs.syncStaleness.state).toBe('unknown');
+        expect(result.stats.systemHealth.inputs.syncStaleness.state).not.toBe('ok');
+        expect(result.stats.systemHealth.inputs.syncStaleness.reason).toMatch(/background refresh is off/i);
+      });
+
+      test('real gate ON + wrong-mapping gate OFF, stale site -> degraded, not unknown (would be unknown under the old, wrong mapping)', async () => {
+        mockSettings.autoIndex = true; // real gate: on
+        mockSettings.localContentIndexAutoEnabled = false; // wrong-mapping gate: off
+
+        // Make the site stale (2 days old) rather than fresh, so a correct
+        // 'ok' vs 'degraded' distinction is visible too, not just presence/absence.
+        const twoDaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000;
+        await graphService.upsertSite({
+          id: 'test-site',
+          name: 'Test Site',
+          domain: 'test.local',
+          is_active: true,
+          last_sync_at: twoDaysAgo,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        });
+
+        // Under the WRONG mapping (localContentIndexAutoEnabled: false) this would
+        // read refreshEnabled: false and syncStaleness: 'unknown' ("background
+        // refresh is off"). Under the correct mapping (autoIndex: true) it must
+        // read 'degraded': something IS supposed to be refreshing it, and it hasn't.
+        const result = await mockIpc.invokeHandler(IPC_CHANNELS.EVENTS_GET_STATS);
+
+        expect(result.stats.systemHealth.inputs.syncStaleness.state).toBe('degraded');
+        expect(result.stats.systemHealth.inputs.syncStaleness.state).not.toBe('unknown');
+        expect(result.stats.systemHealth.inputs.syncStaleness.reason).toMatch(/not checked in over a day/i);
+      });
     });
   });
 
