@@ -2,8 +2,9 @@ import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { injectThemeVars } from '../../utils/theme';
 import { ContextSelector } from './ContextSelector';
-import { DockedPanel } from './DockedPanel';
+import { DockedPanel, PanelTab } from './DockedPanel';
 import { PanelChat } from './PanelChat';
+import { PanelInsights } from './PanelInsights';
 import { SessionsSidebar } from './SessionsSidebar';
 
 type PanelSize = 'docked' | 'wide' | 'full';
@@ -15,6 +16,7 @@ interface ContainerProps {
 interface ContainerState {
   open: boolean;
   size: PanelSize;
+  activeTab: PanelTab;
   activeSessionId: string | null;
   showSessions: boolean;
   sessionListVersion: number;
@@ -38,9 +40,13 @@ function readState(): ContainerState {
       // Accept all three valid sizes, coerce anything unrecognised to 'docked'
       const validSizes: PanelSize[] = ['docked', 'wide', 'full'];
       const size: PanelSize = validSizes.includes(parsed.size) ? parsed.size : 'docked';
+      // Accept both valid tabs, coerce anything unrecognised to 'chat'
+      const validTabs: PanelTab[] = ['insights', 'chat'];
+      const activeTab: PanelTab = validTabs.includes(parsed.activeTab) ? parsed.activeTab : 'chat';
       return {
         open: false, // always start collapsed — never block Local on load
         size,
+        activeTab,
         activeSessionId: parsed.activeSessionId ?? null,
         showSessions: false,
         sessionListVersion: 0,
@@ -49,7 +55,7 @@ function readState(): ContainerState {
       };
     }
   } catch { /* ignore */ }
-  return { open: false, size: 'docked', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null };
+  return { open: false, size: 'docked', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
@@ -61,18 +67,21 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.openPanel = this.openPanel.bind(this);
     this.closePanel = this.closePanel.bind(this);
     this.setSize = this.setSize.bind(this);
+    this.setActiveTab = this.setActiveTab.bind(this);
     this.setActiveSession = this.setActiveSession.bind(this);
     this.newChat = this.newChat.bind(this);
+    this.openAgentsHub = this.openAgentsHub.bind(this);
   }
 
   componentDidUpdate(_: {}, prevState: ContainerState) {
-    const { open, size, activeSessionId } = this.state;
+    const { open, size, activeTab, activeSessionId } = this.state;
     if (
       prevState.open !== open ||
       prevState.size !== size ||
+      prevState.activeTab !== activeTab ||
       prevState.activeSessionId !== activeSessionId
     ) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open, size, activeSessionId }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open, size, activeTab, activeSessionId }));
     }
     this.syncReflowStyle();
   }
@@ -133,6 +142,10 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.setState({ size });
   }
 
+  setActiveTab(activeTab: PanelTab) {
+    this.setState({ activeTab });
+  }
+
   setActiveSession(id: string | null) {
     this.setState({ activeSessionId: id });
   }
@@ -141,17 +154,29 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.setState({ activeSessionId: null, showSessions: false });
   }
 
-  render() {
-    const { open, size, activeSessionId, showSessions, sessionListVersion, selectedSiteIds } = this.state;
+  openAgentsHub() {
+    // Navigate to Agents Hub (Activity tab in Local)
+    // This is a placeholder - the actual implementation would trigger navigation
+    // For now, we'll just log it since the wiring to Local's tab system isn't exposed
+    console.log('[Nexus] Navigate to Agents Hub requested');
+  }
 
-    const panelContent = React.createElement(PanelChat, {
-      electron: this.props.electron,
-      sessionId: activeSessionId,
-      selectedSiteIds,
-      onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
-      onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
-      onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
-    });
+  render() {
+    const { open, size, activeTab, activeSessionId, showSessions, sessionListVersion, selectedSiteIds } = this.state;
+
+    const panelContent = activeTab === 'insights'
+      ? React.createElement(PanelInsights, {
+          electron: this.props.electron,
+          onOpenAgents: this.openAgentsHub,
+        })
+      : React.createElement(PanelChat, {
+          electron: this.props.electron,
+          sessionId: activeSessionId,
+          selectedSiteIds,
+          onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
+          onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
+          onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
+        });
 
     // ContextSelector hidden — site scope selection not yet exposed in UI
     const panelBody = panelContent;
@@ -171,6 +196,8 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       {
         open,
         size,
+        activeTab,
+        onSetActiveTab: this.setActiveTab,
         onOpen: this.openPanel,
         onClose: this.closePanel,
         onSetSize: this.setSize,

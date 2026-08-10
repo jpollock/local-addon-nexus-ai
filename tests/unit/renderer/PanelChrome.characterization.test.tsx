@@ -41,8 +41,9 @@ describe('panel chrome — control interactions', () => {
     const tree = panel.render();
 
     // Find the expand button in the control cluster
+    // Header now has: [0] avatar, [1] title stack, [2] segmented control, [3] control cluster
     const header = tree.props.children[0];
-    const controlCluster = header.props.children[2];
+    const controlCluster = header.props.children[3];
     const expandBtn = controlCluster.props.children.find((child: any) =>
       child?.props?.['aria-label'] === 'Expand to full screen' ||
       child?.props?.['aria-label'] === 'Wide view'
@@ -57,8 +58,9 @@ describe('panel chrome — control interactions', () => {
     const panel = makePanel({ size: 'wide' });
     const tree = panel.render();
 
+    // Header now has: [0] avatar, [1] title stack, [2] segmented control, [3] control cluster
     const header = tree.props.children[0];
-    const controlCluster = header.props.children[2];
+    const controlCluster = header.props.children[3];
     const sessionsBtn = controlCluster.props.children.find((child: any) =>
       child?.props?.['aria-label'] === 'Sessions'
     );

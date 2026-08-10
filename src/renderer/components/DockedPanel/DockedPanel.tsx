@@ -2,10 +2,13 @@ import React from 'react';
 import { UI_COLORS } from '../../../common/constants';
 
 export type PanelSize = 'docked' | 'wide' | 'full';
+export type PanelTab = 'insights' | 'chat';
 
 export interface Props {
   open: boolean;
   size: PanelSize;
+  activeTab?: PanelTab;
+  onSetActiveTab?: (tab: PanelTab) => void;
   onOpen: () => void;
   onClose: () => void;
   onSetSize: (size: PanelSize) => void;
@@ -177,7 +180,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
   render() {
     const {
-      open, size, onOpen, onClose, onSetSize, onNewChat,
+      open, size, activeTab = 'chat', onSetActiveTab, onOpen, onClose, onSetSize, onNewChat,
       children, sessionsSidebar, onToggleSessions, showSessions, streamingStatus,
     } = this.props;
 
@@ -199,6 +202,58 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
     const isFull = size === 'full';
 
+    // Segmented control for Insights / Chat
+    const segmentedControl = React.createElement(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          background: 'var(--nxai-table-hover)',
+          borderRadius: 6,
+          padding: 2,
+          gap: 2,
+        },
+      },
+      React.createElement(
+        'button',
+        {
+          style: {
+            background: activeTab === 'insights' ? 'var(--nxai-card-bg)' : 'transparent',
+            border: 'none',
+            color: activeTab === 'insights' ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+            cursor: 'pointer',
+            padding: '5px 11px',
+            fontSize: 13,
+            fontWeight: 600,
+            borderRadius: 5,
+            transition: 'all 0.15s ease',
+          },
+          onClick: () => onSetActiveTab?.('insights'),
+          'aria-label': 'Insights',
+        },
+        'Insights',
+      ),
+      React.createElement(
+        'button',
+        {
+          style: {
+            background: activeTab === 'chat' ? 'var(--nxai-card-bg)' : 'transparent',
+            border: 'none',
+            color: activeTab === 'chat' ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+            cursor: 'pointer',
+            padding: '5px 11px',
+            fontSize: 13,
+            fontWeight: 600,
+            borderRadius: 5,
+            transition: 'all 0.15s ease',
+          },
+          onClick: () => onSetActiveTab?.('chat'),
+          'aria-label': 'Chat',
+        },
+        'Chat',
+      ),
+    );
+
     const header = React.createElement(
       'div',
       { style: styles.header },
@@ -218,6 +273,8 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
             )
           : React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', lineHeight: 1.2 } }, 'Follows you across tabs'),
       ),
+      // Segmented control
+      segmentedControl,
       // Control cluster
       React.createElement(
         'div',

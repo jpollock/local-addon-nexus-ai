@@ -110,6 +110,61 @@ exports[`panel chrome — characterization renders docked 1`] = `
         {
           "children": [
             {
+              "children": "Insights",
+              "key": null,
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Chat",
+              "key": null,
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
               "children": {
                 "children": null,
                 "key": null,
@@ -378,6 +433,61 @@ exports[`panel chrome — characterization renders full 1`] = `
         },
         {
           "children": [
+            {
+              "children": "Insights",
+              "key": null,
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Chat",
+              "key": null,
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
             null,
             {
               "children": {
@@ -632,6 +742,61 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
               "display": "flex",
               "flexDirection": "column",
               "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Insights",
+              "key": null,
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Chat",
+              "key": null,
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
             },
           },
           "type": "div",
@@ -945,6 +1110,61 @@ exports[`panel chrome — characterization renders streaming 1`] = `
         {
           "children": [
             {
+              "children": "Insights",
+              "key": null,
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Chat",
+              "key": null,
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
               "children": {
                 "children": null,
                 "key": null,
@@ -1207,6 +1427,61 @@ exports[`panel chrome — characterization renders wide 1`] = `
               "display": "flex",
               "flexDirection": "column",
               "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Insights",
+              "key": null,
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Chat",
+              "key": null,
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
             },
           },
           "type": "div",
