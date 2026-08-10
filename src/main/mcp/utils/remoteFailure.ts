@@ -17,6 +17,27 @@
  * error handed to an agent.
  */
 
+/**
+ * How long a single remote WP-CLI/SSH call may take before it is abandoned.
+ *
+ * Was 35s, and that was marginal by the code's own account: WP Engine SSH cold-start variance is
+ * 13–30s depending on server load, DB size and PHP process warmth. Measured live on a real
+ * install, a `wp plugin list` was killed at 35.07s — the deadline itself, not the server giving
+ * up. 60s is twice the documented ceiling, and matches the 60s this codebase already allows a
+ * batched external-SSH call.
+ *
+ * Raising it costs nothing for the common case: a warm call through the ControlMaster socket
+ * returns in 1–3s, and a genuinely unreachable host still fails immediately on DNS rather than
+ * waiting out the deadline. What it buys is that a slow-but-alive server is not reported as a
+ * failure — which, before `describeRemoteFailure`, was reported as whatever warning happened to
+ * be on stderr.
+ *
+ * Note for anyone tuning this: `ControlPersist=30s` expires the multiplexed socket sooner than
+ * most agent cadences, so a scheduled agent running every 2 minutes is cold on *every* call and
+ * never sees the 1–3s warm path.
+ */
+export const REMOTE_SSH_TIMEOUT_MS = 60_000;
+
 export interface RemoteFailure {
   /** Process exit code; null when the process was killed by a signal. */
   code: number | null;

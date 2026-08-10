@@ -1,4 +1,13 @@
-import { describeRemoteFailure } from '../../../src/main/mcp/utils/remoteFailure';
+import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS } from '../../../src/main/mcp/utils/remoteFailure';
+
+describe('REMOTE_SSH_TIMEOUT_MS', () => {
+  it('clears the documented cold-start ceiling with real headroom', () => {
+    // The bridge's own comment puts WP Engine SSH cold start at 13-30s, and the previous 35s
+    // budget killed a live call at 35.07s. A deadline anywhere near 30s turns an ordinary cold
+    // start into a reported failure, so this pins the headroom rather than the number.
+    expect(REMOTE_SSH_TIMEOUT_MS).toBeGreaterThan(30_000 * 1.5);
+  });
+});
 
 const PQ_WARNING =
   '** WARNING: connection is not using a post-quantum key exchange algorithm.\n'

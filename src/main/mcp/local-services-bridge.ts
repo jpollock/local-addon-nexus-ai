@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { describeRemoteFailure } from './utils/remoteFailure';
+import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS } from './utils/remoteFailure';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -871,11 +871,8 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         let stdout = '';
         let stderr = '';
         const startedAt = Date.now();
-        // 35s: WPE SSH cold-start variance is 13-30s depending on server load, DB size, and PHP
-        // process warmth — so this budget is genuinely marginal for a cold call, and a timeout is
-        // an expected outcome rather than an exotic one. Subsequent calls via ControlMaster
-        // complete in 1-3s. Truly unreachable sites fail immediately with a DNS error regardless.
-        const timeoutMs = 35000;
+        // See REMOTE_SSH_TIMEOUT_MS for why this is 60s and not the 35s it used to be.
+        const timeoutMs = REMOTE_SSH_TIMEOUT_MS;
 
         const proc = spawn('ssh', sshArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
