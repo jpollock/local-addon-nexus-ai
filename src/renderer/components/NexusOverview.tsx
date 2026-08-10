@@ -29,7 +29,9 @@ import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
 import { OverviewTab } from './tabs/OverviewTab';
+import { InboxTab } from './tabs/InboxTab';
 import type { DashboardStats, McpInfo, StartupStatus, AiProxyInfo, FleetVersionEntry, FleetSummaryData } from './tabs/shared/types';
+import type { InboxItem } from '../../main/inbox/types';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -100,6 +102,7 @@ interface SetupAIResult {
  */
 const TABS = [
   { key: 'overview',   label: 'Dashboard' },
+  { key: 'inbox',      label: 'Inbox' },
   { key: 'operations', label: 'Operations' },
   { key: 'activity',   label: 'Activity' },
   { key: 'agents',     label: 'Agents' },
@@ -171,6 +174,13 @@ interface NexusOverviewState {
   factoryResetDone: boolean;
   factoryResetChecked: boolean;
   credentialRequest: NexusState['credentialConnectRequest'];
+  // Inbox
+  inboxLoaded: boolean;
+  inboxFailed: boolean;
+  inboxItems: InboxItem[];
+  inboxTotal: number;
+  inboxCounts: { decide: number; problem: number; know: number };
+  inboxPausedSources: string[];
 }
 
 // -- Shared styles --
@@ -281,6 +291,12 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     factoryResetDone: false,
     factoryResetChecked: false,
     credentialRequest: null,
+    inboxLoaded: false,
+    inboxFailed: false,
+    inboxItems: [],
+    inboxTotal: 0,
+    inboxCounts: { decide: 0, problem: 0, know: 0 },
+    inboxPausedSources: [],
   };
 
   componentDidMount(): void {
@@ -440,7 +456,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus, inboxResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -451,6 +467,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
         ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.GET_STARTUP_STATUS),
+        ipc.invoke(IPC_CHANNELS.GET_INBOX).catch(() => ({ success: false })),
       ]);
       if (!this.mounted) return;
 
@@ -517,6 +534,12 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         fleetSummary: fleetSummaryResult ?? null,
         wpeAccounts: Array.isArray(wpeAccounts) ? wpeAccounts : [],
         wpeAccountFilter: settings?.wpeAccountFilter ?? null,
+        inboxLoaded: true,
+        inboxFailed: !inboxResult?.success,
+        inboxItems: inboxResult?.items ?? [],
+        inboxTotal: inboxResult?.total ?? 0,
+        inboxCounts: inboxResult?.counts ?? { decide: 0, problem: 0, know: 0 },
+        inboxPausedSources: inboxResult?.pausedSources ?? [],
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -1395,12 +1418,33 @@ renderTabBar(): React.ReactNode {
       aiProxy: this.state.aiProxy,
       mcpInfo: this.state.mcpInfo,
       startupStatus: this.state.startupStatus,
-      onNavigate: (tab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents') => this.setState({ activeTab: tab }),
+      onNavigate: (tab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents' | 'inbox') => this.setState({ activeTab: tab }),
       onRefresh: () => { void this.fetchAll(); },
     };
 
     switch (this.state.activeTab) {
       case 'overview': return React.createElement(OverviewTab, overviewProps);
+      case 'inbox': return React.createElement(InboxTab, {
+        loaded: this.state.inboxLoaded,
+        failed: this.state.inboxFailed,
+        items: this.state.inboxItems,
+        total: this.state.inboxTotal,
+        counts: this.state.inboxCounts,
+        pausedSources: this.state.inboxPausedSources,
+        onDecide: async (id: number, decision: string, status: 'dismissed' | 'done') => {
+          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INBOX_DECIDE, { id, decision, status });
+          void this.fetchAll();
+        },
+        onReopen: async (id: number) => {
+          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INBOX_REOPEN, { id });
+          void this.fetchAll();
+        },
+        onResumeAgent: async (agentId: string) => {
+          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RESUME, { agentId });
+          void this.fetchAll();
+        },
+        onRetry: () => { void this.fetchAll(); },
+      });
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
