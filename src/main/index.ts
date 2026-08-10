@@ -42,6 +42,7 @@ import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
 import { createSessionTables, pruneSessions } from './ipc/chat-sessions';
 import { GraphService } from './events/GraphService';
+import { sweepOrphanedLocalRows } from './fleet/collectFleetCounts';
 import { EventProcessor } from './events/EventProcessor';
 import { HttpEventInterface } from './events/HttpEventInterface';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
@@ -613,6 +614,21 @@ export default function main(context: any): void {
       setStartupPhase('GraphService');
       await graphService.initialize();
       localLogger.info('[NexusAI] GraphService initialized');
+
+      // Deleted local sites leave their graph row at is_active = 1 forever — nothing
+      // else reconciles them. Measured 2026-08-09: 22 of 56 active local rows were
+      // sandbox sites that no longer existed.
+      try {
+        const swept = sweepOrphanedLocalRows({
+          getSites: () => siteDataAccessor.getSites() as Record<string, unknown>,
+          getDb: () => graphService.getDb() as never,
+        });
+        if (swept > 0) {
+          localLogger.info(`[NexusAI] Deactivated ${swept} graph rows for deleted local sites`);
+        }
+      } catch (err) {
+        localLogger.warn('[NexusAI] Local row reconciliation failed:', (err as Error).message);
+      }
 
       // Wire SmartSearch stores + handler into the HTTP interface
       const graphDb = graphService.getDb();
