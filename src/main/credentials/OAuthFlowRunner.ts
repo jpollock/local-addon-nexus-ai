@@ -82,7 +82,12 @@ export class OAuthFlowRunner {
         // Exchange code for tokens
         this.exchangeCode({ provider, code, verifier, redirectUri })
           .then(tokens => settle({ outcome: 'success', ...tokens }))
-          .catch(() => settle({ outcome: 'cancelled' }));
+          .catch((e: Error) => {
+            // Previously collapsed into 'cancelled', which discarded the only evidence of what
+            // went wrong AND made a completed consent look like the user backing out.
+            console.error('[OAuthFlowRunner] token exchange failed:', e?.message ?? e);
+            settle({ outcome: 'error', message: e?.message ?? 'Token exchange failed' });
+          });
       });
 
       server.listen(0, '127.0.0.1', () => {
@@ -107,7 +112,7 @@ export class OAuthFlowRunner {
         shell.openExternal(authUrl).catch(() => settle({ outcome: 'cancelled' }));
       });
 
-      server.on('error', () => settle({ outcome: 'cancelled' }));
+      server.on('error', (e: Error) => settle({ outcome: 'error', message: `Callback server failed: ${e?.message ?? e}` }));
     });
   }
 
@@ -137,7 +142,21 @@ export class OAuthFlowRunner {
       body: body.toString(),
     });
 
-    if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
+    if (!res.ok) {
+      // Google's status code alone is useless here — every failure is a 400, and the body is what
+      // names it: `invalid_client` (wrong or missing client_secret), `invalid_grant` (code reused
+      // or expired), `redirect_uri_mismatch`. Those are three unrelated fixes, so the body has to
+      // survive into the message.
+      let detail = '';
+      try {
+        const body = await res.text();
+        const parsed = JSON.parse(body) as { error?: string; error_description?: string };
+        detail = parsed.error
+          ? ` — ${parsed.error}${parsed.error_description ? `: ${parsed.error_description}` : ''}`
+          : ` — ${body.slice(0, 200)}`;
+      } catch { /* body unreadable; the status is all we have */ }
+      throw new Error(`Token exchange failed: ${res.status}${detail}`);
+    }
     const data = await res.json() as {
       access_token: string;
       refresh_token?: string;

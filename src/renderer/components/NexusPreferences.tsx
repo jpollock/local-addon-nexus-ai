@@ -10,6 +10,8 @@ import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import type { AIProvider, NexusSettings } from '../../common/types';
 import { injectThemeVars } from '../utils/theme';
+import { ConnectionsPanel } from './credentials/ConnectionsPanel';
+import { LoggingSection, type LoggingStats } from './LoggingSection';
 
 interface NexusPreferencesProps {
   electron: any;
@@ -81,6 +83,8 @@ interface NexusPreferencesState {
   awsError: string;
   awsSaved: boolean;
   awsShowReenter: boolean;
+  // Logging stats
+  loggingStats: LoggingStats | null;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -223,6 +227,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     awsError: '',
     awsSaved: false,
     awsShowReenter: false,
+    loggingStats: null,
   };
 
   componentDidMount(): void {
@@ -238,7 +243,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [settings, sites, providers, keyStatus, wpeCredsStatus, wpeAccounts, wpeInstalls, awsStatus] = await Promise.all([
+      const [settings, sites, providers, keyStatus, wpeCredsStatus, wpeAccounts, wpeInstalls, awsStatus, loggingStats] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_PROVIDERS),
@@ -247,6 +252,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE).catch(() => []),
         ipc.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_STATUS, { provider: 'aws' }).catch(() => null),
+        ipc.invoke(IPC_CHANNELS.LOGGING_STATS).catch(() => null),
       ]);
       if (!this.mounted) return;
       const awsStatusTyped = awsStatus as { connections: Array<{ id: string; label: string; status: string }> } | null;
@@ -266,6 +272,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         awsRevoked: !activeAws && !!revokedAws,
         awsLabel: activeAws?.label ?? revokedAws?.label ?? '',
         awsConnectionId: activeAws?.id ?? revokedAws?.id ?? '',
+        loggingStats,
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
@@ -1427,6 +1434,18 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         : null,
     );
 
+    // Section 4b: Connected accounts — OAuth connections, next to the AWS key above.
+    //
+    // These used to live on a *separate* top-level Preferences page registered alongside
+    // "Nexus AI", so the two credential types had two unrelated homes and neither page answered
+    // "where do my connections live?". Folded in here; the standalone entry is gone.
+    const section4b = React.createElement('div', { style: sectionStyle },
+      this.renderSectionHeader('connected-accounts', 'Connected Accounts'),
+      expandedSections.has('connected-accounts')
+        ? React.createElement(ConnectionsPanel, { electron: this.props.electron })
+        : null,
+    );
+
     // Section 5: Chat History
     const panelEnabled = settings.dockedPanelEnabled !== false;
     const section5 = React.createElement('div', { style: sectionStyle },
@@ -1474,6 +1493,22 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         : null,
     );
 
+    // Section 6: Logging
+    const section6 = React.createElement('div', { style: sectionStyle },
+      this.renderSectionHeader('logging', 'Logging'),
+      expandedSections.has('logging')
+        ? React.createElement(LoggingSection, {
+            stats: this.state.loggingStats,
+            electron: this.props.electron,
+            settings: this.state.settings,
+            notifyChange: (next: NexusSettings) => {
+              this.setState({ settings: next });
+              this.notifyChange(next);
+            },
+          })
+        : null,
+    );
+
     // Note: Auto-Indexing, Sync Schedule, and WPE Access & Permissions have
     // moved to the Nexus AI Settings tab for a cleaner separation of concerns.
 
@@ -1485,7 +1520,9 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       section2,
       section3,
       section4,
+      section4b,
       section5,
+      section6,
     );
   }
 }

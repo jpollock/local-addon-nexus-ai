@@ -5341,7 +5341,7 @@ export function createResolvers(context: ResolverContext) {
         }
         const agent = registry.get(name);
         if (!agent) throw new Error(`Agent "${name}" not found`);
-        const result = await runner.run(agent);
+        const result = await runner.run(agent, undefined, { trigger: 'manual' });
         return {
           agentName:  result.agentName,
           status:     result.status,
@@ -5502,6 +5502,19 @@ export function createResolvers(context: ResolverContext) {
             supportsFullRun: (def as any).supportsFullRun ?? false,
             allowsProduction: (def as any).allowsProduction ?? true,
             effect: (def as any).effect ?? 'writes',
+            producesApprovals: (def as any).producesApprovals ?? false,
+            producesReports: (def as any).producesReports ?? false,
+            siteScoped: (def as any).siteScoped ?? true,
+            // Passed through verbatim from the agent's own definition. The renderer used to keep
+            // its own hardcoded agent list and scope constant, which meant a new Google agent got
+            // no connect button and the wrong scopes if it ever did.
+            credentials: ((def as any).credentials ?? []).map((c: any) => ({
+              provider: c?.provider ?? '',
+              type: c?.type ?? 'oauth',
+              scopes: Array.isArray(c?.scopes) ? c.scopes : [],
+              optional: c?.optional ?? false,
+              reason: c?.reason ?? null,
+            })).filter((c: any) => c.provider),
           };
         });
       },

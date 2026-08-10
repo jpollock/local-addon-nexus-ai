@@ -14,6 +14,43 @@ const LOG_COLORS: Record<LogLine['level'], string> = {
   info: '#9aa1ac', ok: '#3ecf8e', warn: '#f5b544', error: '#f4685f',
 };
 
+interface RunIdDisplayProps { runIds: string[]; }
+interface RunIdDisplayState { expanded: boolean; }
+
+class RunIdDisplay extends React.Component<RunIdDisplayProps, RunIdDisplayState> {
+  state: RunIdDisplayState = { expanded: false };
+
+  render() {
+    const { runIds } = this.props;
+    const { expanded } = this.state;
+    if (runIds.length === 0) return null;
+
+    if (runIds.length === 1) {
+      return React.createElement('code', {
+        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, color: 'var(--ag-text-primary)', background: 'var(--ag-bg-elevated)', padding: '6px 10px', borderRadius: 6, userSelect: 'all' as const },
+      }, runIds[0]);
+    }
+
+    return React.createElement('div', null,
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+        React.createElement('code', {
+          style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, color: 'var(--ag-text-primary)', background: 'var(--ag-bg-elevated)', padding: '6px 10px', borderRadius: 6, userSelect: 'all' as const, flex: 1 },
+        }, runIds[0]),
+        React.createElement('button', {
+          onClick: () => this.setState({ expanded: !expanded }),
+          style: { background: 'none', border: 'none', color: 'var(--ag-text-muted)', fontSize: 12, cursor: 'pointer', padding: '4px 8px' },
+        }, expanded ? `− ${runIds.length - 1} more` : `+ ${runIds.length - 1} more`),
+      ),
+      expanded && runIds.slice(1).map((id, idx) =>
+        React.createElement('code', {
+          key: idx,
+          style: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, color: 'var(--ag-text-primary)', background: 'var(--ag-bg-elevated)', padding: '6px 10px', borderRadius: 6, userSelect: 'all' as const, display: 'block', marginTop: 6 },
+        }, id),
+      ),
+    );
+  }
+}
+
 interface DrawerProps { electron?: any; }
 
 export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
@@ -61,8 +98,9 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
 
     const isDone = run.phase === 'done';
     const isCancelled = isDone && !!run.cancelled;
-    const isClean = isDone && !isCancelled && run.failedCount === 0 && run.findingsSites.length === 0;
-    const accentColor = isCancelled ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
+    const isEmptySelection = isDone && !!run.emptySelection;
+    const isClean = isDone && !isCancelled && !isEmptySelection && run.failedCount === 0 && run.findingsSites.length === 0;
+    const accentColor = isCancelled || isEmptySelection ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
     const doneSites = Object.values(run.siteStatus).filter(s => s !== 'running').length;
     const totalSites = run.siteNames.length;
     const progress = totalSites > 0 ? (doneSites / totalSites) * 100 : 0;
@@ -92,7 +130,7 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
             }, isDone ? (isClean ? '✓' : '!') : '⟳'),
             React.createElement('div', { style: { flex: 1 } },
               React.createElement('div', { style: { fontSize: 15, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 2 } },
-                isCancelled ? `${run.agentName} cancelled` : `${run.agentName} ${isDone ? 'done' : 'running'}`,
+                isCancelled ? `${run.agentName} cancelled` : isEmptySelection ? `${run.agentName} — no sites selected` : `${run.agentName} ${isDone ? 'done' : 'running'}`,
               ),
               React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)' } },
                 isDone
@@ -189,6 +227,18 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
             },
             style: { padding: '9px 20px', background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border)', borderRadius: 8, fontSize: 13, color: 'var(--ag-red)', cursor: 'pointer' },
           }, 'Cancel run'),
+        ),
+
+        // Run IDs (when done and available)
+        isDone && run.runIds && run.runIds.length > 0 && React.createElement('div', {
+          style: { padding: '14px 22px', borderTop: '1px solid var(--ag-border-subtle)', flexShrink: 0 },
+        },
+          React.createElement('div', { style: { fontSize: 11.5, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--ag-text-muted)', marginBottom: 8 } },
+            'Run IDs (for grep)',
+          ),
+          React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: 6 } },
+            React.createElement(RunIdDisplay, { runIds: run.runIds }),
+          ),
         ),
 
         // Completion actions

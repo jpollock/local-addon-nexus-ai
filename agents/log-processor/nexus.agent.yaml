@@ -1,9 +1,9 @@
 name: log-processor
-version: 1.0.0
+version: 2.0.0
 description: >-
-  Access log ingestion and read contract. Streams WPE Apache-style logs from S3,
-  folds into daily aggregates (constant memory), and serves seo-insights and
-  security-sentinel via contributed tools.
+  Access log ingestion and read contract. Streams WPE Apache-style logs from one
+  account-level S3 bucket, folds into daily aggregates (constant memory), and
+  serves seo-insights and security-sentinel via contributed tools.
 permissions:
   tier: 1
 credentials:
@@ -14,19 +14,22 @@ credentials:
 triggers:
   - type: cron
     expression: '0 3 * * *'
+# This manifest — NOT agent.ts's `contributes.tools` — is what AgentRegistry.loadManifest()
+# registers into the ContributedToolRegistry, and therefore what AgentDispatcher.dispatch() will
+# accept. agent.ts supplies the handlers; a tool missing here is "not found" no matter how
+# complete its implementation is. Keep the two in step, including `executionMode`.
 contributes:
   tools:
-    - name: connect_log_source
+    - name: set_log_bucket
       description: >-
-        Bind an S3 log location to a WPE install. Validates by listing the prefix.
-        Does not enable the site for cron — call set_log_processing to do that.
+        Point the agent at the one S3 bucket + prefix WP Engine writes this account's access logs
+        into. There is no per-site bucket: every install shares the prefix and is separated by the
+        install id in each filename. Validates by listing and grouping; nothing is saved unless
+        apache-style logs are found.
       executionMode: function
       inputSchema:
         type: object
         properties:
-          siteId:
-            type: string
-            description: WPE install name
           bucket:
             type: string
           region:
@@ -35,30 +38,50 @@ contributes:
           prefix:
             type: string
             default: ''
-        required: [siteId, bucket]
-    - name: set_log_processing
+            description: Typically wpe_logs/nginx/ — one folder for the whole account.
+          dryRun:
+            type: boolean
+            default: false
+            description: Scan and report without saving.
+          format:
+            type: string
+            enum: [text, json]
+            default: text
+        required: [bucket]
+    - name: rescan_log_bucket
       description: >-
-        Enable or disable scheduled log processing for a WPE install.
-        Enabled sites are picked up by the nightly cron.
+        Re-list the connected bucket and refresh which installs have apache-style logs in it,
+        with counts and date ranges. Read-only against S3 and against the aggregates.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          format:
+            type: string
+            enum: [text, json]
+            default: text
+    # executionMode was `run` for this and fetch_log_window. That is not a longer-timeout
+    # variant of the same call: AgentDispatcher.dispatchRun() ignores the tool name entirely and
+    # invokes the agent's run(), so calling either one performed a nightly sync instead of the
+    # requested operation, with the arguments handed to run() as an event payload it does not
+    # read. Both timeouts are the same 5 minutes, so `function` costs nothing and actually
+    # reaches the handler.
+    - name: sync_access_logs
+      description: >-
+        Ingest access-log days from S3. Streams each file (constant memory), classifies traffic,
+        folds into per-day aggregates. Ledgered and budgeted. Pass several sites to share one
+        listing pass per date.
       executionMode: function
       inputSchema:
         type: object
         properties:
           siteId:
             type: string
-          enabled:
-            type: boolean
-        required: [siteId, enabled]
-    - name: sync_access_logs
-      description: >-
-        Ingest access-log days from S3. Streams each file (constant memory),
-        classifies traffic, folds into per-day aggregates. Ledgered and budgeted.
-      executionMode: run
-      inputSchema:
-        type: object
-        properties:
-          siteId:
-            type: string
+            description: WPE install name. Use siteIds for more than one.
+          siteIds:
+            type: array
+            items:
+              type: string
           from:
             type: string
           to:
@@ -66,7 +89,6 @@ contributes:
           budgetMB:
             type: number
             default: 512
-        required: [siteId]
     - name: get_log_aggregates
       description: >-
         Return daily aggregate objects for a site and date range. Offline read —
@@ -86,7 +108,7 @@ contributes:
       description: >-
         Forensic raw-log query. Two-phase: without confirm returns cost estimate;
         confirm=true streams and filters. Nothing persists.
-      executionMode: run
+      executionMode: function
       permissionTier: 2
       inputSchema:
         type: object
@@ -111,16 +133,20 @@ contributes:
         required: [siteId, from, to]
     - name: log_storage_status
       description: >-
-        Report local disk footprint: per-site aggregate days, ledger coverage,
-        enabled status, approximate KB.
+        Report the connected bucket, the installs found in it, and the local disk footprint:
+        per-site aggregate days, ledger coverage, last sync, approximate KB.
       executionMode: function
       inputSchema:
         type: object
-        properties: {}
+        properties:
+          format:
+            type: string
+            enum: [text, json]
+            default: text
     - name: evict_log_data
       description: >-
-        Delete local log-derived data older than N days. Never touches sources
-        or the S3 bucket.
+        Delete local log-derived data older than N days. Never touches the bucket
+        binding or the S3 bucket itself.
       executionMode: function
       inputSchema:
         type: object

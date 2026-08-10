@@ -45,8 +45,36 @@ export class ProviderRegistry {
     };
   }
 
+  /**
+   * Why a provider cannot be used, or null when it can.
+   *
+   * Kept separate from `get()` on purpose: the UI still needs the config to explain itself, and a
+   * connect flow needs to refuse *before* opening a browser. Sending someone through Google's
+   * consent screen when the exchange cannot possibly succeed spends their attention on a dead end
+   * and ends with a 400 they had no way to anticipate — which is exactly what happened here.
+   */
+  configurationError(id: string): string | null {
+    const cfg = this.get(id);
+    if (!cfg) return `${id} is not a configured provider.`;
+    if (!cfg.clientId || cfg.clientId === 'REPLACE_WITH_GOOGLE_CLIENT_ID') {
+      return 'No OAuth client id — set NEXUS_GOOGLE_CLIENT_ID.';
+    }
+    // Google requires client_secret in the code exchange for BOTH "Desktop app" and "Web
+    // application" client types. PKCE does not replace it. Without one, every exchange returns
+    // 400 invalid_request: client_secret is missing.
+    if (!cfg.clientSecret) {
+      return 'No OAuth client secret — set NEXUS_GOOGLE_CLIENT_SECRET. Google rejects the token exchange without it, even with PKCE.';
+    }
+    return null;
+  }
+
+  /**
+   * Usable, not merely present. This used to be `get(id) !== null`, which stopped meaning anything
+   * once a real client id was committed as the fallback: the gate read "enabled" on every machine,
+   * including ones that could never complete a sign-in.
+   */
   isEnabled(id: string): boolean {
-    return this.get(id) !== null;
+    return this.configurationError(id) === null;
   }
 
   list(): ProviderConfig[] {

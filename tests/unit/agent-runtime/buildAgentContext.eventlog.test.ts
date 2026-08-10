@@ -1,0 +1,282 @@
+// getAgentSettings reads a module-private cache normally populated only by registerIpcHandlers()
+// (real Electron IPC wiring, out of scope for this file). getProvider reads a registry populated
+// only by initializeProviders(). Both are mocked here — spread over the real (jest.requireActual)
+// implementations so every export other than these two behaves exactly as before — so the
+// "transcript gate" tests below can (a) control the `transcripts` flag the gate reads and (b)
+// drive a real, deterministic model call through ctx.ai.run() without hitting the network.
+// ts-jest does not hoist jest.mock() the way babel-jest does, so both calls must appear before
+// any import that pulls these modules in transitively.
+jest.mock('../../../src/main/ipc-handlers', () => {
+  const actual = jest.requireActual('../../../src/main/ipc-handlers');
+  return { ...actual, getAgentSettings: jest.fn(actual.getAgentSettings) };
+});
+jest.mock('../../../src/main/chat/providers', () => {
+  const actual = jest.requireActual('../../../src/main/chat/providers');
+  return { ...actual, getProvider: jest.fn(actual.getProvider) };
+});
+
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { buildAgentContext } from '../../../src/main/agent-runtime/buildAgentContext';
+import { EventLog } from '../../../src/main/logging/eventLog';
+import { initializeProviders, getProvider } from '../../../src/main/chat/providers';
+import { getAgentSettings } from '../../../src/main/ipc-handlers';
+
+beforeAll(() => { initializeProviders(); });
+
+const makeAgent = () => ({
+  name: 'test-agent', version: '1.0.0',
+  triggers: [{ type: 'cron' as const, expression: '0 * * * *' }],
+  run: async () => {},
+});
+
+const makeStubs = () => ({
+  toolRegistry: { list: jest.fn().mockReturnValue([]), call: jest.fn() } as any,
+  services: {} as any,
+  stateStore: { buildHandle: jest.fn().mockReturnValue({ get: jest.fn(), set: jest.fn(), delete: jest.fn(), scratch: {}, isCoolingDown: jest.fn().mockReturnValue(false), setCooldown: jest.fn() }) } as any,
+  resolvedProvider: { provider: 'anthropic', apiKey: '', model: 'claude-3-haiku', useLocalGateway: false } as any,
+});
+
+let root: string; let logDir: string;
+beforeEach(() => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-ctxlog-'));
+  logDir = path.join(root, 'legacy');
+});
+afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+const AT = () => new Date('2026-08-09T10:00:00Z');
+// The file is named for the LOCAL day (see eventLog.ts `localDay`), so derive it rather than
+// hardcoding this instant's UTC rendering — the two differ in most timezones.
+const agentFile = () => path.join(root, 'agents', `test-agent-${AT().toLocaleDateString('en-CA')}.log`);
+// The combined stream every source (agent AND system) writes to — see EventLog.pathsFor's
+// `combined` field. Used by the transcript-gate tests below to read the actual formatted
+// `llm.call` line, the same way a person running `tail nexus-<day>.log` would see it.
+const combinedFile = () => path.join(root, `nexus-${AT().toLocaleDateString('en-CA')}.log`);
+
+function build(runId = 'r_test1') {
+  const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
+  const { ctx } = buildAgentContext({
+    agent: makeAgent() as any, logDir, eventLog, runId, ...makeStubs(),
+  } as any);
+  return { ctx, file: agentFile() };
+}
+
+describe('ctx.log → EventLog', () => {
+  it('stamps every line with the agent and run id without the agent supplying them', () => {
+    const { ctx, file } = build();
+    ctx.log.info('scanning');
+    expect(fs.readFileSync(file, 'utf-8')).toContain('test-agent run=r_test1  scanning');
+  });
+
+  it('emits phase and finding as vocabulary events, not prose', () => {
+    const { ctx, file } = build();
+    ctx.log.phase('scan', 'acfprod');
+    ctx.log.finding({ id: 'FS-02', severity: 'high', title: 'unexpected file', site: 'acfprod' } as any);
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toContain('phase name=scan detail=acfprod');
+    expect(out).toContain('finding sev=high id=FS-02 site=acfprod  unexpected file');
+  });
+
+  it('records a mutation with before and after', () => {
+    // The whole point of the "it changed something I didn't expect" case: the log answers it
+    // directly rather than leaving it to be inferred from an intent line.
+    const { ctx, file } = build();
+    ctx.log.mutation({ op: 'wp_plugin_update', target: 'acfprod', before: 'acf 6.8.5', after: 'acf 6.8.6', ok: true });
+    expect(fs.readFileSync(file, 'utf-8'))
+      .toContain('mutation op=wp_plugin_update target=acfprod before="acf 6.8.5" after="acf 6.8.6" ok=true');
+  });
+
+  it('honours the level on the FILE, not just the console', () => {
+    // ctx.log.debug() previously appended unconditionally, which is why the level knob meant
+    // nothing in practice.
+    const eventLog = new EventLog({ root, minLevel: 'INFO', now: AT });
+    const { ctx } = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, runId: 'r_x', ...makeStubs(),
+    } as any);
+    ctx.log.debug('noisy');
+    ctx.log.info('kept');
+    const out = fs.readFileSync(agentFile(), 'utf-8');
+    expect(out).not.toContain('noisy');
+    expect(out).toContain('kept');
+  });
+
+  it('still accumulates findings for AgentResult', () => {
+    // Routing logs to a new destination must not break the accumulators that populate
+    // AgentResult.findings — the Approvals tab and the run record both read them.
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
+    const built = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, runId: 'r_acc', ...makeStubs(),
+    } as any);
+    built.ctx.log.finding({ id: 'A', severity: 'low', title: 't' } as any);
+    expect(built.accFindings).toHaveLength(1);
+    expect(built.accFindings[0].id).toBe('A');
+  });
+
+  it('emits warn() with WARN level to the event log', () => {
+    const { ctx, file } = build();
+    ctx.log.warn('warning message');
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toMatch(/WARN.*test-agent.*warning message/);
+  });
+
+  it('emits error() with ERROR level to the event log', () => {
+    const { ctx, file } = build();
+    ctx.log.error('error message');
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toMatch(/ERROR.*test-agent.*error message/);
+  });
+
+  it('emits action() with action event name and result/duration fields', () => {
+    const { ctx, file } = build();
+    ctx.log.action({ label: 'cleanup', result: 'ok', durationMs: 1500 });
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toContain('action action=cleanup result=ok dur=1500');
+    // Verify it is NOT tagged as 'phase' — this test catches silent reversion to phase
+    expect(out).not.toMatch(/phase.*action=cleanup/);
+  });
+
+  it('emits siteStatus() with site event name and status fields', () => {
+    const { ctx, file } = build();
+    ctx.log.siteStatus('mysite', 'clean');
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toContain('site site=mysite status=clean');
+    // Verify it is NOT tagged as 'phase' — this test catches silent reversion to phase
+    expect(out).not.toMatch(/phase.*site=mysite/);
+  });
+
+  it('records a mutation with ok: false as WARN level', () => {
+    const { ctx, file } = build();
+    ctx.log.mutation({ op: 'wp_plugin_update', target: 'failedsite', before: 'old 1.0', after: 'new 2.0', ok: false });
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toMatch(/WARN.*mutation/);
+    expect(out).toContain('ok=false');
+  });
+
+  it('writes DEBUG level to file when minLevel is DEBUG', () => {
+    // Positive assertion: DEBUG appears when the level is set to DEBUG
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
+    const { ctx } = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, runId: 'r_debug', ...makeStubs(),
+    } as any);
+    ctx.log.debug('debug message');
+    const out = fs.readFileSync(agentFile(), 'utf-8');
+    expect(out).toContain('debug message');
+  });
+
+  it('omits site key from finding when site is not provided', () => {
+    // Confirms formatLine handles undefined fields correctly: no bare site= in output
+    const { ctx, file } = build();
+    ctx.log.finding({ id: 'NO-SITE', severity: 'low', title: 'issue without site' } as any);
+    const out = fs.readFileSync(file, 'utf-8');
+    expect(out).toContain('finding sev=low id=NO-SITE');
+    expect(out).not.toContain('site=');
+  });
+});
+
+/**
+ * The gate this whole task exists for: does `buildAgentContext` actually wire a `TranscriptWriter`
+ * into `AgentAIClient` only when the agent opted in, and does that show up as observable behaviour
+ * — a real file on disk, and a `transcript=` field on the real formatted `llm.call` line — rather
+ * than something only provable by inspecting a private field. `getAgentSettings` and `getProvider`
+ * are mocked (see the top of this file) so each test can drive an actual, deterministic
+ * `ctx.ai.run()` call without touching the network or the real on-disk agent-settings cache.
+ */
+describe('transcript gate (buildAgentContext → AgentAIClient wiring)', () => {
+  // A minimal provider whose streamChat always succeeds in one turn — enough to trigger a real
+  // llm.call and, when a writer is wired up, real transcript appends.
+  const fakeProvider = {
+    id: 'anthropic', displayName: 'fake', requiresApiKey: false,
+    streamChat: async function* () {
+      yield { type: 'token', text: 'hi there' };
+      yield { type: 'done', stopReason: 'end_turn', usage: { inputTokens: 3, outputTokens: 2 } };
+    },
+  } as any;
+
+  beforeEach(() => {
+    (getProvider as jest.Mock).mockReturnValue(fakeProvider);
+  });
+
+  afterEach(() => {
+    // Restore both mocks to their real (jest.requireActual) implementations so nothing here
+    // leaks into a test run after this file, or into a re-run within the same file.
+    (getProvider as jest.Mock).mockReset().mockImplementation(jest.requireActual('../../../src/main/chat/providers').getProvider);
+    (getAgentSettings as jest.Mock).mockReset().mockImplementation(jest.requireActual('../../../src/main/ipc-handlers').getAgentSettings);
+  });
+
+  it('transcripts: true → a transcript file appears for the run, and the llm.call line carries a transcript= path', async () => {
+    (getAgentSettings as jest.Mock).mockReturnValueOnce({ transcripts: true });
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
+    const { ctx } = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, runId: 'r_transcript_on', ...makeStubs(),
+    } as any);
+
+    await ctx.ai.run('hello');
+
+    const transcriptFile = path.join(root, 'transcripts', 'r_transcript_on.jsonl');
+    expect(fs.existsSync(transcriptFile)).toBe(true);
+    // One turn, prompt + response
+    expect(fs.readFileSync(transcriptFile, 'utf-8').trim().split('\n')).toHaveLength(2);
+
+    const combined = fs.readFileSync(combinedFile(), 'utf-8');
+    expect(combined).toContain('llm.call');
+    // Not a literal full-path match: macOS's os.tmpdir() root contains a 30-char opaque-looking
+    // segment (/var/folders/zr/<random>/T/…) that legitimately trips formatLine's "20+ char
+    // alphanumeric run" credential-shaped masking — the same accepted-false-positive rule
+    // documented for `operation-audit.log` — so that PREFIX renders as [REDACTED] in a temp-dir
+    // test root even though nothing here is a secret. The suffix identifying which file this run
+    // wrote is what a reader actually needs, and it survives untouched.
+    expect(combined).toContain('transcript=');
+    expect(combined).toContain(`${path.sep}transcripts${path.sep}r_transcript_on.jsonl`);
+  });
+
+  it('transcripts absent → no transcripts/ directory is created at all, and the line has no transcript= substring', async () => {
+    // Deliberately does NOT touch the getAgentSettings mock — its default implementation is the
+    // real one, which returns {} against the (empty, in this test file) settings cache. This is
+    // the natural "nobody configured anything" state, not a fake stand-in for it.
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
+    const { ctx } = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, runId: 'r_transcript_absent', ...makeStubs(),
+    } as any);
+
+    await ctx.ai.run('hello');
+
+    expect(fs.existsSync(path.join(root, 'transcripts'))).toBe(false);
+    const combined = fs.readFileSync(combinedFile(), 'utf-8');
+    expect(combined).toContain('llm.call');
+    expect(combined).not.toContain('transcript=');
+  });
+
+  it('transcripts: false → same as absent', async () => {
+    (getAgentSettings as jest.Mock).mockReturnValueOnce({ transcripts: false });
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
+    const { ctx } = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, runId: 'r_transcript_false', ...makeStubs(),
+    } as any);
+
+    await ctx.ai.run('hello');
+
+    expect(fs.existsSync(path.join(root, 'transcripts'))).toBe(false);
+    const combined = fs.readFileSync(combinedFile(), 'utf-8');
+    expect(combined).toContain('llm.call');
+    expect(combined).not.toContain('transcript=');
+  });
+
+  it("transcripts: true but no runId → no writer (the gate's second clause)", async () => {
+    (getAgentSettings as jest.Mock).mockReturnValueOnce({ transcripts: true });
+    const eventLog = new EventLog({ root, minLevel: 'DEBUG', now: AT });
+    // No runId in deps at all — the gate's second clause.
+    const { ctx } = buildAgentContext({
+      agent: makeAgent() as any, logDir, eventLog, ...makeStubs(),
+    } as any);
+
+    expect((ctx.ai as any).transcript).toBeUndefined();
+
+    await ctx.ai.run('hello');
+
+    expect(fs.existsSync(path.join(root, 'transcripts'))).toBe(false);
+    const combined = fs.readFileSync(combinedFile(), 'utf-8');
+    expect(combined).toContain('llm.call');
+    expect(combined).not.toContain('transcript=');
+  });
+});

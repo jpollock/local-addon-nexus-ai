@@ -23,6 +23,21 @@ export interface AgentStatus {
   supportsFullRun: boolean;
   allowsProduction: boolean;
   effect: 'readonly' | 'writes';
+  producesApprovals: boolean;
+  producesReports: boolean;
+  /** False = this agent is not per-site: no picker, and Run Now performs exactly one run. */
+  siteScoped: boolean;
+  /** What the agent itself declares it needs. Empty when the query predates this field. */
+  credentials?: AgentCredentialDecl[];
+}
+
+/** Straight from the agent definition — never a renderer-side constant. */
+export interface AgentCredentialDecl {
+  provider: string;
+  type?: string;
+  scopes?: string[];
+  optional?: boolean;
+  reason?: string | null;
 }
 
 export interface AgentRunRecord {
@@ -91,6 +106,12 @@ export interface AgentSettings {
   enabled: boolean;
   scheduleEnabled: boolean;
   cadence: string;  // '*/15 * * * *' | '0 * * * *' | '0 */6 * * *' | '0 0 * * *' | '0 0 * * 0'
+  /**
+   * Unix ms of the moment the user actually picked `cadence`. Absent means `cadence` is the value
+   * getDefaultSettings seeded, which nobody chose — and the scheduler then runs the agent's own
+   * manifest schedule instead. Only an explicit choice outranks the agent author.
+   */
+  cadenceSetAt?: number;
   eventsEnabled: boolean;
   subscribedEvents: Record<string, boolean>;
   /** Persistent scope for scheduled runs and event triggers, shared by both, and the same field
@@ -100,6 +121,17 @@ export interface AgentSettings {
   savedScopes?: AgentSavedScope[];
   /** Unix ms timestamp of the last time `scope` was edited. Required to compute drift. */
   scopeUpdatedAt?: number;
+  /**
+   * Write the full prompt and response of every model call to a transcript sidecar. Off by
+   * default: prompts carry site content, so this is opt-in for the agent you are debugging.
+   */
+  transcripts?: boolean;
+  /**
+   * Per-agent log level override. Absent means use the global level. Overrides work in both
+   * directions: raising one agent to DEBUG while the rest stay at INFO, or lowering a noisy agent
+   * to ERROR while the rest stay at DEBUG.
+   */
+  logLevel?: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 }
 
 export interface AgentState {
@@ -216,6 +248,30 @@ class AgentStore {
       });
     }
     return this.state.agentSettings[agentId];
+  }
+
+  /**
+   * Replace the agent list, always sorted by name.
+   *
+   * The `agentStatus` query returns agents in whatever order the registry scanned their
+   * directories, which is neither stable nor meaningful — the hub grid reshuffled between loads.
+   * Sorting here rather than in the grid means every consumer of `statuses` gets the same order
+   * for free, and a new surface cannot forget to sort.
+   */
+  setStatuses(statuses: AgentStatus[]): void {
+    this.setState({
+      statuses: [...statuses].sort((a, b) => a.name.localeCompare(b.name)),
+    });
+  }
+
+  /** Merge a patch into one agent's settings. The Settings panel has always done this inline;
+   * it lives here so a second editing surface (log-processor's Sites tab) writes the same field
+   * the same way instead of reaching into `agentSettings` itself. */
+  updateSettings(agentId: string, patch: Partial<AgentSettings>): void {
+    const current = this.getOrInitSettings(agentId);
+    this.setState({
+      agentSettings: { ...this.state.agentSettings, [agentId]: { ...current, ...patch } },
+    });
   }
 }
 

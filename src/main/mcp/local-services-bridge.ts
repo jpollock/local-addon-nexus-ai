@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
+import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS, SSH_CONTROL_PERSIST } from './utils/remoteFailure';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -860,7 +861,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         // ControlMaster: reuse SSH connections to reduce overhead
         '-o', 'ControlMaster=auto',
         '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-        '-o', 'ControlPersist=30s',
+        '-o', `ControlPersist=${SSH_CONTROL_PERSIST}`,
         '-i', sshKeyPath,
         `${username}@${host}`,
         wpCommand,
@@ -869,24 +870,32 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       return new Promise<WpCliResult>((resolve) => {
         let stdout = '';
         let stderr = '';
+        const startedAt = Date.now();
+        // See REMOTE_SSH_TIMEOUT_MS for why this is 60s and not the 35s it used to be.
+        const timeoutMs = REMOTE_SSH_TIMEOUT_MS;
 
         const proc = spawn('ssh', sshArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          // 35s: WPE SSH cold-start variance is 13-30s depending on server load,
-          // DB size, and PHP process warmth. Subsequent calls via ControlMaster
-          // complete in 1-3s. Truly unreachable sites fail immediately with DNS
-          // error regardless of timeout.
-          timeout: 35000,
+          timeout: timeoutMs,
         });
 
         proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
         proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
 
-        proc.on('close', (code: number | null) => {
+        proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
           if (code === 0) {
             resolve({ stdout, success: true });
           } else {
-            resolve({ stdout: stderr || `SSH exited with code ${code}`, success: false });
+            // `stderr || ...` used to be the message, which meant any host writing a warning to
+            // stderr reported that warning as the cause of every failure — a 35s timeout against
+            // a real install surfaced as OpenSSH's post-quantum advisory. Lead with what actually
+            // happened; keep the output as context.
+            resolve({
+              stdout: describeRemoteFailure({
+                code, signal, stderr, elapsedMs: Date.now() - startedAt, timeoutMs,
+              }),
+              success: false,
+            });
           }
         });
 

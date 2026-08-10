@@ -225,3 +225,13 @@ describe('supportsFullRun', () => {
     expect(agent.supportsFullRun).toBe(true);
   });
 });
+
+describe('effect / producesApprovals', () => {
+  it('declares effect: readonly — investigates, never writes to the production site it scans', () => {
+    expect(agent.effect).toBe('readonly');
+  });
+
+  it('declares producesApprovals: true — findings create review-status activity', () => {
+    expect(agent.producesApprovals).toBe(true);
+  });
+});

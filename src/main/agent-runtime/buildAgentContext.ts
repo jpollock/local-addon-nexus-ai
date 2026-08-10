@@ -2,9 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
 import { rotateIfNeeded, pruneOldFiles } from '../logging/rotate';
+import { EventLog, LogEvent, LogLevelName } from '../logging/eventLog';
 import { getAgentAutonomy, getAgentSettings } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
+import { TranscriptWriter } from '../logging/transcript';
 import { AgentDbManager } from './AgentDbManager';
 import { getProvider } from '../chat/providers/index';
 import { AgentCredentialsContext } from '../credentials/AgentCredentialsContext';
@@ -29,6 +31,20 @@ export interface AgentContextDeps {
   fullRun?: boolean;
   /** Per-run log filename (e.g. "run-1753276539000.log"). Defaults to "agent.log". */
   logFileName?: string;
+  /** When present, ctx.log writes structured events here. */
+  eventLog?: EventLog;
+  /** Correlation id stamped on every line this run produces. */
+  runId?: string;
+}
+
+/**
+ * The directory EventLog writes its daily files under. Transcripts live in a `transcripts/`
+ * directory beneath the same root, so the writer needs it too — but EventLog keeps that root
+ * private, so this reads it back via the public, stable `pathsFor()` rather than reaching into
+ * an internal field. `pathsFor` never throws, so neither does this.
+ */
+function logRootOf(eventLog: EventLog): string {
+  return path.dirname(eventLog.pathsFor({ level: 'INFO', source: 'transcript' } as LogEvent).combined);
 }
 
 export function buildAgentContext(deps: AgentContextDeps): {
@@ -37,14 +53,31 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accFindings: Finding[];
   accActions: AgentAction[];
   accSites: Record<string, { status: string; findings: Finding[] }>;
+  toolProvider: NexusToolProvider;
 } {
-  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName } = deps;
+  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId } = deps;
   const agentName = agent.name;
+  const agentSettings = getAgentSettings(agentName);
+
+  // Shared by the tool provider and the AI client, so both a tool call and a model call this
+  // agent makes land in the run's log, correlated by run id, without either having to report its
+  // own actions — the reason `ctx.log.mutation()` shipped with no callers at all.
+  const aiEvents = { eventLog, runId, agentName };
+
+  // Off unless this agent asked for it: a transcript is the most sensitive artefact this system
+  // writes, and "on for everything" would put every site's content on disk permanently. Also
+  // requires a runId (to name the file) and an EventLog (the source of the log root) — neither
+  // AgentDispatcher call site supplies those today, so transcripts are reachable only from
+  // AgentRunner's scheduled/manual/event runs.
+  const transcript = agentSettings.transcripts && runId && eventLog
+    ? new TranscriptWriter({ root: logRootOf(eventLog), runId })
+    : undefined;
 
   const toolProvider = new NexusToolProvider(
     toolRegistry,
     services,
     agent.tools?.length ? agent.tools : undefined,
+    aiEvents,
   );
 
   // Build AI client per-run so it gets this agent's scoped tool set.
@@ -71,7 +104,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const directProvider = getProvider(resolvedProvider.provider);
   const directConfig = { apiKey: resolvedProvider.apiKey, model: agentModel };
   const aiClient = aiProvider
-    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig)
+    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig, aiEvents, transcript)
     : {
         run: async (_prompt: string) => {
           createLogger(`agent:${agentName}`).warn(`Agent "${agentName}": AI provider "${resolvedProvider.provider}" unavailable — skipping AI call`);
@@ -125,29 +158,60 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const accActions: AgentAction[] = [];
   const accSites: Record<string, { status: string; findings: Finding[] }> = {};
 
+  const emit = (level: LogLevelName, e: Partial<LogEvent>): void => {
+    // `...e` FIRST: attribution is the log's contract, not a default. With the spread last, a
+    // caller passing `source` or `runId` inside `e` would silently reattribute its line to
+    // another agent or another run. No current call site does — which is precisely when to
+    // make it structurally impossible rather than to rely on it staying that way.
+    //
+    // NO TEST: `AgentLogger` (the only caller-facing interface to this) gives no caller a way to
+    // reach `source` or `runId` — every method signature is `(msg: string)` or `(finding: Finding)`.
+    // A test written today would pass under either spread ordering, making it vacuous. The guard
+    // exists for a future caller that takes a full `Partial<LogEvent>`, and testing it requires
+    // exposing such a caller first.
+    eventLog?.write({
+      ...e, level, source: agentName, sourceKind: 'agent', runId,
+    } as LogEvent);
+  };
+
   const agentLog: AgentLogger = {
-    info:  (msg: string) => { appLog.info(msg);  appendLog('INFO',  msg); },
-    warn:  (msg: string) => { appLog.warn(msg);  appendLog('WARN',  msg); },
-    error: (msg: string) => { appLog.error(msg); appendLog('ERROR', msg); },
-    debug: (msg: string) => { appLog.debug(msg); appendLog('DEBUG', msg); },
+    info:  (msg: string) => { appLog.info(msg);  appendLog('INFO',  msg); emit('INFO',  { message: msg }); },
+    warn:  (msg: string) => { appLog.warn(msg);  appendLog('WARN',  msg); emit('WARN',  { message: msg }); },
+    error: (msg: string) => { appLog.error(msg); appendLog('ERROR', msg); emit('ERROR', { message: msg }); },
+    debug: (msg: string) => { appLog.debug(msg); appendLog('DEBUG', msg); emit('DEBUG', { message: msg }); },
     finding: (finding: Finding) => {
       accFindings.push(finding);
       const sev = finding.severity === 'critical' || finding.severity === 'high' ? 'WARN' : 'INFO';
       appendLog(sev, `[${finding.severity.toUpperCase()}] ${finding.id}: ${finding.title}${finding.site ? ` (${finding.site})` : ''}`);
+      emit(sev as LogLevelName, {
+        event: 'finding',
+        fields: { sev: finding.severity, id: finding.id, site: finding.site },
+        message: finding.title,
+      });
     },
     action: (action: AgentAction) => {
       accActions.push(action);
-      appendLog(action.result === 'failed' ? 'WARN' : 'INFO',
-        `[action] ${action.label}${action.result ? ` — ${action.result}` : ''}${action.durationMs ? ` (${action.durationMs}ms)` : ''}`);
+      const level: LogLevelName = action.result === 'failed' ? 'WARN' : 'INFO';
+      appendLog(level, `[action] ${action.label}${action.result ? ` — ${action.result}` : ''}${action.durationMs ? ` (${action.durationMs}ms)` : ''}`);
+      emit(level, { event: 'action', fields: { action: action.label, result: action.result, dur: action.durationMs }, message: action.label });
     },
     phase: (name: string, description?: string) => {
       appendLog('INFO', `[phase] ${name}${description ? ': ' + description : ''}`);
+      emit('INFO', { event: 'phase', fields: { name, detail: description } });
     },
     siteStatus: (site: string, status: string) => {
       if (!accSites[site]) accSites[site] = { status, findings: [] };
       else accSites[site].status = status;
       const icon = status === 'clean' ? '✓' : status === 'escalated' ? '↑' : status === 'error' ? '✗' : '→';
       appendLog('INFO', `[site] ${site} — ${icon} ${status}`);
+      emit('INFO', { event: 'site', fields: { site, status } });
+    },
+    mutation: (m) => {
+      appendLog(m.ok === false ? 'WARN' : 'INFO', `[mutation] ${m.op} ${m.target} ${m.before ?? ''}→${m.after ?? ''}`);
+      emit(m.ok === false ? 'WARN' : 'INFO', {
+        event: 'mutation',
+        fields: { op: m.op, target: m.target, before: m.before, after: m.after, ok: m.ok },
+      });
     },
   };
 
@@ -180,11 +244,11 @@ export function buildAgentContext(deps: AgentContextDeps): {
     ai: aiClient,
     log: agentLog,
     autonomy: getAgentAutonomy(agentName),
-    settings: getAgentSettings(agentName),
+    settings: agentSettings,
     credentials,
     db,
     fullRun: fullRun ?? false,
   };
 
-  return { ctx, agentLog, accFindings, accActions, accSites };
+  return { ctx, agentLog, accFindings, accActions, accSites, toolProvider };
 }

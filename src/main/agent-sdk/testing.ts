@@ -116,6 +116,7 @@ function makeMockLogger(): AgentLogger {
     action: (_a: AgentAction) => {},
     phase: (_name: string, _description?: string) => {},
     siteStatus: (_site: string, _status: 'running' | 'clean' | 'findings' | 'escalated' | 'error') => {},
+    mutation: (_m: { op: string; target: string; before?: string; after?: string; ok?: boolean }) => {},
   }
 }
 

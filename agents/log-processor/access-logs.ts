@@ -123,6 +123,26 @@ function signedS3Request(
 
 export type S3Object = { key: string; size: number };
 
+/**
+ * S3's XML error body always carries a `<Code>` — that's the one stable thing to branch on;
+ * `<Message>` varies by region/account and isn't safe to pattern-match. Used by validateLogSource
+ * (agent.ts) to pick which of the "What to do" fixes to offer — see design_handoff_log_sources'
+ * BEHAVIOR.md §2.
+ */
+export class S3Error extends Error {
+  constructor(public readonly code: string, message: string, public readonly httpStatus: number) {
+    super(message);
+    this.name = 'S3Error';
+  }
+}
+
+export function parseS3XmlError(body: string): { code: string; message: string } | null {
+  const code = /<Code>([^<]+)<\/Code>/.exec(body)?.[1];
+  if (!code) return null;
+  const message = /<Message>([^<]+)<\/Message>/.exec(body)?.[1] ?? code;
+  return { code, message };
+}
+
 async function s3ListObjects(
   creds: AwsCreds, region: string, bucket: string, prefix: string,
   continuationToken?: string,
@@ -133,7 +153,11 @@ async function s3ListObjects(
   const { url, headers } = signedS3Request(creds, region, bucket, '/', query);
   const res = await fetch(url, { headers });
   const body = await res.text();
-  if (!res.ok) throw new Error(`S3 ListObjectsV2 ${res.status}: ${body.slice(0, 300)}`);
+  if (!res.ok) {
+    const parsed = parseS3XmlError(body);
+    if (parsed) throw new S3Error(parsed.code, parsed.message, res.status);
+    throw new S3Error('Unknown', `S3 ListObjectsV2 ${res.status}: ${body.slice(0, 300)}`, res.status);
+  }
 
   // Pair <Key> and <Size> within each <Contents> block (sizes drive the planner).
   const objects: S3Object[] = [];
@@ -158,6 +182,206 @@ export async function s3ListAll(
     token = page.nextToken;
   } while (token && out.length < maxObjects);
   return out;
+}
+
+/**
+ * Best-effort "what region is this bucket actually in" — an unsigned HEAD to the us-east-1
+ * global endpoint returns the real region in the `x-amz-bucket-region` header even when the
+ * request itself 400s (wrong region) or 403s (no anonymous access), because S3 answers that
+ * header before checking auth. Returns undefined on any failure — per BEHAVIOR.md §2, the UI
+ * drops the "switch region" fix rather than showing a wrong or empty one.
+ */
+export async function probeBucketRegion(bucket: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`https://${bucket}.s3.amazonaws.com/`, { method: 'HEAD' });
+    return res.headers.get('x-amz-bucket-region') ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Best-effort "did the user mean a sibling prefix" — lists one level up from the given prefix
+ * (delimiter='/' groups children as CommonPrefixes without descending into them), then checks
+ * each sibling for apache-style objects, first match wins. Returns undefined if the parent
+ * listing fails or no sibling has logs — the UI drops the fix rather than guessing.
+ */
+export async function findSiblingPrefixWithLogs(
+  creds: AwsCreds, region: string, bucket: string, prefix: string,
+): Promise<string | undefined> {
+  const parent = prefix.replace(/\/?$/, '').replace(/[^/]*$/, '');
+  try {
+    const query: Record<string, string> = { 'list-type': '2', prefix: parent, delimiter: '/' };
+    const { url, headers } = signedS3Request(creds, region, bucket, '/', query);
+    const res = await fetch(url, { headers });
+    const body = await res.text();
+    if (!res.ok) return undefined;
+    const siblings = [...body.matchAll(/<Prefix>([^<]+)<\/Prefix>/g)]
+      .map(m => m[1])
+      .filter(p => p !== prefix && p.replace(/\/$/, '') !== prefix.replace(/\/$/, ''));
+    for (const sibling of siblings.slice(0, 10)) {
+      const objects = await s3ListAll(creds, region, bucket, sibling, 50).catch(() => []);
+      if (objects.some(o => /apachestyle/i.test(o.key))) return sibling;
+    }
+  } catch { /* best-effort — fall through to undefined */ }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// The filename join
+//
+// WP Engine writes every install of an account into ONE flat prefix and separates them by
+// filename. There is no per-site prefix to point at — the install id inside the object name IS
+// the join key, and it is the same id Local already holds from the WP Engine connection
+// (handoff_log_sources_v3/BEHAVIOR.md §3). Everything downstream — which files a site's sync may
+// read, which installs appear in the Sites tab — keys off this parse.
+//
+// Two shapes are live in real buckets:
+//   20260807-0016-jeremypollock2.apachestyle.log.gz   date, dash, hhmm, dash, install
+//   202607210625-localwpe.apachestyle.log.gz          date+hhmm concatenated, dash, install
+//
+// Only `apachestyle` is ever ingested. `access` objects sit in the same folder and roughly halve
+// the raw object count, which is why every count the UI shows has to say "apache-style" or the
+// number reads as data loss.
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize a user-typed S3 prefix to the folder form every caller can concatenate onto.
+ *
+ * This is not cosmetic. The scan lists `prefix` directly, but the ingest and forensic paths list
+ * `prefix + YYYYMMDD` — so a prefix typed without its trailing slash (`wpe_logs/nginx`) scans
+ * perfectly and then silently matches nothing at sync time, because the key it asks S3 for is
+ * `wpe_logs/nginx20260808`. A leading slash is wrong at both ends: S3 keys never begin with one.
+ *
+ * Applied both when saving and at every listing site, so a value already stored by an earlier
+ * build still works without a migration.
+ */
+export function normalizeLogPrefix(raw: string | undefined | null): string {
+  const trimmed = (raw ?? '').trim().replace(/^\/+/, '');
+  if (trimmed === '') return '';
+  return trimmed.endsWith('/') ? trimmed : trimmed + '/';
+}
+
+export type ParsedLogKey = {
+  installId: string;
+  kind: 'apachestyle' | 'access';
+  /** Rotation date from the filename, YYYY-MM-DD. NOT the date of the lines inside — see header. */
+  date: string;
+  time: string;
+};
+
+const KEY_RX = /^(\d{4})(\d{2})(\d{2})-?(\d{4})-([a-z0-9][a-z0-9-]*)\.(apachestyle|access)\.log(?:\.gz)?$/i;
+
+/**
+ * Parse a WPE log object key into its install id and kind. Returns null for anything that does
+ * not match — an unrecognised object is never guessed at or attributed to a site, because a wrong
+ * attribution silently folds one install's traffic into another's aggregates.
+ */
+export function parseInstallIdFromKey(key: string): ParsedLogKey | null {
+  const base = key.split('/').pop() ?? '';
+  const m = KEY_RX.exec(base);
+  if (!m) return null;
+  return {
+    installId: m[5].toLowerCase(),
+    kind: m[6].toLowerCase() as 'apachestyle' | 'access',
+    date: `${m[1]}-${m[2]}-${m[3]}`,
+    time: m[4],
+  };
+}
+
+export type InstallScanRow = {
+  installId: string;
+  objectCount: number;
+  bytes: number;
+  oldest: string;
+  newest: string;
+  sampleKey: string;
+};
+
+export type BucketScan = {
+  /** Every object under the prefix, both kinds plus anything unrecognised. */
+  totalObjects: number;
+  /** The subset actually ingestible. */
+  apacheStyleObjects: number;
+  /** Objects whose filename did not parse — surfaced, never silently dropped. */
+  unparsedObjects: number;
+  /** Apache-style objects grouped by install id, busiest first. */
+  installs: InstallScanRow[];
+  /** True when the listing hit `maxObjects`; counts below are a floor, not a total. */
+  truncated: boolean;
+};
+
+/**
+ * List a bucket prefix once and group the apache-style objects by the install id in their
+ * filenames. This is the single source for the scan result screen, the install table, and the
+ * "logs for an install not on this account" line — all three read the same set, per DECISIONS.md's
+ * derive-never-duplicate rule.
+ */
+export async function scanBucketForInstalls(
+  creds: AwsCreds, region: string, bucket: string, prefix: string, maxObjects = 50_000,
+): Promise<BucketScan> {
+  const objects = await s3ListAll(creds, region, bucket, prefix, maxObjects);
+
+  const byInstall = new Map<string, InstallScanRow>();
+  let apacheStyleObjects = 0;
+  let unparsedObjects = 0;
+
+  for (const o of objects) {
+    const parsed = parseInstallIdFromKey(o.key);
+    if (!parsed) { unparsedObjects++; continue; }
+    if (parsed.kind !== 'apachestyle') continue;
+    apacheStyleObjects++;
+
+    const row = byInstall.get(parsed.installId);
+    if (!row) {
+      byInstall.set(parsed.installId, {
+        installId: parsed.installId, objectCount: 1, bytes: o.size,
+        oldest: parsed.date, newest: parsed.date, sampleKey: o.key.split('/').pop() ?? o.key,
+      });
+      continue;
+    }
+    row.objectCount++;
+    row.bytes += o.size;
+    if (parsed.date < row.oldest) row.oldest = parsed.date;
+    if (parsed.date > row.newest) { row.newest = parsed.date; row.sampleKey = o.key.split('/').pop() ?? o.key; }
+  }
+
+  return {
+    totalObjects: objects.length,
+    apacheStyleObjects,
+    unparsedObjects,
+    installs: Array.from(byInstall.values()).sort((a, b) => b.objectCount - a.objectCount),
+    truncated: objects.length >= maxObjects,
+  };
+}
+
+/** WPE's filename convention embeds the rotation date as a leading YYYYMMDD — see the module
+ * doc comment's note on filename-date-vs-line-date. Good enough for the connect flow's "date
+ * range this bucket covers" summary; NOT used for the real ingestion planner, which folds by
+ * each parsed line's own date. */
+export function extractDateRange(objects: S3Object[]): { oldest?: string; newest?: string } {
+  const dates = objects
+    .map(o => /(\d{4})(\d{2})(\d{2})/.exec(o.key))
+    .filter((m): m is RegExpExecArray => !!m)
+    .map(m => `${m[1]}-${m[2]}-${m[3]}`)
+    .sort();
+  return dates.length ? { oldest: dates[0], newest: dates[dates.length - 1] } : {};
+}
+
+/** First line of the first apache-style object — what tells the user they pointed at the right
+ * bucket (design_handoff_log_sources' BEHAVIOR.md §2, "Success detail"). Best-effort: a stream
+ * or parse failure here must not fail the whole validation, since listing already succeeded. */
+export async function sampleApacheLine(
+  creds: AwsCreds, region: string, bucket: string, objects: S3Object[],
+): Promise<string | undefined> {
+  const target = objects.find(o => /apachestyle/i.test(o.key));
+  if (!target) return undefined;
+  try {
+    for await (const line of s3StreamLines(creds, region, bucket, target.key)) {
+      if (line.trim()) return line;
+    }
+  } catch { /* best-effort */ }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------

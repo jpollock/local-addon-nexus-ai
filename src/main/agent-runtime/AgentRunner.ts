@@ -1,13 +1,15 @@
 import * as os from 'os';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
-import type { AgentDefinition, NexusEvent, AgentResult } from '../agent-sdk/types';
+import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, Finding } from '../agent-sdk/types';
 import type { AgentStateStore } from './AgentStateStore';
 import type { ResolvedAIProvider } from '../ai/getAIProvider';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
+import { newRunId } from '../logging/runId';
+import { EventLog } from '../logging/eventLog';
 
 const logger = createLogger('AgentRunner');
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -32,6 +34,7 @@ export class AgentRunner {
     services: NexusServices,
     resolvedProvider: ResolvedAIProvider,
     dbManager?: AgentDbManager,
+    private readonly eventLog?: EventLog,
   ) {
     this.stateStore = stateStore;
     this.toolRegistry = toolRegistry;
@@ -49,30 +52,61 @@ export class AgentRunner {
     this.resolvedProvider = provider;
   }
 
-  async run(agent: AgentDefinition, event?: NexusEvent, options?: { fullRun?: boolean; logFileName?: string }): Promise<AgentResult> {
+  async run(
+    agent: AgentDefinition,
+    event?: NexusEvent,
+    options?: { fullRun?: boolean; logFileName?: string; trigger?: 'manual' | 'cron' | 'event' },
+  ): Promise<AgentResult> {
     const startedAt = Date.now();
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const agentName = agent.name;
 
-    const { ctx, agentLog, accFindings, accActions, accSites } = buildAgentContext({
-      agent,
-      event,
-      toolRegistry: this.toolRegistry,
-      services: this.services,
-      stateStore: this.stateStore,
-      resolvedProvider: this.resolvedProvider,
-      logDir: path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentName, 'logs'),
-      dbManager: this.dbManager,
-      fullRun: options?.fullRun ?? false,
-      logFileName: options?.logFileName,
+    const runId = newRunId('agent');
+    // The caller's explicit `trigger` always wins. Inference from event/logFileName is only a
+    // fallback for the (shrinking) set of callers that don't state it yet — AGENT_RUN_NOW passes
+    // BOTH a scoped `event` (to target one site) and a `logFileName`, so inferring from either
+    // one alone mislabels an ad-hoc "Run Now" as `event` or leaves `manual` unreachable. Only the
+    // caller genuinely knows why it's running.
+    const trigger = options?.trigger ?? (event ? 'event' : options?.logFileName ? 'manual' : 'cron');
+
+    this.eventLog?.write({
+      level: 'INFO', source: agentName, sourceKind: 'agent', runId,
+      event: 'run.start', fields: { trigger, fullRun: options?.fullRun ?? false },
     });
 
     let status: AgentResult['status'] = 'success';
     let error: string | undefined;
-    let timeoutHandle: NodeJS.Timeout | undefined;
+    let ctx: AgentContext | undefined;
+    let accFindings: Finding[] = [];
+    let accSites: Record<string, { status: string; findings: Finding[] }> = {};
     let agentReturnValue: unknown;
+    let toolProvider: import('./NexusToolProvider').NexusToolProvider | undefined;
 
+    // buildAgentContext is inside this try (not before it, as before) so that a context-
+    // construction failure still produces a run.end and a recordRun row instead of rejecting
+    // run() outright — an unclosed run.start bracket is exactly the "why did this agent not
+    // finish?" case this whole mechanism exists to answer.
     try {
+      const built = buildAgentContext({
+        agent,
+        event,
+        toolRegistry: this.toolRegistry,
+        services: this.services,
+        stateStore: this.stateStore,
+        resolvedProvider: this.resolvedProvider,
+        logDir: path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentName, 'logs'),
+        dbManager: this.dbManager,
+        fullRun: options?.fullRun ?? false,
+        logFileName: options?.logFileName,
+        eventLog: this.eventLog,
+        runId,
+      });
+      ctx = built.ctx;
+      accFindings = built.accFindings;
+      accSites = built.accSites;
+      toolProvider = built.toolProvider;
+
+      let timeoutHandle: NodeJS.Timeout | undefined;
       try {
         await Promise.race([
           agent.run(ctx).then((rv) => { agentReturnValue = rv; }),
@@ -88,14 +122,16 @@ export class AgentRunner {
         status = 'timeout';
         error = `Agent "${agent.name}" timed out after ${timeoutMs}ms`;
         logger.warn(error);
-        if (agent.onError) {
+        // ctx only exists if buildAgentContext succeeded — a context-construction failure has
+        // no ctx to hand onError, so it is skipped for that case (there was never a run to react to).
+        if (agent.onError && ctx) {
           try { await agent.onError(err, ctx); } catch { /* onError must not throw */ }
         }
       } else if (err instanceof Error) {
         status = 'error';
         error = err.message;
         logger.error(`Agent "${agent.name}" failed: ${error}`);
-        if (agent.onError) {
+        if (agent.onError && ctx) {
           try { await agent.onError(err, ctx); } catch { /* onError must not throw */ }
         }
       } else {
@@ -105,7 +141,7 @@ export class AgentRunner {
       }
     }
 
-    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error };
+    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error, runId };
 
     // Merge structured log events accumulated during the run
     if (accFindings.length > 0) result.findings = accFindings;
@@ -143,6 +179,20 @@ export class AgentRunner {
         } catch { /* non-fatal — report still accessible via DB summary */ }
       }
     }
+
+    const failedCalls = toolProvider?.failedCallCount() ?? 0;
+    this.eventLog?.write({
+      level: status === 'success' ? 'INFO' : 'ERROR',
+      source: agentName, sourceKind: 'agent', runId,
+      event: 'run.end',
+      fields: {
+        status,
+        dur: `${result.finishedAt - result.startedAt}ms`,
+        findings: result.findings?.length ?? 0,
+        ...(failedCalls > 0 && { failedCalls }),
+      },
+      message: error,
+    });
 
     this.stateStore.recordRun(result);
     return result;

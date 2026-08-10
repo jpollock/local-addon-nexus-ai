@@ -95,6 +95,15 @@ export class LocalGatewayProvider implements AIProvider {
     let currentToolName = '';
     let currentToolArgs = '';
 
+    // Token usage is not reported on this path — and not because the upstream response body is
+    // unavailable. Verified directly: this generator never yields a `done` event at all. The loop
+    // below yields only `token` and `tool_call_end` (plus `error` on the early-exit branches
+    // above), and the function simply returns once the reader is exhausted or the pending tool
+    // call is flushed. Usage rides on `done` (see TokenUsage in chat-types.ts), so there is no
+    // event here to attach it to, regardless of what the gateway's response actually carries.
+    // `llm.call` therefore carries no in=/out=/cost= for this provider — deliberately absent
+    // rather than estimated, because an invented token count silently corrupts every cost figure
+    // derived from it.
     try {
       while (true) {
         const { done, value } = await reader.read();

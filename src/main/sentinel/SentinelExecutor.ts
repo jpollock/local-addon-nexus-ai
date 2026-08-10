@@ -3,6 +3,7 @@ import * as os from 'os';
 import { spawn } from 'child_process';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { createLogger } from '../logging/Logger';
+import { describeRemoteFailure, REMOTE_SSH_TIMEOUT_MS, SSH_CONTROL_PERSIST } from '../mcp/utils/remoteFailure';
 
 const logger = createLogger('SentinelExecutor');
 
@@ -32,7 +33,7 @@ async function remoteSshRaw(installName: string, sshCommand: string): Promise<{ 
     '-o', 'StrictHostKeyChecking=accept-new',
     '-o', 'ControlMaster=auto',
     '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-    '-o', 'ControlPersist=30s',
+    '-o', `ControlPersist=${SSH_CONTROL_PERSIST}`,
     '-i', sshKeyPath,
     `${username}@${host}`,
     sshCommand,
@@ -41,11 +42,23 @@ async function remoteSshRaw(installName: string, sshCommand: string): Promise<{ 
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
-    const proc = spawn('ssh', sshArgs, { stdio: ['ignore', 'pipe', 'pipe'], timeout: 35000 });
+    const startedAt = Date.now();
+    const proc = spawn('ssh', sshArgs, { stdio: ['ignore', 'pipe', 'pipe'], timeout: REMOTE_SSH_TIMEOUT_MS });
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-    proc.on('close', (code: number | null) => {
-      resolve({ success: code === 0, stdout: stdout || stderr });
+    proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+      if (code === 0) { resolve({ success: true, stdout }); return; }
+      // Remediation runs against production, so "it failed" is not a good enough answer. Lead
+      // with the real reason — a timeout, a signal, an exit code — rather than whichever stream
+      // happened to be non-empty, which reported OpenSSH's post-quantum advisory as the cause of
+      // every failure on hosts that emit it.
+      resolve({
+        success: false,
+        stdout: describeRemoteFailure({
+          code, signal, stderr: stderr || stdout,
+          elapsedMs: Date.now() - startedAt, timeoutMs: REMOTE_SSH_TIMEOUT_MS,
+        }),
+      });
     });
     proc.on('error', (err: Error) => {
       resolve({ success: false, stdout: err.message });
