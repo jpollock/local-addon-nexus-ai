@@ -128,6 +128,16 @@ export class OperationAuditLog {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
         userId: this.currentUser(),
+        // Every field is listed EXPLICITLY. This used to be `...entry`, which
+        // carried any future field straight to disk unredacted — fail-open, in
+        // the one class whose stated guarantee is that a new call site cannot
+        // leak by forgetting. The cost of the allowlist is the mirror risk: a
+        // field added to `AuditEntry` and not added here is silently ABSENT
+        // from the compliance record, which reads as "the operation carried no
+        // such data" rather than as a bug. Add the field in both places, and
+        // decide there whether it is redacted, withheld or passed through.
+        // `userId` is deliberately not read from `entry`: the machine user is
+        // this class's own observation, not a caller-supplied claim.
         operation: entry.operation,
         outcome: entry.outcome,
         // `target` was the one string field spread through unchanged. No
