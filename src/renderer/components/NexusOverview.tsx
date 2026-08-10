@@ -30,6 +30,7 @@ import { RunToast } from './agents/RunToast';
 import { RunPill } from './agents/RunPill';
 import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
+import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -222,29 +223,6 @@ interface NexusOverviewState {
 
 // -- Shared styles --
 
-const cardContainerStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: '16px',
-  marginBottom: '24px',
-};
-
-const cardStyle: React.CSSProperties = {
-  borderRadius: '10px',
-  padding: '20px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-};
-
-const cardTitleStyle: React.CSSProperties = {
-  fontSize: '11px',
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.8px',
-  color: 'var(--nxai-card-label, #6b7280)',
-  marginBottom: '12px',
-};
-
 const bigNumberStyle: React.CSSProperties = {
   fontSize: '36px',
   fontWeight: 700,
@@ -278,14 +256,6 @@ const tagStyle = (bg: string, fg: string): React.CSSProperties => ({
   marginLeft: '8px',
   verticalAlign: 'middle',
 });
-
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: '13px',
-  fontWeight: 600,
-  color: 'var(--nxai-section-label, #374151)',
-  marginBottom: '12px',
-  marginTop: '8px',
-};
 
 const btnStyle: React.CSSProperties = {
   padding: '6px 14px',
@@ -865,10 +835,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
   // -- Card renders (unchanged from original) --
 
-  renderSectionLabel(text: string): React.ReactNode {
-    return React.createElement('div', { style: sectionLabelStyle }, text);
-  }
-
   renderLocalSitesCard(stats: DashboardStats): React.ReactNode {
     const { localSites } = stats;
     return React.createElement('div', { style: cardStyle },
@@ -1084,7 +1050,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     const codeStyle = { fontFamily: 'monospace', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px', fontSize: '11px' };
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
-      this.renderSectionLabel('Connect to AI Tools'),
+      renderSectionLabel('Connect to AI Tools'),
       React.createElement('div', {
         style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' },
       },
@@ -1417,7 +1383,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       this.renderMcpPanel(),
 
       // Fleet Intelligence — site counts + completeness + summary
-      this.renderSectionLabel('Fleet Intelligence'),
+      renderSectionLabel('Fleet Intelligence'),
       React.createElement('div', { style: cardContainerStyle },
         this.renderLocalSitesCard(stats),
         this.renderWpeConnectedCard(stats),
@@ -1433,7 +1399,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       React.createElement('div', { style: { marginTop: 16 } }, this.renderFleetSummaryCard()),
 
       // AI Integration — MCP status + proxy + gateway usage
-      this.renderSectionLabel('AI Integration'),
+      renderSectionLabel('AI Integration'),
       React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(2, 1fr)' } },
         this.renderMcpCard(stats),
         this.renderAiProxyCard(),
@@ -1650,7 +1616,7 @@ renderTabBar(): React.ReactNode {
     // ── Zone 2: Site status ───────────────────────────────────────────────────
     const zone2 = React.createElement('div', null,
       divider,
-      this.renderSectionLabel('Site Status'),
+      renderSectionLabel('Site Status'),
       React.createElement(SystemTab, {
         electron: this.props.electron,
         sites: this.state.sites.map((s) => ({ id: s.id, name: s.name, status: s.status })),
@@ -1700,15 +1666,15 @@ renderTabBar(): React.ReactNode {
         ? React.createElement('div', {
             style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '20px 20px 8px', background: 'var(--nxai-card-bg, #fff)' },
           },
-            this.renderSectionLabel('Factory Reset'),
+            renderSectionLabel('Factory Reset'),
             this.renderFactoryReset(),
-            this.renderSectionLabel('Reset Content Index'),
+            renderSectionLabel('Reset Content Index'),
             this.renderContentIndexReset(),
-            this.renderSectionLabel('Database Health'),
+            renderSectionLabel('Database Health'),
             this.renderDbScanSection(),
-            this.renderSectionLabel('Housekeeping'),
+            renderSectionLabel('Housekeeping'),
             this.renderContentMaintenance(),
-            this.renderSectionLabel('SSH Diagnostics'),
+            renderSectionLabel('SSH Diagnostics'),
             this.renderSshDiagnostics(),
           )
         : null,
