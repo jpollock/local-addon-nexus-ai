@@ -13,6 +13,15 @@ import { LoggingSection, type LoggingStats } from '../../../src/renderer/compone
 import { IPC_CHANNELS } from '../../../src/common/constants';
 import { PRICES_AS_OF } from '../../../src/main/logging/modelPricing';
 
+function spySetState(instance: any): void {
+  jest.spyOn(instance, 'setState').mockImplementation(function (this: any, ...args: unknown[]) {
+    const [updater, cb] = args as [any, (() => void) | undefined];
+    const update = typeof updater === 'function' ? updater(this.state) : updater;
+    Object.assign(this.state, update);
+    cb?.();
+  });
+}
+
 describe('LoggingSection', () => {
   const mockElectron = {
     ipcRenderer: {
@@ -44,8 +53,8 @@ describe('LoggingSection', () => {
     it('writes logRetentionDays (not logDays) - the settings key guard', () => {
       // When growing retention, it writes immediately
       const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
-      // Directly mutate state to simulate user input
-      wrapper.state.localLogDays = '20';
+      spySetState(wrapper);
+      wrapper.setState({ localLogDays: '20' });
       wrapper.commitLogDays();
       expect(mockElectron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: 20 });
     });
@@ -56,19 +65,19 @@ describe('LoggingSection', () => {
       mockElectron.ipcRenderer.invoke.mockResolvedValueOnce(planResult);
 
       const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      spySetState(wrapper);
 
       await wrapper.startClearLogs();
 
       expect(mockElectron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.LOGGING_PLAN_CLEAR);
-      // Wait for the promise to resolve and state to update
-      await new Promise(resolve => setTimeout(resolve, 10));
       expect(wrapper.state.clearPlan).toEqual({ freedBytes: 10 * 1024 * 1024 });
       expect(wrapper.state.confirmingClear).toBe(true);
     });
 
     it('shrinking retention shows confirmation before applying', () => {
       const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
-      wrapper.state.localLogDays = '7';
+      spySetState(wrapper);
+      wrapper.setState({ localLogDays: '7' });
       wrapper.commitLogDays();
 
       // Should NOT invoke UPDATE_SETTINGS immediately (shrinking from 14 to 7)
@@ -80,7 +89,8 @@ describe('LoggingSection', () => {
 
     it('growing retention applies immediately without confirmation', () => {
       const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
-      wrapper.state.localLogDays = '20';
+      spySetState(wrapper);
+      wrapper.setState({ localLogDays: '20' });
       wrapper.commitLogDays();
 
       // Should invoke UPDATE_SETTINGS immediately (growing from 14 to 20)

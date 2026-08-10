@@ -106,6 +106,26 @@ describe('planRetention', () => {
     // Boundary and inside survive; outside is deleted.
     expect(plan.deletePaths).toEqual(['/logs/outside.log']);
   });
+
+  it('does not mutate a shared-instance clock (Date mutation fix substitution check)', () => {
+    // Issue #5: the Date mutation bug. With the fix removed (`const d = now(); d.setDate(...)` instead of
+    // `const d = new Date(now() ? now() : new Date())`), a clock returning a shared instance yields
+    // transcriptCutoff = today - logDays - transcriptDays instead of today - transcriptDays.
+    const shared = new Date('2026-08-09T12:00:00Z');
+    const clock = () => shared;
+
+    const transcript = f({ day: '2026-08-05', category: 'transcript', path: '/logs/t.jsonl' });
+    // 2026-08-05 is 4 days before 2026-08-09, so with transcriptDays: 3 it SHOULD be deleted.
+    // But with the mutation bug, transcriptCutoff would be 2026-07-26 (14+3=17 days back) and the file would be kept.
+
+    const plan = planRetention([transcript], POLICY, clock);
+
+    // The transcript should be deleted (it's 4 days old, transcriptDays is 3)
+    expect(plan.deletePaths).toEqual(['/logs/t.jsonl']);
+
+    // The shared Date should NOT be mutated
+    expect(shared.toISOString()).toBe('2026-08-09T12:00:00.000Z');
+  });
 });
 
 describe('applyRetention — marker detection', () => {
