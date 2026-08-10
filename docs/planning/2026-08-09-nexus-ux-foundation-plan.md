@@ -874,25 +874,16 @@ Place this after graph service initialisation, inside the existing startup try/c
 Run: `npx tsc --noEmit -p tsconfig.json`
 Expected: no errors
 
-- [ ] **Step 4: Verify against the real database**
+- [ ] **Step 4: Run the existing suites**
 
-Run:
+Run: `npx jest tests/unit/fleet tests/unit/ipc`
+Expected: no new failures.
 
-```bash
-npm run build && npm run rebuild && ./dev-reload.sh
-```
-
-Then, once Local has started:
-
-```bash
-node -e "
-const D=require('better-sqlite3'),os=require('os');
-const db=new D(os.homedir()+'/Library/Application Support/Local/nexus-ai/graph.db',{readonly:true});
-console.log(db.prepare(\"SELECT is_active, COUNT(*) c FROM sites WHERE source='local' GROUP BY is_active\").all());
-"
-```
-
-Expected: active local rows drop from 56 to 34, with 22 now at `is_active = 0`.
+**Do NOT run `npm run rebuild` in this task.** It recompiles `better-sqlite3` for Electron's
+ABI, after which `npx jest` — which runs on system Node — fails with a `NODE_MODULE_VERSION`
+error for every remaining task. The against-the-real-database verification of this sweep belongs
+in Task 14, which does the build/rebuild/reload once, at the end, after all testing is finished.
+Task 14 already carries that check.
 
 - [ ] **Step 5: Commit**
 
