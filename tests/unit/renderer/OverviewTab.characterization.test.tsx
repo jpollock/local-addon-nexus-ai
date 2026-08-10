@@ -114,6 +114,7 @@ describe('Overview tab — characterization', () => {
 describe('Overview extraction — structural invariants', () => {
   test.each([
     ['overview', 'OverviewTab'],
+    ['sites', 'SitesTab'],
     ['activity', 'div'],
     ['operations', 'div'],
     ['settings', 'SettingsTab'],

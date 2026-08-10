@@ -29,6 +29,11 @@ import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
 import { OverviewTab } from './tabs/OverviewTab';
+import { SitesTab } from './tabs/SitesTab';
+// Types only — a value import would pull main-process code into the renderer
+// bundle. Precedent: credentials/ConnectionsPanel.tsx:3.
+import type { SiteRow } from '../../main/fleet/siteRows';
+import type { PopulationCount } from '../../main/fleet/FleetCounts';
 import type { DashboardStats, McpInfo, StartupStatus, AiProxyInfo, FleetVersionEntry, FleetSummaryData } from './tabs/shared/types';
 // Local's native notification components
 let toast: any = null;
@@ -100,6 +105,7 @@ interface SetupAIResult {
  */
 const TABS = [
   { key: 'overview',   label: 'Dashboard' },
+  { key: 'sites',      label: 'Sites' },
   { key: 'operations', label: 'Operations' },
   { key: 'activity',   label: 'Activity' },
   { key: 'agents',     label: 'Agents' },
@@ -122,6 +128,12 @@ interface NexusOverviewState {
   loading: boolean;
   error: string | null;
   activeTab: TabKey;
+  /** Sites table. `siteRowsFailed` is distinct from an empty list — see SitesTab. */
+  siteRows: SiteRow[];
+  siteRowsTotal: PopulationCount;
+  siteRowsLoaded: boolean;
+  siteRowsFailed: boolean;
+  selectedSiteIds: string[];
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -235,6 +247,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     loading: true,
     error: null,
     activeTab: 'overview',
+    siteRows: [],
+    // Not zero-with-a-scope: nothing has been read yet, and the empty scope
+    // string is what `loaded: false` renders behind anyway.
+    siteRowsTotal: { count: 0, scope: '' },
+    siteRowsLoaded: false,
+    siteRowsFailed: false,
+    selectedSiteIds: [],
     aiProxy: null,
     fleetSetupOpId: null,
     fleetSetupRunning: false,
@@ -440,7 +459,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus] = await Promise.all([
+      // This destructuring is POSITIONAL. Append new channels at the END of both
+      // the array and the pattern — inserting anywhere else silently shifts every
+      // later variable onto the wrong response, which is not a compile error.
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus, siteRowsResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -451,6 +473,11 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
         ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.GET_STARTUP_STATUS),
+        // A rejected invoke would reject the whole Promise.all and blank every
+        // other panel, so it resolves to the same failure shape the handler
+        // returns. `success: false` is NOT an empty fleet — SitesTab renders
+        // "couldn't read your sites" for it.
+        ipc.invoke(IPC_CHANNELS.GET_SITE_ROWS).catch(() => ({ success: false, rows: [], total: { count: 0, scope: '' } })),
       ]);
       if (!this.mounted) return;
 
@@ -506,6 +533,12 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         mcpInfo: mcpInfo ?? null,
         startupStatus: startupStatus ?? null,
         sites: sites ?? [],
+        siteRows: siteRowsResult?.rows ?? [],
+        siteRowsTotal: siteRowsResult?.total ?? { count: 0, scope: '' },
+        // Loaded means "a response came back", true even when that response was
+        // a failure — otherwise the error state never renders behind the spinner.
+        siteRowsLoaded: true,
+        siteRowsFailed: !siteRowsResult?.success,
         wpeSites,
         indexEntries: indexEntries ?? [],
         aiProxy: proxyResult?.proxy ?? null,
@@ -1385,6 +1418,31 @@ renderTabBar(): React.ReactNode {
     );
   }
 
+  toggleSiteSelection = (id: string): void => {
+    this.setState(prev => ({
+      selectedSiteIds: prev.selectedSiteIds.indexOf(id) === -1
+        ? prev.selectedSiteIds.concat(id)
+        : prev.selectedSiteIds.filter(x => x !== id),
+    }));
+  };
+
+  /**
+   * Select-all is scoped to the ids handed in — the rows currently visible under
+   * the host-type filter — never to the whole fleet. Ticking "all" while filtered
+   * to External must not silently arm an action against 331 WP Engine installs.
+   */
+  toggleAllSiteSelection = (ids: string[]): void => {
+    this.setState(prev => {
+      const allSelected = ids.length > 0 && ids.every(id => prev.selectedSiteIds.indexOf(id) !== -1);
+      if (allSelected) {
+        return { selectedSiteIds: prev.selectedSiteIds.filter(id => ids.indexOf(id) === -1) };
+      }
+      const next = prev.selectedSiteIds.slice();
+      for (const id of ids) if (next.indexOf(id) === -1) next.push(id);
+      return { selectedSiteIds: next };
+    });
+  };
+
   renderActiveTab(): React.ReactNode {
     const overviewProps = {
       electron: this.props.electron,
@@ -1401,6 +1459,19 @@ renderTabBar(): React.ReactNode {
 
     switch (this.state.activeTab) {
       case 'overview': return React.createElement(OverviewTab, overviewProps);
+      case 'sites': return React.createElement(SitesTab, {
+        loaded: this.state.siteRowsLoaded,
+        failed: this.state.siteRowsFailed,
+        rows: this.state.siteRows,
+        total: this.state.siteRowsTotal,
+        selected: this.state.selectedSiteIds,
+        onToggle: this.toggleSiteSelection,
+        onToggleAll: this.toggleAllSiteSelection,
+        // Task 5 builds the bulk bar that reaches these.
+        onBulk: () => undefined,
+        onIndexHost: () => undefined,
+        onRetry: () => { void this.fetchAll(); },
+      });
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
