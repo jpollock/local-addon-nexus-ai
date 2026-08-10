@@ -79,7 +79,7 @@ function IconCollapse({ size }: { size: number }) {
 
 function iconBtnStyle(hovered: boolean, active = false) {
   return {
-    background: hovered || active ? '#22303a' : 'none',
+    background: hovered || active ? 'var(--nxai-table-hover)' : 'none',
     border: 'none',
     color: active ? UI_COLORS.WPE_BRAND : hovered ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
     cursor: 'pointer',
@@ -117,7 +117,7 @@ const styles = {
     bottom: 0,
     width: full ? undefined : PANEL_WIDTH,
     left: full ? 68 : undefined,
-    background: '#23272f',
+    background: 'var(--nxai-card-bg)',
     borderLeft: `1px solid var(--nxai-card-border)`,
     display: 'flex',
     flexDirection: 'column' as const,
@@ -132,7 +132,7 @@ const styles = {
     gap: 11,
     borderBottom: `1px solid var(--nxai-card-border)`,
     flexShrink: 0,
-    background: '#1a1e24',
+    background: 'var(--nxai-card-bg)',
   },
   avatar: {
     width: 34,
@@ -298,7 +298,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           showSessions
             ? React.createElement(
                 'div',
-                { style: { position: 'absolute' as const, inset: 0, background: '#1a1e24', zIndex: 1 } },
+                { style: { position: 'absolute' as const, inset: 0, background: 'var(--nxai-card-bg)', zIndex: 1 } },
                 sessionsSidebar ?? null,
               )
             : null,

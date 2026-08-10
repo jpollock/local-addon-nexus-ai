@@ -1,5 +1,6 @@
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
+import { injectThemeVars } from '../../utils/theme';
 import { ContextSelector } from './ContextSelector';
 import { DockedPanel } from './DockedPanel';
 import { PanelChat } from './PanelChat';
@@ -74,6 +75,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   componentDidMount() {
+    injectThemeVars();
     this.syncReflowStyle();
     // Deep-link: open panel and activate a specific session from the Activity tab.
     // Receives from Activity tab "View chat →" link once activity events carry session_id.

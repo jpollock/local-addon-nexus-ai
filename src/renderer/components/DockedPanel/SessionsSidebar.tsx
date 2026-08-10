@@ -24,7 +24,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    background: '#1a1e24',
+    background: 'var(--nxai-card-bg)',
     borderRight: `1px solid var(--nxai-card-border)`,
   },
   toolbar: {
@@ -36,7 +36,7 @@ const styles = {
   },
   searchInput: {
     flex: 1,
-    background: '#23272f',
+    background: 'var(--nxai-input-bg)',
     border: `1px solid var(--nxai-card-border)`,
     borderRadius: 4,
     color: 'var(--nxai-card-text)',
@@ -105,7 +105,7 @@ const styles = {
     marginTop: 4,
   },
   renameInput: {
-    background: '#23272f',
+    background: 'var(--nxai-input-bg)',
     border: `1px solid ${UI_COLORS.WPE_BRAND}`,
     borderRadius: 3,
     color: 'var(--nxai-card-text)',

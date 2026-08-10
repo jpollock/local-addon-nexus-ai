@@ -16,7 +16,7 @@ interface State {
 const styles = {
   card: {
     border: `1px solid var(--nxai-card-border)`,
-    background: '#132a30',
+    background: 'var(--nxai-section-bg)',
     borderRadius: 6,
     padding: '12px 14px',
     margin: '8px 0',
