@@ -103,6 +103,7 @@ import { listSshConfigHosts } from './external/sshConfigParser';
 import { getExternalProfile, upsertExternalProfile } from './external/externalSiteStore';
 import { collectFleetCounts } from './fleet/collectFleetCounts';
 import { buildSiteRows } from './fleet/siteRows';
+import { createExternalBulkOps } from './bulk/externalBulkOps';
 import { collectSystemHealth } from './health/collectSystemHealth';
 
 /**
@@ -2683,6 +2684,19 @@ Answer:`,
     graphService,
     metadataCache: metadataCache ?? undefined,
     auditServices: deps.nexusServices,
+    // Remote adapters. Without these a WP Engine or external id in a bulk
+    // selection resolves through Local's store and fails "Site not found" —
+    // 334 of 369 rows on a real machine. Both are absent-tolerant by design:
+    // BulkOperationManager reports "not available" per site rather than
+    // pretending the work was done.
+    wpeOps: deps.wpeSyncService
+      ? {
+          syncSingleSite: (installId: string) => deps.wpeSyncService!.syncSingleSite(installId),
+          indexOne: (siteId: string, installName: string) =>
+            deps.wpeSyncService!.indexOneWpeContent(siteId, installName),
+        }
+      : undefined,
+    externalOps: createExternalBulkOps(deps.nexusServices, localLogger),
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const provider = options?.provider ?? settings?.aiProvider;
