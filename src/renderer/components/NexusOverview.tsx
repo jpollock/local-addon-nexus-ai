@@ -88,6 +88,26 @@ interface SetupAIResult {
   message: string;
 }
 
+/**
+ * The tab registry. This array is the single source of truth for which tabs
+ * exist — `TabKey` is derived from it, so adding or removing a tab is one edit
+ * here rather than one here plus one in a hand-maintained union.
+ *
+ * Note the dispatch is deliberately NOT folded in: `renderActiveTab`'s arms need
+ * instance context (`this.renderActivityTab()`, the built `overviewProps`), and
+ * `agents` bypasses that switch entirely because it has no stats dependency.
+ * Moving them here would cost more in binding than the duplication saves.
+ */
+const TABS = [
+  { key: 'overview',   label: 'Dashboard' },
+  { key: 'operations', label: 'Operations' },
+  { key: 'activity',   label: 'Activity' },
+  { key: 'agents',     label: 'Agents' },
+  { key: 'settings',   label: 'Settings' },
+] as const;
+
+type TabKey = typeof TABS[number]['key'];
+
 interface NexusOverviewState {
   stats: DashboardStats | null;
   mcpInfo: McpInfo | null;
@@ -101,7 +121,7 @@ interface NexusOverviewState {
   togglingId: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents';
+  activeTab: TabKey;
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -698,13 +718,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
 renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
-    const tabs: { key: NexusOverviewState['activeTab']; label: string }[] = [
-      { key: 'overview',     label: 'Dashboard' },
-      { key: 'operations',   label: 'Operations' },
-      { key: 'activity',     label: 'Activity' },
-      { key: 'agents',       label: 'Agents' },
-      { key: 'settings',     label: 'Settings' },
-    ];
+    const tabs = TABS;
 
     return React.createElement('div', {
       style: {
