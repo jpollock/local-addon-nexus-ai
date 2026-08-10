@@ -86,6 +86,24 @@ describe('Both automatic trigger paths go through the shared gate', () => {
 
   it('ipc-handlers delegates to the pure predicate rather than reimplementing it', () => {
     const src = read('src/main/ipc-handlers.ts');
-    expect(src).toContain('canAutoRunWith(cache?.get(agentId), kind)');
+
+    // Assert the PROPERTY, not one literal line. This used to pin the exact
+    // string `canAutoRunWith(cache?.get(agentId), kind)`, which broke the day
+    // canAutoRun legitimately began merging the auto-pause marker into the
+    // settings it forwards. Delegation was never in doubt; the literal was.
+    const start = src.indexOf('export function canAutoRun(');
+    expect(start).toBeGreaterThan(-1);
+    const after = src.indexOf('\nexport function ', start + 1);
+    const body = src.slice(start, after === -1 ? undefined : after);
+
+    // It must hand the decision to the shared predicate...
+    expect(body).toContain('canAutoRunWith(');
+
+    // ...and must not carry its own copy of the gating rules. A second
+    // implementation here is exactly the drift the shared predicate removed:
+    // the cron path and the event path silently disagreed for months.
+    expect(body).not.toMatch(/enabled\s*===\s*false/);
+    expect(body).not.toMatch(/scheduleEnabled/);
+    expect(body).not.toMatch(/eventsEnabled/);
   });
 });
