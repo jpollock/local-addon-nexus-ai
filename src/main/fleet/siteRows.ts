@@ -65,6 +65,16 @@ function completenessOf(
   return 'none';
 }
 
+/**
+ * The floor a local site can never fall below. Existing in Local's store means
+ * the site is on this Mac's filesystem, and `filesystem` is the rung for
+ * exactly that. `none` — "we have never looked inside this" — is a claim that
+ * cannot be true of a directory we are serving.
+ */
+function localFloor(completeness: string): string {
+  return completeness === 'none' ? 'filesystem' : completeness;
+}
+
 export function buildSiteRows(input: SiteRowsInput): SiteRowsResult {
   const rows: SiteRow[] = [];
 
@@ -82,12 +92,16 @@ export function buildSiteRows(input: SiteRowsInput): SiteRowsResult {
       wpVersion: s.wpVersion ?? null,
       phpVersion: s.phpVersion ?? null,
       // Same derivation as remote rows — a local site Local knows the WP
-      // version of is `detailed`, not `nothing`.
+      // version of is `detailed`, not `nothing` — but floored at `filesystem`.
+      // A local site is on this Mac's disk by definition, which is precisely
+      // what the `filesystem` rung means, so `none` is never the honest answer
+      // for one. Remote rows get no such floor: `nothing` is true of them, and
+      // it is the rung the UI acts on.
       knowledge: toKnowledgeRung(
-        completenessOf(
+        localFloor(completenessOf(
           { id: s.id, wp_version: s.wpVersion ?? null, content_indexed_at: null },
           input.indexedSiteIds,
-        ),
+        )),
         'local',
       ),
       lastSyncAt: null,
@@ -104,8 +118,13 @@ export function buildSiteRows(input: SiteRowsInput): SiteRowsResult {
       id: g.id,
       name: g.name ?? g.id,
       source,
-      // `host` is a real column; only fall back to parsing the id when it is null.
-      host: source === 'external' ? (g.host ?? hostFromExternalId(g.id)) : null,
+      // Derived from the id, NOT from `g.host`. `sites.host` is a real column
+      // but it does not hold the alias: its only writer in the codebase is
+      // applyTaxonomyMigration's `UPDATE sites SET host = source WHERE host IS
+      // NULL`, so it mirrors the source. Measured on a real graph.db: all 3
+      // external rows read 'external', all 331 wpe 'wpe', all 35 local 'local'.
+      // Reading it here printed "external" as every external row's host name.
+      host: source === 'external' ? hostFromExternalId(g.id) : null,
       domain: g.domain,
       status: null,
       wpVersion: g.wp_version,
