@@ -1101,8 +1101,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export interface SystemHealthDeps {
   /** Agents with their last run outcome. */
   getAgents: () => Promise<Array<{ id: string; lastRunStatus: string | null; lastRunAt: number | null }>>;
-  /** Active sites with their last successful sync. */
-  getSyncAges: () => Array<{ id: string; lastSyncAt: number | null }>;
+  /**
+   * Active sites with their last successful sync, and whether refresh is even
+   * supposed to be running for them.
+   *
+   * `refreshEnabled` is explicit rather than inferred from the source, so the
+   * caller must supply it consciously. Without it, `wpeSyncAutoEnabled` and
+   * `externalRefreshAutoEnabled` — which BOTH DEFAULT FALSE — make every remote
+   * site look permanently stale, and the pill sits at "needs attention" on a
+   * clean install. That false red is as corrosive as a false green: both teach
+   * users to ignore the pill.
+   */
+  getSyncAges: () => Array<{ id: string; lastSyncAt: number | null; refreshEnabled: boolean }>;
   /** Configured connections and whether their credential currently works. */
   getCredentialStates: () => Promise<Array<{ name: string; ok: boolean }>>;
   /** Event queue counts. */
@@ -1139,8 +1149,19 @@ export async function collectSystemHealth(deps: SystemHealthDeps): Promise<Syste
   const syncStaleness = await guard(async () => {
     const rows = deps.getSyncAges();
     if (rows.length === 0) return { state: 'unknown', reason: 'No sites to check' };
-    const never = rows.filter((r) => !r.lastSyncAt).length;
-    const stale = rows.filter((r) => r.lastSyncAt && now - r.lastSyncAt > DAY_MS).length;
+
+    // A site whose refresh scheduler is switched off is not stale — nobody
+    // promised to refresh it. Excluding these is what stops a clean install
+    // (both auto-refresh settings default false) reading as permanently red.
+    const enabled = rows.filter((r) => r.refreshEnabled);
+    if (enabled.length === 0) {
+      // Not `ok`: nothing is verifying this data, so claiming health would be a
+      // false green. Not `degraded`: the user chose this, so it is not a fault.
+      return { state: 'unknown', reason: 'Background refresh is switched off' };
+    }
+
+    const never = enabled.filter((r) => !r.lastSyncAt).length;
+    const stale = enabled.filter((r) => r.lastSyncAt && now - r.lastSyncAt > DAY_MS).length;
     if (never > 0) return { state: 'degraded', reason: `${never} sites have never been checked` };
     if (stale > 0) return { state: 'degraded', reason: `${stale} sites not checked in over a day` };
     return { state: 'ok', reason: null };
