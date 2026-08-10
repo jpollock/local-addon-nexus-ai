@@ -901,6 +901,13 @@ git commit -m "fix(fleet): reconcile graph local rows against Local's store at s
 
 Phase B has no dependency on Phase A and may be executed concurrently by a separate agent.
 
+> **Every line number below is stale.** Phase A added ~120 lines to `src/main/ipc-handlers.ts`.
+> Locate every edit site by its surrounding code, never by a quoted line number, and confirm you
+> are in the right handler before editing. Verified anchors as of Phase A completion:
+> `EVENTS_GET_TIMELINE` ≈ 1802 (was 1770), `EVENTS_GET_STATS` ≈ 1836 (was 1794).
+> `EventStats.healthStatus` is declared at `src/common/types.ts:638`.
+> `NexusOverview.tsx` was not touched by Phase A, so its anchors (169, 1558, 1779) still hold.
+
 ### Task 8: SystemHealth pure module
 
 **Files:**
@@ -1261,7 +1268,12 @@ In `src/renderer/components/EventStatsCards.tsx`, replace the bodies of `getHeal
 
 `getHealthColor` maps `ok → UI_COLORS.STATUS_RUNNING`, `degraded → UI_COLORS.STATUS_WARNING`, `failing → UI_COLORS.STATUS_ERROR`, default `UI_COLORS.STATUS_HALTED`. `getHealthIcon` maps `ok → '✓'`, `degraded → '!'`, `failing → '✕'`, default `'?'`.
 
-Update the `healthStatus` type on the `EventStats` interface (search for `healthStatus:` in `src/common/`) from `'good' | 'warning' | 'error'` to `'ok' | 'degraded' | 'failing' | 'unknown'`, and add `systemHealth`.
+Update the `healthStatus` type on the `EventStats` interface — declared at `src/common/types.ts:638` as `'good' | 'warning' | 'error'` — to `'ok' | 'degraded' | 'failing' | 'unknown'`, and add `systemHealth`.
+
+**This is a breaking type change with consumers.** Before editing, grep for every reader of
+`healthStatus` and of the old string values `'good'`/`'warning'`/`'error'`; a consumer comparing
+against `'good'` will silently stop matching rather than fail to compile. Update each, and list
+them in your report.
 
 - [ ] **Step 4: Update the existing test**
 
