@@ -124,6 +124,12 @@ export interface AgentSettings {
    * default: prompts carry site content, so this is opt-in for the agent you are debugging.
    */
   transcripts?: boolean;
+  /**
+   * Per-agent log level override. Absent means use the global level. Overrides work in both
+   * directions: raising one agent to DEBUG while the rest stay at INFO, or lowering a noisy agent
+   * to ERROR while the rest stay at DEBUG.
+   */
+  logLevel?: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 }
 
 export interface AgentState {

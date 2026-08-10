@@ -36,7 +36,7 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
-import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing } from './ipc-handlers';
+import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing, getAgentLogLevel } from './ipc-handlers';
 import { EventLog } from './logging/eventLog';
 import { resolveLogLevel } from './logging/resolveLogLevel';
 import { initializeProviders } from './chat/providers/index';
@@ -581,7 +581,7 @@ export default function main(context: any): void {
         );
         const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
         const minLevel = resolveLogLevel(settings ?? undefined, process.env);
-        eventLog = new EventLog({ root: nexusLogRoot, minLevel });
+        eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
         const agentRunner = new AgentRunner(

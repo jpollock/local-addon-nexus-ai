@@ -203,6 +203,8 @@ export interface EventLogOptions {
   maxBytes?: number;
   /** Injectable clock, so the midnight-rollover test does not need to wait for midnight. */
   now?: () => Date;
+  /** Per-agent override. Returns the level for a specific source, or undefined to use the global level. */
+  levelFor?: (source: string) => LogLevelName | undefined;
 }
 
 /**
@@ -231,6 +233,7 @@ export class EventLog {
   private readonly minLevel: LogLevelName;
   private readonly maxBytes: number;
   private readonly now: () => Date;
+  private readonly levelFor?: (source: string) => LogLevelName | undefined;
   /**
    * Paths already reported as unwritable. Keyed by path so a broken agent file and a broken
    * combined file each get their own line, and so a new day's file is reported afresh.
@@ -243,6 +246,7 @@ export class EventLog {
     this.minLevel = opts.minLevel ?? 'INFO';
     this.maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
     this.now = opts.now ?? (() => new Date());
+    this.levelFor = opts.levelFor;
   }
 
   pathsFor(e: LogEvent): { combined: string; agent?: string } {
@@ -272,7 +276,14 @@ export class EventLog {
 
   write(e: LogEvent): void {
     try {
-      if (LogLevel[e.level] > LogLevel[this.minLevel]) return;
+      // A per-agent override beats the global level in both directions — you debug one agent, and
+      // you silence one agent, without touching the rest.
+      let min = this.minLevel;
+      try {
+        const override = this.levelFor?.(e.source);
+        if (override) min = override;
+      } catch { /* a settings cache that is not ready must not drop the line */ }
+      if (LogLevel[e.level] > LogLevel[min]) return;
       const at = e.at ?? this.now();
       const line = formatLine({ ...e, at }) + '\n';
       const { combined, agent } = this.pathsFor({ ...e, at });

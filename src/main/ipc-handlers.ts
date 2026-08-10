@@ -294,6 +294,17 @@ export function getAgentCadence(agentId: string): CadenceSettings | undefined {
 }
 
 /**
+ * The log level override the user set for this agent, if they set one.
+ *
+ * Read by `EventLog.write()` through the `levelFor` callback. Returns undefined when no override
+ * is set (falls back to the global level) or before the settings cache is seeded.
+ */
+export function getAgentLogLevel(agentId: string): 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | undefined {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  return cache?.get(agentId)?.logLevel;
+}
+
+/**
  * Reach the process-wide EventLog via `deps.nexusServices` — a declared field on
  * `IpcHandlerDeps` (unlike `__agentSettingsCache`, which is not, hence the `as any` on that one
  * below), so no fresh cast is needed here. `nexusServices.eventLog` is itself a declared-but-
