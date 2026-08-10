@@ -37,6 +37,7 @@ import {
 } from './ipc/chat-sessions';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
+import { isNoiseEvent } from './events/timelineFilter';
 import type { EventTimelineEntry, EventStats, StartupStatus } from '../common/types';
 import { SearchService } from './search/SearchService';
 import { HealthScoreCalculator } from './health/HealthScoreCalculator';
@@ -1812,8 +1813,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       const events = await graphService.getRecentEvents(validated as any);
 
+      // Filter WordPress background churn (auto-drafts, revisions) before
+      // mapping. event_queue has no post_type/action column — this data
+      // lives inside the parsed `payload` (payload.post_type is the WP post
+      // type, payload.status is the WP post status, e.g. 'auto-draft'). See
+      // src/main/events/timelineFilter.ts for the full field-shape note.
+      const filtered = events.filter(
+        e => !isNoiseEvent({ postType: e.payload?.post_type, action: e.payload?.status }),
+      );
+
       // Transform to renderer-safe format with site names
-      const timeline: EventTimelineEntry[] = events.map(e => {
+      const timeline: EventTimelineEntry[] = filtered.map(e => {
         const site = siteData.getSite(e.site_id);
         return {
           id: e.id,

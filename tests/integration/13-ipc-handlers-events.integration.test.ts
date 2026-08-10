@@ -319,6 +319,88 @@ describe('Event Tracking IPC Handlers (Sprint 1)', () => {
       expect(result.success).toBe(true);
       expect(result.events).toHaveLength(5);
     });
+
+    // Task 12 (nexus-ux-foundation): pins the REAL row shape end to end.
+    // event_queue has no post_type/action column — only event_type and a
+    // JSON `payload`. isNoiseEvent's own unit tests (timeline-filter.test.ts)
+    // can only prove the pure function is correct for whatever shape they're
+    // handed; they cannot catch a bug in ipc-handlers.ts's extraction glue
+    // (e.g. reading e.post_type instead of e.payload.post_type). This test
+    // inserts a raw event_queue row exactly as the WP MU plugin's webhook
+    // would, and asserts on EVENTS_GET_TIMELINE's actual output — so a
+    // regression in the handler's field extraction fails HERE, not silently.
+    test('filters WordPress background churn (auto-draft, revision) but keeps real content changes', async () => {
+      const db = (graphService as any).db;
+      const now = Date.now();
+
+      const autoDraftPayload = {
+        post_id: 1,
+        post_type: 'post',
+        title: '',
+        status: 'auto-draft',
+        author_id: 1,
+        created_at: now,
+        updated_at: now,
+      };
+      const revisionPayload = {
+        post_id: 2,
+        post_type: 'revision',
+        title: 'Hello World',
+        status: 'inherit',
+        author_id: 1,
+        created_at: now,
+        updated_at: now,
+      };
+      const publishedPayload = {
+        post_id: 3,
+        post_type: 'post',
+        title: 'A Real Published Post',
+        status: 'publish',
+        author_id: 1,
+        created_at: now,
+        updated_at: now,
+      };
+      const pagePayload = {
+        post_id: 4,
+        post_type: 'page',
+        title: 'About Us',
+        status: 'publish',
+        author_id: 1,
+        created_at: now,
+        updated_at: now,
+      };
+
+      db.prepare(`
+        INSERT INTO event_queue (site_id, event_type, payload, status, created_at, retry_count)
+        VALUES (?, ?, ?, ?, ?, 0)
+      `).run('test-site', 'post_created', JSON.stringify(autoDraftPayload), 'processed', now);
+
+      db.prepare(`
+        INSERT INTO event_queue (site_id, event_type, payload, status, created_at, retry_count)
+        VALUES (?, ?, ?, ?, ?, 0)
+      `).run('test-site', 'post_created', JSON.stringify(revisionPayload), 'processed', now + 1000);
+
+      db.prepare(`
+        INSERT INTO event_queue (site_id, event_type, payload, status, created_at, retry_count)
+        VALUES (?, ?, ?, ?, ?, 0)
+      `).run('test-site', 'post_published', JSON.stringify(publishedPayload), 'processed', now + 2000);
+
+      db.prepare(`
+        INSERT INTO event_queue (site_id, event_type, payload, status, created_at, retry_count)
+        VALUES (?, ?, ?, ?, ?, 0)
+      `).run('test-site', 'post_updated', JSON.stringify(pagePayload), 'processed', now + 3000);
+
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.EVENTS_GET_TIMELINE);
+
+      expect(result.success).toBe(true);
+      // Only the two real content changes survive — the auto-draft and the
+      // revision are filtered. If the handler read e.post_type/e.action
+      // (columns that don't exist on the row) instead of
+      // e.payload?.post_type/e.payload?.status, this would be 4, not 2.
+      expect(result.events).toHaveLength(2);
+      const titles = result.events.map((ev: any) => ev.details.title).sort();
+      expect(titles).toEqual(['A Real Published Post', 'About Us']);
+    });
   });
 
   describe('EVENTS_GET_STATS', () => {
