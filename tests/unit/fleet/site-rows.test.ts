@@ -114,8 +114,31 @@ describe('buildSiteRows', () => {
       localSiteIds: ['L1', 'L2'],
       graphRows: graphRows.map((g: any) => ({ id: g.id, source: g.source, wpeSiteId: null })),
     });
+    // Anchor to a known-correct value as well as to agreement. Two functions
+    // that agree can still both be wrong; only the literal catches that.
+    expect(rows.total.count).toBe(5);          // 2 local + 2 WPE + 1 external
     // Two definitions of "the fleet" that disagree is the bug the foundation
     // spec removed. They must not drift apart again.
     expect(rows.total.count).toBe(counts.installs.count);
+  });
+
+  test('a local site Local knows the WP version of is detailed, not nothing', () => {
+    // ~113 sites on a real machine. Reporting "Nothing yet" for a site we have
+    // the WP version of understates what we know — the same defect as the
+    // external cap, with the sign flipped.
+    const out = buildSiteRows({
+      localSites: [{ id: 'L1', name: 'My Site', status: 'running', wpVersion: '6.5' }],
+      graphRows: [], indexedSiteIds: new Set(),
+    });
+    expect(out.rows[0].knowledge).toBe('detailed');
+    expect(out.rows[0].wpVersion).toBe('6.5');
+  });
+
+  test('an indexed local site is searchable regardless of version', () => {
+    const out = buildSiteRows({
+      localSites: [{ id: 'L2', name: 'Indexed', wpVersion: null }],
+      graphRows: [], indexedSiteIds: new Set(['L2']),
+    });
+    expect(out.rows[0].knowledge).toBe('searchable');
   });
 });

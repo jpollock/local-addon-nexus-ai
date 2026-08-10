@@ -16,7 +16,13 @@ export interface SiteRow {
 }
 
 export interface SiteRowsInput {
-  localSites: Array<{ id: string; name: string; status?: string }>;
+  localSites: Array<{
+    id: string; name: string; status?: string;
+    /** From Local's own store. Absent when Local has not recorded one. */
+    wpVersion?: string | null;
+    phpVersion?: string | null;
+    domain?: string | null;
+  }>;
   graphRows: Array<{
     id: string; source: string; name: string | null; domain: string | null;
     wp_version: string | null; php_version: string | null;
@@ -71,13 +77,19 @@ export function buildSiteRows(input: SiteRowsInput): SiteRowsResult {
       name: s.name,
       source: 'local',
       host: null,
-      domain: null,
+      domain: s.domain ?? null,
       status: s.status ?? null,
-      wpVersion: null,
-      phpVersion: null,
-      knowledge: input.indexedSiteIds.has(s.id)
-        ? toKnowledgeRung('indexed', 'local')
-        : toKnowledgeRung(null, 'local'),
+      wpVersion: s.wpVersion ?? null,
+      phpVersion: s.phpVersion ?? null,
+      // Same derivation as remote rows — a local site Local knows the WP
+      // version of is `detailed`, not `nothing`.
+      knowledge: toKnowledgeRung(
+        completenessOf(
+          { id: s.id, wp_version: s.wpVersion ?? null, content_indexed_at: null },
+          input.indexedSiteIds,
+        ),
+        'local',
+      ),
       lastSyncAt: null,
     });
   }
