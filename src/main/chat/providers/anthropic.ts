@@ -1,9 +1,29 @@
-import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
+import type { ChatMessage, ProviderStreamEvent, TokenUsage } from '../../../common/chat-types';
 import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
+
+/**
+ * Token usage from one Anthropic SSE event, or undefined if it carries none.
+ *
+ * Anthropic splits the pair across two events — input on `message_start`, output on
+ * `message_delta` — so the caller accumulates. Exported for test: this parsing is the only thing
+ * standing between a real cost figure and a fabricated one.
+ */
+export function extractAnthropicUsage(eventType: string, data: any): TokenUsage | undefined {
+  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  if (eventType === 'message_start') {
+    const inputTokens = num(data?.message?.usage?.input_tokens);
+    return inputTokens === undefined ? undefined : { inputTokens };
+  }
+  if (eventType === 'message_delta') {
+    const outputTokens = num(data?.usage?.output_tokens);
+    return outputTokens === undefined ? undefined : { outputTokens };
+  }
+  return undefined;
+}
 
 export class AnthropicProvider implements AIProvider {
   readonly id = 'anthropic';
@@ -73,6 +93,13 @@ export class AnthropicProvider implements AIProvider {
       ...(toolChoice ? { tool_choice: toolChoice } : {}),
     });
 
+    // Accumulated across the stream: Anthropic reports input tokens on `message_start` and output
+    // tokens on `message_delta` as two separate events, so this is merged in place as each arrives
+    // and attached to whichever `done` the stream ultimately yields (including the abort/error paths
+    // below, which is why this is declared outside the try block rather than alongside the other
+    // per-request accumulators).
+    let usage: TokenUsage | undefined;
+
     try {
       const stream = streamingRequest({
         url: `${baseUrl}/messages`,
@@ -100,6 +127,9 @@ export class AnthropicProvider implements AIProvider {
         }
 
         const eventType = data.type;
+
+        const eventUsage = extractAnthropicUsage(eventType, data);
+        if (eventUsage) usage = { ...usage, ...eventUsage };
 
         if (eventType === 'content_block_start') {
           const block = data.content_block;
@@ -141,13 +171,13 @@ export class AnthropicProvider implements AIProvider {
             const mapped = stopReason === 'tool_use' ? 'tool_use'
               : stopReason === 'max_tokens' ? 'max_tokens'
               : 'end_turn';
-            yield { type: 'done', stopReason: mapped };
+            yield { type: 'done', stopReason: mapped, usage };
             return;
           }
         }
 
         if (eventType === 'message_stop') {
-          yield { type: 'done', stopReason: 'end_turn' };
+          yield { type: 'done', stopReason: 'end_turn', usage };
           return;
         }
 
@@ -157,10 +187,10 @@ export class AnthropicProvider implements AIProvider {
         }
       }
 
-      yield { type: 'done', stopReason: 'end_turn' };
+      yield { type: 'done', stopReason: 'end_turn', usage };
     } catch (err) {
       if (signal.aborted) {
-        yield { type: 'done', stopReason: 'end_turn' };
+        yield { type: 'done', stopReason: 'end_turn', usage };
         return;
       }
       yield { type: 'error', message: `Anthropic error: ${(err as Error).message}` };
