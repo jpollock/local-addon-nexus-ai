@@ -7,6 +7,12 @@
  *
  * Deliberately brittle. During a behaviour-preserving refactor ANY structural,
  * prop, style or text change should fail the snapshot.
+ *
+ * LIMITATION: A component element serializes as its type name and props only,
+ * never its rendered output. This is intentional — the helper captures an
+ * element tree that has already been built, not one being rendered. To
+ * characterize a component's own output, serialize the result of calling its
+ * render method directly, not an element referencing it.
  */
 
 function serializeProps(props: Record<string, unknown>): Record<string, unknown> {
