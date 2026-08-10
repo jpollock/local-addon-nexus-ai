@@ -1,5 +1,7 @@
-import { trailingFailures, shouldPauseAgent, pauseIfStuck } from '../../../src/main/inbox/autoPause';
+import { trailingFailures, shouldPauseAgent, pauseIfStuck, resumeAgent, isAutoPaused } from '../../../src/main/inbox/autoPause';
 import type { AgentRunRow } from '../../../src/main/agent-runtime/AgentStateStore';
+import Database from 'better-sqlite3';
+import { AgentStateStore } from '../../../src/main/agent-runtime/AgentStateStore';
 
 const row = (
   id: number, status: AgentRunRow['status'], error?: string,
@@ -94,5 +96,30 @@ describe('pauseIfStuck', () => {
     const set = jest.fn();
     expect(pauseIfStuck({ set }, 'security-sentinel', flaky, 5000)).toBe(false);
     expect(set).not.toHaveBeenCalled();
+  });
+});
+
+describe('pause round trip', () => {
+  test('a paused agent can be resumed, and the marker really goes away', () => {
+    const db = new Database(':memory:');
+    const store = new AgentStateStore(db);
+    const stuck = [row(3, 'error', 'boom'), row(2, 'error', 'boom'), row(1, 'error', 'boom')];
+
+    expect(isAutoPaused(store, 'security-sentinel')).toBe(false);
+    expect(pauseIfStuck(store, 'security-sentinel', stuck, 5000)).toBe(true);
+    expect(isAutoPaused(store, 'security-sentinel')).toBe(true);
+
+    resumeAgent(store, 'security-sentinel');
+    expect(isAutoPaused(store, 'security-sentinel')).toBe(false);
+
+    db.close();
+  });
+
+  test('resuming an agent that was never paused is harmless', () => {
+    const db = new Database(':memory:');
+    const store = new AgentStateStore(db);
+    expect(() => resumeAgent(store, 'never-paused')).not.toThrow();
+    expect(isAutoPaused(store, 'never-paused')).toBe(false);
+    db.close();
   });
 });

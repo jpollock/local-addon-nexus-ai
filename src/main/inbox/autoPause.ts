@@ -52,3 +52,28 @@ export function pauseIfStuck(
   store.set(agentId, AUTO_PAUSED_KEY, now);
   return true;
 }
+
+/** Just the slice of AgentStateStore the resume path needs. */
+export interface PauseMarkerClearer {
+  delete(agentName: string, key: string): void;
+}
+
+/**
+ * Clear an auto-pause so the agent may run automatically again.
+ *
+ * Without this, `pauseIfStuck` is a one-way door: nothing else deletes the
+ * marker, so a paused agent would never run on a schedule again and no surface
+ * could undo it. Keyed by agentId (the slug), matching where the marker is
+ * written and where `canAutoRun` reads it.
+ */
+export function resumeAgent(store: PauseMarkerClearer, agentId: string): void {
+  store.delete(agentId, AUTO_PAUSED_KEY);
+}
+
+/** Whether an agent is currently auto-paused. */
+export function isAutoPaused(
+  store: { get<T>(agentName: string, key: string): T | undefined },
+  agentId: string,
+): boolean {
+  return store.get<number>(agentId, AUTO_PAUSED_KEY) !== undefined;
+}

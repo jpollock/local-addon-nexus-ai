@@ -304,9 +304,7 @@ export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   // Merge the auto-pause marker from AgentStateStore into the settings object.
   // The marker lives in SQLite, not in the renderer-synced settings cache.
   const agentStateStore = _agentSettingsDepsRef?.nexusServices?.agentStateStore;
-  const autoPausedAt: number | undefined = agentStateStore
-    ? (agentStateStore as any).get(agentId, AUTO_PAUSED_KEY)
-    : undefined;
+  const autoPausedAt: number | undefined = (agentStateStore as any)?.get(agentId, AUTO_PAUSED_KEY);
 
   return canAutoRunWith(
     autoPausedAt !== undefined ? { ...cachedSettings, autoPausedAt } : cachedSettings,

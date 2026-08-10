@@ -1195,7 +1195,30 @@ In `src/common/constants.ts`, beside the other agent channels:
   GET_INBOX:      `${ADDON_PREFIX}:inbox:get`,
   INBOX_DECIDE:   `${ADDON_PREFIX}:inbox:decide`,
   INBOX_REOPEN:   `${ADDON_PREFIX}:inbox:reopen`,
+  AGENT_RESUME:   `${ADDON_PREFIX}:agent:resume`,
 ```
+
+`AGENT_RESUME` is not optional decoration. Task 6 makes an agent auto-pause after an
+identical failure streak, and **nothing else clears that marker** — without this channel a
+paused agent can never run automatically again and no surface can undo it. A permanent silent
+disablement is worse than never auto-pausing at all.
+
+```ts
+  safeHandle(IPC_CHANNELS.AGENT_RESUME, async (_e: any, { agentId }: { agentId: string }) => {
+    try {
+      const store = deps.nexusServices?.agentStateStore;
+      if (store) resumeAgent(store, agentId);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] agent-resume failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+```
+
+`GET_INBOX` must also report which agents are currently paused, or the UI cannot offer the
+resume action on the right items. Add `pausedSources: string[]` to its response, built by
+testing `isAutoPaused(agentStateStore, source)` for each distinct `source` in the open items.
 
 - [ ] **Step 2: Add the handlers**
 
@@ -1351,6 +1374,29 @@ describe('InboxTab', () => {
     expect(tree).toContain('7');
   });
 
+  test('a paused agent gets a resume action, and it names the agent', () => {
+    // Without this the pause is a one-way door — nothing else clears the marker.
+    const onResumeAgent = jest.fn();
+    const el = React.createElement(InboxTab, props({
+      items: [item({ kind: 'problem', title: 'security-sentinel could not finish a run' })],
+      counts: { decide: 0, problem: 1, know: 0 },
+      pausedSources: ['security-sentinel'],
+      onResumeAgent,
+    }));
+    const tree = JSON.stringify(serializeTree(el));
+    expect(tree.toLowerCase()).toContain('paused');
+    expect(tree).toContain('Try again');
+  });
+
+  test('an unpaused agent gets no resume action', () => {
+    const tree = JSON.stringify(serializeTree(React.createElement(InboxTab, props({
+      items: [item({ kind: 'problem' })],
+      counts: { decide: 0, problem: 1, know: 0 },
+      pausedSources: [],
+    }))));
+    expect(tree).not.toContain('Try again');
+  });
+
   test('no copy promises reversing a live change', () => {
     const tree = JSON.stringify(serializeTree(React.createElement(
       InboxTab, props({ items: [item({ status: 'done', decision: 'Approve' })] }),
@@ -1388,8 +1434,12 @@ export interface InboxTabProps {
   items: InboxItem[];
   total: number;
   counts: Record<InboxKind, number>;
+  /** Agent ids currently auto-paused, from GET_INBOX. */
+  pausedSources: string[];
   onDecide: (id: number, decision: string, status: 'dismissed' | 'done') => void;
   onReopen: (id: number) => void;
+  /** Clear an agent's auto-pause so it may run automatically again. */
+  onResumeAgent: (agentId: string) => void;
   onRetry?: () => void;
 }
 
