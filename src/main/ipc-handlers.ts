@@ -100,6 +100,7 @@ import { resolveSshConfig, defaultSshExec } from './external/sshExec';
 import { detectCollision, writeHostBlock, generateHostKey, previewHostBlock } from './external/sshConfigWriter';
 import { listSshConfigHosts } from './external/sshConfigParser';
 import { getExternalProfile, upsertExternalProfile } from './external/externalSiteStore';
+import { collectFleetCounts } from './fleet/collectFleetCounts';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -756,13 +757,22 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
       } catch { /* graph may not be ready */ }
 
-      const totalLocal = twins.length;
-      const totalWpe = wpeSites.length;
-      const totalExternal = externalSites.length;
-      const total = totalLocal + totalWpe + totalExternal;
+      // One definition, one source. Local comes from Local's own store (not the
+      // twin cache, not the graph), WPE and external from the graph.
+      const counts = collectFleetCounts({
+        getSites: () => siteData.getSites() as Record<string, unknown>,
+        getDb: () => graphService.getDb() as never,
+      });
+      const totalLocal = counts.local.count;
+      const totalWpe = counts.wpe.count;
+      const totalExternal = counts.external.count;
+      const total = counts.installs.count;
 
-      // Completeness counts (local twins only)
+      // Completeness is measured over local twins ONLY. Its denominator is
+      // therefore twins.length, NOT `total` — a coverage metric's numerator and
+      // denominator must span the same source set.
       const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
+      const completenessScope = { measured: twins.length, label: 'sites on this Mac' };
       let staleCount = 0;
       let neverScannedCount = 0;
 
@@ -846,10 +856,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         wpVersions: sortVersions(wpVersionMap),
         phpVersions: sortVersions(phpVersionMap),
         completeness,
+        completenessScope,
         wpeSync,
         externalSync,
         staleCount,
         neverScannedCount,
+        counts,
       };
     } catch (err) {
       localLogger.error('[NexusAI] get-fleet-summary failed:', (err as Error).message);
