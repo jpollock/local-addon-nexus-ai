@@ -32,9 +32,11 @@
  * failure — which, before `describeRemoteFailure`, was reported as whatever warning happened to
  * be on stderr.
  *
- * Note for anyone tuning this: `ControlPersist=30s` expires the multiplexed socket sooner than
- * most agent cadences, so a scheduled agent running every 2 minutes is cold on *every* call and
- * never sees the 1–3s warm path.
+ * Note for anyone tuning this: the multiplexed socket (see `SSH_CONTROL_PERSIST` below) now
+ * outlives typical agent cadences, so the 1–3s warm path is the common case for scheduled
+ * agents. Historically `ControlPersist=30s` expired before every 2-minute cadence, which is why
+ * calls were reaching the timeout ceiling — the socket was always cold and the cold start is
+ * 13–30s. That is fixed.
  */
 export const REMOTE_SSH_TIMEOUT_MS = 60_000;
 

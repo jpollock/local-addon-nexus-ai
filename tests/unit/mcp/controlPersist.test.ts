@@ -15,5 +15,9 @@ it('both SSH builders use the shared constant, not their own literal', () => {
     const src = fs.readFileSync(path.join(__dirname, '../../../', f), 'utf-8');
     expect(src).toContain('SSH_CONTROL_PERSIST');
     expect(src).not.toMatch(/ControlPersist=30s/);
+    // Pin the interpolation itself — toContain('SSH_CONTROL_PERSIST') is satisfied by the
+    // import line alone, so a file that imports but then hardcodes 'ControlPersist=45s' in
+    // its argv would pass without this. Any hardcoded literal must fail, not just '30s'.
+    expect(src).toMatch(/ControlPersist=\$\{SSH_CONTROL_PERSIST\}/);
   }
 });
