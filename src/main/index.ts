@@ -1038,6 +1038,12 @@ export default function main(context: any): void {
     });
 
     // Update event log level when settings change.
+    //
+    // The `if` is not a dropped update, and it should not be "fixed" into a deferred-apply queue.
+    // `eventLog` is constructed inside the async startup IIFE, and that construction resolves the
+    // level by reading `registryStorage` at that moment — not at process start. The settings IPC
+    // handler persists before it calls this, so a change made during startup is already on disk
+    // when construction reads it, and lands as the initial level. Skipping here loses nothing.
     if (eventLog) {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
       const newLevel = resolveLogLevel(settings ?? undefined, process.env);
