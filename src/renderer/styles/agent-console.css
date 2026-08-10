@@ -178,26 +178,26 @@
 }
 
 /* ── Markdown rendering in chat panel ─────────────────────────────────── */
-.nexus-md { font-size: 13px; line-height: 1.55; color: #e4e7ec; }
+.nexus-md { font-size: 13px; line-height: 1.55; color: var(--ag-text-primary); }
 .nexus-md p { margin: 0 0 8px; }
 .nexus-md p:last-child { margin-bottom: 0; }
 .nexus-md ul, .nexus-md ol { padding-left: 20px; margin: 4px 0 8px; }
 .nexus-md li { margin-bottom: 3px; }
-.nexus-md h1, .nexus-md h2, .nexus-md h3 { font-weight: 600; margin: 12px 0 6px; color: #f2f4f6; }
-.nexus-md h1 { font-size: 16px; border-bottom: 1px solid #2c313a; padding-bottom: 4px; }
-.nexus-md h2 { font-size: 14px; border-bottom: 1px solid #2c313a; padding-bottom: 3px; }
+.nexus-md h1, .nexus-md h2, .nexus-md h3 { font-weight: 600; margin: 12px 0 6px; color: var(--ag-text-primary); }
+.nexus-md h1 { font-size: 16px; border-bottom: 1px solid var(--ag-border); padding-bottom: 4px; }
+.nexus-md h2 { font-size: 14px; border-bottom: 1px solid var(--ag-border); padding-bottom: 3px; }
 .nexus-md h3 { font-size: 13px; }
-.nexus-md code { background: #1a1e24; border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 12px; color: #5fd2e5; }
-.nexus-md pre { background: #1a1e24; border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 8px 0; }
-.nexus-md pre code { background: none; padding: 0; color: #c9d1d9; font-size: 12px; }
+.nexus-md code { background: var(--ag-bg-code); border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 12px; color: var(--ag-teal); }
+.nexus-md pre { background: var(--ag-bg-code); border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 8px 0; }
+.nexus-md pre code { background: none; padding: 0; color: var(--ag-text-primary); font-size: 12px; }
 .nexus-md table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
-.nexus-md th { background: #1a1e24; color: #868d98; font-weight: 600; text-align: left; padding: 6px 10px; border-bottom: 1px solid #2c313a; }
-.nexus-md td { padding: 5px 10px; border-bottom: 1px solid #23272f; }
+.nexus-md th { background: var(--ag-bg-code); color: var(--ag-text-muted); font-weight: 600; text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--ag-border); }
+.nexus-md td { padding: 5px 10px; border-bottom: 1px solid var(--ag-border-subtle); }
 .nexus-md tr:last-child td { border-bottom: none; }
-.nexus-md a { color: #29b6cf; text-decoration: none; }
+.nexus-md a { color: var(--ag-teal); text-decoration: none; }
 .nexus-md a:hover { text-decoration: underline; }
-.nexus-md blockquote { border-left: 3px solid #29b6cf; margin: 8px 0; padding: 4px 12px; color: #868d98; }
-.nexus-md hr { border: none; border-top: 1px solid #2c313a; margin: 12px 0; }
+.nexus-md blockquote { border-left: 3px solid var(--ag-teal); margin: 8px 0; padding: 4px 12px; color: var(--ag-text-secondary); }
+.nexus-md hr { border: none; border-top: 1px solid var(--ag-border); margin: 12px 0; }
 
 /* ── Typing indicator ───────────────────────────────────────────────────── */
 @keyframes nexus-dot {
@@ -205,17 +205,17 @@
   30% { opacity: 1; transform: scale(1.3); }
 }
 .nexus-typing { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; }
-.nexus-typing span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #868d98; animation: nexus-dot 1.4s ease-in-out infinite; }
+.nexus-typing span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ag-text-muted); animation: nexus-dot 1.4s ease-in-out infinite; }
 .nexus-typing span:nth-child(1) { animation-delay: 0s; }
 .nexus-typing span:nth-child(2) { animation-delay: 0.2s; }
 .nexus-typing span:nth-child(3) { animation-delay: 0.4s; }
 
-/* ── Dark scrollbars ────────────────────────────────────────────────────── */
+/* ── Scrollbars ────────────────────────────────────────────────────── */
 [data-nexus-chat]::-webkit-scrollbar,
 [data-nexus-sessions]::-webkit-scrollbar { width: 5px; }
 [data-nexus-chat]::-webkit-scrollbar-track,
 [data-nexus-sessions]::-webkit-scrollbar-track { background: transparent; }
 [data-nexus-chat]::-webkit-scrollbar-thumb,
-[data-nexus-sessions]::-webkit-scrollbar-thumb { background: #3a414c; border-radius: 3px; }
+[data-nexus-sessions]::-webkit-scrollbar-thumb { background: var(--ag-border); border-radius: 3px; }
 [data-nexus-chat]::-webkit-scrollbar-thumb:hover,
-[data-nexus-sessions]::-webkit-scrollbar-thumb:hover { background: #4e5663; }
+[data-nexus-sessions]::-webkit-scrollbar-thumb:hover { background: var(--ag-border-control); }

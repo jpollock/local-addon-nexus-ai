@@ -2,7 +2,7 @@ import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { injectThemeVars } from '../../utils/theme';
 import { ContextSelector } from './ContextSelector';
-import { DockedPanel, PanelTab } from './DockedPanel';
+import { DockedPanel, PanelTab, PANEL_WIDTH, WIDE_WIDTH } from './DockedPanel';
 import { PanelChat } from './PanelChat';
 import { PanelInsights } from './PanelInsights';
 import { SessionsSidebar } from './SessionsSidebar';
@@ -92,7 +92,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     // Deep-link: open panel and activate a specific session from the Activity tab.
     // Receives from Activity tab "View chat →" link once activity events carry session_id.
     this.openSessionListener = (_: any, { sessionId }: { sessionId: string }) => {
-      this.setState({ open: true, activeSessionId: sessionId });
+      this.setState({ open: true, activeSessionId: sessionId, activeTab: 'chat' });
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.OPEN_CHAT_SESSION, this.openSessionListener);
   }
@@ -114,14 +114,18 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   private injectReflowStyle() {
-    if (document.getElementById(REFLOW_STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = REFLOW_STYLE_ID;
-    // Target Local's content wrapper — confirmed via DOM inspection at build time.
-    // Adjust selector if Local's class names change.
-    const marginRight = this.state.size === 'wide' ? 620 : 384;
-    style.textContent = `[class*="SiteInfo_"], [class*="Dashboard_"], [class*="siteinfo-wrapper"] { margin-right: ${marginRight}px !important; transition: margin-right 0.2s ease; }`;
-    document.head.appendChild(style);
+    const marginRight = this.state.size === 'wide' ? WIDE_WIDTH : PANEL_WIDTH;
+    const existing = document.getElementById(REFLOW_STYLE_ID);
+    if (existing) {
+      // Update existing style element on size change
+      existing.textContent = `[class*="SiteInfo_"], [class*="Dashboard_"], [class*="siteinfo-wrapper"] { margin-right: ${marginRight}px !important; transition: margin-right 0.2s ease; }`;
+    } else {
+      // Create new style element
+      const style = document.createElement('style');
+      style.id = REFLOW_STYLE_ID;
+      style.textContent = `[class*="SiteInfo_"], [class*="Dashboard_"], [class*="siteinfo-wrapper"] { margin-right: ${marginRight}px !important; transition: margin-right 0.2s ease; }`;
+      document.head.appendChild(style);
+    }
   }
 
   private removeReflowStyle() {
@@ -147,11 +151,11 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   setActiveSession(id: string | null) {
-    this.setState({ activeSessionId: id });
+    this.setState({ activeSessionId: id, activeTab: 'chat' });
   }
 
   newChat() {
-    this.setState({ activeSessionId: null, showSessions: false });
+    this.setState({ activeSessionId: null, showSessions: false, activeTab: 'chat' });
   }
 
   openAgentsHub() {

@@ -21,9 +21,13 @@ interface FleetCounts {
 
 interface BackgroundJobIntervals {
   halted?: number;
+  haltedEnabled?: boolean;
   wpe?: number;
+  wpeEnabled?: boolean;
   external?: number;
+  externalEnabled?: boolean;
   externalContentIndex?: number;
+  externalContentIndexEnabled?: boolean;
 }
 
 interface InsightsState {
@@ -35,7 +39,7 @@ interface InsightsState {
 
 const styles = {
   container: {
-    flex: 1,
+    height: '100%',
     overflowY: 'auto' as const,
     padding: '20px 16px',
     background: 'var(--nxai-card-bg)',
@@ -60,9 +64,6 @@ const styles = {
     fontWeight: 600,
     color: 'var(--nxai-card-text)',
     margin: 0,
-  },
-  clickableCard: {
-    cursor: 'pointer',
   },
   statRow: {
     display: 'flex',
@@ -133,13 +134,35 @@ export class PanelInsights extends React.Component<PanelInsightsProps, InsightsS
         this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS),
       ]);
 
+      // Apply defaults matching main process (ipc-handlers.ts DEFAULT_SETTINGS)
+      const defaults = {
+        haltedSiteRefreshIntervalHours: 24,
+        wpeRefreshIntervalHours: 24,
+        wpeRefreshAutoEnabled: false,
+        externalRefreshIntervalHours: 24,
+        externalRefreshAutoEnabled: false,
+        externalContentIndexIntervalHours: 24,
+        externalContentIndexAutoEnabled: false,
+      };
+
+      // dashboardStats can be null on error (ipc-handlers.ts catch returns null)
+      // — treat that as an error state, not a loading state
+      if (dashboardStats === null) {
+        this.setState({ counts: null, intervals: null, error: 'Failed to load dashboard stats' });
+        return;
+      }
+
       this.setState({
-        counts: dashboardStats?.counts ?? null,
+        counts: dashboardStats.counts ?? null,
         intervals: {
-          halted: settings?.haltedSiteRefreshIntervalHours,
-          wpe: settings?.wpeRefreshIntervalHours,
-          external: settings?.externalRefreshIntervalHours,
-          externalContentIndex: settings?.externalContentIndexIntervalHours,
+          halted: settings?.haltedSiteRefreshIntervalHours ?? defaults.haltedSiteRefreshIntervalHours,
+          haltedEnabled: true, // Always runs
+          wpe: settings?.wpeRefreshIntervalHours ?? defaults.wpeRefreshIntervalHours,
+          wpeEnabled: settings?.wpeRefreshAutoEnabled ?? defaults.wpeRefreshAutoEnabled,
+          external: settings?.externalRefreshIntervalHours ?? defaults.externalRefreshIntervalHours,
+          externalEnabled: settings?.externalRefreshAutoEnabled ?? defaults.externalRefreshAutoEnabled,
+          externalContentIndex: settings?.externalContentIndexIntervalHours ?? defaults.externalContentIndexIntervalHours,
+          externalContentIndexEnabled: settings?.externalContentIndexAutoEnabled ?? defaults.externalContentIndexAutoEnabled,
         },
         error: null,
       });
@@ -176,12 +199,10 @@ export class PanelInsights extends React.Component<PanelInsightsProps, InsightsS
             ),
           );
 
-    const cardStyle =
-      pendingCount !== null && pendingCount > 0
-        ? { ...styles.card, ...styles.clickableCard }
-        : styles.card;
-
-    const onClick = pendingCount !== null && pendingCount > 0 ? this.props.onOpenAgents : undefined;
+    // Only clickable when there are pending items
+    const isClickable = pendingCount !== null && pendingCount > 0;
+    const cardStyle = isClickable ? { ...styles.card, cursor: 'pointer' } : styles.card;
+    const onClick = isClickable ? this.props.onOpenAgents : undefined;
 
     return React.createElement(
       'div',
@@ -192,6 +213,8 @@ export class PanelInsights extends React.Component<PanelInsightsProps, InsightsS
         React.createElement('h3', { style: styles.cardTitle }, 'Waiting'),
       ),
       React.createElement('div', { style: styles.cardBody }, bodyContent),
+      // TODO: wire onOpenAgents to actually navigate to Agents Hub (Activity tab in Local)
+      // once access to Local's tab navigation is available
     );
   }
 
@@ -246,7 +269,8 @@ export class PanelInsights extends React.Component<PanelInsightsProps, InsightsS
   private renderBackgroundJobs() {
     const { intervals, error } = this.state;
 
-    const formatInterval = (hours: number | undefined) => {
+    const formatInterval = (hours: number | undefined, enabled: boolean | undefined) => {
+      if (enabled === false) return 'off';
       if (hours === undefined || hours === 0) return 'manual';
       if (hours === 1) return '1 hour';
       if (hours < 24) return `${hours} hours`;
@@ -265,25 +289,25 @@ export class PanelInsights extends React.Component<PanelInsightsProps, InsightsS
             'div',
             { style: styles.statRow },
             React.createElement('div', { style: styles.statLabel }, 'Halted site refresh'),
-            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.halted)),
+            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.halted, intervals.haltedEnabled)),
           ),
           React.createElement(
             'div',
             { style: styles.statRow },
             React.createElement('div', { style: styles.statLabel }, 'WP Engine refresh'),
-            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.wpe)),
+            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.wpe, intervals.wpeEnabled)),
           ),
           React.createElement(
             'div',
             { style: styles.statRow },
             React.createElement('div', { style: styles.statLabel }, 'External host refresh'),
-            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.external)),
+            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.external, intervals.externalEnabled)),
           ),
           React.createElement(
             'div',
             { style: { ...styles.statRow, marginBottom: 0 } },
             React.createElement('div', { style: styles.statLabel }, 'External host indexing'),
-            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.externalContentIndex)),
+            React.createElement('div', { style: styles.statValue }, formatInterval(intervals.externalContentIndex, intervals.externalContentIndexEnabled)),
           ),
         );
 

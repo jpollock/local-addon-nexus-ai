@@ -116,12 +116,40 @@ describe('PanelInsights', () => {
     const inst: any = new (PanelInsights as any)({ electron: mockElectron, onOpenAgents: jest.fn() });
     inst.state.intervals = {
       halted: 1,
+      haltedEnabled: true,
       wpe: 24,
+      wpeEnabled: false,
       external: 24,
+      externalEnabled: false,
       externalContentIndex: 24,
+      externalContentIndexEnabled: false,
     };
 
     const tree = JSON.stringify(serializeTree(inst.render()));
     expect(tree).toContain('1 hour');
+  });
+
+  it('treats null dashboardStats response as error state', async () => {
+    const invoke = jest.fn().mockImplementation((channel: string) => {
+      if (channel === 'nexus-ai:get-dashboard-stats') return Promise.resolve(null);
+      if (channel === 'nexus-ai:get-settings') return Promise.resolve({});
+      return Promise.reject(new Error('Unknown channel'));
+    });
+    const electron = { ipcRenderer: { invoke } };
+
+    const inst: any = new (PanelInsights as any)({ electron, onOpenAgents: jest.fn() });
+
+    // Use a spy to capture setState calls
+    const setStateSpy = jest.spyOn(inst, 'setState');
+
+    await inst.fetchData();
+
+    // Verify setState was called with error
+    expect(setStateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'Failed to load dashboard stats',
+        counts: null,
+      })
+    );
   });
 });

@@ -24,8 +24,8 @@ interface DockedPanelState {
   hoveredBtn: string | null;
 }
 
-const PANEL_WIDTH = 384;
-const WIDE_WIDTH = 620;
+export const PANEL_WIDTH = 384;
+export const WIDE_WIDTH = 620;
 const BUBBLE_SIZE = 52;
 
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────

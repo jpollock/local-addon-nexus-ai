@@ -526,6 +526,7 @@ export class PanelChat extends React.Component<Props, State> {
 
       const chatMessages: ChatMessage[] = messages
         .filter((m) => m.role !== 'system')
+        .filter((m) => !(m.role === 'assistant' && m.content === ''))
         .map((m) => ({
           id: m.id,
           sessionId,
