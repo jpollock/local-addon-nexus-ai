@@ -1497,7 +1497,15 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const section6 = React.createElement('div', { style: sectionStyle },
       this.renderSectionHeader('logging', 'Logging'),
       expandedSections.has('logging')
-        ? React.createElement(LoggingSection, { stats: this.state.loggingStats, electron: this.props.electron, settings: this.state.settings })
+        ? React.createElement(LoggingSection, {
+            stats: this.state.loggingStats,
+            electron: this.props.electron,
+            settings: this.state.settings,
+            notifyChange: (next: NexusSettings) => {
+              this.setState({ settings: next });
+              this.notifyChange(next);
+            },
+          })
         : null,
     );
 

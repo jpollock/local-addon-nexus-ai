@@ -62,7 +62,7 @@ function timeOf(at: Date): string {
  * separator, and an invalid Date yields the literal `Invalid Date`, whose space would land in a
  * filename. Both fall back to local date components, and an unusable clock to `unknown`.
  */
-function localDay(at: Date): string {
+export function localDay(at: Date): string {
   if (!Number.isFinite(at.getTime())) return 'unknown';
   const day = at.toLocaleDateString('en-CA');
   if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;

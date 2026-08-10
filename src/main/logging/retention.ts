@@ -9,11 +9,13 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { localDay } from './eventLog';
+import { createLogger } from './Logger';
 
 export interface LogFileInfo {
   path: string;
   category: 'combined' | 'agent' | 'transcript';
-  /** YYYY-MM-DD, from the filename. Sorts lexically, which is why the format matters. */
+  /** YYYY-MM-DD, from the filename or file mtime. Sorts lexically, which is why the format matters. */
   day: string;
   bytes: number;
   /** True when this file records a failed or Tier 3 run — never evicted. */
@@ -25,7 +27,7 @@ export interface RetentionPlan { deletePaths: string[]; freedBytes: number; kept
 
 const DAY_IN_NAME = /(\d{4}-\d{2}-\d{2})/;
 
-let running = false;
+const logger = createLogger('Retention');
 
 /**
  * What retention would delete, decided before anything is deleted.
@@ -33,16 +35,16 @@ let running = false;
  * Pure on purpose: "Clear logs" has to state what it will remove, and a UI cannot honestly
  * promise that if the decision only exists inside the deleting loop.
  *
- * Preserved files are exempt from BOTH passes. A run that errored or performed a Tier 3
+ * Preserved files are exempt from BOTH passes. A run that errored, timed out, or performed a Tier 3
  * operation is the one most worth auditing; ageing it out on the same schedule as a quiet run —
  * or evicting it to satisfy a disk budget — defeats the point of keeping logs at all. Going over
  * budget is recoverable; losing the record of a failed production run is not.
  */
-export function planRetention(files: LogFileInfo[], policy: RetentionPolicy): RetentionPlan {
+export function planRetention(files: LogFileInfo[], policy: RetentionPolicy, now?: () => Date): RetentionPlan {
   const cutoff = (days: number): string => {
-    const d = new Date();
+    const d = now ? now() : new Date();
     d.setDate(d.getDate() - days);
-    return d.toLocaleDateString('en-CA');
+    return localDay(d);
   };
   const logCutoff = cutoff(policy.logDays);
   const transcriptCutoff = cutoff(policy.transcriptDays);
@@ -80,8 +82,6 @@ export function planRetention(files: LogFileInfo[], policy: RetentionPolicy): Re
  */
 export function applyRetention(root: string, policy: RetentionPolicy): RetentionPlan {
   const empty: RetentionPlan = { deletePaths: [], freedBytes: 0, keptBytes: 0 };
-  if (running) return empty; // Guard against overlapping sweeps on slow filesystems
-  running = true;
   try {
     const files: LogFileInfo[] = [];
     const scan = (dir: string, category: LogFileInfo['category']) => {
@@ -90,12 +90,18 @@ export function applyRetention(root: string, policy: RetentionPolicy): Retention
       for (const name of entries) {
         const full = path.join(dir, name);
         let bytes = 0;
+        let mtime: Date | undefined;
         try {
           const st = fs.statSync(full);
           if (!st.isFile()) continue;
           bytes = st.size;
+          mtime = st.mtime;
         } catch { continue; }
-        const day = DAY_IN_NAME.exec(name)?.[1];
+        // Extract day from filename if present; otherwise use file mtime
+        let day = DAY_IN_NAME.exec(name)?.[1];
+        if (!day && mtime) {
+          day = localDay(mtime);
+        }
         if (!day) continue;
         files.push({ path: full, category, day, bytes, preserved: isPreserved(full) });
       }
@@ -109,16 +115,21 @@ export function applyRetention(root: string, policy: RetentionPolicy): Retention
       // Individually wrapped: one undeletable file must not abort the sweep.
       try { fs.unlinkSync(p); } catch { /* leave it; the next sweep tries again */ }
     }
+
+    // Warn when preserved files push the directory over budget
+    if (plan.keptBytes > policy.budgetBytes) {
+      const overage = ((plan.keptBytes - policy.budgetBytes) / (1024 * 1024)).toFixed(1);
+      logger.warn(`Retention budget exceeded by ${overage} MB due to preserved files (kept: ${(plan.keptBytes / (1024 * 1024)).toFixed(1)} MB, budget: ${(policy.budgetBytes / (1024 * 1024)).toFixed(1)} MB)`);
+    }
+
     return plan;
   } catch {
     return empty;
-  } finally {
-    running = false;
   }
 }
 
 /**
- * A file records a run worth keeping: an error, or a mutation. Read cheaply — a scan runs daily
+ * A file records a run worth keeping: an error, timeout, or a mutation. Read cheaply — a scan runs daily
  * over files that can be megabytes, so this looks for the markers and stops caring about the rest.
  *
  * Reads incrementally with early exit: a 100 MB log directory is NOT pulled through the Node heap.
@@ -126,7 +137,7 @@ export function applyRetention(root: string, policy: RetentionPolicy): Retention
  */
 function isPreserved(file: string): boolean {
   const CHUNK_SIZE = 64 * 1024; // 64 KB
-  const MARKERS = ['run.end status=error', ' mutation op='];
+  const MARKERS = ['run.end status=error', 'run.end status=timeout', ' mutation op='];
   const MAX_MARKER_LEN = Math.max(...MARKERS.map(m => m.length));
   const OVERLAP = MAX_MARKER_LEN - 1;
 

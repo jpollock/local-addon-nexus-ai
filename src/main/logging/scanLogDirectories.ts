@@ -42,8 +42,26 @@ export function scanLogDirectories(userDataPath: string): LogSizes {
   scan(logRoot, 'combined');
   scan(path.join(logRoot, 'agents'), 'agent');
   scan(path.join(logRoot, 'transcripts'), 'transcript');
-  // Audit logs live one directory up from the log root
-  scan(path.join(userDataPath, 'nexus-ai'), 'audit');
+
+  // Audit logs: explicit allowlist, not a directory sweep.
+  // The nexus-ai/ directory also contains vectors.db and graph.db, which are not logs.
+  const auditDir = path.join(userDataPath, 'nexus-ai');
+  const auditFiles = ['audit.log', 'operation-audit.log'];
+  for (const basename of auditFiles) {
+    const auditPath = path.join(auditDir, basename);
+    try {
+      const st = fs.statSync(auditPath);
+      if (st.isFile()) sizes.audit += st.size;
+    } catch { /* skip missing or unreadable file */ }
+    // Also count rotated generations (.1, .2, .3)
+    for (let gen = 1; gen <= 3; gen++) {
+      const rotatedPath = `${auditPath}.${gen}`;
+      try {
+        const st = fs.statSync(rotatedPath);
+        if (st.isFile()) sizes.audit += st.size;
+      } catch { /* skip missing generation */ }
+    }
+  }
 
   sizes.total = sizes.combined + sizes.agent + sizes.transcript + sizes.audit;
   return sizes;

@@ -1285,6 +1285,40 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.LOGGING_REVEAL, async (_event: any, logPath: string) => {
+    try {
+      const { shell } = require('electron');
+      await shell.showItemInFolder(logPath);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-reveal failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_CLEAR, async () => {
+    try {
+      const { planRetention, applyRetention } = require('./logging/retention');
+      const { scanLogDirectories } = require('./logging/scanLogDirectories');
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const logDays = settings?.logRetentionDays ?? 14;
+      const transcriptDays = settings?.transcriptRetentionDays ?? 3;
+      const budgetBytes = settings?.logBudgetBytes ?? 250 * 1024 * 1024;
+
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      const policy = { logDays, transcriptDays, budgetBytes };
+
+      // Use applyRetention which honors preservation (failed runs, Tier 3 operations)
+      const plan = applyRetention(logRoot, policy);
+
+      localLogger.info(`[NexusAI] Cleared logs: deleted ${plan.deletePaths.length} files, freed ${plan.freedBytes} bytes`);
+      return { success: true, filesDeleted: plan.deletePaths.length, bytesFreed: plan.freedBytes };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-clear failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
       // Validate input

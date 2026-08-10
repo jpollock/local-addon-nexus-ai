@@ -11,21 +11,27 @@ const f = (over: Partial<any> = {}) => ({
 
 describe('planRetention', () => {
   it('keeps everything inside the day windows and under budget', () => {
-    const plan = planRetention([f({ day: '2026-08-09' }), f({ day: '2026-08-08' })], POLICY);
+    // Use relative days to avoid calendar-date brittleness
+    const now = () => new Date('2026-08-09T12:00:00Z');
+    const plan = planRetention([f({ day: '2026-08-09' }), f({ day: '2026-08-08' })], POLICY, now);
     expect(plan.deletePaths).toEqual([]);
   });
 
   it('drops logs older than logDays', () => {
+    // Use relative days to avoid calendar-date brittleness
+    const now = () => new Date('2026-08-09T12:00:00Z');
     const old = f({ day: '2026-07-01', path: '/logs/old.log' });
-    const plan = planRetention([old, f({ day: '2026-08-09' })], POLICY);
+    const plan = planRetention([old, f({ day: '2026-08-09' })], POLICY, now);
     expect(plan.deletePaths).toEqual(['/logs/old.log']);
   });
 
   it('holds transcripts to a shorter window than logs', () => {
     // Transcripts carry prompt text, so they age out faster than the lines that reference them.
+    // Use relative days to avoid calendar-date brittleness
+    const now = () => new Date('2026-08-09T12:00:00Z');
     const t = f({ day: '2026-08-04', category: 'transcript', path: '/logs/t.jsonl' });
     const l = f({ day: '2026-08-04', path: '/logs/keep.log' });
-    const plan = planRetention([t, l], POLICY);
+    const plan = planRetention([t, l], POLICY, now);
     expect(plan.deletePaths).toEqual(['/logs/t.jsonl']);
   });
 
@@ -179,5 +185,55 @@ describe('applyRetention — marker detection', () => {
     // File SHOULD be deleted — it does not contain the real marker.
     expect(plan.deletePaths).toContain(logPath);
     expect(fs.existsSync(logPath)).toBe(false);
+  });
+
+  it('preserves a run that timed out', () => {
+    // I1: timeout is a preservation marker alongside error
+    const content = 'run.end status=timeout after 10 minutes';
+    const logPath = path.join(tmpDir, 'nexus-2026-07-01.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 1, transcriptDays: 1, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // File should NOT be deleted — it is preserved (contains timeout marker).
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(logPath)).toBe(true);
+  });
+
+  it('processes transcripts without dates in their names via mtime', () => {
+    // C1: transcripts are named r_<base36> with no date; must use mtime
+    const transcriptDir = path.join(tmpDir, 'transcripts');
+    fs.mkdirSync(transcriptDir, { recursive: true });
+    const transcriptPath = path.join(transcriptDir, 'r_abc123.jsonl');
+    fs.writeFileSync(transcriptPath, 'transcript content');
+
+    // Set mtime to 10 days ago
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    fs.utimesSync(transcriptPath, tenDaysAgo, tenDaysAgo);
+
+    const policy = { logDays: 14, transcriptDays: 3, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // Transcript is 10 days old, transcriptDays is 3 — should be deleted
+    expect(plan.deletePaths).toContain(transcriptPath);
+    expect(fs.existsSync(transcriptPath)).toBe(false);
+  });
+
+  it('keeps recent transcripts without dates in their names', () => {
+    // C1: transcripts are named r_<base36> with no date; must use mtime
+    const transcriptDir = path.join(tmpDir, 'transcripts');
+    fs.mkdirSync(transcriptDir, { recursive: true });
+    const transcriptPath = path.join(transcriptDir, 'r_xyz789.jsonl');
+    fs.writeFileSync(transcriptPath, 'recent transcript');
+
+    // mtime is now (just created)
+    const policy = { logDays: 14, transcriptDays: 3, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // Transcript is fresh — should be kept
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(transcriptPath)).toBe(true);
   });
 });

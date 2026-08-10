@@ -40,32 +40,99 @@ const rowStyle: React.CSSProperties = {
 };
 
 export class LoggingSection extends React.Component<
-  { stats: LoggingStats | null; electron: any; settings: NexusSettings },
-  { confirmingClear: boolean }
+  { stats: LoggingStats | null; electron: any; settings: NexusSettings; notifyChange?: (settings: NexusSettings) => void },
+  { confirmingClear: boolean; localLogDays: string; localTranscriptDays: string; localBudgetMB: string }
 > {
-  state = { confirmingClear: false };
+  state = {
+    confirmingClear: false,
+    localLogDays: String(this.props.settings.logRetentionDays ?? 14),
+    localTranscriptDays: String(this.props.settings.transcriptRetentionDays ?? 3),
+    localBudgetMB: String(Math.round((this.props.settings.logBudgetBytes ?? 250 * 1024 * 1024) / 1024 / 1024)),
+  };
+
+  componentDidUpdate(prevProps: { settings: NexusSettings }): void {
+    // Sync local state when settings change externally (e.g., from parent Apply button)
+    if (prevProps.settings.logRetentionDays !== this.props.settings.logRetentionDays) {
+      this.setState({ localLogDays: String(this.props.settings.logRetentionDays ?? 14) });
+    }
+    if (prevProps.settings.transcriptRetentionDays !== this.props.settings.transcriptRetentionDays) {
+      this.setState({ localTranscriptDays: String(this.props.settings.transcriptRetentionDays ?? 3) });
+    }
+    if (prevProps.settings.logBudgetBytes !== this.props.settings.logBudgetBytes) {
+      this.setState({ localBudgetMB: String(Math.round((this.props.settings.logBudgetBytes ?? 250 * 1024 * 1024) / 1024 / 1024)) });
+    }
+  }
 
   handleLevelChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const logLevel = e.target.value as 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
+    const next = { ...this.props.settings, logLevel };
     this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logLevel });
+    this.props.notifyChange?.(next);
   };
 
   handleLogDaysChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const val = parseInt(e.target.value, 10);
-    if (isNaN(val) || val < 1 || val > 365) return;
-    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: val });
+    this.setState({ localLogDays: e.target.value });
   };
 
   handleTranscriptDaysChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const val = parseInt(e.target.value, 10);
-    if (isNaN(val) || val < 1 || val > 365) return;
-    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { transcriptRetentionDays: val });
+    this.setState({ localTranscriptDays: e.target.value });
   };
 
   handleBudgetChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const val = parseInt(e.target.value, 10);
-    if (isNaN(val) || val < 1) return;
-    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logBudgetBytes: val * 1024 * 1024 });
+    this.setState({ localBudgetMB: e.target.value });
+  };
+
+  commitLogDays = (): void => {
+    const val = parseInt(this.state.localLogDays, 10);
+    if (isNaN(val) || val < 1 || val > 365) {
+      // Revert to current setting on invalid input
+      this.setState({ localLogDays: String(this.props.settings.logRetentionDays ?? 14) });
+      return;
+    }
+    const next = { ...this.props.settings, logRetentionDays: val };
+    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: val });
+    this.props.notifyChange?.(next);
+  };
+
+  commitTranscriptDays = (): void => {
+    const val = parseInt(this.state.localTranscriptDays, 10);
+    if (isNaN(val) || val < 1 || val > 365) {
+      this.setState({ localTranscriptDays: String(this.props.settings.transcriptRetentionDays ?? 3) });
+      return;
+    }
+    const next = { ...this.props.settings, transcriptRetentionDays: val };
+    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { transcriptRetentionDays: val });
+    this.props.notifyChange?.(next);
+  };
+
+  commitBudget = (): void => {
+    const val = parseInt(this.state.localBudgetMB, 10);
+    if (isNaN(val) || val < 1) {
+      this.setState({ localBudgetMB: String(Math.round((this.props.settings.logBudgetBytes ?? 250 * 1024 * 1024) / 1024 / 1024)) });
+      return;
+    }
+    const budgetBytes = val * 1024 * 1024;
+    const next = { ...this.props.settings, logBudgetBytes: budgetBytes };
+    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logBudgetBytes: budgetBytes });
+    this.props.notifyChange?.(next);
+  };
+
+  handleRevealLogs = (): void => {
+    const { stats } = this.props;
+    if (!stats) return;
+    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.LOGGING_REVEAL, stats.root).catch((err: Error) => {
+      console.error('Failed to reveal logs:', err);
+    });
+  };
+
+  handleClearLogs = (): void => {
+    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.LOGGING_CLEAR).then(() => {
+      this.setState({ confirmingClear: false });
+      // Optionally refetch stats here
+    }).catch((err: Error) => {
+      console.error('Failed to clear logs:', err);
+      this.setState({ confirmingClear: false });
+    });
   };
 
   render(): React.ReactElement {
@@ -73,16 +140,13 @@ export class LoggingSection extends React.Component<
     if (!stats) return React.createElement('div', null, 'Loading log statistics…');
 
     const logLevel = settings.logLevel ?? 'INFO';
-    const logDays = settings.logRetentionDays ?? 14;
-    const transcriptDays = settings.transcriptRetentionDays ?? 3;
-    const budgetMB = Math.round((settings.logBudgetBytes ?? 250 * 1024 * 1024) / 1024 / 1024);
 
     return React.createElement('div', null,
       // Where they are
       React.createElement('div', { style: { marginBottom: '16px' } },
         React.createElement('div', { style: { fontSize: '13px', marginBottom: '6px' } }, stats.root),
         React.createElement('button', {
-          onClick: () => this.props.electron?.ipcRenderer?.invoke('nexus-ai:reveal-path', stats.root),
+          onClick: this.handleRevealLogs,
           style: { padding: '6px 12px', fontSize: '13px', cursor: 'pointer' },
         }, 'Reveal in Finder'),
       ),
@@ -118,8 +182,10 @@ export class LoggingSection extends React.Component<
           type: 'number',
           min: 1,
           max: 365,
-          value: logDays,
+          value: this.state.localLogDays,
           onChange: this.handleLogDaysChange,
+          onBlur: this.commitLogDays,
+          onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') this.commitLogDays(); },
           style: inputStyle,
         }),
         React.createElement('span', { style: { fontSize: '13px', marginLeft: '6px' } }, 'days'),
@@ -131,8 +197,10 @@ export class LoggingSection extends React.Component<
           type: 'number',
           min: 1,
           max: 365,
-          value: transcriptDays,
+          value: this.state.localTranscriptDays,
           onChange: this.handleTranscriptDaysChange,
+          onBlur: this.commitTranscriptDays,
+          onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') this.commitTranscriptDays(); },
           style: inputStyle,
         }),
         React.createElement('span', { style: { fontSize: '13px', marginLeft: '6px' } }, 'days'),
@@ -144,8 +212,10 @@ export class LoggingSection extends React.Component<
           type: 'number',
           min: 1,
           max: 10000,
-          value: budgetMB,
+          value: this.state.localBudgetMB,
           onChange: this.handleBudgetChange,
+          onBlur: this.commitBudget,
+          onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') this.commitBudget(); },
           style: inputStyle,
         }),
         React.createElement('span', { style: { fontSize: '13px', marginLeft: '6px' } }, 'MB'),
@@ -158,7 +228,7 @@ export class LoggingSection extends React.Component<
               React.createElement('div', { style: { fontSize: '13px', marginBottom: '12px' } },
                 `This will delete ${mb(stats.totalBytes)} of logs. Runs that failed are kept.`),
               React.createElement('button', {
-                onClick: () => this.props.electron?.ipcRenderer?.invoke('nexus-ai:clear-logs'),
+                onClick: this.handleClearLogs,
                 style: { padding: '6px 12px', marginRight: '8px', fontSize: '13px', cursor: 'pointer' },
               }, 'Delete them'),
               React.createElement('button', {
