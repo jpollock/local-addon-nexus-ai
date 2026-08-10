@@ -543,6 +543,31 @@ export default function main(context: any): void {
         localLogger.warn('[NexusAI] GraphDB not available — SmartSearch disabled');
       }
 
+      // EventLog and retention setup — independent of graph DB, moved out from the conditional
+      // below so retention continues working even when the database fails to open.
+      const nexusLogRoot = path.join(
+        os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'logs',
+      );
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+      const minLevel = resolveLogLevel(settings ?? undefined, process.env);
+      eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
+
+      // Apply retention on startup and daily — bounds log growth.
+      // Policy reads from settings if present, falls back to hardcoded defaults.
+      // Pure filesystem work with no database dependency, so it runs even when agentDb is unavailable.
+      const getRetentionPolicy = () => {
+        const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+        return {
+          logDays: s?.logRetentionDays ?? 14,
+          transcriptDays: s?.transcriptRetentionDays ?? 3,
+          budgetBytes: s?.logBudgetBytes ?? 250 * 1024 * 1024,
+        };
+      };
+      applyRetention(nexusLogRoot, getRetentionPolicy());
+      setInterval(() => {
+        try { applyRetention(nexusLogRoot, getRetentionPolicy()); } catch { /* never throw */ }
+      }, 24 * 60 * 60 * 1000);
+
       // Agent Platform initialization — requires GraphDB (same connection as SmartSearch)
       // contributedRegistry and dispatcher are hoisted so McpServer can consume them
       // even when agentDb is unavailable (they'll simply be empty/unused).
@@ -573,31 +598,6 @@ export default function main(context: any): void {
           agentDbManager,
         );
         const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager);
-
-        // One EventLog per process, shared by every agent run — this is what lets `grep run=r_…`
-        // reassemble a run across the combined stream, the per-agent file and (later) the audit
-        // trail. Exposed on nexusServices.eventLog (below) so IPC handlers can reach it too.
-        const nexusLogRoot = path.join(
-          os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'logs',
-        );
-        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
-        const minLevel = resolveLogLevel(settings ?? undefined, process.env);
-        eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
-
-        // Apply retention on startup and daily — bounds log growth.
-        // Policy reads from settings if present, falls back to hardcoded defaults.
-        const getRetentionPolicy = () => {
-          const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
-          return {
-            logDays: s?.logRetentionDays ?? 14,
-            transcriptDays: s?.transcriptRetentionDays ?? 3,
-            budgetBytes: s?.logBudgetBytes ?? 250 * 1024 * 1024,
-          };
-        };
-        applyRetention(nexusLogRoot, getRetentionPolicy());
-        setInterval(() => {
-          try { applyRetention(nexusLogRoot, getRetentionPolicy()); } catch { /* never throw */ }
-        }, 24 * 60 * 60 * 1000);
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
         const agentRunner = new AgentRunner(
@@ -711,10 +711,6 @@ export default function main(context: any): void {
         nexusServices.agentReload = agentReload;
         nexusServices.contributedRegistry = contributedRegistry;
         nexusServices.dispatcher = dispatcher;
-        // Declared field on NexusServices (src/main/mcp/types.ts) — reached the same way
-        // agentRunner/dispatcher are, so a future gate wrapper (e.g. the IPC AGENT_RUN_NOW
-        // handler) can write to the same EventLog instance without constructing a second one.
-        nexusServices.eventLog = eventLog;
 
         // safeStorage.isEncryptionAvailable() can still be false this early in Local's addon
         // startup (confirmed live: false at the exact moment getAIProvider() ran above). When
@@ -739,6 +735,12 @@ export default function main(context: any): void {
       } else {
         localLogger.warn('[NexusAI] GraphDB not available — agent platform disabled');
       }
+
+      // Expose EventLog on services — assigned outside the agentDb conditional so it is always
+      // available. Declared field on NexusServices (src/main/mcp/types.ts) — reached the same way
+      // agentRunner/dispatcher are, so a future gate wrapper (e.g. the IPC AGENT_RUN_NOW handler)
+      // can write to the same EventLog instance without constructing a second one.
+      nexusServices.eventLog = eventLog;
 
       setStartupPhase('EventProcessor');
       await eventProcessor.initialize();

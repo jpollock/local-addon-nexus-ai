@@ -2,7 +2,13 @@ import type { LogLevelName } from './eventLog';
 
 const LEVELS: readonly LogLevelName[] = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
 
-function asLevel(value: unknown): LogLevelName | undefined {
+/**
+ * Validate and normalize a level string.
+ *
+ * Exported so per-agent overrides can route through the same validation the global level gets,
+ * ensuring an unrecognised override is ignored rather than honoured as "log everything".
+ */
+export function asLevel(value: unknown): LogLevelName | undefined {
   if (typeof value !== 'string') return undefined;
   const upper = value.toUpperCase() as LogLevelName;
   return LEVELS.includes(upper) ? upper : undefined;

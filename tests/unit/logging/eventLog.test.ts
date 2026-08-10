@@ -301,3 +301,52 @@ describe('EventLog reports its own failures', () => {
     } finally { spy.mockRestore(); }
   });
 });
+
+describe('EventLog preservation-critical events bypass the level gate', () => {
+  // I6 fix: successful mutations and failed runs must reach the file regardless of verbosity,
+  // because the retention system keys on those markers. A WARN or ERROR level must not silently
+  // disable preservation.
+
+  it('writes a successful mutation even when the level is ERROR', () => {
+    const log = new EventLog({ root, minLevel: 'ERROR', now: () => AT });
+    log.write({ level: 'INFO', source: 'agent', event: 'mutation', fields: { op: 'wp_plugin_update' } });
+    const content = read(combinedPath());
+    expect(content).toContain('mutation op=wp_plugin_update');
+  });
+
+  it('writes a failed run.end even when the level is ERROR', () => {
+    const log = new EventLog({ root, minLevel: 'ERROR', now: () => AT });
+    log.write({ level: 'INFO', source: 'agent', event: 'run.end', fields: { status: 'error' } });
+    const content = read(combinedPath());
+    expect(content).toContain('run.end status=error');
+  });
+
+  it('writes a timeout run.end even when the level is ERROR', () => {
+    const log = new EventLog({ root, minLevel: 'ERROR', now: () => AT });
+    log.write({ level: 'INFO', source: 'agent', event: 'run.end', fields: { status: 'timeout' } });
+    const content = read(combinedPath());
+    expect(content).toContain('run.end status=timeout');
+  });
+
+  it('still drops a successful run.end below the level - not preservation-critical', () => {
+    const log = new EventLog({ root, minLevel: 'ERROR', now: () => AT });
+    log.write({ level: 'INFO', source: 'agent', event: 'run.end', fields: { status: 'success' } });
+    expect(fs.existsSync(combinedPath())).toBe(false);
+  });
+
+  it('still drops ordinary events below the level', () => {
+    const log = new EventLog({ root, minLevel: 'ERROR', now: () => AT });
+    log.write({ level: 'INFO', source: 'agent', event: 'phase', fields: { name: 'analysis' } });
+    expect(fs.existsSync(combinedPath())).toBe(false);
+  });
+
+  it('mutation exemption does not elevate INFO to ERROR semantics - it just bypasses the gate', () => {
+    // The event is written at its declared level, not re-labelled. Raising the level would be a
+    // different class of wrongness: a successful plugin update is not an error.
+    const log = new EventLog({ root, minLevel: 'ERROR', now: () => AT });
+    log.write({ level: 'INFO', source: 'agent', event: 'mutation', fields: { op: 'test' } });
+    const content = read(combinedPath());
+    expect(content).toContain('INFO agent mutation');
+    expect(content).not.toContain('ERROR');
+  });
+});

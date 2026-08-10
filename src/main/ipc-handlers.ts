@@ -273,6 +273,7 @@ import { canAutoRunWith, AutoRunKind, AutoRunDecision } from './agent-runtime/au
 import type { CadenceSettings } from './agent-runtime/schedule';
 import { newRunId } from './logging/runId';
 import type { EventLog } from './logging/eventLog';
+import { asLevel } from './logging/resolveLogLevel';
 
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
@@ -300,10 +301,15 @@ export function getAgentCadence(agentId: string): CadenceSettings | undefined {
  *
  * Read by `EventLog.write()` through the `levelFor` callback. Returns undefined when no override
  * is set (falls back to the global level) or before the settings cache is seeded.
+ *
+ * Routes through `asLevel` so an unrecognised value is ignored rather than honoured. A typo in
+ * agent-settings.json (hand-edited in practice) must not silently maximise verbosity — the same
+ * fail-safe the global level gets.
  */
 export function getAgentLogLevel(agentId: string): 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | undefined {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
-  return cache?.get(agentId)?.logLevel;
+  const raw = cache?.get(agentId)?.logLevel;
+  return asLevel(raw);
 }
 
 /**

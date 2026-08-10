@@ -283,7 +283,17 @@ export class EventLog {
         const override = this.levelFor?.(e.source);
         if (override) min = override;
       } catch { /* a settings cache that is not ready must not drop the line */ }
-      if (LogLevel[e.level] > LogLevel[min]) return;
+
+      // Preservation-critical events bypass the level gate. A successful mutation or a failed run
+      // must reach the file regardless of verbosity — the retention system keys on these markers,
+      // so a WARN or ERROR level must not silently disable preservation. Mutations are rare (volume
+      // is negligible), and failed runs are by definition events someone wants a record of.
+      const isPreservationCritical =
+        e.event === 'mutation' ||
+        (e.event === 'run.end' && e.fields?.status && e.fields.status !== 'success');
+
+      if (!isPreservationCritical && LogLevel[e.level] > LogLevel[min]) return;
+
       const at = e.at ?? this.now();
       const line = formatLine({ ...e, at }) + '\n';
       const { combined, agent } = this.pathsFor({ ...e, at });

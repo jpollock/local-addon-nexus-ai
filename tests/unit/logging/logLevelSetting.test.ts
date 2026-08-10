@@ -1,4 +1,4 @@
-import { resolveLogLevel } from '../../../src/main/logging/resolveLogLevel';
+import { resolveLogLevel, asLevel } from '../../../src/main/logging/resolveLogLevel';
 import { UpdateSettingsSchema } from '../../../src/common/schemas';
 
 describe('resolveLogLevel', () => {
@@ -34,6 +34,37 @@ describe('resolveLogLevel', () => {
 
   it('falls back to INFO when both layers are invalid', () => {
     expect(resolveLogLevel({ logLevel: 'LOUD' as any }, { NEXUS_LOG_LEVEL: 'QUIET' })).toBe('INFO');
+  });
+});
+
+describe('asLevel', () => {
+  it('validates and normalizes recognised level strings', () => {
+    expect(asLevel('ERROR')).toBe('ERROR');
+    expect(asLevel('WARN')).toBe('WARN');
+    expect(asLevel('INFO')).toBe('INFO');
+    expect(asLevel('DEBUG')).toBe('DEBUG');
+  });
+
+  it('normalizes case', () => {
+    expect(asLevel('error')).toBe('ERROR');
+    expect(asLevel('debug')).toBe('DEBUG');
+    expect(asLevel('WaRn')).toBe('WARN');
+  });
+
+  it('I7: returns undefined for unrecognised values rather than failing open', () => {
+    // Before I7, getAgentLogLevel returned the raw value from settings with a cast, so 'LOUD'
+    // became LogLevel['LOUD'] = undefined, and INFO > undefined was false - everything written.
+    // asLevel() makes it explicit: unrecognised values are ignored (undefined = no override).
+    expect(asLevel('LOUD')).toBeUndefined();
+    expect(asLevel('QUIET')).toBeUndefined();
+    expect(asLevel('nonsense')).toBeUndefined();
+  });
+
+  it('returns undefined for non-string inputs', () => {
+    expect(asLevel(null)).toBeUndefined();
+    expect(asLevel(undefined)).toBeUndefined();
+    expect(asLevel(42)).toBeUndefined();
+    expect(asLevel({})).toBeUndefined();
   });
 });
 
