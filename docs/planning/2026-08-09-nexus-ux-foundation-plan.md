@@ -1809,6 +1809,18 @@ the graph. Use the same test for future work rather than absorbing every adjacen
   `index.wpeTotal` (CAPI, unlabelled). The first two are deliberate and distinguishable; the
   third should join them or go.
 
+### Root cause behind the timeline churn (PHP side, not fixed here)
+
+- **`nexus_ai_handle_post_delete` has no revision guard, while the save path does.**
+  `wp-plugins/nexus-ai-connector/nexus-ai-connector.php:100-116` skips autosaves, skips revisions
+  and sends only `post_status === 'publish'`. The delete handler at `:133` does none of that, so
+  **every revision deletion emits a `post_deleted` event with `post_type: 'revision'`.** Measured
+  on the live database: 104 rows in `event_queue`, and 4 of the 12 most recent are revisions.
+  Task 12 filters these out on read, which fixes what the user sees. The root cause is one guard
+  in the PHP delete handler — cheaper, and it stops the rows being written at all. Deferred here
+  because it is a plugin change requiring `npm run sync-wp-plugins` and redeployment to sites.
+  Note the client-side filter is still worth keeping afterwards, for rows already in the queue.
+
 ### Drifting duplicate resolvers
 
 - **`src/main/graphql/resolvers/twin.ts` holds a second, now-unsynced `nexusFleetSummary`.**
