@@ -1,0 +1,127 @@
+/**
+ * Retention: days, a disk budget, and preserved failures.
+ *
+ * Phase 1's `rotateIfNeeded` bounds one day's file by size; nothing bounds the
+ * number of days, so the directory grows without limit. This module sweeps old
+ * files, runs daily, and skips runs worth auditing.
+ *
+ * Contract: NEVER throws. A cleanup fault must never become an operational fault.
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+
+export interface LogFileInfo {
+  path: string;
+  category: 'combined' | 'agent' | 'transcript';
+  /** YYYY-MM-DD, from the filename. Sorts lexically, which is why the format matters. */
+  day: string;
+  bytes: number;
+  /** True when this file records a failed or Tier 3 run — never evicted. */
+  preserved: boolean;
+}
+
+export interface RetentionPolicy { logDays: number; transcriptDays: number; budgetBytes: number }
+export interface RetentionPlan { deletePaths: string[]; freedBytes: number; keptBytes: number }
+
+const DAY_IN_NAME = /(\d{4}-\d{2}-\d{2})/;
+
+/**
+ * What retention would delete, decided before anything is deleted.
+ *
+ * Pure on purpose: "Clear logs" has to state what it will remove, and a UI cannot honestly
+ * promise that if the decision only exists inside the deleting loop.
+ *
+ * Preserved files are exempt from BOTH passes. A run that errored or performed a Tier 3
+ * operation is the one most worth auditing; ageing it out on the same schedule as a quiet run —
+ * or evicting it to satisfy a disk budget — defeats the point of keeping logs at all. Going over
+ * budget is recoverable; losing the record of a failed production run is not.
+ */
+export function planRetention(files: LogFileInfo[], policy: RetentionPolicy): RetentionPlan {
+  const cutoff = (days: number): string => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toLocaleDateString('en-CA');
+  };
+  const logCutoff = cutoff(policy.logDays);
+  const transcriptCutoff = cutoff(policy.transcriptDays);
+
+  const doomed = new Set<string>();
+  for (const f of files) {
+    if (f.preserved) continue;
+    const cut = f.category === 'transcript' ? transcriptCutoff : logCutoff;
+    if (f.day < cut) doomed.add(f.path);
+  }
+
+  // Budget pass: oldest first, and only over files the day pass spared.
+  let kept = files.filter(f => !doomed.has(f.path));
+  let keptBytes = kept.reduce((n, f) => n + f.bytes, 0);
+  if (keptBytes > policy.budgetBytes) {
+    for (const f of [...kept].sort((a, b) => a.day.localeCompare(b.day))) {
+      if (keptBytes <= policy.budgetBytes) break;
+      if (f.preserved) continue;
+      doomed.add(f.path);
+      keptBytes -= f.bytes;
+    }
+    kept = files.filter(f => !doomed.has(f.path));
+  }
+
+  const deleted = files.filter(f => doomed.has(f.path));
+  return {
+    deletePaths: deleted.map(f => f.path),
+    freedBytes: deleted.reduce((n, f) => n + f.bytes, 0),
+    keptBytes: kept.reduce((n, f) => n + f.bytes, 0),
+  };
+}
+
+/**
+ * Scan, plan, unlink. Never throws: a cleanup fault must not fail a run.
+ */
+export function applyRetention(root: string, policy: RetentionPolicy): RetentionPlan {
+  const empty: RetentionPlan = { deletePaths: [], freedBytes: 0, keptBytes: 0 };
+  try {
+    const files: LogFileInfo[] = [];
+    const scan = (dir: string, category: LogFileInfo['category']) => {
+      let entries: string[] = [];
+      try { entries = fs.readdirSync(dir); } catch { return; }
+      for (const name of entries) {
+        const full = path.join(dir, name);
+        let bytes = 0;
+        try {
+          const st = fs.statSync(full);
+          if (!st.isFile()) continue;
+          bytes = st.size;
+        } catch { continue; }
+        const day = DAY_IN_NAME.exec(name)?.[1];
+        if (!day) continue;
+        files.push({ path: full, category, day, bytes, preserved: isPreserved(full) });
+      }
+    };
+    scan(root, 'combined');
+    scan(path.join(root, 'agents'), 'agent');
+    scan(path.join(root, 'transcripts'), 'transcript');
+
+    const plan = planRetention(files, policy);
+    for (const p of plan.deletePaths) {
+      // Individually wrapped: one undeletable file must not abort the sweep.
+      try { fs.unlinkSync(p); } catch { /* leave it; the next sweep tries again */ }
+    }
+    return plan;
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * A file records a run worth keeping: an error, or a mutation. Read cheaply — a scan runs daily
+ * over files that can be megabytes, so this looks for the markers and stops caring about the rest.
+ */
+function isPreserved(file: string): boolean {
+  try {
+    const text = fs.readFileSync(file, 'utf-8');
+    return text.includes('run.end status=error') || text.includes(' mutation ');
+  } catch {
+    // Unreadable: treat as preserved. Deleting a file we could not inspect is the wrong default
+    // for a record whose whole purpose is auditing.
+    return true;
+  }
+}

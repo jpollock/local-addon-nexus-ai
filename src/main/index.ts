@@ -39,6 +39,7 @@ import { InstructionRegistry, registerAllInstructions } from './mcp/instructions
 import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing, getAgentLogLevel } from './ipc-handlers';
 import { EventLog } from './logging/eventLog';
 import { resolveLogLevel } from './logging/resolveLogLevel';
+import { applyRetention } from './logging/retention';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -582,6 +583,13 @@ export default function main(context: any): void {
         const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
         const minLevel = resolveLogLevel(settings ?? undefined, process.env);
         eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
+
+        // Apply retention on startup and daily — bounds log growth
+        const retentionPolicy = { logDays: 14, transcriptDays: 3, budgetBytes: 250 * 1024 * 1024 };
+        applyRetention(nexusLogRoot, retentionPolicy);
+        setInterval(() => {
+          try { applyRetention(nexusLogRoot, retentionPolicy); } catch { /* never throw */ }
+        }, 24 * 60 * 60 * 1000);
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
         const agentRunner = new AgentRunner(
