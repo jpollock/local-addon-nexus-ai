@@ -5097,15 +5097,23 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const runs: Array<{ site: string; result: any }> = [];
       let lastRunResult: unknown;
       try {
-        // Run one site at a time via scoped event — agentRunner.run() resolves when done
-        for (const siteName of siteNames) {
-          if (signal.aborted) break;
-          const scopedEvent = {
-            namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
-            siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
-          };
-          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
-          runs.push({ site: siteName, result: lastRunResult || {} });
+        // AGENT_RUN_NOW is the only fan-out point in the system — cron, events, GraphQL and MCP
+        // all run once. An agent that declares siteScoped:false reads neither ctx.event's site
+        // nor settings.scope, so looping it per site produces N identical runs (measured: 166
+        // selected sites x ~8.5s for auth-probe) and N unrelated run ids for one user action.
+        if ((agent as any).siteScoped === false) {
+          lastRunResult = await runner.run(agent, undefined, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
+          runs.push({ site: '', result: lastRunResult || {} });
+        } else {
+          for (const siteName of siteNames) {
+            if (signal.aborted) break;
+            const scopedEvent = {
+              namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
+              siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
+            };
+            lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
+            runs.push({ site: siteName, result: lastRunResult || {} });
+          }
         }
       } catch (err: any) {
         if (!signal.aborted) {
