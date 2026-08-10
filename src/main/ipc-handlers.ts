@@ -13,6 +13,7 @@ import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/const
 import { getApiKey } from './security/KeyVault';
 import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
+import { recordRunToInbox } from './inbox/recordRun';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
@@ -5416,6 +5417,27 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       } catch {}
 
       const outcomes = parseRunOutcomes(logContent, siteNames);
+
+      // Record to the inbox BEFORE the broadcast, and outside its try/catch.
+      // That broadcast degrades to a minimal payload when findings are too
+      // large to serialize; a finding we cannot send to the renderer is still
+      // a finding worth keeping. Never let an inbox fault fail the run.
+      try {
+        const inboxStore = deps.nexusServices?.inboxStore;
+        if (inboxStore) {
+          recordRunToInbox(inboxStore, {
+            agentId: agentId || 'security-sentinel',
+            status: (lastRunResult as any)?.status,
+            error:  (lastRunResult as any)?.error,
+            sites:  (lastRunResult as any)?.sites,
+            findings: (lastRunResult as any)?.findings,
+            findingsSites: outcomes.findingsSites,
+          });
+        }
+      } catch (inboxErr: any) {
+        console.error('[AGENT_RUN_NOW] inbox write failed:', inboxErr?.message);
+      }
+
       try {
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
           runId,

@@ -74,6 +74,7 @@ import { ContributedToolRegistry } from './agent-runtime/ContributedToolRegistry
 import { AgentDispatcher } from './agent-runtime/AgentDispatcher';
 import { AgentDbManager } from './agent-runtime/AgentDbManager';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
+import { InboxStore } from './inbox/InboxStore';
 import { CredentialManager } from './credentials/CredentialManager';
 import type { CredentialEvent } from './credentials/types';
 import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
@@ -665,6 +666,7 @@ export default function main(context: any): void {
         agentEventBus.pruneOldEvents(30); // prune events older than 30 days on startup
 
         const agentStateStore = new AgentStateStore(agentDb);
+        const inboxStore = new InboxStore(agentDb);
 
         const resolvedAgentProvider = getAIProvider(
           registryStorage,
@@ -788,6 +790,7 @@ export default function main(context: any): void {
         nexusServices.agentRunner = agentRunner;
         nexusServices.agentEventBus = agentEventBus;
         nexusServices.agentStateStore = agentStateStore;
+        nexusServices.inboxStore = inboxStore;
         nexusServices.agentReload = agentReload;
         nexusServices.contributedRegistry = contributedRegistry;
         nexusServices.dispatcher = dispatcher;

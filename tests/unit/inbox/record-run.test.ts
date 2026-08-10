@@ -118,3 +118,19 @@ describe('recordRunToInbox', () => {
     expect(items[0].scope).toBe('*');
   });
 });
+
+describe('inbox writes are independent of the renderer', () => {
+  test('a run whose payload cannot be serialized is still recorded', () => {
+    // A payload with a cycle is exactly what breaks structured clone over IPC.
+    const cyclic: any = { id: 'FS-01', sev: 'high', title: 'Cyclic finding' };
+    cyclic.self = cyclic;
+
+    const written = recordRunToInbox(store, {
+      agentId: 'security-sentinel',
+      sites: { 'Site A': { status: 'findings', findings: [cyclic] } },
+    }, 1000);
+
+    expect(written).toBe(1);
+    expect(store.listOpen().items[0].code).toBe('FS-01');
+  });
+});

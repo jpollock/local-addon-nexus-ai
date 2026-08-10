@@ -172,6 +172,9 @@ export interface NexusServices {
   /** Agent state store — tracks last run status for each agent. */
   agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
 
+  /** Inbox store — tracks distinct findings and failures from background agents. */
+  inboxStore?: import('../inbox/InboxStore').InboxStore;
+
   /** Agent reload function — reloads agents from disk. */
   agentReload?: () => Promise<void>;
 

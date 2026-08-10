@@ -141,6 +141,7 @@ export interface NexusServices {
   agentRunner?: import('../agent-runtime/AgentRunner').AgentRunner;
   agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
   agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
+  inboxStore?: import('../inbox/InboxStore').InboxStore;
   agentReload?: () => Promise<void>;
   /** Contributed tool registry — tracks tools registered by installed agents */
   contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;

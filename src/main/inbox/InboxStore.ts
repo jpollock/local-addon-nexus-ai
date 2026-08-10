@@ -35,6 +35,16 @@ export function failureCode(message: string): string {
   return 'fail:' + createHash('sha256').update(message).digest('hex').slice(0, 12);
 }
 
+function encodePayload(payload: unknown): string | null {
+  if (payload === undefined) return null;
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    // A cyclic or otherwise unserializable payload must not cost us the item.
+    return null;
+  }
+}
+
 interface Row {
   id: number; source: string; code: string; scope: string; scope_label: string;
   kind: string; title: string; detail: string | null; evidence: string | null;
@@ -103,7 +113,7 @@ export class InboxStore {
       input.source, input.code, input.scope, input.scopeLabel, input.kind,
       input.title, input.detail ?? null, input.evidence ?? null,
       input.severity ?? null, now, now,
-      input.payload === undefined ? null : JSON.stringify(input.payload),
+      encodePayload(input.payload),
     );
   }
 
