@@ -9,62 +9,8 @@ import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import type { NexusSettings } from '../../../common/types';
 import { FleetCompletenessWidget } from '../FleetCompletenessWidget';
 import { AIGatewayPanel } from '../AIGatewayPanel';
-import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './shared/cards';
-
-interface DashboardStats {
-  localSites: { total: number; running: number; halted: number };
-  wpeConnected: { count: number };
-  remoteSites: { total: number; unlinked: number; capiAvailable: boolean; wpeAuthenticated: boolean };
-  mcpServer: { running: boolean; toolCount: number; port: number | null; version: string | null };
-  embedding: { ready: boolean; model: string; quantized: boolean; dimensions: number; maxSequenceLength: number };
-  index: { localIndexed: number; localTotal: number; wpeIndexed: number; wpeTotal: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
-}
-
-interface McpInfo {
-  url: string;
-  authToken: string;
-  port: number;
-  version: string;
-  tools: string[];
-  stdioPath: string;
-}
-
-interface StartupStatus {
-  ready: boolean;
-  phase: string | null;
-  error: {
-    message: string;
-    name: string;
-    code: string | null;
-    phase: string;
-    hint: string | null;
-  } | null;
-}
-
-interface AiProxyInfo {
-  url: string;
-  port: number;
-  running: boolean;
-  models: string[];
-  toolCapableModels: string[];
-}
-
-interface FleetVersionEntry {
-  version: string;
-  count: number;
-}
-
-interface FleetSummaryData {
-  total: number;
-  totalLocal: number;
-  totalWpe: number;
-  wpVersions: FleetVersionEntry[];
-  phpVersions: FleetVersionEntry[];
-  completeness: { none: number; filesystem: number; metadata: number; indexed: number };
-  wpeSync?: { synced: number; neverSynced: number };
-  staleCount: number;
-  neverScannedCount: number;
-}
+import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel, bigNumberStyle, subStatStyle, dotStyle, btnStyle, codeBlockStyle } from './shared/cards';
+import type { DashboardStats, McpInfo, StartupStatus, AiProxyInfo, FleetVersionEntry, FleetSummaryData } from './shared/types';
 
 interface OverviewTabProps {
   electron: any;
@@ -84,52 +30,6 @@ interface OverviewTabState {
   wpeNotConnectedDismissed: boolean;
   copiedField: string | null;
 }
-
-const bigNumberStyle: React.CSSProperties = {
-  fontSize: '36px',
-  fontWeight: 700,
-  lineHeight: 1,
-  marginBottom: '8px',
-};
-
-const subStatStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: 'var(--nxai-card-sub, #6b7280)',
-  lineHeight: 1.6,
-};
-
-const dotStyle = (color: string): React.CSSProperties => ({
-  display: 'inline-block',
-  width: '8px',
-  height: '8px',
-  borderRadius: '50%',
-  backgroundColor: color,
-  marginRight: '6px',
-});
-
-const btnStyle: React.CSSProperties = {
-  padding: '6px 14px',
-  borderRadius: '6px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
-  fontSize: '12px',
-  fontWeight: 500,
-  cursor: 'pointer',
-};
-
-const codeBlockStyle: React.CSSProperties = {
-  fontFamily: 'monospace',
-  fontSize: '12px',
-  backgroundColor: 'var(--nxai-code-bg, #f3f4f6)',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  borderRadius: '8px',
-  padding: '14px',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-all',
-  lineHeight: 1.5,
-  color: 'var(--nxai-card-text, #111827)',
-};
 
 export class OverviewTab extends React.Component<OverviewTabProps, OverviewTabState> {
   private mounted = false;
@@ -609,7 +509,7 @@ export class OverviewTab extends React.Component<OverviewTabProps, OverviewTabSt
       this.props.electron.ipcRenderer.invoke(
         IPC_CHANNELS.UPDATE_SETTINGS,
         { wpeBannerDismissed: true },
-      ).catch(() => {});
+      ).then(() => this.props.onRefresh()).catch(() => {});
     };
 
     return React.createElement('div', {
@@ -669,7 +569,7 @@ export class OverviewTab extends React.Component<OverviewTabProps, OverviewTabSt
       this.props.electron.ipcRenderer.invoke(
         IPC_CHANNELS.UPDATE_SETTINGS,
         { wpeNotConnectedBannerDismissed: true },
-      ).catch(() => {});
+      ).then(() => this.props.onRefresh()).catch(() => {});
     };
 
     return React.createElement('div', {

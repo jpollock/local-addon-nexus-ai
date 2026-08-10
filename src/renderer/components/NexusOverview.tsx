@@ -17,11 +17,8 @@ import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
-import { AIGatewayPanel } from './AIGatewayPanel';
-import { LoadingSpinner } from './LoadingSpinner';
 import { SystemTab } from './SystemTab';
 import { SettingsTab } from './SettingsTab';
-import { FleetCompletenessWidget } from './FleetCompletenessWidget';
 import { AssistantPanel } from './AssistantPanel';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
 import { agentStore } from './agents/AgentStore';
@@ -32,6 +29,7 @@ import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
 import { OverviewTab } from './tabs/OverviewTab';
+import type { DashboardStats, McpInfo, StartupStatus, AiProxyInfo, FleetVersionEntry, FleetSummaryData } from './tabs/shared/types';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -44,36 +42,6 @@ try {
 interface NexusOverviewProps {
   NavLink: any;
   electron: any;
-}
-
-interface DashboardStats {
-  localSites: { total: number; running: number; halted: number };
-  wpeConnected: { count: number };
-  remoteSites: { total: number; unlinked: number; capiAvailable: boolean; wpeAuthenticated: boolean };
-  mcpServer: { running: boolean; toolCount: number; port: number | null; version: string | null };
-  embedding: { ready: boolean; model: string; quantized: boolean; dimensions: number; maxSequenceLength: number };
-  index: { localIndexed: number; localTotal: number; wpeIndexed: number; wpeTotal: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
-}
-
-interface McpInfo {
-  url: string;
-  authToken: string;
-  port: number;
-  version: string;
-  tools: string[];
-  stdioPath: string;
-}
-
-interface StartupStatus {
-  ready: boolean;
-  phase: string | null;
-  error: {
-    message: string;
-    name: string;
-    code: string | null;
-    phase: string;
-    hint: string | null;
-  } | null;
 }
 
 interface SiteListItem {
@@ -120,37 +88,6 @@ interface SetupAIResult {
   message: string;
 }
 
-interface AiProxyInfo {
-  url: string;
-  port: number;
-  running: boolean;
-  models: string[];
-  toolCapableModels: string[];
-}
-
-interface FleetVersionEntry {
-  version: string;
-  count: number;
-}
-
-interface FleetSummaryData {
-  total: number;
-  totalLocal: number;
-  totalWpe: number;
-  wpVersions: FleetVersionEntry[];
-  phpVersions: FleetVersionEntry[];
-  completeness: { none: number; filesystem: number; metadata: number; indexed: number };
-  wpeSync?: { synced: number; neverSynced: number };
-  staleCount: number;
-  neverScannedCount: number;
-}
-
-interface FleetPlugin {
-  slug: string;
-  title: string;
-  siteCount: number;
-}
-
 interface NexusOverviewState {
   stats: DashboardStats | null;
   mcpInfo: McpInfo | null;
@@ -162,8 +99,6 @@ interface NexusOverviewState {
   searching: boolean;
   indexingId: string | null;
   togglingId: string | null;
-  setupId: string | null;
-  setupResults: Record<string, SetupAIResult>;
   loading: boolean;
   error: string | null;
   activeTab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents';
@@ -190,7 +125,6 @@ interface NexusOverviewState {
   wpeSyncProgress: { total: number; current: number; skipped: number; currentSite: string; status: string } | null;
   wpeSyncedCount: number;
   wpeSyncError: string | null;
-  wpeStopping: boolean;
   diagInstall: string;
   diagRunning: boolean;
   diagResults: Array<{ cmd: string; success: boolean; stdout: string; durationMs: number; error?: string }>;
@@ -221,28 +155,6 @@ interface NexusOverviewState {
 
 // -- Shared styles --
 
-const bigNumberStyle: React.CSSProperties = {
-  fontSize: '36px',
-  fontWeight: 700,
-  lineHeight: 1,
-  marginBottom: '8px',
-};
-
-const subStatStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: 'var(--nxai-card-sub, #6b7280)',
-  lineHeight: 1.6,
-};
-
-const dotStyle = (color: string): React.CSSProperties => ({
-  display: 'inline-block',
-  width: '8px',
-  height: '8px',
-  borderRadius: '50%',
-  backgroundColor: color,
-  marginRight: '6px',
-});
-
 const tagStyle = (bg: string, fg: string): React.CSSProperties => ({
   display: 'inline-block',
   padding: '2px 8px',
@@ -255,48 +167,16 @@ const tagStyle = (bg: string, fg: string): React.CSSProperties => ({
   verticalAlign: 'middle',
 });
 
-const btnStyle: React.CSSProperties = {
+const btnPrimaryStyle: React.CSSProperties = {
   padding: '6px 14px',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  backgroundColor: UI_COLORS.WPE_BRAND,
+  color: '#fff',
+  border: 'none',
   fontSize: '12px',
   fontWeight: 500,
   cursor: 'pointer',
 };
-
-const btnPrimaryStyle: React.CSSProperties = {
-  ...btnStyle,
-  backgroundColor: UI_COLORS.WPE_BRAND,
-  color: '#fff',
-  border: 'none',
-};
-
-const codeBlockStyle: React.CSSProperties = {
-  fontFamily: 'monospace',
-  fontSize: '12px',
-  backgroundColor: 'var(--nxai-code-bg, #f3f4f6)',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  borderRadius: '8px',
-  padding: '14px',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-all',
-  lineHeight: 1.5,
-  color: 'var(--nxai-card-text, #111827)',
-};
-
-function formatTimeAgo(timestamp: number): string {
-  if (!timestamp) return 'Never';
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return 'Just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -332,8 +212,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     searching: false,
     indexingId: null,
     togglingId: null,
-    setupId: null,
-    setupResults: {},
     loading: true,
     error: null,
     activeTab: 'overview',
@@ -360,7 +238,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeSyncProgress: null,
     wpeSyncedCount: 0,
     wpeSyncError: null,
-    wpeStopping: false,
     diagInstall: '',
     diagRunning: false,
     diagResults: [],
@@ -676,29 +553,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       // Error handled by fetchAll refresh
     }
     if (this.mounted) this.setState({ togglingId: null });
-  };
-
-  handleSetupAI = async (siteId: string): Promise<void> => {
-    this.setState({ setupId: siteId });
-    try {
-      const result: SetupAIResult = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SETUP_AI, siteId,
-      );
-      if (!this.mounted) return;
-      this.setState((prev) => ({
-        setupId: null,
-        setupResults: { ...prev.setupResults, [siteId]: result },
-      }));
-    } catch {
-      if (!this.mounted) return;
-      this.setState((prev) => ({
-        setupId: null,
-        setupResults: {
-          ...prev.setupResults,
-          [siteId]: { success: false, aiPlugin: 'failed', providerPlugins: 'failed', aiFeatures: 'failed', credentials: 'failed', acfAbilities: 'failed', message: 'Setup failed' },
-        },
-      }));
-    }
   };
 
   handleSetupAIFleet = async (): Promise<void> => {
@@ -1518,35 +1372,26 @@ renderTabBar(): React.ReactNode {
   }
 
   renderActiveTab(): React.ReactNode {
+    const overviewProps = {
+      electron: this.props.electron,
+      stats: this.state.stats,
+      fleetSummary: this.state.fleetSummary,
+      settings: this.state.settings,
+      wpeAuthError: this.state.wpeAuthError,
+      aiProxy: this.state.aiProxy,
+      mcpInfo: this.state.mcpInfo,
+      startupStatus: this.state.startupStatus,
+      onNavigate: (tab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents') => this.setState({ activeTab: tab }),
+      onRefresh: () => { void this.fetchAll(); },
+    };
+
     switch (this.state.activeTab) {
-      case 'overview': return React.createElement(OverviewTab, {
-        electron: this.props.electron,
-        stats: this.state.stats,
-        fleetSummary: this.state.fleetSummary,
-        settings: this.state.settings,
-        wpeAuthError: this.state.wpeAuthError,
-        aiProxy: this.state.aiProxy,
-        mcpInfo: this.state.mcpInfo,
-        startupStatus: this.state.startupStatus,
-        onNavigate: (tab) => this.setState({ activeTab: tab }),
-        onRefresh: () => { void this.fetchAll(); },
-      });
+      case 'overview': return React.createElement(OverviewTab, overviewProps);
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
       // 'agents' case handled in render() directly (no stats dependency)
-      default: return React.createElement(OverviewTab, {
-        electron: this.props.electron,
-        stats: this.state.stats,
-        fleetSummary: this.state.fleetSummary,
-        settings: this.state.settings,
-        wpeAuthError: this.state.wpeAuthError,
-        aiProxy: this.state.aiProxy,
-        mcpInfo: this.state.mcpInfo,
-        startupStatus: this.state.startupStatus,
-        onNavigate: (tab) => this.setState({ activeTab: tab }),
-        onRefresh: () => { void this.fetchAll(); },
-      });
+      default: return React.createElement(OverviewTab, overviewProps);
     }
   }
 
@@ -1619,11 +1464,6 @@ renderTabBar(): React.ReactNode {
     }));
   };
 
-  handleWpeSyncStop = (): void => {
-    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STOP);
-    this.setState({ wpeStopping: true });
-  };
-
   handleWpeSync = async (): Promise<void> => {
     if (this.state.wpeSyncing) return;
 
@@ -1644,7 +1484,6 @@ renderTabBar(): React.ReactNode {
         this.setState({
           wpeSyncedCount: syncedCount,
           wpeSyncing: false,
-          wpeStopping: false,
           wpeSyncProgress: null,
           wpeSyncError: null,
         });
