@@ -105,6 +105,12 @@ describe('InboxStore decisions', () => {
     store.record(item({ source: 'security-sentinel', code: 'B' }), 1000);
     store.record(item({ source: 'seo-insights', code: 'C' }), 1000);
 
+    // A decided item must not keep inflating its agent's badge, or the badge
+    // would never clear.
+    store.record(item({ source: 'security-sentinel', code: 'D' }), 1000);
+    const decided = store.listOpen().items.find(i => i.code === 'D')!.id;
+    store.decide(decided, 'Ignore', 'dismissed', 1500);
+
     expect(store.pendingBySource()).toEqual({ 'security-sentinel': 2, 'seo-insights': 1 });
   });
 
