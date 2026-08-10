@@ -74,8 +74,11 @@ describe('EventLog append performance', () => {
   });
 
   it('maintains 0600 mode on pre-existing files', () => {
-    // Create a pre-existing log file with 0600
-    const today = new Date().toISOString().slice(0, 10);
+    // Create a pre-existing log file with 0600, using the SAME day derivation as production.
+    // The previous implementation used toISOString() (UTC) while production uses localDay() (local),
+    // so off UTC the test statted a file the code never opened.
+    const { localDay } = require('../../../src/main/logging/eventLog');
+    const today = localDay(new Date());
     const logPath = path.join(tmpDir, `nexus-${today}.log`);
     fs.writeFileSync(logPath, 'existing content\n', { mode: 0o600 });
 

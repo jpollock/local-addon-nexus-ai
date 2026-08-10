@@ -7,10 +7,14 @@
  *
  * The test table includes: normal dates, PDT evening where UTC differs, invalid Date (the
  * 'unknown' branch), and a case exercising the regex fallback.
+ *
+ * Uses simulatedZone.ts so the PDT assertions pass on any machine (UTC, JST, etc.), not only
+ * machines whose wall clock happens to be PDT.
  */
 
 import { localDay as rendererLocalDay } from '../../../src/renderer/components/localDay';
 import { localDay as mainLocalDay } from '../../../src/main/logging/eventLog';
+import { ZonedDate } from '../logging/simulatedZone';
 
 interface LocalDayCase {
   label: string;
@@ -25,12 +29,12 @@ interface LocalDayCase {
 const cases: LocalDayCase[] = [
   {
     label: 'normal date',
-    date: new Date('2026-08-10T12:00:00Z'),
-    expected: /^\d{4}-\d{2}-\d{2}$/, // YYYY-MM-DD format, value depends on test machine timezone
+    date: new ZonedDate('2026-08-10T19:00:00Z', -7), // 12:00 PDT
+    expected: '2026-08-10',
   },
   {
     label: 'PDT evening where local and UTC days differ',
-    date: new Date('2026-08-11T03:30:00Z'), // 20:30 PDT = 03:30 UTC next day
+    date: new ZonedDate('2026-08-11T03:30:00Z', -7), // 20:30 PDT = 03:30 UTC next day
     expected: '2026-08-10', // Local date (PDT), not UTC (2026-08-11)
   },
   {
@@ -40,7 +44,7 @@ const cases: LocalDayCase[] = [
   },
   {
     label: 'another PDT evening',
-    date: new Date('2026-08-11T06:59:59Z'), // 23:59:59 PDT, one second before midnight
+    date: new ZonedDate('2026-08-11T06:59:59Z', -7), // 23:59:59 PDT, one second before midnight
     expected: '2026-08-10', // Still Aug 10 in PDT
   },
 ];

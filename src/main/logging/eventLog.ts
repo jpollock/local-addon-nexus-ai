@@ -280,7 +280,12 @@ export class EventLog {
     (this as any).minLevel = level;
   }
 
-  write(e: LogEvent): void {
+  /**
+   * Write a log event. Returns true if the event was written, false if it was dropped
+   * (level gate, append failure, exception). Callers that need to know whether a line
+   * reached disk (e.g., deduplication) can key on this.
+   */
+  write(e: LogEvent): boolean {
     try {
       // A per-agent override beats the global level in both directions — you debug one agent, and
       // you silence one agent, without touching the rest.
@@ -303,17 +308,21 @@ export class EventLog {
         e.event === 'mutation' ||
         (e.event === 'run.end' && e.fields?.status && (e.fields.status === 'error' || e.fields.status === 'timeout'));
 
-      if (!isPreservationCritical && LogLevel[e.level] > LogLevel[min]) return;
+      if (!isPreservationCritical && LogLevel[e.level] > LogLevel[min]) return false;
 
       const at = e.at ?? this.now();
       const line = formatLine({ ...e, at }) + '\n';
       const { combined, agent } = this.pathsFor({ ...e, at });
-      this.append(combined, line);
-      if (agent) this.append(agent, line);
-    } catch { /* logging must never break a run */ }
+      const ok1 = this.append(combined, line);
+      const ok2 = agent ? this.append(agent, line) : true;
+      return ok1 && ok2;
+    } catch {
+      /* logging must never break a run */
+      return false;
+    }
   }
 
-  private append(file: string, line: string): void {
+  private append(file: string, line: string): boolean {
     try {
       const dir = path.dirname(file);
       // Create directory if not cached OR if cached but externally removed. Trades two
@@ -334,6 +343,7 @@ export class EventLog {
           fs.chmodSync(file, 0o600);
         } catch { /* best-effort mode setting */ }
       }
+      return true;
     } catch (err) {
       // On failure, invalidate cache so next append retries directory creation. A logging
       // layer that goes quiet after a directory removal is worse than one that retries.
@@ -343,6 +353,7 @@ export class EventLog {
       // either. A silent total failure is indistinguishable from "the agent never ran", which
       // is the exact question this log exists to answer.
       this.reportAppendFailure(file, err);
+      return false;
     }
   }
 

@@ -370,16 +370,19 @@ export function emitRunSkip(
   // reason — a user on Thursday asking "why didn't my agent run today" finds the answer in
   // today's file, not only in Monday's. Without day-keying, an agent disabled on Monday emits
   // one line Monday and zero lines every day after, while it goes on refusing every fifteen minutes.
+  // The trigger kind is part of the key so manual/schedule/event refusals are independently tracked —
+  // without it, the scheduler's first tick consumes the day's slot and Run Now writes nothing.
   const day = localDay(new Date());
-  const key = `${agentId}:${day}`;
+  const key = `${agentId}:${day}:${kind}`;
   const lastReason = lastSkipReason.get(key);
   if (lastReason === decision.reason) return;
 
-  lastSkipReason.set(key, decision.reason);
-
   // "The agent didn't run" is the first thing a user reports — before this, a refused
-  // scheduled or event-triggered run produced zero bytes anywhere. write() never throws.
-  log?.write({
+  // scheduled or event-triggered run produced zero bytes anywhere. write() returns whether
+  // the line reached disk (false when dropped by the level gate or on append failure), so
+  // the slot is claimed only when the write actually happened. Otherwise raising the level
+  // later produces nothing — the slot was burned by a dropped write.
+  const written = log?.write({
     level: 'INFO',
     source: agentId,
     sourceKind: 'agent',
@@ -387,6 +390,10 @@ export function emitRunSkip(
     event: 'run.skip',
     fields: { trigger: kind, reason: decision.reason },
   });
+
+  if (written) {
+    lastSkipReason.set(key, decision.reason);
+  }
 }
 
 /**
@@ -5106,13 +5113,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         }
       }
 
-      const runIds = collectRunIds(runs);
       runAbortMap.delete(correlationId);
 
       if (signal.aborted) {
-        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds, doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
+        // Cancelled runs don't collect runIds — the drawer dismisses ~800ms after Cancel is clicked,
+        // so the ids would never be usable anyway. Broadcasting them reads as working when it doesn't.
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
         return;
       }
+
+      const runIds = collectRunIds(runs);
 
       // Parse outcomes from the new log content written since we started
       let logContent = '';

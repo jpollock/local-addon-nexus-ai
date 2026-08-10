@@ -19,6 +19,7 @@ describe('run.skip volume reduction', () => {
     mockLog = {
       write: jest.fn((event) => {
         writeCalls.push(event);
+        return true; // Simulate successful write
       }),
     } as any;
   });
@@ -116,6 +117,69 @@ describe('run.skip volume reduction', () => {
     jest.setSystemTime(new Date('2026-08-11T10:00:00-07:00'));
     emitRunSkip('test-agent', 'schedule', decision, mockLog);
     expect(writeCalls).toHaveLength(2); // still 2
+
+    jest.useRealTimers();
+  });
+
+  it('emits separately for different trigger kinds with same reason on same day', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-10T10:00:00-07:00'));
+
+    const decision: AutoRunDecision = { allowed: false, reason: 'agent-disabled' };
+
+    // Scheduler ticks first (normal case for agents with cron)
+    emitRunSkip('test-agent', 'schedule', decision, mockLog);
+    expect(writeCalls).toHaveLength(1);
+    expect(writeCalls[0].fields).toEqual({ trigger: 'schedule', reason: 'agent-disabled' });
+
+    // User presses Run Now later the same day - must emit, not be swallowed by schedule slot
+    emitRunSkip('test-agent', 'manual', decision, mockLog);
+    expect(writeCalls).toHaveLength(2);
+    expect(writeCalls[1].fields).toEqual({ trigger: 'manual', reason: 'agent-disabled' });
+
+    // Event trigger also emits independently
+    emitRunSkip('test-agent', 'event', decision, mockLog);
+    expect(writeCalls).toHaveLength(3);
+    expect(writeCalls[2].fields).toEqual({ trigger: 'event', reason: 'agent-disabled' });
+
+    // Second manual refusal same day - now suppressed
+    emitRunSkip('test-agent', 'manual', decision, mockLog);
+    expect(writeCalls).toHaveLength(3); // still 3
+
+    jest.useRealTimers();
+  });
+
+  it('does not claim slot when write is dropped by level gate', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-10T10:00:00-07:00'));
+
+    const decision: AutoRunDecision = { allowed: false, reason: 'agent-disabled' };
+
+    // Create a mock that simulates the level gate dropping the write
+    const mockLogDropping: jest.Mocked<any> = {
+      write: jest.fn(() => false), // Simulates level gate refusing the write
+    };
+
+    // First refusal - write returns false (dropped), so slot should NOT be claimed
+    emitRunSkip('test-agent', 'schedule', decision, mockLogDropping);
+    expect(mockLogDropping.write).toHaveBeenCalledTimes(1);
+
+    // Second refusal - should try to write again because slot wasn't claimed
+    emitRunSkip('test-agent', 'schedule', decision, mockLogDropping);
+    expect(mockLogDropping.write).toHaveBeenCalledTimes(2);
+
+    // Now with a mock that accepts writes
+    const mockLogAccepting: jest.Mocked<any> = {
+      write: jest.fn(() => true), // Write succeeds
+    };
+
+    // First refusal - write succeeds, slot claimed
+    emitRunSkip('test-agent-2', 'schedule', decision, mockLogAccepting);
+    expect(mockLogAccepting.write).toHaveBeenCalledTimes(1);
+
+    // Second refusal - should be suppressed (no write call)
+    emitRunSkip('test-agent-2', 'schedule', decision, mockLogAccepting);
+    expect(mockLogAccepting.write).toHaveBeenCalledTimes(1); // still 1
 
     jest.useRealTimers();
   });

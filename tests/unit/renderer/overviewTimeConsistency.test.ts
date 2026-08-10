@@ -8,15 +8,19 @@
  * CRITICAL: This test exercises the production implementation of localDay() under a simulated
  * PDT evening where local and UTC dates differ. It fails against the original UTC-mixing code
  * (now.toISOString().slice(0,10)) and passes against the fixed code (localDay(now)).
+ *
+ * Uses simulatedZone.ts so the assertions pass on any machine (UTC, JST, etc.), not only
+ * machines whose wall clock happens to be PDT.
  */
 import { localDay } from '../../../src/renderer/components/localDay';
+import { ZonedDate } from '../logging/simulatedZone';
 
 describe('NexusOverview time consistency', () => {
   it('localDay() returns local date in PDT evening (UTC is next day)', () => {
     // Simulate PDT (UTC-7) at 20:30 local = 03:30 UTC next day
     // Local: 2026-08-10 20:30
     // UTC:   2026-08-11 03:30
-    const pdtEvening = new Date('2026-08-11T03:30:00Z');
+    const pdtEvening = new ZonedDate('2026-08-11T03:30:00Z', -7);
     jest.useFakeTimers();
     jest.setSystemTime(pdtEvening);
 
@@ -28,8 +32,6 @@ describe('NexusOverview time consistency', () => {
     const day = localDay(pdtEvening);
 
     // In PDT, local time is 20:30, so local date should be 2026-08-10
-    // (This assertion will pass/fail depending on the test machine's timezone,
-    // but we can assert the key property: date and time must be from same zone)
     expect(day).toBe('2026-08-10'); // Local date
     expect(hh).toBe('20'); // Local hour
 
@@ -47,13 +49,12 @@ describe('NexusOverview time consistency', () => {
   });
 
   it('localDay() handles normal date', () => {
-    const normalDate = new Date('2026-08-10T12:00:00Z');
+    const normalDate = new ZonedDate('2026-08-10T19:00:00Z', -7); // 12:00 PDT
     jest.useFakeTimers();
     jest.setSystemTime(normalDate);
 
     const day = localDay(normalDate);
-    // Should be YYYY-MM-DD format
-    expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(day).toBe('2026-08-10');
 
     jest.useRealTimers();
   });
@@ -61,7 +62,7 @@ describe('NexusOverview time consistency', () => {
   it('detects UTC/local mix conceptually', () => {
     // Demonstrate the bug independently
     // 2026-08-10 20:00 PDT = 2026-08-11 03:00 UTC
-    const pdtEvening = new Date('2026-08-11T03:00:00Z');
+    const pdtEvening = new ZonedDate('2026-08-11T03:00:00Z', -7);
     jest.useFakeTimers();
     jest.setSystemTime(pdtEvening);
 

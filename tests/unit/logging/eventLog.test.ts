@@ -291,13 +291,13 @@ describe('EventLog reports its own failures', () => {
     } finally { spy.mockRestore(); }
   });
 
-  it('reporting changes nothing the caller can observe: still no throw, still no return value', () => {
+  it('reporting changes nothing the caller can observe: still no throw, returns false on failure', () => {
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const log = new EventLog({ root: unwritableRoot(), now: () => AT });
       let result: unknown = 'sentinel-value';
       expect(() => { result = log.write({ level: 'ERROR', source: 'a', message: 'x' }); }).not.toThrow();
-      expect(result).toBeUndefined();
+      expect(result).toBe(false); // write() now returns boolean - false when append fails
     } finally { spy.mockRestore(); }
   });
 });
