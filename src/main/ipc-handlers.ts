@@ -768,11 +768,21 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const totalExternal = counts.external.count;
       const total = counts.installs.count;
 
-      // Completeness is measured over local twins ONLY. Its denominator is
-      // therefore twins.length, NOT `total` — a coverage metric's numerator and
-      // denominator must span the same source set.
+      // `completeness`, `staleCount`'s and `neverScannedCount`'s local share, and
+      // the local rows folded into the WP/PHP version histograms below are all
+      // derived by iterating `twins` — the twin read-model — not by iterating
+      // Local's own site store. `twins.length` can diverge from `totalLocal`
+      // above: they are two different populations (see collectFleetCounts),
+      // so this ONE shared scope object, not `total`/`totalLocal`, is the
+      // honest denominator for the *local* share of every figure below that
+      // reads `twins`. (staleCount and the version histograms also fold in
+      // wpeSites/externalSites, whose counts track counts.wpe/counts.external
+      // structurally — identical `source=... AND is_active=1` filter — so only
+      // their local share is at risk of drifting from the fleet total.) Label
+      // is deliberately distinguishable from `counts.local.scope` ('sites on
+      // this Mac') — two different populations must never share a label.
+      const twinScope = { measured: twins.length, label: 'sites on this Mac (twin read-model)' };
       const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
-      const completenessScope = { measured: twins.length, label: 'sites on this Mac' };
       let staleCount = 0;
       let neverScannedCount = 0;
 
@@ -856,11 +866,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         wpVersions: sortVersions(wpVersionMap),
         phpVersions: sortVersions(phpVersionMap),
         completeness,
-        completenessScope,
         wpeSync,
         externalSync,
         staleCount,
         neverScannedCount,
+        // One shared scope, covering completeness, staleCount/neverScannedCount's
+        // local share, and the local rows in wpVersions/phpVersions above — see
+        // the comment on `twinScope`'s definition. Not named `completenessScope`:
+        // it scopes more than just `completeness`, and a name promising only
+        // that would mislead a consumer of the other fields.
+        twinScope,
         counts,
       };
     } catch (err) {

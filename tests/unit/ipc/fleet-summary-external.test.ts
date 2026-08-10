@@ -23,10 +23,10 @@ describe('GET_FLEET_SUMMARY / GET_FLEET_PLUGINS — external hosts', () => {
   let graphService: GraphService;
   let testDbPath: string;
 
-  function registerDeps() {
+  function registerDeps(overrides: { getSites?: () => Record<string, unknown>; getAllTwins?: () => any[] } = {}) {
     const noop = () => {};
     const deps: any = {
-      siteData: { getSite: () => null, getSites: () => ({}) },
+      siteData: { getSite: () => null, getSites: overrides.getSites ?? (() => ({})) },
       localServicesBridge: {},
       indexRegistry: { listAll: () => [], get: () => null, update: noop },
       embeddingService: {},
@@ -39,7 +39,7 @@ describe('GET_FLEET_SUMMARY / GET_FLEET_PLUGINS — external hosts', () => {
       graphService,
       eventProcessor: {},
       vectorDbPath: '/tmp/nexus-test-vectors.db',
-      nexusServices: { twinService: { getAll: () => [] } },
+      nexusServices: { twinService: { getAll: overrides.getAllTwins ?? (() => []) } },
     };
     registerIpcHandlers(deps);
   }
@@ -82,6 +82,44 @@ describe('GET_FLEET_SUMMARY / GET_FLEET_PLUGINS — external hosts', () => {
     expect(r.total).toBe(r.totalLocal + r.totalWpe + r.totalExternal);
     expect(r.externalSync.synced).toBe(1);
     expect(r.externalSync.neverSynced).toBe(0);
+  });
+
+  it('GET_FLEET_SUMMARY sources totalLocal from siteData.getSites(), not the twin cache, when the two disagree', () => {
+    // Regression for a fix-round finding: before the fix, totalLocal was
+    // `twins.length`. Deliberately make the two populations disagree — 3
+    // sites in Local's own store, 5 entries in the twin cache (as would
+    // happen if the twin cache holds stale/deleted-site entries, or entries
+    // for sites the twin service hasn't reconciled yet) — so a regression
+    // back to `twins.length` is caught instead of passing silently the way
+    // it would if both mocks stayed consistent with each other.
+    const fakeTwin = (id: string) => ({
+      siteId: id,
+      completeness: 'none' as const,
+      asOf: Date.now(),
+      wpVersion: '6.7.0',
+      phpVersion: '8.2',
+    });
+
+    registerDeps({
+      getSites: () => ({ 's1': {}, 's2': {}, 's3': {} }),
+      getAllTwins: () => [fakeTwin('t1'), fakeTwin('t2'), fakeTwin('t3'), fakeTwin('t4'), fakeTwin('t5')],
+    });
+    const r: any = mockIpc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY);
+
+    // The canonical count: 3 sites in Local's own store, not 5 twins.
+    expect(r.totalLocal).toBe(3);
+    expect(r.counts.local.count).toBe(3);
+    // total must be built from the same canonical count, not the twin count.
+    expect(r.total).toBe(r.totalLocal + r.totalWpe + r.totalExternal);
+
+    // The twin-derived figures (completeness, staleCount's/neverScannedCount's
+    // local share, WP/PHP version histograms) are still measured over the 5
+    // twins — that's correct, twins is a different, legitimate population —
+    // but `twinScope` must say so explicitly rather than implying 5 === totalLocal.
+    expect(r.twinScope.measured).toBe(5);
+    expect(r.twinScope.label).not.toBe(r.counts.local.scope);
+    const completenessTotal = (Object.values(r.completeness) as number[]).reduce((a, b) => a + b, 0);
+    expect(completenessTotal).toBe(5);
   });
 
   it('GET_FLEET_PLUGINS includes a plugin only installed on the external site', () => {
