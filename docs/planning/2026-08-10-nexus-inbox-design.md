@@ -71,7 +71,7 @@ tune presentation — grouping, paging, defaults — never to justify an unbound
 - Main-side production of inbox items on run completion.
 - An Inbox destination with the prototype's three groups and inline actions.
 - Per-agent pending counts derived from the inbox, replacing the five copy-pasted filters.
-- `failureAggregation` wired to its first production consumer.
+- `shouldAutoPause` wired, with its caller contract pinned by a test (section D).
 
 **Out, deliberately:**
 - **Undo of a live change.** See "Two lines drawn explicitly" below.
@@ -155,17 +155,30 @@ plain-language and already aggregated (`"A security sweep has failed 5 times sin
 **`scope` is a string on every item, never a bare number.** This is the foundation spec's first
 non-negotiable, and the Inbox is its second render site after the panel's Insights tab.
 
-### D. "Something is stuck" is `failureAggregation`'s first consumer
+### D. "Something is stuck" — half of `failureAggregation`, not all of it
 
-`src/main/agents/failureAggregation.ts` has **zero production callers** today — it is exercised
-only by `tests/unit/agents/failure-aggregation.test.ts`. The prototype's own mock item for this
-group is precisely its output:
+`src/main/agents/failureAggregation.ts` has **zero production callers** today. The prototype's mock
+item for this group reads like its output:
 
 > "A security sweep has failed 5 times since 3:17 PM … It has been paused."
-> Evidence: "Last 5 runs · 15:17, 15:50, 16:02, 17:45, 18:00"
 
-That is `AggregatedFailure`'s `count`, `firstAt`, `lastAt`, plus `shouldAutoPause`. Wiring the
-module is the group.
+But only one of its two functions survives contact with section A:
+
+- **`aggregateFailures` is superseded.** Collapsing identical failures into a count with a time
+  range is exactly what `UNIQUE (source, code, scope)` plus `seenCount` / `firstSeenAt` /
+  `lastSeenAt` does. Wiring it too would be two implementations of one behaviour, disagreeing the
+  first time either changes. It stays unwired; this spec does not pretend otherwise.
+- **`shouldAutoPause` is wired.** Consecutive-ness is a genuinely different question from a count,
+  and nothing else answers it. It drives the pause and the prototype's "It has been paused" copy.
+
+**`shouldAutoPause` carries a trap the caller must close.** It takes `FailureRun[]` — a type with
+no way to represent a success — and every existing test passes failures only. Hand it an agent's
+failed runs and an agent that goes fail / succeed / fail / succeed / fail reads as a three-failure
+streak and gets paused. That agent is flaky, not stuck, and pausing it is wrong.
+
+The caller's contract is therefore: **pass only the trailing failures since the agent's last
+success.** That contract is invisible in the type, so it is pinned by a test at the call site — not
+in the module's own suite, which cannot see it.
 
 (`collectSystemHealth` is **already** wired — `ipc-handlers.ts:1854` feeds the header health pill.
 It is not part of this spec's wiring work.)
@@ -232,7 +245,7 @@ production data this spec has already declined to guess at.
 |---|---|---|
 | 1 | `InboxStore` — schema, identity, upsert-on-re-report, dismissal persistence | store properties 1–3 |
 | 2 | Main-side production at `ipc-handlers.ts:5419`, `InboxStore` wired in `index.ts` | properties 4–5 |
-| 3 | `aggregateFailures` wired into the "stuck" group | its first production caller |
+| 3 | Failure items + `shouldAutoPause` wired | a success between failures prevents the pause |
 | 4 | Inbox UI — three groups, actions, evidence disclosure, empty state | `serializeTree` snapshots |
 | 5 | Per-agent counts derive from the inbox; five filters collapse to one | existing agent tests stay green |
 
