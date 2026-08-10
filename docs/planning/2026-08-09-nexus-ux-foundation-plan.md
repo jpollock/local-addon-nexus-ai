@@ -629,7 +629,7 @@ becomes:
         phpVersion: (site as any)?.phpVersion || undefined,
 ```
 
-In `src/main/mcp/modules/fleet-intelligence/get-site-health.ts:51`, make the identical change. Note line 81 of that same file already carries a `// C3: no default` comment for the sibling path — this brings line 51 in line with it.
+**`src/main/mcp/modules/fleet-intelligence/get-site-health.ts` needs no change** — an earlier draft of this plan said otherwise and was wrong. Its remote path was already fixed to `|| undefined` in commit `ef463e3e` (5 Aug), with the `// C3: no default` comment. The one `|| '8.0'` remaining in that file sits inside `if (localSite)` and is the same deliberately-preserved local case as `DASHBOARD_V2_STATS`, already carrying its own "Left alone deliberately" comment. Applying the change there would silently reverse a documented decision. So there are **two** fallbacks in scope, not three.
 
 **Leave `src/main/ipc-handlers.ts:2623` alone.** It is guarded by `if (site)`, so it only ever fires for a *local* site found in Local's own store — the case CLAUDE.md documents as deliberately kept, because Local supplies a real version there. Add a comment above it so the next reader does not "fix" it:
 

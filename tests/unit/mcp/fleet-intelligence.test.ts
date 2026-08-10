@@ -9,6 +9,7 @@ import { bulkReindexHandler } from '../../../src/main/mcp/modules/fleet-intellig
 import { bulkPluginUpdateHandler } from '../../../src/main/mcp/modules/fleet-intelligence/bulk-plugin-update';
 import { listSiteGroupsHandler } from '../../../src/main/mcp/modules/fleet-intelligence/list-site-groups';
 import { manageSiteGroupHandler } from '../../../src/main/mcp/modules/fleet-intelligence/manage-site-group';
+import { HealthScoreCalculator } from '../../../src/main/health/HealthScoreCalculator';
 import type { NexusServices } from '../../../src/main/mcp/types';
 
 function getText(result: any): string {
@@ -159,6 +160,65 @@ describe('fleet-health-summary', () => {
     const result = await fleetHealthSummaryHandler.execute({}, services);
     const text = getText(result);
     expect(text).toContain('⚠️ no data');
+  });
+
+  test('does not fabricate a PHP version for a site whose phpVersion is absent — scores the honest "unknown" path, not a fabricated 8.0', async () => {
+    // Uses the REAL HealthScoreCalculator rather than a mocked
+    // `calculateAllScores`. The `|| '8.0'` fabrication this test guards
+    // against lives in fleet-health-summary.ts's siteInfoMap construction,
+    // upstream of the calculator — a mocked calculateAllScores can observe
+    // only what it's told to return, so it can't catch a regression in what
+    // gets passed *into* it. Only a real calculator makes the fabrication
+    // observable as a different score.
+    const realCalculator = new HealthScoreCalculator({
+      graphService: {
+        listPlugins: jest.fn().mockResolvedValue([]),
+        getRecentEvents: jest.fn().mockImplementation(({ status }: any) =>
+          status === 'failed' ? [] : [{ created_at: Date.now() }],
+        ),
+        getRecentContent: jest.fn().mockResolvedValue(Array(5).fill({})),
+      },
+      indexRegistry: {
+        get: jest.fn().mockReturnValue({ state: 'indexed', lastIndexed: Date.now() }),
+      },
+      siteDataBridge: {},
+    });
+
+    const services = createMockServices({
+      healthCalculator: realCalculator as any,
+      indexRegistry: {
+        listAll: jest.fn().mockReturnValue([
+          { siteId: 'site-1', siteName: 'Site One', state: 'indexed' },
+        ]),
+      } as any,
+      siteData: {
+        getSite: jest.fn(),
+        // Deliberately no `phpVersion` on this site — the real-world case of
+        // a WPE/external row whose PHP version was never actually read.
+        getSites: jest.fn().mockReturnValue({
+          'site-1': { id: 'site-1', name: 'Site One', path: '/a', domain: 'one.local' },
+        }),
+      },
+    });
+
+    const result = await fleetHealthSummaryHandler.execute({}, services);
+    const text = getText(result);
+
+    // Hand-computed from HealthScoreCalculator's scoring tables for this
+    // fixture with phpVersion undefined:
+    //   security     = 25 (SSL, no scheme -> no penalty) + 5 (php unknown)
+    //                  + 0 (no security plugin) + 25 (<=10 plugins) = 55
+    //   performance  = 10 (php unknown) + 0 (no cache) + 0 (no image opt) = 10
+    //   maintenance  = 100 (indexed, fresh)
+    //   activity     = 100 (recent event, >=5 recent content items)
+    //   stability    = 100 (no failed events)
+    //   overall = round(.30*55 + .25*10 + .20*100 + .15*100 + .10*100) = 64
+    // If the fallback regressed to `|| '8.0'`, scorePhpVersion('8.0') = 20
+    // (not 5) and scorePhpVersionPerformance('8.0') = 30 (not 10), giving
+    // security 70, performance 30, and overall 74 — a different, higher,
+    // and fabricated number.
+    expect(text).toContain('64/100');
+    expect(text).not.toContain('74/100');
   });
 });
 
