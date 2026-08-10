@@ -668,6 +668,17 @@ export default function main(context: any): void {
         const agentStateStore = new AgentStateStore(agentDb);
         const inboxStore = new InboxStore(agentDb);
 
+        // Retention sweep at startup. Without a caller this is just a method
+        // nobody runs, and `inbox_items` grows forever — the table has no other
+        // delete path. Startup is the right moment: it is once per session, off
+        // the hot path, and the same place the other stores prune.
+        try {
+          const pruned = inboxStore.prune();
+          if (pruned > 0) localLogger.info(`[NexusAI] inbox: pruned ${pruned} item(s)`);
+        } catch (err) {
+          localLogger.warn(`[NexusAI] inbox prune failed: ${(err as Error).message}`);
+        }
+
         const resolvedAgentProvider = getAIProvider(
           registryStorage,
           registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null,

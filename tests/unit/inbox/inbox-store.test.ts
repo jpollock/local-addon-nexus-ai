@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { InboxStore } from '../../../src/main/inbox/InboxStore';
+import { InboxStore, failureCode } from '../../../src/main/inbox/InboxStore';
 import type { InboxItemInput } from '../../../src/main/inbox/types';
 
 let db: InstanceType<typeof Database>;
@@ -119,5 +119,95 @@ describe('InboxStore decisions', () => {
     const page = store.listOpen(100);
     expect(page.items).toHaveLength(100);
     expect(page.total).toBe(250);
+  });
+});
+
+describe('failure code normalisation', () => {
+  test('the same fault with varying detail hashes to ONE code', () => {
+    // The whole point: this is one recurring fault, not three.
+    const codes = new Set([
+      'connect ECONNREFUSED 127.0.0.1:13000',
+      'connect ECONNREFUSED 127.0.0.1:13471',
+      'connect ECONNREFUSED 127.0.0.1:9021',
+    ].map(failureCode));
+    expect(codes.size).toBe(1);
+  });
+
+  test('paths, uuids and timestamps do not fork the code', () => {
+    expect(failureCode("ENOENT: no such file '/var/folders/t7/x9/run-a1b2.log' at 2026-08-10T14:02:11Z"))
+      .toBe(failureCode("ENOENT: no such file '/var/folders/qq/z1/run-ffff.log' at 2026-08-11T09:44:02Z"));
+  });
+
+  test('genuinely different faults keep different codes', () => {
+    // The opposite failure: over-normalising merges unrelated bugs into one
+    // row and hides the second one completely.
+    expect(failureCode('connect ECONNREFUSED 127.0.0.1:13000'))
+      .not.toBe(failureCode('(s.evidence || []).map is not a function'));
+    expect(failureCode('Permission denied reading wp-config.php'))
+      .not.toBe(failureCode('Permission denied writing wp-config.php'));
+  });
+
+  test('a recurring fault stays ONE row across fifty runs', () => {
+    // The end-to-end statement of the design's volume-agnosticism claim.
+    for (let i = 0; i < 50; i++) {
+      store.record(item({
+        kind: 'problem',
+        code: failureCode(`connect ECONNREFUSED 127.0.0.1:${13000 + i}`),
+        scope: '*',
+      }), 1000 + i);
+    }
+    const open = store.listOpen();
+    expect(open.total).toBe(1);
+    expect(open.items[0].seenCount).toBe(50);
+  });
+});
+
+describe('InboxStore.prune', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  test('forgets a decided item that stopped recurring', () => {
+    store.record(item(), 1000);
+    store.decide(store.listOpen().items[0].id, 'Not now', 'dismissed', 1000);
+
+    store.prune(90, 500, 1000 + 91 * DAY);
+    expect(store.listAll()).toHaveLength(0);
+  });
+
+  test('a dismissed item that is STILL recurring is never pruned', () => {
+    // Pruning it would let the next sweep resurrect it as open, silently
+    // undoing the dismissal — the one property this store guarantees.
+    store.record(item(), 1000);
+    store.decide(store.listOpen().items[0].id, 'Not now', 'dismissed', 1000);
+    const now = 1000 + 91 * DAY;
+    store.record(item(), now);                    // still happening
+
+    store.prune(90, 500, now);
+    const all = store.listAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].status).toBe('dismissed');
+  });
+
+  test('open items are never aged out, however old', () => {
+    store.record(item(), 1000);
+    store.prune(90, 500, 1000 + 365 * DAY);
+    expect(store.listOpen().total).toBe(1);
+  });
+
+  test('caps runaway open items per source, keeping the newest', () => {
+    for (let i = 0; i < 20; i++) store.record(item({ code: `C-${i}` }), 1000 + i);
+    store.prune(90, 5, 2000);
+
+    const open = store.listOpen();
+    expect(open.total).toBe(5);
+    expect(open.items.map(i => i.code).sort())
+      .toEqual(['C-15', 'C-16', 'C-17', 'C-18', 'C-19']);
+  });
+
+  test('the cap is per source, not global', () => {
+    for (let i = 0; i < 6; i++) store.record(item({ source: 'a', code: `A-${i}` }), 1000 + i);
+    for (let i = 0; i < 6; i++) store.record(item({ source: 'b', code: `B-${i}` }), 1000 + i);
+
+    store.prune(90, 5, 2000);
+    expect(store.pendingBySource()).toEqual({ a: 5, b: 5 });
   });
 });
