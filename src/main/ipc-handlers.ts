@@ -101,6 +101,7 @@ import { detectCollision, writeHostBlock, generateHostKey, previewHostBlock } fr
 import { listSshConfigHosts } from './external/sshConfigParser';
 import { getExternalProfile, upsertExternalProfile } from './external/externalSiteStore';
 import { collectFleetCounts } from './fleet/collectFleetCounts';
+import { collectSystemHealth } from './health/collectSystemHealth';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -1837,13 +1838,77 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     try {
       const stats = await graphService.getEventStats();
 
-      // Determine health status
-      let healthStatus: 'good' | 'warning' | 'error' = 'good';
-      if (stats.failed > 0) {
-        healthStatus = 'error';
-      } else if (stats.pending > 10) {
-        healthStatus = 'warning';
-      }
+      // The pill rolls up four signals. The event queue is one of them and can
+      // contribute red, but can never produce green on its own — it only ever
+      // covers Local sites (see collectSystemHealth / rollUpSystemHealth).
+      const systemHealth = await collectSystemHealth({
+        // Same pair of services the `agentStatus` GraphQL resolver uses
+        // (src/main/graphql/resolvers.ts, `agentStatus` field) — registry for
+        // the definitions, state store for the last run.
+        getAgents: async () => {
+          const registry = deps.nexusServices?.agentRegistry;
+          const store = deps.nexusServices?.agentStateStore;
+          if (!registry) throw new Error('agent registry not available');
+          return registry.list().map((def: any) => {
+            const last = store?.getLastRun(def.name);
+            return {
+              id: def.name,
+              lastRunStatus: last ? last.status : null,
+              lastRunAt: last ? last.startedAt : null,
+            };
+          });
+        },
+        // `refreshEnabled` says whether background refresh is actually
+        // switched on for THIS row's source — read from the real settings,
+        // never inferred/defaulted to true. wpeSyncAutoEnabled (CAPI sync) and
+        // wpeRefreshAutoEnabled (deeper SSH refresh) both write freshness
+        // timestamps for WPE sites (last_sync_at and ssh_last_sync_at
+        // respectively) so either one being on counts; externalRefreshAutoEnabled
+        // covers external SSH hosts (writes both columns together); local sites'
+        // background reindex is gated by localContentIndexAutoEnabled (the
+        // OpportunisticScheduler setting — NOT `autoIndex`, which gates
+        // per-lifecycle-event indexing, not the interval scheduler). All four
+        // settings default false, so on a default install every row reports
+        // refreshEnabled: false and the collector honestly reports 'unknown'
+        // rather than a false 'ok' or a false 'degraded'.
+        getSyncAges: () => {
+          const db = graphService.getDb();
+          if (!db) throw new Error('graph not ready');
+          const settings = (registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null) ?? DEFAULT_SETTINGS;
+          const rows = db.prepare(
+            'SELECT id, source, last_sync_at, ssh_last_sync_at FROM sites WHERE is_active = 1'
+          ).all() as Array<{ id: string; source: string | null; last_sync_at: number | null; ssh_last_sync_at: number | null }>;
+          return rows.map((r) => {
+            let refreshEnabled = false;
+            if (r.source === 'wpe') {
+              refreshEnabled = settings.wpeSyncAutoEnabled === true || settings.wpeRefreshAutoEnabled === true;
+            } else if (r.source === 'external') {
+              refreshEnabled = settings.externalRefreshAutoEnabled === true;
+            } else if (r.source === 'local') {
+              refreshEnabled = settings.localContentIndexAutoEnabled === true;
+            }
+            // WPE/external carry two freshness timestamps (the light sync and
+            // the deeper SSH refresh); either one having run counts as checked.
+            const lastSyncAt = Math.max(r.last_sync_at ?? 0, r.ssh_last_sync_at ?? 0) || null;
+            return { id: String(r.id), lastSyncAt, refreshEnabled };
+          });
+        },
+        // OAuth connections carry 'active' | 'revoked' | 'error'; API-key
+        // connections carry 'active' | 'revoked'. Anything not active is broken.
+        getCredentialStates: async () => {
+          const mgr = deps.nexusServices?.credentialManager;
+          if (!mgr) throw new Error('credential manager not available');
+          const oauth = mgr.listConnections().map((c: any) => ({
+            name: c.provider, ok: c.status === 'active',
+          }));
+          const apiKeys = mgr.listApiKeyConnections().map((c: any) => ({
+            name: c.label || c.provider, ok: c.status === 'active',
+          }));
+          return [...oauth, ...apiKeys];
+        },
+        getEventStats: async () => ({ failed: stats.failed, pending: stats.pending }),
+      });
+      const healthStatus = systemHealth.overall;
 
       const eventStats: EventStats = {
         total: stats.total,
@@ -1853,6 +1918,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         failed: stats.failed,
         byType: stats.by_type as Record<string, number>,
         healthStatus,
+        systemHealth,
       };
 
       return { success: true, stats: eventStats };

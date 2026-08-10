@@ -628,6 +628,34 @@ export interface EventTimelineEntry {
 /**
  * Event statistics for dashboard
  */
+/**
+ * Structurally identical to `SystemHealth` / `HealthState` in
+ * `src/main/health/SystemHealth.ts` — duplicated here rather than imported
+ * because `common/` is shared with the renderer and must not depend on
+ * `main/`. Keep the two in sync if either changes.
+ */
+export type HealthState = 'ok' | 'degraded' | 'failing' | 'unknown';
+
+export interface HealthSignal {
+  state: HealthState;
+  /** Plain-language cause. Null only when state is 'ok'. */
+  reason: string | null;
+}
+
+export interface SystemHealthInputs {
+  agentRuns: HealthSignal;
+  syncStaleness: HealthSignal;
+  credentials: HealthSignal;
+  eventQueue: HealthSignal;
+}
+
+export interface SystemHealth {
+  overall: HealthState;
+  inputs: SystemHealthInputs;
+  /** Reasons from every non-ok input, most severe first. */
+  reasons: string[];
+}
+
 export interface EventStats {
   total: number;
   today: number;
@@ -635,7 +663,16 @@ export interface EventStats {
   pending: number;
   failed: number;
   byType: Record<string, number>;
-  healthStatus: 'good' | 'warning' | 'error';
+  /**
+   * Rolled up from four signals (agents, sync freshness, credentials, event
+   * queue) by `collectSystemHealth` / `rollUpSystemHealth` — see
+   * `src/main/health/SystemHealth.ts`. `'unknown'` means an input could not be
+   * read; it is never treated as healthy. `'ok'` requires every input to have
+   * actually answered.
+   */
+  healthStatus: HealthState;
+  /** The full rollup — per-input states and human-readable reasons. */
+  systemHealth?: SystemHealth;
 }
 
 /**
