@@ -342,6 +342,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     const autonomyById = agentStore.getState().autonomyById;
     const autonomy = autonomyById[agentId] ?? 'suggest';
     const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
+    const pendingLoaded = agentStore.getState().pendingLoaded;
     const isDisabled = !settings.enabled;
 
     // Derived trigger summary from actual config
@@ -401,8 +402,8 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
             React.createElement('span', {
               className: `ag-pill ${isDisabled ? 'ag-pill--disabled' : 'ag-pill--healthy'}`,
             }, isDisabled ? 'Disabled' : 'Enabled'),
-            // Workload pill (only when active + pending)
-            !isDisabled && pendingCount > 0 && React.createElement('span', {
+            // Workload pill (only when active + pending + loaded)
+            !isDisabled && pendingLoaded && pendingCount > 0 && React.createElement('span', {
               className: 'ag-pill ag-pill--review',
             }, `${pendingCount} need review`),
           ),
@@ -438,10 +439,11 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     const { activeTab } = this.state;
     const { agentId } = this.props;
     const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
+    const pendingLoaded = agentStore.getState().pendingLoaded;
 
     const tabs: Array<{ id: WorkspaceTab; label: string; badge?: number }> = [
       { id: 'settings',  label: 'Settings' },
-      { id: 'approvals', label: 'Approvals', badge: pendingCount > 0 ? pendingCount : undefined },
+      { id: 'approvals', label: 'Approvals', badge: pendingLoaded && pendingCount > 0 ? pendingCount : undefined },
       { id: 'activity',  label: 'Activity' },
       { id: 'tools',     label: 'Tools' },
       { id: 'docs',      label: 'Docs' },
@@ -502,9 +504,15 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     const { agentId, onReviewEvent } = this.props;
     const { selectedApprovals, siteEnvByName } = this.state;
     const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
+    const pendingLoaded = agentStore.getState().pendingLoaded;
     const pending = agentStore.getState().activityEvents.filter(
       e => e.agentId === agentId && e.status !== 'dismissed' && e.status !== 'done' && e.status !== 'info'
     );
+
+    // Before pendingLoaded, don't show "No pending approvals" — show a neutral loading state.
+    if (!pendingLoaded) {
+      return React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13, padding: '24px 0' } }, 'Loading approvals…');
+    }
 
     if (pendingCount === 0) {
       return React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13, padding: '24px 0' } }, 'No pending approvals.');

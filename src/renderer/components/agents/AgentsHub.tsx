@@ -8,13 +8,14 @@ interface AgentsHubProps {
   onNavigateToInbox?: () => void;
 }
 
-interface AgentsHubState extends Pick<AgentState, 'statuses' | 'activityEvents' | 'pendingBySource'> {}
+interface AgentsHubState extends Pick<AgentState, 'statuses' | 'activityEvents' | 'pendingBySource' | 'pendingLoaded'> {}
 
 export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
   state: AgentsHubState = {
     statuses: agentStore.getState().statuses,
     activityEvents: agentStore.getState().activityEvents,
     pendingBySource: agentStore.getState().pendingBySource,
+    pendingLoaded: agentStore.getState().pendingLoaded,
   };
   private unsub!: () => void;
 
@@ -23,6 +24,7 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
       statuses: agentStore.getState().statuses,
       activityEvents: agentStore.getState().activityEvents,
       pendingBySource: agentStore.getState().pendingBySource,
+      pendingLoaded: agentStore.getState().pendingLoaded,
     });
     agentStore.subscribe(update);
     this.unsub = update;
@@ -45,8 +47,43 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
   }
 
   private renderInbox() {
+    const { pendingLoaded } = this.state;
     const pending = this.getTotalPending();
     const agentCount = this.getAgentsWithPending();
+
+    // Before pendingLoaded, render a neutral "Checking…" state, never the all-clear.
+    // pendingBySource is {} before the first GET_INBOX resolves, so painting
+    // "Nothing needs you / Everything is running autonomously" on every load is a regression
+    // from the old counters (which read persisted data and had a value at first paint).
+    if (!pendingLoaded) {
+      return React.createElement('div', {
+        style: {
+          width: '100%', borderRadius: 12, padding: '16px 22px', marginBottom: 20,
+          background: 'rgba(130,130,130,0.06)',
+          border: '1px solid rgba(130,130,130,0.25)',
+          display: 'flex', alignItems: 'center', gap: 16,
+        },
+      },
+        React.createElement('div', {
+          style: {
+            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+            background: 'rgba(130,130,130,0.12)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--ag-text-secondary)',
+            fontSize: 16, fontWeight: 700,
+          },
+        }, '…'),
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', { style: { fontSize: 15, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 2 } },
+            'Checking…',
+          ),
+          React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)' } },
+            'Loading inbox status',
+          ),
+        ),
+      );
+    }
+
     const isClean = pending === 0;
 
     return React.createElement('div', {

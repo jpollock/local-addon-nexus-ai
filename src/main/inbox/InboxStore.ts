@@ -129,6 +129,15 @@ export class InboxStore {
     return { items: rows.map(toItem), total };
   }
 
+  /** Recently decided items (dismissed or done), newest decision first, bounded. */
+  listRecentlyDecided(limit: number = 20): InboxItem[] {
+    const rows = this.db.prepare(`
+      SELECT * FROM inbox_items WHERE status != 'open'
+      ORDER BY decided_at DESC, id DESC LIMIT ?
+    `).all(limit) as Row[];
+    return rows.map(toItem);
+  }
+
   /** Record the user's decision. Survives every later re-report. */
   decide(
     id: number,

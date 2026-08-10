@@ -52,6 +52,7 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
 
     const isDisabled = derivedStatus === 'disabled';
     const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
+    const pendingLoaded = agentStore.getState().pendingLoaded;
 
     return React.createElement('div', {
       onClick: onSelect,
@@ -91,8 +92,9 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
             React.createElement('span', {
               className: `ag-pill ${isDisabled ? 'ag-pill--disabled' : 'ag-pill--healthy'}`,
             }, isDisabled ? 'Disabled' : 'Enabled'),
-            // Workload pill — only when there are pending items
-            !isDisabled && pendingCount > 0 && React.createElement('span', {
+            // Workload pill — only when there are pending items AND pending has loaded.
+            // Before pendingLoaded, suppress the badge entirely rather than showing 0.
+            !isDisabled && pendingLoaded && pendingCount > 0 && React.createElement('span', {
               className: 'ag-pill ag-pill--review',
               style: { fontSize: 11, padding: '2px 8px' },
             }, `${pendingCount} need review`),

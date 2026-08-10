@@ -13,8 +13,7 @@ import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/const
 import { getApiKey } from './security/KeyVault';
 import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
-import { recordRunToInbox } from './inbox/recordRun';
-import { pauseIfStuck, AUTO_PAUSED_KEY, resumeAgent, isAutoPaused } from './inbox/autoPause';
+import { AUTO_PAUSED_KEY, resumeAgent, isAutoPaused } from './inbox/autoPause';
 import type { InboxItem } from './inbox/types';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
@@ -5430,40 +5429,10 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
       const outcomes = parseRunOutcomes(logContent, siteNames);
 
-      // Record to the inbox BEFORE the broadcast, and outside its try/catch.
-      // That broadcast degrades to a minimal payload when findings are too
-      // large to serialize; a finding we cannot send to the renderer is still
-      // a finding worth keeping. Never let an inbox fault fail the run.
-      try {
-        const inboxStore = deps.nexusServices?.inboxStore;
-        if (inboxStore) {
-          recordRunToInbox(inboxStore, {
-            // An unattributed run must not borrow a real agent's name — inbox items
-            // are keyed by source, and pendingBySource() drives per-agent badges.
-            agentId: agentId || 'unknown-agent',
-            status: (lastRunResult as any)?.status,
-            error:  (lastRunResult as any)?.error,
-            sites:  (lastRunResult as any)?.sites,
-            findings: (lastRunResult as any)?.findings,
-            findingsSites: outcomes.findingsSites,
-          });
-        }
-
-        // Auto-pause when the agent is stuck in an identical failure streak.
-        const agentStateStore = deps.nexusServices?.agentStateStore;
-        if (agentStateStore && agentId) {
-          const paused = pauseIfStuck(
-            agentStateStore,
-            agentId,  // Write marker with slug (settings cache key)
-            agentStateStore.getRunHistory(agentName, 10),  // Read history with display name (DB key)
-          );
-          if (paused) {
-            localLogger.warn(`[NexusAI] auto-paused ${agentId} after repeated identical failures`);
-          }
-        }
-      } catch (inboxErr: any) {
-        console.error('[AGENT_RUN_NOW] inbox write failed:', inboxErr?.message);
-      }
+      // Inbox write and auto-pause now happen in AgentRunner.run() for ALL trigger paths
+      // (manual, scheduled, event-triggered). This was previously only in the manual path,
+      // which meant scheduled runs never wrote to the inbox — the exact scenario the inbox
+      // was built for.
 
       try {
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
@@ -5562,19 +5531,30 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
           counts: { decide: 0, problem: 0, know: 0 },
           pendingBySource: {},
           pausedSources: [],
+          recentlyDecided: [],
         };
       }
 
       const { items, total } = inboxStore.listOpen();
       const counts = inboxStore.countsByKind();
       const pendingBySource = inboxStore.pendingBySource();
+      const recentlyDecided = inboxStore.listRecentlyDecided(20);
 
-      // Derive from pendingBySource, not from `items` — listOpen() returns only
-      // the first page (INBOX_PAGE_SIZE), so a paused agent whose items all fall
-      // beyond it would silently get no resume action.
+      // Derive pausedSources from the union of agents-with-open-items and all registered agents.
+      // Using pendingBySource alone misses a paused agent whose items were all dismissed — that
+      // agent has no open items, so it never appears in pendingBySource, no "Try again" renders,
+      // and nothing else clears _autoPausedAt. Silently and permanently disabled.
       const pausedSources: string[] = [];
       if (agentStateStore) {
-        for (const source of Object.keys(pendingBySource)) {
+        const candidateSources = new Set<string>(Object.keys(pendingBySource));
+        // Also check every registered agent, in case one is paused but has no open items.
+        const agentRegistry = deps.nexusServices?.agentRegistry;
+        if (agentRegistry) {
+          for (const agent of agentRegistry.list()) {
+            candidateSources.add(agent.name);
+          }
+        }
+        for (const source of candidateSources) {
           if (isAutoPaused(agentStateStore, source)) {
             pausedSources.push(source);
           }
@@ -5588,6 +5568,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         counts,
         pendingBySource,
         pausedSources,
+        recentlyDecided,
       };
     } catch (err) {
       localLogger.error('[NexusAI] get-inbox failed:', (err as Error).message);
@@ -5598,6 +5579,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         counts: { decide: 0, problem: 0, know: 0 },
         pendingBySource: {},
         pausedSources: [],
+        recentlyDecided: [],
       };
     }
   });

@@ -2,10 +2,17 @@ import type { InboxStore } from './InboxStore';
 import { failureCode } from './InboxStore';
 import type { InboxItemInput } from './types';
 
+// Covers both the SDK Finding shape and the renderer's SentinelTypes.Finding shape
 interface RunFinding {
   id: string;
-  sev?: string;
+  // SDK shape (src/main/agent-sdk/types.ts:170)
+  severity?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  category?: 'active-compromise' | 'pre-breach' | 'misconfiguration' | 'informational';
   title?: string;
+  description?: string;
+  evidence?: Record<string, unknown>;
+  // Renderer shape (SentinelTypes.Finding)
+  sev?: string;
   plain?: string;
 }
 
@@ -34,15 +41,34 @@ function siteScope(name: string): string {
 function findingItem(
   agentId: string, f: RunFinding, scope: string, scopeLabel: string,
 ): InboxItemInput {
+  // Map severity === 'info' or category === 'informational' to kind: 'know'.
+  // The original design said "Worth knowing" has no producer because the renderer
+  // type had no 'info' severity, but the SDK type does.
+  const kind =
+    f.severity === 'info' || f.category === 'informational'
+      ? 'know'
+      : 'decide';
+
+  // Serialize evidence, if present. A cyclic or unserializable evidence object must not cost the item.
+  let evidenceStr: string | undefined;
+  if (f.evidence !== undefined) {
+    try {
+      evidenceStr = JSON.stringify(f.evidence);
+    } catch {
+      evidenceStr = undefined;
+    }
+  }
+
   return {
     source: agentId,
     code: f.id,
     scope,
     scopeLabel,
-    kind: 'decide',
+    kind,
     title: f.title || f.id,
-    detail: f.plain,
-    severity: f.sev,
+    detail: f.description ?? f.plain,  // SDK shape then renderer shape
+    severity: f.severity ?? f.sev,     // SDK shape then renderer shape
+    evidence: evidenceStr,
     payload: f,
   };
 }

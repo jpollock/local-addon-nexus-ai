@@ -16,6 +16,7 @@ const props = (over: any = {}) => ({
   total: 1,
   counts: { decide: 1, problem: 0, know: 0 },
   pausedSources: [],
+  recentlyDecided: [],
   onDecide: jest.fn(),
   onReopen: jest.fn(),
   onResumeAgent: jest.fn(),

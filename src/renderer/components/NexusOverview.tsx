@@ -181,6 +181,7 @@ interface NexusOverviewState {
   inboxTotal: number;
   inboxCounts: { decide: number; problem: number; know: number };
   inboxPausedSources: string[];
+  inboxRecentlyDecided: InboxItem[];
 }
 
 // -- Shared styles --
@@ -297,6 +298,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     inboxTotal: 0,
     inboxCounts: { decide: 0, problem: 0, know: 0 },
     inboxPausedSources: [],
+    inboxRecentlyDecided: [],
   };
 
   componentDidMount(): void {
@@ -540,12 +542,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         inboxTotal: inboxResult?.total ?? 0,
         inboxCounts: inboxResult?.counts ?? { decide: 0, problem: 0, know: 0 },
         inboxPausedSources: inboxResult?.pausedSources ?? [],
+        inboxRecentlyDecided: inboxResult?.recentlyDecided ?? [],
       });
 
       // Push pending counts to agentStore only when successfully read.
       // On failure, leave the previous value in place — a false all-clear is worse than stale data.
       if (inboxResult?.success) {
-        agentStore.setState({ pendingBySource: inboxResult.pendingBySource });
+        agentStore.setState({ pendingBySource: inboxResult.pendingBySource, pendingLoaded: true });
       }
     } catch (err: any) {
       if (!this.mounted) return;
@@ -1437,6 +1440,7 @@ renderTabBar(): React.ReactNode {
         total: this.state.inboxTotal,
         counts: this.state.inboxCounts,
         pausedSources: this.state.inboxPausedSources,
+        recentlyDecided: this.state.inboxRecentlyDecided,
         onDecide: async (id: number, decision: string, status: 'dismissed' | 'done') => {
           await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INBOX_DECIDE, { id, decision, status });
           void this.fetchAll();

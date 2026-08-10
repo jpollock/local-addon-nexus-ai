@@ -145,6 +145,40 @@ export class AgentRunner {
     }
 
     this.stateStore.recordRun(result);
+
+    // Record to inbox and check auto-pause. Wrapped so an inbox fault never fails a run.
+    try {
+      const inboxStore = this.services?.inboxStore;
+      const agentStateStore = this.services?.agentStateStore;
+
+      if (inboxStore) {
+        const { recordRunToInbox } = await import('../inbox/recordRun');
+        // agent.name is both the inbox source key and the DB key in agent_runs.
+        recordRunToInbox(inboxStore, {
+          agentId: agent.name,
+          status: result.status,
+          error: result.error,
+          sites: result.sites,
+          findings: result.findings,
+          // No findingsSites — AgentResult does not carry it, and sites is present.
+        });
+      }
+
+      if (agentStateStore && agent.name) {
+        const { pauseIfStuck } = await import('../inbox/autoPause');
+        const paused = pauseIfStuck(
+          agentStateStore,
+          agent.name,  // Both marker write and history read use agent.name
+          agentStateStore.getRunHistory(agent.name, 10),
+        );
+        if (paused) {
+          logger.warn(`auto-paused ${agent.name} after repeated identical failures`);
+        }
+      }
+    } catch (inboxErr: any) {
+      logger.error(`inbox write failed for ${agent.name}:`, inboxErr?.message);
+    }
+
     return result;
   }
 }

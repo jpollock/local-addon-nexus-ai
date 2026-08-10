@@ -112,6 +112,7 @@ export interface AgentState {
   expandedEvents: Record<string, boolean>;
   // runningAgents: managed locally in AgentWorkspace component state
   pendingBySource: Record<string, number>;  // from GET_INBOX, not persisted
+  pendingLoaded: boolean;  // true once a successful GET_INBOX lands, not persisted
 }
 
 const DEFAULT_STATE: AgentState = {
@@ -122,6 +123,7 @@ const DEFAULT_STATE: AgentState = {
   agentSettings: {},
   expandedEvents: {},
   pendingBySource: {},
+  pendingLoaded: false,
 };
 
 const PERSIST_KEY = 'nexus-ai:agent-store-v1';

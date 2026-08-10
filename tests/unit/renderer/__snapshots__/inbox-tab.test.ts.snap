@@ -61,31 +61,25 @@ exports[`InboxTab renders a decide item under its group 1`] = `
               "type": "div",
             },
             null,
-            null,
             {
-              "children": {
-                "children": [
-                  {
-                    "children": "Approve",
-                    "key": null,
-                    "props": {
-                      "onClick": "[fn]",
-                    },
-                    "type": "button",
+              "children": [
+                {
+                  "children": "Approve",
+                  "key": null,
+                  "props": {
+                    "onClick": "[fn]",
                   },
-                  {
-                    "children": "Not now",
-                    "key": null,
-                    "props": {
-                      "onClick": "[fn]",
-                    },
-                    "type": "button",
+                  "type": "button",
+                },
+                {
+                  "children": "Not now",
+                  "key": null,
+                  "props": {
+                    "onClick": "[fn]",
                   },
-                ],
-                "key": null,
-                "props": {},
-                "type": "Unknown",
-              },
+                  "type": "button",
+                },
+              ],
               "key": null,
               "props": {
                 "style": {
@@ -118,6 +112,7 @@ exports[`InboxTab renders a decide item under its group 1`] = `
       },
       "type": "div",
     },
+    null,
   ],
   "key": null,
   "props": {
