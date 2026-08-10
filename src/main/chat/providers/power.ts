@@ -89,6 +89,14 @@ export class PowerProvider implements AIProvider {
       ...(config.forceTool ? { tool_choice: { type: 'function', function: { name: config.forceTool } } } : {}),
     });
 
+    // Token usage is not reported on this path. This adapter does yield `done` (unlike
+    // local-gateway.ts, which never does), so in principle a `usage` field could be attached — but
+    // Power's OpenAI-compatible stream only includes a `usage` chunk when the request opts in via
+    // `stream_options: { include_usage: true }`, which the `body` above does not set, and no
+    // `data.usage` field has ever been observed on the `delta`/`finish_reason` chunks parsed below.
+    // Wiring a field this adapter has never actually seen would be exactly the invented-count
+    // failure mode this system exists to avoid, so `llm.call` carries no in=/out=/cost= for this
+    // provider until that shape is verified against a real response.
     try {
       const stream = streamingRequest({
         url: `${baseUrl}/chat/completions`,
