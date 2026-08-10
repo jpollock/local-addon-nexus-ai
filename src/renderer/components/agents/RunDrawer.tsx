@@ -98,8 +98,9 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
 
     const isDone = run.phase === 'done';
     const isCancelled = isDone && !!run.cancelled;
-    const isClean = isDone && !isCancelled && run.failedCount === 0 && run.findingsSites.length === 0;
-    const accentColor = isCancelled ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
+    const isEmptySelection = isDone && !!run.emptySelection;
+    const isClean = isDone && !isCancelled && !isEmptySelection && run.failedCount === 0 && run.findingsSites.length === 0;
+    const accentColor = isCancelled || isEmptySelection ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
     const doneSites = Object.values(run.siteStatus).filter(s => s !== 'running').length;
     const totalSites = run.siteNames.length;
     const progress = totalSites > 0 ? (doneSites / totalSites) * 100 : 0;
@@ -129,7 +130,7 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
             }, isDone ? (isClean ? '✓' : '!') : '⟳'),
             React.createElement('div', { style: { flex: 1 } },
               React.createElement('div', { style: { fontSize: 15, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 2 } },
-                isCancelled ? `${run.agentName} cancelled` : `${run.agentName} ${isDone ? 'done' : 'running'}`,
+                isCancelled ? `${run.agentName} cancelled` : isEmptySelection ? `${run.agentName} — no sites selected` : `${run.agentName} ${isDone ? 'done' : 'running'}`,
               ),
               React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)' } },
                 isDone

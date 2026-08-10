@@ -19,6 +19,7 @@ export interface Run {
   siteNames: string[];
   phase: 'running' | 'done';
   cancelled?: boolean;
+  emptySelection?: boolean;
   startedAt: number;
   endedAt?: number;
   doneCount: number;
@@ -99,7 +100,7 @@ class RunStore {
     this.startWatching(params.agentId, run.startedAt, params.logFile);
   }
 
-  completeRun(payload: { runId: string; runIds?: string[]; doneCount: number; failedCount: number; findingsSites: string[]; cancelled?: boolean; summary?: string }): void {
+  completeRun(payload: { runId: string; runIds?: string[]; doneCount: number; failedCount: number; findingsSites: string[]; cancelled?: boolean; emptySelection?: boolean; summary?: string }): void {
     const run = this.state.currentRun;
     if (!run || run.runId !== payload.runId) return;
     this.flushLog(run.agentId);
@@ -111,6 +112,7 @@ class RunStore {
         ...flushed,
         phase: 'done',
         cancelled: payload.cancelled ?? false,
+        emptySelection: payload.emptySelection ?? false,
         endedAt: Date.now(),
         doneCount: payload.doneCount,
         failedCount: payload.failedCount,

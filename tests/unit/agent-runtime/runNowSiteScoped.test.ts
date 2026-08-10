@@ -88,7 +88,7 @@ async function invokeRunNow(opts: { agent: any; runner: any; siteNames: string[]
     // Wait a tick for the IIFE to complete
     await new Promise(resolve => setImmediate(resolve));
 
-    return { runIds: capturedCompletion?.runIds || [] };
+    return { runIds: capturedCompletion?.runIds || [], broadcast: capturedCompletion };
   } finally {
     require('electron').BrowserWindow.getAllWindows = originalBroadcast;
   }
@@ -117,5 +117,14 @@ describe('AGENT_RUN_NOW honours siteScoped', () => {
     const agent = { name: 'auth-probe', siteScoped: false } as any;
     await invokeRunNow({ agent, runner, siteNames: [] });
     expect(runner.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports that nothing ran when a scoped agent is given no sites', async () => {
+    const runner = { run: jest.fn() };
+    const agent = { name: 'security-sentinel' } as any;
+    const out = await invokeRunNow({ agent, runner, siteNames: [] });
+    expect(runner.run).not.toHaveBeenCalled();
+    // Not indistinguishable from a successful run of zero sites.
+    expect(out.broadcast).toMatchObject({ emptySelection: true });
   });
 });

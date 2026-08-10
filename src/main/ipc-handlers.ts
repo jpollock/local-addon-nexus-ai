@@ -5105,6 +5105,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
           lastRunResult = await runner.run(agent, undefined, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
           runs.push({ site: '', result: lastRunResult || {} });
         } else {
+          // Defense-in-depth: a scoped agent with no sites selected should report that nothing ran,
+          // not broadcast a completion indistinguishable from a successful run of zero sites.
+          // The UI already disables Run on empty selection, but the CLI and other callers reach this too.
+          if (siteNames.length === 0) {
+            broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], agentId, siteNames: [], doneCount: 0, failedCount: 0, findingsSites: [], emptySelection: true });
+            return;
+          }
           for (const siteName of siteNames) {
             if (signal.aborted) break;
             const scopedEvent = {
