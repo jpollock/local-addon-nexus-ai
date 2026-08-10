@@ -17,7 +17,6 @@ import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
-import { SystemTab } from './SystemTab';
 import { SettingsTab } from './SettingsTab';
 import { AssistantPanel } from './AssistantPanel';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
@@ -620,18 +619,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     }
   };
 
-  handleIndexAllFleet = async (): Promise<void> => {
-    this.setState({ fleetIndexRunning: true });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_FLEET);
-      if (!this.mounted) return;
-      this.setState({ fleetIndexOpId: result?.opId ?? null, fleetIndexRunning: false });
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ fleetIndexRunning: false });
-    }
-  };
-
   handleSetupAllAuto = async (): Promise<void> => {
     this.setState({ setupAllAutoRunning: true });
     try {
@@ -641,18 +628,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     } catch {
       if (!this.mounted) return;
       this.setState({ setupAllAutoRunning: false });
-    }
-  };
-
-  handleIndexAllAuto = async (): Promise<void> => {
-    this.setState({ indexAllAutoRunning: true });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_AUTO);
-      if (!this.mounted) return;
-      this.setState({ indexAllAutoOpId: result?.opId ?? null, indexAllAutoRunning: false });
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ indexAllAutoRunning: false });
     }
   };
 
@@ -709,18 +684,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       alert(`Error: ${errorMsg}`);
     } finally {
       this.setState({ pullingInstall: null });
-    }
-  };
-
-  handleSyncGraph = async (): Promise<void> => {
-    this.setState({ syncGraphRunning: true });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_GRAPH_ALL);
-      if (!this.mounted) return;
-      this.setState({ syncGraphOpId: result?.opId ?? null, syncGraphRunning: false });
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ syncGraphRunning: false });
     }
   };
 
@@ -800,146 +763,24 @@ renderTabBar(): React.ReactNode {
     );
   }
 
-  renderOpsButton(
-    label: string,
-    loadingLabel: string,
-    isRunning: boolean,
-    opId: string | null,
-    handler: () => void,
-    description?: string,
-    disabled?: boolean,
-  ): React.ReactNode {
-    const inactive = isRunning || disabled;
-    return React.createElement('div', { style: { flex: '1', minWidth: '220px' } },
-      React.createElement('button', {
-        style: inactive
-          ? { ...btnPrimaryStyle, opacity: 0.4, cursor: 'not-allowed', width: '100%' }
-          : { ...btnPrimaryStyle, width: '100%' },
-        onClick: inactive ? undefined : handler,
-        disabled: inactive,
-        title: disabled ? 'Requires WP Engine login' : undefined,
-      }, isRunning ? loadingLabel : label),
-      description
-        ? React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub, #6b7280)', marginTop: '4px', lineHeight: '1.3' } }, description)
-        : null,
-      opId
-        ? React.createElement('div', { style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' } }, 'Started — check progress below.')
-        : null,
-    );
-  }
-
+  /**
+   * Operations is a HOLDING PEN, not a destination. Do not "finish the job" by
+   * deleting it.
+   *
+   * Spec 5 moved its two real zones out: the data-currency buttons became
+   * selection-scoped actions on the Sites table, and the per-site list (
+   * the per-site list) became the table itself. What is left is zone 3 — Factory
+   * Reset, Reset Content Index, Database Health, Housekeeping, SSH Diagnostics.
+   *
+   * Those are app-level maintenance with no per-site meaning, so they cannot
+   * become bulk actions. Their destination is the Advanced section **spec 6**
+   * builds in Settings. Deleting this tab before that lands would make all five
+   * unreachable from the UI for the entire gap between the two specs.
+   *
+   * Spec 6 empties this and removes the tab. Until then it stays.
+   */
   renderOperationsTab(): React.ReactNode {
-    const { wpeAccounts, wpeAccountFilter, opsAdvancedExpanded } = this.state;
-    const wpeDisabled = !(this.state.stats?.remoteSites.wpeAuthenticated ?? false);
-    const btnRow = { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const };
-    const divider = React.createElement('hr', { style: { border: 'none', borderTop: '1px solid var(--nxai-card-border, #e5e7eb)', margin: '28px 0 22px' } });
-
-    // Compact inline WPE account scope badge
-    const allAccountIds = wpeAccounts.map(a => a.id);
-    const includedIds = wpeAccountFilter ?? allAccountIds;
-    const scopeBadge = wpeAccounts.length > 0
-      ? React.createElement('span', {
-          style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', fontWeight: 400, marginLeft: 8 },
-        }, `· ${includedIds.length === allAccountIds.length ? 'All accounts' : `${includedIds.length} of ${allAccountIds.length} accounts`}`)
-      : null;
-
-    // ── Zone 1: Keep data current ─────────────────────────────────────────────
-    const zone1 = React.createElement('div', null,
-
-      // Local sites
-      React.createElement('div', {
-        style: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 },
-      }, 'Local'),
-      React.createElement('div', { style: btnRow },
-        this.renderOpsButton(
-          'Refresh metadata', 'Refreshing…',
-          this.state.syncGraphRunning, this.state.syncGraphOpId,
-          this.handleSyncGraph,
-          'WP-CLI: active plugins, WP version, PHP version, themes. Starts halted sites temporarily.',
-        ),
-        this.renderOpsButton(
-          'Index content', 'Indexing…',
-          this.state.indexAllAutoRunning, this.state.indexAllAutoOpId,
-          this.handleIndexAllAuto,
-          'Vector index of posts/pages for search. Starts halted sites temporarily.',
-        ),
-      ),
-
-      // WP Engine sites
-      React.createElement('div', {
-        style: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10, display: 'flex', alignItems: 'center' },
-      }, 'WP Engine', scopeBadge),
-      React.createElement('div', { style: btnRow },
-        this.renderOpsButton(
-          'Sync metadata', 'Syncing…',
-          this.state.wpeSyncing, null,
-          this.handleWpeSync,
-          'SSH: plugins, WP/PHP version, themes for all WPE installs. Progress shown below.',
-          wpeDisabled,
-        ),
-        this.renderOpsButton(
-          'Index content', 'Indexing…',
-          this.state.fleetIndexRunning, this.state.fleetIndexOpId,
-          this.handleIndexAllFleet,
-          'Extracts posts/pages via SSH WP-CLI and builds searchable index. Requires SSH key.',
-          wpeDisabled,
-        ),
-      ),
-
-      // WPE sync inline progress (shows while metadata sync is running)
-      this.state.wpeSyncing && this.state.wpeSyncProgress
-        ? React.createElement('div', {
-            'data-testid': 'wpe-sync-progress',
-            style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: 8, padding: '12px 16px', marginBottom: 12 },
-          },
-            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
-              React.createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, 'WPE metadata sync'),
-              React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
-                `${this.state.wpeSyncProgress.current} / ${this.state.wpeSyncProgress.total} sites`,
-              ),
-            ),
-            React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
-              this.state.wpeSyncProgress.currentSite ? `Syncing: ${this.state.wpeSyncProgress.currentSite}` : 'Starting…',
-            ),
-          )
-        : null,
-
-      // WPE content index inline progress (shows while SSH indexing is running)
-      this.state.fleetIndexRunning
-        ? React.createElement('div', {
-            style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: 8, padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 },
-          },
-            React.createElement('div', { style: { width: 12, height: 12, borderRadius: '50%', background: '#0ECAD4', animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0 } }),
-            React.createElement('div', null,
-              React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, 'WPE content indexing'),
-              React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
-                'Extracting posts via SSH and building search index. This may take several minutes.',
-              ),
-            ),
-          )
-        : null,
-
-      // Bulk ops progress — directly below buttons for immediate feedback
-      React.createElement(BulkOperationsPanel, {
-        electron: this.props.electron,
-        siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
-      }),
-    );
-
-    // ── Zone 2: Site status ───────────────────────────────────────────────────
-    const zone2 = React.createElement('div', null,
-      divider,
-      renderSectionLabel('Site Status'),
-      React.createElement(SystemTab, {
-        electron: this.props.electron,
-        sites: this.state.sites.map((s) => ({ id: s.id, name: s.name, status: s.status })),
-        indexEntries: (this.state.indexEntries ?? []).map((e: any) => ({
-          siteId: e.siteId, siteName: e.siteName ?? '', state: e.state,
-          documentCount: e.documentCount, chunkCount: e.chunkCount,
-          lastIndexed: e.lastIndexed, durationMs: e.durationMs, errors: e.errors,
-        })),
-      }),
-    );
+    const { opsAdvancedExpanded } = this.state;
 
     // ── Zone 3: Advanced (collapsed by default) ───────────────────────────────
     const advancedItems = [
@@ -951,7 +792,6 @@ renderTabBar(): React.ReactNode {
     ];
 
     const zone3 = React.createElement('div', null,
-      divider,
       // Collapsible header
       React.createElement('div', {
         'data-testid': 'ops-advanced-toggle',
@@ -994,8 +834,6 @@ renderTabBar(): React.ReactNode {
     );
 
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const } },
-      zone1,
-      zone2,
       zone3,
     );
   }
@@ -1418,6 +1256,32 @@ renderTabBar(): React.ReactNode {
     );
   }
 
+  /**
+   * Inline progress for a WP Engine metadata sync.
+   *
+   * Survived the gutting of Operations' zone 1 because it is not driven by the
+   * button that lived there: `checkWpeSyncStatus` runs on mount and starts
+   * polling whenever a sync is already in flight, which is the normal case for
+   * one the scheduler began. Renders nothing when no sync is running.
+   */
+  renderWpeSyncProgress(): React.ReactNode {
+    if (!this.state.wpeSyncing || !this.state.wpeSyncProgress) return null;
+    return React.createElement('div', {
+      'data-testid': 'wpe-sync-progress',
+      style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: 8, padding: '12px 16px', marginTop: 12 },
+    },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
+        React.createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, 'WPE metadata sync'),
+        React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
+          `${this.state.wpeSyncProgress.current} / ${this.state.wpeSyncProgress.total} sites`,
+        ),
+      ),
+      React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
+        this.state.wpeSyncProgress.currentSite ? `Syncing: ${this.state.wpeSyncProgress.currentSite}` : 'Starting…',
+      ),
+    );
+  }
+
   toggleSiteSelection = (id: string): void => {
     this.setState(prev => ({
       selectedSiteIds: prev.selectedSiteIds.indexOf(id) === -1
@@ -1487,7 +1351,17 @@ renderTabBar(): React.ReactNode {
 
     switch (this.state.activeTab) {
       case 'overview': return React.createElement(OverviewTab, overviewProps);
-      case 'sites': return React.createElement(SitesTab, {
+      // Progress readouts sit BELOW the table rather than inside SitesTab, so
+      // the tab component stays a pure function of its props.
+      //
+      // Both moved here from Operations' zone 1 when it was gutted, and both
+      // had to survive it. BulkOperationsPanel is the only progress readout for
+      // BULK_EXECUTE, which is exactly what this tab's bulk bar dispatches.
+      // The WPE sync block is NOT the deleted button's: `checkWpeSyncStatus`
+      // runs on mount and fills `wpeSyncProgress` for a sync the scheduler
+      // started, so dropping it would hide background syncs entirely.
+      case 'sites': return React.createElement('div', null,
+        React.createElement(SitesTab, {
         loaded: this.state.siteRowsLoaded,
         failed: this.state.siteRowsFailed,
         rows: this.state.siteRows,
@@ -1500,7 +1374,13 @@ renderTabBar(): React.ReactNode {
         // not `nexus host index <alias>`, which fans out over the connection.
         onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
         onRetry: () => { void this.fetchAll(); },
-      });
+        }),
+        this.renderWpeSyncProgress(),
+        React.createElement(BulkOperationsPanel, {
+          electron: this.props.electron,
+          siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
+        }),
+      );
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
@@ -1576,68 +1456,6 @@ renderTabBar(): React.ReactNode {
       diagRunning: false,
       diagResults: [{ cmd, ...result }, ...prev.diagResults].slice(0, 20),
     }));
-  };
-
-  handleWpeSync = async (): Promise<void> => {
-    if (this.state.wpeSyncing) return;
-
-    this.setState({ wpeSyncing: true, wpeSyncProgress: null, wpeSyncError: null });
-
-    // Start polling for progress
-    this.startWpeSyncProgressPolling();
-
-    try {
-      // Sync all WPE sites
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_ALL);
-
-      // Stop polling
-      this.stopWpeSyncProgressPolling();
-
-      if (result.success) {
-        const syncedCount = result.synced || 0;
-        this.setState({
-          wpeSyncedCount: syncedCount,
-          wpeSyncing: false,
-          wpeSyncProgress: null,
-          wpeSyncError: null,
-        });
-
-        // Show success toast
-        if (toast) {
-          if (syncedCount > 0) {
-            toast({ type: 'success', content: `Successfully synced ${syncedCount} WP Engine site${syncedCount === 1 ? '' : 's'}` });
-          } else {
-            toast({ type: 'cta', content: 'No WP Engine sites found to sync' });
-          }
-        }
-
-        // Refresh data
-        await this.fetchAll();
-      } else {
-        const errorMsg = result.error || 'Unknown error occurred during sync';
-        this.setState({
-          wpeSyncing: false,
-          wpeSyncProgress: null,
-          wpeSyncError: errorMsg,
-        });
-        if (toast) {
-          toast({ type: 'error', content: `WPE sync failed: ${errorMsg}` });
-        }
-        console.error('[NexusOverview] WPE sync failed:', errorMsg);
-      }
-    } catch (error) {
-      this.stopWpeSyncProgressPolling();
-      const errorMsg = error instanceof Error ? error.message : 'Failed to sync WPE sites';
-      this.setState({
-        wpeSyncing: false,
-        wpeSyncProgress: null,
-        wpeSyncError: errorMsg,
-      });
-      if (toast) {
-        toast({ type: 'error', content: `WPE sync error: ${errorMsg}` });
-      }
-      console.error('[NexusOverview] WPE sync error:', error);
-    }
   };
 
   handleCreateWPEBackup = async (): Promise<void> => {

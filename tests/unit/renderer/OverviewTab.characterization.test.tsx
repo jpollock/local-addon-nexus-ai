@@ -114,7 +114,9 @@ describe('Overview tab — characterization', () => {
 describe('Overview extraction — structural invariants', () => {
   test.each([
     ['overview', 'OverviewTab'],
-    ['sites', 'SitesTab'],
+    // 'sites' is a div wrapping SitesTab plus the two progress readouts that
+    // moved out of Operations' zone 1. Asserted properly in its own test below.
+    ['sites', 'div'],
     ['activity', 'div'],
     ['operations', 'div'],
     ['settings', 'SettingsTab'],
@@ -123,6 +125,17 @@ describe('Overview extraction — structural invariants', () => {
     const shell = makeShell({ activeTab: tab, stats: POPULATED_STATS, loading: false });
     const tree: any = serializeTree(shell.renderActiveTab());
     expect(tree.type).toBe(expectedType);
+  });
+
+  test('the Sites tab renders the table alongside the rehomed progress readouts', () => {
+    // BulkOperationsPanel and the WPE sync block lived in Operations' zone 1.
+    // Zone 1 is gone; both had to land somewhere or bulk work would run with no
+    // visible progress at all. `type: 'div'` in the table above is necessary but
+    // not sufficient — this pins what is inside it.
+    const shell = makeShell({ activeTab: 'sites', stats: POPULATED_STATS, loading: false });
+    const tree = JSON.stringify(serializeTree(shell.renderActiveTab()));
+    expect(tree).toContain('SitesTab');
+    expect(tree).toContain('BulkOperationsPanel');
   });
 
   test('the default case falls back to OverviewTab', () => {
