@@ -532,6 +532,83 @@ git commit -m "feat(panel): add the Insights tab beside Chat"
   decision, not a fix to make here.
 - Do not push, tag, or release.
 
+## Outcome
+
+Completed 2026-08-10. Panel: 88 raw hex → 0 across five `.tsx` files plus `agent-console.css`,
+three sizes, an Insights tab. Suite at baseline (13 pre-existing failing suites, 26 failing
+tests), 4,611 passing, `tsc` clean. Snapshot history is exactly the sanctioned changes.
+
+Two constraints in this plan were found infeasible mid-flight and corrected — both required "no
+snapshot changes" on a task that necessarily changed the header. The second time it had already
+caused damage: the implementer satisfied the impossible constraint by reusing a conditional slot,
+producing a `wide` size no user could reach and silently removing the Sessions button in that
+mode. Every test passed. **An unsatisfiable constraint does not get ignored; it gets satisfied in
+a way that damages the feature, and the test report looks identical either way.**
+
+## Outstanding — needs a human at a screen
+
+**I-1 · The docked header may overflow, and this is the default size every user sees first.**
+Task 4's review computed that five buttons fit in 620px, correctly. Task 5 then inserted a
+~134px segmented control into the **384px** header and nobody re-ran the arithmetic. Estimate is
+~423px of content in 319px of space, with no `flexWrap`, `minWidth: 0`, `textOverflow` or
+`flexShrink` guard anywhere in `DockedPanel.tsx:141-149`. If it overflows, the fix is a design
+choice — drop the subtitle in docked only, make the segments icon-only, or shrink the cluster.
+Check with the streaming status showing; that string is longer.
+
+## Follow-up work — found by the final review, not fixed
+
+### Light mode has never been seen, and two things are predicted illegible
+
+- **I-2 · Accent-as-text collapsed onto accent-as-fill.** `#5fd2e5` (accent text, 8 uses) and
+  `#29b6cf` (accent fill, 10 uses) both became `UI_COLORS.WPE_BRAND` (`#0ECAD4`). Fine on dark
+  (7.1:1); against white that is **2.0:1**. Nine sites, including `PanelInsights.tsx:169` — the
+  22px pending count, the headline number of the new tab. Fill uses are fine both ways; it is
+  specifically the text role that needs a darker light-mode value. `agent-console.css` already
+  solved this exact problem: `--ag-teal` is `#35d0c5` dark / `#0e8f83` light.
+- **I-3 · The action-confirmation callout lost its emphasis in both modes.** `ActionCard.tsx:18-19`
+  went from a teal-tinted "stop and confirm" treatment to `--nxai-card-border` /
+  `--nxai-section-bg` — near-invisible on both palettes, while the footer still says "Confirm
+  required for destructive actions". This is a safety affordance and the clearest case of two
+  roles collapsing and losing a needed distinction. `ContextSelector.tsx:30-33` lost the same
+  treatment. Also `ActionCard.tsx:56-59` inverts in light mode: the *disabled* button reads
+  heavier than the enabled one.
+
+### A false all-clear on the new tab
+
+- **I-8 · "Nothing needs you right now" can be wrong.** `PanelInsights.tsx:118-127` reads
+  `agentStore.getState().activityEvents`, whose only writer is `NexusOverview`'s
+  `AGENT_RUN_COMPLETE` handler — registered only while `NexusOverview` is mounted. On the plain
+  Local screens the panel exists for, a background agent run producing a review item does not
+  increment the count, and the card confidently reports all-clear. This is the same defect class
+  the foundation spec was written to remove, on a new surface.
+
+### Streaming
+
+- **I-9 · Switching to Insights abandons an in-flight response with no signal.** Nothing aborts
+  the main-side stream on unmount; `ChatService` keeps generating (and billing) into a session
+  the renderer will never read. The cleanest fix would have removed C-1, C-2 and this at once:
+  keep `PanelChat` mounted and toggle visibility rather than swapping the component out.
+
+### Minors
+
+`PanelInsights.tsx:156` uses a hardcoded `rgba(245,181,68,0.08)` — the "no hardcoded colour"
+constraint re-violated via the gap the theme test still has for `rgba()`; `:89` uses
+`UI_COLORS.STATUS_ERROR` where the panel elsewhere uses `var(--nxai-danger-text)`, so it does not
+flip with the theme; the segmented control's selected pill is `--nxai-card-bg` on
+`--nxai-table-hover`, which is near-identical in both modes and inverted in dark, with no
+`aria-pressed` or `role="tab"` to compensate; `PanelChat.tsx:293`'s comment about filtering
+streaming messages is now false; `PanelInsights.tsx:198-232` renders `installs` as a peer of
+`local`/`wpe`/`external` so the four rows appear to sum to double the fleet; `setState` after an
+`await` with no mounted guard; the test re-implements `serializeTree` instead of importing the
+shared helper; `showSessions` is never reset on a size change.
+
+### Newly visible predecessor debt
+
+The foundation plan's deferred "`catch {}` cannot distinguish 'graph not ready' from a real SQL
+error — both render as 0 with scope labels intact" now has a **user-facing render site**. A
+genuine graph failure displays "WP Engine installs: 0" in Insights rather than going nowhere.
+Worth raising that item's priority.
+
 ## Not in this plan
 
 - Site-scoped Insights — needs Local's routing read from a globally-mounted panel.
