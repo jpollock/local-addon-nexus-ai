@@ -201,7 +201,6 @@ describe('TranscriptWriter', () => {
     const last = entries[entries.length - 1];
     expect(last.role).toBe('truncated');
     expect(last.content).toContain('Transcript truncated');
-    expect(last.content).toMatch(/\d+ entries dropped/);
 
     // File should be under the budget
     expect(Buffer.byteLength(raw, 'utf-8')).toBeLessThan(smallBudget + 200); // +200 for the marker itself
@@ -217,23 +216,27 @@ describe('TranscriptWriter', () => {
     expect(entries.every(e => e.role !== 'truncated')).toBe(true);
   });
 
-  it('reports the entry that triggered truncation as dropped', () => {
+  it('counts every dropped entry, not just the one that tripped the budget', () => {
+    // This test previously asserted the marker said "1 entries dropped", with a comment noting
+    // the count was 1 at marker-write time. That pinned a defect: the marker is written the
+    // instant the budget is hit, so its figure is always 1 however many entries follow — it read
+    // "1 entries dropped" for a run that dropped 38. The count now lives on droppedCount(), which
+    // can be read after the run when the real number is known.
     const smallBudget = 300;
-    const w = new TranscriptWriter({ root, runId: 'r_count' }, smallBudget);
+    const w = new TranscriptWriter({ root, runId: 'r_count_after' }, smallBudget);
 
     const content = 'x'.repeat(100);
-    // First few should succeed, then one will trigger truncation
     for (let i = 0; i < 10; i++) {
       w.append({ turn: i + 1, role: 'prompt', model: 'm', content });
     }
 
-    const file = path.join(root, 'transcripts', 'r_count.jsonl');
+    const file = path.join(root, 'transcripts', 'r_count_after.jsonl');
     const lines = fs.readFileSync(file, 'utf-8').trim().split('\n');
     const marker = JSON.parse(lines[lines.length - 1]);
 
     expect(marker.role).toBe('truncated');
-    // The marker reports the entry that triggered it as dropped (count = 1 at marker-write time)
-    expect(marker.content).toContain('1 entries dropped');
+    expect(marker.content).not.toMatch(/\d+ entries dropped/);
+    expect(w.droppedCount()).toBeGreaterThan(1);
   });
 
   it('never throws when redaction or sequencing logic fails', () => {
@@ -242,5 +245,36 @@ describe('TranscriptWriter', () => {
     expect(() => {
       w.append({ turn: 1, role: 'prompt', model: 'm', content: ' ￿' });
     }).not.toThrow();
+  });
+});
+
+describe('the truncation marker states only what it can know', () => {
+  it('does not print a drop count that is wrong by the time the run ends', () => {
+    // The marker is written the instant the budget is hit, when exactly one entry has been
+    // dropped — but the run keeps going. Interpolating the then-current figure printed
+    // "1 entries dropped" for a run that went on to drop 38. A wrong number that looks
+    // authoritative is worse than no number, so the file states the fact and droppedCount()
+    // carries the tally.
+    const w = new TranscriptWriter({ root, runId: 'r_count' }, 400);
+    for (let i = 0; i < 40; i++) {
+      w.append({ turn: i, role: 'prompt', model: 'm', content: 'x'.repeat(200) });
+    }
+    const entries = fs.readFileSync(path.join(root, 'transcripts', 'r_count.jsonl'), 'utf-8')
+      .trim().split('\n').map(l => JSON.parse(l));
+    const marker = entries.find(e => e.role === 'truncated');
+
+    expect(marker).toBeDefined();
+    expect(marker.content).not.toMatch(/\d+ entries dropped/);
+    expect(w.droppedCount()).toBeGreaterThan(30);
+  });
+
+  it('writes the marker exactly once however many entries follow', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_once' }, 400);
+    for (let i = 0; i < 40; i++) {
+      w.append({ turn: i, role: 'prompt', model: 'm', content: 'x'.repeat(200) });
+    }
+    const entries = fs.readFileSync(path.join(root, 'transcripts', 'r_once.jsonl'), 'utf-8')
+      .trim().split('\n').map(l => JSON.parse(l));
+    expect(entries.filter(e => e.role === 'truncated')).toHaveLength(1);
   });
 });

@@ -51,6 +51,15 @@ export class TranscriptWriter {
 
   path(): string { return this.file; }
 
+  /**
+   * How many entries the budget refused, so far.
+   *
+   * The truncation marker in the file cannot carry this — it is written the instant the budget is
+   * hit, and the run goes on dropping entries afterwards. Read this at the end of a run for the
+   * real figure.
+   */
+  droppedCount(): number { return this.droppedEntries; }
+
   /** Never throws — a transcript is a debugging aid, not a reason to fail a run. */
   append(entry: TranscriptEntry): void {
     try {
@@ -89,7 +98,13 @@ export class TranscriptWriter {
           turn: entry.turn,
           role: 'truncated' as const,
           model: 'system',
-          content: `Transcript truncated at ${this.maxBytes} bytes. ${this.droppedEntries} entries dropped.`,
+          // No count: the marker is written the moment the budget is hit, when exactly one entry
+          // has been dropped, but the run keeps going and drops more. Interpolating the
+          // then-current figure printed "1 entries dropped" for a run that dropped 38 — a number
+          // that looks authoritative and is wrong. The final tally is knowable only after the run,
+          // so it lives on droppedCount() for a caller that wants it; the file states the fact it
+          // can actually stand behind.
+          content: `Transcript truncated at ${this.maxBytes} bytes. Later entries were dropped.`,
           seq: ++this.seq,
           at: new Date().toISOString(),
         };
