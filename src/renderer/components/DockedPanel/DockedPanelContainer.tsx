@@ -6,7 +6,7 @@ import { DockedPanel } from './DockedPanel';
 import { PanelChat } from './PanelChat';
 import { SessionsSidebar } from './SessionsSidebar';
 
-type PanelSize = 'docked' | 'full';
+type PanelSize = 'docked' | 'wide' | 'full';
 
 interface ContainerProps {
   electron: any;
@@ -35,9 +35,12 @@ function readState(): ContainerState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Accept all three valid sizes, coerce anything unrecognised to 'docked'
+      const validSizes: PanelSize[] = ['docked', 'wide', 'full'];
+      const size: PanelSize = validSizes.includes(parsed.size) ? parsed.size : 'docked';
       return {
         open: false, // always start collapsed — never block Local on load
-        size: parsed.size === 'full' ? 'full' : 'docked',
+        size,
         activeSessionId: parsed.activeSessionId ?? null,
         showSessions: false,
         sessionListVersion: 0,
@@ -94,7 +97,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   private syncReflowStyle() {
-    if (this.state.open && this.state.size === 'docked') {
+    if (this.state.open && (this.state.size === 'docked' || this.state.size === 'wide')) {
       this.injectReflowStyle();
     } else {
       this.removeReflowStyle();
@@ -107,7 +110,8 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     style.id = REFLOW_STYLE_ID;
     // Target Local's content wrapper — confirmed via DOM inspection at build time.
     // Adjust selector if Local's class names change.
-    style.textContent = `[class*="SiteInfo_"], [class*="Dashboard_"], [class*="siteinfo-wrapper"] { margin-right: 384px !important; transition: margin-right 0.2s ease; }`;
+    const marginRight = this.state.size === 'wide' ? 620 : 384;
+    style.textContent = `[class*="SiteInfo_"], [class*="Dashboard_"], [class*="siteinfo-wrapper"] { margin-right: ${marginRight}px !important; transition: margin-right 0.2s ease; }`;
     document.head.appendChild(style);
   }
 

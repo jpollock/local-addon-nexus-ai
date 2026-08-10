@@ -28,4 +28,16 @@ describe('DockedPanelContainer localStorage persistence', () => {
     expect(inst.state.size).toBe('docked');
     expect(inst.state.activeSessionId).toBeNull();
   });
+
+  it('round-trips the wide size through localStorage', () => {
+    localStorage.setItem('nexus-panel-state', JSON.stringify({ open: true, size: 'wide', activeSessionId: null }));
+    const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
+    expect(new DockedPanelContainer({}).state.size).toBe('wide');
+  });
+
+  it('still coerces an unrecognised size to docked', () => {
+    localStorage.setItem('nexus-panel-state', JSON.stringify({ open: true, size: 'enormous', activeSessionId: null }));
+    const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
+    expect(new DockedPanelContainer({}).state.size).toBe('docked');
+  });
 });

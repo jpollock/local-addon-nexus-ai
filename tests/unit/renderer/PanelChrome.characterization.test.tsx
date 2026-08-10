@@ -25,6 +25,7 @@ const VARIANTS: Array<[string, Record<string, any>]> = [
   ['full', { size: 'full' }],
   ['streaming', { streamingStatus: 'Thinking…' }],
   ['sessions open', { showSessions: true, sessionsSidebar: React.createElement('div', null, 'sessions') }],
+  ['wide', { size: 'wide' }],
 ];
 
 describe('panel chrome — characterization', () => {

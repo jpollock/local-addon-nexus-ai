@@ -1136,3 +1136,270 @@ exports[`panel chrome — characterization renders streaming 1`] = `
   "type": "div",
 }
 `;
+
+exports[`panel chrome — characterization renders wide 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": {
+            "children": null,
+            "key": null,
+            "props": {
+              "size": 18,
+            },
+            "type": "NexusGlyph",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "background": "#0ECAD4",
+              "borderRadius": "50%",
+              "display": "flex",
+              "flexShrink": 0,
+              "height": 34,
+              "justifyContent": "center",
+              "width": 34,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Nexus",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 15,
+                  "fontWeight": 600,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+            {
+              "children": "Follows you across tabs",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub)",
+                  "fontSize": 12,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconContract",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Back to docked",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Back to docked",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconNewChat",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "New chat",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "New chat",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconExpand",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Expand to full screen",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconCollapse",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Collapse to bubble",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "display": "flex",
+              "gap": 2,
+              "marginLeft": "auto",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-card-bg)",
+          "borderBottom": "1px solid var(--nxai-card-border)",
+          "display": "flex",
+          "flexShrink": 0,
+          "gap": 11,
+          "padding": "15px 16px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        null,
+        {
+          "children": "chat",
+          "key": null,
+          "props": {
+            "data-test": "chat-body",
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "flex": 1,
+          "flexDirection": "column",
+          "overflow": "hidden",
+          "position": "relative",
+        },
+      },
+      "type": "div",
+    },
+  ],
+  "key": null,
+  "props": {
+    "aria-label": "Nexus AI chat panel",
+    "role": "complementary",
+    "style": {
+      "background": "var(--nxai-card-bg)",
+      "borderLeft": "1px solid var(--nxai-card-border)",
+      "bottom": 0,
+      "display": "flex",
+      "flexDirection": "column",
+      "fontFamily": "inherit",
+      "left": undefined,
+      "pointerEvents": "all",
+      "position": "fixed",
+      "right": 0,
+      "top": 0,
+      "width": 620,
+      "zIndex": 8999,
+    },
+  },
+  "type": "div",
+}
+`;

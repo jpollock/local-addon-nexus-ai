@@ -1,7 +1,7 @@
 import React from 'react';
 import { UI_COLORS } from '../../../common/constants';
 
-export type PanelSize = 'docked' | 'full';
+export type PanelSize = 'docked' | 'wide' | 'full';
 
 export interface Props {
   open: boolean;
@@ -22,6 +22,7 @@ interface DockedPanelState {
 }
 
 const PANEL_WIDTH = 384;
+const WIDE_WIDTH = 620;
 const BUBBLE_SIZE = 52;
 
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────
@@ -75,6 +76,15 @@ function IconCollapse({ size }: { size: number }) {
   );
 }
 
+function IconWide({ size }: { size: number }) {
+  return React.createElement(
+    'svg',
+    { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } },
+    React.createElement('rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }),
+    React.createElement('path', { d: 'M9 5v14' }),
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 function iconBtnStyle(hovered: boolean, active = false) {
@@ -110,13 +120,13 @@ const styles = {
     userSelect: 'none' as const,
     pointerEvents: 'all' as const,
   },
-  panel: (full: boolean) => ({
+  panel: (size: PanelSize) => ({
     position: 'fixed' as const,
     top: 0,
     right: 0,
     bottom: 0,
-    width: full ? undefined : PANEL_WIDTH,
-    left: full ? 68 : undefined,
+    width: size === 'full' ? undefined : size === 'wide' ? WIDE_WIDTH : PANEL_WIDTH,
+    left: size === 'full' ? 68 : undefined,
     background: 'var(--nxai-card-bg)',
     borderLeft: `1px solid var(--nxai-card-border)`,
     display: 'flex',
@@ -212,19 +222,34 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       React.createElement(
         'div',
         { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 } },
-        // #1 Sessions — docked only
-        !isFull ? React.createElement(
-          'button',
-          {
-            style: iconBtnStyle(this.hov('sessions'), showSessions),
-            onClick: onToggleSessions,
-            title: 'Sessions',
-            'aria-label': 'Sessions',
-            onMouseEnter: this.onEnter('sessions'),
-            onMouseLeave: this.onLeave(),
-          },
-          React.createElement(IconSessions, { size: 17 }),
-        ) : null,
+        // #1 Sessions (docked) OR Wide control (wide) OR null (full)
+        size === 'docked'
+          ? React.createElement(
+              'button',
+              {
+                style: iconBtnStyle(this.hov('sessions'), showSessions),
+                onClick: onToggleSessions,
+                title: 'Sessions',
+                'aria-label': 'Sessions',
+                onMouseEnter: this.onEnter('sessions'),
+                onMouseLeave: this.onLeave(),
+              },
+              React.createElement(IconSessions, { size: 17 }),
+            )
+          : size === 'wide'
+          ? React.createElement(
+              'button',
+              {
+                style: iconBtnStyle(this.hov('wide')),
+                onClick: () => onSetSize('docked'),
+                title: 'Back to docked',
+                'aria-label': 'Back to docked',
+                onMouseEnter: this.onEnter('wide'),
+                onMouseLeave: this.onLeave(),
+              },
+              React.createElement(IconContract, { size: 17 }),
+            )
+          : null,
         // #2 New chat — always
         React.createElement(
           'button',
@@ -238,20 +263,9 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           },
           React.createElement(IconNewChat, { size: 17 }),
         ),
-        // #3 Expand / #4 Contract — same slot, swapped by state
-        !isFull
+        // #3 Expand (docked/wide) OR Contract (full)
+        size === 'full'
           ? React.createElement(
-              'button',
-              {
-                style: iconBtnStyle(this.hov('expand')),
-                onClick: () => onSetSize('full'),
-                'aria-label': 'Expand to full screen',
-                onMouseEnter: this.onEnter('expand'),
-                onMouseLeave: this.onLeave(),
-              },
-              React.createElement(IconExpand, { size: 17 }),
-            )
-          : React.createElement(
               'button',
               {
                 style: iconBtnStyle(this.hov('contract')),
@@ -261,8 +275,19 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
                 onMouseLeave: this.onLeave(),
               },
               React.createElement(IconContract, { size: 17 }),
+            )
+          : React.createElement(
+              'button',
+              {
+                style: iconBtnStyle(this.hov('expand')),
+                onClick: () => onSetSize('full'),
+                'aria-label': 'Expand to full screen',
+                onMouseEnter: this.onEnter('expand'),
+                onMouseLeave: this.onLeave(),
+              },
+              React.createElement(IconExpand, { size: 17 }),
             ),
-        // #5 Collapse — always
+        // #4 Collapse — always
         React.createElement(
           'button',
           {
@@ -307,7 +332,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
     return React.createElement(
       'div',
-      { style: styles.panel(isFull), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
+      { style: styles.panel(size), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
       header,
       body,
     );
