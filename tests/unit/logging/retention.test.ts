@@ -1,4 +1,7 @@
-import { planRetention } from '../../../src/main/logging/retention';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { planRetention, applyRetention } from '../../../src/main/logging/retention';
 
 const POLICY = { logDays: 14, transcriptDays: 3, budgetBytes: 250 * 1024 * 1024 };
 const f = (over: Partial<any> = {}) => ({
@@ -71,5 +74,110 @@ describe('planRetention', () => {
     // Only the unpreserved file should be deleted, even though it's newer.
     expect(plan.deletePaths).toEqual(['/logs/unpres.log']);
     expect(plan.keptBytes).toBe(2000);
+  });
+
+  it('keeps files at exactly the cutoff boundary', () => {
+    // The cutoff is exclusive — a file from exactly logDays ago survives, one day older does not.
+    // This catches the off-by-one bug: f.day < cut vs f.day <= cut.
+    const now = new Date();
+    const cutoff14 = new Date(now);
+    cutoff14.setDate(cutoff14.getDate() - 14);
+    const boundary = cutoff14.toLocaleDateString('en-CA'); // exactly 14 days ago
+    const oneDayInside = new Date(cutoff14);
+    oneDayInside.setDate(oneDayInside.getDate() + 1);
+    const inside = oneDayInside.toLocaleDateString('en-CA'); // 13 days ago
+    const oneDayOutside = new Date(cutoff14);
+    oneDayOutside.setDate(oneDayOutside.getDate() - 1);
+    const outside = oneDayOutside.toLocaleDateString('en-CA'); // 15 days ago
+
+    const plan = planRetention([
+      f({ day: boundary, path: '/logs/boundary.log' }),
+      f({ day: inside, path: '/logs/inside.log' }),
+      f({ day: outside, path: '/logs/outside.log' }),
+    ], POLICY);
+    // Boundary and inside survive; outside is deleted.
+    expect(plan.deletePaths).toEqual(['/logs/outside.log']);
+  });
+});
+
+describe('applyRetention — marker detection', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'retention-test-'));
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch { /* cleanup is best-effort */ }
+  });
+
+  it('detects a marker straddling a 64 KB chunk boundary', () => {
+    // FIX 1: chunk overlap ensures a marker at exactly position 65536 is found.
+    const CHUNK_SIZE = 64 * 1024;
+    const marker = ' mutation op=wp_plugin_update';
+
+    // Build a file with the marker starting exactly at the chunk boundary.
+    // Fill the first chunk with padding, then place the marker.
+    const padding = 'x'.repeat(CHUNK_SIZE - 5); // Leave 5 chars before boundary
+    const straddler = 'yyyy' + marker + ' target=mysite';
+    const content = padding + straddler;
+
+    const logPath = path.join(tmpDir, 'nexus-2026-08-09.log');
+    fs.writeFileSync(logPath, content);
+
+    // Marker straddles the boundary: starts at position CHUNK_SIZE - 1.
+    // The overlap (marker.length - 1) carried forward must include it.
+    const policy = { logDays: 0, transcriptDays: 0, budgetBytes: 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // File should NOT be deleted — it is preserved (contains mutation marker).
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(logPath)).toBe(true);
+  });
+
+  it('detects run.end status=error in a multi-chunk file', () => {
+    const CHUNK_SIZE = 64 * 1024;
+    const marker = 'run.end status=error';
+
+    // Place the marker well into the second chunk
+    const content = 'a'.repeat(CHUNK_SIZE + 1000) + marker + ' message=failed';
+
+    const logPath = path.join(tmpDir, 'nexus-2026-08-05.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 0, transcriptDays: 0, budgetBytes: 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(logPath)).toBe(true);
+  });
+
+  it('deletes a file with no markers', () => {
+    const content = 'This is a normal log line\nAnother line\nNo errors here\n';
+    const logPath = path.join(tmpDir, 'nexus-2026-07-01.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 1, transcriptDays: 1, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    expect(plan.deletePaths).toContain(logPath);
+    expect(fs.existsSync(logPath)).toBe(false);
+  });
+
+  it('ignores prose that looks like a mutation', () => {
+    // FIX 2: " mutation op=" is the real marker, not " mutation ".
+    // A log line saying "no mutation needed" must NOT be preserved.
+    const content = 'Agent decided no mutation needed for this site';
+    const logPath = path.join(tmpDir, 'nexus-2026-07-01.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 1, transcriptDays: 1, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // File SHOULD be deleted — it does not contain the real marker.
+    expect(plan.deletePaths).toContain(logPath);
+    expect(fs.existsSync(logPath)).toBe(false);
   });
 });

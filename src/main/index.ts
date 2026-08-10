@@ -584,11 +584,19 @@ export default function main(context: any): void {
         const minLevel = resolveLogLevel(settings ?? undefined, process.env);
         eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
 
-        // Apply retention on startup and daily — bounds log growth
-        const retentionPolicy = { logDays: 14, transcriptDays: 3, budgetBytes: 250 * 1024 * 1024 };
-        applyRetention(nexusLogRoot, retentionPolicy);
+        // Apply retention on startup and daily — bounds log growth.
+        // Policy reads from settings if present, falls back to hardcoded defaults.
+        const getRetentionPolicy = () => {
+          const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+          return {
+            logDays: s?.logRetentionDays ?? 14,
+            transcriptDays: s?.transcriptRetentionDays ?? 3,
+            budgetBytes: s?.logBudgetBytes ?? 250 * 1024 * 1024,
+          };
+        };
+        applyRetention(nexusLogRoot, getRetentionPolicy());
         setInterval(() => {
-          try { applyRetention(nexusLogRoot, retentionPolicy); } catch { /* never throw */ }
+          try { applyRetention(nexusLogRoot, getRetentionPolicy()); } catch { /* never throw */ }
         }, 24 * 60 * 60 * 1000);
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
@@ -1079,6 +1087,22 @@ export default function main(context: any): void {
     if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
     wpeContentIndexTimer = null;
     if (newContentEnabled) startWpeContentIndexScheduler(newContentHours);
+
+    // Apply retention immediately when retention settings change.
+    // Policy reads from settings, so changing logRetentionDays/transcriptRetentionDays/logBudgetBytes
+    // takes effect immediately without waiting for the next daily sweep.
+    if (eventLog) {
+      const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+      const policy = {
+        logDays: s?.logRetentionDays ?? 14,
+        transcriptDays: s?.transcriptRetentionDays ?? 3,
+        budgetBytes: s?.logBudgetBytes ?? 250 * 1024 * 1024,
+      };
+      const nexusLogRoot = path.join(
+        os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'logs',
+      );
+      try { applyRetention(nexusLogRoot, policy); } catch { /* never throw */ }
+    }
 
     // Re-resolve agent provider when settings change (API key rotation, provider switch).
     // agentRunner/dispatcher are stored on nexusServices so they're accessible here even

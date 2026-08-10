@@ -25,6 +25,8 @@ export interface RetentionPlan { deletePaths: string[]; freedBytes: number; kept
 
 const DAY_IN_NAME = /(\d{4}-\d{2}-\d{2})/;
 
+let running = false;
+
 /**
  * What retention would delete, decided before anything is deleted.
  *
@@ -78,6 +80,8 @@ export function planRetention(files: LogFileInfo[], policy: RetentionPolicy): Re
  */
 export function applyRetention(root: string, policy: RetentionPolicy): RetentionPlan {
   const empty: RetentionPlan = { deletePaths: [], freedBytes: 0, keptBytes: 0 };
+  if (running) return empty; // Guard against overlapping sweeps on slow filesystems
+  running = true;
   try {
     const files: LogFileInfo[] = [];
     const scan = (dir: string, category: LogFileInfo['category']) => {
@@ -108,20 +112,55 @@ export function applyRetention(root: string, policy: RetentionPolicy): Retention
     return plan;
   } catch {
     return empty;
+  } finally {
+    running = false;
   }
 }
 
 /**
  * A file records a run worth keeping: an error, or a mutation. Read cheaply — a scan runs daily
  * over files that can be megabytes, so this looks for the markers and stops caring about the rest.
+ *
+ * Reads incrementally with early exit: a 100 MB log directory is NOT pulled through the Node heap.
+ * Chunk overlap ensures a marker straddling a boundary is not missed.
  */
 function isPreserved(file: string): boolean {
+  const CHUNK_SIZE = 64 * 1024; // 64 KB
+  const MARKERS = ['run.end status=error', ' mutation op='];
+  const MAX_MARKER_LEN = Math.max(...MARKERS.map(m => m.length));
+  const OVERLAP = MAX_MARKER_LEN - 1;
+
+  let fd: number | undefined;
   try {
-    const text = fs.readFileSync(file, 'utf-8');
-    return text.includes('run.end status=error') || text.includes(' mutation ');
+    fd = fs.openSync(file, 'r');
+    const buffer = Buffer.allocUnsafe(CHUNK_SIZE);
+    let leftover = '';
+
+    while (true) {
+      const bytesRead = fs.readSync(fd, buffer, 0, CHUNK_SIZE, null);
+      if (bytesRead === 0) break;
+
+      const chunk = leftover + buffer.toString('utf-8', 0, bytesRead);
+      for (const marker of MARKERS) {
+        if (chunk.includes(marker)) {
+          fs.closeSync(fd);
+          return true;
+        }
+      }
+
+      // Carry the last (MAX_MARKER_LEN - 1) chars forward so a marker straddling the
+      // chunk boundary is not missed. If the chunk is shorter than the overlap, carry it all.
+      leftover = chunk.length >= OVERLAP ? chunk.slice(-OVERLAP) : chunk;
+    }
+
+    fs.closeSync(fd);
+    return false;
   } catch {
     // Unreadable: treat as preserved. Deleting a file we could not inspect is the wrong default
     // for a record whose whole purpose is auditing.
+    if (fd !== undefined) {
+      try { fs.closeSync(fd); } catch { /* best effort */ }
+    }
     return true;
   }
 }
