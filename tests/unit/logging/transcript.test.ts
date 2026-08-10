@@ -181,7 +181,7 @@ describe('TranscriptWriter', () => {
   // FIX 3: Budget and truncation tests
   it('stops appending past the budget and writes one truncation marker', () => {
     const smallBudget = 500;
-    const w = new TranscriptWriter({ root, runId: 'r_budget' }, smallBudget);
+    const w = new TranscriptWriter({ root, runId: 'r_budget', maxBytes: smallBudget });
 
     // Write entries until we exceed the budget
     const largeContent = 'x'.repeat(200);
@@ -223,7 +223,7 @@ describe('TranscriptWriter', () => {
     // "1 entries dropped" for a run that dropped 38. The count now lives on droppedCount(), which
     // can be read after the run when the real number is known.
     const smallBudget = 300;
-    const w = new TranscriptWriter({ root, runId: 'r_count_after' }, smallBudget);
+    const w = new TranscriptWriter({ root, runId: 'r_count_after', maxBytes: smallBudget });
 
     const content = 'x'.repeat(100);
     for (let i = 0; i < 10; i++) {
@@ -255,7 +255,7 @@ describe('the truncation marker states only what it can know', () => {
     // "1 entries dropped" for a run that went on to drop 38. A wrong number that looks
     // authoritative is worse than no number, so the file states the fact and droppedCount()
     // carries the tally.
-    const w = new TranscriptWriter({ root, runId: 'r_count' }, 400);
+    const w = new TranscriptWriter({ root, runId: 'r_count', maxBytes: 400 });
     for (let i = 0; i < 40; i++) {
       w.append({ turn: i, role: 'prompt', model: 'm', content: 'x'.repeat(200) });
     }
@@ -269,7 +269,7 @@ describe('the truncation marker states only what it can know', () => {
   });
 
   it('writes the marker exactly once however many entries follow', () => {
-    const w = new TranscriptWriter({ root, runId: 'r_once' }, 400);
+    const w = new TranscriptWriter({ root, runId: 'r_once', maxBytes: 400 });
     for (let i = 0; i < 40; i++) {
       w.append({ turn: i, role: 'prompt', model: 'm', content: 'x'.repeat(200) });
     }

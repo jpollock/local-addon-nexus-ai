@@ -17,6 +17,8 @@ export interface TranscriptOptions {
   /** The log root — transcripts live in a `transcripts/` directory beneath it. */
   root: string;
   runId: string;
+  /** Disk budget for one transcript file. Default 5 MB. */
+  maxBytes?: number;
 }
 
 /**
@@ -44,9 +46,9 @@ export class TranscriptWriter {
   private truncated = false;
   private droppedEntries = 0;
 
-  constructor(opts: TranscriptOptions, maxBytes = 5 * 1024 * 1024) {
+  constructor(opts: TranscriptOptions) {
     this.file = path.join(opts.root, 'transcripts', `${sanitizeRunId(opts.runId)}.jsonl`);
-    this.maxBytes = maxBytes;
+    this.maxBytes = opts.maxBytes ?? 5 * 1024 * 1024;
   }
 
   path(): string { return this.file; }
