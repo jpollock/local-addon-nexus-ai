@@ -43,4 +43,21 @@ describe('extractGoogleUsage', () => {
     expect(result).toEqual({ outputTokens: 210 });
     expect('inputTokens' in (result as object)).toBe(false);
   });
+  it('adds thoughtsTokenCount to output total for thinking models', () => {
+    expect(extractGoogleUsage({ usageMetadata: { promptTokenCount: 900, candidatesTokenCount: 210, thoughtsTokenCount: 500 } }))
+      .toEqual({ inputTokens: 900, outputTokens: 710 });
+  });
+  it('counts thoughtsTokenCount alone as output', () => {
+    expect(extractGoogleUsage({ usageMetadata: { promptTokenCount: 900, thoughtsTokenCount: 500 } }))
+      .toEqual({ inputTokens: 900, outputTokens: 500 });
+  });
+  it('preserves candidatesTokenCount-only behaviour (no regression)', () => {
+    expect(extractGoogleUsage({ usageMetadata: { promptTokenCount: 900, candidatesTokenCount: 210 } }))
+      .toEqual({ inputTokens: 900, outputTokens: 210 });
+  });
+  it('omits outputTokens key when neither candidatesTokenCount nor thoughtsTokenCount present', () => {
+    const result = extractGoogleUsage({ usageMetadata: { promptTokenCount: 900 } });
+    expect(result).toEqual({ inputTokens: 900 });
+    expect('outputTokens' in (result as object)).toBe(false);
+  });
 });

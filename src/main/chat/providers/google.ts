@@ -10,15 +10,23 @@ const finiteNumber = (v: unknown): number | undefined =>
 /**
  * Token usage from one Gemini stream chunk, or undefined if it carries none.
  *
- * Google reports cumulative counts on its chunks as `usageMetadata`. Exported for test.
+ * Google reports cumulative counts on its chunks as `usageMetadata`. For Gemini 2.5 thinking
+ * models, reasoning tokens are reported separately as `thoughtsTokenCount` and billed as output.
+ * Exported for test.
  */
 export function extractGoogleUsage(chunk: any): TokenUsage | undefined {
   const inputTokens = finiteNumber(chunk?.usageMetadata?.promptTokenCount);
-  const outputTokens = finiteNumber(chunk?.usageMetadata?.candidatesTokenCount);
-  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  const candidatesTokens = finiteNumber(chunk?.usageMetadata?.candidatesTokenCount);
+  const thoughtsTokens = finiteNumber(chunk?.usageMetadata?.thoughtsTokenCount);
+
+  // Output tokens = candidates + thoughts (both billed as output for thinking models)
+  const outputTokens = (candidatesTokens ?? 0) + (thoughtsTokens ?? 0);
+  const hasOutput = candidatesTokens !== undefined || thoughtsTokens !== undefined;
+
+  if (inputTokens === undefined && !hasOutput) return undefined;
   // Only the keys actually found: returning `outputTokens: undefined` alongside a real
   // inputTokens lets the caller's spread-merge overwrite a count it already had.
-  return { ...(inputTokens !== undefined && { inputTokens }), ...(outputTokens !== undefined && { outputTokens }) };
+  return { ...(inputTokens !== undefined && { inputTokens }), ...(hasOutput && { outputTokens }) };
 }
 
 /**
