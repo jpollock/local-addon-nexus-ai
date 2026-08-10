@@ -259,6 +259,9 @@ export const IPC_CHANNELS = {
 
   // Telemetry (fire-and-forget from renderer → main)
   TELEMETRY_TRACK: `${ADDON_PREFIX}:telemetry`,
+
+  // Logging stats (Preferences → Logging panel)
+  LOGGING_STATS: `${ADDON_PREFIX}:logging-stats`,
 } as const;
 
 // ---------------------------------------------------------------------------

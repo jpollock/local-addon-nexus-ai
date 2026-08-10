@@ -333,6 +333,12 @@ export interface NexusSettings {
   embeddingModel?: 'minilm' | 'bge-small';
   /** Level the structured event log writes at. NEXUS_LOG_LEVEL overrides it. Default INFO. */
   logLevel?: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
+  /** Days to keep log files. Default: 14. */
+  logRetentionDays?: number;
+  /** Days to keep transcript files. Default: 3. */
+  transcriptRetentionDays?: number;
+  /** Disk budget for all logging in bytes. Default: 250MB. */
+  logBudgetBytes?: number;
 }
 
 export interface SiteAIConfig {

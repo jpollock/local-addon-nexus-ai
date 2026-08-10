@@ -92,7 +92,9 @@ import {
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
+import * as fs from 'fs';
+import * as path from 'path';
 import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 
 /**
@@ -1257,6 +1259,49 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // had actually changed (the registryStorage.set above never ran). Return the untouched
       // current settings instead, with an explicit error marker the caller can check.
       return { ...current, _error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_STATS, () => {
+    try {
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const logDays = settings?.logRetentionDays ?? 14;
+      const transcriptDays = settings?.transcriptRetentionDays ?? 3;
+      const budgetBytes = settings?.logBudgetBytes ?? 250 * 1024 * 1024;
+
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      const stats = { combined: 0, agent: 0, transcript: 0, audit: 0 };
+
+      const scan = (dir: string, category: keyof typeof stats) => {
+        try {
+          const entries = fs.readdirSync(dir);
+          for (const name of entries) {
+            const full = path.join(dir, name);
+            try {
+              const st = fs.statSync(full);
+              if (st.isFile()) stats[category] += st.size;
+            } catch { /* skip unreadable file */ }
+          }
+        } catch { /* skip unreadable directory */ }
+      };
+
+      scan(logRoot, 'combined');
+      scan(path.join(logRoot, 'agents'), 'agent');
+      scan(path.join(logRoot, 'transcripts'), 'transcript');
+      // Audit logs live one directory up from the log root
+      scan(path.join(app.getPath('userData'), 'nexus-ai'), 'audit');
+
+      const totalBytes = stats.combined + stats.agent + stats.transcript + stats.audit;
+
+      return {
+        root: logRoot,
+        totalBytes,
+        byCategory: stats,
+        policy: { logDays, transcriptDays, budgetBytes },
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-stats failed:', (err as Error).message);
+      return null;
     }
   });
 

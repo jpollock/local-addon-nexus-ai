@@ -69,6 +69,9 @@ export const UpdateSettingsSchema = z.object({
   dockedPanelEnabled: z.boolean().optional(),
   embeddingModel: z.enum(['minilm', 'bge-small']).optional(),
   logLevel: z.enum(['ERROR', 'WARN', 'INFO', 'DEBUG']).optional(),
+  logRetentionDays: z.number().int().min(1).max(365).optional(),
+  transcriptRetentionDays: z.number().int().min(1).max(365).optional(),
+  logBudgetBytes: z.number().int().min(1024 * 1024).optional(),
 }).strict();
 
 export const PluginSlugSchema = z
