@@ -1804,20 +1804,43 @@ ln -sfn "$PWD" ~/Library/Application\ Support/Local/addons/local-addon-nexus-ai
 ./dev-reload.sh
 ```
 
-Then check, in order of what could actually surprise:
+Then check, in order of what could actually surprise. **Items 1–2 cover behaviour no automated
+test in either spec can see; 3–6 are cheaper confirmations.**
 
-1. **The orphan sweep ran.** This is the only item exercising startup wiring rather than pure
-   logic, and it mutates data (soft-delete). Expect active local rows to drop 56 → 34:
+1. **Banner dismissal survives a tab switch.** This was a real regression found in spec 2.5's
+   final review and fixed there, and it is the single most likely thing to still be wrong,
+   because the fix depends on an async settings refresh landing before the tab remounts.
+   With WPE connected, on Dashboard dismiss the "WP Engine connected — N installs" banner (×),
+   immediately switch to Operations, switch back. **The banner must stay gone.** Repeat for the
+   "☁ Have WP Engine sites?" banner on a machine with no WPE.
+
+2. **All three polling timers survive a tab switch.** The extraction moved rendering out of the
+   shell but left the timers in it; snapshots cannot test this. Start a WPE metadata sync on
+   Operations, switch to Dashboard, wait past the 2s progress poll, switch back — progress must
+   still be advancing. Leave the app idle 60s on Dashboard and confirm counts refresh
+   (`pollTimer`). Confirm a sync started elsewhere is picked up within ~10s
+   (`wpeSyncPassivePoll`).
+
+3. **The orphan sweep ran.** The only item exercising startup wiring rather than pure logic, and
+   it mutates data (soft-delete). Expect active local rows to drop 56 → 34:
    ```bash
    node -e "const D=require('better-sqlite3'),os=require('os');
    const db=new D(os.homedir()+'/Library/Application Support/Local/nexus-ai/graph.db',{readonly:true});
    console.log(db.prepare(\"SELECT is_active, COUNT(*) c FROM sites WHERE source='local' GROUP BY is_active\").all());"
    ```
-2. **The health pill is not green while an agent shows a failed last run**, and does not read
-   red on a clean install with refresh settings off.
-3. **The Ask/Tell tab is gone** and no screen lands on a missing tab.
-4. **No fleet number appears without a scope label.** Note `counts`/`twinScope` are deliberately
-   not yet wired into the renderer, so the visible totals are unchanged for now.
+
+4. **The health pill is honest in both directions.** Not green while an agent shows a failed last
+   run; not red on a clean install with refresh settings off. Click through to confirm the badge
+   underneath states a reason rather than "No issues detected" when the pill is not green.
+
+5. **The two largest uncaptured render paths.** Roughly 230 lines of `OverviewTab` have no
+   snapshot coverage because every fixture nulls their inputs. Confirm the **MCP panel** renders
+   with real port / tool-count / version and both Copy buttons flip to "Copied!"; and the
+   **Fleet Summary** card shows its four columns with real data rather than "Loading fleet data…".
+
+6. **Navigation and the removed tab.** All four `onNavigate` paths — both banner buttons, and
+   FleetCompletenessWidget's Schedule (→ Settings) and Index Sites (→ Operations). Confirm
+   Ask/Tell is gone and nothing lands on a missing tab.
 
 Restore the symlink to its previous target afterwards if you need `sdk-and-agents` back.
 
