@@ -179,9 +179,10 @@ whole run across both streams.
   `tests/unit/logging/simulatedZone.ts` now simulates a zone at the `Date` so
   the assertions fail against a UTC implementation on any machine.
 - **Closed vocabulary, one word one shape:** `run.start`, `run.end`,
-  `run.skip`, `phase`, `action`, `site`, `finding`, `mutation`. `action` and
-  `site` are separate from `phase` deliberately — three field shapes under one
-  word gives away the only property a closed vocabulary has.
+  `run.skip`, `phase`, `action`, `site`, `finding`, `mutation`, `llm.call`,
+  `llm.error`, `tool.call`, `credential`. `action` and `site` are separate from
+  `phase` deliberately — three field shapes under one word gives away the only
+  property a closed vocabulary has.
 - **`redactParams` owns value masking; `renderValue` adds key context.**
   Masking a second time without the key defeated the `target`/`install_name`
   carve-out and redacted the one field naming which production install was
@@ -207,13 +208,15 @@ whole run across both streams.
   bundle, so the function is duplicated. This mirrors the existing
   `resolveAgentCron` / `effectiveCadenceExpression` pattern already
   documented above.
-- **`run.skip` is emitted at most once per agent, per reason, per local day.**
-  Keyed by `agentId:YYYY-MM-DD` in `ipc-handlers.ts`'s `lastSkipReason` map.
-  A user grepping today's log for a long-disabled agent finds exactly one
-  line, not one per tick. The day-keying means each log file (which is also
-  named by local day) contains at least one line explaining why the agent
-  didn't run, so a user on Thursday asking "why didn't this run today" finds
-  the answer in today's file, not only in Monday's.
+- **`run.skip` is emitted at most once per process, per agent, per reason,
+  per trigger kind, per local day.** Keyed by `agentId:YYYY-MM-DD:kind` in
+  `ipc-handlers.ts`'s `lastSkipReason` map (in-memory). A user grepping today's
+  log for a long-disabled agent finds exactly one line per trigger kind, not one
+  per tick. The day-keying means each log file (which is also named by local
+  day) contains at least one line explaining why the agent didn't run (when no
+  rotations have occurred), so a user on Thursday asking "why didn't this run
+  today" finds the answer in today's file, not only in Monday's. A process
+  restart re-arms every agent's slot.
 - **`run.end` gains a `failedCalls` field only when non-zero**, and `status`
   is unchanged when tool calls failed. Reasoning: an agent that caught a
   failure and carried on did succeed. The presence of `failedCalls` means

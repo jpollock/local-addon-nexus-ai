@@ -141,7 +141,7 @@ Write to graph.db:
 
 ### SSH ControlMaster
 
-Each SSH connection uses `ControlMaster=auto` and `ControlPersist=30s`. The first connection to a host takes 13-30 seconds (key exchange, WPE gateway handshake). Subsequent commands to the same host within 30 seconds reuse the socket and complete in 1-3 seconds.
+Each SSH connection uses `ControlMaster=auto` and `ControlPersist=600s` (see `SSH_CONTROL_PERSIST` in `src/main/mcp/utils/remoteFailure.ts`). The first connection to a host takes 13-30 seconds (key exchange, WPE gateway handshake). Subsequent commands to the same host within 10 minutes reuse the socket and complete in 1-3 seconds.
 
 With 4 concurrent connections, the first batch of 4 sites all establish connections simultaneously (~13-30s). Subsequent batches reuse ControlMaster sockets for much faster execution.
 

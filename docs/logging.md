@@ -12,7 +12,7 @@ logs/
     log-processor-2026-08-10.log
     auth-probe-2026-08-10.log
   transcripts/
-    r_abc123.transcript             ← full LLM exchanges (off by default)
+    r_abc123.jsonl                  ← full LLM exchanges (off by default)
 ```
 
 Each agent line appears **twice**: once in `nexus-YYYY-MM-DD.log` and once in its own agent file. The duplication is deliberate — it lets you tail the combined file to see everything while still isolating one agent's history.
@@ -28,7 +28,7 @@ Each agent line appears **twice**: once in `nexus-YYYY-MM-DD.log` and once in it
 Format: `HH:MM:SS.mmm LEVEL source run=<id> [event] [k=v…]  [message]`
 
 - **Time only**, not a full timestamp — the date is in the filename
-- **Level is not padded** — `INFO` and `ERROR` are 4 chars, `DEBUG` and `WARN` are 5, deliberately unaligned
+- **Level is not padded** — `INFO` and `WARN` are 4 chars, `DEBUG` and `ERROR` are 5, deliberately unaligned
 - **`run=` first** after source, because `grep run=r_abc123 logs/**/*.log` reassembles a whole run across every file
 - **Event name** (optional) — from a fixed vocabulary (see below)
 - **Key=value pairs** — logfmt style, so `grep`, `awk` and regex all work
@@ -70,9 +70,9 @@ Tool calls, mutations and findings all appear as structured events. Example:
 ```
 
 Reasons include:
-- `agent-disabled` — toggled off in Preferences
-- `empty-scope` — no sites selected
-- `load-failure` — agent code threw during import
+- `agent-disabled` — agent toggled off in Preferences
+- `trigger-disabled` — the specific trigger (cron/event) is disabled
+- `trigger=manual` — user clicked Run Now on a disabled agent
 
 ## Event vocabulary
 
@@ -84,14 +84,14 @@ Structured events carry a fixed set of fields. Anything else is a freeform `info
 | `run.end` | `status`, `dur`, `findings`, `failedCalls` (when non-zero) | `run.end status=success dur=26342ms findings=0` |
 | `run.skip` | `trigger`, `reason` | `run.skip trigger=schedule reason=agent-disabled` |
 | `phase` | `name`, `detail` | `phase name=cron detail="log-processor nightly sync"` |
-| `action` | `label`, `result`, `dur` | `action label=fetchLogs result=ok dur=1234ms` |
+| `action` | `action`, `result`, `dur` | `action action=fetchLogs result=ok dur=1234ms` |
 | `site` | `site`, `status` | `site site=acfprod status=running` |
-| `llm.call` | `model`, `turn`, `in`, `out`, `cost`, `dur` | `llm.call model=claude-sonnet-4 turn=1 in=1204 out=318 cost=0.0091 dur=1.4s` |
-| `llm.error` | `model`, `turn`, `error` | `llm.error model=claude-sonnet-4 turn=1 error="rate limit"` |
+| `llm.call` | `model`, `turn`, `in`, `out`, `cost`, `dur`, `transcript` | `llm.call model=claude-sonnet-4 turn=1 in=1204 out=318 cost=0.0091 dur=1400ms transcript="/path/to/r_abc123.jsonl"` |
+| `llm.error` | `model`, `turn`, `dur` | `llm.error model=claude-sonnet-4 turn=1 dur=2000ms` (message: `rate limit exceeded`) |
 | `tool.call` | `tool`, `target`, `tier`, `dur`, `ok` | `tool.call tool=wp_plugin_list target=acfprod tier=1 dur=210ms ok=true` |
-| `mutation` | `op`, `target`, `before`, `after` | `mutation op=wp_plugin_update target=acfprod before="acf 6.8.5" after="acf 6.8.6"` |
-| `finding` | `severity`, `id`, `site`, `title` | `finding severity=high id=FS-02 site=acfprod title="unexpected file"` |
-| `credential` | `provider`, `action` | `credential provider=anthropic action=set` |
+| `mutation` | `op`, `target`, `ok` | `mutation op=wp_plugin_update target=acfprod ok=true` (emitted by runtime on Tier 2/3 tool completion) |
+| `finding` | `sev`, `id`, `site` | `finding sev=high id=FS-02 site=acfprod` (message: `unexpected file in wp-content`) |
+| `credential` | (no current emitters) | Reserved for future use — no agent or tool currently emits this event |
 
 **Note on `run.end`'s `failedCalls` field:** appears only when non-zero. An agent that caught a tool failure and carried on still has `status=success` — the run succeeded. A non-zero `failedCalls` means some tools failed, but the agent handled it.
 
@@ -108,7 +108,7 @@ Levels gate what reaches the file, not just the console.
 ## Retention and disk budget
 
 - **Daily files**, named by date: `nexus-2026-08-10.log`
-- **Size guard**: if a file exceeds 5 MB within a day, it rolls to `.2.log`, `.3.log`, etc.
+- **Size guard**: if a file exceeds 5 MB within a day, it rotates to `nexus-2026-08-10.log.1`, `.log.2`, `.log.3` (generation appended after the extension)
 - **Day-based retention**: logs kept for 14 days, transcripts for 3 days (both configurable)
 - **Total disk budget**: 250 MB default, oldest-first eviction across all categories
 - **Preservation**: runs that errored, timed out, or performed Tier 3 operations are exempt from eviction
@@ -117,13 +117,13 @@ The budget prevents runaway agents from filling the disk. Preferences shows tota
 
 ## Transcripts
 
-Full LLM exchanges go to `transcripts/<runId>.transcript`, referenced by log lines with `→`:
+Full LLM exchanges go to `transcripts/<runId>.jsonl`, referenced in `llm.call` log lines via the `transcript` field:
 
 ```
-13:31:04.881 INFO security-sentinel run=r_8f3a2c llm.call model=claude-opus-5 turn=1 in=1204 out=318 cost=0.0091 dur=1.4s → r_8f3a2c.transcript
+13:31:04.881 INFO security-sentinel run=r_8f3a2c llm.call model=claude-opus-5 turn=1 in=1204 out=318 cost=0.0091 dur=1400ms transcript="/Users/.../logs/transcripts/r_8f3a2c.jsonl"
 ```
 
-**Off by default.** Enable via Preferences → Nexus AI → Logging → "Record full AI transcripts".
+**Off by default.** Enable per agent: open the agent's workspace → Settings tab → toggle "Write transcripts".
 
 Why separate files?
 1. A 4,000-token prompt inline destroys the tail-ability this design optimizes for
