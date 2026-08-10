@@ -18,7 +18,10 @@ export function extractOllamaUsage(chunk: any): TokenUsage | undefined {
   const inputTokens = finiteNumber(chunk?.prompt_eval_count);
   const outputTokens = finiteNumber(chunk?.eval_count);
   if (inputTokens === undefined && outputTokens === undefined) return undefined;
-  return { inputTokens, outputTokens };
+  // Only the keys actually found: returning `outputTokens: undefined` alongside a real
+  // inputTokens lets the caller's spread-merge (`{ ...usage, ...chunkUsage }` in streamingChat)
+  // overwrite a count it already had. Same fix as openai.ts / google.ts.
+  return { ...(inputTokens !== undefined && { inputTokens }), ...(outputTokens !== undefined && { outputTokens }) };
 }
 
 /**

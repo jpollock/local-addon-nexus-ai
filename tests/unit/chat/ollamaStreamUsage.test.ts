@@ -58,6 +58,23 @@ describe('OllamaProvider.streamChat — usage wiring across both chat paths', ()
     expect(done!.type === 'done' && done!.usage).toEqual({ inputTokens: 1204, outputTokens: 318 });
   });
 
+  it('streaming path (no tools): merges usage split across two chunks — a later chunk carrying only one count must not blank an earlier one', async () => {
+    // Regression coverage for the spread-merge hazard: `usage = { ...usage, ...chunkUsage }` in
+    // streamingChat (ollama.ts) would silently overwrite a real inputTokens with `undefined` if
+    // extractOllamaUsage ever returned the unfound key explicitly. Real Ollama puts both counts on
+    // the same final chunk, but the merge must be correct regardless of how the counts arrive.
+    mockStreamingRequest.mockReturnValue(linesFrom([
+      JSON.stringify({ message: { content: '' }, done: false, prompt_eval_count: 1204 }),
+      JSON.stringify({ message: { content: '' }, done: true, eval_count: 318 }),
+    ]));
+
+    const events = await drain(provider.streamChat(messages, [], config, new AbortController().signal));
+    const done = events.find((e) => e.type === 'done');
+
+    expect(done).toBeDefined();
+    expect(done!.type === 'done' && done!.usage).toEqual({ inputTokens: 1204, outputTokens: 318 });
+  });
+
   it('streaming path (no tools): reports no usage when the stream carries none — undefined, not {} and not zeros', async () => {
     mockStreamingRequest.mockReturnValue(linesFrom([
       JSON.stringify({ message: { content: 'hi' }, done: false }),

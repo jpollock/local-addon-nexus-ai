@@ -21,4 +21,17 @@ describe('extractOllamaUsage', () => {
     expect(extractOllamaUsage(null)).toBeUndefined();
     expect(extractOllamaUsage({})).toBeUndefined();
   });
+
+  it('omits the key it did not find, rather than including it as undefined', () => {
+    // A caller merges usage across chunks with `{ ...usage, ...chunkUsage }` (streamingChat in
+    // ollama.ts). If this ever returned `{ inputTokens: undefined, outputTokens: 318 }`, that
+    // explicit `undefined` would overwrite a real inputTokens the caller already captured from an
+    // earlier chunk — corrupting a real count rather than merely omitting one. `.toBeUndefined()`
+    // / `.toEqual()` on the missing field pass either way (Jest ignores undefined-valued keys), so
+    // this must check key presence directly. Same hazard, same fix, as extractOpenAiUsage /
+    // extractGoogleUsage.
+    const result = extractOllamaUsage({ eval_count: 318 });
+    expect(result).toEqual({ outputTokens: 318 });
+    expect('inputTokens' in (result as object)).toBe(false);
+  });
 });
