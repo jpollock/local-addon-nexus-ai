@@ -5055,7 +5055,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const logPath = logFilePath;
       const lastSize = _fs.existsSync(logPath) ? _fs.statSync(logPath).size : 0;
 
-      const { collectRunIds } = require('../agent-runtime/runNowIds');
+      const { collectRunIds } = require('./agent-runtime/runNowIds') as typeof import('./agent-runtime/runNowIds');
       const runs: Array<{ site: string; result: any }> = [];
       let lastRunResult: unknown;
       try {
