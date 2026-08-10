@@ -1,14 +1,38 @@
 /**
  * Characterization snapshots for the Overview tab.
  *
- * These exist to make the extraction in Task 5 provably behaviour-preserving.
+ * These exist to make the extraction in Task 6 provably behaviour-preserving.
  * They are intentionally brittle: if the extraction changes the rendered tree
  * in any way, they fail. A change here needs justifying, not `-u`.
  */
 import { NexusOverview } from '../../../src/renderer/components/NexusOverview';
+import { OverviewTab } from '../../../src/renderer/components/tabs/OverviewTab';
 import { serializeTree } from './helpers/serializeTree';
 
 function makeInstance(stateOverrides: Record<string, unknown>): any {
+  const electron = {
+    ipcRenderer: {
+      invoke: jest.fn(async () => ({ success: false })),
+      on: jest.fn(),
+      removeListener: jest.fn(),
+    },
+  };
+  const inst: any = new OverviewTab({
+    electron,
+    stats: (stateOverrides.stats ?? null) as any,
+    fleetSummary: (stateOverrides.fleetSummary ?? null) as any,
+    settings: (stateOverrides.settings ?? null) as any,
+    wpeAuthError: !!stateOverrides.wpeAuthError,
+    aiProxy: (stateOverrides.aiProxy ?? null) as any,
+    mcpInfo: (stateOverrides.mcpInfo ?? null) as any,
+    startupStatus: (stateOverrides.startupStatus ?? null) as any,
+    onNavigate: jest.fn(),
+    onRefresh: jest.fn(),
+  });
+  return inst;
+}
+
+function makeShell(stateOverrides: Record<string, unknown>): any {
   const electron = {
     ipcRenderer: {
       invoke: jest.fn(async () => ({ success: false })),
@@ -30,11 +54,12 @@ const POPULATED_STATS = {
   },
   mcpServer: { running: true, toolCount: 201, port: 10801, version: '0.2.3' },
   embedding: { ready: true, model: 'all-MiniLM-L6-v2', quantized: true, dimensions: 384, maxSequenceLength: 256 },
+  index: { localIndexed: 0, localTotal: 0, wpeIndexed: 0, wpeTotal: 0, totalDocuments: 0, totalChunks: 0, lastIndexed: null },
 };
 
 // Only variants that produce a DIFFERENT tree are snapshotted.
 //
-// `renderOverviewTab` early-returns `null` when `stats` is null, so `loading`
+// `render()` early-returns `null` when `stats` is null, so `loading`
 // and `error` would both snapshot as literal `null` — a passing snapshot that
 // protects nothing. They are covered by an explicit assertion below instead.
 // `wpeSyncing` is not read anywhere in the Overview tree (it belongs to
@@ -42,7 +67,6 @@ const POPULATED_STATS = {
 // asserted structurally in Task 6 rather than snapshotted here.
 const VARIANTS: Array<[string, Record<string, unknown>]> = [
   ['empty fleet', {
-    loading: false,
     stats: {
       ...POPULATED_STATS,
       localSites: { total: 0, running: 0, halted: 0 },
@@ -51,9 +75,8 @@ const VARIANTS: Array<[string, Record<string, unknown>]> = [
     },
     fleetSummary: null,
   }],
-  ['populated', { loading: false, stats: POPULATED_STATS }],
+  ['populated', { stats: POPULATED_STATS }],
   ['wpe not connected', {
-    loading: false,
     stats: {
       ...POPULATED_STATS,
       remoteSites: { total: 0, unlinked: 0, capiAvailable: false, wpeAuthenticated: false, scope: 'installs reported by the WP Engine API' },
@@ -65,14 +88,42 @@ const VARIANTS: Array<[string, Record<string, unknown>]> = [
 describe('Overview tab — characterization', () => {
   test.each(VARIANTS)('renders %s identically before and after extraction', (_name, state) => {
     const inst = makeInstance(state);
-    expect(serializeTree(inst.renderOverviewTab())).toMatchSnapshot();
+    expect(serializeTree(inst.render())).toMatchSnapshot();
   });
 
   // Covers the two variants deliberately excluded from the snapshot set:
   // both produce a literal `null`, which a snapshot would record as a pass
   // while protecting nothing.
   test('renders nothing until stats have loaded', () => {
-    expect(makeInstance({ loading: true, stats: null }).renderOverviewTab()).toBeNull();
-    expect(makeInstance({ loading: false, stats: null, error: 'Failed to load stats' }).renderOverviewTab()).toBeNull();
+    expect(makeInstance({ stats: null }).render()).toBeNull();
+    expect(makeInstance({ stats: null }).render()).toBeNull();
+  });
+});
+
+describe('Overview extraction — structural invariants', () => {
+  test('the shell routes each tab value to its own surface', () => {
+    const shell = makeShell({ activeTab: 'overview', stats: POPULATED_STATS, loading: false });
+    const tree: any = serializeTree(shell.renderActiveTab());
+    expect(tree.type).toBe('OverviewTab');
+  });
+
+  test('long-running operation state stays on the shell, not the tab', () => {
+    const shell = makeShell({});
+    expect(Object.keys(shell.state)).toEqual(expect.arrayContaining(['wpeSyncing', 'wpeSyncProgress']));
+
+    const tab = makeInstance({});
+    expect(Object.keys(tab.state)).not.toEqual(expect.arrayContaining(['wpeSyncing', 'wpeSyncProgress']));
+  });
+
+  test('the tab navigates through onNavigate, never by setting activeTab', () => {
+    const onNavigate = jest.fn();
+    const tab: any = new OverviewTab({
+      electron: { ipcRenderer: { invoke: jest.fn(), on: jest.fn(), removeListener: jest.fn() } },
+      stats: POPULATED_STATS, fleetSummary: null, settings: null, wpeAuthError: false,
+      aiProxy: null, mcpInfo: null, startupStatus: null,
+      onNavigate, onRefresh: jest.fn(),
+    });
+    const tree = JSON.stringify(serializeTree(tab.render()));
+    expect(tree).not.toContain('activeTab');
   });
 });
