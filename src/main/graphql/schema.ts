@@ -574,6 +574,12 @@ export const typeDefs = gql`
     external: FleetPopulationCount!
   }
 
+  "A shared scope for a group of figures measured over the SAME population — see nexusFleetSummary's twinScope."
+  type FleetTwinScope {
+    measured: Int!
+    label: String!
+  }
+
   type FleetSummaryResult {
     success: Boolean!
     error: String
@@ -593,6 +599,14 @@ export const typeDefs = gql`
     nexusFleetSummary resolver) — do not divide one against the other.
     """
     counts: FleetCountsResult!
+    """
+    The ONE shared scope for totalSites, sitesWithFullData, completeness,
+    staleCount, neverScannedCount, recentActivityCount, wpVersions and
+    phpVersions — twinScope.measured always equals totalSites. Its label
+    names the population (twin cache for local, graph for WPE/external) so
+    it is never confused with counts, a different population.
+    """
+    twinScope: FleetTwinScope!
   }
 
   type FleetPluginEntry {

@@ -2105,17 +2105,28 @@ Answer:`,
       );
 
       // ── Local sites ──────────────────────────────────────────────────────
-      // L2 (Configured): read from graph.db where source='local' AND wp_version IS NOT NULL.
-      // This survives restarts — SiteMetadataCache is a session cache only and resets on startup.
-      // Falls back to SiteMetadataCache if graph.db not ready yet (startup race).
+      // L2 (Configured): Local's own store (allLocalSites) is authoritative
+      // for WHICH local sites exist — the graph is consulted only for the
+      // per-site wp_version fact, never as the source of the local id list.
+      // Reading `COUNT(*) FROM sites WHERE source='local'` directly counted
+      // graph rows instead, which include sites that no longer exist locally
+      // (measured on this machine: 56 active graph 'local' rows vs 37 in
+      // Local's store — 22 dead sentinel-* sandbox rows with a stale
+      // wp_version still set). See CLAUDE.md, "Fleet counts": "Never count
+      // local sites from the graph." This survives restarts — SiteMetadataCache
+      // is a session cache only and resets on startup. Falls back to
+      // SiteMetadataCache if graph.db not ready yet (startup race).
       let localConfigured = 0;
       let localSearchable = 0;
 
       if (db) {
-        const localConfiguredCount = (db.prepare(
-          "SELECT COUNT(*) as c FROM sites WHERE source='local' AND wp_version IS NOT NULL AND is_active=1"
-        ).get() as { c: number } | undefined)?.c ?? 0;
-        localConfigured = localConfiguredCount;
+        const localWpVersionRows = db.prepare(
+          "SELECT id FROM sites WHERE source='local' AND wp_version IS NOT NULL AND is_active=1"
+        ).all() as Array<{ id: string }>;
+        const localConfiguredIds = new Set(localWpVersionRows.map(r => r.id));
+        for (const site of allLocalSites) {
+          if (localConfiguredIds.has(site.id)) localConfigured++;
+        }
       } else {
         // graph.db not ready — fall back to SiteMetadataCache
         for (const site of allLocalSites) {

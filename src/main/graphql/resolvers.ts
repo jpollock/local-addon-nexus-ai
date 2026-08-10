@@ -1627,12 +1627,26 @@ export function createResolvers(context: ResolverContext) {
        * its own field so a caller gets the canonical numbers without that
        * risk; it is computed unconditionally, before the twinService check,
        * because collectFleetCounts doesn't depend on the twin service.
+       *
+       * `twinScope` (below) is the ONE shared scope object for every
+       * twin-derived figure — totalSites, sitesWithFullData, completeness,
+       * staleCount, neverScannedCount, recentActivityCount, wpVersions and
+       * phpVersions all describe this SAME population (twinScope.measured
+       * equals totalSites, always, by construction — they are both
+       * `twins.length`). Mirrors the pattern GET_FLEET_SUMMARY already uses
+       * (ipc-handlers.ts, `twinScope`) rather than inventing a differently-
+       * named near-duplicate. Its label deliberately does NOT match
+       * counts.installs.scope: this population's local share comes from the
+       * twin cache, counts.local's comes from Local's own site store — two
+       * different populations that happen, in the common case, to agree.
        */
       nexusFleetSummary: () => {
         const counts = collectFleetCounts({
           getSites: () => services.siteData.getSites() as Record<string, unknown>,
           getDb: () => services.graphService?.getDb?.() as never,
         });
+        const twinScopeLabel =
+          'sites on this Mac (twin read-model), plus WP Engine and external installs (graph)';
         try {
           if (!services.twinService) {
             return {
@@ -1647,6 +1661,7 @@ export function createResolvers(context: ResolverContext) {
               neverScannedCount: 0,
               recentActivityCount: 0,
               counts,
+              twinScope: { measured: 0, label: twinScopeLabel },
             };
           }
 
@@ -1746,6 +1761,7 @@ export function createResolvers(context: ResolverContext) {
             neverScannedCount,
             recentActivityCount,
             counts,
+            twinScope: { measured: twins.length, label: twinScopeLabel },
           };
         } catch (err: any) {
           return {
@@ -1760,6 +1776,7 @@ export function createResolvers(context: ResolverContext) {
             neverScannedCount: 0,
             recentActivityCount: 0,
             counts,
+            twinScope: { measured: 0, label: twinScopeLabel },
           };
         }
       },

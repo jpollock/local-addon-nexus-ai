@@ -111,8 +111,9 @@ export class FleetCompletenessWidget extends React.Component<FleetCompletenessWi
     // ipc-handlers.ts, "L1/L2/L3 coverage counts across local + WPE sites",
     // and the passing test 'FLEET_COMPLETENESS counts external hosts' in
     // tests/unit/fleet/fleet-visibility.test.ts, which pins total=3 for
-    // 1 local + 1 wpe + 1 external). Left unchanged pending confirmation —
-    // see task-6b-report.md.
+    // 1 local + 1 wpe + 1 external). Per fix round 1: kept fleet-wide (not
+    // rewired to a local-only source) — the caption below names the real
+    // population instead of the false "Sites on this Mac" label.
     const total = data?.total ?? 0;
 
     return React.createElement('div', {
@@ -127,9 +128,16 @@ export class FleetCompletenessWidget extends React.Component<FleetCompletenessWi
       React.createElement('div', {
         style: {
           fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const,
-          letterSpacing: '.06em', color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 14,
+          letterSpacing: '.06em', color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 4,
         },
       }, 'Data completeness'),
+
+      // Names the real population instead of leaving it implicit — this
+      // widget covers every source FLEET_COMPLETENESS counts (local + WP
+      // Engine + external), never only "sites on this Mac".
+      React.createElement('div', {
+        style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 },
+      }, 'All sites — this Mac, WP Engine & external hosts'),
 
       loading
         ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } }, 'Loading…')
