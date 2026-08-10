@@ -659,6 +659,57 @@ git commit -m "fix: address verification findings"
 - **Do not push, tag, or release.** CLAUDE.md forbids it without an explicit instruction.
 - **If a "dead" symbol turns out to have a live reference, stop and report it.** The dead-code analysis was done by counting mentions; a dynamic or string-based reference would not have shown up.
 
+## Outcome
+
+Completed 2026-08-10. `NexusOverview.tsx` **2,876 → 1,661 lines**; `OverviewTab.tsx` 650;
+`tabs/shared/cards.tsx` 82; `tabs/shared/types.ts` 59. Full suite at baseline (13 pre-existing
+failing suites, 26 failing tests), `tsc` clean, and **the snapshot baseline was never
+regenerated** — the snapshot directory has exactly one commit across the whole plan, so every
+extraction step left all 2,060 lines byte-identical.
+
+The whole-branch reviewer verified faithfulness independently rather than trusting the snapshots:
+it extracted all 13 moved methods from the base commit and diffed them against `OverviewTab.tsx`
+with `this.state`→`this.props` normalised away. Every difference was either the deliberate
+`setState({activeTab})` → `onNavigate()` swap or a unicode-escape-to-literal conversion.
+
+**The parallelism goal is met, and measured.** Activity (`:823-843`) and Operations (`:883-1518`)
+were disjoint contiguous blocks, so specs 4 and 5 deleting them will not collide.
+
+## Follow-up work for the specs that come next
+
+### Read this before starting specs 3–6
+
+- **`fetchAll`'s `Promise.all` destructuring is positional.** Two specs each appending an IPC call
+  produce a textual conflict whose careless resolution silently misaligns every variable after the
+  insertion point. This is the single highest-value hazard in the shared surface, and it is the
+  same bug class a reviewer had to hand-verify during Phase 1. Any spec touching `fetchAll` must
+  re-verify the destructuring alignment element by element.
+- **The residual shared surface is about six lines**, all in the tab registry: the `activeTab`
+  union, two adjacent lines in the `tabs` array, two adjacent lines in the `renderActiveTab`
+  switch. Trivial to merge, but specs 4 and 5 will both hit all three.
+- **Worth doing first (M8):** collapse the tab registry — union, array and switch — into one
+  `const TABS: { key, label, render }[]` table. Converts three guaranteed adjacent-line conflicts
+  into one, roughly 20 lines. Cheap now, multiplied by four if deferred.
+
+### Known gaps in the characterization baseline
+
+The three snapshot fixtures all have `mcpInfo`, `fleetSummary`, `settings` and `aiProxy` set to
+`null`, so roughly **230 of `OverviewTab`'s 650 lines have no snapshot protection**:
+`renderMcpPanel`'s populated branch (~90 lines) and its `startupStatus.error` branch,
+`renderFleetSummaryCard`'s populated branch (~130 lines), `renderSetupBanner`'s visible branch,
+and the `copiedField` "Copied!" state. These were verified byte-identical by direct source diff
+during the final review, so nothing is broken — but "the snapshots stayed identical" does not
+prove behaviour preservation for those paths, and a future change to them is unguarded.
+
+### Pre-existing debt this plan deliberately did not touch
+
+- **~250 lines of already-dead handlers in the shell** (`handleSearch`, `handleIndex`,
+  `handlePullToLocal`, `handleCreateWPEBackup` and others) were dead *before* this plan began.
+  The shell's true live size is nearer 1,400 than 1,661.
+- **`stats.mcpServer` and `mcpInfo` carry the same three facts** (port, version, tool count) and
+  are both rendered on screen. The extraction made this explicit by turning them into two props;
+  the next tab extraction should not inherit it.
+
 ## Not in this plan
 
 - Decomposing Activity or Operations — specs 4 and 5 delete them.
