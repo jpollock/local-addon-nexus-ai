@@ -11,6 +11,8 @@ import type { AgentStateStore } from './AgentStateStore';
 import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
 import { getAgentSetting } from '../ipc-handlers';
+import type { EventLog } from '../logging/eventLog';
+import { newRunId } from '../logging/runId';
 
 // Ban consecutive underscores so the __ MCP delimiter is unambiguous.
 const VALID_AGENT_NAME = /^[a-z0-9](?:[a-z0-9]|_(?!_)|-)*[a-z0-9]$|^[a-z0-9]$/;
@@ -37,6 +39,7 @@ export class AgentDispatcher {
     private resolvedProvider: ResolvedAIProvider,
     private readonly stateStore: AgentStateStore,
     private readonly dbManager?: AgentDbManager,
+    private readonly eventLog?: EventLog,
   ) {}
 
   clearCache(agentName: string): void {
@@ -75,15 +78,51 @@ export class AgentDispatcher {
       };
     }
 
+    // Mint a run id so this dispatch is discoverable in the event log, and thread it through
+    // buildAgentContext so transcripts work on this path (when the agent opts in). A contributed
+    // tool that makes no model call still emits at least the tool.call line below, so
+    // `grep run=<id>` always finds something.
+    const runId = newRunId('agent');
+
     const start = Date.now();
     let outcome: 'ok' | 'error' = 'ok';
 
     const result =
       registered.executionMode === 'run'
-        ? await this.dispatchRun(registered, args)
-        : await this.dispatchFunction(registered, args);
+        ? await this.dispatchRun(registered, args, runId)
+        : await this.dispatchFunction(registered, args, runId);
 
     if (result.isError) outcome = 'error';
+
+    const durationMs = Date.now() - start;
+
+    // Write the tool.call event so the run id is discoverable. Matches the shape
+    // NexusToolProvider.logToolCall uses — same word, same fields — so both agent-internal calls
+    // (via NexusToolProvider) and contributed-tool dispatches (here) produce identical lines.
+    // Never throws: wrapping the whole block so an event-log fault cannot turn a successful
+    // dispatch into an error result.
+    try {
+      if (this.eventLog) {
+        const target = args && typeof args === 'object' && 'site' in args
+          ? String((args as any).site)
+          : undefined;
+        this.eventLog.write({
+          level: outcome === 'ok' ? 'INFO' : 'WARN',
+          source: agentName,
+          sourceKind: 'agent',
+          runId,
+          event: 'tool.call',
+          fields: {
+            tool: `${agentName}/${toolName}`,
+            target,
+            tier: registered.permissionTier,
+            dur: `${durationMs}ms`,
+            ok: outcome === 'ok',
+          },
+          message: outcome === 'error' ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+        } as any);
+      }
+    } catch { /* never throw from a logging path */ }
 
     // The whole audit block is wrapped: agent handlers are the least-trusted
     // code in the system (cyclic args, absent `content` arrays), and a throw
@@ -96,7 +135,7 @@ export class AgentDispatcher {
         params: args && typeof args === 'object' ? (args as Record<string, unknown>) : {},
         confirmed: null,
         result: outcome === 'ok' ? 'success' : 'error',
-        duration_ms: Date.now() - start,
+        duration_ms: durationMs,
       });
 
       // Durable trail for agent-contributed tools. This path bypasses
@@ -111,10 +150,11 @@ export class AgentDispatcher {
           parameters: {
             ...(args && typeof args === 'object' ? (args as Record<string, unknown>) : {}),
             _tier: registered.permissionTier,
-            _durationMs: Date.now() - start,
+            _durationMs: durationMs,
           },
           outcome: outcome === 'ok' ? 'success' : 'failure',
           error: outcome === 'error' ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+          runId,
         });
       }
     } catch { /* never throw from an audit path */ }
@@ -139,7 +179,7 @@ export class AgentDispatcher {
     return def;
   }
 
-  private async dispatchFunction(registered: RegisteredTool, args: unknown): Promise<McpToolResult> {
+  private async dispatchFunction(registered: RegisteredTool, args: unknown, runId: string): Promise<McpToolResult> {
     try {
       const def = this.loadModule(registered.agentName);
       const handler = def.contributes?.tools?.[registered.toolName]?.handler;
@@ -166,6 +206,8 @@ export class AgentDispatcher {
           'logs',
         ),
         dbManager: this.dbManager,
+        eventLog: this.eventLog,
+        runId,
       });
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -191,7 +233,7 @@ export class AgentDispatcher {
     }
   }
 
-  private async dispatchRun(registered: RegisteredTool, args: unknown): Promise<McpToolResult> {
+  private async dispatchRun(registered: RegisteredTool, args: unknown, runId: string): Promise<McpToolResult> {
     try {
       const def = this.loadModule(registered.agentName);
       const { ctx } = buildAgentContext({
@@ -218,6 +260,8 @@ export class AgentDispatcher {
           'logs',
         ),
         dbManager: this.dbManager,
+        eventLog: this.eventLog,
+        runId,
       });
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {

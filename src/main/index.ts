@@ -596,6 +596,7 @@ export default function main(context: any): void {
           resolvedAgentProvider,
           agentStateStore,
           agentDbManager,
+          eventLog,
         );
         const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager);
 
