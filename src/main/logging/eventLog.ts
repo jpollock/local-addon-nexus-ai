@@ -1,4 +1,4 @@
-import { redactParams, maskSecretsInString } from '../mcp/audit';
+import { redactParams, maskSecretsInString, isIdentityField } from '../mcp/audit';
 
 export type LogLevelName = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 
@@ -97,21 +97,31 @@ function safeTimeOf(at: unknown): string {
 }
 
 /**
- * Quotes only — it must NOT mask.
+ * Mask the RENDERED form, WITH key context, then quote.
  *
- * Every value reaching here has already been through `redactParams`, which applies the same
- * value-shape masking WITH key context. A second, key-blind pass undoes the one carve-out that
- * context buys: `redactParams` deliberately preserves `target` / `install_name` when the whole
- * value is a legal WP Engine install name, and masking again turned
- * `mutation op=wp_plugin_update target=acmeprod2026staging1` into `target=[REDACTED]` — losing
- * the one field that says which production install was operated on.
+ * Both halves matter and each one was got wrong once:
  *
- * `message` still goes through `maskSecretsInString` in `formatLine`, because it is raw text
+ * - Masking the rendered string is not redundant with `redactParams`. That walk masks values it
+ *   sees AS STRINGS; a value whose `String()` rendering is a secret — `{ toString: () =>
+ *   'sk-…' }` — is walked as an object, never masked, and only becomes a credential at the
+ *   moment this function renders it. No emitter passes such a value today, which is the same
+ *   "merely unexercised" status the `emit` spread ordering had, and the same reason to close it
+ *   structurally rather than trust it.
+ * - Masking key-BLIND undoes the one carve-out key context buys: `redactParams` preserves
+ *   `target` / `install_name` when the whole value is a legal WP Engine install name, and a
+ *   blind second pass turned `mutation op=wp_plugin_update target=acmeprod2026staging1` into
+ *   `target=[REDACTED]`, losing the one field that says which production install was changed.
+ *
+ * `identityField` only skips the opaque-alphanumeric-run rule (`audit.ts`'s `maskSecretsInString`
+ * ), so `target=sk-…` or `target=AKIA…` is still masked — the carve-out is for install names,
+ * not for the field.
+ *
+ * `message` gets `maskSecretsInString` in `formatLine` for a different reason: it is raw text
  * that never passes through `redactParams` at all.
  */
-function renderValue(v: unknown): string {
+function renderValue(v: unknown, identityField: boolean): string {
   try {
-    const s = String(v ?? '');
+    const s = maskSecretsInString(String(v ?? ''), identityField ? { identityField: true } : undefined);
     // A bare space or '=' would break key=value parsing on the way back out.
     return /[\s="]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
   } catch {
@@ -157,8 +167,11 @@ export function formatLine(e: LogEvent): string {
       const safe = redactParams(e.fields);
       for (const [k, v] of Object.entries(safe)) {
         if (v === undefined || v === null) continue;
+        // The RAW key, before renderKey masks it — a masked key would never match the identity
+        // list, and the carve-out would be silently dead.
+        const identity = isIdentityField(k);
         const renderedKey = renderKey(k);
-        parts.push(`${renderedKey}=${renderValue(v)}`);
+        parts.push(`${renderedKey}=${renderValue(v, identity)}`);
       }
     }
 
