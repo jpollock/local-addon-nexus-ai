@@ -128,8 +128,7 @@
   flex-shrink: 0;
 }
 .ag-toggle--on  { background: var(--ag-green); }
-.ag-toggle--off { background: #3a4049; }
-:root[data-ag-theme='light'] .ag-toggle--off { background: #c7cdd6; }
+.ag-toggle--off { background: var(--ag-border-control); }
 .ag-toggle__knob {
   position: absolute;
   top: 3px;
@@ -147,7 +146,7 @@
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  border: 1.5px solid #3a4049;
+  border: 1.5px solid var(--ag-border-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -155,7 +154,6 @@
   flex-shrink: 0;
   transition: background 0.12s, border-color 0.12s;
 }
-:root[data-ag-theme='light'] .ag-checkbox { border-color: #c7cdd6; }
 .ag-checkbox--checked {
   background: var(--ag-teal);
   border-color: var(--ag-teal);
