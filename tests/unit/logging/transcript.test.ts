@@ -44,4 +44,19 @@ describe('TranscriptWriter', () => {
     const w = new TranscriptWriter({ root, runId: 'r_abc' });
     expect(w.path().endsWith(path.join('transcripts', 'r_abc.jsonl'))).toBe(true);
   });
+
+  it('restores 0600 on a file that already exists with looser permissions', () => {
+    // appendFileSync's `mode` applies only when it CREATES the file. Without the chmod that
+    // follows the write, a transcript file left at 0644 by anything else stays 0644 forever —
+    // and this is the most sensitive artefact the logging system writes.
+    const w = new TranscriptWriter({ root, runId: 'r_existing' });
+    const file = path.join(root, 'transcripts', 'r_existing.jsonl');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '', { mode: 0o644 });
+    fs.chmodSync(file, 0o644);                       // defeat any umask interference
+
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'x' });
+
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+  });
 });
