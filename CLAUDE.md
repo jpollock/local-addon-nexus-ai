@@ -90,6 +90,58 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ---
 
+## Agent schedules — the manifest is the default, an explicit pick overrides
+
+**There are two sources for an agent's cron and they disagreed silently.**
+`AgentScheduler` scheduled the expressions in the agent's own manifest; the
+Preferences cadence picker wrote `cadence` into `agent-settings.json`, where
+**nothing in the main process ever read it**. All 28 references were renderer
+labels. Measured live 2026-08-09: `auth-probe` displayed *Hourly* and fired
+every two minutes; `seo-insights` displayed *Every 15 minutes* and fired
+Mondays at 07:00. The schedule a user set was never the schedule that ran.
+
+- **`resolveAgentCron` (`src/main/agent-runtime/schedule.ts`) is the rule.**
+  Manifest by default; a cadence the user explicitly picked wins.
+- **`cadenceSetAt` is what makes a pick explicit, and it is load-bearing.**
+  `AgentStore.getDefaultSettings` seeds a fifteen-minute cadence into every
+  agent the renderer has never seen, so a stored `cadence` is **not** evidence
+  anyone chose it. Honouring stored values wholesale would have moved
+  `seo-insights` from weekly to every fifteen minutes — 672× more often — and
+  `web-analytics` 28× more often, on values the user never picked. Only the
+  timestamp, written by the picker's own handler, grants a cadence authority.
+- **The rule exists twice, and a test pins the copies together.**
+  `resolveAgentCron` (main) and `effectiveCadenceExpression`
+  (`src/renderer/components/agents/effectiveCadence.ts`) live in bundles that
+  cannot import each other; `tests/unit/renderer/effectiveCadence.test.ts`
+  runs both over a shared case table. Same pattern as `normalizeLogPrefix`.
+- **A picked cadence takes effect immediately.** `AGENT_SETTINGS_UPDATE`
+  re-registers the agent (`nexusServices.agentScheduler`, exposed for exactly
+  this) rather than waiting for a restart — a schedule that needs a restart is
+  the same class of dead setting as the picker that nothing read. It
+  re-registers only when `cadence`/`cadenceSetAt` actually changed:
+  `register()` stops and destroys the running task first, so a needless call
+  is a real interruption.
+- **An unparseable saved cadence falls back to the manifest and logs why.**
+  Never leave an agent unscheduled because a stored expression went bad —
+  silence is indistinguishable from a broken agent, and this is the schedule
+  for something that runs against production.
+- **An agent with no cron trigger is never given one.** No cron in the
+  manifest means it was not built to run on a timer; the seeded cadence must
+  not conjure a schedule for it.
+- The registration log line names the source
+  (`registered "x" with cron "…" (source=user|manifest)`) so a surprising
+  schedule is explainable without opening settings.
+
+**The settings cache, not the file, is what the gate and the scheduler read.**
+`agent-settings.json` is loaded into `__agentSettingsCache` once, inside
+`registerIpcHandlers`, and updated thereafter only by the
+`AGENT_SETTINGS_UPDATE` IPC channel. Editing the file on disk changes nothing
+until a restart — verified live: restoring a restored `enabled: true` to disk
+left the running process refusing the agent for another half hour. There is no
+GraphQL mutation for agent settings, so the CLI cannot change them either.
+
+---
+
 ## WP AI Plugin Compatibility (wp-plugins/ai-provider-for-local-gateway)
 
 **Connector approval bypass**: The MU plugin template (`src/main/ai-gateway/mu-plugin-template.ts`) injects an `option_wpai_connector_approvals` filter that pre-approves `ai/ai.php`, `nexus-ai-connector/nexus-ai-connector.php`, and `ai-provider-for-local-gateway/plugin.php` for the `local-gateway` connector. This is intentional for local development — the gateway token is the auth layer. Do not remove without understanding the connector-approval experiment.
@@ -101,6 +153,49 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 ---
 
 ## Logging & Audit
+
+### The structured event log — diagnostic, not the compliance record
+
+Separate from the audit files below, and do not confuse them. Under
+`~/Library/Application Support/Local/nexus-ai/logs/`:
+`nexus-YYYY-MM-DD.log` (everything) plus `agents/<source>-YYYY-MM-DD.log`
+(one agent's slice, byte-identical lines). Written by `EventLog`
+(`src/main/logging/eventLog.ts`), mode 0600, rotated by size per day.
+
+Answers "did my agent run, what did it do, and why not" — the case that
+previously produced **zero bytes anywhere**. `grep run=<id>` reassembles a
+whole run across both streams.
+
+- **Line format:** `HH:MM:SS.mmm LEVEL source [run=<id>] [event] [k=v…]  [message]`
+  — message separated by **two spaces**, everything else by one. The level is
+  **not** padded: padding put two spaces after `INFO`/`WARN` and one after
+  `DEBUG`/`ERROR`, so `awk -F'  '` returned a different field per level. Do
+  not reintroduce the pad without changing the delimiter.
+- **Times and filenames are LOCAL, not UTC.** They were `toISOString()`, which
+  made `tail -f nexus-$(date +%F).log` follow a dead file for the seven hours
+  a day PDT is behind UTC — succeeding silently, showing nothing. Every test
+  injected a fixed UTC clock and derived expectations the same way the code
+  did, so the suite was internally consistent and externally wrong;
+  `tests/unit/logging/simulatedZone.ts` now simulates a zone at the `Date` so
+  the assertions fail against a UTC implementation on any machine.
+- **Closed vocabulary, one word one shape:** `run.start`, `run.end`,
+  `run.skip`, `phase`, `action`, `site`, `finding`, `mutation`. `action` and
+  `site` are separate from `phase` deliberately — three field shapes under one
+  word gives away the only property a closed vocabulary has.
+- **`redactParams` owns value masking; `renderValue` adds key context.**
+  Masking a second time without the key defeated the `target`/`install_name`
+  carve-out and redacted the one field naming which production install was
+  changed. Field *keys* are masked and quoted too — nothing else inspects them.
+- **Logging must never throw**, and does not: `formatLine`, `pathsFor` and
+  `write` are each guarded, verified by execution against pathological
+  `toString`, invalid dates and a null event. A dropped event still emits a
+  line saying so — a swallowed event is a lost event.
+- **`ctx.log.mutation()` exists and has no callers yet.** Phase 2 must emit it
+  from the runtime alongside `tool.call`, not rely on agents remembering —
+  design §8's own reasoning for why `llm.call` is runtime-emitted.
+- `agent_runs.run_id` is written but not yet read back by `getLastRun` /
+  `getRunHistory`; the UI's "Run Now" still mints its own unrelated
+  `run-${Date.now()}`, so the id a user can see never appears in a log line.
 
 **Two audit files**, both under `~/Library/Application Support/Local/nexus-ai/`,
 both JSONL, mode 0600, both rotated:
