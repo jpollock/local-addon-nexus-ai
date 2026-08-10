@@ -105,6 +105,82 @@ describe('collectSystemHealth', () => {
     });
   });
 
+  describe('agentRuns branches', () => {
+    test('zero agents -> unknown ("no agents reported a run")', async () => {
+      const deps = healthyDeps({ getAgents: async () => [] });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns).toEqual({
+        state: 'unknown',
+        reason: 'No agents reported a run',
+      });
+    });
+
+    test('one failed agent -> failing, singular message form', async () => {
+      const deps = healthyDeps({
+        getAgents: async () => [
+          { id: 'security-sentinel', lastRunStatus: 'failed', lastRunAt: Date.now() },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns).toEqual({
+        state: 'failing',
+        reason: 'security-sentinel failed on its last run',
+      });
+    });
+
+    test('multiple failed agents -> failing, plural message form', async () => {
+      const deps = healthyDeps({
+        getAgents: async () => [
+          { id: 'security-sentinel', lastRunStatus: 'failed', lastRunAt: Date.now() },
+          { id: 'log-processor', lastRunStatus: 'failed', lastRunAt: Date.now() },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns).toEqual({
+        state: 'failing',
+        reason: '2 agents failed on their last run',
+      });
+    });
+
+    test('an agent that has never run (lastRunStatus: null) -> unknown, not ok', async () => {
+      const deps = healthyDeps({
+        getAgents: async () => [
+          { id: 'web-analytics', lastRunStatus: null, lastRunAt: null },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns).toEqual({
+        state: 'unknown',
+        reason: 'web-analytics has not reported a run yet',
+      });
+    });
+
+    test('multiple never-run agents -> unknown, plural message form', async () => {
+      const deps = healthyDeps({
+        getAgents: async () => [
+          { id: 'web-analytics', lastRunStatus: null, lastRunAt: null },
+          { id: 'log-processor', lastRunStatus: null, lastRunAt: null },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns).toEqual({
+        state: 'unknown',
+        reason: '2 agents have not reported a run yet',
+      });
+    });
+
+    test('a failed agent outranks a never-run agent — failing wins', async () => {
+      const deps = healthyDeps({
+        getAgents: async () => [
+          { id: 'security-sentinel', lastRunStatus: 'failed', lastRunAt: Date.now() },
+          { id: 'web-analytics', lastRunStatus: null, lastRunAt: null },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns.state).toBe('failing');
+    });
+  });
+
   describe('syncStaleness respects refreshEnabled — a disabled scheduler is not a failure', () => {
     test('all sites refresh-disabled -> unknown, reason names refresh being off (not degraded)', async () => {
       const deps = healthyDeps({
@@ -148,6 +224,48 @@ describe('collectSystemHealth', () => {
         reason: '1 sites have never been checked',
       });
     });
+
+    test('zero sites at all -> unknown ("no sites to check"), distinct from the all-disabled branch', async () => {
+      const deps = healthyDeps({ getSyncAges: () => [] });
+      const result = await collectSystemHealth(deps);
+
+      expect(result.inputs.syncStaleness).toEqual({
+        state: 'unknown',
+        reason: 'No sites to check',
+      });
+    });
+  });
+
+  describe('eventQueue branches', () => {
+    test('failed events -> failing (the original bug this plan removes)', async () => {
+      const deps = healthyDeps({ getEventStats: async () => ({ failed: 3, pending: 0 }) });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.eventQueue).toEqual({
+        state: 'failing',
+        reason: '3 site events failed',
+      });
+    });
+
+    test('more than 10 pending events -> degraded', async () => {
+      const deps = healthyDeps({ getEventStats: async () => ({ failed: 0, pending: 11 }) });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.eventQueue).toEqual({
+        state: 'degraded',
+        reason: '11 site events waiting',
+      });
+    });
+
+    test('exactly 10 pending events is still ok — the threshold is "more than 10"', async () => {
+      const deps = healthyDeps({ getEventStats: async () => ({ failed: 0, pending: 10 }) });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.eventQueue).toEqual({ state: 'ok', reason: null });
+    });
+
+    test('a failed event outranks a large pending count — failing wins', async () => {
+      const deps = healthyDeps({ getEventStats: async () => ({ failed: 1, pending: 50 }) });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.eventQueue.state).toBe('failing');
+    });
   });
 
   describe('no gatherer failure ever yields ok', () => {
@@ -190,6 +308,22 @@ describe('collectSystemHealth', () => {
     expect(result.inputs.syncStaleness.state).toBe('unknown');
     expect(result.inputs.credentials.state).toBe('unknown');
     expect(result.inputs.eventQueue.state).toBe('unknown');
+  });
+
+  test('a throwing now() does not escape collectSystemHealth — falls back to Date.now()', async () => {
+    const deps = healthyDeps({
+      now: () => {
+        throw new Error('clock unavailable');
+      },
+      // A fresh site relative to the real Date.now() fallback, so the
+      // fallback being wired up correctly still resolves to ok.
+      getSyncAges: () => [{ id: 'site-1', lastSyncAt: Date.now(), refreshEnabled: true }],
+    });
+    await expect(collectSystemHealth(deps)).resolves.toEqual(
+      expect.objectContaining({ overall: expect.any(String) }),
+    );
+    const result = await collectSystemHealth(deps);
+    expect(result.inputs.syncStaleness.state).toBe('ok');
   });
 
   test('an injected now() is used to evaluate staleness deterministically', async () => {

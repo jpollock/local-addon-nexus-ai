@@ -41,7 +41,15 @@ async function guard(fn: () => Promise<HealthSignal>, label: string): Promise<He
 }
 
 export async function collectSystemHealth(deps: SystemHealthDeps): Promise<SystemHealth> {
-  const now = (deps.now ?? Date.now)();
+  // A throwing `now` must not escape this function unguarded — every other
+  // failure path returns `unknown` via `guard`, and this is the one place an
+  // exception could otherwise leak out uncaught.
+  let now: number;
+  try {
+    now = (deps.now ?? Date.now)();
+  } catch {
+    now = Date.now();
+  }
 
   const agentRuns = await guard(async () => {
     const agents = await deps.getAgents();
@@ -53,6 +61,19 @@ export async function collectSystemHealth(deps: SystemHealthDeps): Promise<Syste
         reason: failed.length === 1
           ? `${failed[0].id} failed on its last run`
           : `${failed.length} agents failed on their last run`,
+      };
+    }
+    // `null` means "registered but has never reported a run" — not the same
+    // as a successful run, and must not read as ok. Mirrors the zero-agents
+    // case above: Nexus genuinely does not know yet, which is `unknown`, not
+    // `degraded` (nothing is wrong) and not `ok` (nothing was verified).
+    const neverRun = agents.filter((a) => a.lastRunStatus === null);
+    if (neverRun.length > 0) {
+      return {
+        state: 'unknown',
+        reason: neverRun.length === 1
+          ? `${neverRun[0].id} has not reported a run yet`
+          : `${neverRun.length} agents have not reported a run yet`,
       };
     }
     return { state: 'ok', reason: null };
