@@ -17,7 +17,9 @@ export function extractOpenAiUsage(chunk: any): TokenUsage | undefined {
   const inputTokens = finiteNumber(chunk?.usage?.prompt_tokens);
   const outputTokens = finiteNumber(chunk?.usage?.completion_tokens);
   if (inputTokens === undefined && outputTokens === undefined) return undefined;
-  return { inputTokens, outputTokens };
+  // Only the keys actually found: returning `outputTokens: undefined` alongside a real
+  // inputTokens lets the caller's spread-merge overwrite a count it already had.
+  return { ...(inputTokens !== undefined && { inputTokens }), ...(outputTokens !== undefined && { outputTokens }) };
 }
 
 export class OpenAIProvider implements AIProvider {

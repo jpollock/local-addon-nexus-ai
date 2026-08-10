@@ -16,7 +16,9 @@ export function extractGoogleUsage(chunk: any): TokenUsage | undefined {
   const inputTokens = finiteNumber(chunk?.usageMetadata?.promptTokenCount);
   const outputTokens = finiteNumber(chunk?.usageMetadata?.candidatesTokenCount);
   if (inputTokens === undefined && outputTokens === undefined) return undefined;
-  return { inputTokens, outputTokens };
+  // Only the keys actually found: returning `outputTokens: undefined` alongside a real
+  // inputTokens lets the caller's spread-merge overwrite a count it already had.
+  return { ...(inputTokens !== undefined && { inputTokens }), ...(outputTokens !== undefined && { outputTokens }) };
 }
 
 /**
