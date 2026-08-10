@@ -171,6 +171,7 @@ exports[`panel chrome — characterization renders docked 1`] = `
               },
               "type": "button",
             },
+            null,
             {
               "children": {
                 "children": null,
@@ -178,11 +179,11 @@ exports[`panel chrome — characterization renders docked 1`] = `
                 "props": {
                   "size": 17,
                 },
-                "type": "IconExpand",
+                "type": "IconWide",
               },
               "key": null,
               "props": {
-                "aria-label": "Expand to full screen",
+                "aria-label": "Wide view",
                 "onClick": "[fn]",
                 "onMouseEnter": "[fn]",
                 "onMouseLeave": "[fn]",
@@ -198,6 +199,7 @@ exports[`panel chrome — characterization renders docked 1`] = `
                   "lineHeight": 1,
                   "padding": 6,
                 },
+                "title": "Wide view",
               },
               "type": "button",
             },
@@ -408,6 +410,7 @@ exports[`panel chrome — characterization renders full 1`] = `
               },
               "type": "button",
             },
+            null,
             {
               "children": {
                 "children": null,
@@ -697,6 +700,7 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
               },
               "type": "button",
             },
+            null,
             {
               "children": {
                 "children": null,
@@ -704,11 +708,11 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
                 "props": {
                   "size": 17,
                 },
-                "type": "IconExpand",
+                "type": "IconWide",
               },
               "key": null,
               "props": {
-                "aria-label": "Expand to full screen",
+                "aria-label": "Wide view",
                 "onClick": "[fn]",
                 "onMouseEnter": "[fn]",
                 "onMouseLeave": "[fn]",
@@ -724,6 +728,7 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
                   "lineHeight": 1,
                   "padding": 6,
                 },
+                "title": "Wide view",
               },
               "type": "button",
             },
@@ -1001,6 +1006,7 @@ exports[`panel chrome — characterization renders streaming 1`] = `
               },
               "type": "button",
             },
+            null,
             {
               "children": {
                 "children": null,
@@ -1008,11 +1014,11 @@ exports[`panel chrome — characterization renders streaming 1`] = `
                 "props": {
                   "size": 17,
                 },
-                "type": "IconExpand",
+                "type": "IconWide",
               },
               "key": null,
               "props": {
-                "aria-label": "Expand to full screen",
+                "aria-label": "Wide view",
                 "onClick": "[fn]",
                 "onMouseEnter": "[fn]",
                 "onMouseLeave": "[fn]",
@@ -1028,6 +1034,7 @@ exports[`panel chrome — characterization renders streaming 1`] = `
                   "lineHeight": 1,
                   "padding": 6,
                 },
+                "title": "Wide view",
               },
               "type": "button",
             },
@@ -1213,11 +1220,11 @@ exports[`panel chrome — characterization renders wide 1`] = `
                 "props": {
                   "size": 17,
                 },
-                "type": "IconContract",
+                "type": "IconSessions",
               },
               "key": null,
               "props": {
-                "aria-label": "Back to docked",
+                "aria-label": "Sessions",
                 "onClick": "[fn]",
                 "onMouseEnter": "[fn]",
                 "onMouseLeave": "[fn]",
@@ -1233,7 +1240,7 @@ exports[`panel chrome — characterization renders wide 1`] = `
                   "lineHeight": 1,
                   "padding": 6,
                 },
-                "title": "Back to docked",
+                "title": "Sessions",
               },
               "type": "button",
             },
@@ -1265,6 +1272,37 @@ exports[`panel chrome — characterization renders wide 1`] = `
                   "padding": 6,
                 },
                 "title": "New chat",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconContract",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Back to docked",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Back to docked",
               },
               "type": "button",
             },

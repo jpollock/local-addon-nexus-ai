@@ -222,34 +222,19 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       React.createElement(
         'div',
         { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 } },
-        // #1 Sessions (docked) OR Wide control (wide) OR null (full)
-        size === 'docked'
-          ? React.createElement(
-              'button',
-              {
-                style: iconBtnStyle(this.hov('sessions'), showSessions),
-                onClick: onToggleSessions,
-                title: 'Sessions',
-                'aria-label': 'Sessions',
-                onMouseEnter: this.onEnter('sessions'),
-                onMouseLeave: this.onLeave(),
-              },
-              React.createElement(IconSessions, { size: 17 }),
-            )
-          : size === 'wide'
-          ? React.createElement(
-              'button',
-              {
-                style: iconBtnStyle(this.hov('wide')),
-                onClick: () => onSetSize('docked'),
-                title: 'Back to docked',
-                'aria-label': 'Back to docked',
-                onMouseEnter: this.onEnter('wide'),
-                onMouseLeave: this.onLeave(),
-              },
-              React.createElement(IconContract, { size: 17 }),
-            )
-          : null,
+        // #1 Sessions — docked and wide only (null in full)
+        isFull ? null : React.createElement(
+          'button',
+          {
+            style: iconBtnStyle(this.hov('sessions'), showSessions),
+            onClick: onToggleSessions,
+            title: 'Sessions',
+            'aria-label': 'Sessions',
+            onMouseEnter: this.onEnter('sessions'),
+            onMouseLeave: this.onLeave(),
+          },
+          React.createElement(IconSessions, { size: 17 }),
+        ),
         // #2 New chat — always
         React.createElement(
           'button',
@@ -263,20 +248,35 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           },
           React.createElement(IconNewChat, { size: 17 }),
         ),
-        // #3 Expand (docked/wide) OR Contract (full)
-        size === 'full'
+        // #3 Contract (wide only) — back to docked
+        size === 'wide' ? React.createElement(
+          'button',
+          {
+            style: iconBtnStyle(this.hov('contract-docked')),
+            onClick: () => onSetSize('docked'),
+            title: 'Back to docked',
+            'aria-label': 'Back to docked',
+            onMouseEnter: this.onEnter('contract-docked'),
+            onMouseLeave: this.onLeave(),
+          },
+          React.createElement(IconContract, { size: 17 }),
+        ) : null,
+        // #4 Expand (docked→wide, wide→full) OR Contract (full→docked)
+        size === 'docked'
           ? React.createElement(
               'button',
               {
-                style: iconBtnStyle(this.hov('contract')),
-                onClick: () => onSetSize('docked'),
-                'aria-label': 'Back to docked',
-                onMouseEnter: this.onEnter('contract'),
+                style: iconBtnStyle(this.hov('expand')),
+                onClick: () => onSetSize('wide'),
+                title: 'Wide view',
+                'aria-label': 'Wide view',
+                onMouseEnter: this.onEnter('expand'),
                 onMouseLeave: this.onLeave(),
               },
-              React.createElement(IconContract, { size: 17 }),
+              React.createElement(IconWide, { size: 17 }),
             )
-          : React.createElement(
+          : size === 'wide'
+          ? React.createElement(
               'button',
               {
                 style: iconBtnStyle(this.hov('expand')),
@@ -286,8 +286,19 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
                 onMouseLeave: this.onLeave(),
               },
               React.createElement(IconExpand, { size: 17 }),
+            )
+          : React.createElement(
+              'button',
+              {
+                style: iconBtnStyle(this.hov('contract')),
+                onClick: () => onSetSize('docked'),
+                'aria-label': 'Back to docked',
+                onMouseEnter: this.onEnter('contract'),
+                onMouseLeave: this.onLeave(),
+              },
+              React.createElement(IconContract, { size: 17 }),
             ),
-        // #4 Collapse — always
+        // #5 Collapse — always
         React.createElement(
           'button',
           {

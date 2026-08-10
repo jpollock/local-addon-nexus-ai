@@ -33,3 +33,37 @@ describe('panel chrome — characterization', () => {
     expect(serializeTree(makePanel(props).render())).toMatchSnapshot();
   });
 });
+
+describe('panel chrome — control interactions', () => {
+  it('docked expand goes to wide, not full', () => {
+    const onSetSize = jest.fn();
+    const panel = makePanel({ size: 'docked', onSetSize });
+    const tree = panel.render();
+
+    // Find the expand button in the control cluster
+    const header = tree.props.children[0];
+    const controlCluster = header.props.children[2];
+    const expandBtn = controlCluster.props.children.find((child: any) =>
+      child?.props?.['aria-label'] === 'Expand to full screen' ||
+      child?.props?.['aria-label'] === 'Wide view'
+    );
+
+    expect(expandBtn).toBeDefined();
+    expandBtn.props.onClick();
+    expect(onSetSize).toHaveBeenCalledWith('wide');
+  });
+
+  it('wide mode has sessions button', () => {
+    const panel = makePanel({ size: 'wide' });
+    const tree = panel.render();
+
+    const header = tree.props.children[0];
+    const controlCluster = header.props.children[2];
+    const sessionsBtn = controlCluster.props.children.find((child: any) =>
+      child?.props?.['aria-label'] === 'Sessions'
+    );
+
+    expect(sessionsBtn).toBeDefined();
+    expect(sessionsBtn.type).toBe('button');
+  });
+});
