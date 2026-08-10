@@ -196,6 +196,24 @@ whole run across both streams.
 - `agent_runs.run_id` is written but not yet read back by `getLastRun` /
   `getRunHistory`; the UI's "Run Now" still mints its own unrelated
   `run-${Date.now()}`, so the id a user can see never appears in a log line.
+- **`localDay` exists twice** — `src/main/logging/eventLog.ts` and
+  `src/renderer/components/localDay.ts` — pinned by a shared case table in
+  `tests/unit/renderer/localDay.test.ts`. Main and renderer do not share a
+  bundle, so the function is duplicated. This mirrors the existing
+  `resolveAgentCron` / `effectiveCadenceExpression` pattern already
+  documented above.
+- **`run.skip` is emitted at most once per agent, per reason, per local day.**
+  Keyed by `agentId:YYYY-MM-DD` in `ipc-handlers.ts`'s `lastSkipReason` map.
+  A user grepping today's log for a long-disabled agent finds exactly one
+  line, not one per tick. The day-keying means each log file (which is also
+  named by local day) contains at least one line explaining why the agent
+  didn't run, so a user on Thursday asking "why didn't this run today" finds
+  the answer in today's file, not only in Monday's.
+- **`run.end` gains a `failedCalls` field only when non-zero**, and `status`
+  is unchanged when tool calls failed. Reasoning: an agent that caught a
+  failure and carried on did succeed. The presence of `failedCalls` means
+  some tools failed, but the agent handled it — the run as a whole did not
+  fail.
 
 **Two audit files**, both under `~/Library/Application Support/Local/nexus-ai/`,
 both JSONL, mode 0600, both rotated:
@@ -261,6 +279,12 @@ WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates
 
 **Known gaps — do not assume completeness:**
 
+- **Run id reaches `operation-audit.log` from only ONE of three audit
+  writers.** `ToolRegistry.call()` passes `runId` through; `AgentDispatcher.
+  dispatch()` does not (and that is a real gap — agent-contributed tools are
+  agent runs); `auditDirectOperation()` does not either (mostly honest — those
+  are GraphQL/IPC paths that generally are not agent runs). The join between
+  the compliance record and the diagnostic log is therefore incomplete.
 - `nexusWpeDomainCheck` (`/domains/{id}/check_status`) is POST-shaped but a
   read-only DNS check, so it is deliberately not audited.
 - `nexus:sentinel:execute-sandbox` runs WP-CLI against a *local* sandbox site

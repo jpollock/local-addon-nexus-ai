@@ -60,11 +60,11 @@ Reports (`run-*-report.md`) are user-facing artifacts, not logs. They move to
 ## 2. Line format
 
 ```
-13:31:02.123 INFO  security-sentinel run=r_8f3a2c  phase=scan site=acfprod  12 plugins
-13:31:04.881 INFO  security-sentinel run=r_8f3a2c  llm.call model=claude-opus-5 turn=1 in=1204 out=318 cost=0.0091 dur=1.4s → r_8f3a2c.transcript
-13:31:05.002 INFO  security-sentinel run=r_8f3a2c  tool.call wp_plugin_list site=acfprod tier=1 dur=210ms ok
-13:31:09.140 WARN  security-sentinel run=r_8f3a2c  finding sev=high id=FS-02 site=acfprod  unexpected file in wp-content
-13:31:11.007 INFO  security-sentinel run=r_8f3a2c  mutation wp_plugin_update site=acfprod acf 6.8.5→6.8.6 ok
+13:31:02.123 INFO security-sentinel run=r_8f3a2c phase name=scan detail=acfprod  12 plugins
+13:31:04.881 INFO security-sentinel run=r_8f3a2c llm.call model=claude-opus-5 turn=1 in=1204 out=318 cost=0.0091 dur=1.4s → r_8f3a2c.transcript
+13:31:05.002 INFO security-sentinel run=r_8f3a2c tool.call tool=wp_plugin_list target=acfprod tier=1 dur=210ms ok=true
+13:31:09.140 WARN security-sentinel run=r_8f3a2c finding severity=high id=FS-02 site=acfprod  unexpected file in wp-content
+13:31:11.007 INFO security-sentinel run=r_8f3a2c mutation op=wp_plugin_update target=acfprod before="acf 6.8.5" after="acf 6.8.6"
 ```
 
 `<time> <LEVEL> <source> run=<id>  <event> <key=value…>  <free text>`
