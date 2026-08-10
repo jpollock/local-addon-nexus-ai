@@ -33,3 +33,22 @@ export function trailingFailures(runs: AgentRunRow[]): FailureRun[] {
 export function shouldPauseAgent(runs: AgentRunRow[]): boolean {
   return shouldAutoPause(trailingFailures(runs));
 }
+
+/** Just the slice of AgentStateStore this needs, so tests need no database. */
+export interface PauseMarkerWriter {
+  set(agentName: string, key: string, value: unknown): void;
+}
+
+export const AUTO_PAUSED_KEY = '_autoPausedAt';
+
+/** Mark the agent paused when its recent runs are an unbroken identical failure streak. */
+export function pauseIfStuck(
+  store: PauseMarkerWriter,
+  agentId: string,
+  runs: AgentRunRow[],
+  now: number = Date.now(),
+): boolean {
+  if (!shouldPauseAgent(runs)) return false;
+  store.set(agentId, AUTO_PAUSED_KEY, now);
+  return true;
+}

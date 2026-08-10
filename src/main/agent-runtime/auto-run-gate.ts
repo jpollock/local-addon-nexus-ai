@@ -19,6 +19,13 @@ export interface AgentTriggerSettings {
   enabled?: boolean;
   scheduleEnabled?: boolean;
   eventsEnabled?: boolean;
+  /**
+   * Set by pauseIfStuck when an agent's recent runs are an unbroken identical
+   * failure streak. Deliberately separate from `enabled` — that switch belongs
+   * to the user, and overwriting it would make "did I turn this off, or did
+   * Nexus?" unanswerable.
+   */
+  autoPausedAt?: number;
 }
 
 export type AutoRunKind = 'schedule' | 'event';
@@ -33,6 +40,7 @@ export type AutoRunKind = 'schedule' | 'event';
  */
 export function canAutoRunWith(settings: AgentTriggerSettings | undefined, kind: AutoRunKind): boolean {
   if (settings?.enabled === false) return false;
+  if (settings?.autoPausedAt !== undefined) return false;
   const perTrigger = kind === 'schedule' ? settings?.scheduleEnabled : settings?.eventsEnabled;
   return perTrigger !== false;
 }

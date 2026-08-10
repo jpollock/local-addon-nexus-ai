@@ -1,4 +1,4 @@
-import { trailingFailures, shouldPauseAgent } from '../../../src/main/inbox/autoPause';
+import { trailingFailures, shouldPauseAgent, pauseIfStuck } from '../../../src/main/inbox/autoPause';
 import type { AgentRunRow } from '../../../src/main/agent-runtime/AgentStateStore';
 
 const row = (
@@ -74,5 +74,25 @@ describe('shouldPauseAgent', () => {
     const b = { ...row(2, 'success'),       finishedAt: 5000 };
     expect(trailingFailures([a, b])).toEqual([]);
     expect(trailingFailures([b, a])).toEqual([]);   // input order must not matter
+  });
+});
+
+describe('pauseIfStuck', () => {
+  const stuck = [row(3, 'error', 'boom'), row(2, 'error', 'boom'), row(1, 'error', 'boom')];
+  const flaky = [
+    row(5, 'error', 'boom'), row(4, 'success'),
+    row(3, 'error', 'boom'), row(2, 'success'), row(1, 'error', 'boom'),
+  ];
+
+  test('marks a stuck agent paused', () => {
+    const set = jest.fn();
+    expect(pauseIfStuck({ set }, 'security-sentinel', stuck, 5000)).toBe(true);
+    expect(set).toHaveBeenCalledWith('security-sentinel', '_autoPausedAt', 5000);
+  });
+
+  test('leaves a flaky agent running', () => {
+    const set = jest.fn();
+    expect(pauseIfStuck({ set }, 'security-sentinel', flaky, 5000)).toBe(false);
+    expect(set).not.toHaveBeenCalled();
   });
 });

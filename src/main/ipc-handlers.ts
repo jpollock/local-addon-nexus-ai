@@ -14,6 +14,7 @@ import { getApiKey } from './security/KeyVault';
 import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
 import { recordRunToInbox } from './inbox/recordRun';
+import { pauseIfStuck, AUTO_PAUSED_KEY } from './inbox/autoPause';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
@@ -298,7 +299,19 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
  */
 export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
-  return canAutoRunWith(cache?.get(agentId), kind);
+  const cachedSettings = cache?.get(agentId);
+
+  // Merge the auto-pause marker from AgentStateStore into the settings object.
+  // The marker lives in SQLite, not in the renderer-synced settings cache.
+  const agentStateStore = _agentSettingsDepsRef?.nexusServices?.agentStateStore;
+  const autoPausedAt: number | undefined = agentStateStore
+    ? (agentStateStore as any).get(agentId, AUTO_PAUSED_KEY)
+    : undefined;
+
+  return canAutoRunWith(
+    autoPausedAt !== undefined ? { ...cachedSettings, autoPausedAt } : cachedSettings,
+    kind,
+  );
 }
 
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
@@ -5435,6 +5448,19 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             findings: (lastRunResult as any)?.findings,
             findingsSites: outcomes.findingsSites,
           });
+        }
+
+        // Auto-pause when the agent is stuck in an identical failure streak.
+        const agentStateStore = deps.nexusServices?.agentStateStore;
+        if (agentStateStore && agentId) {
+          const paused = pauseIfStuck(
+            agentStateStore,
+            agentId,  // Write marker with slug (settings cache key)
+            agentStateStore.getRunHistory(agentName, 10),  // Read history with display name (DB key)
+          );
+          if (paused) {
+            localLogger.warn(`[NexusAI] auto-paused ${agentId} after repeated identical failures`);
+          }
         }
       } catch (inboxErr: any) {
         console.error('[AGENT_RUN_NOW] inbox write failed:', inboxErr?.message);
