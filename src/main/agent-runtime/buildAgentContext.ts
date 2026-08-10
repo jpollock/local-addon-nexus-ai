@@ -46,14 +46,16 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId } = deps;
   const agentName = agent.name;
 
+  // Shared by the tool provider and the AI client, so both a tool call and a model call this
+  // agent makes land in the run's log, correlated by run id, without either having to report its
+  // own actions — the reason `ctx.log.mutation()` shipped with no callers at all.
+  const aiEvents = { eventLog, runId, agentName };
+
   const toolProvider = new NexusToolProvider(
     toolRegistry,
     services,
     agent.tools?.length ? agent.tools : undefined,
-    // So every tool call this agent makes lands in the run's log, correlated by run id, without
-    // the agent having to report its own actions — the reason `ctx.log.mutation()` shipped with
-    // no callers at all.
-    { eventLog, runId, agentName },
+    aiEvents,
   );
 
   // Build AI client per-run so it gets this agent's scoped tool set.
@@ -80,7 +82,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const directProvider = getProvider(resolvedProvider.provider);
   const directConfig = { apiKey: resolvedProvider.apiKey, model: agentModel };
   const aiClient = aiProvider
-    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig)
+    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig, aiEvents)
     : {
         run: async (_prompt: string) => {
           createLogger(`agent:${agentName}`).warn(`Agent "${agentName}": AI provider "${resolvedProvider.provider}" unavailable — skipping AI call`);

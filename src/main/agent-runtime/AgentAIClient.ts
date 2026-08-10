@@ -2,7 +2,8 @@ import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from '../
 import type { ChatMessage, ToolCallRequest, ProviderStreamEvent, TokenUsage } from '../../common/chat-types';
 import type { AIClient } from '../agent-sdk/types';
 import { AgentAILoopError } from '../agent-sdk/types';
-import type { NexusToolProvider } from './NexusToolProvider';
+import type { NexusToolProvider, ToolEventContext } from './NexusToolProvider';
+import { estimateCostUsd } from '../logging/modelPricing';
 
 interface StreamResult {
   content: string;
@@ -60,13 +61,53 @@ export class AgentAIClient implements AIClient {
   /** Direct provider (bypasses gateway) — used for generateObject forced-tool calls */
   private directProvider?: AIProvider;
   private directConfig?: ChatProviderConfig;
+  private events?: ToolEventContext;
 
-  constructor(provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider, directProvider?: AIProvider, directConfig?: ChatProviderConfig) {
+  constructor(
+    provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider,
+    directProvider?: AIProvider, directConfig?: ChatProviderConfig, events?: ToolEventContext,
+  ) {
     this.provider = provider;
     this.directProvider = directProvider;
     this.directConfig = directConfig;
     this.config = config;
     this.toolProvider = toolProvider;
+    this.events = events;
+  }
+
+  /**
+   * One model call, recorded. The runtime does this rather than the agent, because an agent
+   * cannot forget to log a call it never mentions — the same reason tool.call is emitted here
+   * and not in agent code. Never throws: a logging fault must not fail a model call.
+   */
+  private emitLlmCall(model: string, turn: number, startedAt: number, usage?: TokenUsage): void {
+    const ctx = this.events;
+    if (!ctx?.eventLog) return;
+    try {
+      ctx.eventLog.write({
+        level: 'INFO', source: ctx.agentName, sourceKind: 'agent', runId: ctx.runId,
+        event: 'llm.call',
+        fields: {
+          model, turn,
+          in: usage?.inputTokens, out: usage?.outputTokens,
+          cost: estimateCostUsd(model, usage),
+          dur: `${Date.now() - startedAt}ms`,
+        },
+      } as any);
+    } catch { /* never fail a model call for a log line */ }
+  }
+
+  private emitLlmError(model: string, turn: number, startedAt: number, message: string): void {
+    const ctx = this.events;
+    if (!ctx?.eventLog) return;
+    try {
+      ctx.eventLog.write({
+        level: 'WARN', source: ctx.agentName, sourceKind: 'agent', runId: ctx.runId,
+        event: 'llm.error',
+        fields: { model, turn, dur: `${Date.now() - startedAt}ms` },
+        message,
+      } as any);
+    } catch { /* never fail a model call for a log line */ }
   }
 
   async run(prompt: string, opts?: { maxTurns?: number; model?: string }): Promise<string> {
@@ -83,7 +124,15 @@ export class AgentAIClient implements AIClient {
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < maxTurns; turn++) {
-      const response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
+      const startedAt = Date.now();
+      let response;
+      try {
+        response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
+      } catch (err: unknown) {
+        this.emitLlmError(config.model, turn + 1, startedAt, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+      this.emitLlmCall(config.model, turn + 1, startedAt, response.usage);
 
       if (response.toolCalls.length === 0) {
         return response.content;
@@ -137,7 +186,15 @@ export class AgentAIClient implements AIClient {
       // API key lives there when useLocalGateway=true.
       const forcedConfig = { ...this.config, forceTool: '__output__' };
       const signal = new AbortController().signal;
-      const response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
+      const startedAt = Date.now();
+      let response;
+      try {
+        response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
+      } catch (err: unknown) {
+        this.emitLlmError(forcedConfig.model, 1, startedAt, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+      this.emitLlmCall(forcedConfig.model, 1, startedAt, response.usage);
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
         return unwrapOutputArguments(outputCall.arguments) as T;
@@ -163,7 +220,15 @@ export class AgentAIClient implements AIClient {
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < 5; turn++) {
-      const response = await collectStream(this.provider.streamChat(messages, tools, this.config, signal));
+      const startedAt = Date.now();
+      let response;
+      try {
+        response = await collectStream(this.provider.streamChat(messages, tools, this.config, signal));
+      } catch (err: unknown) {
+        this.emitLlmError(this.config.model, turn + 1, startedAt, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+      this.emitLlmCall(this.config.model, turn + 1, startedAt, response.usage);
 
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
