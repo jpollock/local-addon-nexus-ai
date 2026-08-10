@@ -16,6 +16,7 @@ interface ModalProps {
   effect: 'readonly' | 'writes';
   /** The agent's persisted schedule/event scope. Undefined = never configured. */
   scheduleScope?: AgentScope;
+  siteScoped: boolean;
   onCancel: () => void;
   onRun: (siteNames: string[]) => void;
 }
@@ -82,9 +83,11 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   private async handleRun() {
     if (this.state.isRunning) return;
     this.setState({ isRunning: true });
-    const { onRun, electron, agentId } = this.props;
+    const { onRun, electron, agentId, siteScoped } = this.props;
     const bySite = new Map(this.state.sites.map(s => [s.id, s]));
-    const toRun = [...this.state.selection].map(id => bySite.get(id)?.name).filter((n): n is string => !!n);
+    const toRun = siteScoped
+      ? [...this.state.selection].map(id => bySite.get(id)?.name).filter((n): n is string => !!n)
+      : [];
 
     try {
       await electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_NOW, {
@@ -100,7 +103,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   }
 
   render() {
-    const { agentName, allowsProduction, effect, onCancel, supportsFullRun } = this.props;
+    const { agentName, allowsProduction, effect, onCancel, supportsFullRun, siteScoped } = this.props;
     const { loading, sites, selection, fullRun, isRunning } = this.state;
     const { added, removed, modified } = this.getDelta();
     const scheduleCount = this.props.scheduleScope?.siteIds?.length ?? 0;
@@ -170,16 +173,22 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
           ),
         ),
 
-        // Picker
+        // Picker — or a single explanatory block for non-scoped agents
         React.createElement('div', { style: { padding: '0 24px', flex: 1, overflow: 'hidden', display: 'flex' } },
-          loading
-            ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: 'var(--ag-text-muted)', width: '100%' } }, 'Loading sites…')
-            : React.createElement(SitePicker, {
-                sites,
-                selection,
-                onChange: (next: Set<string>) => this.setState({ selection: next }),
-                allowsProduction,
-              }),
+          siteScoped
+            ? (loading
+                ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: 'var(--ag-text-muted)', width: '100%' } }, 'Loading sites…')
+                : React.createElement(SitePicker, {
+                    sites,
+                    selection,
+                    onChange: (next: Set<string>) => this.setState({ selection: next }),
+                    allowsProduction,
+                  }))
+            : React.createElement('div', {
+                style: { padding: '28px 24px', fontSize: 13.5, color: 'var(--ag-text-secondary)', lineHeight: 1.55 },
+              },
+                'This agent does not run per site — it performs the same fleet-wide checks every time. Running it now performs one run.',
+              ),
         ),
 
         // Footer — the production warning sentence takes over the note slot and tints the whole
@@ -203,14 +212,14 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
           }, 'Cancel'),
           React.createElement('button', {
             onClick: () => this.handleRun(),
-            disabled: selection.size === 0 || isRunning,
+            disabled: siteScoped ? (selection.size === 0 || isRunning) : isRunning,
             style: {
               padding: '10px 22px', borderRadius: 9, border: 'none', fontSize: 13.5, fontWeight: 700,
-              cursor: selection.size === 0 ? 'not-allowed' : 'pointer',
-              background: selection.size === 0 ? 'var(--ag-bg-elevated)' : hasProd ? 'var(--ag-picker-danger)' : 'var(--ag-picker-teal)',
-              color: selection.size === 0 ? 'var(--ag-text-faint)' : 'var(--ag-picker-bg-page)',
+              cursor: (siteScoped && selection.size === 0) || isRunning ? 'not-allowed' : 'pointer',
+              background: (siteScoped && selection.size === 0) ? 'var(--ag-bg-elevated)' : hasProd ? 'var(--ag-picker-danger)' : 'var(--ag-picker-teal)',
+              color: (siteScoped && selection.size === 0) ? 'var(--ag-text-faint)' : 'var(--ag-picker-bg-page)',
             },
-          }, `Run on ${selection.size} site${selection.size === 1 ? '' : 's'}`),
+          }, siteScoped ? `Run on ${selection.size} site${selection.size === 1 ? '' : 's'}` : 'Run now'),
         ),
       ),
     );

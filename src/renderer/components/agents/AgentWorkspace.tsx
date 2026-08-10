@@ -763,6 +763,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         sitesTabCount: this.hasSitesTab() ? this.runnableLogSites().length : undefined,
         sitesTabNoun: agentId === 'web-analytics' ? 'site' : 'install',
         sitesTabVerb: agentId === 'web-analytics' ? 'bound to a property' : 'switched on',
+        siteScoped: this.state.status?.siteScoped ?? true,
       }),
       activeTab === 'sites' && agentId === 'web-analytics' && React.createElement(AnalyticsSitesTab, {
         electron: this.props.electron,
@@ -803,6 +804,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         supportsFullRun: this.state.status?.supportsFullRun ?? false,
         allowsProduction: this.state.status?.allowsProduction ?? true,
         effect: this.state.status?.effect ?? 'writes',
+        siteScoped: this.state.status?.siteScoped ?? true,
         // Run Now prefills from the SAME derived set the schedule uses, not the raw saved scope.
         // A stale id — scoped before a rescan dropped that install out of the bucket — would
         // otherwise arrive pre-selected and produce a run row that reads nothing.

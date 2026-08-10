@@ -35,6 +35,7 @@ interface SettingsProps {
   /** What a row is called, and what having one is called, for this agent. */
   sitesTabNoun?: string;
   sitesTabVerb?: string;
+  siteScoped?: boolean;
 }
 
 interface GoogleConnection {
@@ -315,6 +316,22 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
    * scope at all — a GA4 binding *is* the opt-in. Reading the field directly reported "nothing
    * switched on" for an agent that was, in fact, running.
    */
+  /**
+   * Stand-in for the scope editor for an agent that declares siteScoped:false. Its run() reads
+   * neither ctx.event's site nor settings.scope, so a picker here would write a field nothing
+   * consumes — the same "two lists answering one question" failure renderScopeElsewhereLine
+   * exists to avoid.
+   */
+  private renderNotSiteScopedLine() {
+    return React.createElement('div', {
+      style: {
+        marginBottom: 14, padding: '11px 14px', borderRadius: 10,
+        background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border-subtle)',
+        fontSize: 13, color: 'var(--ag-text-secondary)',
+      },
+    }, 'This agent is not scoped to sites — each run performs the same fleet-wide checks.');
+  }
+
   private renderScopeElsewhereLine() {
     const count = this.props.sitesTabCount ?? this.currentScopeSiteIds().length;
     const noun = this.props.sitesTabNoun ?? 'install';
@@ -612,9 +629,11 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
           // every state that reconciles them is an apology for a state that should never have
           // been representable. One line pointing at the real control, never a second copy of it.
           settings.scheduleEnabled && (
-            this.props.scopeLivesInSitesTab
-              ? this.renderScopeElsewhereLine()
-              : this.renderScanScope()
+            !(this.props.siteScoped ?? true)
+              ? this.renderNotSiteScopedLine()
+              : this.props.scopeLivesInSitesTab
+                ? this.renderScopeElsewhereLine()
+                : this.renderScanScope()
           ),
 
           // Respond to events
