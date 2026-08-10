@@ -23,7 +23,6 @@ import { SystemTab } from './SystemTab';
 import { SettingsTab } from './SettingsTab';
 import { FleetCompletenessWidget } from './FleetCompletenessWidget';
 import { AssistantPanel } from './AssistantPanel';
-import { ChatTab } from './ChatTab';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
 import { agentStore } from './agents/AgentStore';
 import { runStore } from './agents/RunStore';
@@ -167,9 +166,6 @@ interface NexusOverviewState {
   loading: boolean;
   error: string | null;
   activeTab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents';
-  // Chat state lifted here so it survives tab switches (ChatTab remounts but picks these up)
-  chatMessages: any[];
-  chatSessionId: string;
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -203,15 +199,8 @@ interface NexusOverviewState {
   indexResetRunning: boolean;
   indexResetResult: { siteCount: number; docCount: number } | null;
   _resetConfirmChecked: boolean;
-  wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
-  wpeSyncThresholdHours: number;
   // Fleet Intelligence panels
   fleetSummary: FleetSummaryData | null;
-  fleetPlugins: FleetPlugin[];
-  // Credential sync state
-  syncStatus: Record<string, { lastSync: number; success: boolean }>;
-  syncing: boolean;
-  syncResults: Array<{ siteId: string; siteName: string; success: boolean; providers: string[]; error?: string }> | null;
   wpeAuthError: boolean;
   // WPE action buttons
   wpeBackupRunning: boolean;
@@ -396,8 +385,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     aiSearchMode: false,
     hasLLM: false,
     settings: null,
-    chatMessages: [],
-    chatSessionId: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     showLocalSites: true,
     showWpeSites: true,
     wpeSites: [],
@@ -416,14 +403,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     indexResetRunning: false,
     indexResetResult: null,
     _resetConfirmChecked: false,
-    wpeSyncStats: null,
-    wpeSyncThresholdHours: 8,
-    syncStatus: {},
-    syncing: false,
-    syncResults: null,
     wpeAuthError: false,
     fleetSummary: null,
-    fleetPlugins: [],
     wpeBackupRunning: false,
     wpeBackupInstallId: null,
     wpeBackupInstallName: null,
@@ -597,7 +578,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, wpeAccounts, startupStatus] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -605,8 +586,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
-        ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
-        ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
         ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.GET_STARTUP_STATUS),
@@ -670,9 +649,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         aiProxy: proxyResult?.proxy ?? null,
         settings: settings ?? null,
         hasLLM,
-        syncStatus: syncStatus ?? {},
-        wpeSyncStats: wpeSyncStatsResult?.stats ?? null,
-        wpeSyncThresholdHours: wpeSyncStatsResult?.thresholdHours ?? 8,
         loading: false,
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
@@ -2225,42 +2201,6 @@ renderTabBar(): React.ReactNode {
     if (this.wpeSyncPollInterval) {
       clearInterval(this.wpeSyncPollInterval);
       this.wpeSyncPollInterval = null;
-    }
-  };
-
-  // Credential Sync methods
-  handleSyncAll = async (): Promise<void> => {
-    this.setState({ syncing: true, syncResults: null });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
-      if (!this.mounted) return;
-
-      const results = result?.results ?? [];
-      this.setState({ syncing: false, syncResults: results });
-
-      // Show toast notification
-      const successCount = results.filter((r: any) => r.success).length;
-      const failCount = results.length - successCount;
-
-      if (toast) {
-        if (failCount === 0 && successCount > 0) {
-          toast({ type: 'success', content: `Successfully synced credentials to ${successCount} site${successCount === 1 ? '' : 's'}` });
-        } else if (failCount > 0 && successCount > 0) {
-          toast({ type: 'error', content: `Synced ${successCount} site${successCount === 1 ? '' : 's'}, ${failCount} failed` });
-        } else if (failCount > 0) {
-          toast({ type: 'error', content: `Failed to sync credentials to ${failCount} site${failCount === 1 ? '' : 's'}` });
-        }
-      }
-
-      // Refresh sync status
-      const syncStatus = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS);
-      if (this.mounted) this.setState({ syncStatus: syncStatus ?? {} });
-    } catch (err) {
-      if (!this.mounted) return;
-      this.setState({ syncing: false, syncResults: [] });
-      if (toast) {
-        toast({ type: 'error', content: 'Failed to sync credentials' });
-      }
     }
   };
 
