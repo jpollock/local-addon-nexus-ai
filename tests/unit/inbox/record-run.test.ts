@@ -78,6 +78,20 @@ describe('recordRunToInbox', () => {
     expect(row.scopeLabel).toBe('2 sites');
   });
 
+  test('findings with no site attribution say so, rather than "0 sites"', () => {
+    recordRunToInbox(store, {
+      agentId: 'security-sentinel',
+      findings: [finding('FS-01')],
+      findingsSites: [],
+    }, 1000);
+
+    const row = store.listOpen().items[0];
+    expect(row.scope).toBe('*');
+    expect(row.scopeLabel).toBe('Site not identified');
+    // "0 sites" would assert the finding affects nothing, which is false.
+    expect(row.scopeLabel).not.toContain('0');
+  });
+
   test('scope is namespaced, never a bare site name', () => {
     recordRunToInbox(store, {
       agentId: 'security-sentinel',

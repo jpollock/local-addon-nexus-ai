@@ -84,10 +84,16 @@ export function recordRunToInbox(
   // No per-finding attribution available. One site is unambiguous; more is not,
   // so the item is fleet-scoped and labelled honestly rather than guessing.
   const sites = run.findingsSites ?? [];
+  // Three distinct cases, and none of them may state something untrue:
+  //   1 site   → name it
+  //   n sites  → "n sites"
+  //   0 sites  → we have findings but no attribution. Say that, do not say "0 sites".
   const scope = sites.length === 1 ? siteScope(sites[0]) : '*';
   const scopeLabel = sites.length === 1
     ? sites[0]
-    : `${sites.length} site${sites.length === 1 ? '' : 's'}`;
+    : sites.length === 0
+      ? 'Site not identified'
+      : `${sites.length} sites`;
 
   for (const f of findings) {
     store.record(findingItem(run.agentId, f, scope, scopeLabel), now);
