@@ -41,4 +41,32 @@ describe('shouldAutoPause', () => {
   test('a different recent failure resets the streak', () => {
     expect(shouldAutoPause([run(1, 'boom'), run(2, 'boom'), run(3, 'other')])).toBe(false);
   });
+
+  test('the most recent N are chosen by time, not by array position (negative case)', () => {
+    // The three newest by time are boom(20), boom(30), different(40).
+    // Since the newest differs, the streak is broken → false.
+    // But array order puts 'different' first, and the last three positions are
+    // all 'boom'. Position-based slicing (without sort) would wrongly return true.
+    const runs = [
+      { agentId: 'a', at: 40, message: 'different' },
+      { agentId: 'a', at: 10, message: 'boom' },
+      { agentId: 'a', at: 20, message: 'boom' },
+      { agentId: 'a', at: 30, message: 'boom' },
+    ];
+    expect(shouldAutoPause(runs)).toBe(false);
+  });
+
+  test('the most recent N are chosen by time, not by array position (positive case)', () => {
+    // The three newest by time are boom(30), boom(40), boom(50) - all identical → true.
+    // But array order puts an unrelated 'different' run last.
+    // Position-based slicing of the last three array positions would include
+    // the different run and wrongly return false.
+    const runs = [
+      { agentId: 'a', at: 30, message: 'boom' },
+      { agentId: 'a', at: 40, message: 'boom' },
+      { agentId: 'a', at: 50, message: 'boom' },
+      { agentId: 'a', at: 10, message: 'different' },
+    ];
+    expect(shouldAutoPause(runs)).toBe(true);
+  });
 });
