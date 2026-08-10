@@ -207,10 +207,23 @@ host content_indexed_at wp_path wp_cli_path
 **`buildSiteRows` must derive that value from real columns** rather than reading one. Selecting a
 `completeness` column would throw at runtime. Two other columns matter and are easy to miss:
 
-- **`host`** already exists — use it for External rows rather than parsing `ssh:<alias>/<site>`.
-  Fall back to parsing the id only when it is null.
-- **`content_indexed_at`** is a direct record of indexing, independent of `IndexRegistry`. Treat
-  either as evidence of searchable content.
+- **`host` exists but does NOT hold the SSH alias — do not use it for External rows.** This
+  bullet previously said the opposite, and Task 2 was built and fixture-tested against it. Its
+  only writer in the codebase is `applyTaxonomyMigration`'s
+  `UPDATE sites SET host = source WHERE host IS NULL` (`GraphService.ts:1474`), so it mirrors
+  `source`. Measured on a real `graph.db`: all 3 external rows read `'external'`, all 331 wpe
+  `'wpe'`, all 35 local `'local'` — **zero rows carry an alias**. `g.host ?? parse(id)` therefore
+  never reaches its fallback and prints "external" as every external row's host name.
+  **Parse the alias out of the id** (`ssh:<alias>` or `ssh:<alias>/<site>`, both real today).
+  A fixture that defaults `host` to `null` hides this — default it to the row's `source`.
+- **`content_indexed_at` is NOT guaranteed to exist.** It is absent from the base schema and
+  `GraphService.initialize()` does not create it; the only creator is
+  `ensureContentIndexedAtColumn`, whose callers are `ExternalContentIndexScheduler` and
+  `nexus host index <alias>` — neither runs while `externalContentIndexAutoEnabled` is false,
+  which is the default. Selecting it unconditionally throws `no such column` (verified) on any
+  machine that never opted in. Guard on `pragma_table_info` and degrade to `NULL`; a read path
+  must not `ALTER` the schema to make its own query work. When present it is a direct record of
+  indexing, independent of `IndexRegistry` — treat either as evidence of searchable content.
 
 `SiteRow.source` is `'local' | 'wpe' | 'external'`. Never use `source != 'local'` anywhere —
 `tests/unit/.../source-semantics.test.ts` forbids it because it silently absorbs future sources.
@@ -228,7 +241,12 @@ const local = (id: string, name: string, status = 'running') => ({ id, name, sta
 const graph = (over: any) => ({
   id: 'g1', source: 'wpe' as const, name: 'install-a', domain: 'a.example.com',
   wp_version: '6.5', php_version: '8.2',
-  host: null, content_indexed_at: null, last_sync_at: 1000, ...over,
+  content_indexed_at: null, last_sync_at: 1000,
+  ...over,
+  // Defaults to the row's own source, because that is what the column holds.
+  // Defaulting it to null lets an implementation that reads `host` for the
+  // alias pass here and print "external" in production.
+  host: over.host ?? over.source ?? 'wpe',
 });
 
 describe('buildSiteRows', () => {
@@ -427,8 +445,9 @@ export function buildSiteRows(input: SiteRowsInput): SiteRowsResult {
       id: g.id,
       name: g.name ?? g.id,
       source,
-      // `host` is a real column; only fall back to parsing the id when it is null.
-      host: source === 'external' ? (g.host ?? hostFromExternalId(g.id)) : null,
+      // From the id, NOT from `g.host` — that column mirrors `source`, so
+      // reading it prints "external" as every external row's host name.
+      host: source === 'external' ? hostFromExternalId(g.id) : null,
       domain: g.domain,
       status: null,
       wpVersion: g.wp_version,
@@ -497,7 +516,9 @@ git commit -m "feat(fleet): build one row per site across all three sources"
 
 **Interfaces:**
 - Consumes: `buildSiteRows` (Task 2).
-- Produces: `GET_SITE_ROWS` returning `{ success, rows, total, counts }`. Tasks 4–6 consume it.
+- Produces: `GET_SITE_ROWS` returning `{ success, rows, total }`. Tasks 4–6 consume it.
+  (This line used to promise a fourth `counts` field. Nothing produces or reads one — the handler
+  below returns three, and Task 4's fixtures destructure three.)
 
 **Context.** Follow the shape of the neighbouring handlers — `GET_DASHBOARD_STATS` (~line 637) is a
 good model, and `safeHandle` + `localLogger` are already in scope. `indexRegistry.listAll()` gives
@@ -531,14 +552,27 @@ different place.
       const allLocal = Object.values(siteData.getSites() ?? {}) as any[];
       const statuses = localServicesBridge.getAllSiteStatuses();
 
-      // No `completeness` column exists — see Task 2. `host` and
-      // `content_indexed_at` do, and buildSiteRows derives the rung from them.
-      // `is_active = 1` is required: nexusHostRemove soft-deletes, and a removed
-      // host must never reappear in a list (CLAUDE.md records this exact bug in
-      // `sites list`, `sites get` and nexusFleetSiteHealth).
+      // `content_indexed_at` is NOT guaranteed to exist — see the schema notes
+      // in Task 2. Selecting it unconditionally throws `no such column` on any
+      // machine that never enabled external content indexing, and the catch
+      // below would then report the ENTIRE fleet as unreadable over one optional
+      // column. Degrade to NULL; IndexRegistry still carries the live signal.
+      const hasIndexedAt = db
+        ? !!(db.prepare(
+            "SELECT COUNT(*) AS c FROM pragma_table_info('sites') WHERE name = 'content_indexed_at'",
+          ).get() as { c: number }).c
+        : false;
+
+      // No `completeness` column exists — see Task 2; buildSiteRows derives the
+      // rung. `is_active = 1` is required: nexusHostRemove soft-deletes, and a
+      // removed host must never reappear in a list (CLAUDE.md records this exact
+      // bug in `sites list`, `sites get` and nexusFleetSiteHealth).
+      // `host` is selected because the row has it, but it is NOT the alias —
+      // buildSiteRows ignores it and parses the id.
       const graphRows = db ? db.prepare(`
-        SELECT id, source, name, domain, wp_version, php_version,
-               host, content_indexed_at, last_sync_at
+        SELECT id, source, name, domain, wp_version, php_version, host,
+               ${hasIndexedAt ? 'content_indexed_at' : 'NULL AS content_indexed_at'},
+               last_sync_at
         FROM sites WHERE source IN ('wpe','external') AND is_active = 1
       `).all() as any[] : [];
 
