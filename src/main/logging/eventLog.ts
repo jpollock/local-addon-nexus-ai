@@ -261,6 +261,15 @@ export class EventLog {
     }
   }
 
+  /**
+   * Update the minimum log level. Takes effect immediately for all subsequent writes.
+   * Wired into the settings-updated callback so a change in Preferences or NEXUS_LOG_LEVEL
+   * does not require a restart.
+   */
+  setMinLevel(level: LogLevelName): void {
+    (this as any).minLevel = level;
+  }
+
   write(e: LogEvent): void {
     try {
       if (LogLevel[e.level] > LogLevel[this.minLevel]) return;

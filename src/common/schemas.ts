@@ -68,6 +68,7 @@ export const UpdateSettingsSchema = z.object({
   chatRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).optional(),
   dockedPanelEnabled: z.boolean().optional(),
   embeddingModel: z.enum(['minilm', 'bge-small']).optional(),
+  logLevel: z.enum(['ERROR', 'WARN', 'INFO', 'DEBUG']).optional(),
 }).strict();
 
 export const PluginSlugSchema = z

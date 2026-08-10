@@ -331,6 +331,8 @@ export interface NexusSettings {
   dockedPanelEnabled?: boolean;
   /** Which embedding model to use for semantic search. Default: 'minilm' (22MB, fast). 'nomic' = 522MB download, better quality. */
   embeddingModel?: 'minilm' | 'bge-small';
+  /** Level the structured event log writes at. NEXUS_LOG_LEVEL overrides it. Default INFO. */
+  logLevel?: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 }
 
 export interface SiteAIConfig {

@@ -38,6 +38,7 @@ import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
 import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing } from './ipc-handlers';
 import { EventLog } from './logging/eventLog';
+import { resolveLogLevel } from './logging/resolveLogLevel';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -473,6 +474,10 @@ export default function main(context: any): void {
   // WPE content index timer — inline interval-based scheduler for indexAllWpeContent.
   // Declared here so the onSettingsUpdated closure can restart/stop it reactively.
   let wpeContentIndexTimer: ReturnType<typeof setInterval> | null = null;
+
+  // EventLog — declared before the async IIFE so the onSettingsUpdated closure can restart
+  // it when the log level changes. Assigned inside the IIFE once AGENTS_DIR is available.
+  let eventLog: EventLog;
   const startWpeContentIndexScheduler = (hours: number) => {
     if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
     wpeContentIndexTimer = setInterval(async () => {
@@ -574,7 +579,9 @@ export default function main(context: any): void {
         const nexusLogRoot = path.join(
           os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'logs',
         );
-        const eventLog = new EventLog({ root: nexusLogRoot });
+        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+        const minLevel = resolveLogLevel(settings ?? undefined, process.env);
+        eventLog = new EventLog({ root: nexusLogRoot, minLevel });
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
         const agentRunner = new AgentRunner(
@@ -1029,6 +1036,13 @@ export default function main(context: any): void {
       buildSiteNames: buildSiteNamesLocal,
       logger: localLogger,
     });
+
+    // Update event log level when settings change.
+    if (eventLog) {
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+      const newLevel = resolveLogLevel(settings ?? undefined, process.env);
+      eventLog.setMinLevel(newLevel);
+    }
 
     // Restart halted-site refresh scheduler with updated interval from settings.
     const newHaltedIntervalHours = (registryStorage.get(STORAGE_KEYS.SETTINGS) as { haltedSiteRefreshIntervalHours?: number } | null)?.haltedSiteRefreshIntervalHours ?? 24;
