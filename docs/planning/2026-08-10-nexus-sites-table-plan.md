@@ -834,10 +834,22 @@ git commit -m "feat(sites): the Sites table, all three host types in one list"
 **Context.** `BulkOperationManager` exists (`src/main/bulk/BulkOperationManager.ts`) with
 `BULK_EXECUTE` / `BULK_STATUS` / `BULK_CANCEL` / `BULK_LIST` / `BULK_PROGRESS` already wired, and
 `BulkOpType = 'reindex' | 'plugin-update' | 'start' | 'stop' | 'health-refresh' | 'setup-ai' |
-'sync-graph'` already covering everything Operations' zone 1 does. **Do not build a second bulk
-path** — per-site plugin updates through this manager are audited, and a parallel path loses that.
+'sync-graph'`. **Do not build a second bulk path** — per-site plugin updates through this manager
+are audited, and a parallel path loses that.
 
-Map zone 1's four buttons: `Refresh metadata` → `sync-graph`, `Index content` → `reindex`.
+**This section used to say that type list "already covers everything Operations' zone 1 does".
+That was false, and it is the reason Task 5 grew.** Zone 1's *Local* buttons (`SYNC_GRAPH_ALL`,
+`INDEX_ALL_AUTO`) do go through this manager. Its *WP Engine* buttons do not — they call
+`WPE_SYNC_ALL` and `INDEX_ALL_FLEET`, which are fleet-wide and take no id list. And every Local
+arm of `executeByType` resolves the id via `resolveSiteObject` → `siteData.getSite`, so a `wpe-`
+or `ssh:` id failed with `Site not found`: **334 of 369 active rows on a real machine.** Routing a
+selection straight at `BULK_EXECUTE` would therefore have shipped a button broken for ~90% of the
+table. `executeByType` now branches on `siteSourceOf(siteId)` first; see
+`src/main/bulk/siteSource.ts` and `src/main/bulk/externalBulkOps.ts`.
+
+Map zone 1's four buttons: `Refresh metadata` → `sync-graph`, `Index content` → `reindex`. That is
+**two** actions, not four — Step 3 below says "the four actions", but the source split disappears
+once the selection carries it, so four buttons collapse to two.
 
 **The behaviour change:** zone 1's buttons act on *every* site of a type; these act on the
 selection. That is intended, and the empty-selection guard is what makes it safe.
