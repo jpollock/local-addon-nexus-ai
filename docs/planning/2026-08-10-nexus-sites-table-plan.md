@@ -950,14 +950,20 @@ Searchable not because of a cap but because the switch is invisible.
 `externalRefreshAutoEnabled` — **copy that row's exact shape**, including how it calls
 `this.saveSetting(...)` (line 236).
 
-**SCHEMA GATE — this one WILL bite you.** I checked: `externalContentIndexAutoEnabled` is declared
-in `src/common/types.ts:353` but appears **zero times** in `src/main/mcp/schemas.ts`.
-`UpdateSettingsSchema` is `.strict()`, so it silently strips any field not listed — the checkbox
-would toggle, the save would report success, and the value would never persist. This is a
-documented recurring trap in this codebase, not a hypothetical.
+**SCHEMA GATE — this one does NOT apply, contrary to what this section used to say.** The claim
+was that `externalContentIndexAutoEnabled` appears "zero times in `src/main/mcp/schemas.ts`".
+That file **does not exist**. `UpdateSettingsSchema` lives in `src/common/schemas.ts`, is
+`.strict()`, and already lists `externalContentIndexAutoEnabled: z.boolean().optional()` (line 73)
+alongside `externalContentIndexIntervalHours`. It is also already covered by
+`tests/unit/common/schemas-settings.test.ts:166` ("external content-index settings survive the
+strict schema"). **No schema change is needed** — which also answers the CLI question below: the
+CLI does not bypass anything, the field was simply already allowed.
 
-So Task 6 must **add `externalContentIndexAutoEnabled` to `UpdateSettingsSchema`** as well as to
-the UI. Prove it round-trips rather than assuming:
+The `.strict()` trap itself is real and recurring; it just is not open here. What IS worth pinning
+is the **range**, since the schema rejects 0 and 999 outright and an unclamped number input would
+fail the entire settings write rather than just that field.
+
+The original instruction, kept for the record:
 
 ```ts
 // tests/unit/mcp/settings-schema.test.ts (add to the existing file if there is one)
@@ -970,9 +976,14 @@ test('externalContentIndexAutoEnabled survives the update schema', () => {
 ```
 
 Watch out: the CLI can set this today via `nexus settings set`, which suggests it must already be
-allowed somewhere. Find out which path the CLI uses before concluding the schema is the only gate —
-if the CLI bypasses `UpdateSettingsSchema`, say so in your report, because that is a second
-inconsistency worth recording even though it is out of scope to fix.
+allowed somewhere. **Resolved: it is.** The CLI does not bypass `UpdateSettingsSchema`; the field
+was already in it. The suspicion was the right instinct and the conclusion drawn from it was wrong.
+
+**The drafted row-action tests below do not work as written.** They assert
+`toContain('Index content')` and `not.toContain('Index content')` over the whole serialized tree,
+but Task 5's bulk bar renders a button with exactly that label on every populated table — so the
+negative case can never pass, and the positive case would pass for a local-only table. Anchor on
+the row action's own `aria-label` (`Index content on <name>`) instead.
 
 - [ ] **Step 1: Write the failing test**
 
