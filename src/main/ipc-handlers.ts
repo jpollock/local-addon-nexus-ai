@@ -5109,6 +5109,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
           // not broadcast a completion indistinguishable from a successful run of zero sites.
           // The UI already disables Run on empty selection, but the CLI and other callers reach this too.
           if (siteNames.length === 0) {
+            runAbortMap.delete(correlationId);
             broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], agentId, siteNames: [], doneCount: 0, failedCount: 0, findingsSites: [], emptySelection: true });
             return;
           }

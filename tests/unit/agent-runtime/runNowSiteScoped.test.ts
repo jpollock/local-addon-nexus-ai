@@ -58,7 +58,7 @@ function registerWithServices(nexusServices: any = {}) {
 
 /**
  * invokeRunNow: drive the real AGENT_RUN_NOW handler and capture the runner.run() calls.
- * Returns the collected runIds from the broadcast.
+ * Returns the collected runIds from the broadcast, plus deps for abort-map inspection.
  */
 async function invokeRunNow(opts: { agent: any; runner: any; siteNames: string[] }) {
   const { agent, runner, siteNames } = opts;
@@ -88,7 +88,7 @@ async function invokeRunNow(opts: { agent: any; runner: any; siteNames: string[]
     // Wait a tick for the IIFE to complete
     await new Promise(resolve => setImmediate(resolve));
 
-    return { runIds: capturedCompletion?.runIds || [], broadcast: capturedCompletion };
+    return { runIds: capturedCompletion?.runIds || [], broadcast: capturedCompletion, deps };
   } finally {
     require('electron').BrowserWindow.getAllWindows = originalBroadcast;
   }
@@ -126,5 +126,8 @@ describe('AGENT_RUN_NOW honours siteScoped', () => {
     expect(runner.run).not.toHaveBeenCalled();
     // Not indistinguishable from a successful run of zero sites.
     expect(out.broadcast).toMatchObject({ emptySelection: true });
+    // The AbortController must be cleaned up — the map is stashed on deps and lives for the process lifetime.
+    const runAbortMap = (out.deps as any).__runAbortMap as Map<string, AbortController>;
+    expect(runAbortMap.has(out.broadcast.runId)).toBe(false);
   });
 });
