@@ -1,10 +1,12 @@
 /**
  * The I/O seam for fleet counting. Everything upstream (`FleetCounts`,
- * `localReconciliation`) is pure and unit-tested; this file is the only place
- * in the fleet module family that touches Local's site store and the
- * better-sqlite3 graph handle, which is why it carries no unit test of its
- * own — there is nothing here to test that isn't either a database mock (not
- * worth building) or already covered by Tasks 1 and 3.
+ * `localReconciliation`) is pure and unit-tested. `collectFleetCounts` itself
+ * still carries no unit test of its own — nothing in it beyond plumbing a
+ * database mock (not worth building) that Tasks 1 and 3 don't already cover.
+ * `sweepOrphanedLocalRows` is the exception: its empty-store circuit breaker
+ * (see below) is real logic guarding against permanent data loss, and is
+ * covered in `tests/unit/fleet/sweep-circuit-breaker.test.ts` against a
+ * minimal in-memory `FleetCountsDeps` mock.
  */
 
 import { computeFleetCounts, FleetCounts } from './FleetCounts';
@@ -55,9 +57,32 @@ export function sweepOrphanedLocalRows(deps: FleetCountsDeps): number {
   const rows = db
     .prepare("SELECT id FROM sites WHERE source = 'local' AND is_active = 1")
     .all() as Array<{ id: string }>;
+  const localStoreIds = Object.keys(deps.getSites() ?? {});
+
+  // Circuit breaker. findOrphanedLocalRows has no threshold of its own — if
+  // localStoreIds is empty, every active source='local' graph row is "orphaned"
+  // in one pass. An empty store CAN be genuine (a user with zero local sites),
+  // in which case refusing here is a false negative: those rows really are
+  // orphans and we leave them stale. But the trade is asymmetric, not close.
+  // Refusing wrongly just leaves stale rows — cosmetic, and self-correcting the
+  // next time the sweep runs against a good read. Sweeping wrongly soft-deletes
+  // (is_active = 0) every local site's graph row below, and GraphService's
+  // cleanupOldData (GraphService.ts, retention sweep) later hard-deletes
+  // is_active=0 rows *and their content* once they age past the retention
+  // window — a single bad read compounds into permanent data loss. So: refuse
+  // to sweep when the store is empty but the graph is not. Deliberately not a
+  // proportional/percentage threshold — an empty store is a specific, legible
+  // shape of a bad read; a percentage cutoff would just be a guess.
+  if (localStoreIds.length === 0 && rows.length > 0) {
+    console.warn(
+      `[sweepOrphanedLocalRows] Refusing to sweep: Local's store reports 0 sites while the graph holds ${rows.length} active local row(s). This looks like a bad read (site data not ready, wrong container, etc.), not a mass deletion — leaving the rows untouched.`,
+    );
+    return 0;
+  }
+
   const orphans = findOrphanedLocalRows(
     rows.map((r) => String(r.id)),
-    Object.keys(deps.getSites() ?? {}),
+    localStoreIds,
   );
 
   // findOrphanedLocalRows does not dedupe its input, and orphans.length feeds
@@ -71,4 +96,32 @@ export function sweepOrphanedLocalRows(deps: FleetCountsDeps): number {
     db.prepare('UPDATE sites SET is_active = 0, updated_at = ? WHERE id = ?').run(Date.now(), id);
   }
   return orphans.length;
+}
+
+export interface OrphanSweepDeps extends FleetCountsDeps {
+  logger: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void };
+}
+
+/**
+ * Startup wiring for the orphan sweep. Calls `sweepOrphanedLocalRows`, logs the
+ * outcome, and swallows any error so a sweep failure can never block addon
+ * startup. `sweepOrphanedLocalRows` (and the pure `findOrphanedLocalRows`
+ * beneath it) has no internal error handling by design — this is its only
+ * catcher, which is also why it is broken out as its own function: the
+ * try/catch and logging are the one piece of this feature that couldn't be
+ * exercised in a test without either invoking Local's real `main()` bootstrap
+ * (impractical — it requires `@getflywheel/local/main`, Electron, and a real
+ * service container) or duplicating the wiring logic inside the test. Extracting
+ * it gives the startup wiring the same "stub the deps, assert the behaviour"
+ * coverage the rest of the fleet module family already gets.
+ */
+export function runOrphanSweep(deps: OrphanSweepDeps): void {
+  try {
+    const swept = sweepOrphanedLocalRows(deps);
+    if (swept > 0) {
+      deps.logger.info(`[NexusAI] Deactivated ${swept} graph rows for deleted local sites`);
+    }
+  } catch (err) {
+    deps.logger.warn('[NexusAI] Local row reconciliation failed:', (err as Error).message);
+  }
 }
