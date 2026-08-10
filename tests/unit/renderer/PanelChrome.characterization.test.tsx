@@ -6,9 +6,11 @@ function makePanel(overrides: Record<string, any> = {}): any {
   return new (DockedPanel as any)({
     open: true,
     size: 'docked',
+    activeTab: 'chat',
     onOpen: jest.fn(),
     onClose: jest.fn(),
     onSetSize: jest.fn(),
+    onSetActiveTab: jest.fn(),
     onNewChat: jest.fn(),
     onToggleSessions: jest.fn(),
     showSessions: false,
@@ -67,5 +69,28 @@ describe('panel chrome — control interactions', () => {
 
     expect(sessionsBtn).toBeDefined();
     expect(sessionsBtn.type).toBe('button');
+  });
+
+  it('segmented control switches tabs', () => {
+    const onSetActiveTab = jest.fn();
+    const panel = makePanel({ activeTab: 'chat', onSetActiveTab });
+    const tree = panel.render();
+
+    // Header: [0] avatar, [1] title stack, [2] segmented control, [3] control cluster
+    const header = tree.props.children[0];
+    const segmentedControl = header.props.children[2];
+    const buttons = segmentedControl.props.children;
+
+    // First button is Insights
+    const insightsBtn = buttons[0];
+    expect(insightsBtn.props['aria-label']).toBe('Insights');
+    insightsBtn.props.onClick();
+    expect(onSetActiveTab).toHaveBeenCalledWith('insights');
+
+    // Second button is Chat
+    const chatBtn = buttons[1];
+    expect(chatBtn.props['aria-label']).toBe('Chat');
+    chatBtn.props.onClick();
+    expect(onSetActiveTab).toHaveBeenCalledWith('chat');
   });
 });

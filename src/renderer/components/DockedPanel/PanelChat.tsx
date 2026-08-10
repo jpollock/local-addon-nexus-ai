@@ -24,6 +24,7 @@ interface UIMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   streaming?: boolean;
+  incomplete?: boolean;  // Message was interrupted; response is partial
   toolCalls?: Array<{
     id: string;
     name: string;
@@ -359,6 +360,7 @@ export class PanelChat extends React.Component<Props, State> {
         id: m.id,
         role: m.role,
         content: m.content,
+        incomplete: m.incomplete,
       }));
       // Restore the DB-persisted action count so persistSession never resets it to 0.
       const actionCount: number = result.session?.actionCount ?? 0;
@@ -523,13 +525,14 @@ export class PanelChat extends React.Component<Props, State> {
       };
 
       const chatMessages: ChatMessage[] = messages
-        .filter((m) => m.role !== 'system' && !m.streaming)
+        .filter((m) => m.role !== 'system')
         .map((m) => ({
           id: m.id,
           sessionId,
           role: m.role,
           content: m.content,
           timestamp: Date.now(),
+          incomplete: m.streaming ? true : undefined,
         }));
 
       console.log('[NexusAI] persistSession — saving', chatMessages.length, 'messages, title:', title);
@@ -696,11 +699,31 @@ export class PanelChat extends React.Component<Props, State> {
           ),
         );
       } else {
-        bubbleElement = React.createElement('div', {
-          style: { ...styles.assistantBubble, whiteSpace: 'normal' as const },
-          className: 'nexus-md',
-          dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) },
-        });
+        bubbleElement = React.createElement(
+          'div',
+          null,
+          React.createElement('div', {
+            style: { ...styles.assistantBubble, whiteSpace: 'normal' as const },
+            className: 'nexus-md',
+            dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) },
+          }),
+          msg.incomplete
+            ? React.createElement(
+                'div',
+                {
+                  style: {
+                    fontSize: 11,
+                    color: 'var(--nxai-card-sub)',
+                    fontStyle: 'italic' as const,
+                    marginTop: 6,
+                    paddingLeft: 12,
+                    borderLeft: '2px solid var(--nxai-card-border)',
+                  },
+                },
+                'Response interrupted',
+              )
+            : null,
+        );
       }
     } else {
       // User bubble — plain text, no markdown
