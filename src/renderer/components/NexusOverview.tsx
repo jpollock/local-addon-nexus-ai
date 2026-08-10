@@ -166,7 +166,7 @@ interface NexusOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'activity' | 'operations' | 'ask' | 'settings' | 'agents';
+  activeTab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents';
   // Chat state lifted here so it survives tab switches (ChatTab remounts but picks these up)
   chatMessages: any[];
   chatSessionId: string;
@@ -226,8 +226,6 @@ interface NexusOverviewState {
   factoryResetRunning: boolean;
   factoryResetDone: boolean;
   factoryResetChecked: boolean;
-  dashboardDraft: string;
-  dashboardPrompt: string | null;
   wpeBannerDismissed: boolean;
   wpeNotConnectedDismissed: boolean;
   credentialRequest: NexusState['credentialConnectRequest'];
@@ -437,8 +435,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     factoryResetRunning: false,
     factoryResetDone: false,
     factoryResetChecked: false,
-    dashboardDraft: '',
-    dashboardPrompt: null,
     wpeBannerDismissed: false,
     wpeNotConnectedDismissed: false,
     credentialRequest: null,
@@ -1552,51 +1548,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
           ),
     );
   }
-  handleDashboardSend = (): void => {
-    const { dashboardDraft } = this.state;
-    if (!dashboardDraft.trim()) return;
-    this.setState({ dashboardPrompt: dashboardDraft, dashboardDraft: '', activeTab: 'ask' });
-  };
-
-  renderAskCard(): React.ReactNode {
-    const { dashboardDraft } = this.state;
-    return React.createElement('div', {
-      style: { ...cardStyle, marginBottom: 24, padding: '14px 18px' },
-    },
-      React.createElement('div', { style: { ...cardTitleStyle, marginBottom: 6 } }, 'Ask Nexus AI'),
-      React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 } },
-        'Ask about your fleet, sites, or plugins.',
-      ),
-      React.createElement('div', { style: { display: 'flex', gap: 8 } },
-        React.createElement('textarea', {
-          value: dashboardDraft,
-          onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => this.setState({ dashboardDraft: e.target.value }),
-          onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleDashboardSend(); }
-          },
-          placeholder: 'e.g. Which sites have ACF installed?',
-          rows: 2,
-          style: {
-            flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: 12,
-            border: '1px solid var(--nxai-card-border, #30363d)',
-            background: 'var(--nxai-code-bg, #1f1f1f)', color: 'var(--nxai-card-text)',
-            fontFamily: 'inherit', resize: 'none' as const, outline: 'none',
-          },
-        }),
-        React.createElement('button', {
-          onClick: () => this.handleDashboardSend(),
-          disabled: !dashboardDraft.trim(),
-          style: {
-            padding: '0 16px', borderRadius: 6, fontSize: 14, fontWeight: 700,
-            background: dashboardDraft.trim() ? '#51BB7B' : 'rgba(107,114,128,0.2)',
-            color: dashboardDraft.trim() ? '#fff' : 'var(--nxai-card-sub, #6b7280)',
-            border: 'none', cursor: dashboardDraft.trim() ? 'pointer' : 'default',
-            fontFamily: 'inherit', alignSelf: 'stretch',
-          },
-        }, '→'),
-      ),
-    );
-  }
 
   renderWpeBanner(): React.ReactNode {
     const { stats, wpeBannerDismissed } = this.state;
@@ -1718,9 +1669,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       this.renderWpeNotConnectedBanner(),
       this.renderWpeBanner(),
 
-      // Ask/Tell quick card
-      this.renderAskCard(),
-
       // Connect AI Tools — MCP connection panel
       this.renderMcpPanel(),
 
@@ -1776,7 +1724,6 @@ renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
     const tabs: { key: NexusOverviewState['activeTab']; label: string }[] = [
       { key: 'overview',     label: 'Dashboard' },
-      { key: 'ask' as const, label: 'Ask/Tell' },
       { key: 'operations',   label: 'Operations' },
       { key: 'activity',     label: 'Activity' },
       { key: 'agents',       label: 'Agents' },
@@ -2454,7 +2401,7 @@ renderTabBar(): React.ReactNode {
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
-      // 'ask' and 'agents' cases handled in render() directly (no stats dependency)
+      // 'agents' case handled in render() directly (no stats dependency)
       default: return this.renderOverviewTab();
     }
   }
@@ -2935,36 +2882,6 @@ renderTabBar(): React.ReactNode {
             style: { flexGrow: 1, overflow: 'auto' as const, display: 'flex', flexDirection: 'column' as const },
           },
             React.createElement(AgentConsoleTab, { electron: this.props.electron }),
-          )
-        : activeTab === 'ask'
-        // Ask/Tell: same flexGrow:1 + overflow:hidden wrapper that all other tabs use,
-        // so ChatTab participates in the flex layout exactly like Overview/Search/etc.
-        ? React.createElement('div', {
-            style: { flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const },
-          },
-            React.createElement('div', {
-              style: {
-                flexShrink: 0, padding: '8px 32px',
-                background: 'rgba(167,139,250,0.06)',
-                borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)',
-                fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', lineHeight: 1.5,
-              },
-            },
-              '💡 Ask/Tell is a quick way to try Nexus AI. For a richer experience with full tool support, use the ',
-              React.createElement('strong', null, 'MCP server'),
-              ' or ',
-              React.createElement('strong', null, 'CLI'),
-              ' with your AI tool of choice.',
-            ),
-            React.createElement(ChatTab, {
-              electron: this.props.electron,
-              initialMessages: this.state.chatMessages,
-              initialSessionId: this.state.chatSessionId,
-              onMessagesChange: (msgs: any[]) => this.setState({ chatMessages: msgs }),
-              onSessionIdChange: (id: string) => this.setState({ chatSessionId: id }),
-              initialPrompt: this.state.dashboardPrompt ?? undefined,
-              onPromptConsumed: () => this.setState({ dashboardPrompt: null }),
-            }),
           )
         : loading
           ? React.createElement('div', {
