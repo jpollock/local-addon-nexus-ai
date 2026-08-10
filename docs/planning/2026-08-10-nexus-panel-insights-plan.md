@@ -17,10 +17,18 @@
   stay byte-identical through Tasks 4 and 5. That is not achievable and was a defect in this
   plan: Task 5 inserts a segmented control into the header, which is a child of an ordered array
   the snapshots capture, so 4 of 5 necessarily change. The design *intends* the Chat view to gain
-  a tab switcher. The rule is therefore: **Task 4 must not change any snapshot. Task 5 may update
-  them, but its diff must contain only the segmented control's addition** — the brand block,
-  existing control cluster, body layout and sessions overlay must all be untouched, and the full
-  snapshot diff goes in its report for review.
+  a tab switcher. **The same error applied to Task 4** and was found the same way: it was told not
+  to change any snapshot while also being told to add a header control, and the contradiction
+  pushed its implementer into reusing an existing conditional slot — which produced a `wide` size
+  no user could reach. A constraint that cannot be satisfied does not get ignored; it gets
+  satisfied in a way that damages the feature.
+
+  The rule is therefore: **Tasks 4 and 5 may each update the panel chrome snapshots, and each
+  one's diff must contain only its own stated change** — Task 4 the control-cluster changes,
+  Task 5 the segmented control. In both cases the brand block, body layout and sessions overlay
+  must be untouched, and the full snapshot diff goes in the report for review. The
+  `collapsed bubble` variant renders no header at all and must stay byte-identical through both;
+  a diff there means something leaked outside the header.
 - **One conversation across all three sizes.** Resizing is a size change, not a different surface.
 - **No raw hex literals in the five panel files** after Task 2. Colours that must flip with the theme become `var(--nxai-*)`; colours that pair with the fixed brand become named constants in `src/common/constants.ts`.
 - **Do not add variables to `theme.ts`.** The ruling is to collapse onto what exists — three background levels become two, three cyan shades become the single brand accent — per review finding 15, "adopt Local's chrome everywhere and keep exactly one accent." If it reads flat on screen, that is a follow-up, not this plan.
