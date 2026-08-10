@@ -5013,6 +5013,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
     // Guard: refuse to run a disabled agent
     if (getAgentSetting(agentId, 'enabled') === false) {
+      emitRunSkip(agentId, 'manual', { allowed: false, reason: 'agent-disabled' }, getEventLog());
       return { error: 'agent-disabled', message: `Agent ${agentId} is disabled` };
     }
 

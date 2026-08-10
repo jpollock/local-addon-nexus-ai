@@ -21,7 +21,7 @@ export interface AgentTriggerSettings {
   eventsEnabled?: boolean;
 }
 
-export type AutoRunKind = 'schedule' | 'event';
+export type AutoRunKind = 'schedule' | 'event' | 'manual';
 
 /**
  * Why an automatic trigger was, or was not, allowed to start an agent.
