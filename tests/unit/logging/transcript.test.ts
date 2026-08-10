@@ -59,4 +59,29 @@ describe('TranscriptWriter', () => {
 
     expect(fs.statSync(file).mode & 0o777).toBe(0o600);
   });
+
+  it('restores 0700 on a transcripts/ directory that already exists with looser permissions', () => {
+    // mkdirSync's `mode` applies only when it CREATES the directory — the identical caveat that
+    // justifies reapplying the file's 0600 above. A pre-existing transcripts/ directory at 0755
+    // must not stay 0755 forever.
+    const dir = path.join(root, 'transcripts');
+    fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+    fs.chmodSync(dir, 0o755);                          // defeat any umask interference
+
+    const w = new TranscriptWriter({ root, runId: 'r_dir_existing' });
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'x' });
+
+    expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+  });
+
+  it('sanitizes a runId containing path traversal so it cannot escape the transcripts directory', () => {
+    const w = new TranscriptWriter({ root, runId: '../../etc/evil' });
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'x' });
+
+    const transcriptsDir = path.join(root, 'transcripts');
+    // The written file must land INSIDE transcripts/, not escape it via the traversal segments.
+    expect(path.dirname(w.path())).toBe(transcriptsDir);
+    expect(fs.existsSync(w.path())).toBe(true);
+    expect(JSON.parse(fs.readFileSync(w.path(), 'utf-8').trim()).content).toBe('x');
+  });
 });
