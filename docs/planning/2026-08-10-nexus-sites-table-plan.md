@@ -508,6 +508,14 @@ the index entries; `SiteNexusSection.tsx:723` defines searchable as `state === '
 empty fleet. Return `success: false` with an empty list; the renderer renders "couldn't read your
 sites", never "you have no sites".
 
+**A local site is always at least `basic`.** Task 2 made local rows derive their rung from the
+metadata passed in, which fixed them reporting "Nothing yet". Finish the job here: a Local site
+exists on the filesystem by definition, so `'nothing'` is never the right answer for one. If a
+local site has no WP version and no index entry, it is still `filesystem` → `'basic'`. Verify
+`buildSiteRows` does this for local rows and fix it there if not — ~113 rows on a real machine
+depend on it, and "Nothing yet" for a site sitting on disk is the same understatement in a
+different place.
+
 - [ ] **Step 1: Add the channel**
 
 ```ts
@@ -542,8 +550,31 @@ sites", never "you have no sites".
           .map((e: any) => e.siteId),
       );
 
+      // Local site objects do NOT have wpVersion/phpVersion at the top level.
+      // I read a real sites.json: the keys are
+      //   name domain path environment xdebugEnabled workspace mysql ports
+      //   hostConnections id localVersion services
+      // PHP lives at services.php.version ('8.2.29'); `domain` is top-level;
+      // and WP version is not there at all — it comes from the graph.
+      //
+      // So: Local's store decides WHICH local sites exist (never the graph —
+      // it keeps rows for deleted ones), and the graph supplies extra facts for
+      // those that happen to have a row. Enrich, do not select.
+      const localGraph = new Map<string, any>(
+        db ? (db.prepare(
+          "SELECT id, wp_version FROM sites WHERE source = 'local' AND is_active = 1"
+        ).all() as any[]).map((r: any) => [r.id, r]) : [],
+      );
+
       const { rows, total } = buildSiteRows({
-        localSites: allLocal.map((s: any) => ({ id: s.id, name: s.name, status: statuses[s.id] })),
+        localSites: allLocal.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          status: statuses[s.id],
+          domain: s.domain ?? null,
+          phpVersion: s.services?.php?.version ?? null,
+          wpVersion: localGraph.get(s.id)?.wp_version ?? null,
+        })),
         graphRows,
         indexedSiteIds,
       });
