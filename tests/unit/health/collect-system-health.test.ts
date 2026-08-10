@@ -115,10 +115,10 @@ describe('collectSystemHealth', () => {
       });
     });
 
-    test('one failed agent -> failing, singular message form', async () => {
+    test('one agent with status error -> failing, singular message form', async () => {
       const deps = healthyDeps({
         getAgents: async () => [
-          { id: 'security-sentinel', lastRunStatus: 'failed', lastRunAt: Date.now() },
+          { id: 'security-sentinel', lastRunStatus: 'error', lastRunAt: Date.now() },
         ],
       });
       const result = await collectSystemHealth(deps);
@@ -128,11 +128,24 @@ describe('collectSystemHealth', () => {
       });
     });
 
-    test('multiple failed agents -> failing, plural message form', async () => {
+    test('one agent with status timeout -> failing, singular message form', async () => {
       const deps = healthyDeps({
         getAgents: async () => [
-          { id: 'security-sentinel', lastRunStatus: 'failed', lastRunAt: Date.now() },
-          { id: 'log-processor', lastRunStatus: 'failed', lastRunAt: Date.now() },
+          { id: 'security-sentinel', lastRunStatus: 'timeout', lastRunAt: Date.now() },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns).toEqual({
+        state: 'failing',
+        reason: 'security-sentinel failed on its last run',
+      });
+    });
+
+    test('multiple failed agents (mix of error and timeout) -> failing, plural message form', async () => {
+      const deps = healthyDeps({
+        getAgents: async () => [
+          { id: 'security-sentinel', lastRunStatus: 'error', lastRunAt: Date.now() },
+          { id: 'log-processor', lastRunStatus: 'timeout', lastRunAt: Date.now() },
         ],
       });
       const result = await collectSystemHealth(deps);
@@ -172,12 +185,22 @@ describe('collectSystemHealth', () => {
     test('a failed agent outranks a never-run agent — failing wins', async () => {
       const deps = healthyDeps({
         getAgents: async () => [
-          { id: 'security-sentinel', lastRunStatus: 'failed', lastRunAt: Date.now() },
+          { id: 'security-sentinel', lastRunStatus: 'error', lastRunAt: Date.now() },
           { id: 'web-analytics', lastRunStatus: null, lastRunAt: null },
         ],
       });
       const result = await collectSystemHealth(deps);
       expect(result.inputs.agentRuns.state).toBe('failing');
+    });
+
+    test('agent with success status -> contributes ok', async () => {
+      const deps = healthyDeps({
+        getAgents: async () => [
+          { id: 'security-sentinel', lastRunStatus: 'success', lastRunAt: Date.now() },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.agentRuns).toEqual({ state: 'ok', reason: null });
     });
   });
 
@@ -336,6 +359,45 @@ describe('collectSystemHealth', () => {
     expect(result.inputs.syncStaleness).toEqual({
       state: 'degraded',
       reason: '1 sites not checked in over a day',
+    });
+  });
+
+  describe('credential signal excludes user-revoked API keys', () => {
+    test('a revoked API key is not treated as broken — excluded from the signal entirely', async () => {
+      const deps = healthyDeps({
+        getCredentialStates: async () => [
+          { name: 'wpe', ok: true }, // active OAuth
+          // A revoked API key would not appear in this list at all — it is
+          // filtered out in the IPC handler's getCredentialStates before being
+          // passed to collectSystemHealth. This test documents that contract.
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.credentials).toEqual({ state: 'ok', reason: null });
+    });
+
+    test('an active API key and a revoked one: only the active appears, no failure', async () => {
+      const deps = healthyDeps({
+        getCredentialStates: async () => [
+          { name: 'wpe', ok: true }, // active API key
+          // The revoked one is not here — the IPC handler filters it out.
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.credentials).toEqual({ state: 'ok', reason: null });
+    });
+
+    test('an errored API key (status not active or revoked) is still broken', async () => {
+      const deps = healthyDeps({
+        getCredentialStates: async () => [
+          { name: 'wpe', ok: false }, // error state (not active, not revoked)
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+      expect(result.inputs.credentials).toEqual({
+        state: 'failing',
+        reason: 'wpe needs reconnecting',
+      });
     });
   });
 });

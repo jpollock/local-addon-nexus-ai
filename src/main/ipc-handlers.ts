@@ -1940,16 +1940,24 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           });
         },
         // OAuth connections carry 'active' | 'revoked' | 'error'; API-key
-        // connections carry 'active' | 'revoked'. Anything not active is broken.
+        // connections carry 'active' | 'revoked'. A user-disconnected key
+        // ('revoked') is not a failure — exclude it from the signal. Only
+        // 'active' (ok) and 'error' (broken) are relevant.
         getCredentialStates: async () => {
           const mgr = deps.nexusServices?.credentialManager;
           if (!mgr) throw new Error('credential manager not available');
           const oauth = mgr.listConnections().map((c: any) => ({
+            // c.provider is the OAuth provider name (e.g. 'wpe'), not a leaky field.
             name: c.provider, ok: c.status === 'active',
           }));
-          const apiKeys = mgr.listApiKeyConnections().map((c: any) => ({
-            name: c.label || c.provider, ok: c.status === 'active',
-          }));
+          const apiKeys = mgr.listApiKeyConnections()
+            // A revoked API key is not a problem — the user chose to disconnect it.
+            .filter((c: any) => c.status !== 'revoked')
+            .map((c: any) => ({
+              // c.provider is safe to log; c.label is not (it can be a full ARN or key name).
+              // Use provider instead; it is a well-known string like 'wpe' or 'anthropic'.
+              name: c.provider, ok: c.status === 'active',
+            }));
           return [...oauth, ...apiKeys];
         },
         getEventStats: async () => ({ failed: stats.failed, pending: stats.pending }),

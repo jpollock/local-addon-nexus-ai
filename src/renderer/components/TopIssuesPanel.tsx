@@ -14,7 +14,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { Issue } from '../../common/types';
+import type { Issue, SystemHealth } from '../../common/types';
 
 interface TopIssuesPanelProps {
   electron: any;
@@ -27,6 +27,7 @@ interface TopIssuesPanelState {
   loading: boolean;
   error: string | null;
   actionInProgress: string | null; // Issue ID being acted upon
+  systemHealth: SystemHealth | null; // Rolled-up health from four signals
 }
 
 // -- Styles --
@@ -155,15 +156,20 @@ export class TopIssuesPanel extends React.Component<TopIssuesPanelProps, TopIssu
     loading: true,
     error: null,
     actionInProgress: null,
+    systemHealth: null,
   };
 
   componentDidMount(): void {
     this.mounted = true;
     this.fetchIssues();
+    this.fetchSystemHealth();
 
     if (this.props.autoRefresh) {
       this.refreshTimer = setInterval(
-        () => this.fetchIssues(),
+        () => {
+          this.fetchIssues();
+          this.fetchSystemHealth();
+        },
         this.props.refreshInterval!,
       );
     }
@@ -214,6 +220,26 @@ export class TopIssuesPanel extends React.Component<TopIssuesPanelProps, TopIssu
         error: err.message || 'Failed to detect issues',
         loading: false,
       });
+    }
+  };
+
+  fetchSystemHealth = async (): Promise<void> => {
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.EVENTS_GET_STATS,
+      );
+
+      if (!this.mounted) return;
+
+      if (result.success && result.stats?.systemHealth) {
+        this.setState({
+          systemHealth: result.stats.systemHealth,
+        });
+      }
+    } catch (err: any) {
+      // Swallow errors — systemHealth is advisory, not critical.
+      // If it fails, the empty state falls back to describing what
+      // detectIssues actually checked (the old behavior).
     }
   };
 
@@ -322,12 +348,23 @@ export class TopIssuesPanel extends React.Component<TopIssuesPanelProps, TopIssu
   }
 
   renderEmptyState(): React.ReactNode {
+    const { systemHealth } = this.state;
+    // Defer to systemHealth when available, so this panel never contradicts
+    // the pill's overall state. If systemHealth is unavailable (fetch failed
+    // or hasn't completed yet), fall back to describing what detectIssues
+    // actually checked: the event queue and last_sync_at.
+    const label = systemHealth?.overall === 'ok'
+      ? 'All Systems Healthy'
+      : systemHealth
+        ? 'No issues in event queue or site sync'
+        : 'No issues detected';
+
     return React.createElement(
       'div',
       { style: emptyStateStyle },
       React.createElement('div', { style: emptyIconStyle }, '✓'),
-      React.createElement('div', { style: emptyTextStyle }, 'All Systems Healthy'),
-      React.createElement('div', { style: emptySubtextStyle }, 'No issues detected'),
+      React.createElement('div', { style: emptyTextStyle }, label),
+      React.createElement('div', { style: emptySubtextStyle }, 'Event queue and site sync checked'),
     );
   }
 

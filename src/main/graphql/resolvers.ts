@@ -1625,8 +1625,11 @@ export function createResolvers(context: ResolverContext) {
        * populations briefly disagree — the exact numerator/denominator
        * mismatch this whole task exists to remove. `counts` is exposed as
        * its own field so a caller gets the canonical numbers without that
-       * risk; it is computed unconditionally, before the twinService check,
-       * because collectFleetCounts doesn't depend on the twin service.
+       * risk.
+       *
+       * collectFleetCounts is called INSIDE the try guard (not before it), so
+       * a throwing siteData service turns into {success:false,…} rather than a
+       * raw GraphQL error.
        *
        * `twinScope` (below) is the ONE shared scope object for every
        * twin-derived figure — totalSites, sitesWithFullData, completeness,
@@ -1641,13 +1644,18 @@ export function createResolvers(context: ResolverContext) {
        * different populations that happen, in the common case, to agree.
        */
       nexusFleetSummary: () => {
-        const counts = collectFleetCounts({
-          getSites: () => services.siteData.getSites() as Record<string, unknown>,
-          getDb: () => services.graphService?.getDb?.() as never,
-        });
         const twinScopeLabel =
           'sites on this Mac (twin read-model), plus WP Engine and external installs (graph)';
         try {
+          // collectFleetCounts is called INSIDE the try, so a throwing
+          // siteData service returns {success:false,…} rather than crashing.
+          // Defensive call — siteData.getSites() can throw if the service is
+          // partially initialized. Optional-chain the method itself (not just
+          // the service) to match the early-exit branch below.
+          const counts = collectFleetCounts({
+            getSites: () => services.siteData?.getSites?.() ?? {},
+            getDb: () => services.graphService?.getDb?.() as never,
+          });
           if (!services.twinService) {
             return {
               success: false,
@@ -1764,6 +1772,12 @@ export function createResolvers(context: ResolverContext) {
             twinScope: { measured: twins.length, label: twinScopeLabel },
           };
         } catch (err: any) {
+          // counts is inside the try, so on this path it's unavailable — return
+          // a zeroed-out object. This is the "couldn't compute anything" path.
+          const emptyCounts = {
+            local: { running: 0, halted: 0, total: 0, scope: 'unknown' },
+            installs: { wpe: 0, external: 0, total: 0, scope: 'unknown' },
+          };
           return {
             success: false,
             error: err.message,
@@ -1775,7 +1789,7 @@ export function createResolvers(context: ResolverContext) {
             staleCount: 0,
             neverScannedCount: 0,
             recentActivityCount: 0,
-            counts,
+            counts: emptyCounts,
             twinScope: { measured: 0, label: twinScopeLabel },
           };
         }

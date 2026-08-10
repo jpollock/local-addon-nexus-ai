@@ -269,8 +269,13 @@ export class EventStatsCards extends React.Component<EventStatsCardsProps, Event
     const healthLabel = this.getHealthLabel();
     const healthIcon = this.getHealthIcon();
 
-    const pending = stats?.pending ?? 0;
-    const failed = stats?.failed ?? 0;
+    // systemHealth.reasons is already ordered most-severe-first (from rollUpSystemHealth).
+    const reasons = stats?.systemHealth?.reasons ?? [];
+    const badgeText = reasons.length > 0
+      ? reasons.length === 1
+        ? reasons[0]
+        : `${reasons[0]} (+${reasons.length - 1} more)`
+      : 'No issues detected';
 
     return React.createElement(
       'div',
@@ -305,11 +310,7 @@ export class EventStatsCards extends React.Component<EventStatsCardsProps, Event
         React.createElement(
           'span',
           null,
-          failed > 0
-            ? `${failed} failed event${failed === 1 ? '' : 's'}`
-            : pending > 0
-            ? `${pending} pending event${pending === 1 ? '' : 's'}`
-            : 'No issues detected',
+          badgeText,
         ),
       ),
     );

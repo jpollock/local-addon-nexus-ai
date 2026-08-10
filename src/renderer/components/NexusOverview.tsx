@@ -955,49 +955,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
-  renderEmbeddingCard(stats: DashboardStats): React.ReactNode {
-    const { embedding } = stats;
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Embedding Model'),
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
-        React.createElement('span', { style: dotStyle(embedding.ready ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_WARNING) }),
-        React.createElement('span', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, embedding.model),
-        embedding.quantized
-          ? React.createElement('span', { style: tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND) }, 'QUANTIZED')
-          : null,
-      ),
-      React.createElement('div', { style: subStatStyle },
-        `${embedding.dimensions}d vectors`,
-        React.createElement('br'),
-        `${embedding.maxSequenceLength} max tokens`,
-        React.createElement('br'),
-        embedding.ready ? 'Model loaded' : 'Loading...',
-      ),
-    );
-  }
-
-  renderIndexCard(stats: DashboardStats): React.ReactNode {
-    const { index } = stats;
-    const totalIndexed = index.localIndexed + index.wpeIndexed;
-    const totalSites = index.localTotal + index.wpeTotal;
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Context Index'),
-      React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } },
-        `${totalIndexed}`,
-        React.createElement('span', { style: { fontSize: '14px', fontWeight: 400, color: 'var(--nxai-card-sub)' } },
-          ` / ${totalSites} sites`,
-        ),
-      ),
-      React.createElement('div', { style: subStatStyle },
-        React.createElement('span', null, `${index.localIndexed} local · ${index.wpeIndexed} remote`),
-        React.createElement('br'),
-        `${index.totalDocuments.toLocaleString()} documents`,
-        React.createElement('br'),
-        `Last indexed: ${index.lastIndexed ? formatTimeAgo(index.lastIndexed) : 'Never'}`,
-      ),
-    );
-  }
-
   renderGraphCard(): React.ReactNode {
     const { wpeSyncStats } = this.state;
     const total = wpeSyncStats?.total ?? 0;

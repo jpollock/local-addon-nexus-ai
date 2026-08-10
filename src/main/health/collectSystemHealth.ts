@@ -54,7 +54,10 @@ export async function collectSystemHealth(deps: SystemHealthDeps): Promise<Syste
   const agentRuns = await guard(async () => {
     const agents = await deps.getAgents();
     if (agents.length === 0) return { state: 'unknown', reason: 'No agents reported a run' };
-    const failed = agents.filter((a) => a.lastRunStatus === 'failed');
+    // AgentResult.status is typed 'success' | 'error' | 'timeout' (src/main/agent-sdk/types.ts:153).
+    // Treat both 'error' and 'timeout' as failing — the old literal 'failed' is not in that union
+    // and could never fire.
+    const failed = agents.filter((a) => a.lastRunStatus === 'error' || a.lastRunStatus === 'timeout');
     if (failed.length > 0) {
       return {
         state: 'failing',

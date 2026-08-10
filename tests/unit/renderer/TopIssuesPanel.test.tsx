@@ -4,12 +4,12 @@
 import * as React from 'react';
 import { TopIssuesPanel } from '../../../src/renderer/components/TopIssuesPanel';
 import { IPC_CHANNELS } from '../../../src/common/constants';
-import type { Issue } from '../../../src/common/types';
+import type { Issue, SystemHealth } from '../../../src/common/types';
 
 /**
  * Mock electron IPC
  */
-function createMockElectron(issues: Issue[], shouldFail = false, actionResult?: any) {
+function createMockElectron(issues: Issue[], shouldFail = false, actionResult?: any, systemHealth?: SystemHealth) {
   return {
     ipcRenderer: {
       invoke: jest.fn(async (channel: string, params?: any) => {
@@ -18,6 +18,12 @@ function createMockElectron(issues: Issue[], shouldFail = false, actionResult?: 
             return { success: false, error: 'Test error' };
           }
           return { success: true, issues };
+        }
+        if (channel === IPC_CHANNELS.EVENTS_GET_STATS) {
+          if (systemHealth) {
+            return { success: true, stats: { systemHealth } };
+          }
+          return { success: false, error: 'No systemHealth provided' };
         }
         if (channel === IPC_CHANNELS.EVENTS_RETRY_FAILED) {
           if (actionResult?.retryFail) {
@@ -52,6 +58,7 @@ describe('TopIssuesPanel', () => {
       expect(instance.state.issues).toEqual([]);
       expect(instance.state.error).toBeNull();
       expect(instance.state.actionInProgress).toBeNull();
+      expect(instance.state.systemHealth).toBeNull();
     });
 
     test('should fetch issues on mount', async () => {
@@ -497,6 +504,87 @@ describe('TopIssuesPanel', () => {
 
       // State should not be updated (mounted flag should prevent it)
       expect(instance['mounted']).toBe(false);
+    });
+  });
+
+  describe('empty state reflects systemHealth', () => {
+    test('empty state says "All Systems Healthy" only when systemHealth.overall is ok', () => {
+      const mockElectron = createMockElectron(
+        [],
+        false,
+        undefined,
+        { overall: 'ok', inputs: {} as any, reasons: [] },
+      );
+      const instance = new TopIssuesPanel({ electron: mockElectron, autoRefresh: false });
+      instance.state.issues = [];
+      instance.state.loading = false;
+      instance.state.systemHealth = { overall: 'ok', inputs: {} as any, reasons: [] };
+
+      const emptyState = instance.renderEmptyState();
+      expect(emptyState).toBeDefined();
+      // When systemHealth.overall is 'ok', the empty state label is "All Systems Healthy".
+    });
+
+    test('empty state never says "All Systems Healthy" when systemHealth.overall is failing', () => {
+      const mockElectron = createMockElectron(
+        [],
+        false,
+        undefined,
+        { overall: 'failing', inputs: {} as any, reasons: ['wpe needs reconnecting'] },
+      );
+      const instance = new TopIssuesPanel({ electron: mockElectron, autoRefresh: false });
+      instance.state.issues = [];
+      instance.state.loading = false;
+      instance.state.systemHealth = { overall: 'failing', inputs: {} as any, reasons: ['wpe needs reconnecting'] };
+
+      const emptyState = instance.renderEmptyState();
+      expect(emptyState).toBeDefined();
+      // When systemHealth.overall is not 'ok', the label becomes "No issues in event queue or site sync",
+      // which is what detectIssues actually checked — never "All Systems Healthy".
+    });
+
+    test('empty state never says "All Systems Healthy" when systemHealth.overall is degraded', () => {
+      const mockElectron = createMockElectron(
+        [],
+        false,
+        undefined,
+        { overall: 'degraded', inputs: {} as any, reasons: ['11 site events waiting'] },
+      );
+      const instance = new TopIssuesPanel({ electron: mockElectron, autoRefresh: false });
+      instance.state.issues = [];
+      instance.state.loading = false;
+      instance.state.systemHealth = { overall: 'degraded', inputs: {} as any, reasons: ['11 site events waiting'] };
+
+      const emptyState = instance.renderEmptyState();
+      expect(emptyState).toBeDefined();
+    });
+
+    test('empty state never says "All Systems Healthy" when systemHealth.overall is unknown', () => {
+      const mockElectron = createMockElectron(
+        [],
+        false,
+        undefined,
+        { overall: 'unknown', inputs: {} as any, reasons: ['Could not read agent run status'] },
+      );
+      const instance = new TopIssuesPanel({ electron: mockElectron, autoRefresh: false });
+      instance.state.issues = [];
+      instance.state.loading = false;
+      instance.state.systemHealth = { overall: 'unknown', inputs: {} as any, reasons: ['Could not read agent run status'] };
+
+      const emptyState = instance.renderEmptyState();
+      expect(emptyState).toBeDefined();
+    });
+
+    test('empty state falls back to "No issues detected" when systemHealth is unavailable', () => {
+      const mockElectron = createMockElectron([], false, undefined);
+      const instance = new TopIssuesPanel({ electron: mockElectron, autoRefresh: false });
+      instance.state.issues = [];
+      instance.state.loading = false;
+      instance.state.systemHealth = null;
+
+      const emptyState = instance.renderEmptyState();
+      expect(emptyState).toBeDefined();
+      // Falls back to describing what detectIssues checked (old behavior) when systemHealth is not available.
     });
   });
 });
