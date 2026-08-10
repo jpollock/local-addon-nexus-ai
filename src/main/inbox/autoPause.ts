@@ -10,7 +10,13 @@ import type { AgentRunRow } from '../agent-runtime/AgentStateStore';
  * it were stuck. Closing that gap is this function's whole job.
  */
 export function trailingFailures(runs: AgentRunRow[]): FailureRun[] {
-  const newestFirst = [...runs].sort((a, b) => b.finishedAt - a.finishedAt);
+  // `id` is a monotonic autoincrement, so it settles same-millisecond ties
+  // deterministically. Without it, a success and a failure stamped in the same
+  // millisecond could scan in either order, and the order decides whether the
+  // streak breaks.
+  const newestFirst = [...runs].sort(
+    (a, b) => b.finishedAt - a.finishedAt || b.id - a.id,
+  );
   const out: FailureRun[] = [];
   for (const r of newestFirst) {
     if (r.status === 'success') break;

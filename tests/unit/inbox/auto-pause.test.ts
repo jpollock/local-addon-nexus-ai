@@ -58,4 +58,21 @@ describe('shouldPauseAgent', () => {
       row(3, 'timeout', 'slow'), row(2, 'timeout', 'slow'), row(1, 'timeout', 'slow'),
     ])).toBe(true);
   });
+
+  test('an empty run list does not pause and does not throw', () => {
+    expect(shouldPauseAgent([])).toBe(false);
+  });
+
+  test('fewer runs than the threshold does not pause', () => {
+    expect(shouldPauseAgent([row(2, 'error', 'boom'), row(1, 'error', 'boom')])).toBe(false);
+  });
+
+  test('a same-millisecond success and failure resolve deterministically', () => {
+    // Both stamped at the same finishedAt; `id` decides which is newer.
+    // The success (id 2) is newer, so there is no trailing failure at all.
+    const a = { ...row(1, 'error', 'boom'), finishedAt: 5000 };
+    const b = { ...row(2, 'success'),       finishedAt: 5000 };
+    expect(trailingFailures([a, b])).toEqual([]);
+    expect(trailingFailures([b, a])).toEqual([]);   // input order must not matter
+  });
 });
