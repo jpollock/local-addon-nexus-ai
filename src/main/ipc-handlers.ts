@@ -269,7 +269,7 @@ async function withSiteRunning<T>(
   }
 }
 
-import { canAutoRunWith, AutoRunKind, AutoRunDecision } from './agent-runtime/auto-run-gate';
+import { canAutoRunWith, AutoRunKind, AutoRunDecision, SkipTrigger } from './agent-runtime/auto-run-gate';
 import type { CadenceSettings } from './agent-runtime/schedule';
 import { newRunId } from './logging/runId';
 import type { EventLog } from './logging/eventLog';
@@ -342,7 +342,7 @@ function getEventLog(): EventLog | undefined {
  */
 export function emitRunSkip(
   agentId: string,
-  kind: AutoRunKind,
+  kind: SkipTrigger,
   decision: AutoRunDecision,
   log?: EventLog,
 ): void {

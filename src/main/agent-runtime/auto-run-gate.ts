@@ -21,7 +21,16 @@ export interface AgentTriggerSettings {
   eventsEnabled?: boolean;
 }
 
-export type AutoRunKind = 'schedule' | 'event' | 'manual';
+export type AutoRunKind = 'schedule' | 'event';
+
+/**
+ * Trigger kind recorded in a run.skip event.
+ *
+ * Wider than AutoRunKind — includes 'manual' for Run Now refusals, which are not automatic
+ * triggers and cannot be passed to canAutoRunWith (whose ternary is only total over the two
+ * automatic kinds).
+ */
+export type SkipTrigger = AutoRunKind | 'manual';
 
 /**
  * Why an automatic trigger was, or was not, allowed to start an agent.

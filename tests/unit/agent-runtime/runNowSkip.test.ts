@@ -7,6 +7,13 @@
 // — that returns an error object and writes nothing, so a user pressing Run Now on a disabled
 // agent produces no evidence at all. This test verifies that the guard now emits `run.skip` with
 // `trigger: 'manual'` before returning the error.
+//
+// TYPE-LEVEL GUARANTEE: AutoRunKind is 'schedule' | 'event' only. SkipTrigger extends it with
+// 'manual', but canAutoRun() and canAutoRunWith() accept only AutoRunKind. Attempting to call
+// canAutoRun(agentId, 'manual') is a compile-time error. Verified via temporary test file that
+// produced: "error TS2345: Argument of type '"manual"' is not assignable to parameter of type
+// 'AutoRunKind'." This prevents the latent bug where a 'manual' trigger would fall into the
+// else branch of canAutoRunWith's ternary and incorrectly check eventsEnabled.
 
 class MockIpcMain {
   handlers = new Map<string, Function>();
