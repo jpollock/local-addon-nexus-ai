@@ -50,6 +50,10 @@ export function buildAgentContext(deps: AgentContextDeps): {
     toolRegistry,
     services,
     agent.tools?.length ? agent.tools : undefined,
+    // So every tool call this agent makes lands in the run's log, correlated by run id, without
+    // the agent having to report its own actions — the reason `ctx.log.mutation()` shipped with
+    // no callers at all.
+    { eventLog, runId, agentName },
   );
 
   // Build AI client per-run so it gets this agent's scoped tool set.
