@@ -5,6 +5,7 @@ import { AgentAILoopError } from '../agent-sdk/types';
 import type { NexusToolProvider, ToolEventContext } from './NexusToolProvider';
 import { estimateCostUsd } from '../logging/modelPricing';
 import type { TranscriptWriter } from '../logging/transcript';
+import { randomUUID } from 'crypto';
 
 interface StreamResult {
   content: string;
@@ -130,11 +131,15 @@ export class AgentAIClient implements AIClient {
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < maxTurns; turn++) {
-      const startedAt = Date.now();
+      // FIX 2: Generate a per-call id to pair prompt and response entries
+      const callId = randomUUID();
       this.transcript?.append({
         turn: turn + 1, role: 'prompt', model: config.model,
         content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+        callId,
       });
+      // FIX 4: Move startedAt to immediately before the provider call so dur= excludes the transcript write
+      const startedAt = Date.now();
       let response;
       try {
         response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
@@ -145,6 +150,7 @@ export class AgentAIClient implements AIClient {
       this.emitLlmCall(config.model, turn + 1, startedAt, response.usage);
       this.transcript?.append({
         turn: turn + 1, role: 'response', model: config.model, content: response.content,
+        callId,
       });
 
       if (response.toolCalls.length === 0) {
@@ -199,11 +205,15 @@ export class AgentAIClient implements AIClient {
       // API key lives there when useLocalGateway=true.
       const forcedConfig = { ...this.config, forceTool: '__output__' };
       const signal = new AbortController().signal;
-      const startedAt = Date.now();
+      // FIX 2: Generate a per-call id to pair prompt and response entries
+      const callId = randomUUID();
       this.transcript?.append({
         turn: 1, role: 'prompt', model: forcedConfig.model,
         content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+        callId,
       });
+      // FIX 4: Move startedAt to immediately before the provider call
+      const startedAt = Date.now();
       let response;
       try {
         response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
@@ -214,6 +224,7 @@ export class AgentAIClient implements AIClient {
       this.emitLlmCall(forcedConfig.model, 1, startedAt, response.usage);
       this.transcript?.append({
         turn: 1, role: 'response', model: forcedConfig.model, content: response.content,
+        callId,
       });
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
@@ -240,11 +251,15 @@ export class AgentAIClient implements AIClient {
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < 5; turn++) {
-      const startedAt = Date.now();
+      // FIX 2: Generate a per-call id to pair prompt and response entries
+      const callId = randomUUID();
       this.transcript?.append({
         turn: turn + 1, role: 'prompt', model: this.config.model,
         content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+        callId,
       });
+      // FIX 4: Move startedAt to immediately before the provider call
+      const startedAt = Date.now();
       let response;
       try {
         response = await collectStream(this.provider.streamChat(messages, tools, this.config, signal));
@@ -255,6 +270,7 @@ export class AgentAIClient implements AIClient {
       this.emitLlmCall(this.config.model, turn + 1, startedAt, response.usage);
       this.transcript?.append({
         turn: turn + 1, role: 'response', model: this.config.model, content: response.content,
+        callId,
       });
 
       const outputCall = response.toolCalls.find(c => c.name === '__output__');

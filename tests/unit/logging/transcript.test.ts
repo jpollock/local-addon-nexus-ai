@@ -84,4 +84,163 @@ describe('TranscriptWriter', () => {
     expect(fs.existsSync(w.path())).toBe(true);
     expect(JSON.parse(fs.readFileSync(w.path(), 'utf-8').trim()).content).toBe('x');
   });
+
+  // FIX 1: Redaction tests
+  it('masks credential-shaped content (sk- vendor key and DB_PASSWORD)', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_redact' });
+    w.append({
+      turn: 1, role: 'prompt', model: 'claude-opus-5',
+      content: 'Check wp-config.php: sk-ant-api03-abcd1234 and define("DB_PASSWORD", "MySecret123")',
+    });
+
+    const file = path.join(root, 'transcripts', 'r_redact.jsonl');
+    const line = fs.readFileSync(file, 'utf-8').trim();
+    const entry = JSON.parse(line);
+
+    expect(entry.content).not.toContain('sk-ant-api03-abcd1234');
+    expect(entry.content).not.toContain('MySecret123');
+    expect(entry.content).toContain('[REDACTED]');
+    expect(entry.content).toContain('Check wp-config.php'); // surrounding prose survives
+  });
+
+  it('masks credential-shaped model names', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_model' });
+    w.append({ turn: 1, role: 'prompt', model: 'sk-sneaky-model-name', content: 'test' });
+
+    const file = path.join(root, 'transcripts', 'r_model.jsonl');
+    const entry = JSON.parse(fs.readFileSync(file, 'utf-8').trim());
+
+    expect(entry.model).not.toContain('sk-sneaky');
+    expect(entry.model).toBe('[REDACTED]');
+  });
+
+  it('leaves non-credential content unmasked', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_clean' });
+    w.append({ turn: 1, role: 'prompt', model: 'claude-opus-5', content: 'Scan acfprod for outdated plugins' });
+
+    const file = path.join(root, 'transcripts', 'r_clean.jsonl');
+    const entry = JSON.parse(fs.readFileSync(file, 'utf-8').trim());
+
+    expect(entry.content).toBe('Scan acfprod for outdated plugins');
+    expect(entry.model).toBe('claude-opus-5');
+  });
+
+  // FIX 2: Sequencing and pairing tests
+  it('assigns monotonically increasing seq to each entry', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_seq' });
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'first' });
+    w.append({ turn: 1, role: 'response', model: 'm', content: 'second' });
+    w.append({ turn: 2, role: 'prompt', model: 'm', content: 'third' });
+
+    const file = path.join(root, 'transcripts', 'r_seq.jsonl');
+    const lines = fs.readFileSync(file, 'utf-8').trim().split('\n');
+    const entries = lines.map(l => JSON.parse(l));
+
+    expect(entries[0].seq).toBe(1);
+    expect(entries[1].seq).toBe(2);
+    expect(entries[2].seq).toBe(3);
+  });
+
+  it('adds ISO timestamp to each entry', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_time' });
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'x' });
+
+    const file = path.join(root, 'transcripts', 'r_time.jsonl');
+    const entry = JSON.parse(fs.readFileSync(file, 'utf-8').trim());
+
+    expect(entry.at).toBeDefined();
+    expect(new Date(entry.at).toISOString()).toBe(entry.at); // valid ISO string
+  });
+
+  it('preserves callId to pair prompt and response even when interleaved', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_pair' });
+    const call1 = 'call-1-uuid';
+    const call2 = 'call-2-uuid';
+
+    // Simulate Promise.all: two prompts, then two responses in reverse order
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'p1', callId: call1 });
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'p2', callId: call2 });
+    w.append({ turn: 1, role: 'response', model: 'm', content: 'r2', callId: call2 }); // call2 finishes first
+    w.append({ turn: 1, role: 'response', model: 'm', content: 'r1', callId: call1 });
+
+    const file = path.join(root, 'transcripts', 'r_pair.jsonl');
+    const entries = fs.readFileSync(file, 'utf-8').trim().split('\n').map(l => JSON.parse(l));
+
+    const call1Entries = entries.filter(e => e.callId === call1);
+    const call2Entries = entries.filter(e => e.callId === call2);
+
+    expect(call1Entries).toHaveLength(2);
+    expect(call1Entries[0].content).toBe('p1');
+    expect(call1Entries[1].content).toBe('r1');
+
+    expect(call2Entries).toHaveLength(2);
+    expect(call2Entries[0].content).toBe('p2');
+    expect(call2Entries[1].content).toBe('r2');
+  });
+
+  // FIX 3: Budget and truncation tests
+  it('stops appending past the budget and writes one truncation marker', () => {
+    const smallBudget = 500;
+    const w = new TranscriptWriter({ root, runId: 'r_budget' }, smallBudget);
+
+    // Write entries until we exceed the budget
+    const largeContent = 'x'.repeat(200);
+    for (let i = 0; i < 10; i++) {
+      w.append({ turn: i + 1, role: 'prompt', model: 'm', content: largeContent });
+    }
+
+    const file = path.join(root, 'transcripts', 'r_budget.jsonl');
+    const raw = fs.readFileSync(file, 'utf-8');
+    const lines = raw.trim().split('\n');
+    const entries = lines.map(l => JSON.parse(l));
+
+    // Should have stopped before 10 entries
+    expect(entries.length).toBeLessThan(10);
+
+    // Last entry should be the truncation marker
+    const last = entries[entries.length - 1];
+    expect(last.role).toBe('truncated');
+    expect(last.content).toContain('Transcript truncated');
+    expect(last.content).toMatch(/\d+ entries dropped/);
+
+    // File should be under the budget
+    expect(Buffer.byteLength(raw, 'utf-8')).toBeLessThan(smallBudget + 200); // +200 for the marker itself
+  });
+
+  it('does not write a truncation marker when under budget', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_no_truncate' });
+    w.append({ turn: 1, role: 'prompt', model: 'm', content: 'small' });
+
+    const file = path.join(root, 'transcripts', 'r_no_truncate.jsonl');
+    const entries = fs.readFileSync(file, 'utf-8').trim().split('\n').map(l => JSON.parse(l));
+
+    expect(entries.every(e => e.role !== 'truncated')).toBe(true);
+  });
+
+  it('reports the entry that triggered truncation as dropped', () => {
+    const smallBudget = 300;
+    const w = new TranscriptWriter({ root, runId: 'r_count' }, smallBudget);
+
+    const content = 'x'.repeat(100);
+    // First few should succeed, then one will trigger truncation
+    for (let i = 0; i < 10; i++) {
+      w.append({ turn: i + 1, role: 'prompt', model: 'm', content });
+    }
+
+    const file = path.join(root, 'transcripts', 'r_count.jsonl');
+    const lines = fs.readFileSync(file, 'utf-8').trim().split('\n');
+    const marker = JSON.parse(lines[lines.length - 1]);
+
+    expect(marker.role).toBe('truncated');
+    // The marker reports the entry that triggered it as dropped (count = 1 at marker-write time)
+    expect(marker.content).toContain('1 entries dropped');
+  });
+
+  it('never throws when redaction or sequencing logic fails', () => {
+    const w = new TranscriptWriter({ root, runId: 'r_robust' });
+    // Pathological input should not crash
+    expect(() => {
+      w.append({ turn: 1, role: 'prompt', model: 'm', content: ' ￿' });
+    }).not.toThrow();
+  });
 });
