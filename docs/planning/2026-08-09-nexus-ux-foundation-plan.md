@@ -1021,26 +1021,50 @@ const INPUT_ORDER: (keyof SystemHealthInputs)[] = [
   'agentRuns', 'syncStaleness', 'credentials', 'eventQueue',
 ];
 
+const KNOWN_STATES: ReadonlySet<string> = new Set<string>(SEVERITY);
+
+/**
+ * A state outside the four literals means the producer is broken or has drifted.
+ * It must read as `unknown` — never be skipped.
+ *
+ * This is not defensive padding. Without it, `SEVERITY.find(s => states.includes(s))`
+ * only fails safe when ALL FOUR states are unrecognised: one malformed state beside
+ * three `ok`s falls through to `ok`, and the pill reports healthy while an input is
+ * unreadable — the exact defect this module exists to eliminate. The collector in
+ * Task 9 feeds this from IPC and service data, so an out-of-union value is a live
+ * possibility, not a contrived cast.
+ */
+function normalizeState(state: HealthState): HealthState {
+  return KNOWN_STATES.has(state) ? state : 'unknown';
+}
+
 export function rollUpSystemHealth(inputs: SystemHealthInputs): SystemHealth {
-  const states = INPUT_ORDER.map((k) => inputs[k].state);
+  const states = INPUT_ORDER.map((k) => normalizeState(inputs[k].state));
 
   // `ok` is last in SEVERITY, so it wins only when every input is ok. An input
   // that could not be read reports `unknown` and drags the pill off green — it
   // is never treated as "fine".
   const overall = SEVERITY.find((s) => states.includes(s)) ?? 'unknown';
 
+  // Normalised here too, so a malformed signal's reason still surfaces rather
+  // than vanishing along with its state.
   const reasons: string[] = [];
   for (const severity of SEVERITY) {
     if (severity === 'ok') continue;
-    for (const key of INPUT_ORDER) {
+    INPUT_ORDER.forEach((key, i) => {
+      if (states[i] !== severity) return;
       const signal = inputs[key];
-      if (signal.state === severity && signal.reason) reasons.push(signal.reason);
-    }
+      reasons.push(signal.reason || `${key} reported an unreadable state`);
+    });
   }
 
   return { overall, inputs, reasons };
 }
 ```
+
+Three tests beyond the six above are required, because the six cannot fail on these paths:
+a malformed state beside three `ok`s must yield `unknown`; that signal's reason must appear in
+`reasons`; and two inputs at the **same** severity must come back in `INPUT_ORDER` order.
 
 - [ ] **Step 4: Run test to verify it passes**
 
