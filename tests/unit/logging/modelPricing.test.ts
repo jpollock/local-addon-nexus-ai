@@ -32,4 +32,13 @@ describe('estimateCostUsd', () => {
   it('carries the date the prices were accurate', () => {
     expect(PRICES_AS_OF).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
+
+  it('prices gpt-4o-mini as mini, never as gpt-4o', () => {
+    // Both prefixes match the string "gpt-4o-mini". Without longest-prefix-wins, the shorter one
+    // can win and every mini call is logged at roughly 16x its real rate — a cost figure that is
+    // wrong in the expensive direction and indistinguishable from a right one.
+    const mini = estimateCostUsd('gpt-4o-mini', { inputTokens: 1_000_000 });
+    const full = estimateCostUsd('gpt-4o', { inputTokens: 1_000_000 });
+    expect(mini).toBeLessThan(full!);
+  });
 });
