@@ -97,4 +97,89 @@ describe('llm.call', () => {
     );
     await expect(client.run('hello')).resolves.toBe('ok');
   });
+
+  it('run() with an explicit model override logs the override, not the constructor model', async () => {
+    // The two things a wrong `config` reference could confuse: config.model vs opts.model.
+    // Pinning this directly is cheaper than inferring it from cost math.
+    const { lines, log } = fakeLog();
+    const client = new AgentAIClient(
+      fakeProvider({ type: 'token', text: 'ok' }, { type: 'done', stopReason: 'end_turn' }),
+      config, toolProvider, undefined, undefined,
+      { eventLog: log, runId: 'r_test', agentName: 'a' },
+    );
+    await client.run('hello', { model: 'some-other-model' });
+
+    const calls = lines.filter(l => l.event === 'llm.call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].fields.model).toBe('some-other-model');
+  });
+});
+
+describe('generateObject llm events', () => {
+  it('noTools/forced-tool branch emits one llm.call reporting the forced config model and turn 1', async () => {
+    // Same fake shape AgentAIClient.generateObject.test.ts already uses for a forced __output__
+    // call — reused rather than invented, per the coordinator's note.
+    const { lines, log } = fakeLog();
+    const provider = {
+      async *streamChat() {
+        yield { type: 'tool_call_end', id: 'c1', name: '__output__', arguments: { verdict: 'clean' } };
+      },
+    } as any;
+    const client = new AgentAIClient(provider, config, toolProvider, undefined, undefined,
+      { eventLog: log, runId: 'r_test', agentName: 'a' });
+    await client.generateObject({
+      prompt: 'test',
+      schema: { type: 'object', properties: { verdict: { type: 'string' } }, required: ['verdict'] },
+      noTools: true,
+    });
+
+    const calls = lines.filter(l => l.event === 'llm.call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].fields).toMatchObject({ model: 'claude-opus-5', turn: 1 });
+  });
+
+  it('tools-allowed loop emits llm.call per turn with 1-based numbering', async () => {
+    const { lines, log } = fakeLog();
+    let call = 0;
+    const provider = {
+      async *streamChat() {
+        call++;
+        if (call === 1) {
+          // A non-output tool call, so the loop takes a second turn before finishing.
+          yield { type: 'tool_call_end', id: 't1', name: 'fleet_sql', arguments: {} };
+          yield { type: 'done', stopReason: 'tool_use' };
+        } else {
+          yield { type: 'tool_call_end', id: 'c1', name: '__output__', arguments: { verdict: 'clean' } };
+          yield { type: 'done', stopReason: 'tool_use' };
+        }
+      },
+    } as any;
+    const client = new AgentAIClient(provider, config, toolProvider, undefined, undefined,
+      { eventLog: log, runId: 'r_test', agentName: 'a' });
+    await client.generateObject({
+      prompt: 'test',
+      schema: { type: 'object', properties: { verdict: { type: 'string' } }, required: ['verdict'] },
+    });
+
+    expect(lines.filter(l => l.event === 'llm.call').map(l => l.fields.turn)).toEqual([1, 2]);
+  });
+
+  it('a provider error emits llm.error at WARN, rethrows, and emits no llm.call', async () => {
+    const { lines, log } = fakeLog();
+    const client = new AgentAIClient(
+      fakeProvider({ type: 'error', message: 'rate limited' }),
+      config, toolProvider, undefined, undefined,
+      { eventLog: log, runId: 'r_test', agentName: 'a' },
+    );
+    await expect(client.generateObject({
+      prompt: 'test',
+      schema: { type: 'object', properties: {}, required: [] },
+    })).rejects.toThrow(/rate limited/);
+
+    const errors = lines.filter(l => l.event === 'llm.error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].level).toBe('WARN');
+    expect(errors[0].message).toMatch(/rate limited/);
+    expect(lines.filter(l => l.event === 'llm.call')).toHaveLength(0);
+  });
 });
