@@ -1679,6 +1679,40 @@ Nothing automated can judge these. Run them in Local against the dev fleet:
 - [ ] Dismissing an item and re-running the sweep leaves it dismissed.
 - [ ] With Nexus closed during a scheduled run, items appear on next open.
 
+## Residuals after the whole-branch review — open, not fixed
+
+The final review found 2 Critical and 8 Important defects; the Criticals and the
+reachability/honesty ones were fixed (see `git log`). These remain open and are the next
+engineer's list. They are ranked.
+
+1. **No retention, no cap, and `failureCode` hashes raw error text.** `InboxStore` has no
+   `DELETE`, no prune and no age policy. `failureCode()` hashes the error message, and real
+   messages carry ports, paths, ids and timestamps — so each variant mints a **new permanent
+   `problem` row** *and* breaks `shouldAutoPause`'s identical-message requirement, so the agent
+   keeps running and keeps minting. **This is the one input that falsifies the design's
+   volume-agnosticism claim, and it is unguarded.** Normalising the message before hashing, plus
+   a retention sweep, is the fix.
+2. **`seenCount` inflates on a manual multi-site run.** `AGENT_RUN_NOW` loops `runner.run()`
+   once per site, and the write now lives in `AgentRunner`, so a fleet-scoped failure item
+   increments once per site — "seen 12 times" from a single click over 12 sites.
+3. **"Approve" records a decision and executes nothing.** Deliberate — the spec grants no new
+   execution authority — but the label implies otherwise. Either route it through
+   `SentinelExecutor` (with its `isOperationAllowed` gate intact) or rename it.
+4. **`know` items count as pending.** `pendingBySource` and `total` do not filter by kind, so
+   informational findings inflate "N actions need your review" and each needs a decision to clear.
+5. **`AgentWorkspace.renderApprovalsTab` gates on one population and lists another** — the count
+   comes from the inbox, the list from `activityEvents`. After a restart it can render the header,
+   "Select all", and zero cards.
+6. **Nothing outside the Inbox shows an agent is auto-paused.** `getAgentDerivedStatus` returns
+   `'disabled'` only for `!settings.enabled`, so a paused agent reads as healthy and scheduled
+   in the Agents hub while never running.
+7. **Site attribution is lost on the fallback path.** `AgentRunner` does not pass `findingsSites`
+   (the old manual handler did, from `parseRunOutcomes`), so a run with run-level `findings` and
+   no `sites` map now scopes to "Site not identified" where it previously named the site.
+8. **`countsByKind()` is computed, sent over IPC, held in state — and never rendered.** Group
+   headers use `g.rows.length`, the truncated page count, so at 250 open items the header reads
+   "Needs a decision · 100".
+
 ## Known limitations to record, not fix here
 
 - **`scope` uses `name:<siteName>`, not a stable site id.** Names collide across sources (CLAUDE.md), so a Local site and a WPE install with the same name would share inbox items. The namespace prefix means resolving names to ids later will not silently merge anything in the meantime.

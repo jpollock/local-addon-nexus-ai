@@ -112,10 +112,18 @@ Two consequences to hold onto:
 
 ### B. Production moves to the main process
 
-`ipc-handlers.ts:5419` already holds everything needed — `findings`, `plan`, `summary`,
-`findingsSites`, `siteNames`, `agentId` — immediately before it broadcasts `AGENT_RUN_COMPLETE`.
-Inbox items are written there, on the same `graphService.getDb()` connection that carries
+Inbox items are written in **`AgentRunner.run()`**, immediately after the existing
+`this.stateStore.recordRun(result)`, on the same `graphService.getDb()` connection that carries
 `agent_runs`, with `InboxStore` constructed beside `AgentStateStore` (`src/main/index.ts:667`).
+
+> **Corrected after the whole-branch review.** This section originally named
+> `ipc-handlers.ts:5419`, inside the `AGENT_RUN_NOW` handler. That is the **manual "Run Now"**
+> path only. Scheduled runs go `AgentScheduler.ts:43 → runner.run(agent)` and event runs go
+> `index.ts:718`/`:726`; neither reaches that handler. Built as first specified, a cron sweep
+> that found problems overnight would have written nothing and auto-pause would only have
+> advanced when a human clicked Run Now three times — falsifying the entire premise above.
+> `AgentRunner.run()` is the one point every trigger path reaches. The error survived all nine
+> tasks because each task's fixtures assumed what this document asserted.
 
 The renderer's event-minting block in `NexusOverview.tsx` stops being the source of truth. It may
 keep feeding the Activity ledger; it no longer decides what needs a decision.
@@ -131,17 +139,22 @@ too large to send to the renderer is still a finding worth recording.
 |---|---|---|---|
 | Needs a decision | `decide` | Findings awaiting approval, one item per distinct finding | yes |
 | Something is stuck | `problem` | `aggregateFailures` output — agent failures only | yes |
-| Worth knowing | `know` | Nothing yet | **no** |
+| Worth knowing | `know` | SDK findings with `severity: 'info'` or `category: 'informational'` | yes, if an agent emits them |
 
 Two of those need saying plainly, because both look like bugs otherwise.
 
-**"Worth knowing" will be empty.** `FindingSev` is `'critical' | 'high' | 'medium'`
-(`SentinelTypes.ts:1`) — there is no informational severity, so no current producer can raise a
-`know` item. The prototype's examples for the group ("traffic down 13%", "6 broken links appeared
-this week") come from a Web Analytics agent and a Site Health agent that do not exist. The group is
-still built, because the prototype already hides empty groups
-(`.filter(g => g.items.length > 0)`) — so an empty one is invisible, and the slot is ready when
-such an agent lands. Do not invent a producer to fill it.
+**"Worth knowing" is populated only if an agent emits informational findings.**
+
+> **Corrected after the whole-branch review.** This paragraph originally said the group could
+> never be populated, reasoning from `FindingSev = 'critical' | 'high' | 'medium'`
+> (`SentinelTypes.ts:1`). That is the **renderer's** type. The SDK finding type has both
+> `severity: 'info'` and `category: 'informational'`, so the producer exists and informational
+> findings were silently landing in "Needs a decision". They now map to `know`.
+
+The prototype's examples for the group ("traffic down 13%", "6 broken links appeared this week")
+come from a Web Analytics agent and a Site Health agent that do not exist, so the group may still
+be empty in practice. Empty groups are hidden (`.filter(g => g.rows.length > 0)`), so that costs
+nothing. Do not invent a producer to fill it.
 
 **"Something is stuck" covers agent failures, not fleet blockers.** The prototype also shows
 "Meridian has been stopped for 6 days" and "44 WP Engine sites haven't been looked inside" in this
@@ -253,8 +266,23 @@ production data this spec has already declined to guess at.
 
 - `NexusOverview.tsx`'s `fetchAll` uses a **positional** `Promise.all` destructuring. Specs 4 and 5
   both touch it; a careless merge silently misaligns every variable after the insertion point.
-- `AgentStore.Finding` is `{ [key: string]: any }` — untyped. `SentinelTypes.Finding` is the real
-  shape and the one carrying the check code that section A depends on.
+- **There are three `Finding` types and only one of them is what production passes.**
+  `AgentStore.Finding` is `{ [key: string]: any }` — untyped. `SentinelTypes.Finding`
+  (`{ id, sev, title, plain }`) is the **renderer's** shape. What actually arrives at the
+  main-process write is the SDK finding, `src/main/agent-sdk/types.ts:170`:
+  `{ id, severity, category?, title, description?, site?, evidence? }`.
+
+  > **Corrected after the whole-branch review.** This note originally called
+  > `SentinelTypes.Finding` "the real shape". Built on that, the mapper read `f.sev` and
+  > `f.plain` — both permanently `undefined` against real data — and never mapped `evidence`
+  > at all, so every real inbox item would have rendered as a bare title with no detail, no
+  > severity and an evidence disclosure that never appeared. The mapper now reads the SDK
+  > shape with the renderer shape as fallback. **Any new test fixture must be SDK-shaped**;
+  > renderer-shaped fixtures are exactly what hid this through nine task reviews.
+
+  Note also that the SDK type has `severity: 'info'` and `category: 'informational'`, which the
+  renderer type does not. Section C's claim that "Worth knowing" has no possible producer was
+  therefore wrong; informational findings now map to `kind: 'know'`.
 - The dedup key's `scope` component must be a stable target identifier, not a display string. Site
   names collide across sources (`goldenecomm`, `jpp0413p`, `myloop`, `psbtest2`, `testjppstg` each
   exist as both a WPE install and a Local site — see CLAUDE.md), so a name-keyed scope would merge
