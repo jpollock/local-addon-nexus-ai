@@ -16,6 +16,7 @@ import { getAIProvider } from './ai/getAIProvider';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
+import { localDay } from './logging/eventLog';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -342,8 +343,9 @@ function getEventLog(): EventLog | undefined {
  */
 
 /**
- * The last skip reason emitted for each agent, so a steady state is stated once rather than
- * every tick. Keyed by agentId. Cleared only on process restart (bounded by agent count).
+ * The last skip reason emitted for each agent per day, so a steady state is stated once rather
+ * than every tick, while guaranteeing each day's log file contains at least one line.
+ * Keyed by `agentId:YYYY-MM-DD`. Cleared only on process restart (bounded by agent count × days).
  */
 const lastSkipReason = new Map<string, string>();
 
@@ -363,13 +365,17 @@ export function emitRunSkip(
 ): void {
   if (decision.allowed) return;
 
-  // Emit on transition only: the first refusal for an agent, or when the reason changes.
-  // Without this, three disabled agents on 15-minute cadences produce ~288 identical lines
-  // a day in a log file the design tells you to `tail -f`.
-  const lastReason = lastSkipReason.get(agentId);
+  // Emit on transition: the first refusal for an agent on a given day, or when the reason changes.
+  // Keyed by day so each log file (nexus-YYYY-MM-DD.log) contains exactly one line per agent per
+  // reason — a user on Thursday asking "why didn't my agent run today" finds the answer in
+  // today's file, not only in Monday's. Without day-keying, an agent disabled on Monday emits
+  // one line Monday and zero lines every day after, while it goes on refusing every fifteen minutes.
+  const day = localDay(new Date());
+  const key = `${agentId}:${day}`;
+  const lastReason = lastSkipReason.get(key);
   if (lastReason === decision.reason) return;
 
-  lastSkipReason.set(agentId, decision.reason);
+  lastSkipReason.set(key, decision.reason);
 
   // "The agent didn't run" is the first thing a user reports — before this, a refused
   // scheduled or event-triggered run produced zero bytes anywhere. write() never throws.

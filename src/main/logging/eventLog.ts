@@ -316,10 +316,11 @@ export class EventLog {
   private append(file: string, line: string): void {
     try {
       const dir = path.dirname(file);
-      // Create directory if not already cached, OR if it was cached but no longer exists
-      // (handles external removal). Check existence only when cached to avoid the syscall
-      // on every append for uncached paths.
-      if (!this.ensured.has(dir) || (this.ensured.has(dir) && !fs.existsSync(dir))) {
+      // Create directory if not cached OR if cached but externally removed. Trades two
+      // write syscalls (mkdirSync + chmodSync) for one or two cheap stat calls (existsSync).
+      // The second half runs only when cached (steady state), re-verifying the directory still
+      // exists so external removal is detected and recovered rather than staying quiet.
+      if (!this.ensured.has(dir) || !fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
         this.ensured.add(dir);
       }

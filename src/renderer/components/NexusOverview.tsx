@@ -18,6 +18,7 @@ import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayPanel } from './AIGatewayPanel';
+import { localDay } from './localDay';
 import { LoadingSpinner } from './LoadingSpinner';
 import { SystemTab } from './SystemTab';
 import { SettingsTab } from './SettingsTab';
@@ -521,7 +522,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         const mm = now.getMinutes().toString().padStart(2, '0');
         // Local time, not UTC — the time is local (getHours), so the date must be too.
         // Mixing them made the date and time disagree for seven hours a day in PDT.
-        const day = now.toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
+        // Use localDay() with its ICU guard, not raw toLocaleDateString().
+        const day = localDay(now);
         const cleanCount = payload.doneCount - (payload.failedCount || 0);
         const findingsCount = payload.findingsSites?.length || 0;
         const sub = findingsCount > 0

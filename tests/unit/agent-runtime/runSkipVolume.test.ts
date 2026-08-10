@@ -90,4 +90,33 @@ describe('run.skip volume reduction', () => {
     emitRunSkip('agent-one', 'schedule', decision, mockLog);
     expect(writeCalls).toHaveLength(2); // still 2
   });
+
+  it('emits once per day for the same agent and reason (day-keyed deduplication)', () => {
+    // Use fake timers to control time
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-10T10:00:00-07:00')); // Sunday 10am PDT
+
+    const decision: AutoRunDecision = { allowed: false, reason: 'agent-disabled' };
+
+    // First refusal on Sunday - should emit
+    emitRunSkip('test-agent', 'schedule', decision, mockLog);
+    expect(writeCalls).toHaveLength(1);
+
+    // Same refusal 2 hours later on Sunday - should NOT emit
+    jest.setSystemTime(new Date('2026-08-10T12:00:00-07:00'));
+    emitRunSkip('test-agent', 'schedule', decision, mockLog);
+    expect(writeCalls).toHaveLength(1); // still 1
+
+    // Cross midnight into Monday - same reason should emit again (new day's log file)
+    jest.setSystemTime(new Date('2026-08-11T02:00:00-07:00')); // Monday 2am PDT
+    emitRunSkip('test-agent', 'schedule', decision, mockLog);
+    expect(writeCalls).toHaveLength(2); // Monday's file gets its line
+
+    // Same reason later Monday - should NOT emit
+    jest.setSystemTime(new Date('2026-08-11T10:00:00-07:00'));
+    emitRunSkip('test-agent', 'schedule', decision, mockLog);
+    expect(writeCalls).toHaveLength(2); // still 2
+
+    jest.useRealTimers();
+  });
 });
