@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { agentStore, AgentSettings, AgentCredentialDecl } from './AgentStore';
 import { IPC_CHANNELS } from '../../../common/constants';
+import type { NexusSettings } from '../../../common/types';
 import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
 import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
 import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
@@ -53,6 +54,8 @@ interface SettingsState {
   /** Non-null while the picker is open — edits happen here first; Save commits, Cancel discards. */
   scopeDraftSelection: Set<string> | null;
   driftDismissed: boolean;
+  /** Global settings, loaded once on mount to read logLevel for the override control. */
+  globalSettings: NexusSettings | null;
 }
 
 const CADENCE_OPTIONS = [
@@ -137,6 +140,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     scopeExpanded: false,
     scopeDraftSelection: null,
     driftDismissed: false,
+    globalSettings: null,
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -147,6 +151,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     this.unsubscribe = () => agentStore.unsubscribe(update);
 
     this.loadScopeSites();
+    this.loadGlobalSettings();
 
     // Load Google connection status if this agent uses Google credentials
     if (this.googleDecl()) {
@@ -169,6 +174,14 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
   /** The agent's Google declaration, if it has one. Single source for both the gate and scopes. */
   private googleDecl(): AgentCredentialDecl | undefined {
     return (this.props.credentials ?? []).find(c => c.provider === 'google');
+  }
+
+  private async loadGlobalSettings() {
+    if (!this.props.electron?.ipcRenderer) return;
+    try {
+      const settings = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS);
+      this.setState({ globalSettings: settings ?? null });
+    } catch { /* Local not running */ }
   }
 
   private async loadGoogleStatus() {
@@ -437,6 +450,25 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     this.updateSettings({ cadence: next.value, cadenceSetAt: Date.now() });
   }
 
+  private cycleLogLevel() {
+    const LOG_LEVEL_OPTIONS: Array<'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | undefined> = [
+      undefined, 'ERROR', 'WARN', 'INFO', 'DEBUG',
+    ];
+    const current = this.state.settings.logLevel;
+    const idx = LOG_LEVEL_OPTIONS.indexOf(current);
+    const nextIdx = (idx + 1) % LOG_LEVEL_OPTIONS.length;
+    this.updateSettings({ logLevel: LOG_LEVEL_OPTIONS[nextIdx] });
+  }
+
+  private formatLogLevel(): string {
+    const agentLevel = this.state.settings.logLevel;
+    const globalLevel = this.state.globalSettings?.logLevel ?? 'INFO';
+    if (agentLevel === undefined) {
+      return `Inherit (${globalLevel})`;
+    }
+    return agentLevel;
+  }
+
   private getRunSummary(): string {
     const { settings } = this.state;
     if (!settings.enabled) return 'Disabled — not running';
@@ -677,6 +709,46 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
       ),
       // Connections card — only for agents that declare Google credentials
       !!this.googleDecl() && this.renderConnectionsCard(),
+
+      // Observability card — transcripts toggle and log level override
+      this.renderCard(
+        React.createElement('div', null,
+          React.createElement('div', { style: { fontSize: 14.5, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 16 } }, 'Observability'),
+
+          // Transcripts toggle
+          React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 18 } },
+            React.createElement(ToggleSwitch, {
+              checked: settings.transcripts ?? false,
+              onChange: (v) => this.updateSettings({ transcripts: v }),
+            }),
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)', marginBottom: 3 } }, 'Write transcripts'),
+              React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)', lineHeight: 1.5 } },
+                'Records the full prompt and response of every model call this agent makes. Prompts carry site content, findings, and whatever the agent puts in them — this is off by default and per-agent rather than global for that reason. Transcripts are redacted with the same masking as the logs, kept 3 days, and capped per run, but redaction is a backstop, not a guarantee.',
+              ),
+            ),
+          ),
+
+          // Log level override
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)', marginBottom: 3 } }, 'Log level'),
+              React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)' } },
+                'Override the global log level for this agent. Useful for raising one agent to DEBUG while the rest stay at INFO, or lowering a noisy agent to ERROR.',
+              ),
+            ),
+            React.createElement('button', {
+              onClick: () => this.cycleLogLevel(),
+              style: {
+                background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
+                borderRadius: 7, padding: '5px 12px', fontSize: 12.5, color: 'var(--ag-text-primary)',
+                cursor: 'pointer', fontWeight: 500,
+              },
+            }, this.formatLogLevel()),
+          ),
+        ),
+        !settings.enabled,
+      ),
 
       // Danger zone — remove agent
       React.createElement('div', {
