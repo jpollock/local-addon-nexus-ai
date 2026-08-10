@@ -5569,12 +5569,12 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const counts = inboxStore.countsByKind();
       const pendingBySource = inboxStore.pendingBySource();
 
-      // Which agents among the open items are currently auto-paused?
-      // Only check the sources that actually have pending items.
+      // Derive from pendingBySource, not from `items` — listOpen() returns only
+      // the first page (INBOX_PAGE_SIZE), so a paused agent whose items all fall
+      // beyond it would silently get no resume action.
       const pausedSources: string[] = [];
       if (agentStateStore) {
-        const sources = new Set<string>(items.map((item: InboxItem) => item.source));
-        for (const source of sources) {
+        for (const source of Object.keys(pendingBySource)) {
           if (isAutoPaused(agentStateStore, source)) {
             pausedSources.push(source);
           }
@@ -5604,13 +5604,31 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
   safeHandle(IPC_CHANNELS.INBOX_DECIDE, async (
     _e: any,
-    { id, decision, status }: { id: number; decision: string; status: 'dismissed' | 'done' },
+    payload: { id: number; decision: string; status: 'dismissed' | 'done' } | undefined,
   ) => {
     try {
       const inboxStore = deps.nexusServices?.inboxStore;
       if (!inboxStore) {
         return { success: false, error: 'Inbox store not available' };
       }
+
+      const id = payload?.id;
+      const decision = payload?.decision;
+      const status = payload?.status;
+
+      if (typeof id !== 'number' || !Number.isFinite(id)) {
+        return { success: false, error: `Invalid id: ${String(id)}` };
+      }
+      if (typeof decision !== 'string') {
+        return { success: false, error: `Invalid decision: ${String(decision)}` };
+      }
+      if (status !== 'dismissed' && status !== 'done') {
+        // The annotation is erased at runtime and this value crosses a process
+        // boundary. An unknown status would make the row invisible to every
+        // query while leaving it in the table.
+        return { success: false, error: `Invalid status: ${String(status)}` };
+      }
+
       inboxStore.decide(id, decision, status);
       return { success: true };
     } catch (err) {
@@ -5619,12 +5637,18 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     }
   });
 
-  safeHandle(IPC_CHANNELS.INBOX_REOPEN, async (_e: any, { id }: { id: number }) => {
+  safeHandle(IPC_CHANNELS.INBOX_REOPEN, async (_e: any, payload: { id: number } | undefined) => {
     try {
       const inboxStore = deps.nexusServices?.inboxStore;
       if (!inboxStore) {
         return { success: false, error: 'Inbox store not available' };
       }
+
+      const id = payload?.id;
+      if (typeof id !== 'number' || !Number.isFinite(id)) {
+        return { success: false, error: `Invalid id: ${String(id)}` };
+      }
+
       inboxStore.reopen(id);
       return { success: true };
     } catch (err) {
@@ -5633,12 +5657,18 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     }
   });
 
-  safeHandle(IPC_CHANNELS.AGENT_RESUME, async (_e: any, { agentId }: { agentId: string }) => {
+  safeHandle(IPC_CHANNELS.AGENT_RESUME, async (_e: any, payload: { agentId: string } | undefined) => {
     try {
       const agentStateStore = deps.nexusServices?.agentStateStore;
       if (!agentStateStore) {
         return { success: false, error: 'Agent state store not available' };
       }
+
+      const agentId = payload?.agentId;
+      if (typeof agentId !== 'string' || !agentId) {
+        return { success: false, error: `Invalid agentId: ${String(agentId)}` };
+      }
+
       resumeAgent(agentStateStore, agentId);
       return { success: true };
     } catch (err) {
