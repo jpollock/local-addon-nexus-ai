@@ -1119,7 +1119,15 @@ capabilities unreachable for the whole gap between the specs."
 - [ ] An indexed external host reads `Searchable`.
 - [ ] Selecting nothing leaves every bulk action visibly disabled.
 - [ ] A bulk action affects only the ticked rows.
-- [ ] Factory Reset, Reset Content Index, Database Health and Housekeeping are still reachable.
+- [ ] **A bulk action on a WP Engine row and on an external row actually completes.** The remote
+      adapters are unit-tested against fakes only; nothing here proves a real SSH or CAPI round
+      trip succeeds from this surface.
+- [ ] **Bulk progress still appears** — `BulkOperationsPanel` moved from Operations to below the
+      Sites table, and it is the only readout for `BULK_EXECUTE`.
+- [ ] **The per-row `Index content` action on an external row indexes only that site**, not every
+      site on the connection.
+- [ ] Factory Reset, Reset Content Index, Database Health, Housekeeping **and SSH Diagnostics**
+      are still reachable (five, not four).
 - [ ] Whether a 367-row table is actually usable. `DECISIONS.md` is candid that this is "agency
       furniture"; nothing automated can judge it.
 
@@ -1129,3 +1137,26 @@ capabilities unreachable for the whole gap between the specs."
   `--nxai-accent` and uses it for the table only; the sweep collides with spec 3's panel migration.
 - **Operations still exists** as a shell. Spec 6 deletes it.
 - **`collectFleetCounts` has no unit test of its own** (its pure parts do). Unchanged here.
+
+### Found during execution — ranked follow-ups
+
+1. **`SYSTEM_WPE_STATUS` reads `last_sync_at` as seconds; it is milliseconds.**
+   `ipc-handlers.ts:508` compares against a `cutoffSec` (~1.79e9) while the column holds ~1.79e12,
+   so **every** install counts `fresh` and `stale` is permanently 0; it then returns
+   `maxSyncAt * 1000`, i.e. the year 58578. Its only consumer is `SystemTab`, which Task 7
+   unmounted — so the bug is now unreachable, not fixed. Fix it or delete the channel with the
+   component.
+2. **`SystemTab.tsx` and `FleetCompletenessWidget.tsx` are now orphaned components.** Nothing
+   renders either after Task 7. Deleting them also strands `SYSTEM_WPE_STATUS` (above). Left in
+   place because removing components plus their IPC channels and tests is its own reviewable
+   change, and spec 6 may want `FleetCompletenessWidget`'s shape.
+3. **`INDEX_ALL_FLEET` is registered twice** — `ipc/handlers/bulk.ts:126` and
+   `ipc/handlers/wpe-sync.ts:353`. Only one wins, silently, and they do different things (the
+   first accepts a `siteIds` list and goes through `BulkOperationManager`; the second takes no
+   arguments). Unrelated to this spec but adjacent to Task 5's work.
+4. **Pre-existing orphans in `NexusOverview`:** `handleSetupAllAuto` and `renderWpeAccountScope`
+   each have exactly one reference — their own definition. They predate this spec (Task 7 removed
+   only the five methods it orphaned itself), so they belong to the next orphan sweep.
+5. **Remote bulk adapters are unit-tested against fakes, never against a live host.** The routing,
+   id translation, auto-start suppression and error shapes are proven; that a real WPE sync or SSH
+   refresh *succeeds* when driven from the bulk bar is not. Added to the live checklist below.
