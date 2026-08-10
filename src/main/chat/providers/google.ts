@@ -1,8 +1,23 @@
-import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
+import type { ChatMessage, ProviderStreamEvent, TokenUsage } from '../../../common/chat-types';
 import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+
+const finiteNumber = (v: unknown): number | undefined =>
+  (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+/**
+ * Token usage from one Gemini stream chunk, or undefined if it carries none.
+ *
+ * Google reports cumulative counts on its chunks as `usageMetadata`. Exported for test.
+ */
+export function extractGoogleUsage(chunk: any): TokenUsage | undefined {
+  const inputTokens = finiteNumber(chunk?.usageMetadata?.promptTokenCount);
+  const outputTokens = finiteNumber(chunk?.usageMetadata?.candidatesTokenCount);
+  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  return { inputTokens, outputTokens };
+}
 
 /**
  * Gemini's function-declaration schema accepts a strict subset of JSON Schema.
@@ -103,6 +118,12 @@ export class GoogleProvider implements AIProvider {
 
     const _startMs = Date.now();
 
+    // Accumulated across the stream: Gemini reports usageMetadata (cumulative counts) on each
+    // chunk, so later values simply overwrite earlier ones here; this is merged in place as each
+    // arrives and attached to whichever `done` this generator ultimately yields, including the
+    // abort/error paths below, which is why it is declared outside the try block.
+    let usage: TokenUsage | undefined;
+
     try {
       const stream = streamingRequest({
         url: `${baseUrl}/models/${config.model}:streamGenerateContent?alt=sse&key=${config.apiKey}`,
@@ -119,6 +140,9 @@ export class GoogleProvider implements AIProvider {
         } catch {
           continue;
         }
+
+        const chunkUsage = extractGoogleUsage(data);
+        if (chunkUsage) usage = { ...usage, ...chunkUsage };
 
         const candidates = data.candidates ?? [];
         for (const candidate of candidates) {
@@ -145,16 +169,16 @@ export class GoogleProvider implements AIProvider {
             const stopReason = hasFunctionCalls ? 'tool_use'
               : finishReason === 'MAX_TOKENS' ? 'max_tokens'
               : 'end_turn';
-            yield { type: 'done', stopReason };
+            yield { type: 'done', stopReason, usage };
             return;
           }
         }
       }
 
-      yield { type: 'done', stopReason: 'end_turn' };
+      yield { type: 'done', stopReason: 'end_turn', usage };
     } catch (err) {
       if (signal.aborted) {
-        yield { type: 'done', stopReason: 'end_turn' };
+        yield { type: 'done', stopReason: 'end_turn', usage };
         return;
       }
       yield { type: 'error', message: `Gemini error: ${(err as Error).message}` };

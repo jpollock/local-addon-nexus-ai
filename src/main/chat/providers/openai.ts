@@ -1,8 +1,24 @@
-import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
+import type { ChatMessage, ProviderStreamEvent, TokenUsage } from '../../../common/chat-types';
 import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
+
+const finiteNumber = (v: unknown): number | undefined =>
+  (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+/**
+ * Token usage from one OpenAI stream chunk, or undefined if it carries none.
+ *
+ * OpenAI reports usage only on a final chunk, and only when the request set
+ * `stream_options: { include_usage: true }` — see the request body below. Exported for test.
+ */
+export function extractOpenAiUsage(chunk: any): TokenUsage | undefined {
+  const inputTokens = finiteNumber(chunk?.usage?.prompt_tokens);
+  const outputTokens = finiteNumber(chunk?.usage?.completion_tokens);
+  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  return { inputTokens, outputTokens };
+}
 
 export class OpenAIProvider implements AIProvider {
   readonly id = 'openai';
@@ -57,8 +73,16 @@ export class OpenAIProvider implements AIProvider {
       model: config.model,
       messages: openaiMessages,
       stream: true,
+      stream_options: { include_usage: true },
       ...(openaiTools ? { tools: openaiTools } : {}),
     });
+
+    // Accumulated across the stream: OpenAI reports usage only on a final chunk (and only because
+    // stream_options.include_usage is set above), so this merges in whatever arrives and is
+    // attached to every `done` this generator yields, including the abort/error paths below —
+    // which is why it is declared outside the try block rather than alongside the per-request
+    // tool-call accumulator.
+    let usage: TokenUsage | undefined;
 
     try {
       const stream = streamingRequest({
@@ -71,6 +95,14 @@ export class OpenAIProvider implements AIProvider {
       // Track in-progress tool calls by index
       const activeToolCalls = new Map<number, { id: string; name: string; argsBuf: string }>();
 
+      // Captured once the finish_reason chunk arrives, but NOT returned on immediately: with
+      // stream_options.include_usage set above, OpenAI sends the usage totals in a further chunk
+      // (choices: [], usage: {...}) strictly AFTER the finish_reason chunk, right before [DONE].
+      // Returning as soon as finish_reason is seen — the previous behavior — would end this
+      // generator before that trailing chunk is ever read, so usage would silently never arrive
+      // even with stream_options set. Let the loop run to the stream's real end instead.
+      let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | undefined;
+
       for await (const line of stream) {
         if (signal.aborted) break;
 
@@ -80,6 +112,9 @@ export class OpenAIProvider implements AIProvider {
         } catch {
           continue;
         }
+
+        const chunkUsage = extractOpenAiUsage(data);
+        if (chunkUsage) usage = { ...usage, ...chunkUsage };
 
         const delta = data.choices?.[0]?.delta;
         const finishReason = data.choices?.[0]?.finish_reason;
@@ -108,7 +143,7 @@ export class OpenAIProvider implements AIProvider {
           }
         }
 
-        if (finishReason) {
+        if (finishReason && !stopReason) {
           // Finalize any pending tool calls
           for (const [, tc] of activeToolCalls) {
             let args: Record<string, unknown> = {};
@@ -119,18 +154,17 @@ export class OpenAIProvider implements AIProvider {
           }
           activeToolCalls.clear();
 
-          const stopReason = finishReason === 'tool_calls' ? 'tool_use'
+          stopReason = finishReason === 'tool_calls' ? 'tool_use'
             : finishReason === 'length' ? 'max_tokens'
             : 'end_turn';
-          yield { type: 'done', stopReason };
-          return;
+          // Do not return here — see the comment above the `stopReason` declaration.
         }
       }
 
-      yield { type: 'done', stopReason: 'end_turn' };
+      yield { type: 'done', stopReason: stopReason ?? 'end_turn', usage };
     } catch (err) {
       if (signal.aborted) {
-        yield { type: 'done', stopReason: 'end_turn' };
+        yield { type: 'done', stopReason: 'end_turn', usage };
         return;
       }
       yield { type: 'error', message: `OpenAI error: ${(err as Error).message}` };
