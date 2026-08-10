@@ -4,7 +4,7 @@ import { collectSystemHealth, SystemHealthDeps } from '../../../src/main/health/
 function healthyDeps(overrides: Partial<SystemHealthDeps> = {}): SystemHealthDeps {
   return {
     getAgents: async () => [{ id: 'security-sentinel', lastRunStatus: 'success', lastRunAt: Date.now() }],
-    getSyncAges: () => [{ id: 'site-1', lastSyncAt: Date.now() }],
+    getSyncAges: () => [{ id: 'site-1', lastSyncAt: Date.now(), refreshEnabled: true }],
     getCredentialStates: async () => [{ name: 'wpe', ok: true }],
     getEventStats: async () => ({ failed: 0, pending: 0 }),
     ...overrides,
@@ -88,7 +88,7 @@ describe('collectSystemHealth', () => {
     const deps = healthyDeps({
       getAgents: throwing(),
       getEventStats: throwing(),
-      getSyncAges: () => [{ id: 'site-1', lastSyncAt: null }],
+      getSyncAges: () => [{ id: 'site-1', lastSyncAt: null, refreshEnabled: true }],
       getCredentialStates: async () => [{ name: 'wpe', ok: false }],
     });
     const result = await collectSystemHealth(deps);
@@ -102,6 +102,51 @@ describe('collectSystemHealth', () => {
     expect(result.inputs.credentials).toEqual({
       state: 'failing',
       reason: 'wpe needs reconnecting',
+    });
+  });
+
+  describe('syncStaleness respects refreshEnabled — a disabled scheduler is not a failure', () => {
+    test('all sites refresh-disabled -> unknown, reason names refresh being off (not degraded)', async () => {
+      const deps = healthyDeps({
+        getSyncAges: () => [
+          { id: 'site-1', lastSyncAt: null, refreshEnabled: false },
+          { id: 'site-2', lastSyncAt: Date.now() - 30 * 24 * 60 * 60 * 1000, refreshEnabled: false },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+
+      expect(result.inputs.syncStaleness.state).toBe('unknown');
+      expect(result.inputs.syncStaleness.state).not.toBe('degraded');
+      expect(result.inputs.syncStaleness.reason).toMatch(/refresh/i);
+      expect(result.inputs.syncStaleness.reason).toMatch(/off|disabled/i);
+    });
+
+    test('a mix of refresh-disabled stale sites and one refresh-enabled fresh site -> not degraded', async () => {
+      const deps = healthyDeps({
+        getSyncAges: () => [
+          // These would both read as stale/never-checked if refreshEnabled were ignored.
+          { id: 'disabled-never', lastSyncAt: null, refreshEnabled: false },
+          { id: 'disabled-stale', lastSyncAt: Date.now() - 30 * 24 * 60 * 60 * 1000, refreshEnabled: false },
+          { id: 'enabled-fresh', lastSyncAt: Date.now(), refreshEnabled: true },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+
+      expect(result.inputs.syncStaleness).toEqual({ state: 'ok', reason: null });
+    });
+
+    test('a refresh-enabled site with lastSyncAt: null is still degraded (fix does not over-correct into silence)', async () => {
+      const deps = healthyDeps({
+        getSyncAges: () => [
+          { id: 'enabled-never', lastSyncAt: null, refreshEnabled: true },
+        ],
+      });
+      const result = await collectSystemHealth(deps);
+
+      expect(result.inputs.syncStaleness).toEqual({
+        state: 'degraded',
+        reason: '1 sites have never been checked',
+      });
     });
   });
 
@@ -151,7 +196,7 @@ describe('collectSystemHealth', () => {
     const fixedNow = 1_000_000_000_000;
     const deps = healthyDeps({
       now: () => fixedNow,
-      getSyncAges: () => [{ id: 'site-1', lastSyncAt: fixedNow - 25 * 60 * 60 * 1000 }], // 25h old
+      getSyncAges: () => [{ id: 'site-1', lastSyncAt: fixedNow - 25 * 60 * 60 * 1000, refreshEnabled: true }], // 25h old
     });
     const result = await collectSystemHealth(deps);
     expect(result.inputs.syncStaleness).toEqual({

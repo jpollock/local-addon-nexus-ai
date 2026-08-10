@@ -8,22 +8,23 @@ export interface SystemHealthDeps {
   /**
    * Active sites with their last successful sync.
    *
-   * NOTE: this collector compares `lastSyncAt` against a single flat
-   * threshold (`DAY_MS`) for every row. It has no per-source refresh
-   * interval and no way to tell "this source's scheduler is disabled"
-   * (e.g. `wpeSyncAutoEnabled` / `externalRefreshAutoEnabled`, both
-   * default `false`) apart from "this source is enabled but has never
-   * synced" — both show up here as `lastSyncAt: null`. A scheduler that
-   * is off is not a failure, but with the current shape of this array
-   * the gatherer below cannot distinguish the two and will report
-   * `degraded` for both. Whoever implements `getSyncAges` (Task 10) must
-   * either exclude sites whose source scheduler is disabled before
-   * returning them, or this interface needs a field (e.g. `schedulerEnabled`)
-   * so the gatherer can report `unknown` instead of `degraded` for them.
-   * Flagged per the Task 9 brief's instruction; not fixed here because
-   * fixing it requires information this interface does not carry.
+   * `refreshEnabled` says whether background refresh is even supposed to be
+   * happening for that site (e.g. `wpeSyncAutoEnabled` /
+   * `externalRefreshAutoEnabled`, both default `false`). It is deliberately
+   * explicit here rather than inferred from the site's source string, so the
+   * caller building this array must consciously decide it per row instead of
+   * the gatherer guessing.
+   *
+   * A site with `refreshEnabled: false` is excluded from the staleness
+   * assessment entirely — nobody promised to refresh it, so a null or old
+   * `lastSyncAt` on it is neither `degraded` nor evidence of anything. Only
+   * `refreshEnabled: true` rows are checked against `DAY_MS`. If every row is
+   * `refreshEnabled: false`, the gatherer reports `unknown` (background
+   * refresh is off, so freshness cannot be verified) rather than `ok` (a
+   * false green — nothing is checking) or `degraded` (a false red — the user
+   * chose this, it is not a fault).
    */
-  getSyncAges: () => Array<{ id: string; lastSyncAt: number | null }>;
+  getSyncAges: () => Array<{ id: string; lastSyncAt: number | null; refreshEnabled: boolean }>;
   /** Configured connections and whether their credential currently works. */
   getCredentialStates: () => Promise<Array<{ name: string; ok: boolean }>>;
   /** Event queue counts. */
@@ -60,8 +61,15 @@ export async function collectSystemHealth(deps: SystemHealthDeps): Promise<Syste
   const syncStaleness = await guard(async () => {
     const rows = deps.getSyncAges();
     if (rows.length === 0) return { state: 'unknown', reason: 'No sites to check' };
-    const never = rows.filter((r) => !r.lastSyncAt).length;
-    const stale = rows.filter((r) => r.lastSyncAt && now - r.lastSyncAt > DAY_MS).length;
+    const enabled = rows.filter((r) => r.refreshEnabled);
+    if (enabled.length === 0) {
+      return {
+        state: 'unknown',
+        reason: `Background refresh is off for all ${rows.length} sites`,
+      };
+    }
+    const never = enabled.filter((r) => !r.lastSyncAt).length;
+    const stale = enabled.filter((r) => r.lastSyncAt && now - r.lastSyncAt > DAY_MS).length;
     if (never > 0) return { state: 'degraded', reason: `${never} sites have never been checked` };
     if (stale > 0) return { state: 'degraded', reason: `${stale} sites not checked in over a day` };
     return { state: 'ok', reason: null };
