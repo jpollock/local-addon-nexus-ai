@@ -20,12 +20,26 @@ describe('collectRunIds', () => {
     expect(collectRunIds([])).toEqual([]);
   });
 
-  it('is resolvable from ipc-handlers.ts via ./agent-runtime/runNowIds', () => {
-    // ipc-handlers.ts lives at src/main/ipc-handlers.ts
-    const ipcHandlersDir = path.resolve(__dirname, '../../../src/main');
-    const specifier = './agent-runtime/runNowIds';
+  it('is resolvable from ipc-handlers.ts with the specifier that file actually uses', () => {
+    // Read the actual require() call from the source
+    const fs = require('fs');
+    const ipcHandlersPath = path.resolve(__dirname, '../../../src/main/ipc-handlers.ts');
+    const source = fs.readFileSync(ipcHandlersPath, 'utf-8');
 
-    // Verify the path resolves correctly from ipc-handlers' directory
+    // Extract the specifier from: require('X') as typeof import('./agent-runtime/runNowIds')
+    // The bug is in the require string, not the type assertion, so match the first group
+    const match = source.match(/require\(['"]([^'"]+runNowIds)['"]\)/);
+
+    // Fail if the pattern isn't found — a vanishing guard is a broken guard
+    if (!match) {
+      throw new Error('Could not find runNowIds require() in ipc-handlers.ts — test needs updating');
+    }
+
+    const specifier = match[1];
+    const ipcHandlersDir = path.dirname(ipcHandlersPath);
+
+    // Resolve the extracted specifier from ipc-handlers' directory
+    // This will throw if the path is wrong (e.g., '../agent-runtime/runNowIds')
     expect(() => {
       require.resolve(path.join(ipcHandlersDir, specifier));
     }).not.toThrow();
