@@ -222,10 +222,13 @@ host content_indexed_at wp_path wp_cli_path
 import { buildSiteRows } from '../../../src/main/fleet/siteRows';
 
 const local = (id: string, name: string, status = 'running') => ({ id, name, status });
+// Mirrors the real `sites` columns. There is deliberately no `completeness`
+// field — no such column exists, and a fixture that invents one would let a
+// buildSiteRows that reads it pass here and throw in production.
 const graph = (over: any) => ({
   id: 'g1', source: 'wpe' as const, name: 'install-a', domain: 'a.example.com',
-  wp_version: '6.5', php_version: '8.2', completeness: 'metadata',
-  last_sync_at: 1000, account_id: null, ...over,
+  wp_version: '6.5', php_version: '8.2',
+  host: null, content_indexed_at: null, last_sync_at: 1000, ...over,
 });
 
 describe('buildSiteRows', () => {
@@ -252,18 +255,42 @@ describe('buildSiteRows', () => {
     // The Task 1 correction, asserted at the layer the UI actually reads.
     const out = buildSiteRows({
       localSites: [],
-      graphRows: [graph({ id: 'x1', source: 'external', completeness: 'indexed' })],
-      indexedSiteIds: new Set(['x1']),
+      graphRows: [graph({ id: 'x1', source: 'external', content_indexed_at: 5000 })],
+      indexedSiteIds: new Set(),
     });
     expect(out.rows[0].knowledge).toBe('searchable');
   });
 
-  test('an index entry promotes a row to searchable even without completeness', () => {
-    const out = buildSiteRows({
-      localSites: [], graphRows: [graph({ id: 'w1', completeness: 'metadata' })],
+  test('either indexing signal alone is enough', () => {
+    // The registry is the live view; content_indexed_at is what the last sync
+    // wrote. They can disagree, and trusting only one under-reports.
+    const viaRegistry = buildSiteRows({
+      localSites: [], graphRows: [graph({ id: 'w1', content_indexed_at: null })],
       indexedSiteIds: new Set(['w1']),
     });
-    expect(out.rows[0].knowledge).toBe('searchable');
+    expect(viaRegistry.rows[0].knowledge).toBe('searchable');
+
+    const viaColumn = buildSiteRows({
+      localSites: [], graphRows: [graph({ id: 'w2', content_indexed_at: 5000 })],
+      indexedSiteIds: new Set(),
+    });
+    expect(viaColumn.rows[0].knowledge).toBe('searchable');
+  });
+
+  test('a row with a wp_version but no indexing is detailed', () => {
+    const out = buildSiteRows({
+      localSites: [], graphRows: [graph({ id: 'w3', wp_version: '6.5' })],
+      indexedSiteIds: new Set(),
+    });
+    expect(out.rows[0].knowledge).toBe('detailed');
+  });
+
+  test('a row with nothing collected reads as nothing', () => {
+    const out = buildSiteRows({
+      localSites: [], graphRows: [graph({ id: 'w4', wp_version: null })],
+      indexedSiteIds: new Set(),
+    });
+    expect(out.rows[0].knowledge).toBe('nothing');
   });
 
   test('a local site absent from the graph still appears', () => {
@@ -424,7 +451,7 @@ export function buildSiteRows(input: SiteRowsInput): SiteRowsResult {
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `npx jest tests/unit/fleet/site-rows.test.ts`
-Expected: PASS, 7 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Confirm the total agrees with `collectFleetCounts`**
 
@@ -451,7 +478,7 @@ Both count the same population. Add:
 ```
 
 Run: `npx jest tests/unit/fleet/site-rows.test.ts`
-Expected: PASS, 8 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 6: Commit**
 
