@@ -1,14 +1,17 @@
 /**
  * LoggingSection test
  *
- * Covers the three critical fixes:
+ * Covers the critical fixes and guards deleted in the rewrite:
  * - C3: No retention deletion on keystroke
  * - C2: Clear/Reveal channels exist and are called correctly
  * - I4: Parent Apply button doesn't revert panel changes
+ * - Confirmation copy guard (issue #2)
+ * - Settings key guard (writes logRetentionDays not logDays)
  */
 import * as React from 'react';
 import { LoggingSection, type LoggingStats } from '../../../src/renderer/components/LoggingSection';
 import { IPC_CHANNELS } from '../../../src/common/constants';
+import { PRICES_AS_OF } from '../../../src/main/logging/modelPricing';
 
 describe('LoggingSection', () => {
   const mockElectron = {
@@ -35,6 +38,55 @@ describe('LoggingSection', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe('Behavior tests (guards for defects #2 and #3)', () => {
+    it('writes logRetentionDays (not logDays) - the settings key guard', () => {
+      // When growing retention, it writes immediately
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      // Directly mutate state to simulate user input
+      wrapper.state.localLogDays = '20';
+      wrapper.commitLogDays();
+      expect(mockElectron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: 20 });
+    });
+
+    it('Clear logs fetches a plan BEFORE showing confirmation - the honest-number guard', async () => {
+      // startClearLogs should call LOGGING_PLAN_CLEAR and use the freedBytes in the confirmation
+      const planResult = { success: true, freedBytes: 10 * 1024 * 1024, keptBytes: 2 * 1024 * 1024, filesDeleted: 8 };
+      mockElectron.ipcRenderer.invoke.mockResolvedValueOnce(planResult);
+
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+
+      await wrapper.startClearLogs();
+
+      expect(mockElectron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.LOGGING_PLAN_CLEAR);
+      // Wait for the promise to resolve and state to update
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(wrapper.state.clearPlan).toEqual({ freedBytes: 10 * 1024 * 1024 });
+      expect(wrapper.state.confirmingClear).toBe(true);
+    });
+
+    it('shrinking retention shows confirmation before applying', () => {
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      wrapper.state.localLogDays = '7';
+      wrapper.commitLogDays();
+
+      // Should NOT invoke UPDATE_SETTINGS immediately (shrinking from 14 to 7)
+      expect(mockElectron.ipcRenderer.invoke).not.toHaveBeenCalled();
+
+      // Should set confirmingShrink state
+      expect(wrapper.state.confirmingShrink).toEqual({ freedBytes: 0, newValue: 7, field: 'logDays' });
+    });
+
+    it('growing retention applies immediately without confirmation', () => {
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      wrapper.state.localLogDays = '20';
+      wrapper.commitLogDays();
+
+      // Should invoke UPDATE_SETTINGS immediately (growing from 14 to 20)
+      expect(mockElectron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: 20 });
+      expect(wrapper.state.confirmingShrink).toBeNull();
+    });
   });
 
   describe('C3: No retention deletion on keystroke', () => {

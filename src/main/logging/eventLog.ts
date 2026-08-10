@@ -285,12 +285,17 @@ export class EventLog {
       } catch { /* a settings cache that is not ready must not drop the line */ }
 
       // Preservation-critical events bypass the level gate. A successful mutation or a failed run
-      // must reach the file regardless of verbosity — the retention system keys on these markers,
-      // so a WARN or ERROR level must not silently disable preservation. Mutations are rare (volume
-      // is negligible), and failed runs are by definition events someone wants a record of.
+      // must reach the file regardless of verbosity — the retention system keys on these markers
+      // (retention.ts:141 MARKERS list), so a WARN or ERROR level must not silently disable
+      // preservation. Mutations are rare (volume is negligible), and failed runs are by definition
+      // events someone wants a record of.
+      //
+      // NOTE: The `run.end` half is presently inert — `AgentRunner` already emits non-success at
+      // ERROR level, which passes at every level — so the live effect of I6 is entirely the
+      // `mutation` case.
       const isPreservationCritical =
         e.event === 'mutation' ||
-        (e.event === 'run.end' && e.fields?.status && e.fields.status !== 'success');
+        (e.event === 'run.end' && e.fields?.status && (e.fields.status === 'error' || e.fields.status === 'timeout'));
 
       if (!isPreservationCritical && LogLevel[e.level] > LogLevel[min]) return;
 

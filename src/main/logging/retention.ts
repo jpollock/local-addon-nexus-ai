@@ -42,7 +42,9 @@ const logger = createLogger('Retention');
  */
 export function planRetention(files: LogFileInfo[], policy: RetentionPolicy, now?: () => Date): RetentionPlan {
   const cutoff = (days: number): string => {
-    const d = now ? now() : new Date();
+    // Copy the date before mutating — a clock returning a shared instance would otherwise
+    // be mutated twice, making transcriptCutoff = today - logDays - transcriptDays.
+    const d = new Date(now ? now() : new Date());
     d.setDate(d.getDate() - days);
     return localDay(d);
   };
@@ -137,6 +139,9 @@ export function applyRetention(root: string, policy: RetentionPolicy): Retention
  */
 function isPreserved(file: string): boolean {
   const CHUNK_SIZE = 64 * 1024; // 64 KB
+  // These markers must match eventLog.ts:292 isPreservationCritical gate (the coupling is invisible
+  // from either side). A marker must appear here AND be emitted regardless of log level there, or
+  // the exemption looks like it works while doing nothing.
   const MARKERS = ['run.end status=error', 'run.end status=timeout', ' mutation op='];
   const MAX_MARKER_LEN = Math.max(...MARKERS.map(m => m.length));
   const OVERLAP = MAX_MARKER_LEN - 1;

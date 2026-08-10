@@ -211,4 +211,14 @@ describe('getAgentLogLevel returns undefined when no override is set', () => {
     const result = getAgentLogLevel('agent-with-override');
     expect(result).toBe('DEBUG');
   });
+
+  it('returns undefined when logLevel is an invalid value', () => {
+    const deps = registerWithServices();
+    (deps as any).__agentSettingsCache.set('agent-with-invalid-override', {
+      enabled: true, scheduleEnabled: true, logLevel: 'LOUD',
+    });
+
+    const result = getAgentLogLevel('agent-with-invalid-override');
+    expect(result).toBeUndefined();
+  });
 });

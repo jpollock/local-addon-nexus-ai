@@ -1302,20 +1302,61 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.LOGGING_PLAN_CLEAR, async () => {
+    try {
+      const { planRetention } = require('./logging/retention');
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      // Clear means "delete everything except preserved files" — zero-day retention, zero budget.
+      const clearPolicy = { logDays: 0, transcriptDays: 0, budgetBytes: 0 };
+
+      // Scan the log directory to get files
+      const fs = require('fs');
+      const files: any[] = [];
+      const DAY_IN_NAME = /(\d{4}-\d{2}-\d{2})/;
+      const scan = (dir: string, category: 'combined' | 'agent' | 'transcript') => {
+        let entries: string[] = [];
+        try { entries = fs.readdirSync(dir); } catch { return; }
+        for (const name of entries) {
+          const full = path.join(dir, name);
+          let bytes = 0;
+          let mtime: Date | undefined;
+          try {
+            const st = fs.statSync(full);
+            if (!st.isFile()) continue;
+            bytes = st.size;
+            mtime = st.mtime;
+          } catch { continue; }
+          let day = DAY_IN_NAME.exec(name)?.[1];
+          if (!day && mtime) {
+            const { localDay } = require('./logging/eventLog');
+            day = localDay(mtime);
+          }
+          if (!day) continue;
+          files.push({ path: full, category, day, bytes, preserved: false });
+        }
+      };
+      scan(logRoot, 'combined');
+      scan(path.join(logRoot, 'agents'), 'agent');
+      scan(path.join(logRoot, 'transcripts'), 'transcript');
+
+      const plan = planRetention(files, clearPolicy);
+
+      return { success: true, freedBytes: plan.freedBytes, keptBytes: plan.keptBytes, filesDeleted: plan.deletePaths.length };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-plan-clear failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.LOGGING_CLEAR, async () => {
     try {
-      const { planRetention, applyRetention } = require('./logging/retention');
-      const { scanLogDirectories } = require('./logging/scanLogDirectories');
-      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-      const logDays = settings?.logRetentionDays ?? 14;
-      const transcriptDays = settings?.transcriptRetentionDays ?? 3;
-      const budgetBytes = settings?.logBudgetBytes ?? 250 * 1024 * 1024;
-
+      const { applyRetention } = require('./logging/retention');
       const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
-      const policy = { logDays, transcriptDays, budgetBytes };
+      // Clear means "delete everything except preserved files" — zero-day retention, zero budget.
+      // Preserved files (failed runs, Tier 3 operations) are exempt from both passes.
+      const clearPolicy = { logDays: 0, transcriptDays: 0, budgetBytes: 0 };
 
-      // Use applyRetention which honors preservation (failed runs, Tier 3 operations)
-      const plan = applyRetention(logRoot, policy);
+      const plan = applyRetention(logRoot, clearPolicy);
 
       localLogger.info(`[NexusAI] Cleared logs: deleted ${plan.deletePaths.length} files, freed ${plan.freedBytes} bytes`);
       return { success: true, filesDeleted: plan.deletePaths.length, bytesFreed: plan.freedBytes };

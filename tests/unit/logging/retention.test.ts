@@ -44,12 +44,14 @@ describe('planRetention', () => {
   });
 
   it('evicts oldest-first when the budget is exceeded', () => {
+    // Use relative days to avoid calendar-date brittleness — starts failing 2026-08-23.
+    const now = () => new Date('2026-08-09T12:00:00Z');
     const big = { ...POLICY, budgetBytes: 2048 };
     const plan = planRetention([
       f({ day: '2026-08-09', bytes: 1024, path: '/logs/new.log' }),
       f({ day: '2026-08-08', bytes: 1024, path: '/logs/mid.log' }),
       f({ day: '2026-08-07', bytes: 1024, path: '/logs/old.log' }),
-    ], big);
+    ], big, now);
     expect(plan.deletePaths).toEqual(['/logs/old.log']);
     expect(plan.keptBytes).toBeLessThanOrEqual(2048);
   });
@@ -235,5 +237,27 @@ describe('applyRetention — marker detection', () => {
     // Transcript is fresh — should be kept
     expect(plan.deletePaths).toEqual([]);
     expect(fs.existsSync(transcriptPath)).toBe(true);
+  });
+
+  it('keeps preserved files even when they push the directory over budget', () => {
+    // The budget yields to preservation: going over disk is recoverable, losing evidence is not.
+    // Write a preserved file that exceeds the budget and verify the result keeps it and reports
+    // the overage (rather than deleting it or crashing).
+    const logPath = path.join(tmpDir, 'nexus-2026-08-09.log');
+    const preservedSize = 100 * 1024; // 100 KB
+    fs.writeFileSync(logPath, 'run.end status=error' + 'x'.repeat(preservedSize));
+
+    const tinyBudget = { logDays: 14, transcriptDays: 3, budgetBytes: 10 * 1024 }; // 10 KB budget
+
+    const plan = applyRetention(tmpDir, tinyBudget);
+
+    // File should be kept (preserved)
+    expect(fs.existsSync(logPath)).toBe(true);
+
+    // keptBytes should exceed the budget
+    expect(plan.keptBytes).toBeGreaterThan(tinyBudget.budgetBytes);
+
+    // freedBytes should be zero (nothing deleted)
+    expect(plan.freedBytes).toBe(0);
   });
 });

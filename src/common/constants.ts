@@ -264,6 +264,7 @@ export const IPC_CHANNELS = {
   LOGGING_STATS: `${ADDON_PREFIX}:logging-stats`,
   LOGGING_REVEAL: `${ADDON_PREFIX}:logging-reveal`,
   LOGGING_CLEAR: `${ADDON_PREFIX}:logging-clear`,
+  LOGGING_PLAN_CLEAR: `${ADDON_PREFIX}:logging-plan-clear`,
 } as const;
 
 // ---------------------------------------------------------------------------

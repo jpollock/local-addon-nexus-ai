@@ -7,6 +7,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { DEFAULT_KEEP } from './rotate';
 
 export interface LogSizes {
   combined: number;
@@ -53,8 +54,8 @@ export function scanLogDirectories(userDataPath: string): LogSizes {
       const st = fs.statSync(auditPath);
       if (st.isFile()) sizes.audit += st.size;
     } catch { /* skip missing or unreadable file */ }
-    // Also count rotated generations (.1, .2, .3)
-    for (let gen = 1; gen <= 3; gen++) {
+    // Also count rotated generations (.1, .2, ..., .DEFAULT_KEEP)
+    for (let gen = 1; gen <= DEFAULT_KEEP; gen++) {
       const rotatedPath = `${auditPath}.${gen}`;
       try {
         const st = fs.statSync(rotatedPath);
