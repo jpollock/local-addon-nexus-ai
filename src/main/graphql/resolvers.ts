@@ -31,6 +31,7 @@ import type { NexusServices } from '../types/nexus-services';
 import type { LocalSite, LocalSiteDataAccessor } from '../types/site-data';
 import pLimit from 'p-limit';
 import { withQueue, parseTarget } from './resolver-utils';
+import { collectFleetCounts } from '../fleet/collectFleetCounts';
 import { probeExternalHost } from '../external/probeExternalHost';
 import type { ProbeReport } from '../external/probeExternalHost';
 import { probeHostMultiIssue } from '../external/probeHostMultiIssue';
@@ -1608,8 +1609,30 @@ export function createResolvers(context: ResolverContext) {
       /**
        * Fleet-wide summary from twin cache — WP/PHP version distribution,
        * completeness breakdown, recent post activity, stale count.
+       *
+       * `counts` (below) is the canonical fleet population from
+       * collectFleetCounts — the same source GET_FLEET_SUMMARY and
+       * GET_DASHBOARD_STATS use. Every OTHER figure this resolver returns
+       * (totalSites, sitesWithFullData, completeness, staleCount,
+       * neverScannedCount, recentActivityCount, wpVersions, phpVersions) is
+       * deliberately NOT recomputed from `counts` — they are all derived by
+       * iterating `twins`, whose local portion comes from the twin cache
+       * (services.twinService.getAll()), a legitimate but DIFFERENT
+       * population than Local's own site store (see CLAUDE.md, "Fleet
+       * counts"). Swapping only `totalSites`'s source while leaving
+       * `sitesWithFullData` (a subset of `twins`) scoped to the twin cache
+       * would let sitesWithFullData exceed totalSites whenever the two
+       * populations briefly disagree — the exact numerator/denominator
+       * mismatch this whole task exists to remove. `counts` is exposed as
+       * its own field so a caller gets the canonical numbers without that
+       * risk; it is computed unconditionally, before the twinService check,
+       * because collectFleetCounts doesn't depend on the twin service.
        */
       nexusFleetSummary: () => {
+        const counts = collectFleetCounts({
+          getSites: () => services.siteData.getSites() as Record<string, unknown>,
+          getDb: () => services.graphService?.getDb?.() as never,
+        });
         try {
           if (!services.twinService) {
             return {
@@ -1623,6 +1646,7 @@ export function createResolvers(context: ResolverContext) {
               staleCount: 0,
               neverScannedCount: 0,
               recentActivityCount: 0,
+              counts,
             };
           }
 
@@ -1721,6 +1745,7 @@ export function createResolvers(context: ResolverContext) {
             staleCount,
             neverScannedCount,
             recentActivityCount,
+            counts,
           };
         } catch (err: any) {
           return {
@@ -1734,6 +1759,7 @@ export function createResolvers(context: ResolverContext) {
             staleCount: 0,
             neverScannedCount: 0,
             recentActivityCount: 0,
+            counts,
           };
         }
       },

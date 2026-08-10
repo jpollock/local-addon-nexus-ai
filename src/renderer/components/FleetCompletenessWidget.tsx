@@ -103,6 +103,16 @@ export class FleetCompletenessWidget extends React.Component<FleetCompletenessWi
   render(): React.ReactNode {
     const { data, loading } = this.state;
     const { onSchedule, onIndexSites } = this.props;
+    // `data` here is the FLEET_COMPLETENESS IPC response (FleetCompleteness
+    // in common/types.ts) — NOT GET_FLEET_SUMMARY's response, which is what
+    // Task 5's `twinScope`/`counts` fields were added to. FLEET_COMPLETENESS
+    // has no `completenessScope` field, and its `total` is deliberately
+    // fleet-wide (local + WPE + external — see its own handler comment in
+    // ipc-handlers.ts, "L1/L2/L3 coverage counts across local + WPE sites",
+    // and the passing test 'FLEET_COMPLETENESS counts external hosts' in
+    // tests/unit/fleet/fleet-visibility.test.ts, which pins total=3 for
+    // 1 local + 1 wpe + 1 external). Left unchanged pending confirmation —
+    // see task-6b-report.md.
     const total = data?.total ?? 0;
 
     return React.createElement('div', {
@@ -124,8 +134,12 @@ export class FleetCompletenessWidget extends React.Component<FleetCompletenessWi
       loading
         ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } }, 'Loading…')
         : React.createElement('div', null,
-            this.renderBar('Scanned',    'WP version · installed plugins/themes known', data?.scanned ?? 0,    total, '#51BB7B'),
-            this.renderBar('Configured', 'Active plugins · users · post counts known',  data?.configured ?? 0, total, '#a78bfa',
+            // Labels match the four-rung knowledge ladder vocabulary
+            // (src/main/fleet/knowledgeLadder.ts: nothing/basic/detailed/
+            // searchable) instead of the six overlapping vocabularies it
+            // replaced. 'Scanned' -> 'Basic', 'Configured' -> 'Detailed'.
+            this.renderBar('Basic',      'WP version · installed plugins/themes known', data?.scanned ?? 0,    total, '#51BB7B'),
+            this.renderBar('Detailed',   'Active plugins · users · post counts known',  data?.configured ?? 0, total, '#a78bfa',
               'Start a site in Local to populate active plugins, users, and post counts.'),
             this.renderBar('Searchable', 'Posts · pages · custom content indexed',       data?.searchable ?? 0, total, '#0ECAD4',
               'Click ⚡ Index sites to make content searchable, or enable the Content index interval in Settings.'),

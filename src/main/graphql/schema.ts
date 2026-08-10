@@ -560,6 +560,20 @@ export const typeDefs = gql`
     indexed: Int!
   }
 
+  "A single population count, always carrying the scope it was measured over — see collectFleetCounts."
+  type FleetPopulationCount {
+    count: Int!
+    scope: String!
+  }
+
+  "The canonical fleet counts (collectFleetCounts) — local from Local's own store, WPE/external from the graph."
+  type FleetCountsResult {
+    installs: FleetPopulationCount!
+    local: FleetPopulationCount!
+    wpe: FleetPopulationCount!
+    external: FleetPopulationCount!
+  }
+
   type FleetSummaryResult {
     success: Boolean!
     error: String
@@ -571,6 +585,14 @@ export const typeDefs = gql`
     staleCount: Int!
     neverScannedCount: Int!
     recentActivityCount: Int!
+    """
+    The canonical fleet counts, from collectFleetCounts — the same source
+    GET_FLEET_SUMMARY/GET_DASHBOARD_STATS use. totalSites above, and
+    completeness/staleCount/neverScannedCount/recentActivityCount, are
+    a DIFFERENT, twin-cache-scoped population (see the doc comment on the
+    nexusFleetSummary resolver) — do not divide one against the other.
+    """
+    counts: FleetCountsResult!
   }
 
   type FleetPluginEntry {

@@ -130,6 +130,36 @@ describe('fleet queries include external sites', () => {
     expect(phpVersions).toContain('8.1'); // wpe site
   });
 
+  it('nexusFleetSummary.counts reads local from siteData, never from the graph', async () => {
+    // The fixture's graph has ONE 'local' row (local-site-1, from the
+    // beforeEach seed) alongside the wpe and external rows, but ctx()'s
+    // siteData.getSites() mock returns {} — zero local sites. If
+    // counts.local ever read the graph's source='local' rows instead of
+    // Local's own store, this would be 1, not 0 — see CLAUDE.md, "Fleet
+    // counts": "Never count local sites from the graph."
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSummary(null, {});
+    expect(r.success).toBe(true);
+    expect(r.counts).toBeDefined();
+    expect(r.counts.local.count).toBe(0);
+    expect(r.counts.wpe.count).toBe(1);
+    expect(r.counts.external.count).toBe(1);
+    expect(r.counts.installs.count).toBe(2);
+    expect(r.counts.installs.count).toBe(r.counts.local.count + r.counts.wpe.count + r.counts.external.count);
+
+    // Every population count carries a scope string.
+    for (const key of ['local', 'wpe', 'external', 'installs'] as const) {
+      expect(typeof r.counts[key].scope).toBe('string');
+      expect(r.counts[key].scope.length).toBeGreaterThan(0);
+    }
+
+    // counts.installs (2) is a DIFFERENT population than totalSites (2 here
+    // only by coincidence — both happen to equal localTwins.length(0) +
+    // graph wpe/external(2)). They must never be assumed interchangeable;
+    // this resolver keeps them as two separately-labelled fields rather than
+    // collapsing one into the other. See the doc comment on the resolver.
+    expect(r.totalSites).toBe(r.counts.installs.count);
+  });
+
   it('nexusFleetPlugins includes the external site', async () => {
     const r = await (createResolvers(ctx()).Mutation as any).nexusFleetPlugins(null, {});
     expect(r.success).toBe(true);
