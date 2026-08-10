@@ -1810,8 +1810,39 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // vectorDbPath is passed as a dep
       const rawHealth = await graphService.getStorageHealth(vectorDbPath);
 
+      // Fetch logging stats for the logs section
+      let logsSize: number | undefined;
+      try {
+        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+        const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+        let totalLogBytes = 0;
+
+        const scan = (dir: string) => {
+          try {
+            const entries = fs.readdirSync(dir);
+            for (const name of entries) {
+              const full = path.join(dir, name);
+              try {
+                const st = fs.statSync(full);
+                if (st.isFile()) totalLogBytes += st.size;
+              } catch { /* skip unreadable file */ }
+            }
+          } catch { /* skip unreadable directory */ }
+        };
+
+        scan(logRoot);
+        scan(path.join(logRoot, 'agents'));
+        scan(path.join(logRoot, 'transcripts'));
+        // Audit logs live one directory up from the log root
+        scan(path.join(app.getPath('userData'), 'nexus-ai'));
+
+        logsSize = totalLogBytes;
+      } catch {
+        // If logging stats fail, just leave logs undefined
+      }
+
       // Transform snake_case to camelCase for renderer
-      const health = {
+      const health: any = {
         graphDb: {
           sizeBytes: rawHealth.graph_db.size_bytes,
           path: rawHealth.graph_db.path,
@@ -1827,6 +1858,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         pendingEvents: rawHealth.pending_events,
         failedEvents: rawHealth.failed_events,
       };
+
+      // Only add logs if we successfully gathered the data
+      if (logsSize !== undefined) {
+        health.logs = { sizeBytes: logsSize };
+      }
 
       return { success: true, health };
     } catch (err) {

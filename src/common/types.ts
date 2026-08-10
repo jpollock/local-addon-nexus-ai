@@ -610,6 +610,9 @@ export interface StorageHealth {
     path: string;
     tableCount: number;
   };
+  logs?: {
+    sizeBytes: number;
+  };
   pendingEvents: number;
   failedEvents: number;
 }
