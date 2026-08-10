@@ -1758,6 +1758,15 @@ the graph. Use the same test for future work rather than absorbing every adjacen
   `index.wpeTotal` (CAPI, unlabelled). The first two are deliberate and distinguishable; the
   third should join them or go.
 
+### Drifting duplicate resolvers
+
+- **`src/main/graphql/resolvers/twin.ts` holds a second, now-unsynced `nexusFleetSummary`.**
+  CLAUDE.md documents that file (with `resolvers/wpe.ts` and `resolvers/sites.ts`) as exported
+  only from a barrel with no production importers — dead code kept in sync so the in-progress
+  resolver split does not silently lose work when it lands. This plan updated the live
+  `resolvers.ts` copy and not that one, so the two have now diverged. Either sync it or delete
+  it; leaving a stale duplicate is how the split loses the `counts`/`twinScope` fields later.
+
 ### Error visibility
 
 - **`catch {}` cannot distinguish "graph not ready" from a real SQL or schema error** — both
