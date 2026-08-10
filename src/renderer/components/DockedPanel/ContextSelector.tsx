@@ -1,5 +1,5 @@
 import React from 'react';
-import { IPC_CHANNELS } from '../../../common/constants';
+import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import type { SiteSource } from '../../../common/types';
 
 interface SiteOption {
@@ -28,9 +28,9 @@ const styles = {
     alignItems: 'center',
     gap: 6,
     background: '#10262b',
-    border: '1px solid #22697a',
+    border: `1px solid var(--nxai-card-border)`,
     borderRadius: 12,
-    color: '#5fd2e5',
+    color: UI_COLORS.WPE_BRAND,
     cursor: 'pointer',
     fontSize: 11,
     fontWeight: 600,
@@ -43,7 +43,7 @@ const styles = {
     left: 0,
     marginTop: 4,
     background: '#23272f',
-    border: '1px solid #2c313a',
+    border: `1px solid var(--nxai-card-border)`,
     borderRadius: 6,
     minWidth: 220,
     zIndex: 10000,
@@ -52,7 +52,7 @@ const styles = {
   },
   section: {
     padding: '4px 12px',
-    color: '#868d98',
+    color: 'var(--nxai-card-sub)',
     fontSize: 10,
     fontWeight: 700,
     textTransform: 'uppercase' as const,
@@ -64,15 +64,15 @@ const styles = {
     gap: 8,
     padding: '5px 12px',
     cursor: 'pointer',
-    color: '#e4e7ec',
+    color: 'var(--nxai-card-text)',
     fontSize: 12,
   },
   badge: {
     fontSize: 9,
     padding: '1px 5px',
     borderRadius: 4,
-    background: '#2c313a',
-    color: '#868d98',
+    background: 'var(--nxai-card-border)',
+    color: 'var(--nxai-card-sub)',
     textTransform: 'uppercase' as const,
   },
 };

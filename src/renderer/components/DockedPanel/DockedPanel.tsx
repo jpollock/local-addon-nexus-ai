@@ -1,4 +1,5 @@
 import React from 'react';
+import { UI_COLORS } from '../../../common/constants';
 
 export type PanelSize = 'docked' | 'full';
 
@@ -28,7 +29,7 @@ const BUBBLE_SIZE = 52;
 function NexusGlyph({ size }: { size: number }) {
   return React.createElement(
     'svg',
-    { width: size, height: size, viewBox: '0 0 24 24', fill: '#05262e', style: { display: 'block' } },
+    { width: size, height: size, viewBox: '0 0 24 24', fill: UI_COLORS.NEXUS_MARK, style: { display: 'block' } },
     React.createElement('path', { d: 'M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8z' }),
   );
 }
@@ -80,7 +81,7 @@ function iconBtnStyle(hovered: boolean, active = false) {
   return {
     background: hovered || active ? '#22303a' : 'none',
     border: 'none',
-    color: active ? '#5fd2e5' : hovered ? '#e4e7ec' : '#868d98',
+    color: active ? UI_COLORS.WPE_BRAND : hovered ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
     cursor: 'pointer',
     padding: 6,
     display: 'flex',
@@ -99,7 +100,7 @@ const styles = {
     width: BUBBLE_SIZE,
     height: BUBBLE_SIZE,
     borderRadius: '50%',
-    background: 'linear-gradient(135deg, #29b6cf, #1fc0d8)',
+    background: UI_COLORS.WPE_BRAND,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -117,7 +118,7 @@ const styles = {
     width: full ? undefined : PANEL_WIDTH,
     left: full ? 68 : undefined,
     background: '#23272f',
-    borderLeft: '1px solid #2c313a',
+    borderLeft: `1px solid var(--nxai-card-border)`,
     display: 'flex',
     flexDirection: 'column' as const,
     zIndex: 8999,
@@ -129,7 +130,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 11,
-    borderBottom: '1px solid #2c313a',
+    borderBottom: `1px solid var(--nxai-card-border)`,
     flexShrink: 0,
     background: '#1a1e24',
   },
@@ -137,7 +138,7 @@ const styles = {
     width: 34,
     height: 34,
     borderRadius: '50%' as const,
-    background: 'linear-gradient(135deg, #29b6cf, #1fc0d8)',
+    background: UI_COLORS.WPE_BRAND,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -197,15 +198,15 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       React.createElement(
         'div',
         { style: { display: 'flex', flexDirection: 'column' as const, gap: 1 } },
-        React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: '#f2f4f6', lineHeight: 1.2 } }, 'Nexus'),
+        React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: 'var(--nxai-card-text)', lineHeight: 1.2 } }, 'Nexus'),
         streamingStatus
           ? React.createElement(
               'span',
-              { style: { fontSize: 12, color: '#5fd2e5', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 5 } },
-              React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: '#5fd2e5', flexShrink: 0, display: 'inline-block' } }),
+              { style: { fontSize: 12, color: UI_COLORS.WPE_BRAND, lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 5 } },
+              React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: UI_COLORS.WPE_BRAND, flexShrink: 0, display: 'inline-block' } }),
               streamingStatus,
             )
-          : React.createElement('span', { style: { fontSize: 12, color: '#868d98', lineHeight: 1.2 } }, 'Follows you across tabs'),
+          : React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', lineHeight: 1.2 } }, 'Follows you across tabs'),
       ),
       // Control cluster
       React.createElement(
@@ -282,7 +283,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           { style: { display: 'flex', flex: 1, overflow: 'hidden' } },
           React.createElement(
             'div',
-            { style: { width: 264, flexShrink: 0, borderRight: '1px solid #2c313a', overflow: 'hidden' } },
+            { style: { width: 264, flexShrink: 0, borderRight: `1px solid var(--nxai-card-border)`, overflow: 'hidden' } },
             sessionsSidebar ?? null,
           ),
           React.createElement(

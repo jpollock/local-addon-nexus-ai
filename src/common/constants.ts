@@ -285,6 +285,10 @@ export const UI_COLORS = {
   STATUS_HALTED: '#999',
   STATUS_ERROR: '#ef4444',
   STATUS_WARNING: '#f59e0b',
+  /** Nexus mark fill. Pairs with WPE_BRAND, so it is fixed in both themes — see docs/planning/2026-08-10-nexus-panel-insights-design.md */
+  NEXUS_MARK: '#05262e',
+  /** Disabled foreground on a brand-filled control. Fixed for the same reason. */
+  ON_BRAND_DISABLED: '#23272f',
 } as const;
 
 export const POLL_INTERVALS = {
