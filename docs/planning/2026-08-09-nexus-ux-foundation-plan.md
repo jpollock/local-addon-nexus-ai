@@ -862,7 +862,10 @@ Place this after graph service initialisation, inside the existing startup try/c
         getDb: () => graphService.getDb() as never,
       });
       if (swept > 0) {
-        localLogger.log(`[NexusAI] Deactivated ${swept} graph rows for deleted local sites`);
+        // `.info`, not `.log` — localLogger is Winston, whose `log()` signature is
+        // (level, message), so a single-string call reads the message as the level
+        // and emits nothing. The codebase uses `.info`/`.warn` exclusively.
+        localLogger.info(`[NexusAI] Deactivated ${swept} graph rows for deleted local sites`);
       }
     } catch (err) {
       localLogger.warn('[NexusAI] Local row reconciliation failed:', (err as Error).message);
@@ -1765,6 +1768,18 @@ the graph. Use the same test for future work rather than absorbing every adjacen
   `src/main/fleet/collectFleetCounts.ts`, `fleet-overview.ts:70`, `fleet-plugins.ts:113`. For a
   module whose purpose is honest counts, a real failure and "no data" should not be
   indistinguishable. Fix all three together or none.
+
+### Log discoverability
+
+- **The orphan-sweep circuit breaker warns via `console.warn`, not `localLogger`.**
+  `sweepOrphanedLocalRows` has no logger on `FleetCountsDeps` (deliberately — its other callers
+  have none), so a *refused* sweep misses the log files while `runOrphanSweep`'s own success and
+  failure lines land in them. That inverts the trail: the rarest and most diagnostic message is
+  the hardest to find. Cheapest correct fix, per the reviewer: have `sweepOrphanedLocalRows`
+  return `{ swept, refused?: { storeCount, graphCount } }` and let `runOrphanSweep` — which
+  already carries a logger — emit it. Do not thread a logger through `FleetCountsDeps`.
+  Consequence of the gap is benign (a refusal deletes nothing), so this is discoverability, not
+  data safety.
 
 ### Test coverage
 
