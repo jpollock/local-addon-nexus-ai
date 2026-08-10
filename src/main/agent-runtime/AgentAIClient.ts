@@ -41,9 +41,10 @@ export async function collectStream(gen: AsyncGenerator<ProviderStreamEvent>): P
     } else if (event.type === 'tool_call_end') {
       toolCalls.push({ id: event.id, name: event.name, arguments: event.arguments });
     } else if (event.type === 'done') {
-      // Last one wins: a provider may emit several done-shaped events, and the final carries the
-      // completed counts.
-      if (event.usage) usage = event.usage;
+      // Merge rather than replace: a provider may report the two directions on separate events,
+      // and a later partial report must not drop a count already captured. Later values win on
+      // the fields they carry; fields they omit keep what came before.
+      if (event.usage) usage = { ...usage, ...event.usage };
     } else if (event.type === 'error') {
       throw new Error(`Provider error: ${event.message}`);
     }

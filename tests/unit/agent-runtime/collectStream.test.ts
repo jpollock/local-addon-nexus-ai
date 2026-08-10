@@ -36,4 +36,31 @@ describe('collectStream', () => {
     await expect(collectStream(stream({ type: 'error', message: 'rate limited' })))
       .rejects.toThrow(/rate limited/);
   });
+
+  it('last done event usage wins when multiple done events carry usage', async () => {
+    const r = await collectStream(stream(
+      { type: 'token', text: 'hello' },
+      { type: 'done', stopReason: 'end_turn', usage: { inputTokens: 100, outputTokens: 200 } },
+      { type: 'done', stopReason: 'end_turn', usage: { inputTokens: 1204, outputTokens: 318 } },
+    ));
+    expect(r.usage).toEqual({ inputTokens: 1204, outputTokens: 318 });
+  });
+
+  it('earlier done event usage survives when later done event has no usage', async () => {
+    const r = await collectStream(stream(
+      { type: 'token', text: 'hello' },
+      { type: 'done', stopReason: 'end_turn', usage: { inputTokens: 1204, outputTokens: 318 } },
+      { type: 'done', stopReason: 'end_turn' },
+    ));
+    expect(r.usage).toEqual({ inputTokens: 1204, outputTokens: 318 });
+  });
+
+  it('merges partial usage reports from multiple done events', async () => {
+    const r = await collectStream(stream(
+      { type: 'token', text: 'hello' },
+      { type: 'done', stopReason: 'end_turn', usage: { inputTokens: 1204 } },
+      { type: 'done', stopReason: 'end_turn', usage: { outputTokens: 318 } },
+    ));
+    expect(r.usage).toEqual({ inputTokens: 1204, outputTokens: 318 });
+  });
 });
