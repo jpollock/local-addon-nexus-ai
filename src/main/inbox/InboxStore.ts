@@ -43,7 +43,7 @@ interface Row {
   seen_count: number; payload: string | null;
 }
 
-function toItem(r: Row): InboxItem {
+export function toItem(r: Row): InboxItem {
   let payload: unknown;
   if (r.payload) { try { payload = JSON.parse(r.payload); } catch { payload = undefined; } }
   return {
@@ -117,5 +117,60 @@ export class InboxStore {
       `SELECT COUNT(*) AS n FROM inbox_items WHERE status = 'open'`,
     ).get() as { n: number }).n;
     return { items: rows.map(toItem), total };
+  }
+
+  /** Record the user's decision. Survives every later re-report. */
+  decide(
+    id: number,
+    decision: string,
+    status: 'dismissed' | 'done',
+    now: number = Date.now(),
+  ): void {
+    this.db.prepare(`
+      UPDATE inbox_items SET status = ?, decision = ?, decided_at = ? WHERE id = ?
+    `).run(status, decision, now, id);
+  }
+
+  /**
+   * Return a decided item to the queue.
+   *
+   * This reverses the DECISION, not the change the decision caused. Reversing a
+   * live change is the staging-and-revert problem this spec deliberately does
+   * not solve — no copy on this surface may imply otherwise.
+   */
+  reopen(id: number, _now: number = Date.now()): void {
+    this.db.prepare(`
+      UPDATE inbox_items SET status = 'open', decision = NULL, decided_at = NULL
+      WHERE id = ?
+    `).run(id);
+  }
+
+  /** Every item regardless of status, bounded. Diagnostics and tests. */
+  listAll(limit: number = INBOX_PAGE_SIZE): InboxItem[] {
+    return (this.db.prepare(`
+      SELECT * FROM inbox_items ORDER BY last_seen_at DESC, id DESC LIMIT ?
+    `).all(limit) as Row[]).map(toItem);
+  }
+
+  /** Open counts per group. Always carries all three keys, zero included. */
+  countsByKind(): Record<InboxKind, number> {
+    const out: Record<InboxKind, number> = { decide: 0, problem: 0, know: 0 };
+    const rows = this.db.prepare(`
+      SELECT kind, COUNT(*) AS n FROM inbox_items WHERE status = 'open' GROUP BY kind
+    `).all() as Array<{ kind: string; n: number }>;
+    for (const r of rows) {
+      if (r.kind in out) out[r.kind as InboxKind] = r.n;
+    }
+    return out;
+  }
+
+  /** Open counts per agent — the single source for per-agent pending badges. */
+  pendingBySource(): Record<string, number> {
+    const rows = this.db.prepare(`
+      SELECT source, COUNT(*) AS n FROM inbox_items WHERE status = 'open' GROUP BY source
+    `).all() as Array<{ source: string; n: number }>;
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.source] = r.n;
+    return out;
   }
 }

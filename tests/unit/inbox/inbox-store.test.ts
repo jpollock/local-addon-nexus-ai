@@ -57,3 +57,61 @@ describe('InboxStore identity', () => {
     expect(row.detail).toBe('Now worse.');
   });
 });
+
+describe('InboxStore decisions', () => {
+  test('a dismissed item stays dismissed when re-reported', () => {
+    store.record(item(), 1000);
+    const id = store.listOpen().items[0].id;
+    store.decide(id, 'Not now', 'dismissed', 1500);
+
+    store.record(item(), 2000);   // the next sweep finds it again
+
+    expect(store.listOpen().items).toHaveLength(0);
+    const all = store.listAll();
+    expect(all[0].status).toBe('dismissed');
+    expect(all[0].decision).toBe('Not now');
+    expect(all[0].decidedAt).toBe(1500);
+    // still counted and still time-stamped — the problem has not gone away
+    expect(all[0].seenCount).toBe(2);
+    expect(all[0].lastSeenAt).toBe(2000);
+  });
+
+  test('reopen returns a decided item to the queue and clears the decision', () => {
+    store.record(item(), 1000);
+    const id = store.listOpen().items[0].id;
+    store.decide(id, 'Approve', 'done', 1500);
+    expect(store.listOpen().items).toHaveLength(0);
+
+    store.reopen(id, 2000);
+
+    const open = store.listOpen().items;
+    expect(open).toHaveLength(1);
+    expect(open[0].decision).toBeUndefined();
+    expect(open[0].decidedAt).toBeUndefined();
+  });
+
+  test('countsByKind counts only open items', () => {
+    store.record(item({ code: 'A', kind: 'decide' }), 1000);
+    store.record(item({ code: 'B', kind: 'decide' }), 1000);
+    store.record(item({ code: 'C', kind: 'problem' }), 1000);
+    const doneId = store.listOpen().items.find(i => i.code === 'B')!.id;
+    store.decide(doneId, 'Approve', 'done', 1500);
+
+    expect(store.countsByKind()).toEqual({ decide: 1, problem: 1, know: 0 });
+  });
+
+  test('pendingBySource counts open items per agent', () => {
+    store.record(item({ source: 'security-sentinel', code: 'A' }), 1000);
+    store.record(item({ source: 'security-sentinel', code: 'B' }), 1000);
+    store.record(item({ source: 'seo-insights', code: 'C' }), 1000);
+
+    expect(store.pendingBySource()).toEqual({ 'security-sentinel': 2, 'seo-insights': 1 });
+  });
+
+  test('listOpen is bounded and reports the true total', () => {
+    for (let i = 0; i < 250; i++) store.record(item({ code: `C-${i}` }), 1000 + i);
+    const page = store.listOpen(100);
+    expect(page.items).toHaveLength(100);
+    expect(page.total).toBe(250);
+  });
+});
