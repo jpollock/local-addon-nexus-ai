@@ -10,6 +10,17 @@ jest.mock('../../../src/main/ipc-handlers', () => ({
   getAgentSetting: jest.fn().mockReturnValue(true),
 }));
 
+jest.mock('../../../src/main/agent-runtime/buildAgentContext', () => ({
+  buildAgentContext: jest.fn().mockReturnValue({
+    ctx: {},
+    agentLog: {},
+    accFindings: [],
+    accActions: [],
+    accSites: {},
+    toolProvider: {},
+  }),
+}));
+
 const makeReg = () => {
   const reg = new ContributedToolRegistry();
   reg.register('my-agent', { name: 'greet', description: 'Hello', inputSchema: {} });
@@ -208,12 +219,31 @@ describe('AgentDispatcher', () => {
       expect(true).toBe(true);
     });
 
-    it('passes runId and eventLog through buildAgentContext for both dispatchFunction and dispatchRun', async () => {
-      // This test verifies that runId and eventLog are threaded through to buildAgentContext.
-      // We verify this by checking that the tool.call event was emitted with a runId — which only
-      // happens when eventLog is passed to buildAgentContext AND a runId is minted.
+    it('passes runId and eventLog through buildAgentContext in dispatchFunction', async () => {
+      const { buildAgentContext } = require('../../../src/main/agent-runtime/buildAgentContext');
+      (buildAgentContext as jest.Mock).mockClear();
+
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-ctx-'));
+      const agentDir = path.join(dir, 'test-agent');
+      fs.mkdirSync(agentDir, { recursive: true });
+
+      // Write a minimal agent.js that has a contributes.tools handler
+      fs.writeFileSync(
+        path.join(agentDir, 'agent.js'),
+        `module.exports = {
+          name: 'test-agent',
+          contributes: {
+            tools: {
+              greet: {
+                handler: async () => ({ content: [{ type: 'text', text: 'ok' }], isError: false }),
+              },
+            },
+          },
+        };`
+      );
+
       const reg = new ContributedToolRegistry();
-      reg.register('my-agent', { name: 'greet', description: 'Hello', inputSchema: {} });
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {} });
 
       const eventLog = {
         write: jest.fn(),
@@ -221,38 +251,130 @@ describe('AgentDispatcher', () => {
       } as any;
 
       const stubs = makeStubs();
-      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, '/nonexistent', stubs.resolvedProvider, stubs.stateStore, undefined, eventLog);
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore, undefined, eventLog);
 
-      // This will error (module not found), but the tool.call event is written BEFORE the error
-      await d.dispatch('my-agent', 'greet', {});
+      await d.dispatch('test-agent', 'greet', {});
 
-      expect(eventLog.write).toHaveBeenCalled();
-      const call = eventLog.write.mock.calls[0][0];
+      // buildAgentContext should have been called
+      expect(buildAgentContext).toHaveBeenCalled();
+      const call = (buildAgentContext as jest.Mock).mock.calls[0][0];
+      expect(call.eventLog).toBe(eventLog);
       expect(call.runId).toBeTruthy();
-      expect(call.event).toBe('tool.call');
-      // The fact that this event was written with a runId proves that dispatch() minted one
-      // and passed it through buildAgentContext
+      expect(call.runId).toMatch(/^r_[a-z0-9]+$/);
+
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it('FAILS when buildAgentContext receives no eventLog (substitution check)', async () => {
-      // This test verifies the seam: if we construct buildAgentContext WITHOUT eventLog,
-      // event emission inside the agent context should not work. We can't directly test
-      // buildAgentContext from here without mocking it, but we can verify that when
-      // AgentDispatcher is constructed WITHOUT an eventLog, no tool.call event is written.
+    it('passes runId and eventLog through buildAgentContext in dispatchRun', async () => {
+      const { buildAgentContext } = require('../../../src/main/agent-runtime/buildAgentContext');
+      (buildAgentContext as jest.Mock).mockClear();
+
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-ctx-'));
+      const agentDir = path.join(dir, 'test-agent');
+      fs.mkdirSync(agentDir, { recursive: true });
+
+      // Write a minimal agent.js that has a run() method
+      fs.writeFileSync(
+        path.join(agentDir, 'agent.js'),
+        `module.exports = {
+          name: 'test-agent',
+          run: async () => ({ findings: [] }),
+        };`
+      );
 
       const reg = new ContributedToolRegistry();
-      reg.register('my-agent', { name: 'greet', description: 'Hello', inputSchema: {} });
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {}, executionMode: 'run' });
+
+      const eventLog = {
+        write: jest.fn(),
+        pathsFor: jest.fn().mockReturnValue({ combined: '/tmp/nexus.log', agent: '/tmp/agent.log' }),
+      } as any;
 
       const stubs = makeStubs();
-      const mockEventLog = { write: jest.fn(), pathsFor: jest.fn().mockReturnValue({ combined: '/tmp/nexus.log', agent: '/tmp/agent.log' }) } as any;
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore, undefined, eventLog);
 
+      await d.dispatch('test-agent', 'greet', {});
+
+      // buildAgentContext should have been called
+      expect(buildAgentContext).toHaveBeenCalled();
+      const call = (buildAgentContext as jest.Mock).mock.calls[0][0];
+      expect(call.eventLog).toBe(eventLog);
+      expect(call.runId).toBeTruthy();
+      expect(call.runId).toMatch(/^r_[a-z0-9]+$/);
+
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('FAILS when buildAgentContext receives no eventLog — dispatchFunction path', async () => {
+      const { buildAgentContext } = require('../../../src/main/agent-runtime/buildAgentContext');
+      (buildAgentContext as jest.Mock).mockClear();
+
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-ctx-'));
+      const agentDir = path.join(dir, 'test-agent');
+      fs.mkdirSync(agentDir, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(agentDir, 'agent.js'),
+        `module.exports = {
+          name: 'test-agent',
+          contributes: {
+            tools: {
+              greet: {
+                handler: async () => ({ content: [{ type: 'text', text: 'ok' }], isError: false }),
+              },
+            },
+          },
+        };`
+      );
+
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {} });
+
+      const stubs = makeStubs();
       // Construct WITHOUT eventLog
-      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, '/nonexistent', stubs.resolvedProvider, stubs.stateStore);
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
 
-      await d.dispatch('my-agent', 'greet', {});
+      await d.dispatch('test-agent', 'greet', {});
 
-      // The eventLog we passed to the dispatcher was undefined, so write should never have been called
-      expect(mockEventLog.write).not.toHaveBeenCalled();
+      // buildAgentContext should have been called, but WITHOUT eventLog
+      expect(buildAgentContext).toHaveBeenCalled();
+      const call = (buildAgentContext as jest.Mock).mock.calls[0][0];
+      expect(call.eventLog).toBeUndefined();
+
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('FAILS when buildAgentContext receives no eventLog — dispatchRun path', async () => {
+      const { buildAgentContext } = require('../../../src/main/agent-runtime/buildAgentContext');
+      (buildAgentContext as jest.Mock).mockClear();
+
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-ctx-'));
+      const agentDir = path.join(dir, 'test-agent');
+      fs.mkdirSync(agentDir, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(agentDir, 'agent.js'),
+        `module.exports = {
+          name: 'test-agent',
+          run: async () => ({ findings: [] }),
+        };`
+      );
+
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {}, executionMode: 'run' });
+
+      const stubs = makeStubs();
+      // Construct WITHOUT eventLog
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      await d.dispatch('test-agent', 'greet', {});
+
+      // buildAgentContext should have been called, but WITHOUT eventLog
+      expect(buildAgentContext).toHaveBeenCalled();
+      const call = (buildAgentContext as jest.Mock).mock.calls[0][0];
+      expect(call.eventLog).toBeUndefined();
+
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('includes target field when args contains site', async () => {
