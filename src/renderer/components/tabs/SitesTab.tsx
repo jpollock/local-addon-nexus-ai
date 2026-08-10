@@ -140,6 +140,18 @@ const bulkBtnStyle = (enabled: boolean): React.CSSProperties => ({
   color: 'var(--nxai-accent-text)',
 });
 
+const rowActionStyle: React.CSSProperties = {
+  padding: '3px 10px',
+  borderRadius: '6px',
+  fontSize: '11px',
+  fontWeight: 500,
+  cursor: 'pointer',
+  border: '1px solid var(--nxai-card-border)',
+  backgroundColor: 'var(--nxai-card-bg)',
+  color: 'var(--nxai-card-text)',
+  whiteSpace: 'nowrap',
+};
+
 const tableStyle: React.CSSProperties = {
   width: '100%',
   borderCollapse: 'collapse',
@@ -291,6 +303,44 @@ export class SitesTab extends React.Component<SitesTabProps, SitesTabState> {
     );
   }
 
+  /**
+   * Index one external site's content.
+   *
+   * Takes the site id, never the alias. `nexus host index <alias>` fans out
+   * over every registered site on the connection — a row action must touch the
+   * one row it sits on, and a single alias really does host several sites.
+   */
+  handleIndexHost = (siteId: string): void => {
+    this.props.onIndexHost(siteId);
+  };
+
+  /**
+   * External rows only. This is the affordance the spec exists to add: content
+   * indexing for external hosts shipped, but `externalContentIndexAutoEnabled`
+   * defaults to false and had zero renderer references, so "0 Searchable" read
+   * as a cap when it was actually an invisible switch. Local and WP Engine
+   * sites already index through their own schedulers and the bulk bar.
+   */
+  private renderActionsCell(r: SiteRow): React.ReactNode {
+    if (r.source !== 'external') {
+      return React.createElement('td', { style: tdStyle }, null);
+    }
+    return React.createElement(
+      'td',
+      { style: tdStyle },
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          style: rowActionStyle,
+          'aria-label': `Index content on ${r.name}`,
+          onClick: () => this.handleIndexHost(r.id),
+        },
+        'Index content',
+      ),
+    );
+  }
+
   private renderRow(r: SiteRow): React.ReactNode {
     const checked = this.props.selected.indexOf(r.id) !== -1;
     return React.createElement(
@@ -317,6 +367,7 @@ export class SitesTab extends React.Component<SitesTabProps, SitesTabState> {
       React.createElement('td', { style: tdStyle }, r.wpVersion || UNKNOWN),
       React.createElement('td', { style: tdStyle }, r.phpVersion || UNKNOWN),
       React.createElement('td', { style: tdStyle }, formatLastSync(r.lastSyncAt)),
+      this.renderActionsCell(r),
     );
   }
 
@@ -349,6 +400,7 @@ export class SitesTab extends React.Component<SitesTabProps, SitesTabState> {
           React.createElement('th', { style: thStyle }, 'WP'),
           React.createElement('th', { style: thStyle }, 'PHP'),
           React.createElement('th', { style: thStyle }, 'Last sync'),
+          React.createElement('th', { style: thStyle }, 'Actions'),
         ),
       ),
       React.createElement('tbody', null, rows.map(r => this.renderRow(r))),

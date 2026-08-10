@@ -346,6 +346,24 @@ exports[`SitesTab snapshot 1`] = `
                 },
                 "type": "th",
               },
+              {
+                "children": "Actions",
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
             ],
             "key": null,
             "props": {},
@@ -463,6 +481,18 @@ exports[`SitesTab snapshot 1`] = `
                 },
                 {
                   "children": "—",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+                {
+                  "children": null,
                   "key": null,
                   "props": {
                     "style": {

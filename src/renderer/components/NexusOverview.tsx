@@ -1496,8 +1496,9 @@ renderTabBar(): React.ReactNode {
         onToggle: this.toggleSiteSelection,
         onToggleAll: this.toggleAllSiteSelection,
         onBulk: (type: string, ids: string[]) => { void this.handleSiteBulk(type, ids); },
-        // Task 6 wires the per-host "Index content" row action.
-        onIndexHost: () => undefined,
+        // One site, through the same audited bulk path as everything else —
+        // not `nexus host index <alias>`, which fans out over the connection.
+        onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
         onRetry: () => { void this.fetchAll(); },
       });
       case 'activity': return this.renderActivityTab();

@@ -71,6 +71,69 @@ describe('SettingsTab — sync schedule (external host refresh)', () => {
     const numberInput = findAll(tree, (n) => n.type === 'input' && n.props.type === 'number' && n.props.value === 12);
     expect(numberInput.length).toBe(1);
   });
+
+  it('the external content-index row reads externalContentIndexAutoEnabled/IntervalHours', async () => {
+    // Before this row existed the setting had zero references in src/renderer/,
+    // so external hosts read 0 Searchable because the switch was invisible —
+    // not because they were capped at a lower knowledge rung.
+    const electron = mockElectron({
+      [IPC_CHANNELS.GET_SETTINGS]: {
+        autoIndex: true, excludedSiteIds: [],
+        externalContentIndexAutoEnabled: true, externalContentIndexIntervalHours: 6,
+      },
+    });
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    const tree = instance.render();
+
+    const checkbox = findAll(tree, (n) => n.type === 'input' && n.props.type === 'checkbox'
+      && n.props.checked === true && n.props.onChange === instance.handleExternalContentIndexAutoEnabledChange);
+    expect(checkbox.length).toBe(1);
+    const numberInput = findAll(tree, (n) => n.type === 'input' && n.props.type === 'number' && n.props.value === 6);
+    expect(numberInput.length).toBe(1);
+  });
+
+  it('toggling it persists the field the strict schema actually accepts', async () => {
+    // UpdateSettingsSchema is .strict(): a field absent from it is stripped
+    // silently, the save reports success, and the value never persists. This
+    // asserts the exact key travels over UPDATE_SETTINGS.
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+
+    instance.handleExternalContentIndexAutoEnabledChange({ target: { checked: true } } as any);
+
+    // The mock is typed as a one-arg invoke; the payload is the second arg.
+    const calls = electron.ipcRenderer.invoke.mock.calls as unknown as any[][];
+    const call = calls.find(c => c[0] === IPC_CHANNELS.UPDATE_SETTINGS
+      && Object.prototype.hasOwnProperty.call(c[1] ?? {}, 'externalContentIndexAutoEnabled'));
+    expect(call).toBeDefined();
+    expect(call?.[1].externalContentIndexAutoEnabled).toBe(true);
+  });
+
+  it('the interval is clamped to the range the schema enforces', async () => {
+    // The schema rejects 0 and 999 outright, so an unclamped input would make
+    // the whole settings write fail rather than just that field.
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+
+    instance.handleExternalContentIndexIntervalChange({ target: { value: '0' } } as any);
+    instance.handleExternalContentIndexIntervalChange({ target: { value: '999' } } as any);
+
+    const calls = electron.ipcRenderer.invoke.mock.calls as unknown as any[][];
+    const values = calls
+      .filter(c => c[0] === IPC_CHANNELS.UPDATE_SETTINGS
+        && c[1]?.externalContentIndexIntervalHours !== undefined)
+      .map(c => c[1].externalContentIndexIntervalHours);
+    expect(values).toEqual([1, 168]);
+  });
 });
 
 describe('SettingsTab — exception picker writes targetRef', () => {
