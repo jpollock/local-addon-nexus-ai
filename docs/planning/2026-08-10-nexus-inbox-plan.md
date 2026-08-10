@@ -1029,18 +1029,19 @@ user's settings untouched.
 import { canAutoRunWith } from '../../../src/main/agent-runtime/auto-run-gate';
 
 describe('auto-pause marker', () => {
-  test('an auto-paused agent may not auto-run', () => {
-    expect(canAutoRunWith({ enabled: true, scheduleEnabled: true }, 'schedule', 1000)).toBe(true);
-    expect(canAutoRunWith({ enabled: true, scheduleEnabled: true, autoPausedAt: 900 }, 'schedule', 1000)).toBe(false);
+  test('an auto-paused agent may not be started by the scheduler', () => {
+    expect(canAutoRunWith({ enabled: true, scheduleEnabled: true }, 'schedule')).toBe(true);
+    expect(canAutoRunWith({ enabled: true, scheduleEnabled: true, autoPausedAt: 900 }, 'schedule')).toBe(false);
   });
 
-  test('an auto-paused agent may still be run by hand', () => {
-    // The gate governs automatic triggers only; "Try again" must still work.
-    expect(canAutoRunWith({ enabled: true, autoPausedAt: 900 }, 'event', 1000)).toBe(false);
+  test('an auto-paused agent may not be started by an event either', () => {
+    // Both triggers are automatic, so both are blocked. Running by hand does
+    // not pass through this gate at all — "Try again" keeps working.
+    expect(canAutoRunWith({ enabled: true, autoPausedAt: 900 }, 'event')).toBe(false);
   });
 
   test('clearing the marker resumes automatic runs', () => {
-    expect(canAutoRunWith({ enabled: true, scheduleEnabled: true, autoPausedAt: undefined }, 'schedule', 1000)).toBe(true);
+    expect(canAutoRunWith({ enabled: true, scheduleEnabled: true, autoPausedAt: undefined }, 'schedule')).toBe(true);
   });
 });
 ```
@@ -1073,7 +1074,7 @@ describe('pauseIfStuck', () => {
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `npx jest tests/unit/agents/auto-run-gate.test.ts tests/unit/inbox/auto-pause.test.ts`
-Expected: FAIL — `canAutoRunWith` takes two arguments; `pauseIfStuck` is not exported.
+Expected: FAIL — `autoPausedAt` is not a property of `AgentTriggerSettings`; `pauseIfStuck` is not exported.
 
 - [ ] **Step 3: Extend the gate**
 
@@ -1097,7 +1098,6 @@ export interface AgentTriggerSettings {
 export function canAutoRunWith(
   settings: AgentTriggerSettings | undefined,
   kind: AutoRunKind,
-  _now?: number,
 ): boolean {
   if (settings?.enabled === false) return false;
   if (settings?.autoPausedAt !== undefined) return false;
@@ -1105,6 +1105,9 @@ export function canAutoRunWith(
   return perTrigger !== false;
 }
 ```
+
+The signature is unchanged — the marker rides in the settings object, so every existing caller and
+every existing test in `tests/unit/agents/auto-run-gate.test.ts` keeps working untouched.
 
 - [ ] **Step 4: Add `pauseIfStuck` to `src/main/inbox/autoPause.ts`**
 
