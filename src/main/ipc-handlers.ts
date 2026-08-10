@@ -104,6 +104,8 @@ import { detectCollision, writeHostBlock, generateHostKey, previewHostBlock } fr
 import { listSshConfigHosts } from './external/sshConfigParser';
 import { getExternalProfile, upsertExternalProfile } from './external/externalSiteStore';
 import { collectFleetCounts } from './fleet/collectFleetCounts';
+import { buildSiteRows } from './fleet/siteRows';
+import { createExternalBulkOps } from './bulk/externalBulkOps';
 import { collectSystemHealth } from './health/collectSystemHealth';
 
 /**
@@ -606,6 +608,90 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     } catch (err) {
       localLogger.error('[NexusAI] get-sites failed:', (err as Error).message);
       return [];
+    }
+  });
+
+  // One row per site across all three sources, for the Sites table. Unlike
+  // GET_SITES above (local only), this is the whole fleet.
+  safeHandle(IPC_CHANNELS.GET_SITE_ROWS, async () => {
+    try {
+      const db = graphService?.getDb?.();
+      const allLocal = Object.values(siteData.getSites() ?? {}) as any[];
+      const statuses = localServicesBridge.getAllSiteStatuses();
+
+      // `content_indexed_at` is NOT in the base schema and is NOT created by
+      // GraphService.initialize(). Its only creator is ensureContentIndexedAtColumn,
+      // whose two callers are ExternalContentIndexScheduler and `nexus host index
+      // <alias>` — neither of which runs while externalContentIndexAutoEnabled is
+      // false, and false is the default. Selecting it unconditionally therefore
+      // throws `no such column` on any machine that never opted in, and the catch
+      // below would report the ENTIRE fleet as unreadable over one optional column.
+      // Degrade instead: no column means no writer ever stamped it, so NULL is the
+      // true value for every row, and indexedSiteIds below still carries the live
+      // signal. A read handler must not ALTER the schema to make its own query work.
+      const hasIndexedAt = db
+        ? !!(db.prepare(
+            "SELECT COUNT(*) AS c FROM pragma_table_info('sites') WHERE name = 'content_indexed_at'",
+          ).get() as { c: number }).c
+        : false;
+
+      // No `completeness` column exists — buildSiteRows derives the rung instead.
+      // `is_active = 1` is required: nexusHostRemove soft-deletes, and a removed
+      // host must never reappear in a list (CLAUDE.md records this exact bug in
+      // `sites list`, `sites get` and nexusFleetSiteHealth).
+      //
+      // `host` is selected as the row genuinely has it, but it is NOT the SSH
+      // alias — it mirrors `source`. buildSiteRows ignores it and parses the
+      // alias out of the id; passing it through keeps the row honest rather
+      // than substituting a null the database does not contain.
+      const graphRows = db ? db.prepare(`
+        SELECT id, source, name, domain, wp_version, php_version, host,
+               ${hasIndexedAt ? 'content_indexed_at' : 'NULL AS content_indexed_at'},
+               last_sync_at
+        FROM sites WHERE source IN ('wpe','external') AND is_active = 1
+      `).all() as any[] : [];
+
+      // 'stale' counts as searchable — the content is indexed, just ageing.
+      // Same definition as SiteNexusSection.tsx:723; do not invent a second one.
+      const indexedSiteIds = new Set<string>(
+        (indexRegistry.listAll() ?? [])
+          .filter((e: any) => e.state === 'indexed' || e.state === 'stale')
+          .map((e: any) => e.siteId),
+      );
+
+      // Local site objects do NOT have wpVersion/phpVersion at the top level.
+      // A real sites.json entry has: name domain path environment xdebugEnabled
+      // workspace mysql ports hostConnections id localVersion services.
+      // PHP lives at services.php.version ('8.2.29'); `domain` is top-level; and
+      // WP version is not there at all — it comes from the graph.
+      //
+      // So: Local's store decides WHICH local sites exist (never the graph — it
+      // keeps rows for deleted ones), and the graph supplies extra facts for those
+      // that happen to have a row. Enrich, do not select.
+      const localGraph = new Map<string, any>(
+        db ? (db.prepare(
+          "SELECT id, wp_version FROM sites WHERE source = 'local' AND is_active = 1",
+        ).all() as any[]).map((r: any) => [r.id, r]) : [],
+      );
+
+      const { rows, total } = buildSiteRows({
+        localSites: allLocal.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          status: statuses[s.id],
+          domain: s.domain ?? null,
+          phpVersion: s.services?.php?.version ?? null,
+          wpVersion: localGraph.get(s.id)?.wp_version ?? null,
+        })),
+        graphRows,
+        indexedSiteIds,
+      });
+
+      return { success: true, rows, total };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-site-rows failed:', (err as Error).message);
+      // NOT an empty fleet. The renderer must say "couldn't read your sites".
+      return { success: false, rows: [], total: { count: 0, scope: '' } };
     }
   });
 
@@ -2294,9 +2380,10 @@ Answer:`,
 
       // ── External SSH hosts ───────────────────────────────────────────────
       // Same shape as the WPE block: Configured means the graph has a
-      // wp_version, Searchable means an IndexRegistry entry exists. Until
-      // Spec 4b there is no external content indexing, so searchable will
-      // read 0 — that is the true number, not a gap to hide.
+      // wp_version, Searchable means an IndexRegistry entry exists. External
+      // content indexing has since shipped (ExternalContentIndexScheduler,
+      // `nexus host index <alias>`), so this can be non-zero — but it is
+      // opt-in and off by default, so on most machines it will read 0.
       let externalTotal = 0, externalConfigured = 0, externalSearchable = 0;
       if (db) {
         const externalSites = db.prepare(
@@ -2609,6 +2696,19 @@ Answer:`,
     graphService,
     metadataCache: metadataCache ?? undefined,
     auditServices: deps.nexusServices,
+    // Remote adapters. Without these a WP Engine or external id in a bulk
+    // selection resolves through Local's store and fails "Site not found" —
+    // 334 of 369 rows on a real machine. Both are absent-tolerant by design:
+    // BulkOperationManager reports "not available" per site rather than
+    // pretending the work was done.
+    wpeOps: deps.wpeSyncService
+      ? {
+          syncSingleSite: (installId: string) => deps.wpeSyncService!.syncSingleSite(installId),
+          indexOne: (siteId: string, installName: string) =>
+            deps.wpeSyncService!.indexOneWpeContent(siteId, installName),
+        }
+      : undefined,
+    externalOps: createExternalBulkOps(deps.nexusServices, localLogger),
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const provider = options?.provider ?? settings?.aiProvider;

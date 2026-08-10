@@ -644,6 +644,25 @@ export class WPESyncService {
   }
 
   /**
+   * Content-index a single WPE install.
+   *
+   * `syncContent` is private and `indexAllWpeContent` is fleet-wide, so a
+   * selection-scoped bulk index had no entry point. Unlike the fleet-wide
+   * version, this THROWS when its dependencies are missing rather than warning
+   * and returning zero: the caller is BulkOperationManager, which records a
+   * per-site error, and a silent no-op there would report "indexed" for a site
+   * nothing ran against.
+   */
+  async indexOneWpeContent(siteId: string, installName: string): Promise<void> {
+    if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
+      throw new Error(
+        'WP Engine content indexing is unavailable — SSH key or embedding service not configured.',
+      );
+    }
+    await this.syncContent(siteId, installName);
+  }
+
+  /**
    * Remove a WPE site from the graph
    */
   async removeWPESite(installId: string): Promise<void> {

@@ -33,6 +33,14 @@ export function injectThemeVars(): void {
       --nxai-chat-assistant-bg: #fef3c7;
       --nxai-filter-bg: #f0fdf4;
       --nxai-error-bg: #fef2f2;
+      /* Primary action fill. Deliberately NOT UI_COLORS.WPE_BRAND (#0ECAD4):
+         measured, the brand cyan is 2.02:1 against white and fails WCAG AA at
+         any text size. #0a8189 is 4.65:1 against white, so white-on-accent
+         passes AA in both themes — which is why the value is identical below.
+         Use it as a FILL behind --nxai-accent-text, not as a text colour: as
+         text on the dark card (#2a2a2a) it is 3.09:1 and fails AA for body copy. */
+      --nxai-accent: #0a8189;
+      --nxai-accent-text: #ffffff;
     }
     .Theme__Dark {
       --nxai-card-bg: #2a2a2a;
@@ -55,6 +63,10 @@ export function injectThemeVars(): void {
       --nxai-chat-assistant-bg: #78350f;
       --nxai-filter-bg: #052e16;
       --nxai-error-bg: #450a0a;
+      /* Same value as light: the pair is judged on accent-vs-accent-text
+         (4.65:1), which does not change with the surrounding theme. */
+      --nxai-accent: #0a8189;
+      --nxai-accent-text: #ffffff;
     }
   `;
   document.head.appendChild(style);

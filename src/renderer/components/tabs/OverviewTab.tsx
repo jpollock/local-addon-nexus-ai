@@ -7,7 +7,6 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import type { NexusSettings } from '../../../common/types';
-import { FleetCompletenessWidget } from '../FleetCompletenessWidget';
 import { AIGatewayPanel } from '../AIGatewayPanel';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel, bigNumberStyle, subStatStyle, dotStyle, btnStyle, codeBlockStyle } from './shared/cards';
 import type { DashboardStats, McpInfo, StartupStatus, AiProxyInfo, FleetVersionEntry, FleetSummaryData } from './shared/types';
@@ -353,150 +352,6 @@ export class OverviewTab extends React.Component<OverviewTabProps, OverviewTabSt
     );
   }
 
-  renderFleetSummaryCard(): React.ReactNode {
-    const { fleetSummary } = this.props;
-    if (!fleetSummary) {
-      return React.createElement('div', { style: { ...cardStyle, gridColumn: '1 / 3' } },
-        React.createElement('div', { style: cardTitleStyle }, 'Fleet Summary'),
-        React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontSize: '13px' } }, 'Loading fleet data…'),
-      );
-    }
-
-    const { total, totalLocal, totalWpe, wpVersions, phpVersions, completeness, wpeSync, staleCount, neverScannedCount } = fleetSummary;
-
-    // Show top 3 WP versions
-    const topWp = wpVersions.slice(0, 3);
-    const otherWpCount = wpVersions.slice(3).reduce((s, e) => s + (e.version !== 'unknown' ? e.count : 0), 0);
-
-    // Show top 3 PHP versions; track unknown separately so it's always surfaced
-    const knownPhp = phpVersions.filter(e => e.version !== 'unknown');
-    const unknownPhpEntry = phpVersions.find(e => e.version === 'unknown');
-    const topPhp = knownPhp.slice(0, 3);
-    const otherPhpCount = knownPhp.slice(3).reduce((s, e) => s + e.count, 0);
-
-    const versionListStyle: React.CSSProperties = {
-      fontSize: '12px',
-      color: 'var(--nxai-card-text)',
-      lineHeight: '1.8',
-    };
-
-    const colStyle: React.CSSProperties = {
-      flex: 1,
-    };
-
-    const labelStyle: React.CSSProperties = {
-      fontSize: '11px',
-      fontWeight: 600,
-      textTransform: 'uppercase' as const,
-      letterSpacing: '0.5px',
-      color: 'var(--nxai-card-label)',
-      marginBottom: '6px',
-    };
-
-    return React.createElement('div', { style: { ...cardStyle, gridColumn: '1 / 3' } },
-      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' } },
-        React.createElement('div', { style: cardTitleStyle }, 'Fleet Intelligence'),
-        React.createElement('div', { style: { fontSize: '22px', fontWeight: 700, color: 'var(--nxai-card-text)' } },
-          `${total} sites`,
-          React.createElement('span', { style: { fontSize: '12px', fontWeight: 400, color: 'var(--nxai-card-sub)', marginLeft: '8px' } },
-            `${totalLocal} local · ${totalWpe} WPE`,
-          ),
-        ),
-      ),
-
-      React.createElement('div', { style: { display: 'flex', gap: '24px' } },
-        // WP Versions column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'WordPress'),
-          React.createElement('div', { style: versionListStyle },
-            ...topWp.map(e =>
-              React.createElement('div', { key: e.version },
-                React.createElement('span', { style: { fontWeight: 500 } }, e.version),
-                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, `${e.count} site${e.count !== 1 ? 's' : ''}`),
-              )
-            ),
-            otherWpCount > 0
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } }, `+${otherWpCount} on other versions`)
-              : null,
-          ),
-        ),
-
-        // PHP Versions column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'PHP'),
-          React.createElement('div', { style: versionListStyle },
-            ...topPhp.map(e =>
-              React.createElement('div', { key: e.version },
-                React.createElement('span', { style: { fontWeight: 500 } }, e.version),
-                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, `${e.count} site${e.count !== 1 ? 's' : ''}`),
-              )
-            ),
-            otherPhpCount > 0
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } }, `+${otherPhpCount} on other versions`)
-              : null,
-            unknownPhpEntry
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic' } },
-                  `${unknownPhpEntry.count} unknown (need SSH sync)`,
-                )
-              : null,
-          ),
-        ),
-
-        // Local Twins + WPE Sync column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'Local Twins'),
-          React.createElement('div', { style: versionListStyle },
-            completeness.indexed > 0
-              ? React.createElement('div', null, `✅ indexed: ${completeness.indexed}`)
-              : null,
-            completeness.metadata > 0
-              ? React.createElement('div', null, `✅ metadata: ${completeness.metadata}`)
-              : null,
-            completeness.filesystem > 0
-              ? React.createElement('div', null, `🔶 filesystem: ${completeness.filesystem}`)
-              : null,
-            completeness.none > 0
-              ? React.createElement('div', null, `❌ none: ${completeness.none}`)
-              : null,
-          ),
-          wpeSync && totalWpe > 0
-            ? React.createElement('div', { style: { marginTop: 10 } },
-                React.createElement('div', { style: { ...labelStyle, marginBottom: 4 } }, 'WPE Sync'),
-                React.createElement('div', { style: versionListStyle },
-                  React.createElement('div', null,
-                    React.createElement('span', { style: { fontWeight: 500 } }, `${wpeSync.synced}/${totalWpe}`),
-                    React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, 'synced'),
-                  ),
-                  wpeSync.neverSynced > 0
-                    ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic' } },
-                        `${wpeSync.neverSynced} need SSH sync`,
-                      )
-                    : null,
-                ),
-              )
-            : null,
-        ),
-
-        // Freshness column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'Freshness'),
-          React.createElement('div', { style: versionListStyle },
-            staleCount > 0
-              ? React.createElement('div', { style: { color: UI_COLORS.STATUS_WARNING } },
-                  `⚠️ ${staleCount} need${staleCount !== 1 ? '' : 's'} refresh`,
-                )
-              : React.createElement('div', { style: { color: UI_COLORS.STATUS_RUNNING } }, '✓ All current'),
-            neverScannedCount > 0
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } },
-                  `${neverScannedCount} never scanned`,
-                )
-              : null,
-          ),
-        ),
-      ),
-    );
-  }
-
   renderWpeBanner(): React.ReactNode {
     const { stats } = this.props;
     const { wpeBannerDismissed } = this.state;
@@ -629,14 +484,10 @@ export class OverviewTab extends React.Component<OverviewTabProps, OverviewTabSt
         this.renderWpeConnectedCard(stats),
         this.renderRemoteSitesCard(stats),
       ),
-      React.createElement('div', { style: { marginTop: 16 } },
-        React.createElement(FleetCompletenessWidget, {
-          electron: this.props.electron,
-          onSchedule: () => this.props.onNavigate('settings'),
-          onIndexSites: () => this.props.onNavigate('operations'),
-        }),
-      ),
-      React.createElement('div', { style: { marginTop: 16 } }, this.renderFleetSummaryCard()),
+      // FleetCompletenessWidget and the Fleet Summary card were here. Both said
+      // "how much do we know about the fleet?" one source at a time, and the
+      // Sites table now answers that per row, for all three sources at once.
+      // The three count cards above stay: they are a rollup, not a list.
 
       // AI Integration — MCP status + proxy + gateway usage
       renderSectionLabel('AI Integration'),

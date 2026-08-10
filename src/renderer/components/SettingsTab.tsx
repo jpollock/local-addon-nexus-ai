@@ -242,6 +242,16 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     this.saveSetting({ externalRefreshIntervalHours: hours });
   };
 
+  handleExternalContentIndexAutoEnabledChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    this.saveSetting({ externalContentIndexAutoEnabled: e.target.checked });
+  };
+
+  handleExternalContentIndexIntervalChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const val = parseInt(e.target.value, 10);
+    const hours = isNaN(val) || val < 1 ? 1 : val > 168 ? 168 : val;
+    this.saveSetting({ externalContentIndexIntervalHours: hours });
+  };
+
   // ── WPE Access handlers ──────────────────────────────────────────────────
 
   handleOpCardToggle = (op: string): void => {
@@ -520,7 +530,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       // part of Sync Schedule alongside the WPE sync toggles above it.
       sublabel('External SSH Hosts'),
       React.createElement('div', { style: cardStyle },
-        React.createElement('div', { style: { ...rowStyle, borderBottom: 'none' } },
+        React.createElement('div', { style: rowStyle },
           React.createElement('div', { style: rowLabelStyle },
             React.createElement('div', { style: rowTitleStyle }, 'Metadata refresh for external hosts'),
             React.createElement('div', { style: rowSubStyle }, 'Off by default. Nexus does not SSH into a third-party host on a timer unless you ask it to.'),
@@ -538,6 +548,33 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
               onChange: this.handleExternalRefreshIntervalChange,
               disabled: !(settings.externalRefreshAutoEnabled ?? false),
               style: { ...numInputStyle, opacity: (settings.externalRefreshAutoEnabled ?? false) ? 1 : 0.4 },
+            }),
+            React.createElement('span', { style: unitStyle }, 'hrs'),
+          ),
+        ),
+        // Until this row existed, `externalContentIndexAutoEnabled` had zero
+        // references anywhere in src/renderer/ — the only ways to turn external
+        // content indexing on were `nexus settings set` and `nexus host index`.
+        // That is why external hosts read 0 Searchable: an invisible switch, not
+        // the knowledge cap the design originally described.
+        React.createElement('div', { style: { ...rowStyle, borderBottom: 'none' } },
+          React.createElement('div', { style: rowLabelStyle },
+            React.createElement('div', { style: rowTitleStyle }, 'Content indexing for external hosts'),
+            React.createElement('div', { style: rowSubStyle }, 'Off by default, and a separate SSH session per host. Needed before an external site can be searched.'),
+          ),
+          React.createElement('div', { style: rowControlStyle },
+            React.createElement('input', {
+              type: 'checkbox',
+              checked: settings.externalContentIndexAutoEnabled ?? false,
+              onChange: this.handleExternalContentIndexAutoEnabledChange,
+              title: 'Enable automatic external host content indexing',
+            }),
+            React.createElement('input', {
+              type: 'number', min: 1, max: 168,
+              value: settings.externalContentIndexIntervalHours ?? 24,
+              onChange: this.handleExternalContentIndexIntervalChange,
+              disabled: !(settings.externalContentIndexAutoEnabled ?? false),
+              style: { ...numInputStyle, opacity: (settings.externalContentIndexAutoEnabled ?? false) ? 1 : 0.4 },
             }),
             React.createElement('span', { style: unitStyle }, 'hrs'),
           ),

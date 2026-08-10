@@ -11,6 +11,7 @@ import type {
   BulkOpType,
 } from './types';
 import { auditDirectOperation, type AuditCapableServices } from '../audit/auditDirectOperation';
+import { siteSourceOf, wpeInstallIdOf, type SiteSource } from './siteSource';
 
 export interface BulkOpDeps {
   contentPipeline: { indexSite(info: any): Promise<any> };
@@ -47,7 +48,34 @@ export interface BulkOpDeps {
    * site, not by bulk op id.
    */
   auditServices?: AuditCapableServices;
+  /**
+   * WP Engine adapters. Optional so existing construction sites and tests keep
+   * working, but absent means a WPE id in a selection FAILS rather than being
+   * skipped — see `unavailable()`. A bulk op that silently does nothing is
+   * worse than one that reports it could not run.
+   */
+  wpeOps?: {
+    /** Metadata refresh. Takes the CAPI install id, not the `wpe-` graph id. */
+    syncSingleSite(installId: string): Promise<void>;
+    /** Content index for one install. Takes the graph id. */
+    indexOne(siteId: string, installName: string): Promise<void>;
+  };
+  /** External SSH adapters. Both take the `ssh:<alias>/<site>` graph id. */
+  externalOps?: {
+    refreshSite(siteId: string, siteName: string): Promise<void>;
+    indexSite(siteId: string, siteName: string): Promise<void>;
+  };
 }
+
+/**
+ * Which operations mean anything for a given source.
+ *
+ * `start`/`stop` are Local process controls — Nexus does not start or stop a
+ * remote host. `plugin-update`, `setup-ai` and `health-refresh` all run through
+ * Local's WP-CLI bridge. Only the two data-currency operations, which are what
+ * the Sites table's bulk bar offers, are defined for all three.
+ */
+const REMOTE_SUPPORTED: BulkOpType[] = ['sync-graph', 'reindex'];
 
 const MAX_CONCURRENCY = 5; // Increased from 3 for better performance (50 sites: ~10 min vs ~17 min)
 const MAX_HISTORY = 20;
@@ -210,8 +238,11 @@ export class BulkOperationManager {
         throw new Error('Operation cancelled');
       }
 
-      // Auto-start logic: if site is halted and autoStartStop is enabled
-      const autoStartStop = op.options.autoStartStop === true;
+      // Auto-start logic: if site is halted and autoStartStop is enabled.
+      // Local only — `getSiteStatus`/`startSite` are Local process controls and
+      // Nexus does not start or stop a remote host. Calling them with a `wpe-`
+      // or `ssh:` id reaches Local's store and throws.
+      const autoStartStop = op.options.autoStartStop === true && siteSourceOf(siteId) === 'local';
       if (autoStartStop) {
         const currentStatus = this.deps.siteDataBridge.getSiteStatus(siteId);
         if (currentStatus !== 'running') {
@@ -250,6 +281,11 @@ export class BulkOperationManager {
   }
 
   private async executeByType(op: BulkOperation, siteId: string): Promise<void> {
+    const source = siteSourceOf(siteId);
+    if (source !== 'local') {
+      return this.executeRemote(op, siteId, source);
+    }
+
     switch (op.type) {
       case 'reindex':
         return this.executeReindex(siteId, op.options);
@@ -268,6 +304,41 @@ export class BulkOperationManager {
       default:
         throw new Error(`Unknown operation type: ${op.type}`);
     }
+  }
+
+  /**
+   * WP Engine and external SSH sites.
+   *
+   * Kept as one branch rather than folded into the switch above because the
+   * Local arms all resolve the id through `siteDataBridge`, which only knows
+   * Local's store — reaching them with a remote id produced "Site not found",
+   * a message that reads like the site is missing rather than like the
+   * operation was pointed at the wrong backend.
+   */
+  private async executeRemote(op: BulkOperation, siteId: string, source: SiteSource): Promise<void> {
+    if (REMOTE_SUPPORTED.indexOf(op.type) === -1) {
+      throw new Error(
+        `'${op.type}' is not supported for ${source} sites — it is a Local-only operation. ` +
+        `Supported for ${source}: ${REMOTE_SUPPORTED.join(', ')}.`,
+      );
+    }
+
+    const siteName = op.siteNames?.[siteId] ?? siteId;
+
+    if (source === 'wpe') {
+      const ops = this.deps.wpeOps;
+      if (!ops) throw new Error(`WP Engine sync is not available in this process — cannot ${op.type} ${siteName}.`);
+      // syncSingleSite calls capiGetInstall, which does not know the `wpe-` form.
+      return op.type === 'sync-graph'
+        ? ops.syncSingleSite(wpeInstallIdOf(siteId))
+        : ops.indexOne(siteId, siteName);
+    }
+
+    const ops = this.deps.externalOps;
+    if (!ops) throw new Error(`External host access is not available in this process — cannot ${op.type} ${siteName}.`);
+    return op.type === 'sync-graph'
+      ? ops.refreshSite(siteId, siteName)
+      : ops.indexSite(siteId, siteName);
   }
 
   private async executeReindex(siteId: string, options?: Record<string, any>): Promise<void> {
