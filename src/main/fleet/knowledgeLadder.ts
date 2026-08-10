@@ -29,11 +29,25 @@ const FROM_COMPLETENESS: Record<string, KnowledgeRung> = {
   indexed: 'searchable',
 };
 
-/** A generic SSH connection cannot yield indexed content, so external caps here. */
+/**
+ * Per-source ceiling on what Nexus can claim to know.
+ *
+ * External used to cap at `detailed`, on the reasoning that "a generic SSH
+ * connection cannot yield indexed content". That stopped being true when
+ * external content indexing shipped — `ExternalContentIndexScheduler` runs on
+ * an opt-in timer and `nexus host index <alias>` runs one host on demand, and
+ * `ipc-handlers` already counts those hosts as searchable. An indexed external
+ * host is searchable, and saying otherwise on the Sites table would be a
+ * statement we know to be false.
+ *
+ * The map itself stays, and so does the `?? 'nothing'` fallback below: an
+ * unrecognised source must still fail closed rather than inherit the most
+ * permissive rung.
+ */
 const SOURCE_CEILING: Record<string, KnowledgeRung> = {
   local: 'searchable',
   wpe: 'searchable',
-  external: 'detailed',
+  external: 'searchable',
 };
 
 export function toKnowledgeRung(
