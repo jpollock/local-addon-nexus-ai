@@ -1264,39 +1264,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.LOGGING_STATS, () => {
     try {
+      const { scanLogDirectories } = require('./logging/scanLogDirectories');
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const logDays = settings?.logRetentionDays ?? 14;
       const transcriptDays = settings?.transcriptRetentionDays ?? 3;
       const budgetBytes = settings?.logBudgetBytes ?? 250 * 1024 * 1024;
 
       const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
-      const stats = { combined: 0, agent: 0, transcript: 0, audit: 0 };
-
-      const scan = (dir: string, category: keyof typeof stats) => {
-        try {
-          const entries = fs.readdirSync(dir);
-          for (const name of entries) {
-            const full = path.join(dir, name);
-            try {
-              const st = fs.statSync(full);
-              if (st.isFile()) stats[category] += st.size;
-            } catch { /* skip unreadable file */ }
-          }
-        } catch { /* skip unreadable directory */ }
-      };
-
-      scan(logRoot, 'combined');
-      scan(path.join(logRoot, 'agents'), 'agent');
-      scan(path.join(logRoot, 'transcripts'), 'transcript');
-      // Audit logs live one directory up from the log root
-      scan(path.join(app.getPath('userData'), 'nexus-ai'), 'audit');
-
-      const totalBytes = stats.combined + stats.agent + stats.transcript + stats.audit;
+      const sizes = scanLogDirectories(app.getPath('userData'));
 
       return {
         root: logRoot,
-        totalBytes,
-        byCategory: stats,
+        totalBytes: sizes.total,
+        byCategory: { combined: sizes.combined, agent: sizes.agent, transcript: sizes.transcript, audit: sizes.audit },
         policy: { logDays, transcriptDays, budgetBytes },
       };
     } catch (err) {
@@ -1813,30 +1793,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // Fetch logging stats for the logs section
       let logsSize: number | undefined;
       try {
-        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-        const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
-        let totalLogBytes = 0;
-
-        const scan = (dir: string) => {
-          try {
-            const entries = fs.readdirSync(dir);
-            for (const name of entries) {
-              const full = path.join(dir, name);
-              try {
-                const st = fs.statSync(full);
-                if (st.isFile()) totalLogBytes += st.size;
-              } catch { /* skip unreadable file */ }
-            }
-          } catch { /* skip unreadable directory */ }
-        };
-
-        scan(logRoot);
-        scan(path.join(logRoot, 'agents'));
-        scan(path.join(logRoot, 'transcripts'));
-        // Audit logs live one directory up from the log root
-        scan(path.join(app.getPath('userData'), 'nexus-ai'));
-
-        logsSize = totalLogBytes;
+        const { scanLogDirectories } = require('./logging/scanLogDirectories');
+        const sizes = scanLogDirectories(app.getPath('userData'));
+        logsSize = sizes.total;
       } catch {
         // If logging stats fail, just leave logs undefined
       }
