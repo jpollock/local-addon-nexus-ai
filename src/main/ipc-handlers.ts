@@ -642,6 +642,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const totalSites = siteList.length;
       const runningSites = siteList.filter((s: any) => statuses[s.id] === 'running').length;
 
+      // The canonical fleet figures. `remoteSites.total` below stays CAPI-derived
+      // because it is about link state, and is labelled as such.
+      const counts = collectFleetCounts({
+        getSites: () => allSites as Record<string, unknown>,
+        getDb: () => graphService.getDb() as never,
+      });
+
       // WPE-connected local sites
       let wpeConnectedSites = 0;
       const linkedRemoteIds = new Set<string>();
@@ -702,8 +709,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       return {
         localSites: { total: totalSites, running: runningSites, halted: totalSites - runningSites },
+        counts,
         wpeConnected: { count: wpeConnectedSites },
-        remoteSites: { total: totalRemoteInstalls, unlinked: remoteInstalls, capiAvailable, wpeAuthenticated },
+        remoteSites: {
+          total: totalRemoteInstalls,
+          unlinked: remoteInstalls,
+          capiAvailable,
+          wpeAuthenticated,
+          // Live from WP Engine's API, so it can differ from counts.wpe (the graph).
+          scope: 'installs reported by the WP Engine API',
+        },
         mcpServer: {
           running: !!mcpInfo,
           toolCount: mcpInfo?.tools?.length ?? 0,
@@ -2647,6 +2662,9 @@ Answer:`,
       for (const siteId of siteIds) {
         const site = allSites[siteId];
         if (site) {
+          // Local-only path: `site` came from Local's own store, which supplies a
+          // real PHP version. Deliberately NOT the fabricating fallback removed
+          // from the fleet-intelligence modules — see CLAUDE.md, "Fleet counts".
           siteInfoMap[siteId] = { domain: site.domain || '', phpVersion: site.phpVersion || '8.0' };
         }
       }
