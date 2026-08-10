@@ -45,4 +45,32 @@ describe('rollUpSystemHealth', () => {
     });
     expect(r.reasons).toEqual(['agent failed', 'sync stale']);
   });
+
+  test('a malformed state (outside the union) becomes unknown, never green', () => {
+    const malformed = { state: 'timeout' as any, reason: 'signal timed out' };
+    const r = rollUpSystemHealth({
+      ...allOk,
+      agentRuns: malformed,
+    });
+    expect(r.overall).toBe('unknown');
+  });
+
+  test('a malformed state\'s reason appears in output', () => {
+    const malformed = { state: 'timeout' as any, reason: 'signal timed out' };
+    const r = rollUpSystemHealth({
+      ...allOk,
+      agentRuns: malformed,
+    });
+    expect(r.reasons).toContain('signal timed out');
+  });
+
+  test('same-severity inputs are ordered by INPUT_ORDER, not arbitrary key order', () => {
+    const r = rollUpSystemHealth({
+      ...allOk,
+      syncStaleness: { state: 'degraded', reason: 'sync stale' },
+      credentials: { state: 'degraded', reason: 'creds missing' },
+    });
+    // syncStaleness comes before credentials in INPUT_ORDER, so its reason should be first
+    expect(r.reasons).toEqual(['sync stale', 'creds missing']);
+  });
 });

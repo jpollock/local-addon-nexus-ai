@@ -40,8 +40,20 @@ const INPUT_ORDER: (keyof SystemHealthInputs)[] = [
   'agentRuns', 'syncStaleness', 'credentials', 'eventQueue',
 ];
 
+const KNOWN_STATES: ReadonlySet<string> = new Set<string>(SEVERITY);
+
+/**
+ * A state outside the four literals means the producer is broken or drifted.
+ * It must read as `unknown` — never be skipped. Skipping it is worse than an
+ * unknown answer, because `.includes` renders it invisible and lets the
+ * remaining `ok` inputs carry the rollup to green.
+ */
+function normalizeState(state: HealthState): HealthState {
+  return KNOWN_STATES.has(state) ? state : 'unknown';
+}
+
 export function rollUpSystemHealth(inputs: SystemHealthInputs): SystemHealth {
-  const states = INPUT_ORDER.map((k) => inputs[k].state);
+  const states = INPUT_ORDER.map((k) => normalizeState(inputs[k].state));
 
   // `ok` is last in SEVERITY, so it wins only when every input is ok. An input
   // that could not be read reports `unknown` and drags the pill off green — it
@@ -53,7 +65,16 @@ export function rollUpSystemHealth(inputs: SystemHealthInputs): SystemHealth {
     if (severity === 'ok') continue;
     for (const key of INPUT_ORDER) {
       const signal = inputs[key];
-      if (signal.state === severity && signal.reason) reasons.push(signal.reason);
+      const normalizedState = normalizeState(signal.state);
+      if (normalizedState === severity) {
+        // If this input is broken, include its reason if present, or generate one naming the input
+        if (signal.reason) {
+          reasons.push(signal.reason);
+        } else if (normalizedState === 'unknown' && signal.state !== 'unknown') {
+          // This input was malformed (outside the union)
+          reasons.push(`${key}: state was malformed (${JSON.stringify(signal.state)})`);
+        }
+      }
     }
   }
 
