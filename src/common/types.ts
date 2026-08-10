@@ -448,6 +448,7 @@ export interface ChatMessage {
   toolCalls?: unknown;       // JSON-serialised tool calls
   segments?: unknown;        // JSON-serialised MessageSegment[]
   timestamp: number;
+  incomplete?: boolean;      // Message was streaming when saved; response may be partial
 }
 
 // ===== Unified Search Types =====

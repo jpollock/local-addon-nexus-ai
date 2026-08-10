@@ -129,7 +129,8 @@ export class ChatService {
       if (persisted && persisted.messages.length > 0) {
         // Reconstruct message array from persisted records
         const history = persisted.messages
-          .filter((m: any) => !m.streaming)
+          .filter((m: any) => !m.incomplete)
+          .filter((m: any) => m.content !== '')
           .filter((m: any) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
           .map((m: any) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }));
 

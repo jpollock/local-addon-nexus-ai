@@ -1,4 +1,5 @@
 import React from 'react';
+import { UI_COLORS } from '../../../common/constants';
 
 interface Props {
   title: string;
@@ -14,8 +15,8 @@ interface State {
 
 const styles = {
   card: {
-    border: '1px solid #22697a',
-    background: '#132a30',
+    border: `1px solid var(--nxai-card-border)`,
+    background: 'var(--nxai-section-bg)',
     borderRadius: 6,
     padding: '12px 14px',
     margin: '8px 0',
@@ -24,17 +25,17 @@ const styles = {
     gap: 8,
   },
   icon: {
-    color: '#5fd2e5',
+    color: UI_COLORS.WPE_BRAND,
     fontSize: 14,
     marginRight: 6,
   },
   title: {
-    color: '#e4e7ec',
+    color: 'var(--nxai-card-text)',
     fontSize: 13,
     fontWeight: 600,
   },
   effect: {
-    color: '#868d98',
+    color: 'var(--nxai-card-sub)',
     fontSize: 12,
     lineHeight: 1.4,
   },
@@ -43,7 +44,7 @@ const styles = {
     alignItems: 'center',
     gap: 8,
     fontSize: 12,
-    color: '#e4e7ec',
+    color: 'var(--nxai-card-text)',
     cursor: 'pointer',
   },
   actions: {
@@ -52,10 +53,10 @@ const styles = {
     marginTop: 4,
   },
   confirmBtn: (disabled: boolean) => ({
-    background: disabled ? '#868d98' : '#29b6cf',
+    background: disabled ? 'var(--nxai-card-sub)' : UI_COLORS.WPE_BRAND,
     border: 'none',
     borderRadius: 4,
-    color: disabled ? '#23272f' : '#05262e',
+    color: disabled ? UI_COLORS.ON_BRAND_DISABLED : UI_COLORS.NEXUS_MARK,
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: 12,
     fontWeight: 600,
@@ -63,9 +64,9 @@ const styles = {
   }),
   cancelBtn: {
     background: 'none',
-    border: '1px solid #2c313a',
+    border: `1px solid var(--nxai-card-border)`,
     borderRadius: 4,
-    color: '#868d98',
+    color: 'var(--nxai-card-sub)',
     cursor: 'pointer',
     fontSize: 12,
     padding: '6px 14px',

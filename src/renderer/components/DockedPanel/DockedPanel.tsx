@@ -1,10 +1,14 @@
 import React from 'react';
+import { UI_COLORS } from '../../../common/constants';
 
-export type PanelSize = 'docked' | 'full';
+export type PanelSize = 'docked' | 'wide' | 'full';
+export type PanelTab = 'insights' | 'chat';
 
 export interface Props {
   open: boolean;
   size: PanelSize;
+  activeTab?: PanelTab;
+  onSetActiveTab?: (tab: PanelTab) => void;
   onOpen: () => void;
   onClose: () => void;
   onSetSize: (size: PanelSize) => void;
@@ -20,7 +24,8 @@ interface DockedPanelState {
   hoveredBtn: string | null;
 }
 
-const PANEL_WIDTH = 384;
+export const PANEL_WIDTH = 384;
+export const WIDE_WIDTH = 620;
 const BUBBLE_SIZE = 52;
 
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────
@@ -28,7 +33,7 @@ const BUBBLE_SIZE = 52;
 function NexusGlyph({ size }: { size: number }) {
   return React.createElement(
     'svg',
-    { width: size, height: size, viewBox: '0 0 24 24', fill: '#05262e', style: { display: 'block' } },
+    { width: size, height: size, viewBox: '0 0 24 24', fill: UI_COLORS.NEXUS_MARK, style: { display: 'block' } },
     React.createElement('path', { d: 'M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8z' }),
   );
 }
@@ -74,13 +79,22 @@ function IconCollapse({ size }: { size: number }) {
   );
 }
 
+function IconWide({ size }: { size: number }) {
+  return React.createElement(
+    'svg',
+    { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } },
+    React.createElement('rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }),
+    React.createElement('path', { d: 'M9 5v14' }),
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 function iconBtnStyle(hovered: boolean, active = false) {
   return {
-    background: hovered || active ? '#22303a' : 'none',
+    background: hovered || active ? 'var(--nxai-table-hover)' : 'none',
     border: 'none',
-    color: active ? '#5fd2e5' : hovered ? '#e4e7ec' : '#868d98',
+    color: active ? UI_COLORS.WPE_BRAND : hovered ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
     cursor: 'pointer',
     padding: 6,
     display: 'flex',
@@ -99,7 +113,7 @@ const styles = {
     width: BUBBLE_SIZE,
     height: BUBBLE_SIZE,
     borderRadius: '50%',
-    background: 'linear-gradient(135deg, #29b6cf, #1fc0d8)',
+    background: UI_COLORS.WPE_BRAND,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -109,15 +123,15 @@ const styles = {
     userSelect: 'none' as const,
     pointerEvents: 'all' as const,
   },
-  panel: (full: boolean) => ({
+  panel: (size: PanelSize) => ({
     position: 'fixed' as const,
     top: 0,
     right: 0,
     bottom: 0,
-    width: full ? undefined : PANEL_WIDTH,
-    left: full ? 68 : undefined,
-    background: '#23272f',
-    borderLeft: '1px solid #2c313a',
+    width: size === 'full' ? undefined : size === 'wide' ? WIDE_WIDTH : PANEL_WIDTH,
+    left: size === 'full' ? 68 : undefined,
+    background: 'var(--nxai-card-bg)',
+    borderLeft: `1px solid var(--nxai-card-border)`,
     display: 'flex',
     flexDirection: 'column' as const,
     zIndex: 8999,
@@ -129,15 +143,15 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 11,
-    borderBottom: '1px solid #2c313a',
+    borderBottom: `1px solid var(--nxai-card-border)`,
     flexShrink: 0,
-    background: '#1a1e24',
+    background: 'var(--nxai-card-bg)',
   },
   avatar: {
     width: 34,
     height: 34,
     borderRadius: '50%' as const,
-    background: 'linear-gradient(135deg, #29b6cf, #1fc0d8)',
+    background: UI_COLORS.WPE_BRAND,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -166,7 +180,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
   render() {
     const {
-      open, size, onOpen, onClose, onSetSize, onNewChat,
+      open, size, activeTab = 'chat', onSetActiveTab, onOpen, onClose, onSetSize, onNewChat,
       children, sessionsSidebar, onToggleSessions, showSessions, streamingStatus,
     } = this.props;
 
@@ -188,6 +202,58 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
     const isFull = size === 'full';
 
+    // Segmented control for Insights / Chat
+    const segmentedControl = React.createElement(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          background: 'var(--nxai-table-hover)',
+          borderRadius: 6,
+          padding: 2,
+          gap: 2,
+        },
+      },
+      React.createElement(
+        'button',
+        {
+          style: {
+            background: activeTab === 'insights' ? 'var(--nxai-card-bg)' : 'transparent',
+            border: 'none',
+            color: activeTab === 'insights' ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+            cursor: 'pointer',
+            padding: '5px 11px',
+            fontSize: 13,
+            fontWeight: 600,
+            borderRadius: 5,
+            transition: 'all 0.15s ease',
+          },
+          onClick: () => onSetActiveTab?.('insights'),
+          'aria-label': 'Insights',
+        },
+        'Insights',
+      ),
+      React.createElement(
+        'button',
+        {
+          style: {
+            background: activeTab === 'chat' ? 'var(--nxai-card-bg)' : 'transparent',
+            border: 'none',
+            color: activeTab === 'chat' ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+            cursor: 'pointer',
+            padding: '5px 11px',
+            fontSize: 13,
+            fontWeight: 600,
+            borderRadius: 5,
+            transition: 'all 0.15s ease',
+          },
+          onClick: () => onSetActiveTab?.('chat'),
+          'aria-label': 'Chat',
+        },
+        'Chat',
+      ),
+    );
+
     const header = React.createElement(
       'div',
       { style: styles.header },
@@ -197,22 +263,24 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       React.createElement(
         'div',
         { style: { display: 'flex', flexDirection: 'column' as const, gap: 1 } },
-        React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: '#f2f4f6', lineHeight: 1.2 } }, 'Nexus'),
+        React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: 'var(--nxai-card-text)', lineHeight: 1.2 } }, 'Nexus'),
         streamingStatus
           ? React.createElement(
               'span',
-              { style: { fontSize: 12, color: '#5fd2e5', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 5 } },
-              React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: '#5fd2e5', flexShrink: 0, display: 'inline-block' } }),
+              { style: { fontSize: 12, color: UI_COLORS.WPE_BRAND, lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 5 } },
+              React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: UI_COLORS.WPE_BRAND, flexShrink: 0, display: 'inline-block' } }),
               streamingStatus,
             )
-          : React.createElement('span', { style: { fontSize: 12, color: '#868d98', lineHeight: 1.2 } }, 'Follows you across tabs'),
+          : React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', lineHeight: 1.2 } }, 'Follows you across tabs'),
       ),
+      // Segmented control
+      segmentedControl,
       // Control cluster
       React.createElement(
         'div',
         { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 } },
-        // #1 Sessions — docked only
-        !isFull ? React.createElement(
+        // #1 Sessions — docked and wide only (null in full)
+        isFull ? null : React.createElement(
           'button',
           {
             style: iconBtnStyle(this.hov('sessions'), showSessions),
@@ -223,7 +291,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
             onMouseLeave: this.onLeave(),
           },
           React.createElement(IconSessions, { size: 17 }),
-        ) : null,
+        ),
         // #2 New chat — always
         React.createElement(
           'button',
@@ -237,8 +305,34 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           },
           React.createElement(IconNewChat, { size: 17 }),
         ),
-        // #3 Expand / #4 Contract — same slot, swapped by state
-        !isFull
+        // #3 Contract (wide only) — back to docked
+        size === 'wide' ? React.createElement(
+          'button',
+          {
+            style: iconBtnStyle(this.hov('contract-docked')),
+            onClick: () => onSetSize('docked'),
+            title: 'Back to docked',
+            'aria-label': 'Back to docked',
+            onMouseEnter: this.onEnter('contract-docked'),
+            onMouseLeave: this.onLeave(),
+          },
+          React.createElement(IconContract, { size: 17 }),
+        ) : null,
+        // #4 Expand (docked→wide, wide→full) OR Contract (full→docked)
+        size === 'docked'
+          ? React.createElement(
+              'button',
+              {
+                style: iconBtnStyle(this.hov('expand')),
+                onClick: () => onSetSize('wide'),
+                title: 'Wide view',
+                'aria-label': 'Wide view',
+                onMouseEnter: this.onEnter('expand'),
+                onMouseLeave: this.onLeave(),
+              },
+              React.createElement(IconWide, { size: 17 }),
+            )
+          : size === 'wide'
           ? React.createElement(
               'button',
               {
@@ -282,7 +376,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           { style: { display: 'flex', flex: 1, overflow: 'hidden' } },
           React.createElement(
             'div',
-            { style: { width: 264, flexShrink: 0, borderRight: '1px solid #2c313a', overflow: 'hidden' } },
+            { style: { width: 264, flexShrink: 0, borderRight: `1px solid var(--nxai-card-border)`, overflow: 'hidden' } },
             sessionsSidebar ?? null,
           ),
           React.createElement(
@@ -297,7 +391,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           showSessions
             ? React.createElement(
                 'div',
-                { style: { position: 'absolute' as const, inset: 0, background: '#1a1e24', zIndex: 1 } },
+                { style: { position: 'absolute' as const, inset: 0, background: 'var(--nxai-card-bg)', zIndex: 1 } },
                 sessionsSidebar ?? null,
               )
             : null,
@@ -306,7 +400,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
     return React.createElement(
       'div',
-      { style: styles.panel(isFull), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
+      { style: styles.panel(size), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
       header,
       body,
     );
