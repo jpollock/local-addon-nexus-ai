@@ -149,7 +149,12 @@ export class AgentRunner {
     // Record to inbox and check auto-pause. Wrapped so an inbox fault never fails a run.
     try {
       const inboxStore = this.services?.inboxStore;
-      const agentStateStore = this.services?.agentStateStore;
+      // `this.stateStore` is the constructor-guaranteed handle — the same instance
+      // as services.agentStateStore, but not optional. Reading it through the
+      // optional service field would silently no-op the pause check if that field
+      // were ever left unassigned, which is the declared-but-never-assigned failure
+      // that once made audit logging write nothing on any machine.
+      const agentStateStore = this.stateStore;
 
       if (inboxStore) {
         const { recordRunToInbox } = await import('../inbox/recordRun');

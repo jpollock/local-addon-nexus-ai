@@ -26,7 +26,7 @@ const GROUPS: Array<{ kind: InboxKind; title: string }> = [
 ];
 
 export class InboxTab extends React.Component<InboxTabProps> {
-  private renderItem(item: InboxItem, showPauseBanner: boolean): React.ReactElement {
+  private renderItem(item: InboxItem): React.ReactElement {
     const { onDecide, onReopen } = this.props;
 
     return React.createElement('div', {
@@ -101,7 +101,11 @@ export class InboxTab extends React.Component<InboxTabProps> {
     if (!loaded) {
       return React.createElement('div', { style: { padding: 24, color: 'var(--nxai-card-sub)' } }, 'Loading…');
     }
-    if (items.length === 0 && recentlyDecided.length === 0) {
+    // A paused agent counts as needing you even with an empty queue — it is the
+    // only place the pause can be cleared, and nothing else clears it. Returning
+    // the all-clear here would strand exactly the case this banner exists for:
+    // agent paused, its failure item already dismissed, nothing left on screen.
+    if (items.length === 0 && recentlyDecided.length === 0 && pausedSources.length === 0) {
       return React.createElement('div', { style: { padding: 24, color: 'var(--nxai-card-sub)' } },
         'Nothing needs you right now.');
     }
@@ -110,41 +114,34 @@ export class InboxTab extends React.Component<InboxTabProps> {
       .map(g => ({ ...g, rows: items.filter(i => i.kind === g.kind) }))
       .filter(g => g.rows.length > 0);   // an empty group is not rendered
 
-    // Identify paused agents that have open items, so we can show their banners.
-    const pausedAgentsWithItems = new Set<string>();
-    for (const item of items) {
-      if (item.status === 'open' && pausedSources.includes(item.source)) {
-        pausedAgentsWithItems.add(item.source);
-      }
-    }
-
     return React.createElement('div', { style: { padding: '0 0 24px' } },
+      // Paused-agent banners come from `pausedSources` DIRECTLY, above the groups —
+      // never from the items on screen. An agent pauses precisely when it keeps
+      // failing, and the user may well have dismissed its failure item, leaving it
+      // with zero open items. Deriving the banner from `items` meant that agent got
+      // no "Try again" and nothing else clears `_autoPausedAt`, so it stayed
+      // silently disabled forever. `items` is also only one page, so a paused agent
+      // beyond the first INBOX_PAGE_SIZE rows would have been missed too.
+      // One banner per paused agent, whatever it does or does not have in the queue.
+      ...pausedSources.map(agent => this.renderPausedBanner(agent)),
+
       items.length < total && React.createElement('div', {
         style: { fontSize: 12.5, color: 'var(--nxai-card-sub)', marginBottom: 12 },
       }, `Showing ${items.length} of ${total}`),
 
-      ...groups.map(g => {
-        // For each group, collect paused agents and render their banners once at the top.
-        const pausedInGroup = new Set<string>();
-        for (const row of g.rows) {
-          if (pausedAgentsWithItems.has(row.source)) pausedInGroup.add(row.source);
-        }
-
-        return React.createElement('div', { key: g.kind, style: { marginBottom: 24 } },
-          React.createElement('div', {
-            style: { fontSize: 13, fontWeight: 700, color: 'var(--nxai-card-text)', marginBottom: 10 },
-          }, `${g.title} · ${g.rows.length}`),
-          ...Array.from(pausedInGroup).map(agent => this.renderPausedBanner(agent)),
-          ...g.rows.map(r => this.renderItem(r, false)),
-        );
-      }),
+      ...groups.map(g => React.createElement('div', { key: g.kind, style: { marginBottom: 24 } },
+        React.createElement('div', {
+          style: { fontSize: 13, fontWeight: 700, color: 'var(--nxai-card-text)', marginBottom: 10 },
+        }, `${g.title} · ${g.rows.length}`),
+        ...g.rows.map(r => this.renderItem(r)),
+      )),
 
       // Recently decided items — visually quieter, below the open groups
       recentlyDecided.length > 0 && React.createElement('div', { style: { marginTop: 32, borderTop: '1px solid var(--nxai-card-border)', paddingTop: 16 } },
         React.createElement('div', {
           style: { fontSize: 12.5, fontWeight: 600, color: 'var(--nxai-card-sub)', marginBottom: 10 },
         }, `Recently decided · ${recentlyDecided.length}`),
-        ...recentlyDecided.map(r => this.renderItem(r, false)),
+        ...recentlyDecided.map(r => this.renderItem(r)),
       ),
     );
   }
