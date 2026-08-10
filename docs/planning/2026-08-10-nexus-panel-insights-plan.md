@@ -13,6 +13,14 @@
 ## Global Constraints
 
 - **Chat remains the default tab.** Opening the panel must land exactly where it lands today.
+- **Snapshot rule, corrected after Task 3's review.** An earlier draft required the Chat view to
+  stay byte-identical through Tasks 4 and 5. That is not achievable and was a defect in this
+  plan: Task 5 inserts a segmented control into the header, which is a child of an ordered array
+  the snapshots capture, so 4 of 5 necessarily change. The design *intends* the Chat view to gain
+  a tab switcher. The rule is therefore: **Task 4 must not change any snapshot. Task 5 may update
+  them, but its diff must contain only the segmented control's addition** — the brand block,
+  existing control cluster, body layout and sessions overlay must all be untouched, and the full
+  snapshot diff goes in its report for review.
 - **One conversation across all three sizes.** Resizing is a size change, not a different surface.
 - **No raw hex literals in the five panel files** after Task 2. Colours that must flip with the theme become `var(--nxai-*)`; colours that pair with the fixed brand become named constants in `src/common/constants.ts`.
 - **Do not add variables to `theme.ts`.** The ruling is to collapse onto what exists — three background levels become two, three cyan shades become the single brand accent — per review finding 15, "adopt Local's chrome everywhere and keep exactly one accent." If it reads flat on screen, that is a follow-up, not this plan.
@@ -471,11 +479,20 @@ function findByTestId(node: any, id: string): any {
 
 Give the waiting-items card `'data-test': 'waiting-items'` in Step 1 so this can find it.
 
-- [ ] **Step 4: The Chat view must not change**
+- [ ] **Step 4: Update the snapshots, and prove the diff contains only the new control**
 
-Run: `npx jest tests/unit/renderer`
-Expected: the panel chrome snapshots pass **unchanged** for every variant whose tab is Chat. A
-diff here means adding Insights altered the existing surface — fix the code, do not run `-u`.
+Adding the segmented control inserts a child into the header, so 4 of the 5 panel chrome
+snapshots will change. That is expected — see the corrected snapshot rule in Global Constraints.
+
+Run: `npx jest tests/unit/renderer -u`
+
+Then **paste the complete snapshot diff into your report** (`git diff -- tests/unit/renderer/__snapshots__/`).
+It must contain only the segmented control's markup. If it also touches the brand block, the
+existing control cluster, the body layout or the sessions overlay, adding Insights disturbed
+something it should not have — fix the code and regenerate.
+
+The `collapsed bubble` snapshot must be **unchanged**: it renders no header at all, so a diff
+there means something leaked outside the header.
 
 - [ ] **Step 5: Commit**
 
