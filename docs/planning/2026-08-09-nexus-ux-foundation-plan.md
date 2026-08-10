@@ -1733,6 +1733,49 @@ git commit -m "fix: address verification findings"
 - **Do not commit untested work.** Each task's test steps run before its commit step, in that order.
 - **Do not push, tag, or release.** CLAUDE.md forbids it without an explicit instruction.
 
+## Follow-up work discovered during execution
+
+Found by task reviewers while this plan was being built. None were fixed here; all are recorded
+so they survive the scratch ledger.
+
+**The scope rule applied during this plan.** A finding was folded into the current task only when
+it violated one of this plan's own Global Constraints *and* was producing a wrong number in a
+live surface. Everything else was deferred to this list, even when it was the same bug class.
+One finding met that bar and was fixed in Task 6b: `FLEET_COMPLETENESS` counted local sites from
+the graph. Use the same test for future work rather than absorbing every adjacent defect.
+
+### Same bug class, still open — "a population labelled X that isn't X"
+
+- **`GET_DASHBOARD_STATS`'s `index` object** (`src/main/ipc-handlers.ts`): `localIndexed` comes
+  from `indexRegistry.listAll()` filtered by state alone, with no local-only restriction, yet is
+  paired with `localTotal`, which *is* genuinely local. CLAUDE.md measured 297 of 423
+  `indexRegistry` entries as WPE-owned — so the field named "local" mostly is not.
+- **Same object:** `wpeIndexedSites`/`wpeIndexedDocs` (graph `content`, `site_id LIKE 'wpe-%'`)
+  paired with `wpeTotal` (CAPI-derived, includes linked local sites).
+- **`wpeConnected: { count }`** carries no scope label, unlike every other count after this plan.
+- **Three definitions of "how many WPE things"** now coexist in one `GET_DASHBOARD_STATS`
+  response: `counts.wpe.count` (graph, labelled), `remoteSites.total` (CAPI, labelled), and
+  `index.wpeTotal` (CAPI, unlabelled). The first two are deliberate and distinguishable; the
+  third should join them or go.
+
+### Error visibility
+
+- **`catch {}` cannot distinguish "graph not ready" from a real SQL or schema error** — both
+  render as `0` with scope labels intact, and nothing is logged. Three sites share the idiom:
+  `src/main/fleet/collectFleetCounts.ts`, `fleet-overview.ts:70`, `fleet-plugins.ts:113`. For a
+  module whose purpose is honest counts, a real failure and "no data" should not be
+  indistinguishable. Fix all three together or none.
+
+### Test coverage
+
+- **No test exercises `NexusOverview.tsx`'s fleet summary card** or the `GET_FLEET_SUMMARY`
+  response shape from the renderer side. Consumer safety was established by manual grep during
+  Task 5, so nothing would fail on a future renderer regression.
+- Minor: `FleetCountsInput.graphRows[].id` is never read by `computeFleetCounts`; `if
+  (row.wpeSiteId)` treats `''` as unparented where `=== null` would be exact; no test
+  distinguishes `completeness: ''` from `null`; stale name `mockLocalTwinCount` in
+  `fleet-summary-ipc.test.ts`.
+
 ## Not in this plan
 
 - The rail badge (`NavItemInjector.ts` has no badge mechanism — its own spec).
