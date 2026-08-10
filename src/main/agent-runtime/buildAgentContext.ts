@@ -6,6 +6,7 @@ import { EventLog, LogEvent, LogLevelName } from '../logging/eventLog';
 import { getAgentAutonomy, getAgentSettings } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
+import { TranscriptWriter } from '../logging/transcript';
 import { AgentDbManager } from './AgentDbManager';
 import { getProvider } from '../chat/providers/index';
 import { AgentCredentialsContext } from '../credentials/AgentCredentialsContext';
@@ -36,6 +37,16 @@ export interface AgentContextDeps {
   runId?: string;
 }
 
+/**
+ * The directory EventLog writes its daily files under. Transcripts live in a `transcripts/`
+ * directory beneath the same root, so the writer needs it too — but EventLog keeps that root
+ * private, so this reads it back via the public, stable `pathsFor()` rather than reaching into
+ * an internal field. `pathsFor` never throws, so neither does this.
+ */
+function logRootOf(eventLog: EventLog): string {
+  return path.dirname(eventLog.pathsFor({ level: 'INFO', source: 'transcript' } as LogEvent).combined);
+}
+
 export function buildAgentContext(deps: AgentContextDeps): {
   ctx: AgentContext;
   agentLog: AgentLogger;
@@ -45,11 +56,21 @@ export function buildAgentContext(deps: AgentContextDeps): {
 } {
   const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId } = deps;
   const agentName = agent.name;
+  const agentSettings = getAgentSettings(agentName);
 
   // Shared by the tool provider and the AI client, so both a tool call and a model call this
   // agent makes land in the run's log, correlated by run id, without either having to report its
   // own actions — the reason `ctx.log.mutation()` shipped with no callers at all.
   const aiEvents = { eventLog, runId, agentName };
+
+  // Off unless this agent asked for it: a transcript is the most sensitive artefact this system
+  // writes, and "on for everything" would put every site's content on disk permanently. Also
+  // requires a runId (to name the file) and an EventLog (the source of the log root) — neither
+  // AgentDispatcher call site supplies those today, so transcripts are reachable only from
+  // AgentRunner's scheduled/manual/event runs.
+  const transcript = agentSettings.transcripts && runId && eventLog
+    ? new TranscriptWriter({ root: logRootOf(eventLog), runId })
+    : undefined;
 
   const toolProvider = new NexusToolProvider(
     toolRegistry,
@@ -82,7 +103,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const directProvider = getProvider(resolvedProvider.provider);
   const directConfig = { apiKey: resolvedProvider.apiKey, model: agentModel };
   const aiClient = aiProvider
-    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig, aiEvents)
+    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig, aiEvents, transcript)
     : {
         run: async (_prompt: string) => {
           createLogger(`agent:${agentName}`).warn(`Agent "${agentName}": AI provider "${resolvedProvider.provider}" unavailable — skipping AI call`);
@@ -216,7 +237,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
     ai: aiClient,
     log: agentLog,
     autonomy: getAgentAutonomy(agentName),
-    settings: getAgentSettings(agentName),
+    settings: agentSettings,
     credentials,
     db,
     fullRun: fullRun ?? false,

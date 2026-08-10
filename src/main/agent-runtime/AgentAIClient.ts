@@ -4,6 +4,7 @@ import type { AIClient } from '../agent-sdk/types';
 import { AgentAILoopError } from '../agent-sdk/types';
 import type { NexusToolProvider, ToolEventContext } from './NexusToolProvider';
 import { estimateCostUsd } from '../logging/modelPricing';
+import type { TranscriptWriter } from '../logging/transcript';
 
 interface StreamResult {
   content: string;
@@ -62,10 +63,13 @@ export class AgentAIClient implements AIClient {
   private directProvider?: AIProvider;
   private directConfig?: ChatProviderConfig;
   private events?: ToolEventContext;
+  /** Off unless the agent opted in — see buildAgentContext.ts. Never throws on append. */
+  private transcript?: TranscriptWriter;
 
   constructor(
     provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider,
     directProvider?: AIProvider, directConfig?: ChatProviderConfig, events?: ToolEventContext,
+    transcript?: TranscriptWriter,
   ) {
     this.provider = provider;
     this.directProvider = directProvider;
@@ -73,6 +77,7 @@ export class AgentAIClient implements AIClient {
     this.config = config;
     this.toolProvider = toolProvider;
     this.events = events;
+    this.transcript = transcript;
   }
 
   /**
@@ -92,6 +97,7 @@ export class AgentAIClient implements AIClient {
           in: usage?.inputTokens, out: usage?.outputTokens,
           cost: estimateCostUsd(model, usage),
           dur: `${Date.now() - startedAt}ms`,
+          transcript: this.transcript?.path(),
         },
       } as any);
     } catch { /* never fail a model call for a log line */ }
@@ -125,6 +131,10 @@ export class AgentAIClient implements AIClient {
 
     for (let turn = 0; turn < maxTurns; turn++) {
       const startedAt = Date.now();
+      this.transcript?.append({
+        turn: turn + 1, role: 'prompt', model: config.model,
+        content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+      });
       let response;
       try {
         response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
@@ -133,6 +143,9 @@ export class AgentAIClient implements AIClient {
         throw err;
       }
       this.emitLlmCall(config.model, turn + 1, startedAt, response.usage);
+      this.transcript?.append({
+        turn: turn + 1, role: 'response', model: config.model, content: response.content,
+      });
 
       if (response.toolCalls.length === 0) {
         return response.content;
@@ -187,6 +200,10 @@ export class AgentAIClient implements AIClient {
       const forcedConfig = { ...this.config, forceTool: '__output__' };
       const signal = new AbortController().signal;
       const startedAt = Date.now();
+      this.transcript?.append({
+        turn: 1, role: 'prompt', model: forcedConfig.model,
+        content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+      });
       let response;
       try {
         response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
@@ -195,6 +212,9 @@ export class AgentAIClient implements AIClient {
         throw err;
       }
       this.emitLlmCall(forcedConfig.model, 1, startedAt, response.usage);
+      this.transcript?.append({
+        turn: 1, role: 'response', model: forcedConfig.model, content: response.content,
+      });
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
         return unwrapOutputArguments(outputCall.arguments) as T;
@@ -221,6 +241,10 @@ export class AgentAIClient implements AIClient {
 
     for (let turn = 0; turn < 5; turn++) {
       const startedAt = Date.now();
+      this.transcript?.append({
+        turn: turn + 1, role: 'prompt', model: this.config.model,
+        content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+      });
       let response;
       try {
         response = await collectStream(this.provider.streamChat(messages, tools, this.config, signal));
@@ -229,6 +253,9 @@ export class AgentAIClient implements AIClient {
         throw err;
       }
       this.emitLlmCall(this.config.model, turn + 1, startedAt, response.usage);
+      this.transcript?.append({
+        turn: turn + 1, role: 'response', model: this.config.model, content: response.content,
+      });
 
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {

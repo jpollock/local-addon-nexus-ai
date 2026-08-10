@@ -119,6 +119,11 @@ export interface AgentSettings {
   savedScopes?: AgentSavedScope[];
   /** Unix ms timestamp of the last time `scope` was edited. Required to compute drift. */
   scopeUpdatedAt?: number;
+  /**
+   * Write the full prompt and response of every model call to a transcript sidecar. Off by
+   * default: prompts carry site content, so this is opt-in for the agent you are debugging.
+   */
+  transcripts?: boolean;
 }
 
 export interface AgentState {
