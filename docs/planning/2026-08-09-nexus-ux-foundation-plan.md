@@ -1784,6 +1784,43 @@ git commit -m "fix: address verification findings"
 - **Do not commit untested work.** Each task's test steps run before its commit step, in that order.
 - **Do not push, tag, or release.** CLAUDE.md forbids it without an explicit instruction.
 
+## Live verification checklist (outstanding)
+
+Task 14's automated half is done: full suite shows the **same 13 pre-existing failing suites and
+26 failing tests** as the pre-work baseline, with passing tests up 4451 → 4551, and
+`npx tsc --noEmit` clean.
+
+The live half was **not** run. Local's addon symlink points at a different worktree
+(`.worktrees/sdk-and-agents`), so building here changes nothing that Local loads, and
+`dev-reload.sh` does not repoint it. Run this when you are next on this branch:
+
+```bash
+# 1. Point Local at this worktree (note the current target first, to restore it later)
+readlink ~/Library/Application\ Support/Local/addons/local-addon-nexus-ai
+ln -sfn "$PWD" ~/Library/Application\ Support/Local/addons/local-addon-nexus-ai
+
+# 2. Build for Electron and restart. NOTE: `npm run rebuild` compiles better-sqlite3 for
+#    Electron's ABI — `npx jest` in this worktree will fail until you `npm install` again.
+./dev-reload.sh
+```
+
+Then check, in order of what could actually surprise:
+
+1. **The orphan sweep ran.** This is the only item exercising startup wiring rather than pure
+   logic, and it mutates data (soft-delete). Expect active local rows to drop 56 → 34:
+   ```bash
+   node -e "const D=require('better-sqlite3'),os=require('os');
+   const db=new D(os.homedir()+'/Library/Application Support/Local/nexus-ai/graph.db',{readonly:true});
+   console.log(db.prepare(\"SELECT is_active, COUNT(*) c FROM sites WHERE source='local' GROUP BY is_active\").all());"
+   ```
+2. **The health pill is not green while an agent shows a failed last run**, and does not read
+   red on a clean install with refresh settings off.
+3. **The Ask/Tell tab is gone** and no screen lands on a missing tab.
+4. **No fleet number appears without a scope label.** Note `counts`/`twinScope` are deliberately
+   not yet wired into the renderer, so the visible totals are unchanged for now.
+
+Restore the symlink to its previous target afterwards if you need `sdk-and-agents` back.
+
 ## Follow-up work discovered during execution
 
 Found by task reviewers while this plan was being built. None were fixed here; all are recorded
