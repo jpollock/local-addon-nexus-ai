@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { agentStore, ActivityEvent } from './AgentStore';
 import { runStore } from './RunStore';
+import { totalPending, isReviewStatus } from './pending';
 
 interface LedgerProps {
   onReviewEvent: (eventId: string) => void;
@@ -89,7 +90,7 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
   private renderRow(event: ActivityEvent) {
     const { onReviewEvent } = this.props;
     const accent = ACCENTS[event.agentId] || '#9aa1ac';
-    const isReviewable = event.status === 'review' && !!event.ref;
+    const isReviewable = isReviewStatus(event) && !!event.ref;
     const isViewable = (event.status === 'done' || event.status === 'auto') &&
       runStore.getState().currentRun?.runId === event.id;
     const isExpanded = this.state.expandedEvents[event.id];
@@ -205,7 +206,7 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
     const filtered = this.getFilteredEvents();
     const grouped = groupByDay(filtered);
     const allAgentIds = [...new Set(this.state.events.map(e => e.agentId))];
-    const pendingCount = filtered.filter(e => e.status === 'review').length;
+    const pendingCount = totalPending(agentStore.getState().pendingBySource);
 
     return React.createElement('div', { style: { padding: '24px 40px' } },
 

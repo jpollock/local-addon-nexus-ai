@@ -1,21 +1,28 @@
 import * as React from 'react';
 import { agentStore, AgentState, AgentStatus } from './AgentStore';
 import { AgentCard } from './AgentCard';
+import { totalPending, agentsWithPending } from './pending';
 
 interface AgentsHubProps {
   onSelectAgent: (id: string) => void;
+  onNavigateToInbox?: () => void;
 }
 
-interface AgentsHubState extends Pick<AgentState, 'statuses' | 'activityEvents'> {}
+interface AgentsHubState extends Pick<AgentState, 'statuses' | 'activityEvents' | 'pendingBySource'> {}
 
 export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
-  state: AgentsHubState = { statuses: agentStore.getState().statuses, activityEvents: agentStore.getState().activityEvents };
+  state: AgentsHubState = {
+    statuses: agentStore.getState().statuses,
+    activityEvents: agentStore.getState().activityEvents,
+    pendingBySource: agentStore.getState().pendingBySource,
+  };
   private unsub!: () => void;
 
   componentDidMount() {
     const update = () => this.setState({
       statuses: agentStore.getState().statuses,
       activityEvents: agentStore.getState().activityEvents,
+      pendingBySource: agentStore.getState().pendingBySource,
     });
     agentStore.subscribe(update);
     this.unsub = update;
@@ -26,12 +33,11 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
   }
 
   private getTotalPending(): number {
-    return this.state.activityEvents.filter(e => e.status === 'review').length;
+    return totalPending(this.state.pendingBySource);
   }
 
   private getAgentsWithPending(): number {
-    const ids = new Set(this.state.activityEvents.filter(e => e.status === 'review').map(e => e.agentId));
-    return ids.size;
+    return agentsWithPending(this.state.pendingBySource);
   }
 
   private getAgentId(name: string): string {
@@ -77,9 +83,13 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
       // Review now button (only when pending)
       !isClean && React.createElement('button', {
         onClick: () => {
-          // Navigate to first agent with pending items
-          const firstPendingId = this.state.activityEvents.find(e => e.status === 'review')?.agentId;
-          if (firstPendingId) this.props.onSelectAgent(firstPendingId);
+          // Navigate to Inbox tab if available, otherwise first agent with pending items
+          if (this.props.onNavigateToInbox) {
+            this.props.onNavigateToInbox();
+          } else {
+            const firstPendingSource = Object.keys(this.state.pendingBySource).find(k => this.state.pendingBySource[k] > 0);
+            if (firstPendingSource) this.props.onSelectAgent(firstPendingSource);
+          }
         },
         style: {
           background: 'var(--ag-amber)', color: '#1a1200',

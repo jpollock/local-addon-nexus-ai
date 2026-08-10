@@ -6,6 +6,7 @@ import { AgentRunModal } from './AgentRunModal';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { rendererGql } from '../../utils/rendererGql';
 import { fetchScopeSites, ScopeSiteEnv } from './fetchScopeSites';
+import { pendingForAgent } from './pending';
 
 type WorkspaceTab = 'settings' | 'approvals' | 'activity' | 'tools' | 'docs';
 
@@ -340,9 +341,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     const settings = agentStore.getOrInitSettings(agentId);
     const autonomyById = agentStore.getState().autonomyById;
     const autonomy = autonomyById[agentId] ?? 'suggest';
-    const pendingCount = agentStore.getState().activityEvents.filter(
-      e => e.agentId === agentId && e.status === 'review'
-    ).length;
+    const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
     const isDisabled = !settings.enabled;
 
     // Derived trigger summary from actual config
@@ -438,9 +437,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
   private renderTabBar() {
     const { activeTab } = this.state;
     const { agentId } = this.props;
-    const pendingCount = agentStore.getState().activityEvents.filter(
-      e => e.agentId === agentId && e.status === 'review'
-    ).length;
+    const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
 
     const tabs: Array<{ id: WorkspaceTab; label: string; badge?: number }> = [
       { id: 'settings',  label: 'Settings' },
@@ -504,11 +501,12 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
   private renderApprovalsTab() {
     const { agentId, onReviewEvent } = this.props;
     const { selectedApprovals, siteEnvByName } = this.state;
+    const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
     const pending = agentStore.getState().activityEvents.filter(
-      e => e.agentId === agentId && e.status === 'review'
+      e => e.agentId === agentId && e.status !== 'dismissed' && e.status !== 'done' && e.status !== 'info'
     );
 
-    if (pending.length === 0) {
+    if (pendingCount === 0) {
       return React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13, padding: '24px 0' } }, 'No pending approvals.');
     }
 

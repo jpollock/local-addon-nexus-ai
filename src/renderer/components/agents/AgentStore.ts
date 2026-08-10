@@ -111,6 +111,7 @@ export interface AgentState {
   agentSettings: Record<string, AgentSettings>;
   expandedEvents: Record<string, boolean>;
   // runningAgents: managed locally in AgentWorkspace component state
+  pendingBySource: Record<string, number>;  // from GET_INBOX, not persisted
 }
 
 const DEFAULT_STATE: AgentState = {
@@ -120,6 +121,7 @@ const DEFAULT_STATE: AgentState = {
   autonomyById: {},
   agentSettings: {},
   expandedEvents: {},
+  pendingBySource: {},
 };
 
 const PERSIST_KEY = 'nexus-ai:agent-store-v1';
@@ -216,10 +218,8 @@ class AgentStore {
   getAgentDerivedStatus(agentId: string): 'disabled' | 'action' | 'ok' {
     const settings = this.state.agentSettings[agentId];
     if (settings && !settings.enabled) return 'disabled';
-    // In v1, pending count comes from activity events with status='review' referencing this agent
-    const pending = this.state.activityEvents.filter(
-      e => e.agentId === agentId && e.status === 'review'
-    ).length;
+    // Pending count comes from the inbox store, not activityEvents
+    const pending = this.state.pendingBySource[agentId] ?? 0;
     return pending > 0 ? 'action' : 'ok';
   }
 

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { agentStore, AgentStatus } from './AgentStore';
+import { pendingForAgent } from './pending';
 
 interface AgentCardProps {
   status: AgentStatus;
@@ -50,9 +51,7 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
     const cadenceLabel = CADENCE_LABELS[settings.cadence] || 'Custom schedule';
 
     const isDisabled = derivedStatus === 'disabled';
-    const pendingCount = agentStore.getState().activityEvents.filter(
-      e => e.agentId === agentId && e.status === 'review'
-    ).length;
+    const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
 
     return React.createElement('div', {
       onClick: onSelect,

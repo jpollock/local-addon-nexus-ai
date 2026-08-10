@@ -541,6 +541,12 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         inboxCounts: inboxResult?.counts ?? { decide: 0, problem: 0, know: 0 },
         inboxPausedSources: inboxResult?.pausedSources ?? [],
       });
+
+      // Push pending counts to agentStore only when successfully read.
+      // On failure, leave the previous value in place — a false all-clear is worse than stale data.
+      if (inboxResult?.success) {
+        agentStore.setState({ pendingBySource: inboxResult.pendingBySource });
+      }
     } catch (err: any) {
       if (!this.mounted) return;
       this.setState({ error: err.message || 'Failed to load', loading: false });
@@ -1681,7 +1687,10 @@ renderTabBar(): React.ReactNode {
         ? React.createElement('div', {
             style: { flexGrow: 1, overflow: 'auto' as const, display: 'flex', flexDirection: 'column' as const },
           },
-            React.createElement(AgentConsoleTab, { electron: this.props.electron }),
+            React.createElement(AgentConsoleTab, {
+              electron: this.props.electron,
+              onNavigateToInbox: () => this.setState({ activeTab: 'inbox' }),
+            }),
           )
         : loading
           ? React.createElement('div', {
