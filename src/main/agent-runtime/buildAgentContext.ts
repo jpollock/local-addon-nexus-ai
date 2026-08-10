@@ -53,6 +53,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accFindings: Finding[];
   accActions: AgentAction[];
   accSites: Record<string, { status: string; findings: Finding[] }>;
+  toolProvider: NexusToolProvider;
 } {
   const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId } = deps;
   const agentName = agent.name;
@@ -243,5 +244,5 @@ export function buildAgentContext(deps: AgentContextDeps): {
     fullRun: fullRun ?? false,
   };
 
-  return { ctx, agentLog, accFindings, accActions, accSites };
+  return { ctx, agentLog, accFindings, accActions, accSites, toolProvider };
 }

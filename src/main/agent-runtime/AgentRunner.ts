@@ -80,6 +80,7 @@ export class AgentRunner {
     let accFindings: Finding[] = [];
     let accSites: Record<string, { status: string; findings: Finding[] }> = {};
     let agentReturnValue: unknown;
+    let toolProvider: import('./NexusToolProvider').NexusToolProvider | undefined;
 
     // buildAgentContext is inside this try (not before it, as before) so that a context-
     // construction failure still produces a run.end and a recordRun row instead of rejecting
@@ -103,6 +104,7 @@ export class AgentRunner {
       ctx = built.ctx;
       accFindings = built.accFindings;
       accSites = built.accSites;
+      toolProvider = built.toolProvider;
 
       let timeoutHandle: NodeJS.Timeout | undefined;
       try {
@@ -178,11 +180,17 @@ export class AgentRunner {
       }
     }
 
+    const failedCalls = toolProvider?.failedCallCount() ?? 0;
     this.eventLog?.write({
       level: status === 'success' ? 'INFO' : 'ERROR',
       source: agentName, sourceKind: 'agent', runId,
       event: 'run.end',
-      fields: { status, dur: `${result.finishedAt - result.startedAt}ms`, findings: result.findings?.length ?? 0 },
+      fields: {
+        status,
+        dur: `${result.finishedAt - result.startedAt}ms`,
+        findings: result.findings?.length ?? 0,
+        ...(failedCalls > 0 && { failedCalls }),
+      },
       message: error,
     });
 

@@ -27,6 +27,9 @@ export class NexusToolProvider implements ToolProvider {
   /** Absent in MCP mode and in tests; tool events are simply not written then. */
   private events: ToolEventContext | undefined;
 
+  /** Counts how many tool calls threw — either failed or refused. */
+  private _failedCallCount = 0;
+
   constructor(
     registry: ToolRegistry,
     services: NexusServices,
@@ -37,6 +40,11 @@ export class NexusToolProvider implements ToolProvider {
     this.services = services;
     this.allowedTools = tools !== undefined ? new Set(tools) : undefined;
     this.events = events;
+  }
+
+  /** Returns how many tool calls failed or were refused. */
+  failedCallCount(): number {
+    return this._failedCallCount;
   }
 
   /**
@@ -121,6 +129,7 @@ export class NexusToolProvider implements ToolProvider {
       this.emitToolEvents(name, args, Date.now() - started, true, reached.tool);
       return value;
     } catch (err: unknown) {
+      this._failedCallCount++;
       const message = err instanceof Error ? err.message : String(err);
       this.emitToolEvents(name, args, Date.now() - started, false, reached.tool, message);
       throw err;
