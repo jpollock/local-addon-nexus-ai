@@ -62,11 +62,13 @@ function readState(): ContainerState {
         sessionListVersion: 0,
         selectedSiteIds: [],
         streamingStatus: null,
-        reflowMode: 'in-flow', // will be computed on mount
+        // Overlay is the fail-safe default: it reserves nothing, so a panel that renders
+        // before applyReflow() runs draws correctly instead of assuming space it never got.
+        reflowMode: 'overlay',
       };
     }
   } catch { /* ignore */ }
-  return { panelState: 'closed', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null, reflowMode: 'in-flow' };
+  return { panelState: 'closed', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null, reflowMode: 'overlay' };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
@@ -135,9 +137,11 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     if (this.localRoot) {
       this.resizeObserver = new ResizeObserver(this.handleResize);
       this.resizeObserver.observe(this.localRoot);
-      // Initial reflow
-      this.applyReflow();
     }
+    // Runs either way. With no host root there is nothing to observe and nothing to pad,
+    // but the panel still has to know it must overlay — skipping this left reflowMode at
+    // its initial 'in-flow', so a docked panel drew with no shadow AND reserved no space.
+    this.applyReflow();
   }
 
   private teardownReflow() {
@@ -163,12 +167,14 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   private applyReflow() {
-    if (!this.localRoot) return;
-    const availableWidth = this.localRoot.clientWidth;
-    const reflowMode = computeReflowMode(this.state.panelState, availableWidth);
-    const paddingRight = computePaddingRight(this.state.panelState, reflowMode);
-    this.localRoot.style.paddingRight = paddingRight > 0 ? `${paddingRight}px` : '';
-    this.localRoot.style.transition = 'padding-right 0.2s ease';
+    const hostRoot = this.localRoot;
+    const availableWidth = hostRoot ? hostRoot.clientWidth : 0;
+    const reflowMode = computeReflowMode(this.state.panelState, availableWidth, hostRoot !== null);
+    if (hostRoot) {
+      const paddingRight = computePaddingRight(this.state.panelState, reflowMode);
+      hostRoot.style.paddingRight = paddingRight > 0 ? `${paddingRight}px` : '';
+      hostRoot.style.transition = 'padding-right 0.2s ease';
+    }
     // Update state if reflowMode changed
     if (this.state.reflowMode !== reflowMode) {
       this.setState({ reflowMode });
