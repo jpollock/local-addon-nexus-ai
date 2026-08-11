@@ -42,10 +42,10 @@ const OPERATION_DEFAULTS = {
   delete:     { development: false, staging: false, production: false },
 } as const;
 
-type Operation = keyof typeof OPERATION_DEFAULTS;
+export type Operation = keyof typeof OPERATION_DEFAULTS;
 type Environment = 'development' | 'staging' | 'production';
 
-const GRID_ROWS: Array<{ id: Operation; label: string; scope: 'wpe' | 'both' }> = [
+export const GRID_ROWS: Array<{ id: Operation; label: string; scope: 'wpe' | 'both' }> = [
   { id: 'pull',   label: 'Copy a site down to this Mac', scope: 'wpe' },
   { id: 'wpcli',  label: 'Install or update things', scope: 'both' },
   { id: 'push',   label: 'Push local changes up', scope: 'wpe' },
