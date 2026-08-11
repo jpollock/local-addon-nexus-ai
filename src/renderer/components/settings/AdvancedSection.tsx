@@ -18,6 +18,7 @@ interface Props {
   settings: NexusSettings;
   indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
   mcpInfo: { port: number };
+  sites: Array<{ id: string; name: string }>;
   onSave: (patch: Partial<NexusSettings>) => void;
   electron: {
     ipcRenderer: {
@@ -53,6 +54,9 @@ interface State {
 
   // Vector store size
   vectorStoreSizeMB: number | null;
+
+  // Auto-index exclusions
+  excludedExpanded: boolean;
 }
 
 export class AdvancedSection extends React.Component<Props, State> {
@@ -72,6 +76,7 @@ export class AdvancedSection extends React.Component<Props, State> {
     factoryResetRunning: false,
     factoryResetTyped: '',
     vectorStoreSizeMB: null,
+    excludedExpanded: false,
   };
 
   async componentDidMount() {
@@ -80,18 +85,10 @@ export class AdvancedSection extends React.Component<Props, State> {
 
   async loadVectorStoreSize() {
     try {
-      // Get Local's userData path and check vectors.db
-      const userDataPath = (window as any).getUserDataPath?.();
-      if (!userDataPath) return;
-
-      const fs = (window as any).require?.('fs');
-      const path = (window as any).require?.('path');
-      if (!fs || !path) return;
-
-      const vectorsDbPath = path.join(userDataPath, 'Local', 'nexus-ai', 'vectors.db');
-      if (fs.existsSync(vectorsDbPath)) {
-        const stats = fs.statSync(vectorsDbPath);
-        this.setState({ vectorStoreSizeMB: Math.round(stats.size / (1024 * 1024)) });
+      // Get vector store size via IPC (follows the GET_JOB_RUN_DATA pattern)
+      const result = await this.props.electron.ipcRenderer.invoke('nexus-ai:get-vector-store-size');
+      if (result.success && result.sizeMB !== undefined) {
+        this.setState({ vectorStoreSizeMB: result.sizeMB });
       }
     } catch {
       // Silently fail — size is optional UX sugar
@@ -619,20 +616,28 @@ export class AdvancedSection extends React.Component<Props, State> {
   }
 
   renderAutoIndexingSection(): React.ReactNode {
-    const { settings } = this.props;
-    const sites: any[] = []; // Would need to be passed as prop in real usage
+    const { settings, sites } = this.props;
+    const { excludedExpanded } = this.state;
+    const excludedSiteIds = settings.excludedSiteIds ?? [];
 
     return React.createElement('div', {
       style: {
         marginBottom: 24,
-        padding: 16,
         background: 'var(--nxai-card-bg)',
         border: '1px solid var(--nxai-card-border)',
         borderRadius: 6,
       },
     },
+      // Toggle row
       React.createElement('label', {
-        style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' },
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          cursor: 'pointer',
+          padding: '10px 13px',
+          borderBottom: settings.autoIndex && sites.length > 0 ? '1px solid var(--nxai-card-border)' : 'none',
+        },
       },
         React.createElement('input', {
           type: 'checkbox',
@@ -649,6 +654,71 @@ export class AdvancedSection extends React.Component<Props, State> {
           }, 'Creates searchable content index when a local site starts'),
         ),
       ),
+
+      // Excluded sites accordion (only if autoIndex=true and sites exist)
+      settings.autoIndex && sites.length > 0
+        ? React.createElement('div', null,
+            React.createElement('div', {
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '9px 13px',
+                cursor: 'pointer',
+                userSelect: 'none' as const,
+                background: 'rgba(128,128,128,0.04)',
+              },
+              onClick: () => this.setState(prev => ({ excludedExpanded: !prev.excludedExpanded })),
+            },
+              React.createElement('span', { style: { fontSize: 13, color: 'var(--nxai-card-text)' } }, 'Excluded sites'),
+              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)' } },
+                  excludedSiteIds.length > 0 ? `${excludedSiteIds.length} excluded` : 'none excluded',
+                ),
+                React.createElement('span', {
+                  style: {
+                    fontSize: 9,
+                    color: 'var(--nxai-card-sub)',
+                    display: 'inline-block',
+                    transform: excludedExpanded ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 0.15s',
+                  },
+                }, '▶'),
+              ),
+            ),
+            excludedExpanded
+              ? React.createElement('div', {
+                  style: {
+                    borderTop: '1px solid var(--nxai-card-border)',
+                    padding: '10px 13px',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '4px 16px',
+                  },
+                },
+                  sites.map((site) => {
+                    const isExcluded = excludedSiteIds.includes(site.id);
+                    return React.createElement('label', {
+                      key: site.id,
+                      style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' },
+                    },
+                      React.createElement('input', {
+                        type: 'checkbox',
+                        checked: !isExcluded,
+                        onChange: () => {
+                          const updated = isExcluded
+                            ? excludedSiteIds.filter((id: string) => id !== site.id)
+                            : [...excludedSiteIds, site.id];
+                          this.props.onSave({ excludedSiteIds: updated });
+                        },
+                      }),
+                      React.createElement('span', { style: { color: 'var(--nxai-card-text)' } }, site.name),
+                    );
+                  }),
+                )
+              : null,
+          )
+        : null,
     );
   }
 
@@ -710,8 +780,8 @@ export class AdvancedSection extends React.Component<Props, State> {
       style: {
         marginBottom: 16,
         padding: 16,
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
+        background: 'var(--nxai-card-bg)',
+        border: '1px solid var(--nxai-card-border)',
         borderRadius: 6,
       },
     },
@@ -720,13 +790,13 @@ export class AdvancedSection extends React.Component<Props, State> {
       },
         React.createElement('div', { style: { flex: 1 } },
           React.createElement('div', {
-            style: { fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 6 },
+            style: { fontSize: 14, fontWeight: 600, color: 'var(--nxai-section-label)', marginBottom: 6 },
           }, 'Rebuild search'),
           React.createElement('div', {
-            style: { fontSize: 12, color: '#4b5563', marginBottom: 4 },
+            style: { fontSize: 12, color: 'var(--nxai-keeps-text)', marginBottom: 4 },
           }, 'Keeps everything. Re-reads content you already have on this Mac.'),
           React.createElement('div', {
-            style: { fontSize: 12, color: '#374151' },
+            style: { fontSize: 12, color: 'var(--nxai-section-label)' },
           }, 'A few minutes · search results are patchy meanwhile'),
         ),
         React.createElement('button', {
@@ -804,8 +874,8 @@ export class AdvancedSection extends React.Component<Props, State> {
       style: {
         marginBottom: 16,
         padding: 16,
-        background: '#fffdf7',
-        border: '1px solid #fde68a',
+        background: 'var(--nxai-amber-row-bg)',
+        border: '1px solid var(--nxai-amber-border)',
         borderRadius: 6,
       },
     },
@@ -814,39 +884,75 @@ export class AdvancedSection extends React.Component<Props, State> {
       },
         React.createElement('div', { style: { flex: 1 } },
           React.createElement('div', {
-            style: { fontSize: 14, fontWeight: 600, color: '#b45309', marginBottom: 6 },
+            style: { fontSize: 14, fontWeight: 600, color: 'var(--nxai-amber-text)', marginBottom: 6 },
           }, 'Rebuild what Nexus knows'),
           React.createElement('div', {
-            style: { fontSize: 12, color: '#4b5563', marginBottom: 4 },
+            style: { fontSize: 12, color: 'var(--nxai-keeps-text)', marginBottom: 4 },
           }, 'Keeps your connections and settings. Throws away everything Nexus worked out about your sites and reads all 367 again from scratch.'),
           React.createElement('div', {
-            style: { fontSize: 12, color: '#b45309' },
+            style: { fontSize: 12, color: 'var(--nxai-amber-text)' },
           }, 'About 30 minutes · Nexus cannot answer questions about your fleet until it finishes'),
         ),
         React.createElement('button', {
           disabled: resetAllRunning,
-          onClick: () => {
-            if (resetAllConfirming) {
-              if (confirm('This will delete all graph and vector data then run a full sync. Continue?')) {
-                this.handleResetAll();
-              }
-            } else {
-              this.setState({ resetAllConfirming: true });
-            }
-          },
+          onClick: () => this.setState({ resetAllConfirming: !resetAllConfirming }),
           style: {
             padding: '6px 14px',
             fontSize: 12,
             fontWeight: 600,
-            background: '#fffbeb',
-            border: '1px solid #fde68a',
+            background: 'var(--nxai-amber-button-bg)',
+            border: '1px solid var(--nxai-amber-border)',
             borderRadius: 4,
             cursor: resetAllRunning ? 'not-allowed' : 'pointer',
-            color: '#b45309',
+            color: 'var(--nxai-amber-text)',
             opacity: resetAllRunning ? 0.6 : 1,
           },
         }, resetAllRunning ? 'Rebuilding...' : 'Rebuild everything'),
       ),
+
+      // Inline confirmation panel (replaces browser confirm dialog)
+      resetAllConfirming && !resetAllRunning
+        ? React.createElement('div', {
+            style: {
+              marginTop: 12,
+              padding: 12,
+              background: 'var(--nxai-section-bg)',
+              borderRadius: 4,
+            },
+          },
+            React.createElement('div', {
+              style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 10 },
+            }, 'This will delete all graph and vector data then run a full sync. Continue?'),
+            React.createElement('div', { style: { display: 'flex', gap: 8 } },
+              React.createElement('button', {
+                onClick: this.handleResetAll,
+                style: {
+                  padding: '5px 12px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: 'var(--nxai-amber-text)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                },
+              }, 'Confirm Rebuild'),
+              React.createElement('button', {
+                onClick: () => this.setState({ resetAllConfirming: false }),
+                style: {
+                  padding: '5px 12px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: 'var(--nxai-card-bg)',
+                  border: '1px solid var(--nxai-card-border)',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  color: 'var(--nxai-card-text)',
+                },
+              }, 'Cancel'),
+            ),
+          )
+        : null,
     );
   }
 
@@ -857,8 +963,8 @@ export class AdvancedSection extends React.Component<Props, State> {
       style: {
         marginBottom: 16,
         padding: 16,
-        background: '#fff5f5',
-        border: '1px solid #fecaca',
+        background: 'var(--nxai-red-row-bg)',
+        border: '1px solid var(--nxai-red-border)',
         borderRadius: 6,
       },
     },
@@ -867,13 +973,13 @@ export class AdvancedSection extends React.Component<Props, State> {
       },
         React.createElement('div', { style: { flex: 1 } },
           React.createElement('div', {
-            style: { fontSize: 14, fontWeight: 600, color: '#ef4444', marginBottom: 6 },
+            style: { fontSize: 14, fontWeight: 600, color: 'var(--nxai-danger-text)', marginBottom: 6 },
           }, 'Start over'),
           React.createElement('div', {
-            style: { fontSize: 12, color: '#4b5563', marginBottom: 4 },
+            style: { fontSize: 12, color: 'var(--nxai-keeps-text)', marginBottom: 4 },
           }, 'Keeps your connections. Forgets everything else, restores every setting on this page to its default and restarts Local.'),
           React.createElement('div', {
-            style: { fontSize: 12, color: '#ef4444' },
+            style: { fontSize: 12, color: 'var(--nxai-danger-text)' },
           }, 'Restarts Local · nothing is rebuilt until you ask it to be'),
         ),
         React.createElement('button', {
@@ -883,11 +989,11 @@ export class AdvancedSection extends React.Component<Props, State> {
             padding: '6px 14px',
             fontSize: 12,
             fontWeight: 600,
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
+            background: 'var(--nxai-error-bg)',
+            border: '1px solid var(--nxai-red-border)',
             borderRadius: 4,
             cursor: factoryResetRunning ? 'not-allowed' : 'pointer',
-            color: '#ef4444',
+            color: 'var(--nxai-danger-text)',
             opacity: factoryResetRunning ? 0.6 : 1,
           },
         }, factoryResetRunning ? 'Resetting...' : 'Start over'),
@@ -898,8 +1004,7 @@ export class AdvancedSection extends React.Component<Props, State> {
             style: {
               marginTop: 12,
               padding: 12,
-              background: 'rgba(239,68,68,0.05)',
-              border: '1px solid rgba(239,68,68,0.2)',
+              background: 'var(--nxai-section-bg)',
               borderRadius: 4,
             },
           },
@@ -931,7 +1036,7 @@ export class AdvancedSection extends React.Component<Props, State> {
                   padding: '5px 12px',
                   fontSize: 11,
                   fontWeight: 600,
-                  background: factoryResetTyped.toLowerCase() === 'start over' ? '#ef4444' : '#ccc',
+                  background: factoryResetTyped.toLowerCase() === 'start over' ? 'var(--nxai-danger-text)' : '#ccc',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 4,

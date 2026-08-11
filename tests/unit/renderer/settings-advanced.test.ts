@@ -4,7 +4,7 @@ import { IPC_CHANNELS } from '../../../src/common/constants';
 
 const tree = (over: any = {}) => JSON.stringify(serializeTree(
   new (AdvancedSection as any)({
-    settings: {}, indexEntries: [], mcpInfo: { port: 10801 },
+    settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
     onSave: jest.fn(), electron: { ipcRenderer: { invoke: jest.fn() } }, ...over,
   }).render()));
 
@@ -64,7 +64,7 @@ describe('AdvancedSection', () => {
     test('DB scan button invokes DB_SCAN_ALL', async () => {
       const invoke = jest.fn().mockResolvedValue({ success: true, scans: [] });
       const instance = new (AdvancedSection as any)({
-        settings: {}, indexEntries: [], mcpInfo: { port: 10801 },
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
         onSave: jest.fn(), electron: { ipcRenderer: { invoke } },
       });
 
@@ -76,7 +76,7 @@ describe('AdvancedSection', () => {
     test('ghost cleanup button invokes CLEANUP_GHOST_INSTALLS', async () => {
       const invoke = jest.fn().mockResolvedValue({ success: true, removed: 2 });
       const instance = new (AdvancedSection as any)({
-        settings: {}, indexEntries: [], mcpInfo: { port: 10801 },
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
         onSave: jest.fn(), electron: { ipcRenderer: { invoke } },
       });
 
@@ -87,7 +87,7 @@ describe('AdvancedSection', () => {
     test('SSH diag calls WPE_DIAGNOSE with install and args', async () => {
       const invoke = jest.fn().mockResolvedValue({ success: true, output: 'WP 6.7.1' });
       const instance = new (AdvancedSection as any)({
-        settings: {}, indexEntries: [], mcpInfo: { port: 10801 },
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
         onSave: jest.fn(), electron: { ipcRenderer: { invoke } },
       });
 
@@ -100,7 +100,7 @@ describe('AdvancedSection', () => {
     test('reset index button invokes RESET_CONTENT_INDEX', async () => {
       const invoke = jest.fn().mockResolvedValue({ success: true, siteCount: 3, docCount: 150 });
       const instance = new (AdvancedSection as any)({
-        settings: {}, indexEntries: [], mcpInfo: { port: 10801 },
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
         onSave: jest.fn(), electron: { ipcRenderer: { invoke } },
       });
 
@@ -111,7 +111,7 @@ describe('AdvancedSection', () => {
     test('reset all button invokes RESET_AND_REFRESH', async () => {
       const invoke = jest.fn().mockResolvedValue({ success: true, capiInstalls: 10, sshSynced: 2 });
       const instance = new (AdvancedSection as any)({
-        settings: {}, indexEntries: [], mcpInfo: { port: 10801 },
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
         onSave: jest.fn(), electron: { ipcRenderer: { invoke } },
       });
 
@@ -122,7 +122,7 @@ describe('AdvancedSection', () => {
     test('factory reset button invokes FACTORY_RESET', async () => {
       const invoke = jest.fn().mockResolvedValue({ success: true });
       const instance = new (AdvancedSection as any)({
-        settings: {}, indexEntries: [], mcpInfo: { port: 10801 },
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
         onSave: jest.fn(), electron: { ipcRenderer: { invoke } },
       });
 
@@ -198,6 +198,75 @@ describe('AdvancedSection', () => {
       const t = JSON.stringify(serializeTree(instance.render()));
       expect(t).not.toContain(' MB');
       expect(t).toContain('0 sites indexed'); // Still shows count
+    });
+  });
+
+  // Exclusions UI and inline confirm tests
+  describe('auto-index exclusions', () => {
+    test('exclusions accordion renders when autoIndex=true and sites exist', () => {
+      const instance = new (AdvancedSection as any)({
+        settings: { autoIndex: true, excludedSiteIds: [] },
+        indexEntries: [],
+        mcpInfo: { port: 10801 },
+        sites: [{ id: 'site1', name: 'Site 1' }, { id: 'site2', name: 'Site 2' }],
+        onSave: jest.fn(),
+        electron: { ipcRenderer: { invoke: jest.fn() } },
+      });
+      instance.state.excludedExpanded = true; // Expand to see site names
+      const t = JSON.stringify(serializeTree(instance.render()));
+      expect(t).toContain('Excluded sites');
+      expect(t).toContain('Site 1');
+      expect(t).toContain('Site 2');
+    });
+
+    test('exclusions accordion hidden when autoIndex=false', () => {
+      const t = tree({
+        settings: { autoIndex: false, excludedSiteIds: [] },
+        sites: [{ id: 'site1', name: 'Site 1' }],
+      });
+      expect(t).not.toContain('Excluded sites');
+    });
+
+    test('exclusions accordion hidden when no sites', () => {
+      const t = tree({
+        settings: { autoIndex: true, excludedSiteIds: [] },
+        sites: [],
+      });
+      expect(t).not.toContain('Excluded sites');
+    });
+
+    test('excluded count shown correctly', () => {
+      const t = tree({
+        settings: { autoIndex: true, excludedSiteIds: ['site1'] },
+        sites: [{ id: 'site1', name: 'Site 1' }, { id: 'site2', name: 'Site 2' }],
+      });
+      expect(t).toContain('1 excluded');
+    });
+  });
+
+  describe('inline confirmation', () => {
+    test('reset-all uses inline confirm, not browser confirm', () => {
+      const instance = new (AdvancedSection as any)({
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
+        onSave: jest.fn(), electron: { ipcRenderer: { invoke: jest.fn() } },
+      });
+      instance.state.resetAllConfirming = true;
+      const t = JSON.stringify(serializeTree(instance.render()));
+      expect(t).toContain('This will delete all graph and vector data');
+      expect(t).toContain('Confirm Rebuild');
+      expect(t).toContain('Cancel');
+    });
+
+    test('factory reset uses typed confirm', () => {
+      const instance = new (AdvancedSection as any)({
+        settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
+        onSave: jest.fn(), electron: { ipcRenderer: { invoke: jest.fn() } },
+      });
+      instance.state.factoryResetConfirming = true;
+      const t = JSON.stringify(serializeTree(instance.render()));
+      expect(t).toContain('Type');
+      expect(t).toContain('start over');
+      expect(t).toContain('Confirm Reset');
     });
   });
 

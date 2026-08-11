@@ -1486,6 +1486,20 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle('nexus-ai:get-vector-store-size', () => {
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(deps.vectorDbPath)) {
+        const stats = fs.statSync(deps.vectorDbPath);
+        return { success: true, sizeMB: Math.round(stats.size / (1024 * 1024)) };
+      }
+      return { success: true, sizeMB: undefined };
+    } catch (err) {
+      deps.localLogger.error('[NexusAI] get-vector-store-size failed:', (err as Error).message);
+      return { success: false };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
       // Validate input
