@@ -32,6 +32,7 @@ export interface FleetCountsDeps {
 export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
   const localSiteIds = Object.keys(deps.getSites() ?? {});
 
+  const db = deps.getDb();
   let graphRows: Array<{
     id: string;
     source: 'wpe' | 'external';
@@ -40,9 +41,11 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
     lastSyncAt: number | null;
     contentIndexedAt: number | null;
   }> = [];
-  try {
-    const db = deps.getDb();
-    if (db) {
+
+  // DB absent (graph not ready) vs query threw are different conditions.
+  // The first is legitimately zero-ish; the second is unknown and must be logged.
+  if (db) {
+    try {
       // The graph column is snake_case; FleetCounts takes camelCase. Map once,
       // on the way out of the database, so nothing downstream sees both shapes.
       const rows = db
@@ -62,13 +65,28 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
         wpeSiteId: r.wpe_site_id == null ? null : String(r.wpe_site_id),
         accountId: r.account_id == null ? null : String(r.account_id),
         lastSyncAt: r.last_sync_at == null ? null : Number(r.last_sync_at),
-        contentIndexedAt: null, // Not in schema; would come from content table join if needed
+        // content_indexed_at is added at runtime by ExternalContentIndexScheduler when
+        // external content indexing runs (ALTER TABLE sites ADD COLUMN content_indexed_at INTEGER).
+        // It is conditionally present — exists on any machine where external indexing has
+        // run, absent otherwise — so never SELECT it (query would fail on fresh DBs).
+        // Hardcoded null here; unused downstream (indexed data comes from indexEntries input).
+        contentIndexedAt: null,
       }));
+    } catch (err) {
+      // Query threw. Do NOT silently convert this to zero — a failed query is not
+      // "the fleet is empty", it is "fleet status unknown", and the two must not
+      // produce the same output. Log the error so it surfaces rather than requiring
+      // a test suite to notice, and leave graphRows = [] so the counts reflect the
+      // failure (zero where they should be non-zero, which consumers can detect).
+      console.error('[collectFleetCounts] Fleet query failed:', (err as Error).message);
+      // graphRows stays [] — this produces zero counts for wpe/external, which is
+      // wrong but detectable. The alternative (throwing) would break every surface
+      // that expects a FleetCounts return. A better fix: extend PopulationCount to
+      // express "not measured" and have consumers omit the clause rather than print 0.
     }
-  } catch {
-    // Graph may not be ready. Local still counts; the remote populations report zero
-    // with their scope labels intact rather than the whole call failing.
   }
+  // else: DB absent (graph not ready). graphRows stays [], local still counts.
+  // This is the legitimate zero-ish case the original comment described.
 
   // Optional extended inputs — defaults make them null when unavailable.
   const wpeAccountFilter = deps.getWpeAccountFilter?.() ?? null;
