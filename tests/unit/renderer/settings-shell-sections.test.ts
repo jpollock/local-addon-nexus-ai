@@ -137,7 +137,7 @@ describe('SettingsShell section dispatch', () => {
       fleetCounts: null,
       jobRunData: {},
       indexEntries: [{ siteId: 's1', state: 'indexed', documentCount: 10 }],
-      mcpInfo: { port: 13100 },
+      mcpInfo: { port: 13100, stdioPath: '/path/to/stdio.js' },
     };
     const tree = shell.render();
     expect(findComponentInTree(tree, AdvancedSection)).toBe(true);

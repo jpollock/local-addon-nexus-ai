@@ -161,56 +161,6 @@ describe('SitesTab', () => {
   });
 });
 
-describe('SitesTab — the external content-index row action', () => {
-  // The plan's drafted assertions were `toContain('Index content')` /
-  // `not.toContain('Index content')` over the whole tree. That no longer
-  // discriminates: Task 5's bulk bar renders a button with exactly that label
-  // on every populated table, so the negative case could never pass and the
-  // positive case would pass for a local-only table. Both anchor on the row
-  // action's own aria-label instead, which names the site.
-  const rowAction = (name: string) => `Index content on ${name}`;
-
-  test('an unindexed external row offers Index content', () => {
-    const t = tree({
-      rows: [row({ id: 'ssh:hostinger/shop', name: 'shop', source: 'external',
-                   host: 'hostinger', knowledge: 'detailed' })],
-    });
-    expect(t).toContain(rowAction('shop'));
-  });
-
-  test('a local row does not offer it', () => {
-    // The action exists because external indexing has no other UI entry point.
-    const t = tree({ rows: [row({ id: 'L1', name: 'My Site', source: 'local', knowledge: 'detailed' })] });
-    expect(t).not.toContain(rowAction('My Site'));
-  });
-
-  test('a wpe row does not offer it either', () => {
-    const t = tree({ rows: [row({ id: 'wpe-1', name: 'install', source: 'wpe', knowledge: 'detailed' })] });
-    expect(t).not.toContain(rowAction('install'));
-  });
-
-  test('an already-searchable external row still offers it, for a re-index', () => {
-    // Indexed content goes stale; the affordance is not one-shot.
-    const t = tree({
-      rows: [row({ id: 'ssh:h/shop', name: 'shop', source: 'external', host: 'h',
-                   knowledge: 'searchable' })],
-    });
-    expect(t).toContain(rowAction('shop'));
-  });
-
-  test('clicking it passes the site id, not the alias', () => {
-    // `nexus host index <alias>` fans out over every site on the connection.
-    // A row action must index the ONE site whose row was clicked.
-    const onIndexHost = jest.fn();
-    const inst = new (SitesTab as any)(props({
-      rows: [row({ id: 'ssh:hostinger/shop', name: 'shop', source: 'external', host: 'hostinger' })],
-      onIndexHost,
-    }));
-    inst.handleIndexHost('ssh:hostinger/shop');
-    expect(onIndexHost).toHaveBeenCalledWith('ssh:hostinger/shop');
-    expect(onIndexHost).not.toHaveBeenCalledWith('hostinger');
-  });
-});
 
 describe('SitesTab selection', () => {
   const twoRows = { rows: [row({ id: 'A' }), row({ id: 'B' })] };

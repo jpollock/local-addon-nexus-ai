@@ -24,7 +24,7 @@ const mockElectron = {
 const advancedProps = {
   settings: { autoIndex: true, excludedSiteIds: [] } as any,
   indexEntries: [],
-  mcpInfo: { port: 13100 },
+  mcpInfo: { port: 13100, stdioPath: '/path/to/stdio.js' },
   sites: [],
   fleetCounts: null,
   onSave: jest.fn(),
