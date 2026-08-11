@@ -1175,7 +1175,26 @@ npx jest tests/unit/renderer/settings-background-work.test.ts
 
 Expected: PASS, 8 tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Re-home two regression guards deleted in Task 5**
+
+Task 5 deleted `SettingsTab.tsx` and with it two tests that guard *previously-fixed
+bugs*, not UI shape. Their UI is gone, but the invariants are not — this section now
+owns the interval controls, so it inherits them. The original bodies are parked in
+`.superpowers/sdd/2026-08-10-nexus-settings-home-plan/parked-guards-from-task-5.md`.
+
+Re-create both against `BackgroundWorkSection`:
+
+- **The `.strict()` silent-strip guard.** Assert that changing an interval sends the
+  *exact* settings key the schema accepts, not a near-miss. `UpdateSettingsSchema` is
+  `.strict()`, so a misspelled key is silently dropped and the setting never persists
+  — a failure mode with no runtime symptom. Pin at least
+  `externalContentIndexAutoEnabled`, which is the one the original test named.
+- **The `[1, 168]` clamp.** Assert an out-of-range interval cannot be written. The
+  schema rejects it, and a rejected write fails the *whole* settings save, not just
+  that field — so an unclamped stepper can silently discard unrelated changes the
+  user made in the same session.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/renderer/components/settings/BackgroundWorkSection.tsx tests/unit/renderer/settings-background-work.test.ts
@@ -1374,7 +1393,28 @@ describe('PermissionsSection', () => {
 npx jest tests/unit/renderer/settings-permissions.test.ts
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Re-home four regression guards deleted in Task 5**
+
+Task 5 deleted `SettingsTab.tsx` and with it four tests guarding *previously-fixed
+bugs* in exception handling. This section inherits that behaviour, so it inherits the
+guards. Original bodies are parked in
+`.superpowers/sdd/2026-08-10-nexus-settings-home-plan/parked-guards-from-task-5.md`.
+
+Re-create all four:
+
+- **Display falls back to the deprecated `wpeSiteExceptions`** when
+  `remoteSiteExceptions` is empty, so a user's existing exceptions do not vanish from
+  the UI after the rename.
+- **`remoteSiteExceptions` takes precedence** over the deprecated key when both exist.
+- **Removing the last legacy exception also clears `wpeSiteExceptions`.** This is the
+  resurrection bug: without it the fallback re-creates the exception the user just
+  deleted, and it comes back on reload.
+- **Removing one of two does NOT clear `wpeSiteExceptions`** — the other half of the
+  same fix, guarding against over-clearing.
+
+The pair matters together: either one alone permits a bug the other catches.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/renderer/components/settings/PermissionsSection.tsx tests/unit/renderer/settings-permissions.test.ts
