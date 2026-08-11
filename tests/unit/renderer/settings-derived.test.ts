@@ -353,3 +353,29 @@ describe('derived — FIX 12: weekly job passesPerDay is never 0', () => {
     expect(d.summary.time.minsPerDay).toBeGreaterThan(0);
   });
 });
+
+describe('derived — FIX 13: module is pure (no Date.now())', () => {
+  test('source contains no Date.now() calls', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const derivedPath = path.join(__dirname, '../../../src/renderer/components/settings/derived.ts');
+    const source = fs.readFileSync(derivedPath, 'utf8');
+    expect(source).not.toContain('Date.now()');
+  });
+
+  test('same input produces same output (deterministic)', () => {
+    const now = 1234567890000;
+    const lastRunAt = { wpeRefresh: now - 2 * 3600_000 };
+    const input = base({
+      lastRunAt,
+      now,
+      settings: { wpeRefreshIntervalHours: 4 }
+    });
+
+    const result1 = computeDerived(input);
+    const result2 = computeDerived(input);
+
+    expect(result1.summary.time.nextInHours).toBe(result2.summary.time.nextInHours);
+    expect(result1).toEqual(result2);
+  });
+});

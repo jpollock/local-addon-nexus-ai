@@ -216,12 +216,13 @@ export function computeDerived(input: DerivedInput): Derived {
   // nextInHours is time until next run, computed from lastRunAt + interval - now.
   // When no enabled job has ever run, the clause is omitted (null).
   // Overdue jobs (negative time) are clamped to 0.
+  // `now` is required (not defaulted) — this module stays pure.
   const nextTimes = rows
     .filter((r) => r.canRun)
     .map((r) => {
       const last = input.lastRunAt?.[r.key];
       if (last == null) return null;
-      const nextMs = last + r.hours * 3600_000 - (input.now ?? Date.now());
+      const nextMs = last + r.hours * 3600_000 - input.now;
       return Math.max(0, nextMs / 3600_000); // Clamp to 0 for overdue jobs
     })
     .filter((t): t is number => t !== null);
