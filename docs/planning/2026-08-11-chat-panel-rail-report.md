@@ -109,13 +109,15 @@ private persistChatSession() {
 
 ### Tokens added
 
-None. All colors are existing `--nxai-*` variables or inline literals from the spec:
-- Rail background: `var(--nxai-card-bg)`
-- Rail border: `var(--nxai-card-border)`
-- Rail label: `var(--nxai-card-sub)`
-- Mark background: `#ecfcfd` (spec-defined teal tint, no token exists)
-- Badge background: `UI_COLORS.WPE_BRAND` (`#0ECAD4`)
-- Stuck marker: `#fffbeb` / `#b45309` (spec-defined amber, matches existing `--nxai-amber-*` pattern)
+Four rail-specific tokens added to `src/renderer/utils/theme.ts` (commit `ef243edd`):
+
+- `--nxai-rail-mark-bg: #ecfcfd` — teal tint for rail mark background (spec §3)
+- `--nxai-rail-stuck-bg: #fffbeb` — amber background for stuck marker
+- `--nxai-rail-stuck-text: #b45309` — amber text for stuck marker
+- `--nxai-rail-badge-shadow: #fff` (light) / `var(--nxai-card-bg)` (dark) — badge border shadow
+
+**Derivation:** All four are spec-defined literals from PANEL-IMPLEMENTATION.md §3 with no
+existing tokens. Dark theme uses same values per spec's non-variant treatment of the rail.
 
 ### No-neither-state invariant test
 
@@ -141,18 +143,58 @@ Iterates over all four states and asserts each renders a truthy tree with truthy
 
 ### Test results
 
-**Baseline (before):** 32 failed / 4111 total  
-**After implementation:** 32 failed / 4123 total  
+**Baseline (actual):** 20 failed / 4111 total  
+**After all fixes:** 20 failed / 4123 total  
 **New tests added:** 12 (all in `DockedPanelState.test.tsx`)  
-**New failures:** 0  
+**New failures:** 0 (baseline maintained exactly)  
 **TypeScript:** `npx tsc --noEmit` ✓ (no errors)
 
-### What remains
+**Baseline measurement error (corrected):** Initially reported 32/4111 as baseline by measuring
+after my own change and taking that as the reference. The actual baseline is 20/4111. This made
+12 new failures invisible until corrected:
 
-- **Badge count wiring:** Hardcoded `badgeCount = 0`. Real count should come from Inbox/Insights data.
-- **Stuck marker wiring:** Hardcoded `hasStuck = false`. Real state should come from agent health check.
-- **Rail label scoping:** Hardcoded `'INSIGHTS'`. Spec requires `'THIS SITE'` on site screens vs `'INSIGHTS'` on fleet screens — needs context detection.
-- **Tooltip scoping:** Hardcoded `'Insights across all sites'`. Should say site name on site screens.
-- **PanelChat `visible` gating:** Prop is passed but not yet used to gate expensive work (no such work identified in this pass).
+1. **docked-panel-container.test.ts** (4 failures) — Expected `open`/`size` fields that no longer exist. Updated to expect `panelState` enum and test migration from old format.
+2. **panel-theme.test.ts** (1 failure) — Four hardcoded hex literals violated the no-literals rule. Added tokens to theme.ts (see "Tokens added" above).
+3. **PanelChrome.characterization.test.tsx** (7 failures) — Deliberate chrome change (bubble → rail). Updated snapshots and props for new API.
 
-All four items are deliberate placeholders, not bugs — the rail renders and the state transitions work.
+All 12 were legitimate expectation updates for the enum change and rail chrome, fixed in commit `ef243edd`.
+
+### Signal gap (§3 requirement not yet met)
+
+**What §3 requires:** The rail must carry two indicators that scope together:
+- **Count badge:** inbox items waiting (hidden at zero)
+- **Stuck marker:** agents paused/blocked (only when something is stuck)
+
+Both must scope to what the rail is showing (fleet on Nexus screens, site-specific on Local site screens).
+
+**What is hardcoded:**
+```typescript
+const badgeCount = 0; // placeholder
+const hasStuck = false; // placeholder
+const railLabel = 'INSIGHTS'; // placeholder: should be 'THIS SITE' on site screens
+```
+
+**Where the data lives:**
+- Badge count: `GET_INBOX` → `PendingCounts`, helpers exist (`totalPending()`, `pendingForAgent()`)
+- Stuck marker: `GET_INBOX.paused: string[]` → `hasStuck = paused.length > 0`
+- Both already consumed by `NexusOverview.tsx` and `AgentStore.ts`
+
+**What blocks wiring:** The rail does not yet know whether it is on a site screen or a fleet screen.
+This is a real architectural question:
+- Does Local's router expose current context?
+- Should there be a `CurrentSiteContext` provider?
+- Should the rail read `window.location` and parse it?
+
+None is a "just wire it" task — they are design decisions with implications for how other Nexus
+surfaces detect their context.
+
+**Analysis:** See `docs/planning/2026-08-11-rail-signal-gap.md` for full breakdown of data sources,
+scoping dependencies, and three implementation options.
+
+**Recommendation:** Wire data without scoping as the next commit (Option 1):
+1. Subscribe to `GET_INBOX` in `DockedPanelContainer`
+2. Compute `totalPending(counts)` and `paused.length > 0`
+3. Pass `badgeCount` and `hasStuck` to `DockedPanel`
+4. Document scoping as deferred gap with clear blocker
+
+**Result:** Rail shows signal (§3's primary requirement), scoping refinement deferred as known gap.
