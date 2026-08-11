@@ -198,3 +198,45 @@ scoping dependencies, and three implementation options.
 4. Document scoping as deferred gap with clear blocker
 
 **Result:** Rail shows signal (§3's primary requirement), scoping refinement deferred as known gap.
+
+---
+
+## Final state (2026-08-11, after coordinator feedback)
+
+**Baseline measurement corrected:** 20 failed / 4111 total (not 32).  
+**All 12 failures fixed:** Deliberate expectation updates for enum change and rail chrome.
+
+**Signal gap resolution:** Badge and stuck marker **omitted** where scope is unknown.
+
+**Why not Option 1 (wire data without scoping)?** The coordinator was correct: wiring fleet-wide
+counts on a site screen would be a number misrepresenting its own context — the same defect as
+"449 sites indexed". An absent clause beats a plausible wrong one.
+
+**Mount point investigation:** Checked per coordinator guidance. `DockedPanelContainer` is mounted
+globally on `document.body`, not per-screen. It has no access to:
+- Route props (not a Route component)
+- Router context (mounted outside Router tree)
+- Site prop (only passed to per-route components via hooks)
+
+**Parsing window.location explicitly forbidden** as fragile guess-dressed-as-lookup.
+
+**Honest interim chosen:** Omit badge and stuck marker where scope is unknown. Rail shows:
+- Generic label: 'NEXUS AI' (no scope claim)
+- Generic tooltip: 'Open Nexus AI panel' (no scope claim)
+- Badge: null (never rendered)
+- Stuck marker: null (never rendered)
+
+**What this preserves:**
+- Rail renders and functions
+- State transitions work
+- No false information presented
+
+**Blocker documented:** `docs/planning/2026-08-11-rail-signal-gap.md` includes:
+- Data source locations (GET_INBOX, PendingCounts, helpers)
+- Mount point investigation (why scope is unknown)
+- Four architectural options (smallest real fix: event-based signaling)
+
+**Test results:** 20 failed / 4123 total (baseline: 20 / 4111)
+- Failed count: matches baseline exactly (20 = 20)
+- Total: +12 from new tests (DockedPanelState.test.tsx)
+- Snapshot updated for generic rail labels (commit 59ebe95d)
