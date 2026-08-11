@@ -560,7 +560,6 @@ export default function main(context: any): void {
         getSettings: getSchedulerSettings,
         buildSiteNames: buildSiteNamesLocal,
         logger: localLogger,
-        jobRunStore,
       });
     }
 
@@ -890,7 +889,6 @@ export default function main(context: any): void {
           getSettings: getSchedulerSettings,
           buildSiteNames: buildSiteNamesLocal,
           logger: localLogger,
-          jobRunStore,
         });
       }
 

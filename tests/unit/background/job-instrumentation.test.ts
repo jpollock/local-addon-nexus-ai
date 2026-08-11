@@ -31,9 +31,18 @@ describe('every scheduled job records its duration', () => {
     expect(src).toContain("'wpeSync'");
   });
 
-  test('localContentIndex is recorded', () => {
+  test('localContentIndex is NOT recorded — work happens asynchronously', () => {
+    // OpportunisticScheduler.runCycle() dispatches work fire-and-forget through
+    // BulkOperationManager.execute(), which returns immediately. The actual
+    // indexing happens asynchronously over minutes/hours. Measuring dispatch time
+    // (~0-1ms) would be meaningless. Awaiting completion would block the
+    // setInterval and change scheduler semantic from "dispatch every N hours" to
+    // "wait for completion then N more hours" — a scheduling behavior change that
+    // violates the task constraint. Result: no recording, averageMs() returns
+    // null, UI omits the duration clause. This test pins that decision so nobody
+    // "fixes" it back.
     const src = read('main/scheduler/OpportunisticScheduler.ts');
-    expect(src).toContain('jobRunStore');
-    expect(src).toContain("'localContentIndex'");
+    expect(src).toContain('Duration not recorded');
+    expect(src).toContain('fire-and-forget');
   });
 });

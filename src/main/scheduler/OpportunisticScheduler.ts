@@ -13,8 +13,6 @@ export interface SchedulerDeps {
   getSettings(): NexusSettings;
   buildSiteNames(siteIds: string[]): Record<string, string>;
   logger: { info(msg: string): void; warn(msg: string): void };
-  /** Optional — when absent the job simply is not timed. */
-  jobRunStore?: import('../background/JobRunStore').JobRunStore;
 }
 
 /**
@@ -61,29 +59,32 @@ export class OpportunisticScheduler {
   }
 
   private runCycle(deps: SchedulerDeps): void {
-    const startedAt = Date.now();
-    try {
-      const settings = deps.getSettings();
-      if (!settings.localContentIndexAutoEnabled) return;
+    const settings = deps.getSettings();
+    if (!settings.localContentIndexAutoEnabled) return;
 
-      const excluded = new Set(settings.excludedSiteIds ?? []);
-      const allSites = Object.values(deps.siteData.getSites()) as Array<{ id: string }>;
-      const siteIds = allSites.map(s => s.id).filter(id => !excluded.has(id));
+    const excluded = new Set(settings.excludedSiteIds ?? []);
+    const allSites = Object.values(deps.siteData.getSites()) as Array<{ id: string }>;
+    const siteIds = allSites.map(s => s.id).filter(id => !excluded.has(id));
 
-      if (siteIds.length === 0) {
-        deps.logger.info('[OpportunisticScheduler] No eligible sites to index');
-        return;
-      }
-
-      deps.logger.info(`[OpportunisticScheduler] Scheduled run — ${siteIds.length} sites`);
-      deps.bulkOpManager.execute({
-        type: 'reindex',
-        siteIds,
-        siteNames: deps.buildSiteNames(siteIds),
-        options: { autoStartStop: true },
-      });
-    } finally {
-      deps.jobRunStore?.record('localContentIndex', startedAt, Date.now() - startedAt);
+    if (siteIds.length === 0) {
+      deps.logger.info('[OpportunisticScheduler] No eligible sites to index');
+      return;
     }
+
+    deps.logger.info(`[OpportunisticScheduler] Scheduled run — ${siteIds.length} sites`);
+    deps.bulkOpManager.execute({
+      type: 'reindex',
+      siteIds,
+      siteNames: deps.buildSiteNames(siteIds),
+      options: { autoStartStop: true },
+    });
+    // Duration not recorded: BulkOperationManager.execute() dispatches work
+    // fire-and-forget and returns immediately with an operation id. The actual
+    // indexing happens asynchronously over minutes/hours. Awaiting
+    // waitForCompletion(opId) would block the setInterval callback and change
+    // the scheduler's semantic from "dispatch every N hours" to "wait for
+    // completion then N more hours", which violates the task constraint.
+    // Result: averageMs('localContentIndex') returns null, the UI omits the
+    // duration clause, and the screen tells the truth.
   }
 }
