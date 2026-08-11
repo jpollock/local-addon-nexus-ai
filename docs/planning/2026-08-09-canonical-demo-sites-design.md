@@ -93,12 +93,45 @@ and each placement is forced by something:
   A self-managed cloud server is the honest home for an unpatched install; it is
   also the only tier where nothing upstream will quietly fix the defect between
   demos.
-- **Three external sites on ONE SpinupWP server, not three servers.** A SpinupWP
-  server hosts many sites under one SSH connection, which produces the
-  `ssh:<alias>/<site>` multi-site form. That form is worth exercising: it is the
-  shape that collided in `vectorSiteId()` and silently merged two hosts' indexed
-  content. One alias with three sites is a live regression target; three
-  single-site aliases are not.
+- **Three external sites on ONE SpinupWP server, not three servers.** One server
+  is still correct — it is cheaper and it is how a self-managed fleet actually
+  looks. Whether that server yields *one* SSH connection or three is a separate
+  question, settled below.
+
+**How many SpinupWP aliases — measured 2026-08-11, on the live server.** This
+bullet originally required one alias serving all three sites, on the grounds
+that the resulting `ssh:<alias>/<site>` multi-site form is the shape that
+collided in `vectorSiteId()`. Both halves of that reasoning turned out to be
+wrong.
+
+SpinupWP isolates each site behind its own system user, and on
+`myfirstserver` (159.65.76.95, Ubuntu 26.04, WP-CLI 2.12.0, PHP 8.3.33):
+
+- `/sites` carries an ACL granting `group:site-users:--x` — traverse, not list.
+- `wp-config.php` is `-rw-------` (0600), owner only. No group bit, no other
+  bit, no ACL entry.
+- The sudo user is `spinupwp` (uid 1000, the only member of `sudo`); each site
+  user is separate (`cedarvale-spin`, uid 1001).
+
+So no user other than a site's own owner can read that site's `wp-config.php`,
+and without it `wp` cannot bootstrap. The sudo user could only reach it through
+`sudo`, and **Nexus never sudos** — nor should it. One alias covering three
+independently-owned sites is therefore not achievable on SpinupWP without
+loosening a permission that is correctly set.
+
+The second half was also wrong: **the multi-site form is already exercised in
+the live fleet.** The registered Hostinger connection carries two sites,
+`ssh:hostinger-test/palegreen-capybara-114180` and
+`ssh:hostinger-test/mediumslateblue-hyena-983322`, under one alias and one
+`account_id`. The `vectorSiteId()` regression target exists whether or not
+SpinupWP adds another.
+
+**Decision: three sites, three site users, three aliases** — SpinupWP's own
+model, and nothing real is lost. **Exception:** if SpinupWP's New Site form
+allows selecting an *existing* site user rather than creating one, put all three
+sites on `cedarvale-spin`; then one alias reaches all three roots and the
+one-alias form is recovered at no cost. Prefer that if it is offered; fall back
+to three aliases if it is not.
 
 **SpinupWP is a WP Engine product** (via the 2022 Delicious Brains acquisition),
 so a fleet spanning WP Engine, SpinupWP and Local is three WP Engine surfaces —
@@ -107,10 +140,15 @@ is simply an SSH-reachable non-WPE host: `source='external'`, identical path to
 the existing Hostinger connection. It adds narrative and multi-site coverage, not
 a new transport.
 
-**Prerequisite, not yet met:** no SpinupWP alias exists in `~/.ssh/config` as of
-this amendment. The three registered external rows are all Hostinger. A SpinupWP
-account and a provisioned server are a hard dependency of the `external` row and
-must be stood up before those three sites can be built.
+**Prerequisite status, updated 2026-08-11:** the server exists.
+`myfirstserver` at 159.65.76.95 (DigitalOcean, Ubuntu 26.04 LTS) is provisioned
+and reachable, with WP-CLI 2.12.0 and PHP 8.3.33 installed globally and a
+`cedarvale-spin` alias in `~/.ssh/config`. **One** of the three sites exists —
+`cedarvale-spin.com`, WordPress 7.0.3, running the `spinupwp` and
+`limit-login-attempts-reloaded` plugins. Two more must be created in the
+SpinupWP dashboard before C, D and G can all be built. The three registered
+`external` rows in the graph are still all Hostinger; nothing on this server is
+registered with Nexus yet.
 
 **Seeding does not go through Nexus's write gate, and that is the point.**
 `wpcli` (write) is refused on `production` by default, on both WPE and external

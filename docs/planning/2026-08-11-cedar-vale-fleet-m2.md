@@ -11,7 +11,8 @@
 ## Global Constraints
 
 - **Spec is `docs/planning/2026-08-09-canonical-demo-sites-design.md` §1.2, §1.3, §3.1, §3.2.** The pathology ids, host assignments and defect definitions there are binding. Do not invent an eighth pathology or move a site between host classes.
-- **Host split is fixed:** A, B → WP Engine. C, D, G → SpinupWP (one server, one SSH alias, three sites). E, F → Local. Flagship → WP Engine production, with the existing `cedarvale.local` as its Local development clone.
+- **Host split is fixed:** A, B → WP Engine. C, D, G → SpinupWP (one server). E, F → Local. Flagship → WP Engine production, with the existing `cedarvale.local` as its Local development clone.
+- **How many SpinupWP aliases depends on the site users, and is measured, not assumed.** This plan originally mandated one alias for all three sites. On the live server that is impossible unless the sites share a system user: `wp-config.php` is `0600`, owner-only, so no other user — sudo user included — can bootstrap `wp` in someone else's site, and Nexus never sudos. If SpinupWP's New Site form lets all three sites run as the existing `cedarvale-spin` user, use one alias; otherwise use three. Nothing rides on the outcome: the `ssh:<alias>/<site>` multi-site form is already live in the fleet via `ssh:hostinger-test`, which carries two sites. Whatever is true, `fleet.json` must state it, because Task 8 registers exactly what it says.
 - **No corpus regeneration.** Fleet corpora are derived from `cedar-vale-health-demo/data/normalized.json`. Zero calls to any completion API in this plan. A task that adds one is wrong.
 - **Determinism.** Every sampling decision is seeded from the fleet manifest. Running the build twice must produce byte-identical corpora. No `Math.random()`, no `Date.now()`, no bare `new Date()` — in production code *or* in tests.
 - **No `cv_*` marker fields.** Every pathology must be detectable from fields that already exist in `scripts/src/acf/field-types.ts`. A new ACF key would have to be added to `FIELD_TYPES`, which would put it on the flagship's field groups too; worse, a corpus that flags its own defects proves nothing, because the demo would be finding the flag rather than the problem. If you cannot detect a pathology without a marker, the pathology is wrongly designed.
@@ -127,11 +128,14 @@ describe('fleet manifest', () => {
     ]);
   });
 
-  it('puts all three SpinupWP sites behind one SSH alias, so ssh:<alias>/<site> is exercised', () => {
-    const aliases = new Set(
-      manifest.sites.filter((s) => s.host === 'spinupwp').map((s) => s.sshAlias),
-    );
-    expect(aliases).toEqual(new Set(['cedarvale-spin']));
+  it('gives every SpinupWP site an alias that exists in ~/.ssh/config', () => {
+    // Deliberately does NOT require the three to share one alias. SpinupWP's
+    // per-site 0600 wp-config.php makes a shared alias possible only when the
+    // sites also share a system user; whether they do is a dashboard choice at
+    // provisioning time. Task 8 registers whatever this file says.
+    for (const s of manifest.sites.filter((x) => x.host === 'spinupwp')) {
+      expect(s.sshAlias).toMatch(/^[A-Za-z0-9][A-Za-z0-9._-]*$/);
+    }
   });
 
   it('gives every site a distinct seed, so no two derive the same sample', () => {
@@ -2025,40 +2029,70 @@ verification output to `docs/fleet-provisioning.md`; commit.
 
 ### Task 8: SpinupWP provisioning — C, D and G
 
-**Blocked on:** a SpinupWP account and a provisioned server. Neither exists today
-— `~/.ssh/config` has no SpinupWP alias, and all three registered `external` rows
-are Hostinger.
+**Blocked on:** two more SpinupWP sites. The server is up and one site exists.
+
+**Measured 2026-08-11.** `myfirstserver`, 159.65.76.95, DigitalOcean, Ubuntu
+26.04 LTS. WP-CLI 2.12.0 and PHP 8.3.33 installed globally. Sudo user
+`spinupwp` (uid 1000, sole member of `sudo`). One site: `cedarvale-spin.com`,
+site user `cedarvale-spin` (uid 1001, group `site-users`), docroot
+`/sites/cedarvale-spin.com/files`, WordPress **7.0.3**, plugins `spinupwp` and
+`limit-login-attempts-reloaded` active. Alias `cedarvale-spin` is in
+`~/.ssh/config` and authenticates.
 
 **Files:**
 - Modify: `canonical-demos/docs/fleet-provisioning.md` (add the `## SpinupWP` section)
 
-- [ ] **Step 1: Provision the server and three sites**
+- [ ] **Step 1: Create the two missing sites**
 
-In SpinupWP: one server on any supported provider, then three sites —
-`cedar-vale-c`, `cedar-vale-d`, `cedar-vale-g`. Note each document root
-(SpinupWP's convention is `/sites/<domain>/files`).
+One of the three already exists. In the SpinupWP dashboard, add two more on
+`myfirstserver`.
 
-- [ ] **Step 2: Add ONE ssh alias that reaches all three roots**
+**At the New Site step, check whether the form offers an existing system user.**
+If it does, put both new sites on `cedarvale-spin`: all three docroots then
+belong to one user, one alias reaches all three, and the `ssh:<alias>/<site>`
+multi-site form is exercised here as well as on Hostinger. If it forces a new
+user per site, accept that and plan for three aliases — see the Global
+Constraints; nothing depends on the outcome.
+
+Record each site's domain and docroot. SpinupWP's convention is
+`/sites/<domain>/files`, which is also `$HOME/files` for that site's user.
+
+WordPress 7.0.3 is current, so `<two-majors-back>` for CV-C-01 in Step 4 means a
+6.x release — pick the latest 6.x minor and record which.
+
+- [ ] **Step 2: Add the ssh alias(es)**
+
+The first is already in `~/.ssh/config` and working:
 
 ```
 Host cedarvale-spin
-  Hostname <server-ip-or-hostname>
-  User <sudo-user>
+  Hostname 159.65.76.95
+  User cedarvale-spin
   IdentityFile ~/.ssh/id_ed25519
+  IdentitiesOnly yes
 ```
 
-**One alias, not three.** SpinupWP's default per-site users cannot read each
-other's roots, so per-site aliases give three single-site connections and never
-produce the `ssh:<alias>/<site>` form. That form is the point: it is the shape
-that collided in `vectorSiteId()` and silently merged two hosts' indexed content
-(CLAUDE.md, "Vector-store site ids"). Use a user with read access to all three.
+**One alias or three depends on Step 1's site-user choice.** If all three sites
+run as `cedarvale-spin`, this single block reaches all three roots and nothing
+more is needed. If each site got its own user — SpinupWP's default — add one
+block per site with that site's user, and set each site's `sshAlias` in
+`fleet.json` accordingly.
 
-Verify before going further — `ssh -G` resolves but does not validate, and exits
-0 for an alias in no config file at all:
+`IdentitiesOnly yes` is not cosmetic. Without it ssh offers every key in
+`~/.ssh` on each connection, and each is a separate failed-auth line in the
+server log; SpinupWP installs fail2ban, whose default `sshd` jail bans after 5
+failures in 10 minutes. One apparent login attempt can trip it on its own.
+
+Verify each alias before going further — `ssh -G` resolves but does not
+validate, and exits 0 for an alias in no config file at all:
 
 ```bash
-ssh cedarvale-spin 'ls -d /sites/*/files'
+ssh <alias> 'id; wp --version; ls -d "$HOME"/files'
 ```
+
+A site user cannot list `/sites` (the ACL grants `site-users` traverse only,
+`--x`), so `ls -d /sites/*/files` returns nothing even when the connection is
+healthy. Check `$HOME/files`, which is that site's docroot.
 
 - [ ] **Step 3: Seed each site with the server's own WP-CLI**
 
@@ -2101,20 +2135,21 @@ it gives `find_sites_with_theme` a real negative to return.
 - [ ] **Step 5: Register all three with Nexus**
 
 ```bash
-nexus host add cedarvale-spin --env production
+nexus host add <alias> --env production      # once per alias from Step 2
 ```
 
 Registration lists every discovered WordPress install and lets you pick which to
-register — pick all three. Then confirm the ids are the multi-site form:
+register. On a shared-user server, pick all three from the single alias; on
+per-site users, each `host add` will offer exactly one. Then:
 
 ```bash
 nexus host list
-nexus wp core version ssh:cedarvale-spin/cedar-vale-d@production
+nexus wp core version ssh:<alias>/<site>@production
 ```
 
-Expected: `ssh:cedarvale-spin/cedar-vale-c`, `…/cedar-vale-d`, `…/cedar-vale-g`.
-A bare `ssh:cedarvale-spin` id means only one site was registered and Step 2's
-alias user cannot see the others.
+Every surface prints the full `ssh:<alias>/<site>` form regardless of how many
+sites a connection carries, so expect that shape in both cases. What must be
+true either way: three rows, `source='external'`, `is_active=1`.
 
 - [ ] **Step 6: Collect metadata and index**
 
@@ -2128,16 +2163,20 @@ needs it. On SpinupWP that is unlikely, but if it happens, leave it NULL. Never
 substitute `'8.0'`; the honest NULL is what keeps the site out of the health
 score rather than giving it a fabricated one (CLAUDE.md, "Fleet counts").
 
-Then confirm the vector tables did not collide — the regression the multi-site
-form exists to catch:
+Then confirm the vector tables did not collide:
 
 ```
-search_site_content  site="ssh:cedarvale-spin/cedar-vale-d"  query="<a term unique to D's corpus>"
-search_site_content  site="ssh:cedarvale-spin/cedar-vale-g"  query="<the same term>"
+search_site_content  site="ssh:<alias>/cedar-vale-d"  query="<a term unique to D's corpus>"
+search_site_content  site="ssh:<alias>/cedar-vale-g"  query="<the same term>"
 ```
 
 D must return hits and G must not. Both returning the same hits means the two
 sites share a sqlite-vec table.
+
+This check is worth running whichever alias layout Step 2 produced, but it is
+**not** the only coverage of that regression: `ssh:hostinger-test` already
+carries two registered sites under one alias, so the multi-site `vectorSiteId()`
+path has a live target independent of this server.
 
 - [ ] **Step 7: Record and commit**
 
