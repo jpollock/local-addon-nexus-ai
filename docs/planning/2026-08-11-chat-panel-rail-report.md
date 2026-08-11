@@ -123,8 +123,10 @@ Both mutations were restored before commit.
 
 ## Test results
 
-**Baseline (before changes):** 427 failed / 4123 total  
-**After changes:** 428 failed / 4105 total (1 better than baseline — 22 fewer total tests, likely unrelated)
+**Actual baseline (after rebuild):** 20 failed / 4123 total  
+**After changes:** 20 failed / 4133 total (10 new tests added, no new failures)
+
+**Initial miscount:** Reported 427 failed / 4123 total as "baseline". 427 is the ABI failure count when better-sqlite3 is compiled for Electron and every SQLite-dependent suite fails to load. The real baseline is 20 failed.
 
 **New tests added:** 10 passing in `tests/unit/renderer/panelReflow.test.ts`
 - `computeReflowMode()` for all four states and the threshold boundary
@@ -132,6 +134,8 @@ Both mutations were restored before commit.
 - Mutation verification test for the 1380px threshold
 
 **Snapshots updated:** 5 in `PanelChrome.characterization.test.tsx.snap` (width 384 → 380, added `boxShadow` property)
+
+**Width expectation corrected:** `DockedPanelState.test.tsx` expected 384px (stale). Corrected to 380px per spec. 384 was not the outer width — outer is 381px (380 content + 1px border). Test now asserts content width explicitly.
 
 **TypeScript:** `npx tsc --noEmit` passed with no errors.
 
