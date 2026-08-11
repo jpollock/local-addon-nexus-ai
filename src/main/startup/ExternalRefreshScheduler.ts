@@ -12,6 +12,8 @@ export interface ExternalRefreshSchedulerOptions {
   /** Skip a host synced more recently than this. Default: same as intervalMs. */
   stalenessThresholdMs?: number;
   logger: { info: (...a: any[]) => void; warn: (...a: any[]) => void; error: (...a: any[]) => void };
+  /** Optional — when absent the job simply is not timed. */
+  jobRunStore?: import('../background/JobRunStore').JobRunStore;
 }
 
 export interface ExternalRefreshResult {
@@ -40,6 +42,7 @@ export class ExternalRefreshScheduler {
   private readonly graphService: ExternalRefreshSchedulerOptions['graphService'];
   private readonly services: any;
   private readonly logger: ExternalRefreshSchedulerOptions['logger'];
+  private readonly jobRunStore?: import('../background/JobRunStore').JobRunStore;
   private currentIntervalMs: number;
   private currentStalenessThresholdMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -48,6 +51,7 @@ export class ExternalRefreshScheduler {
     this.graphService = options.graphService;
     this.services = options.services;
     this.logger = options.logger;
+    this.jobRunStore = options.jobRunStore;
     this.currentIntervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.currentStalenessThresholdMs = options.stalenessThresholdMs ?? this.currentIntervalMs;
   }
@@ -86,8 +90,10 @@ export class ExternalRefreshScheduler {
    * fails is counted and logged, and the rest of the cycle continues.
    */
   async runCycleNow(): Promise<ExternalRefreshResult> {
-    const result: ExternalRefreshResult = { scanned: 0, skipped: 0, failed: 0 };
-    const now = Date.now();
+    const startedAt = Date.now();
+    try {
+      const result: ExternalRefreshResult = { scanned: 0, skipped: 0, failed: 0 };
+      const now = Date.now();
 
     let rows: Array<{ id: string; name: string; account_id: string; environment: string | null; ssh_last_sync_at: number | null }>;
     try {
@@ -134,9 +140,12 @@ export class ExternalRefreshScheduler {
       }
     })));
 
-    this.logger.info(
-      `[ExternalRefreshScheduler] Cycle done — scanned ${result.scanned}, `
-      + `skipped ${result.skipped}, failed ${result.failed}`);
-    return result;
+      this.logger.info(
+        `[ExternalRefreshScheduler] Cycle done — scanned ${result.scanned}, `
+        + `skipped ${result.skipped}, failed ${result.failed}`);
+      return result;
+    } finally {
+      this.jobRunStore?.record('externalRefresh', startedAt, Date.now() - startedAt);
+    }
   }
 }

@@ -37,6 +37,8 @@ export interface HaltedSiteRefreshSchedulerOptions {
     warn: (...args: any[]) => void;
     error: (...args: any[]) => void;
   };
+  /** Optional — when absent the job simply is not timed. */
+  jobRunStore?: import('../background/JobRunStore').JobRunStore;
 }
 
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -49,6 +51,7 @@ export class HaltedSiteRefreshScheduler {
   private currentIntervalMs: number;
   private readonly isSiteRunning: (siteId: string) => boolean;
   private readonly logger: HaltedSiteRefreshSchedulerOptions['logger'];
+  private readonly jobRunStore?: import('../background/JobRunStore').JobRunStore;
 
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -58,6 +61,7 @@ export class HaltedSiteRefreshScheduler {
     this.siteData = options.siteData;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.currentIntervalMs = this.intervalMs;
+    this.jobRunStore = options.jobRunStore;
     this.isSiteRunning = options.isSiteRunning;
     this.logger = options.logger;
   }
@@ -114,7 +118,9 @@ export class HaltedSiteRefreshScheduler {
    * - Calls scanner.scanSite(id) for every halted site with a stale twin.
    */
   async runNow(): Promise<void> {
-    const sites = Object.values(this.siteData.getSites());
+    const startedAt = Date.now();
+    try {
+      const sites = Object.values(this.siteData.getSites());
 
     if (sites.length === 0) {
       this.logger.info('[HaltedSiteRefreshScheduler] No sites found — nothing to refresh');
@@ -159,8 +165,11 @@ export class HaltedSiteRefreshScheduler {
       }
     }
 
-    this.logger.info(
-      `[HaltedSiteRefreshScheduler] Cycle done — ${scanned} scanned, ${skippedRunning} running (skipped), ${skippedFresh} fresh (skipped)`
-    );
+      this.logger.info(
+        `[HaltedSiteRefreshScheduler] Cycle done — ${scanned} scanned, ${skippedRunning} running (skipped), ${skippedFresh} fresh (skipped)`
+      );
+    } finally {
+      this.jobRunStore?.record('haltedSiteRefresh', startedAt, Date.now() - startedAt);
+    }
   }
 }
