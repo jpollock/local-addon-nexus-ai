@@ -516,6 +516,17 @@ export default function main(context: any): void {
   };
 
   /**
+   * Shared helper to check if background work is paused. Read from one place so
+   * every gate checks the same source — startup schedulers, the settings-change
+   * reactive path, and the WPE auto-sync paths.
+   */
+  const isBackgroundWorkPaused = () => {
+    const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+      { backgroundWorkPaused?: boolean } | null;
+    return settings?.backgroundWorkPaused === true;
+  };
+
+  /**
    * Re-read settings and restart/stop every settings-driven scheduler.
    *
    * Two callers, deliberately:
@@ -534,8 +545,7 @@ export default function main(context: any): void {
    * has constructed them.
    */
   const onSettingsUpdated = () => {
-    const paused = (registryStorage.get(STORAGE_KEYS.SETTINGS) as
-      { backgroundWorkPaused?: boolean } | null)?.backgroundWorkPaused === true;
+    const paused = isBackgroundWorkPaused();
 
     if (paused) {
       // Stop everything. The per-job flags are read but never written, so
@@ -883,13 +893,15 @@ export default function main(context: any): void {
 
       // Start opportunistic local-site indexer now that bulkOpManager is wired
       if (nexusServices?.bulkOpManager) {
-        opportunisticScheduler.start({
-          bulkOpManager: nexusServices.bulkOpManager,
-          siteData: siteDataAccessor,
-          getSettings: getSchedulerSettings,
-          buildSiteNames: buildSiteNamesLocal,
-          logger: localLogger,
-        });
+        if (!isBackgroundWorkPaused()) {
+          opportunisticScheduler.start({
+            bulkOpManager: nexusServices.bulkOpManager,
+            siteData: siteDataAccessor,
+            getSettings: getSchedulerSettings,
+            buildSiteNames: buildSiteNamesLocal,
+            logger: localLogger,
+          });
+        }
       }
 
       const instructionRegistry = new InstructionRegistry();
@@ -1017,7 +1029,9 @@ export default function main(context: any): void {
         logger: localLogger,
         jobRunStore,
       });
-      haltedRefreshScheduler.start();
+      if (!isBackgroundWorkPaused()) {
+        haltedRefreshScheduler.start();
+      }
 
       // Phase 5: Scheduled SSH WP-CLI refresh for stale WPE installs.
       // Runs once every 24h; updates plugins, themes, site URL, admin email,
@@ -1037,7 +1051,7 @@ export default function main(context: any): void {
         logger: localLogger,
         jobRunStore,
       });
-      if (wpeRefreshEnabled) {
+      if (wpeRefreshEnabled && !isBackgroundWorkPaused()) {
         wpeRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] WPE SSH refresh auto-run disabled by preference — scheduler not started');
@@ -1057,7 +1071,7 @@ export default function main(context: any): void {
         logger: localLogger,
         jobRunStore,
       });
-      if (externalRefreshEnabled) {
+      if (externalRefreshEnabled && !isBackgroundWorkPaused()) {
         externalRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] External SSH host refresh auto-run disabled by preference — scheduler not started');
@@ -1085,7 +1099,7 @@ export default function main(context: any): void {
         logger: localLogger,
         jobRunStore,
       });
-      if (externalContentIndexEnabled) {
+      if (externalContentIndexEnabled && !isBackgroundWorkPaused()) {
         externalContentIndexScheduler.start();
       } else {
         localLogger.info('[NexusAI] External SSH content indexing auto-run disabled by preference — scheduler not started');
@@ -1119,6 +1133,10 @@ export default function main(context: any): void {
 
         // Tier 2: SSH sync only if auto-sync enabled and data is stale
         try {
+          if (isBackgroundWorkPaused()) {
+            localLogger.info('[NexusAI] Background work paused — skipping WPE SSH sync');
+            return;
+          }
           if (!isWpeSyncAutoEnabled()) {
             localLogger.info('[NexusAI] WPE auto-sync disabled — skipping SSH sync');
             return;
@@ -1146,6 +1164,7 @@ export default function main(context: any): void {
         } catch { /* non-fatal */ }
         // Tier 2: SSH only if enabled and data is stale
         try {
+          if (isBackgroundWorkPaused()) return;
           if (!isWpeSyncAutoEnabled()) return;
           const hours = getWpeSyncIntervalHours();
           const stale = await wpeSyncService.isStale(hours);
