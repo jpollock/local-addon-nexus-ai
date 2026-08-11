@@ -525,6 +525,23 @@ export default function main(context: any): void {
    * has constructed them.
    */
   const onSettingsUpdated = () => {
+    const paused = (registryStorage.get(STORAGE_KEYS.SETTINGS) as
+      { backgroundWorkPaused?: boolean } | null)?.backgroundWorkPaused === true;
+
+    if (paused) {
+      // Stop everything. The per-job flags are read but never written, so
+      // unpausing restores exactly the configuration the user had.
+      opportunisticScheduler.stop();
+      haltedRefreshScheduler?.stop();
+      wpeRefreshScheduler?.stop();
+      externalRefreshScheduler?.stop();
+      externalContentIndexScheduler?.stop();
+      if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
+      wpeContentIndexTimer = null;
+      localLogger.info('[NexusAI] Background work paused — all schedulers stopped');
+      return;
+    }
+
     if (nexusServices?.bulkOpManager) {
       opportunisticScheduler.restart({
         bulkOpManager: nexusServices.bulkOpManager,
