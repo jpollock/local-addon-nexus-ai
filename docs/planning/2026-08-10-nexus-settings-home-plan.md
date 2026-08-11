@@ -951,6 +951,39 @@ git commit -m "feat(settings): derived.ts — one module for every figure on the
 
 Each section is a pure function of its props: it receives data and callbacks, owns no fetch and no save. The shell owns both. Test every section with `new Component(props).render()` — **never** `serializeTree(createElement(C, props))`, which serializes the props bag and makes assertions vacuous (`tests/unit/renderer/helpers/serializeTree.ts` records why; spec 5 hit it).
 
+### The fixture trap — read before copying any test helper below
+
+An earlier draft of this plan shipped a broken fixture into Tasks 4 and 6, and it
+cost a fix round in each. Do not reproduce it:
+
+```js
+// BROKEN — later spread keys win, so `...over` replaces the merged object wholesale
+const base = (over = {}) => ({
+  settings: { ...defaults, ...(over.settings ?? {}) },   // merge happens here…
+  installCount: 331,
+  ...over,                                               // …and this discards it
+});
+```
+
+`base({ settings: { someFlag: true } })` yields `settings` containing **only**
+`someFlag` — every default gone. The test then silently exercises a state nobody
+intended (in Task 4 it made every job read as disabled, so three assertions failed
+against correct code; in Task 6 the paused-state test never exercised "jobs on *and*
+paused", which is the only state its copy makes a promise about).
+
+Destructure nested objects out before spreading the rest:
+
+```js
+// CORRECT
+const base = (over = {}) => {
+  const { settings: settingsOver, ...rest } = over;
+  return { settings: { ...defaults, ...(settingsOver ?? {}) }, installCount: 331, ...rest };
+};
+```
+
+This applies to every fixture below whose props contain a nested object carrying
+defaults — Task 7's and Task 10's both do.
+
 ### Task 5: `SettingsShell`
 
 **Files:**
