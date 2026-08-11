@@ -40,6 +40,7 @@ export const IPC_CHANNELS = {
   CHAT_TOOL_APPROVE: `${ADDON_PREFIX}:chat-tool-approve`,
   CHAT_STOP: `${ADDON_PREFIX}:chat-stop`,
   CHAT_CLEAR: `${ADDON_PREFIX}:chat-clear`,
+  CHAT_CLEAR_ALL: `${ADDON_PREFIX}:chat-clear-all`,
 
   // Provider management
   VALIDATE_API_KEY: `${ADDON_PREFIX}:validate-api-key`,

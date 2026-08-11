@@ -83,6 +83,11 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
     return { success: true };
   });
 
+  ipcMain.handle(IPC_CHANNELS.CHAT_CLEAR_ALL, () => {
+    chatService.clearAllSessions();
+    return { success: true };
+  });
+
   // -----------------------------------------------------------------------
   // Provider Management
   // -----------------------------------------------------------------------

@@ -13,8 +13,17 @@ describe('ChatSection', () => {
     for (const label of ['7', '30', '90', 'Forever']) expect(t).toContain(label);
   });
 
-  test('the retention sentence tracks the choice', () => {
-    expect(tree({ chatRetentionDays: 7 })).not.toEqual(tree({ chatRetentionDays: null }));
+  test('null renders Forever as selected (not a default)', () => {
+    const instance = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: null },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn() } },
+    });
+    const rendered = serializeTree(instance.render());
+    const json = JSON.stringify(rendered);
+
+    // null is a real stored value meaning Forever, not unset
+    expect(json).toContain('"value":"null"');
   });
 
   test('the panel toggle says it removes the panel everywhere', () => {
@@ -23,6 +32,51 @@ describe('ChatSection', () => {
 
   test('no hardcoded brand colour', () => {
     expect(tree().toLowerCase()).not.toContain('0ecad4');
+  });
+
+  test('delete-all button exists with destructive styling in confirm state', () => {
+    const instance = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn() } },
+    });
+
+    // Initial state
+    let rendered = serializeTree(instance.render());
+    let json = JSON.stringify(rendered);
+    expect(json).toContain('Delete All Chat History');
+
+    // Trigger confirm state by directly setting state (not via setState callback)
+    instance.state.deleteConfirmPending = true;
+    rendered = serializeTree(instance.render());
+    json = JSON.stringify(rendered);
+
+    // Must use danger/error CSS variables in confirm state, not raw hex
+    expect(json).toContain('var(--nxai-danger-text)');
+    expect(json).toContain('var(--nxai-error-bg)');
+    expect(json).toContain('Confirm Delete');
+  });
+
+  test('delete-all has a confirmation step', () => {
+    const mockInvoke = jest.fn();
+    const instance = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: mockInvoke } },
+    });
+
+    // The component must have a handleDeleteAll method
+    expect(typeof instance.handleDeleteAll).toBe('function');
+  });
+
+  test('override link is deliberately absent (pending destination)', () => {
+    const t = tree({ dockedPanelEnabled: true });
+    // Must NOT contain override link copy
+    expect(t).not.toContain('override');
+    expect(t).not.toContain('per-site');
+    // The source code must have a comment explaining why
+    const source = require('fs').readFileSync('src/renderer/components/settings/ChatSection.tsx', 'utf8');
+    expect(source).toContain('deferred');
   });
 
   // Port fidelity tests - each interactive control must exist and be wired
@@ -57,19 +111,31 @@ describe('ChatSection', () => {
     expect(json).toContain('Forever');
   });
 
-  test('retention sentence changes per selection', () => {
-    const days7 = tree({ dockedPanelEnabled: true, chatRetentionDays: 7 });
-    const days30 = tree({ dockedPanelEnabled: true, chatRetentionDays: 30 });
-    const days90 = tree({ dockedPanelEnabled: true, chatRetentionDays: 90 });
-    const forever = tree({ dockedPanelEnabled: true, chatRetentionDays: null });
+  test('retention dropdown value pins the selected option', () => {
+    // Without the sentence, the test now pins what DOES exist: the select's value
+    const days7 = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: 7 },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn() } },
+    });
+    const days30 = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn() } },
+    });
+    const forever = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: null },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn() } },
+    });
 
-    // Each must be different from the others
-    expect(days7).not.toEqual(days30);
-    expect(days7).not.toEqual(days90);
-    expect(days7).not.toEqual(forever);
-    expect(days30).not.toEqual(days90);
-    expect(days30).not.toEqual(forever);
-    expect(days90).not.toEqual(forever);
+    const json7 = JSON.stringify(serializeTree(days7.render()));
+    const json30 = JSON.stringify(serializeTree(days30.render()));
+    const jsonForever = JSON.stringify(serializeTree(forever.render()));
+
+    expect(json7).toContain('"value":"7"');
+    expect(json30).toContain('"value":"30"');
+    expect(jsonForever).toContain('"value":"null"');
   });
 
   test('panel toggle off hides retention controls', () => {

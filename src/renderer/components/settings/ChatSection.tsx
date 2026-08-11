@@ -1,10 +1,15 @@
 /**
- * ChatSection — panel toggle, retention, and per-site overrides
+ * ChatSection — panel toggle, retention, and delete-all
  *
  * Ported from NexusPreferences Chat History section (Operations tab, lines 1802-1846).
- * Panel toggle with descriptive text; retention dropdown with sentence that tracks the choice.
+ * Panel toggle with descriptive text; retention dropdown; delete-all with confirmation.
+ *
+ * Per-site AI provider override link is specified in the design but deferred pending
+ * a defined destination (which sites, how to navigate, what the link says). When that
+ * is defined, add it below the delete-all button.
  */
 import * as React from 'react';
+import { IPC_CHANNELS } from '../../../common/constants';
 import type { NexusSettings } from '../../../common/types';
 
 interface ChatSectionProps {
@@ -13,7 +18,15 @@ interface ChatSectionProps {
   electron: any;
 }
 
-export class ChatSection extends React.Component<ChatSectionProps> {
+interface ChatSectionState {
+  deleteConfirmPending: boolean;
+}
+
+export class ChatSection extends React.Component<ChatSectionProps, ChatSectionState> {
+  state: ChatSectionState = {
+    deleteConfirmPending: false,
+  };
+
   handleDockedPanelToggle = (enabled: boolean): void => {
     this.props.onSave({ dockedPanelEnabled: enabled });
   };
@@ -22,18 +35,24 @@ export class ChatSection extends React.Component<ChatSectionProps> {
     this.props.onSave({ chatRetentionDays: days });
   };
 
-  renderRetentionSentence(days: number | null | undefined): string {
-    if (days === null) {
-      return 'Chat messages are kept forever.';
+  handleDeleteAll = async (): Promise<void> => {
+    if (!this.state.deleteConfirmPending) {
+      this.setState({ deleteConfirmPending: true });
+      return;
     }
-    if (days === undefined) {
-      return `Chat messages older than 30 days are automatically deleted.`;
-    }
-    return `Chat messages older than ${days} days are automatically deleted.`;
-  }
+
+    // Confirmed — delete all chat history
+    await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR_ALL);
+    this.setState({ deleteConfirmPending: false });
+  };
+
+  handleCancelDelete = (): void => {
+    this.setState({ deleteConfirmPending: false });
+  };
 
   render(): React.ReactElement {
     const { settings } = this.props;
+    const { deleteConfirmPending } = this.state;
     const panelEnabled = settings.dockedPanelEnabled !== false;
     const retentionDays = settings.chatRetentionDays !== undefined ? settings.chatRetentionDays : 30;
 
@@ -82,7 +101,7 @@ export class ChatSection extends React.Component<ChatSectionProps> {
         }, 'Show the AI chat panel bubble in the bottom-right corner of every screen in Local.'),
       ),
 
-      // Retention controls (shown only when panel is enabled)
+      // Retention and delete-all (shown only when panel is enabled)
       panelEnabled ? React.createElement('div', {
         style: {
           padding: 16,
@@ -107,7 +126,7 @@ export class ChatSection extends React.Component<ChatSectionProps> {
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            marginBottom: 12,
+            marginBottom: 16,
           },
         },
           React.createElement('label', {
@@ -139,14 +158,64 @@ export class ChatSection extends React.Component<ChatSectionProps> {
           ),
         ),
 
-        // Retention sentence
+        // Delete all chat history
         React.createElement('div', {
           style: {
-            fontSize: 12,
-            color: 'var(--nxai-card-sub)',
-            lineHeight: 1.4,
+            padding: 12,
+            background: deleteConfirmPending ? 'var(--nxai-error-bg)' : 'transparent',
+            border: deleteConfirmPending ? '1px solid var(--nxai-danger-text)' : 'none',
+            borderRadius: 6,
           },
-        }, this.renderRetentionSentence(retentionDays)),
+        },
+          React.createElement('div', {
+            style: {
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--nxai-card-text)',
+              marginBottom: 6,
+            },
+          }, 'Delete All Chat History'),
+          React.createElement('div', {
+            style: {
+              fontSize: 12,
+              color: 'var(--nxai-card-sub)',
+              lineHeight: 1.4,
+              marginBottom: 12,
+            },
+          }, 'Deletes every conversation across all sessions. Indexed content is unaffected — only chat messages are removed. This cannot be undone.'),
+          React.createElement('div', {
+            style: {
+              display: 'flex',
+              gap: 8,
+            },
+          },
+            React.createElement('button', {
+              onClick: this.handleDeleteAll,
+              style: {
+                padding: '6px 12px',
+                fontSize: 13,
+                borderRadius: 4,
+                background: deleteConfirmPending ? 'var(--nxai-error-bg)' : 'var(--nxai-card-bg)',
+                border: '1px solid var(--nxai-input-border)',
+                color: deleteConfirmPending ? 'var(--nxai-danger-text)' : 'var(--nxai-card-text)',
+                cursor: 'pointer',
+                fontWeight: deleteConfirmPending ? 600 : 400,
+              },
+            }, deleteConfirmPending ? 'Confirm Delete' : 'Delete All'),
+            deleteConfirmPending ? React.createElement('button', {
+              onClick: this.handleCancelDelete,
+              style: {
+                padding: '6px 12px',
+                fontSize: 13,
+                borderRadius: 4,
+                background: 'var(--nxai-card-bg)',
+                border: '1px solid var(--nxai-input-border)',
+                color: 'var(--nxai-card-text)',
+                cursor: 'pointer',
+              },
+            }, 'Cancel') : null,
+          ),
+        ),
       ) : null,
     );
   }

@@ -525,6 +525,18 @@ export class ChatService {
   }
 
   /**
+   * Clear all chat history (in-memory sessions and database).
+   */
+  clearAllSessions(): void {
+    this.sessions.clear();
+    const db = this.services.graphService?.getDb();
+    if (db) {
+      const { deleteAllSessions } = require('../ipc/chat-sessions');
+      deleteAllSessions(db);
+    }
+  }
+
+  /**
    * Build the system prompt with optional site context.
    */
   private async buildSystemPrompt(siteId?: string): Promise<string> {
