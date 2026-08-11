@@ -2,12 +2,16 @@ import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { injectThemeVars } from '../../utils/theme';
 import { ContextSelector } from './ContextSelector';
-import { DockedPanel, PanelTab, PANEL_WIDTH, WIDE_WIDTH } from './DockedPanel';
+import { DockedPanel, PanelTab } from './DockedPanel';
 import { PanelChat } from './PanelChat';
 import { PanelInsights } from './PanelInsights';
 import { SessionsSidebar } from './SessionsSidebar';
-
-type PanelState = 'closed' | 'docked' | 'wide' | 'full';
+import {
+  type PanelState,
+  computeReflowMode,
+  computePaddingRight,
+  findLocalRoot,
+} from '../../utils/panelReflow';
 
 interface ContainerProps {
   electron: any;
@@ -21,10 +25,10 @@ interface ContainerState {
   sessionListVersion: number;
   selectedSiteIds: string[];
   streamingStatus: string | null;
+  reflowMode: 'in-flow' | 'overlay';
 }
 
 const STORAGE_KEY = 'nexus-panel-state';
-const REFLOW_STYLE_ID = 'nexus-panel-reflow';
 
 /** Fire-and-forget telemetry helper. Never throws. */
 function track(ipcRenderer: any, event: string, properties: Record<string, unknown> = {}) {
@@ -58,15 +62,19 @@ function readState(): ContainerState {
         sessionListVersion: 0,
         selectedSiteIds: [],
         streamingStatus: null,
+        reflowMode: 'in-flow', // will be computed on mount
       };
     }
   } catch { /* ignore */ }
-  return { panelState: 'closed', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null };
+  return { panelState: 'closed', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null, reflowMode: 'in-flow' };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
   private openSessionListener: ((_: any, payload: { sessionId: string }) => void) | null = null;
   private chatRef = React.createRef<PanelChat>();
+  private resizeObserver: ResizeObserver | null = null;
+  private localRoot: HTMLElement | null = null;
+  private resizeDebounceTimer: number | null = null;
 
   constructor(props: ContainerProps) {
     super(props);
@@ -78,6 +86,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.setActiveSession = this.setActiveSession.bind(this);
     this.newChat = this.newChat.bind(this);
     this.openAgentsHub = this.openAgentsHub.bind(this);
+    this.handleResize = this.handleResize.bind(this);
   }
 
   componentDidUpdate(_: {}, prevState: ContainerState) {
@@ -93,12 +102,15 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     if (prevState.panelState !== 'closed' && panelState === 'closed') {
       this.persistChatSession();
     }
-    this.syncReflowStyle();
+    // Reapply reflow when panel state changes
+    if (prevState.panelState !== panelState) {
+      this.applyReflow();
+    }
   }
 
   componentDidMount() {
     injectThemeVars();
-    this.syncReflowStyle();
+    this.setupReflow();
     // Deep-link: open panel and activate a specific session from the Activity tab.
     // Receives from Activity tab "View chat →" link once activity events carry session_id.
     this.openSessionListener = (_: any, { sessionId }: { sessionId: string }) => {
@@ -108,39 +120,59 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   componentWillUnmount() {
-    this.removeReflowStyle();
+    this.teardownReflow();
     if (this.openSessionListener) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.OPEN_CHAT_SESSION, this.openSessionListener);
       this.openSessionListener = null;
     }
-  }
-
-  private syncReflowStyle() {
-    if (this.state.panelState === 'docked' || this.state.panelState === 'wide') {
-      this.injectReflowStyle();
-    } else {
-      this.removeReflowStyle();
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
     }
   }
 
-  private injectReflowStyle() {
-    const marginRight = this.state.panelState === 'wide' ? WIDE_WIDTH : PANEL_WIDTH;
-    const existing = document.getElementById(REFLOW_STYLE_ID);
-    if (existing) {
-      // Update existing style element on size change
-      existing.textContent = `[class*="SiteInfo_"], [class*="Dashboard_"], [class*="siteinfo-wrapper"] { margin-right: ${marginRight}px !important; transition: margin-right 0.2s ease; }`;
-    } else {
-      // Create new style element
-      const style = document.createElement('style');
-      style.id = REFLOW_STYLE_ID;
-      style.textContent = `[class*="SiteInfo_"], [class*="Dashboard_"], [class*="siteinfo-wrapper"] { margin-right: ${marginRight}px !important; transition: margin-right 0.2s ease; }`;
-      document.head.appendChild(style);
+  private setupReflow() {
+    this.localRoot = findLocalRoot();
+    if (this.localRoot) {
+      this.resizeObserver = new ResizeObserver(this.handleResize);
+      this.resizeObserver.observe(this.localRoot);
+      // Initial reflow
+      this.applyReflow();
     }
   }
 
-  private removeReflowStyle() {
-    const el = document.getElementById(REFLOW_STYLE_ID);
-    if (el) el.remove();
+  private teardownReflow() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    if (this.localRoot) {
+      this.localRoot.style.paddingRight = '';
+      this.localRoot = null;
+    }
+  }
+
+  private handleResize() {
+    // Debounce to avoid thrashing on every resize pixel
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
+    }
+    this.resizeDebounceTimer = window.setTimeout(() => {
+      this.resizeDebounceTimer = null;
+      this.applyReflow();
+    }, 100);
+  }
+
+  private applyReflow() {
+    if (!this.localRoot) return;
+    const availableWidth = this.localRoot.clientWidth;
+    const reflowMode = computeReflowMode(this.state.panelState, availableWidth);
+    const paddingRight = computePaddingRight(this.state.panelState, reflowMode);
+    this.localRoot.style.paddingRight = paddingRight > 0 ? `${paddingRight}px` : '';
+    this.localRoot.style.transition = 'padding-right 0.2s ease';
+    // Update state if reflowMode changed
+    if (this.state.reflowMode !== reflowMode) {
+      this.setState({ reflowMode });
+    }
   }
 
   openPanel() {
@@ -183,7 +215,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   render() {
-    const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, selectedSiteIds } = this.state;
+    const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, selectedSiteIds, reflowMode } = this.state;
 
     const panelContent = activeTab === 'insights'
       ? React.createElement(PanelInsights, {
@@ -228,6 +260,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         showSessions,
         onToggleSessions: () => this.setState((s) => ({ showSessions: !s.showSessions })),
         streamingStatus: this.state.streamingStatus,
+        isOverlay: reflowMode === 'overlay',
       },
       panelBody,
     );

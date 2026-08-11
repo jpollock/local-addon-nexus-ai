@@ -17,13 +17,14 @@ export interface Props {
   onToggleSessions?: () => void;
   showSessions?: boolean;
   streamingStatus?: string | null;
+  isOverlay?: boolean;
 }
 
 interface DockedPanelState {
   hoveredBtn: string | null;
 }
 
-export const PANEL_WIDTH = 384;
+export const PANEL_WIDTH = 380;
 export const WIDE_WIDTH = 620;
 const RAIL_WIDTH = 48;
 
@@ -188,7 +189,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  panel: (state: PanelState) => ({
+  panel: (state: PanelState, isOverlay: boolean) => ({
     position: 'fixed' as const,
     top: 0,
     right: 0,
@@ -197,6 +198,7 @@ const styles = {
     left: state === 'full' ? 68 : undefined,
     background: 'var(--nxai-card-bg)',
     borderLeft: `1px solid var(--nxai-card-border)`,
+    boxShadow: isOverlay ? '0 0 24px rgba(17, 24, 39, 0.10)' : 'none',
     display: 'flex',
     flexDirection: 'column' as const,
     zIndex: 8999,
@@ -246,7 +248,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
   render() {
     const {
       panelState, activeTab = 'chat', onSetActiveTab, onOpen, onClose, onSetPanelState, onNewChat,
-      children, sessionsSidebar, onToggleSessions, showSessions, streamingStatus,
+      children, sessionsSidebar, onToggleSessions, showSessions, streamingStatus, isOverlay = false,
     } = this.props;
 
     // Render 48px rail when closed
@@ -507,7 +509,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
     return React.createElement(
       'div',
-      { style: styles.panel(panelState), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
+      { style: styles.panel(panelState, isOverlay), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
       header,
       body,
     );
