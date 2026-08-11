@@ -12,6 +12,7 @@ interface ExternalHost {
   site: string;
   environment: string;
   domain: string;
+  wpPath: string;
 }
 
 interface WpeAccount {

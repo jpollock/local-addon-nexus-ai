@@ -86,9 +86,9 @@ describe('OtherHostsPanel — empty state', () => {
 
 describe('OtherHostsPanel — host list', () => {
   const twoSites = [
-    { alias: 'boxa', site: 'one', environment: 'production', domain: 'one.com' },
-    { alias: 'boxa', site: 'two', environment: 'staging', domain: 'two.com' },
-    { alias: 'boxb', site: 'solo', environment: 'production', domain: 'solo.com' },
+    { alias: 'boxa', site: 'one', environment: 'production', domain: 'one.com', wpPath: '/home/u/one' },
+    { alias: 'boxa', site: 'two', environment: 'staging', domain: 'two.com', wpPath: '/home/u/two' },
+    { alias: 'boxb', site: 'solo', environment: 'production', domain: 'solo.com', wpPath: '/home/u/solo' },
   ];
 
   it('groups sites under one row per host, not one row per site', () => {

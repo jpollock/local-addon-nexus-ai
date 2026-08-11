@@ -12,7 +12,7 @@ import type { AIProvider, NexusSettings } from '../../../common/types';
 import { OtherHostsPanel } from './OtherHostsPanel';
 
 interface WpeAccount { id: string; name: string; nickname?: string; }
-interface ExternalHost { alias: string; site: string; environment: string; domain: string; }
+interface ExternalHost { alias: string; site: string; environment: string; domain: string; wpPath: string; }
 
 interface ConnectionsProps {
   settings: NexusSettings;

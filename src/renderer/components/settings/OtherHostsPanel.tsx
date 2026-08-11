@@ -10,7 +10,7 @@ import { rendererGql } from '../../utils/rendererGql';
  */
 const HOST_PROBE_CLIENT_TIMEOUT_MS = 210000;
 
-export interface ExternalHostRow { alias: string; site: string; environment: string; domain: string }
+export interface ExternalHostRow { alias: string; site: string; environment: string; domain: string; wpPath: string }
 interface SshConfigHost { alias: string; hostname: string; user: string; port: string; identityFile?: string; proxyJump?: string; alreadyRegistered: boolean }
 
 export type HostScreen =
@@ -118,13 +118,16 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     const result = await this.runProbe(alias);
     if (!this.mounted) return;
 
-    // Filter out installs that are already followed.
-    // The hosts array contains site slugs, but for a simple match we compare
-    // the path basename or the full path against known sites.
+    // Filter out installs that are already followed by comparing the probe's
+    // discovered paths against the wp_path values stored for this alias.
+    // Normalize trailing slashes on both sides so /home/u/one and /home/u/one/ match.
+    const normalize = (p: string) => p.replace(/\/$/, '');
     const followedPaths = new Set(
-      this.state.hosts.filter(h => h.alias === alias).map(h => h.site)
+      this.state.hosts
+        .filter(h => h.alias === alias)
+        .map(h => normalize(h.wpPath))
     );
-    const newInstalls = result.installs.filter(path => !followedPaths.has(path));
+    const newInstalls = result.installs.filter(path => !followedPaths.has(normalize(path)));
 
     this.setState({
       checking: null,

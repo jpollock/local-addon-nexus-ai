@@ -1375,8 +1375,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const db = graphService?.getDb?.();
       if (!db) return [];
       const rows = db.prepare(
-        "SELECT name, account_id, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
-      ).all() as Array<{ name: string; account_id: string | null; environment: string | null; domain: string | null }>;
+        "SELECT name, account_id, environment, domain, wp_path FROM sites WHERE source = 'external' AND is_active = 1"
+      ).all() as Array<{ name: string; account_id: string | null; environment: string | null; domain: string | null; wp_path: string | null }>;
       return rows.map((r) => ({
         // A legacy single-site registration has account_id = null -- the
         // site's own row IS the connection, so its own name is the alias.
@@ -1384,6 +1384,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         site: r.name,
         environment: r.environment ?? 'production',
         domain: r.domain ?? '',
+        wpPath: r.wp_path ?? '',
       }));
     } catch {
       return [];

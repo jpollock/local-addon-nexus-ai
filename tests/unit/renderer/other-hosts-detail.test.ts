@@ -29,7 +29,7 @@ const inst = (over: any = {}) => {
 };
 
 describe('host detail', () => {
-  const hosts = [{ alias: 'boxa', site: 'one', environment: 'production', domain: 'one.com' }];
+  const hosts = [{ alias: 'boxa', site: 'one', environment: 'production', domain: 'one.com', wpPath: '/home/u/one' }];
 
   it('renders the three capability states, with wpcli gated rather than allowed', () => {
     const i = inst({ externalHosts: hosts });
@@ -61,6 +61,7 @@ describe('host detail', () => {
     i.runProbe = jest.fn().mockResolvedValue({ installs: ['/home/u/one', '/home/u/brand-new'] });
     await i.checkItNow('boxa');
     expect(i.state.discovered['boxa']).toContain('/home/u/brand-new');
+    expect(i.state.discovered['boxa']).not.toContain('/home/u/one');
     // the followed site is untouched
     expect(i.state.hosts).toEqual(hosts);
   });

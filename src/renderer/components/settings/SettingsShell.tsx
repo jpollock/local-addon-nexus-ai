@@ -33,7 +33,7 @@ interface SettingsShellState {
   sites: SiteItem[];
   wpeAccounts: WpeAccount[];
   wpeInstalls: WpeInstall[];
-  externalHosts: Array<{ alias: string; site: string; environment: string; domain: string }>;
+  externalHosts: Array<{ alias: string; site: string; environment: string; domain: string; wpPath: string }>;
   loading: boolean;
   active: Section;
   fleetCounts: { wpe: number; external: number; local: number } | null;
