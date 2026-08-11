@@ -984,6 +984,31 @@ const base = (over = {}) => {
 This applies to every fixture below whose props contain a nested object carrying
 defaults — Task 7's and Task 10's both do.
 
+### Port fidelity — Tasks 7 through 10 are ports, and a port loses things silently
+
+Task 7 shipped a structurally correct section that had quietly dropped API key
+validation, made a masked key editable, and removed four help and confirmation
+messages. Every one of its tests passed. **The happy path of a port always looks
+right; the loss is invisible until someone goes looking for a button that used to be
+there.**
+
+The tests each task lists below are a floor for the *spec*, not for a *port*. When a
+task says "port from X", the deliverable includes:
+
+1. **A surface-by-surface comparison in the report.** For each render method ported:
+   what the original did, what the port does, and any difference. Not a summary —
+   a list.
+2. **A test per interactive surface** asserting its buttons and inputs exist. A
+   section that renders the right headings and no longer has a working button is the
+   failure this catches.
+3. **Deliberate omissions pinned by a test asserting absence**, with a comment saying
+   why. A documented omission is a decision; an undocumented one is indistinguishable
+   from an accident, and the next reader cannot tell them apart.
+
+Help text, confirmation messages and security assurances are behaviour, not
+decoration — especially on credential surfaces, where "encrypted in your OS keychain,
+never shared" is the sentence that earns the user's key.
+
 ### Task 5: `SettingsShell`
 
 **Files:**
