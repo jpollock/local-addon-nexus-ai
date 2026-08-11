@@ -18,6 +18,14 @@ export interface Props {
   showSessions?: boolean;
   streamingStatus?: string | null;
   isOverlay?: boolean;
+  /** Rendered in the header in place of a static tagline. */
+  contextSelector?: React.ReactNode;
+  /** Decisions waiting, scoped to what's on screen. null = not knowable; renders nothing. */
+  badgeCount?: number | null;
+  /** Whether anything is stuck. null = not knowable; renders nothing. */
+  hasStuck?: boolean | null;
+  /** What the collapsed tab is speaking for — 'THIS SITE' or 'INSIGHTS'. */
+  scopeLabel?: string;
 }
 
 interface DockedPanelState {
@@ -31,9 +39,14 @@ export const WIDE_WIDTH = 620;
  * nothing in Local's layout, and — because it never spans the full height — structurally
  * cannot sit in the header or footer band where Local's own actions ("Start site",
  * "Open site", "WP Admin") live. A 48px full-height rail did, which is how it clipped them.
- * Height is content-derived (~150px); only the width is fixed.
+ * Height is content-derived; only the width is fixed.
+ *
+ * 52px rather than the prototype's 44: at 44 against a white site screen the tab read as a
+ * faint sliver — closer to a rendering artifact than a control — because the mark inside it
+ * was too small to register. The border and shadow are literal values, not theme variables,
+ * for the same reason: this edge has to be visible, so it does not get to be subtle.
  */
-const TAB_WIDTH = 44;
+const TAB_WIDTH = 52;
 
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────
 
@@ -122,8 +135,11 @@ const styles = {
     right: 0,
     transform: 'translateY(-50%)',
     width: TAB_WIDTH,
-    padding: '12px 0 14px',
+    padding: '14px 0 16px',
     background: 'var(--nxai-card-bg)',
+    // --nxai-card-border already resolves to the requested light-theme edge colour, and to
+    // a dark equivalent in dark theme. Hardcoding the light value fails the no-raw-hex
+    // guard in panel-theme.test.ts and leaves a near-invisible border on a dark screen.
     border: `1px solid var(--nxai-card-border)`,
     borderRight: 'none',
     borderRadius: '11px 0 0 11px',
@@ -139,8 +155,8 @@ const styles = {
   },
   railMark: {
     position: 'relative' as const,
-    width: 28,
-    height: 28,
+    width: 34,
+    height: 34,
     borderRadius: 8,
     background: 'var(--nxai-rail-mark-bg)',
     display: 'flex',
@@ -246,20 +262,20 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
     const {
       panelState, activeTab = 'chat', onSetActiveTab, onOpen, onClose, onSetPanelState, onNewChat,
       children, sessionsSidebar, onToggleSessions, showSessions, streamingStatus, isOverlay = false,
+      contextSelector,
     } = this.props;
 
     // Render the floating tab when closed
     if (panelState === 'closed') {
-      // Badge and stuck marker omitted: scope is unknown (see docs/planning/2026-08-11-rail-signal-gap.md).
-      // The panel is mounted globally and cannot determine if it's on a site screen or fleet screen
-      // without parsing window.location (forbidden) or accessing router context (unavailable).
-      // Per spec, both indicators must scope together — showing a fleet count on a site screen is
-      // false information. Omitting them is honest; showing the wrong number is a lie.
-      const badgeCount = null; // omitted where scope unknown
-      const hasStuck = null;   // omitted where scope unknown
-      const railLabel = 'NEXUS AI'; // generic, no scope claim
+      // The tab's whole reason to stay visible rather than hide is that it carries these two:
+      // how many decisions wait, and whether anything is stuck. Both arrive already scoped to
+      // what is on screen (see DockedPanelContainer.tabSignals). A null is "not knowable" and
+      // renders nothing — showing a fleet number on a site page is a false statement, and 0 is
+      // indistinguishable from not-yet-loaded.
+      const { badgeCount = null, hasStuck = null, scopeLabel = 'INSIGHTS' } = this.props;
+      const railLabel = scopeLabel;
 
-      // The whole tab is the control — there is no separate chevron. At 44px wide a second
+      // The whole tab is the control — there is no separate chevron. At this width a second
       // hit target would halve both.
       return React.createElement(
         'div',
@@ -280,7 +296,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
         React.createElement(
           'div',
           { style: styles.railMark },
-          React.createElement(NexusGlyph, { size: 16 }),
+          React.createElement(NexusGlyph, { size: 20 }),
           badgeCount !== null && badgeCount > 0
             ? React.createElement('div', { style: styles.railBadge }, String(badgeCount))
             : null,
@@ -359,6 +375,10 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
         'div',
         { style: { display: 'flex', flexDirection: 'column' as const, gap: 1 } },
         React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: 'var(--nxai-card-text)', lineHeight: 1.2 } }, 'Nexus'),
+        // The second line says what the panel is pointed at. It used to say "Follows you
+        // across tabs" — three lines of header spent restating a behaviour the user can see,
+        // on a panel that showed no context at all. Streaming status displaces it because
+        // "what is happening now" outranks "what this is scoped to" while a run is live.
         streamingStatus
           ? React.createElement(
               'span',
@@ -366,7 +386,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
               React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: UI_COLORS.WPE_BRAND, flexShrink: 0, display: 'inline-block' } }),
               streamingStatus,
             )
-          : React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', lineHeight: 1.2 } }, 'Follows you across tabs'),
+          : contextSelector ?? null,
       ),
       // Segmented control
       segmentedControl,

@@ -9,7 +9,7 @@ exports[`panel chrome — characterization renders collapsed rail 1`] = `
           "children": null,
           "key": null,
           "props": {
-            "size": 16,
+            "size": 20,
           },
           "type": "NexusGlyph",
         },
@@ -22,16 +22,16 @@ exports[`panel chrome — characterization renders collapsed rail 1`] = `
           "background": "var(--nxai-rail-mark-bg)",
           "borderRadius": 8,
           "display": "flex",
-          "height": 28,
+          "height": 34,
           "justifyContent": "center",
           "position": "relative",
-          "width": 28,
+          "width": 34,
         },
       },
       "type": "div",
     },
     {
-      "children": "NEXUS AI",
+      "children": "INSIGHTS",
       "key": null,
       "props": {
         "style": {
@@ -67,14 +67,14 @@ exports[`panel chrome — characterization renders collapsed rail 1`] = `
       "display": "flex",
       "flexDirection": "column",
       "gap": 9,
-      "padding": "12px 0 14px",
+      "padding": "14px 0 16px",
       "pointerEvents": "all",
       "position": "fixed",
       "right": 0,
       "top": "50%",
       "transform": "translateY(-50%)",
       "userSelect": "none",
-      "width": 44,
+      "width": 52,
       "zIndex": 8999,
     },
     "tabIndex": 0,
@@ -128,18 +128,7 @@ exports[`panel chrome — characterization renders docked 1`] = `
               },
               "type": "span",
             },
-            {
-              "children": "Follows you across tabs",
-              "key": null,
-              "props": {
-                "style": {
-                  "color": "var(--nxai-card-sub)",
-                  "fontSize": 12,
-                  "lineHeight": 1.2,
-                },
-              },
-              "type": "span",
-            },
+            null,
           ],
           "key": null,
           "props": {
@@ -453,18 +442,7 @@ exports[`panel chrome — characterization renders full 1`] = `
               },
               "type": "span",
             },
-            {
-              "children": "Follows you across tabs",
-              "key": null,
-              "props": {
-                "style": {
-                  "color": "var(--nxai-card-sub)",
-                  "fontSize": 12,
-                  "lineHeight": 1.2,
-                },
-              },
-              "type": "span",
-            },
+            null,
           ],
           "key": null,
           "props": {
@@ -769,18 +747,7 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
               },
               "type": "span",
             },
-            {
-              "children": "Follows you across tabs",
-              "key": null,
-              "props": {
-                "style": {
-                  "color": "var(--nxai-card-sub)",
-                  "fontSize": 12,
-                  "lineHeight": 1.2,
-                },
-              },
-              "type": "span",
-            },
+            null,
           ],
           "key": null,
           "props": {
@@ -1456,18 +1423,7 @@ exports[`panel chrome — characterization renders wide 1`] = `
               },
               "type": "span",
             },
-            {
-              "children": "Follows you across tabs",
-              "key": null,
-              "props": {
-                "style": {
-                  "color": "var(--nxai-card-sub)",
-                  "fontSize": 12,
-                  "lineHeight": 1.2,
-                },
-              },
-              "type": "span",
-            },
+            null,
           ],
           "key": null,
           "props": {

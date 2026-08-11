@@ -16,14 +16,14 @@ describe('DockedPanel — state enum', () => {
   }
 
   describe('closed state', () => {
-    it('renders the 44px floating tab, not the panel', () => {
+    it('renders the 52px floating tab, not the panel', () => {
       const tree = renderPanel('closed');
       expect(tree).toBeTruthy();
       const props = (tree as any).props;
       // Tab is the control itself, so it carries role='button'; the panel is 'complementary'
       expect(props.role).toBe('button');
       // Tab is narrower than any panel size
-      expect(props.style.width).toBe(44);
+      expect(props.style.width).toBe(52);
       expect(props['aria-label']).toMatch(/closed/i);
     });
 
@@ -46,6 +46,62 @@ describe('DockedPanel — state enum', () => {
       expect(style.transform).toBe('translateY(-50%)');
       expect(style.bottom).toBeUndefined();
       expect(style.height).toBeUndefined();
+    });
+  });
+
+  describe('closed state — the signals it exists to carry', () => {
+    function renderTab(signals: Partial<React.ComponentProps<typeof DockedPanel>>) {
+      return new DockedPanel({
+        panelState: 'closed',
+        onOpen: noop,
+        onClose: noop,
+        onSetPanelState: noop,
+        ...signals,
+      } as any).render();
+    }
+
+    /** Depth-first scan for a rendered element whose text content equals `text`. */
+    function findByText(node: any, text: string): any {
+      if (!node || typeof node !== 'object') return null;
+      const kids = node.props?.children;
+      const flat = Array.isArray(kids) ? kids : [kids];
+      if (flat.length === 1 && flat[0] === text) return node;
+      for (const k of flat) {
+        const hit = findByText(k, text);
+        if (hit) return hit;
+      }
+      return null;
+    }
+
+    it('renders the count badge when there are pending decisions', () => {
+      const tree = renderTab({ badgeCount: 7, scopeLabel: 'INSIGHTS' });
+      expect(findByText(tree, '7')).not.toBeNull();
+    });
+
+    it('renders the stuck marker when something is stuck', () => {
+      const tree = renderTab({ hasStuck: true });
+      expect(findByText(tree, '!')).not.toBeNull();
+    });
+
+    it('renders no badge at 0 — an all-clear is not a decision waiting', () => {
+      expect(findByText(renderTab({ badgeCount: 0 }), '0')).toBeNull();
+    });
+
+    it('renders no badge and no marker when the values are not knowable', () => {
+      // null is "we could not determine this", which must look different from "none".
+      // Rendering 0 or a quiet marker here would state something we have not measured.
+      const tree = renderTab({ badgeCount: null, hasStuck: null });
+      expect(findByText(tree, '0')).toBeNull();
+      expect(findByText(tree, '!')).toBeNull();
+    });
+
+    it('renders no stuck marker when explicitly not stuck', () => {
+      expect(findByText(renderTab({ hasStuck: false }), '!')).toBeNull();
+    });
+
+    it('shows the scope it is speaking for', () => {
+      expect(findByText(renderTab({ scopeLabel: 'THIS SITE' }), 'THIS SITE')).not.toBeNull();
+      expect(findByText(renderTab({ scopeLabel: 'INSIGHTS' }), 'INSIGHTS')).not.toBeNull();
     });
   });
 
@@ -104,8 +160,8 @@ describe('DockedPanel — state enum', () => {
       });
       const tree = component.render();
       // This assertion MUST fail if the mutation is applied:
-      // If closed renders the panel, width becomes 380 instead of 44
-      expect((tree as any).props.style.width).toBe(44);
+      // If closed renders the panel, width becomes 380 instead of 52
+      expect((tree as any).props.style.width).toBe(52);
     });
 
     it('removing the tab render entirely leaves closed with nothing', () => {
@@ -113,7 +169,7 @@ describe('DockedPanel — state enum', () => {
       const tree = renderPanel('closed');
       // If the mutation is applied, tree is undefined or the panel
       expect(tree).toBeTruthy();
-      expect((tree as any).props.style.width).toBe(44);
+      expect((tree as any).props.style.width).toBe(52);
     });
   });
 });

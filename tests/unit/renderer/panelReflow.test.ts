@@ -3,8 +3,9 @@
  */
 import {
   computeReflowMode,
-  computePaddingRight,
+  computeReservedWidth,
   findLocalRoot,
+  readSiteId,
   PANEL_WIDTH,
 } from '../../../src/renderer/utils/panelReflow';
 
@@ -57,12 +58,12 @@ describe('panelReflow', () => {
     });
   });
 
-  describe('computePaddingRight', () => {
+  describe('computeReservedWidth', () => {
     it('returns 0 when overlay mode', () => {
-      expect(computePaddingRight('docked', 'overlay')).toBe(0);
-      expect(computePaddingRight('wide', 'overlay')).toBe(0);
-      expect(computePaddingRight('full', 'overlay')).toBe(0);
-      expect(computePaddingRight('closed', 'overlay')).toBe(0);
+      expect(computeReservedWidth('docked', 'overlay')).toBe(0);
+      expect(computeReservedWidth('wide', 'overlay')).toBe(0);
+      expect(computeReservedWidth('full', 'overlay')).toBe(0);
+      expect(computeReservedWidth('closed', 'overlay')).toBe(0);
     });
 
     it('returns 0 for closed in-flow — the collapsed tab reserves no width', () => {
@@ -71,23 +72,23 @@ describe('panelReflow', () => {
       // someone re-enables in-flow for the collapsed state, they get 0 and have to write
       // the reservation deliberately, rather than inheriting a 48px strip that clips
       // Local's site header and its "Open site" / "WP Admin" actions.
-      expect(computePaddingRight('closed', 'in-flow')).toBe(0);
+      expect(computeReservedWidth('closed', 'in-flow')).toBe(0);
     });
 
     it('returns 380 for docked in-flow', () => {
-      expect(computePaddingRight('docked', 'in-flow')).toBe(PANEL_WIDTH);
+      expect(computeReservedWidth('docked', 'in-flow')).toBe(PANEL_WIDTH);
     });
 
     it('returns 0 for wide/full in-flow (they are never in-flow)', () => {
-      expect(computePaddingRight('wide', 'in-flow')).toBe(0);
-      expect(computePaddingRight('full', 'in-flow')).toBe(0);
+      expect(computeReservedWidth('wide', 'in-flow')).toBe(0);
+      expect(computeReservedWidth('full', 'in-flow')).toBe(0);
     });
 
     it('docked in-flow is the only combination that reserves anything', () => {
       const states = ['closed', 'docked', 'wide', 'full'] as const;
       const modes = ['in-flow', 'overlay'] as const;
       const reserving = states.flatMap((s) =>
-        modes.filter((m) => computePaddingRight(s, m) > 0).map((m) => `${s}/${m}`),
+        modes.filter((m) => computeReservedWidth(s, m) > 0).map((m) => `${s}/${m}`),
       );
       expect(reserving).toEqual(['docked/in-flow']);
     });
@@ -118,29 +119,71 @@ describe('panelReflow', () => {
       document.body.innerHTML = '';
     });
 
-    it('returns the App_ container when present', () => {
-      document.body.innerHTML = '<div id="root"><div class="App_Wrapper__x1y2">content</div></div>';
+    it('finds Local\'s shell as rendered by Window.tsx', () => {
+      // Exactly the markup classnames('Window', {__FlexColumn, __OsDarwin}) produces, so
+      // the extra modifier classes have to not defeat the match.
+      document.body.innerHTML =
+        '<div id="root"><div class="Window __FlexColumn __OsDarwin" data-location="/">shell</div></div>';
       const found = findLocalRoot();
       expect(found).not.toBeNull();
-      expect(found!.className).toBe('App_Wrapper__x1y2');
+      expect(found!.classList.contains('Window')).toBe(true);
       expect(warn).not.toHaveBeenCalled();
     });
 
-    it('returns null and warns when App_ is missing — it does NOT fall back to #root', () => {
-      // #root is present and would have been returned by the old fallback. That fallback
-      // is the defect: #root is the React root of the whole app, not Local's content
-      // container, so the mechanism silently padded the wrong box while every downstream
-      // measurement (including "#root has padding-right: 48px") still looked healthy.
+    it('returns null and warns when the shell is missing — it does NOT fall back to #root', () => {
+      // #root is present and would have been returned by the old fallback. That fallback was
+      // the defect: #root is the React root of the whole app, and .Window inside it is
+      // position:absolute, so padding #root moved nothing while still measuring as applied.
       document.body.innerHTML = '<div id="root"><div class="SomethingElse">content</div></div>';
       expect(document.getElementById('root')).not.toBeNull();
       expect(findLocalRoot()).toBeNull();
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(String(warn.mock.calls[0][0])).toContain('App_');
+      expect(String(warn.mock.calls[0][0])).toContain('.Window');
+    });
+
+    it('does not match the old App_ guess', () => {
+      // The selector this replaced. It never matched anything in a real Local window, which
+      // is why the mechanism silently ran against #root for as long as it did.
+      document.body.innerHTML = '<div id="root"><div class="App_Wrapper__x1y2">content</div></div>';
+      expect(findLocalRoot()).toBeNull();
     });
 
     it('returns null and warns when the document is empty', () => {
       expect(findLocalRoot()).toBeNull();
       expect(warn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('readSiteId', () => {
+    function shell(location: string | null): HTMLElement {
+      const el = document.createElement('div');
+      el.className = 'Window';
+      if (location !== null) el.setAttribute('data-location', location);
+      return el;
+    }
+
+    it('reads the site id from a site-info route', () => {
+      expect(readSiteId(shell('/site-info/abc123'))).toBe('abc123');
+    });
+
+    it('reads the site id from a site-info subroute', () => {
+      // Local appends tab subroutes; the scope is still that site.
+      expect(readSiteId(shell('/site-info/abc123/overview'))).toBe('abc123');
+    });
+
+    it('returns null on fleet-level routes', () => {
+      ['/', '/connect', '/marketplace', '/blueprints', '/support'].forEach((route) => {
+        expect(readSiteId(shell(route))).toBeNull();
+      });
+    });
+
+    it('does not mistake a route that merely starts with the same text', () => {
+      expect(readSiteId(shell('/site-information-page'))).toBeNull();
+    });
+
+    it('returns null when the attribute or the shell is absent', () => {
+      expect(readSiteId(shell(null))).toBeNull();
+      expect(readSiteId(null)).toBeNull();
     });
   });
 });
