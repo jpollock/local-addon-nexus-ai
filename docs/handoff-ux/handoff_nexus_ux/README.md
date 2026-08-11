@@ -244,7 +244,10 @@ while paused, *"switching this back on restores them."*
 
 **One row has no toggle.** `haltedSiteRefresh` has an interval and has never had an enable flag. Its
 switch column shows a static **Always on** label — not a disabled toggle, which implies it could be
-enabled — and its interval column reads *"not adjustable"*. It is **excluded from the nav note's
+enabled. Its **interval column is an ordinary stepper**: `haltedSiteRefreshIntervalHours` is
+`min(1).max(168)` and already has a working number input in today's Settings, so the earlier
+*"not adjustable"* string is cut — it described the removed row 8, which had no interval at all.
+The row is **excluded from the nav note's
 denominator**: the note counts switchable jobs only, since a count including an unswitchable row can
 never reach its own maximum. Below it one row per
 job with the cost stated **as the value in the row**, not as prose underneath:

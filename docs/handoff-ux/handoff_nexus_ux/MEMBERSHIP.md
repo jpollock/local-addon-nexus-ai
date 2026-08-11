@@ -3,11 +3,11 @@
 Three different subsets over the same rows, held in the one compute-once module. Tabulated
 rather than inferred, because this is the exact shape of thing the review found broken six times.
 
-> **Reconciled against code 2026-08-10.** The design's flag names were a mapping, and four of the
+> **Reconciled against code 2026-08-10.** The design's flag names were a mapping, and four of its
 > eight rows did not match the real settings keys. Corrected below per the design's own instruction
-> ("correct this table, not the design"). One correction changes both denominators, and one row
-> turns out not to be a scheduled job at all — that one is left in place and marked, because
-> removing a row is a design decision, not a table correction. See "Corrections applied".
+> ("correct this table, not the design"). One correction changes both denominators. An eighth row
+> turned out not to be a scheduled job at all and was **cut by the designer**, leaving seven. See
+> "Corrections applied".
 
 ## The table
 
@@ -20,7 +20,6 @@ rather than inferred, because this is the exact shape of thing the review found 
 | 5 | Make other hosts searchable | `externalContentIndexAutoEnabled` | `ext` | yes | Other-hosts figure | < 6h |
 | 6 | Index sites on this Mac | `localContentIndexAutoEnabled` | `local` | yes | neither | never |
 | 7 | Look over stopped local sites | *(none — never switchable)* | `local` | **no** | neither | never |
-| 8 | Notice when a local site stops | *(not a scheduled job — see below)* | `local` | **no** | neither | never |
 
 Interval keys pair with the flags by the same stem: `wpeRefreshIntervalHours`,
 `wpeSyncIntervalHours`, `wpeContentIndexIntervalHours`, `externalRefreshIntervalHours`,
@@ -39,22 +38,35 @@ Rows 4 and 5 exist only when at least one external host is connected.
 | 3 | `contentIndexAutoEnabled` | `wpeContentIndexAutoEnabled` | rename only |
 | 7 | `offlineScanAutoEnabled` | **no such key** | row 7 is the always-on row; both denominators drop by 1 |
 
-Row 7 is `haltedSiteRefresh`. It has an interval and has never had an enable flag — that is the row
-the design's "Always on / not adjustable" treatment describes. The design had assigned always-on
-status to row 8 instead and left row 7 switchable, which put one too many rows in the denominator.
+Row 7 is `haltedSiteRefresh`. It has an interval and has never had an enable flag. The design had
+assigned always-on status to row 8 instead and left row 7 switchable, which put one too many rows
+in the denominator.
 
-**Row 8 is not a scheduled job.** "Notice when a local site stops" is the `siteStopped` event hook
+**Rows 7 and 8 were the same job, rendered twice.** The prototype's array carries
+`{ key: 'scan', name: 'Look over stopped local sites' }` *and*
+`{ key: 'halted', name: 'Notice when a local site stops', always: true }` — one real scheduler
+(`HaltedSiteRefreshScheduler`) with its accurate description on one row and its always-on property
+on the other. That split is also where `offlineScanAutoEnabled` came from: today's Settings labels
+this job **"Offline site scan"**, so the name was inferred from the UI rather than the schema.
+Merging them is what "cut row 8" means — row 7 keeps the description and inherits always-on.
+
+**But its interval stays adjustable.** `haltedSiteRefreshIntervalHours` is `min(1).max(168)`,
+defaults to 24, and has a working number input in today's Settings
+(`src/renderer/components/SettingsTab.tsx:407`). Only the *on/off* is absent. The design's
+*"not adjustable"* interval copy described row 8, which had no interval; carrying it onto row 7
+would remove a control that currently works.
+
+**A row 8 was cut.** "Notice when a local site stops" is the `siteStopped` event hook
 (`src/main/content/lifecycle-hooks.ts:529`,
-`src/main/agent-event-bus/bridges/local-lifecycle-bridge.ts:24`). It has no interval, no cycle and
-no cost, so it has no passes-a-day and nothing to pause. Listing it in a table of *scheduled* work
-is the open question — it is reassuring to see and it is genuinely always on, but it is not on a
-schedule. **Designer's call**, and the denominators are unaffected either way because it is
-excluded from the count regardless.
+`src/main/agent-event-bus/bridges/local-lifecycle-bridge.ts:24`) — no interval, no cycle, no cost,
+nothing to pause. It could not fill any of this table's columns, and Background work exists to show
+what Nexus costs you on a timer. **Cut 2026-08-10.** Do not reintroduce it here; if the
+running/stopped reassurance is wanted, it belongs wherever site status is displayed.
 
 ## The three subsets
 
-**Switchable set** — rows 1–6. Denominator for the nav note. Rows 7 and 8 are excluded: a count
-that includes an unswitchable row can never reach its own maximum, so it would read `"6 of 8 on"`
+**Switchable set** — rows 1–6. Denominator for the nav note. Row 7 is excluded: a count that
+includes an unswitchable row can never reach its own maximum, so it would read `"6 of 7 on"`
 forever and look like something is off.
 
 - With at least one external host connected: **denominator 6** — `"5 of 6 on"`.

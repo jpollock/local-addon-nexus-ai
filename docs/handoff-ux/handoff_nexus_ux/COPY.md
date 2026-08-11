@@ -88,7 +88,10 @@ own callout and why all rows stay the same height.
 | Make other hosts searchable | Indexes page and post text on those same sites. |
 | Index sites on this Mac | Starts a stopped site, reads its content, stops it again. |
 | Look over stopped local sites | Reads files on disk. Nothing starts up and nothing connects anywhere. |
-| Notice when a local site stops | Keeps the running/stopped state on this Mac accurate. Has never been switchable and costs nothing. |
+
+Seven rows. An eighth, *"Notice when a local site stops"*, was cut on 2026-08-10 — it is an event
+hook rather than a schedule, so it had no interval, no passes-a-day and no cost to show. See
+`MEMBERSHIP.md` § Corrections applied.
 
 Cost strings, right-aligned, one per row:
 
@@ -99,13 +102,17 @@ Cost strings, right-aligned, one per row:
 > free                                    (disk scan, and the always-on row)
 > nothing while off                       (any switched-off row)
 
-Interval column: `every hour` / `every 4h`. The always-on row instead reads:
-
-> not adjustable
-
-and its switch column shows a static label, **not** a disabled toggle:
+Interval column: `every hour` / `every 4h` — **including the always-on row**, whose interval is an
+ordinary stepper (1–168h, default 24). Only its switch column differs, showing a static label
+rather than a disabled toggle:
 
 > ALWAYS ON
+
+**The earlier *"not adjustable"* interval string is cut with row 8.** It described the event hook,
+which had no interval at all. The row it would now land on is `haltedSiteRefresh`, whose interval
+*is* user-settable and already has a live number input in today's Settings ("Offline site scan",
+`src/renderer/components/SettingsTab.tsx:407`). Printing "not adjustable" over a control that
+currently works would be a silent feature removal.
 
 ---
 

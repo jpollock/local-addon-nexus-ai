@@ -49,7 +49,7 @@ Two handoff files are normative for this spec and must be quoted rather than res
 
 | File | Owns |
 |---|---|
-| `docs/handoff-ux/handoff_nexus_ux/COPY.md` | every user-visible string — the nine reset fragments, both halves of the pause copy, all eight row descriptions, the six cost-string forms, the grid's two framing lines |
+| `docs/handoff-ux/handoff_nexus_ux/COPY.md` | every user-visible string — the nine reset fragments, both halves of the pause copy, all seven row descriptions, the six cost-string forms, the grid's two framing lines |
 | `docs/handoff-ux/handoff_nexus_ux/MEMBERSHIP.md` | which rows belong to which subset, which figure each feeds, and each row's amber threshold |
 
 `MEMBERSHIP.md` was **reconciled against the code on 2026-08-10** and four of its eight flag names
@@ -190,12 +190,17 @@ The two facts that most often get assumed wrong:
 - **The switchable denominator is 6 with an external host connected and 4 without**, not the 7 and 5
   the design's table gave. `haltedSiteRefresh` is the always-on row and is excluded from both.
 
-**`haltedSiteRefresh` has no on/off.** It has an interval and has never had an enable setting. Its
-switch column shows a static **Always on** label — *not* a disabled toggle, which would imply it
-could be enabled — and its interval column reads *"not adjustable"*. Inventing
-`haltedSiteRefreshAutoEnabled` would hand users a switch for something that has never been
-switchable, a behaviour change deserving its own decision rather than a side effect of a settings
-rewrite.
+**`haltedSiteRefresh` has no on/off, but its interval is adjustable.** It has never had an enable
+setting, so its switch column shows a static **Always on** label — *not* a disabled toggle, which
+would imply it could be enabled. Inventing `haltedSiteRefreshAutoEnabled` would hand users a switch
+for something that has never been switchable, a behaviour change deserving its own decision rather
+than a side effect of a settings rewrite.
+
+Its **interval column is an ordinary stepper**. `haltedSiteRefreshIntervalHours` is
+`min(1).max(168)`, defaults to 24, and already has a working number input in today's Settings
+(`SettingsTab.tsx:407`, labelled "Offline site scan"). The design's *"not adjustable"* string
+described the cut row 8, which had no interval at all; carrying it here would silently remove a
+control that ships today.
 
 **The master switch is a pause, not an all-off.** It gets its own persisted field,
 `backgroundWorkPaused`; the six per-job flags are never written to. A master that writes `false`
@@ -416,12 +421,9 @@ into a single set:
   ~230px, or the two clauses want to be stacked by design rather than by accident. Designer's note
   from the prototype build.
 
-## Open question for the designer
-
-**Row 8, "Notice when a local site stops", is not a scheduled job.** It is the `siteStopped` event
-hook (`src/main/content/lifecycle-hooks.ts:529`,
-`src/main/agent-event-bus/bridges/local-lifecycle-bridge.ts:24`) — no interval, no cycle, no cost,
-nothing to pause. It is genuinely always on and reassuring to see, but listing it in a table of
-*scheduled* work is a design call, not a correctness one. Both denominators are unaffected either
-way, since it is excluded from the count regardless. Recorded in `MEMBERSHIP.md`; implement the
-other seven rows and leave row 8 as the designer decides.
+- **An eighth job row was cut.** *"Notice when a local site stops"* is the `siteStopped` event hook
+  (`src/main/content/lifecycle-hooks.ts:529`,
+  `src/main/agent-event-bus/bridges/local-lifecycle-bridge.ts:24`) — no interval, no cycle, no cost,
+  nothing to pause, so it could fill none of the table's columns. Cut by the designer 2026-08-10.
+  **Background work has seven rows.** Do not reintroduce it; if the running/stopped reassurance is
+  wanted it belongs wherever site status is displayed, not in a cost table.
