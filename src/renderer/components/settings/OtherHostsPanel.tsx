@@ -28,6 +28,12 @@ export interface OtherHostsPanelProps {
   electron: any;
 }
 
+interface HostIdentity {
+  approved: string;
+  current: string;
+  approvedAt: string;
+}
+
 interface OtherHostsPanelState {
   screen: HostScreen;
   sshConfigHosts: SshConfigHost[];
@@ -36,6 +42,8 @@ interface OtherHostsPanelState {
   discovered: Record<string, string[]>;
   /** Which host is currently being re-probed, if any. */
   checking: string | null;
+  /** Identity data for hosts whose fingerprint changed. */
+  identity: Record<string, HostIdentity>;
 }
 
 export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, OtherHostsPanelState> {
@@ -47,6 +55,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     hosts: this.props.externalHosts,
     discovered: {},
     checking: null,
+    identity: {},
   };
 
   componentDidMount(): void {
@@ -143,6 +152,16 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
    */
   setRootMode = async (alias: string, allowRoot: boolean): Promise<void> => {
     await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, alias, allowRoot);
+  };
+
+  /**
+   * Surface the instruction to accept a changed host key in Local's Preferences.
+   * Does NOT call TRUST_EXTERNAL_HOST_KEY — that is renderer-only by design.
+   */
+  acceptIdentity = (alias: string): void => {
+    // Only surfaces the instruction — no IPC call to trust the key.
+    // The user must approve it in Local → Settings → Nexus AI → External Hosts.
+    void alias;
   };
 
   /**
@@ -637,6 +656,145 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     );
   }
 
+  renderIdentityChanged(alias: string): React.ReactElement {
+    const identity = this.state.identity[alias];
+    if (!identity) {
+      return React.createElement('div', {}, 'No identity data for this host');
+    }
+
+    return React.createElement('div', {},
+      // Back button
+      React.createElement('div', {
+        onClick: () => this.setState({ screen: { name: 'list' } }),
+        style: {
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--nxai-accent)',
+          marginBottom: 16,
+          cursor: 'pointer',
+        },
+      }, '← Back to hosts'),
+
+      // Main card
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-error-border)',
+          borderRadius: 6,
+          marginBottom: 16,
+        },
+      },
+        // Title
+        React.createElement('div', {
+          style: {
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 12,
+          },
+        }, "This server's identity changed"),
+
+        // Main message
+        React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-text)',
+            lineHeight: 1.5,
+            marginBottom: 16,
+          },
+        },
+          React.createElement('p', { style: { marginBottom: 12 } },
+            `${alias} is answering with a different fingerprint than the one you approved on ${identity.approvedAt}. Nexus has stopped connecting to it and will not try again until you say so.`,
+          ),
+          React.createElement('p', { style: { marginBottom: 12 } },
+            'Usually this means the host rebuilt the server. Occasionally it means something is impersonating it — which is why this is not something Nexus should decide for you.',
+          ),
+          React.createElement('p', { style: { marginBottom: 12 } },
+            'Ask your host to confirm the new fingerprint before you accept it. Do not accept it because the site seems fine — a site seeming fine is exactly what an impersonation looks like.',
+          ),
+        ),
+
+        // Fingerprints
+        React.createElement('div', {
+          style: {
+            marginBottom: 16,
+          },
+        },
+          React.createElement('div', {
+            style: {
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--nxai-card-sub)',
+              marginBottom: 4,
+            },
+          }, `Approved on ${identity.approvedAt}`),
+          React.createElement('div', {
+            style: {
+              fontSize: 12,
+              color: 'var(--nxai-card-text)',
+              fontFamily: 'monospace',
+              wordBreak: 'break-all',
+              marginBottom: 12,
+            },
+          }, identity.approved),
+
+          React.createElement('div', {
+            style: {
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--nxai-card-sub)',
+              marginBottom: 4,
+            },
+          }, 'Current fingerprint'),
+          React.createElement('div', {
+            style: {
+              fontSize: 12,
+              color: 'var(--nxai-card-text)',
+              fontFamily: 'monospace',
+              wordBreak: 'break-all',
+            },
+          }, identity.current),
+        ),
+
+        // Buttons
+        React.createElement('div', {
+          style: {
+            display: 'flex',
+            gap: 8,
+          },
+        },
+          React.createElement('div', {
+            onClick: () => this.setState({ screen: { name: 'list' } }),
+            style: {
+              display: 'inline-block',
+              padding: '6px 12px',
+              background: 'var(--nxai-card-border)',
+              color: 'var(--nxai-card-text)',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            },
+          }, 'Leave it disconnected'),
+          React.createElement('div', {
+            onClick: () => this.acceptIdentity(alias),
+            style: {
+              display: 'inline-block',
+              padding: '6px 12px',
+              background: 'var(--nxai-accent)',
+              color: 'var(--nxai-accent-text)',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            },
+          }, 'I confirmed it with my host — accept'),
+        ),
+      ),
+    );
+  }
+
   render(): React.ReactElement {
     // Add screen
     if (this.state.screen.name === 'add') {
@@ -660,12 +818,17 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
       return this.renderDetail(this.state.screen.alias);
     }
 
+    // Identity changed screen
+    if (this.state.screen.name === 'identityChanged') {
+      return this.renderIdentityChanged(this.state.screen.alias);
+    }
+
     // List state
     if (this.state.screen.name === 'list') {
       return this.renderList();
     }
 
-    // Placeholder for other screens (Tasks 5-6)
+    // Placeholder for other screens
     return React.createElement('div', {}, `Screen: ${this.state.screen.name}`);
   }
 }

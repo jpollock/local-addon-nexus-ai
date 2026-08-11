@@ -5731,6 +5731,32 @@ export function createResolvers(context: ResolverContext) {
                 wpCliVersion: multi.wpCli?.version ?? null,
                 installs: multi.installs ?? null,
               };
+
+              // Record host key change in Inbox — a changed fingerprint means
+              // either a rebuilt server or an impersonation, and Nexus must not
+              // decide which. Recording here puts it where disconnect is actually
+              // decided (the probe detected it and refused) rather than where it
+              // is displayed (the renderer). A scheduled refresh that hits this
+              // while no UI is open would otherwise leave the user unaware until
+              // they happen to open Settings.
+              const changedKey = multi.issues.find((i) => i.kind === 'changedHostKey');
+              if (changedKey && services.inboxStore) {
+                const detail = `${alias} is answering with a different fingerprint. `
+                  + `This can mean the server was rebuilt or replaced, or that something is `
+                  + `intercepting your connection. Nexus has stopped connecting to it and `
+                  + `will not try again until you approve the new fingerprint in Local → `
+                  + `Settings → Nexus AI → External Hosts.`;
+                services.inboxStore.record({
+                  source: 'nexus',
+                  code: 'EXT-HOSTKEY-CHANGED',
+                  scope: `name:ssh:${alias}`,
+                  scopeLabel: alias,
+                  kind: 'problem',
+                  title: "This server's identity changed",
+                  detail,
+                  severity: 'high',
+                });
+              }
             } catch (e) {
               // Non-fatal -- see comment above.
             }
