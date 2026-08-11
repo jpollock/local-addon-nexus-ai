@@ -8,6 +8,15 @@
 import { ConnectionsSection } from '../../../src/renderer/components/settings/ConnectionsSection';
 import { serializeTree } from './helpers/serializeTree';
 
+function findAll(node: any, pred: (n: any) => boolean, out: any[] = []): any[] {
+  if (!node || typeof node !== 'object') return out;
+  if (pred(node)) out.push(node);
+  const children = node.props?.children;
+  const kids = Array.isArray(children) ? children : [children];
+  for (const k of kids) findAll(k, pred, out);
+  return out;
+}
+
 const tree = (over: any = {}) => {
   const { settings, wpeAccounts, externalHosts, ...rest } = over;
   return JSON.stringify(serializeTree(
@@ -19,6 +28,18 @@ const tree = (over: any = {}) => {
       electron: { ipcRenderer: { invoke: jest.fn() } },
       ...rest,
     }).render()));
+};
+
+const inst = (over: any = {}) => {
+  const { settings, wpeAccounts, externalHosts, ...rest } = over;
+  return new (ConnectionsSection as any)({
+    settings: { aiProvider: 'anthropic', useLocalGateway: false, ...settings },
+    wpeAccounts: wpeAccounts ?? [],
+    externalHosts: externalHosts ?? [],
+    onSave: jest.fn(),
+    electron: { ipcRenderer: { invoke: jest.fn() } },
+    ...rest,
+  });
 };
 
 describe('ConnectionsSection', () => {
@@ -41,5 +62,118 @@ describe('ConnectionsSection', () => {
 
   test('no hardcoded brand colour', () => {
     expect(tree().toLowerCase()).not.toContain('0ecad4');
+  });
+
+  // Port fidelity tests — pin restored behavior
+
+  test('gateway row has the correct left margin and section background', () => {
+    const component = inst();
+    component.state.providers = [{ id: 'anthropic', name: 'Anthropic', requiresApiKey: true }];
+    const rendered = component.render();
+
+    // Find the gateway div by its checkbox label
+    const found = findAll(rendered, n =>
+      n.type === 'div' &&
+      n.props?.style?.marginLeft === 28 &&
+      n.props?.style?.background === 'var(--nxai-section-bg)');
+
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  test('API key input is readOnly when a key is set', () => {
+    const component = inst();
+    component.state.providers = [{ id: 'anthropic', name: 'Anthropic', requiresApiKey: true }];
+    component.state.keyIsSet = true;
+    component.state.keyInput = 'sk-ant-api0...xxxx';
+    const rendered = component.render();
+
+    const inputs = findAll(rendered, n => n.type === 'input' && n.props?.type === 'text' && n.props?.value?.startsWith('sk-'));
+    expect(inputs.length).toBeGreaterThan(0);
+    expect(inputs[0].props.readOnly).toBe(true);
+  });
+
+  test('Change button appears when key is set (provider section)', () => {
+    const component = inst();
+    component.state.providers = [{ id: 'anthropic', name: 'Anthropic', requiresApiKey: true }];
+    component.state.keyIsSet = true;
+    component.state.keyInput = 'sk-ant-api0...xxxx';
+    const rendered = component.render();
+
+    const t = JSON.stringify(serializeTree(rendered));
+    // The Change button should be present in the key management area
+    expect(t).toContain('"children":"Change"');
+    // The provider section should not have an Apply button for the key when keyIsSet is true
+    // (Apply buttons in WPE/AWS sections are expected and fine)
+    const changeCount = (t.match(/"children":"Change"/g) || []).length;
+    expect(changeCount).toBeGreaterThan(0);
+  });
+
+  test('Check Key button is present when provider requires a key', () => {
+    const component = inst();
+    component.state.providers = [{ id: 'anthropic', name: 'Anthropic', requiresApiKey: true }];
+    component.state.keyInput = 'sk-ant-test';
+    const rendered = component.render();
+
+    const buttons = findAll(rendered, n => n.type === 'button');
+    const checkButton = buttons.find(b => b.props?.children === 'Check Key');
+
+    expect(checkButton).toBeDefined();
+  });
+
+  test('WPE credentials form has username, password, Apply and Clear buttons', () => {
+    const t = tree();
+    expect(t).toContain('API username');
+    expect(t).toContain('API password');
+    expect(t).toContain('Apply');
+    expect(t).toContain('Clear');
+  });
+
+  test('WPE credentials saved feedback appears on success', () => {
+    const component = inst();
+    component.state.wpeCredsSaved = true;
+    component.state.wpePendingClear = false;
+    const rendered = component.render();
+
+    const t = JSON.stringify(serializeTree(rendered));
+    expect(t).toContain('✓ Credentials saved');
+  });
+
+  test('AWS credentials form has key ID, secret, Show/Hide, and Save buttons', () => {
+    const component = inst();
+    component.state.awsConnected = false;
+    const rendered = component.render();
+
+    const t = JSON.stringify(serializeTree(rendered));
+    expect(t).toContain('AKIA');
+    expect(t).toContain('Show');
+    expect(t).toContain('Save');
+  });
+
+  test('AWS description includes the security assurance', () => {
+    const t = tree();
+    expect(t).toContain('encrypted in your OS keychain');
+    expect(t).toContain('never stored in plaintext');
+    expect(t).toContain('never stored locally');
+  });
+
+  test('WPE description explains credential storage', () => {
+    const t = tree();
+    expect(t).toContain('stored encrypted using OS-level encryption');
+  });
+
+  test('WPE help text links to my.wpengine.com', () => {
+    const t = tree();
+    expect(t).toContain('my.wpengine.com');
+    expect(t).toContain('different from your WP Engine login');
+  });
+
+  test('stored key security indicator is present when key is set', () => {
+    const component = inst();
+    component.state.providers = [{ id: 'anthropic', name: 'Anthropic', requiresApiKey: true }];
+    component.state.keyIsSet = true;
+    const rendered = component.render();
+
+    const t = JSON.stringify(serializeTree(rendered));
+    expect(t).toContain('Key is encrypted and stored securely');
   });
 });

@@ -22,13 +22,13 @@ interface ConnectionsProps {
 }
 
 interface ConnectionsState {
-  providers: Array<{ id: string; name: string }>;
+  providers: Array<{ id: string; name: string; displayName?: string; requiresApiKey?: boolean }>;
   models: string[];
   loadingModels: boolean;
   keyInput: string;
   keyIsSet: boolean;
   keySaved: boolean;
-  keyStatus: Record<string, 'valid' | 'invalid' | 'unchecked'>;
+  keyStatus: Record<string, 'valid' | 'invalid' | 'unchecked' | 'checking'>;
   // WPE API credentials
   wpeCredentialsConfigured: boolean;
   wpeUsernameInput: string;
@@ -173,6 +173,43 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
       keySaved: true,
       keyIsSet: true,
     }));
+  };
+
+  handleValidateKey = async (): Promise<void> => {
+    const { keyInput, keyIsSet } = this.state;
+    const providerId = this.props.settings.aiProvider;
+    if (!providerId || !keyInput.trim() || keyIsSet) return;
+
+    this.setState((prev) => ({
+      keyStatus: { ...prev.keyStatus, [providerId]: 'checking' },
+    }));
+
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.VALIDATE_API_KEY,
+        providerId,
+        keyInput.trim(),
+      );
+      if (!this.mounted) return;
+
+      this.setState((prev) => ({
+        keyStatus: { ...prev.keyStatus, [providerId]: result.valid ? 'valid' : 'invalid' },
+      }));
+
+      // Refresh models after key validation
+      if (result.valid) {
+        this.fetchModels(providerId);
+      }
+    } catch {
+      if (!this.mounted) return;
+      this.setState((prev) => ({
+        keyStatus: { ...prev.keyStatus, [providerId]: 'invalid' },
+      }));
+    }
+  };
+
+  handleChangeKey = (): void => {
+    this.setState({ keyInput: '', keySaved: false, keyIsSet: false });
   };
 
   // WPE API credentials handlers
@@ -363,8 +400,20 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
 
   renderProviderAndGateway(): React.ReactElement {
     const { settings } = this.props;
-    const { providers, models, loadingModels, keyInput, keySaved, keyIsSet } = this.state;
+    const { providers, models, loadingModels, keyInput, keySaved, keyIsSet, keyStatus } = this.state;
     const providerId = settings.aiProvider;
+    const currentProvider = providers.find((p: any) => p.id === providerId);
+    const currentStatus = providerId ? (keyStatus[providerId] ?? 'unchecked') : 'unchecked';
+
+    const statusColor = currentStatus === 'valid' ? UI_COLORS.STATUS_RUNNING
+      : currentStatus === 'invalid' ? UI_COLORS.STATUS_ERROR
+      : currentStatus === 'checking' ? 'var(--nxai-accent)'
+      : 'var(--nxai-status-neutral)';
+
+    const statusLabel = currentStatus === 'valid' ? 'Valid'
+      : currentStatus === 'invalid' ? 'Invalid'
+      : currentStatus === 'checking' ? 'Checking...'
+      : 'Not checked';
 
     return React.createElement('div', null,
       this.renderGroupHeading('How Nexus answers you'),
@@ -406,7 +455,8 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
           },
             React.createElement('option', { value: '', disabled: true }, 'Select provider...'),
             ...providers.map((p: any) =>
-              React.createElement('option', { key: p.id, value: p.id }, p.name)),
+              React.createElement('option', { key: p.id, value: p.id },
+                `${p.displayName ?? p.name}${!(p.requiresApiKey ?? true) ? ' (no key required)' : ''}`)),
           ),
         ),
 
@@ -437,41 +487,112 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
             ),
         ) : null,
 
-        // API key input
-        providerId ? React.createElement('div', { style: { marginBottom: 12 } },
-          React.createElement('input', {
-            type: keyIsSet ? 'text' : 'password',
-            value: keyInput,
-            onChange: this.handleKeyInputChange,
-            placeholder: 'API key',
+        // API key input and buttons (shown when provider requires key)
+        (currentProvider?.requiresApiKey ?? true) && providerId ? React.createElement('div', { style: { marginTop: 4 } },
+          React.createElement('div', {
             style: {
-              padding: '6px 10px',
-              fontSize: 13,
-              background: 'var(--nxai-input-bg)',
-              border: '1px solid var(--nxai-input-border)',
-              borderRadius: 4,
-              color: 'var(--nxai-card-text)',
-              width: '100%',
-              maxWidth: 300,
-              fontFamily: 'monospace',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              marginBottom: 8,
             },
-          }),
-        ) : null,
-
-        // Save key button
-        providerId ? React.createElement('button', {
-          onClick: this.handleSaveKey,
-          disabled: !keyInput.trim() || keyIsSet,
-          style: {
-            padding: '6px 12px',
-            fontSize: 13,
-            borderRadius: 4,
-            background: (!keyInput.trim() || keyIsSet) ? 'var(--nxai-card-bg)' : 'var(--nxai-accent)',
-            border: '1px solid var(--nxai-input-border)',
-            color: (!keyInput.trim() || keyIsSet) ? 'var(--nxai-card-text)' : 'var(--nxai-accent-text)',
-            cursor: (!keyInput.trim() || keyIsSet) ? 'default' : 'pointer',
           },
-        }, keySaved ? 'Saved' : 'Save key') : null,
+            React.createElement('input', {
+              type: keyIsSet ? 'text' : 'password',
+              value: keyInput,
+              onChange: this.handleKeyInputChange,
+              placeholder: keyIsSet ? '' : 'Enter API key...',
+              readOnly: keyIsSet,
+              style: {
+                padding: '6px 10px',
+                fontSize: 13,
+                background: 'var(--nxai-input-bg)',
+                border: '1px solid var(--nxai-input-border)',
+                borderRadius: 4,
+                color: 'var(--nxai-card-text)',
+                flex: 1,
+                maxWidth: 300,
+                fontFamily: 'monospace',
+                opacity: keyIsSet ? 0.7 : 1,
+                cursor: keyIsSet ? 'default' : 'text',
+              },
+            }),
+            // Change or Apply button
+            keyIsSet
+              ? React.createElement('button', {
+                onClick: this.handleChangeKey,
+                style: {
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  borderRadius: 4,
+                  background: 'var(--nxai-card-bg)',
+                  border: '1px solid var(--nxai-input-border)',
+                  color: 'var(--nxai-card-text)',
+                  cursor: 'pointer',
+                },
+              }, 'Change')
+              : React.createElement('button', {
+                onClick: this.handleSaveKey,
+                disabled: !keyInput.trim() || keySaved,
+                style: {
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  borderRadius: 4,
+                  background: (keyInput.trim() && !keySaved) ? 'var(--nxai-accent)' : 'var(--nxai-card-bg)',
+                  border: '1px solid var(--nxai-input-border)',
+                  color: (keyInput.trim() && !keySaved) ? 'var(--nxai-accent-text)' : 'var(--nxai-card-text)',
+                  cursor: (keyInput.trim() && !keySaved) ? 'pointer' : 'default',
+                },
+              }, keySaved ? 'Saved' : 'Apply'),
+            // Check Key button
+            React.createElement('button', {
+              onClick: this.handleValidateKey,
+              disabled: !keyInput.trim() || keyIsSet || currentStatus === 'checking',
+              style: {
+                padding: '6px 12px',
+                fontSize: 13,
+                borderRadius: 4,
+                background: 'var(--nxai-card-bg)',
+                border: '1px solid var(--nxai-input-border)',
+                color: 'var(--nxai-card-text)',
+                cursor: (!keyInput.trim() || keyIsSet || currentStatus === 'checking') ? 'default' : 'pointer',
+              },
+            }, 'Check Key'),
+          ),
+
+          // Security indicator when key is stored
+          keyIsSet ? React.createElement('div', {
+            style: {
+              fontSize: 11,
+              color: 'var(--nxai-card-sub)',
+              opacity: 0.6,
+              marginBottom: 4,
+            },
+          }, 'Key is encrypted and stored securely') : null,
+
+          // Status indicator
+          React.createElement('div', {
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 8,
+            },
+          },
+            React.createElement('span', {
+              style: {
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: statusColor,
+              },
+            }),
+            React.createElement('span', {
+              style: { fontSize: 12, color: statusColor },
+            }, statusLabel),
+          ),
+        ) : null,
       ),
 
       // Local AI Gateway (nested under provider)
@@ -556,8 +677,9 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
             fontSize: 12,
             color: 'var(--nxai-card-sub)',
             marginBottom: 12,
+            lineHeight: 1.4,
           },
-        }, 'WP Engine API credentials for backup creation'),
+        }, 'Store WP Engine API credentials for backup creation. WP Engine\'s backup endpoint requires basic authentication (not OAuth). Credentials are stored encrypted using OS-level encryption.'),
 
         // Status
         React.createElement('div', {
@@ -617,7 +739,7 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
         ),
 
         // Buttons
-        React.createElement('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+        React.createElement('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 } },
           React.createElement('button', {
             onClick: this.handleWpeApplyCredentials,
             disabled: !hasWpeChanges || wpeCredsSaved,
@@ -643,6 +765,22 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
               color: 'var(--nxai-card-text)',
             },
           }, 'Clear'),
+          wpeCredsSaved ? React.createElement('span', {
+            style: { fontSize: 12, color: UI_COLORS.STATUS_RUNNING, marginLeft: 4 },
+          }, wpePendingClear ? '✓ Credentials cleared' : '✓ Credentials saved') : null,
+        ),
+
+        // Help text
+        React.createElement('div', {
+          style: { fontSize: 12, color: 'var(--nxai-card-sub)', opacity: 0.7, lineHeight: 1.4 },
+        },
+          'Get your API credentials from ',
+          React.createElement('a', {
+            href: 'https://my.wpengine.com',
+            target: '_blank',
+            style: { color: 'var(--nxai-accent)', textDecoration: 'underline' },
+          }, 'my.wpengine.com'),
+          '. These are different from your WP Engine login — you must generate API credentials specifically for programmatic access.',
         ),
       ),
 
@@ -669,8 +807,9 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
             fontSize: 12,
             color: 'var(--nxai-card-sub)',
             marginBottom: 12,
+            lineHeight: 1.4,
           },
-        }, 'Read-only AWS access for your WP Engine log bucket'),
+        }, 'Store a read-only AWS access key for the IAM user that can list and read your WP Engine log bucket. Keys are encrypted in your OS keychain — never stored in plaintext or shared with WP Engine.'),
 
         // Status
         React.createElement('div', {
@@ -824,6 +963,17 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
               marginBottom: 12,
             },
           }, 'Re-enter credentials') : null,
+
+        // Disconnect note
+        React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-sub)',
+            opacity: 0.6,
+            marginTop: 4,
+            lineHeight: 1.4,
+          },
+        }, 'Disconnecting removes Nexus\'s access to your S3 bucket. Already-computed log summaries are kept — raw logs are never stored locally.'),
       ),
     );
   }
