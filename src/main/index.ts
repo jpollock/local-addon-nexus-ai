@@ -536,8 +536,10 @@ export default function main(context: any): void {
       wpeRefreshScheduler?.stop();
       externalRefreshScheduler?.stop();
       externalContentIndexScheduler?.stop();
-      if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
-      wpeContentIndexTimer = null;
+      if (wpeContentIndexTimer) {
+        clearInterval(wpeContentIndexTimer);
+        wpeContentIndexTimer = null;
+      }
       localLogger.info('[NexusAI] Background work paused — all schedulers stopped');
       return;
     }
