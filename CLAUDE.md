@@ -594,8 +594,8 @@ WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates
   (not the production install) and is not audited.
 - IPC handlers that mutate local site state — `START_SITE` / `STOP_SITE`,
   `SETUP_AI`, `SWITCH_AI_PROVIDER`, `STORAGE_CLEANUP`, `RESET_AND_REFRESH`,
-  `RESET_CONTENT_INDEX`, `FACTORY_RESET`, `WPE_PULL_TO_LOCAL`, and the
-  saved-query / site-group CRUD channels — are not routed through
+  `RESET_CONTENT_INDEX`, `FACTORY_RESET`, `CHAT_CLEAR_ALL`, `WPE_PULL_TO_LOCAL`,
+  and the saved-query / site-group CRUD channels — are not routed through
   `auditDirectOperation`. Note `WPE_PULL_TO_LOCAL` *does* write to the separate
   `AuditLogger` store (see "Three sinks" below), just not to
   `operation-audit.log`.

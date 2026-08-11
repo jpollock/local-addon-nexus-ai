@@ -48,6 +48,8 @@ export interface WpeRefreshSchedulerOptions {
     error: (...args: any[]) => void;
   };
   agentEventBus?: AgentEventBus;
+  /** Optional — when absent the job simply is not timed. */
+  jobRunStore?: import('../background/JobRunStore').JobRunStore;
 }
 
 export interface WpeRefreshResult {
@@ -67,6 +69,7 @@ export class WpeRefreshScheduler {
   private readonly getAccountFilter: () => string[] | null | undefined;
   private readonly logger: WpeRefreshSchedulerOptions['logger'];
   private readonly agentEventBus?: AgentEventBus;
+  private readonly jobRunStore?: import('../background/JobRunStore').JobRunStore;
 
   private timer: ReturnType<typeof setInterval> | null = null;
   private columnsEnsured = false;
@@ -80,6 +83,7 @@ export class WpeRefreshScheduler {
     this.getAccountFilter = options.getAccountFilter ?? (() => null);
     this.logger = options.logger;
     this.agentEventBus = options.agentEventBus;
+    this.jobRunStore = options.jobRunStore;
   }
 
   /**
@@ -177,10 +181,12 @@ export class WpeRefreshScheduler {
    * Returns counts of scanned / skipped / failed installs.
    */
   async runNow(): Promise<WpeRefreshResult> {
-    const result: WpeRefreshResult = { scanned: 0, skipped: 0, failed: 0 };
+    const startedAt = Date.now();
+    try {
+      const result: WpeRefreshResult = { scanned: 0, skipped: 0, failed: 0 };
 
-    // Ensure SSH-specific columns exist before attempting writes
-    this.ensureColumns();
+      // Ensure SSH-specific columns exist before attempting writes
+      this.ensureColumns();
 
     // SSH key is required — bail early if not available
     if (!this.localServices.isSSHKeyAvailable()) {
@@ -263,11 +269,14 @@ export class WpeRefreshScheduler {
       }
     }
 
-    this.logger.info(
-      `[WpeRefreshScheduler] Cycle done — ${result.scanned} scanned, ${result.skipped} fresh (skipped), ${result.failed} failed`
-    );
+      this.logger.info(
+        `[WpeRefreshScheduler] Cycle done — ${result.scanned} scanned, ${result.skipped} fresh (skipped), ${result.failed} failed`
+      );
 
-    return result;
+      return result;
+    } finally {
+      this.jobRunStore?.record('wpeRefresh', startedAt, Date.now() - startedAt);
+    }
   }
 
   /**

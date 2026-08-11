@@ -145,6 +145,10 @@ export function deleteSession(db: Database.Database, sessionId: string): void {
   db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(sessionId);
 }
 
+export function deleteAllSessions(db: Database.Database): void {
+  db.prepare('DELETE FROM chat_sessions').run();
+}
+
 export function pruneSessions(db: Database.Database, nowMs: number = Date.now()): void {
   db.prepare(
     'DELETE FROM chat_sessions WHERE pinned = 0 AND expires_at IS NOT NULL AND expires_at < ?',

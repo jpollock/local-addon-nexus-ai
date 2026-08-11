@@ -82,6 +82,7 @@ import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events
 import { getAIProvider } from './ai/getAIProvider';
 import { refreshProviderWhenEncryptionReady } from './ai/refreshProviderWhenEncryptionReady';
 import type { Unsubscribe, AgentDefinition } from './agent-sdk/types';
+import { JobRunStore } from './background/JobRunStore';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -172,6 +173,9 @@ export default function main(context: any): void {
       }
     },
   };
+
+  // Job run duration store for Settings → Background work
+  const jobRunStore = new JobRunStore(registryStorage);
 
   // Digital Twin: Site metadata cache (created early for lifecycle hooks)
   const metadataCache = new SiteMetadataCache(registryStorage);
@@ -487,10 +491,15 @@ export default function main(context: any): void {
   const startWpeContentIndexScheduler = (hours: number) => {
     if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
     wpeContentIndexTimer = setInterval(async () => {
-      if (!wpeSyncService) return;
-      localLogger.info(`[NexusAI] WPE content index scheduler running (every ${hours}h)`);
-      try { await wpeSyncService.indexAllWpeContent(); } catch (e: any) {
-        localLogger.warn('[NexusAI] WPE content index scheduler failed:', e?.message);
+      const startedAt = Date.now();
+      try {
+        if (!wpeSyncService) return;
+        localLogger.info(`[NexusAI] WPE content index scheduler running (every ${hours}h)`);
+        try { await wpeSyncService.indexAllWpeContent(); } catch (e: any) {
+          localLogger.warn('[NexusAI] WPE content index scheduler failed:', e?.message);
+        }
+      } finally {
+        jobRunStore.record('wpeContentIndex', startedAt, Date.now() - startedAt);
       }
     }, hours * 60 * 60 * 1000);
   };
@@ -504,6 +513,17 @@ export default function main(context: any): void {
     const names: Record<string, string> = {};
     ids.forEach(id => { names[id] = sites[id]?.name ?? id; });
     return names;
+  };
+
+  /**
+   * Shared helper to check if background work is paused. Read from one place so
+   * every gate checks the same source — startup schedulers, the settings-change
+   * reactive path, and the WPE auto-sync paths.
+   */
+  const isBackgroundWorkPaused = () => {
+    const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+      { backgroundWorkPaused?: boolean } | null;
+    return settings?.backgroundWorkPaused === true;
   };
 
   /**
@@ -525,6 +545,24 @@ export default function main(context: any): void {
    * has constructed them.
    */
   const onSettingsUpdated = () => {
+    const paused = isBackgroundWorkPaused();
+
+    if (paused) {
+      // Stop everything. The per-job flags are read but never written, so
+      // unpausing restores exactly the configuration the user had.
+      opportunisticScheduler.stop();
+      haltedRefreshScheduler?.stop();
+      wpeRefreshScheduler?.stop();
+      externalRefreshScheduler?.stop();
+      externalContentIndexScheduler?.stop();
+      if (wpeContentIndexTimer) {
+        clearInterval(wpeContentIndexTimer);
+        wpeContentIndexTimer = null;
+      }
+      localLogger.info('[NexusAI] Background work paused — all schedulers stopped');
+      return;
+    }
+
     if (nexusServices?.bulkOpManager) {
       opportunisticScheduler.restart({
         bulkOpManager: nexusServices.bulkOpManager,
@@ -855,13 +893,15 @@ export default function main(context: any): void {
 
       // Start opportunistic local-site indexer now that bulkOpManager is wired
       if (nexusServices?.bulkOpManager) {
-        opportunisticScheduler.start({
-          bulkOpManager: nexusServices.bulkOpManager,
-          siteData: siteDataAccessor,
-          getSettings: getSchedulerSettings,
-          buildSiteNames: buildSiteNamesLocal,
-          logger: localLogger,
-        });
+        if (!isBackgroundWorkPaused()) {
+          opportunisticScheduler.start({
+            bulkOpManager: nexusServices.bulkOpManager,
+            siteData: siteDataAccessor,
+            getSettings: getSchedulerSettings,
+            buildSiteNames: buildSiteNamesLocal,
+            logger: localLogger,
+          });
+        }
       }
 
       const instructionRegistry = new InstructionRegistry();
@@ -921,21 +961,26 @@ export default function main(context: any): void {
       };
 
       const runWpeAutoSyncIncremental = async (reason: string) => {
-        if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
-        const hours = getWpeSyncIntervalHours();
-        localLogger.info(`[NexusAI] WPE incremental sync triggered: ${reason} (threshold: ${hours}h)`);
-        // Signal sync started so UI shows active state immediately
-        emitNexusState({ wpeSyncProgress: { active: true, current: 0, total: 0, currentSite: '', phase: 'metadata' } });
+        const startedAt = Date.now();
         try {
-          const result = await wpeSyncService.syncAllWPESites(undefined, hours);
-          localLogger.info(
-            `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
-          );
-          // Clear progress and push fresh wpeStatus
-          emitNexusState({ wpeSyncProgress: null });
-        } catch (err) {
-          localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
-          emitNexusState({ wpeSyncProgress: null });
+          if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
+          const hours = getWpeSyncIntervalHours();
+          localLogger.info(`[NexusAI] WPE incremental sync triggered: ${reason} (threshold: ${hours}h)`);
+          // Signal sync started so UI shows active state immediately
+          emitNexusState({ wpeSyncProgress: { active: true, current: 0, total: 0, currentSite: '', phase: 'metadata' } });
+          try {
+            const result = await wpeSyncService.syncAllWPESites(undefined, hours);
+            localLogger.info(
+              `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
+            );
+            // Clear progress and push fresh wpeStatus
+            emitNexusState({ wpeSyncProgress: null });
+          } catch (err) {
+            localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
+            emitNexusState({ wpeSyncProgress: null });
+          }
+        } finally {
+          jobRunStore.record('wpeSync', startedAt, Date.now() - startedAt);
         }
       };
 
@@ -982,8 +1027,11 @@ export default function main(context: any): void {
         },
         intervalMs: haltedIntervalHours * 60 * 60 * 1000,
         logger: localLogger,
+        jobRunStore,
       });
-      haltedRefreshScheduler.start();
+      if (!isBackgroundWorkPaused()) {
+        haltedRefreshScheduler.start();
+      }
 
       // Phase 5: Scheduled SSH WP-CLI refresh for stale WPE installs.
       // Runs once every 24h; updates plugins, themes, site URL, admin email,
@@ -1001,8 +1049,9 @@ export default function main(context: any): void {
           return s?.wpeAccountFilter ?? null;
         },
         logger: localLogger,
+        jobRunStore,
       });
-      if (wpeRefreshEnabled) {
+      if (wpeRefreshEnabled && !isBackgroundWorkPaused()) {
         wpeRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] WPE SSH refresh auto-run disabled by preference — scheduler not started');
@@ -1020,8 +1069,9 @@ export default function main(context: any): void {
         services: nexusServices,
         intervalMs: externalRefreshHours * 60 * 60 * 1000,
         logger: localLogger,
+        jobRunStore,
       });
-      if (externalRefreshEnabled) {
+      if (externalRefreshEnabled && !isBackgroundWorkPaused()) {
         externalRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] External SSH host refresh auto-run disabled by preference — scheduler not started');
@@ -1047,8 +1097,9 @@ export default function main(context: any): void {
         indexService: externalContentIndexService,
         intervalMs: externalContentIndexHours * 60 * 60 * 1000,
         logger: localLogger,
+        jobRunStore,
       });
-      if (externalContentIndexEnabled) {
+      if (externalContentIndexEnabled && !isBackgroundWorkPaused()) {
         externalContentIndexScheduler.start();
       } else {
         localLogger.info('[NexusAI] External SSH content indexing auto-run disabled by preference — scheduler not started');
@@ -1082,6 +1133,10 @@ export default function main(context: any): void {
 
         // Tier 2: SSH sync only if auto-sync enabled and data is stale
         try {
+          if (isBackgroundWorkPaused()) {
+            localLogger.info('[NexusAI] Background work paused — skipping WPE SSH sync');
+            return;
+          }
           if (!isWpeSyncAutoEnabled()) {
             localLogger.info('[NexusAI] WPE auto-sync disabled — skipping SSH sync');
             return;
@@ -1109,6 +1164,7 @@ export default function main(context: any): void {
         } catch { /* non-fatal */ }
         // Tier 2: SSH only if enabled and data is stale
         try {
+          if (isBackgroundWorkPaused()) return;
           if (!isWpeSyncAutoEnabled()) return;
           const hours = getWpeSyncIntervalHours();
           const stale = await wpeSyncService.isStale(hours);
@@ -1196,6 +1252,7 @@ export default function main(context: any): void {
     nexusServices,
     wpeSyncService,
     metadataCache,
+    jobRunStore,
     onSettingsUpdated,
     emitNexusState,
   });

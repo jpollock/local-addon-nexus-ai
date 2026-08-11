@@ -58,3 +58,47 @@ describe('chat-ipc-handlers — reactive refresh on key write', () => {
     await expect(mockIpc.invoke(IPC_CHANNELS.SAVE_API_KEY, 'power', 'wpe_key')).resolves.toEqual({ success: true });
   });
 });
+
+describe('CHAT_CLEAR_ALL', () => {
+  it('calls clearAllSessions and returns success when DB available', async () => {
+    const clearAllSessions = jest.fn(() => ({ success: true }));
+    registerChatIpcHandlers({
+      chatService: { clearAllSessions } as any,
+      registryStorage: makeStorage() as any,
+      localLogger: { info: () => {}, error: () => {} },
+    });
+
+    const result = await mockIpc.invoke(IPC_CHANNELS.CHAT_CLEAR_ALL);
+
+    expect(clearAllSessions).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ success: true });
+  });
+
+  it('returns failure when clearAllSessions returns failure (DB not ready)', async () => {
+    const clearAllSessions = jest.fn(() => ({ success: false, error: 'Database not available' }));
+    registerChatIpcHandlers({
+      chatService: { clearAllSessions } as any,
+      registryStorage: makeStorage() as any,
+      localLogger: { info: () => {}, error: () => {} },
+    });
+
+    const result = await mockIpc.invoke(IPC_CHANNELS.CHAT_CLEAR_ALL);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Database not available');
+  });
+
+  it('returns failure when clearAllSessions throws', async () => {
+    const clearAllSessions = jest.fn(() => { throw new Error('Unexpected error'); });
+    registerChatIpcHandlers({
+      chatService: { clearAllSessions } as any,
+      registryStorage: makeStorage() as any,
+      localLogger: { info: () => {}, error: () => {} },
+    });
+
+    const result = await mockIpc.invoke(IPC_CHANNELS.CHAT_CLEAR_ALL);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Unexpected error');
+  });
+});

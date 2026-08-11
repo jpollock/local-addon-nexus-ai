@@ -40,6 +40,8 @@ export const IPC_CHANNELS = {
   CHAT_TOOL_APPROVE: `${ADDON_PREFIX}:chat-tool-approve`,
   CHAT_STOP: `${ADDON_PREFIX}:chat-stop`,
   CHAT_CLEAR: `${ADDON_PREFIX}:chat-clear`,
+  CHAT_CLEAR_ALL: `${ADDON_PREFIX}:chat-clear-all`,
+  CHAT_ALL_CLEARED: `${ADDON_PREFIX}:chat-all-cleared`,
 
   // Provider management
   VALIDATE_API_KEY: `${ADDON_PREFIX}:validate-api-key`,
@@ -234,6 +236,9 @@ export const IPC_CHANNELS = {
 
   // System tab — WPE sync summary
   SYSTEM_WPE_STATUS: `${ADDON_PREFIX}:system:wpe-status`,
+
+  // Job run data (background work scheduler telemetry)
+  GET_JOB_RUN_DATA: `${ADDON_PREFIX}:get-job-run-data`,
 
   // AI Assistant (fleet panel, dashboard Ask tab, site tab)
   ASSISTANT_QUERY:   `${ADDON_PREFIX}:assistant:query`,

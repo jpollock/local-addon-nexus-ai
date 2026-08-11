@@ -345,6 +345,9 @@ export interface NexusSettings {
   wpeSyncIntervalHours?: number; // How often to auto-sync WPE sites (default: 8)
   wpeSyncAutoEnabled?: boolean;  // Whether WPE SSH metadata sync is enabled (default: false — opt-in)
   haltedSiteRefreshIntervalHours?: number; // How often to refresh halted local sites (default: 24)
+  /** Master pause for scheduled background work (default: false). Per-job
+   *  AutoEnabled flags are preserved while paused. */
+  backgroundWorkPaused?: boolean;
   wpeRefreshIntervalHours?: number;         // How often to run WPE SSH refresh cycle (default: 24)
   wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH site-info refresh is enabled (default: false — opt-in)
   externalRefreshIntervalHours?: number;    // How often to refresh external SSH hosts (default: 24)

@@ -11,6 +11,8 @@ export interface ExternalContentIndexSchedulerOptions {
   intervalMs?: number;
   stalenessThresholdMs?: number;
   logger: { info: (...a: any[]) => void; warn: (...a: any[]) => void; error: (...a: any[]) => void };
+  /** Optional — when absent the job simply is not timed. */
+  jobRunStore?: import('../background/JobRunStore').JobRunStore;
 }
 
 export interface ExternalContentIndexResult {
@@ -64,6 +66,7 @@ export class ExternalContentIndexScheduler {
   private readonly services: any;
   private readonly indexService: ExternalContentIndexService;
   private readonly logger: ExternalContentIndexSchedulerOptions['logger'];
+  private readonly jobRunStore?: import('../background/JobRunStore').JobRunStore;
   private currentIntervalMs: number;
   private currentStalenessThresholdMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -74,6 +77,7 @@ export class ExternalContentIndexScheduler {
     this.services = options.services;
     this.indexService = options.indexService;
     this.logger = options.logger;
+    this.jobRunStore = options.jobRunStore;
     this.currentIntervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.currentStalenessThresholdMs = options.stalenessThresholdMs ?? this.currentIntervalMs;
   }
@@ -113,8 +117,10 @@ export class ExternalContentIndexScheduler {
   }
 
   async runCycleNow(): Promise<ExternalContentIndexResult> {
-    const result: ExternalContentIndexResult = { scanned: 0, skipped: 0, failed: 0 };
-    const now = Date.now();
+    const startedAt = Date.now();
+    try {
+      const result: ExternalContentIndexResult = { scanned: 0, skipped: 0, failed: 0 };
+      const now = Date.now();
 
     const db = this.graphService.getDb?.();
     if (!db) return result;
@@ -163,9 +169,12 @@ export class ExternalContentIndexScheduler {
       }
     })));
 
-    this.logger.info(
-      `[ExternalContentIndexScheduler] Cycle done — scanned ${result.scanned}, `
-      + `skipped ${result.skipped}, failed ${result.failed}`);
-    return result;
+      this.logger.info(
+        `[ExternalContentIndexScheduler] Cycle done — scanned ${result.scanned}, `
+        + `skipped ${result.skipped}, failed ${result.failed}`);
+      return result;
+    } finally {
+      this.jobRunStore?.record('externalContentIndex', startedAt, Date.now() - startedAt);
+    }
   }
 }

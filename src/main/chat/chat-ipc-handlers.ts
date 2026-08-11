@@ -83,6 +83,21 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
     return { success: true };
   });
 
+  ipcMain.handle(IPC_CHANNELS.CHAT_CLEAR_ALL, async () => {
+    try {
+      const result = await chatService.clearAllSessions();
+      if (!result.success) {
+        localLogger.error('[chat-ipc] CHAT_CLEAR_ALL failed:', result.error);
+        return result;
+      }
+      localLogger.info('[chat-ipc] CHAT_CLEAR_ALL: all sessions deleted');
+      return { success: true };
+    } catch (err: any) {
+      localLogger.error('[chat-ipc] CHAT_CLEAR_ALL error:', err);
+      return { success: false, error: err.message ?? 'Unknown error' };
+    }
+  });
+
   // -----------------------------------------------------------------------
   // Provider Management
   // -----------------------------------------------------------------------

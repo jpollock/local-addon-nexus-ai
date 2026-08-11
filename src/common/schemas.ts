@@ -85,6 +85,9 @@ export const UpdateSettingsSchema = z.object({
   wpeContentIndexIntervalHours: z.number().int().min(1).max(168).optional(),
   chatRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).optional(),
   dockedPanelEnabled: z.boolean().optional(),
+  /** Master pause for all scheduled background work. Deliberately separate from
+   *  the six per-job AutoEnabled flags — pausing must never overwrite them. */
+  backgroundWorkPaused: z.boolean().optional(),
   embeddingModel: z.enum(['minilm', 'bge-small']).optional(),
 }).strict();
 

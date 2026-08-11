@@ -118,7 +118,9 @@ describe('Overview extraction — structural invariants', () => {
     // moved out of Operations' zone 1. Asserted properly in its own test below.
     ['sites', 'div'],
     ['activity', 'div'],
-    ['operations', 'div'],
+    // 'operations' was retired in spec 6a (Task 11). Its five maintenance actions
+    // moved to Settings → Advanced. Unknown/retired tab keys fall back to Overview.
+    ['operations', 'OverviewTab'],
     ['settings', 'SettingsTab'],
     // 'agents' is rendered directly in render(), not through renderActiveTab()
   ])('the shell routes activeTab=%s to %s', (tab, expectedType) => {

@@ -20,7 +20,7 @@ interface OverviewTabProps {
   aiProxy: AiProxyInfo | null;
   mcpInfo: McpInfo | null;
   startupStatus: StartupStatus | null;
-  onNavigate: (tab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents') => void;
+  onNavigate: (tab: 'overview' | 'activity' | 'settings' | 'agents') => void;
   onRefresh: () => void;
 }
 

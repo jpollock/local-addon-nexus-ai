@@ -157,6 +157,8 @@ export interface IpcHandlerDeps {
   wpeSyncService?: WPESyncService;
   /** Site metadata cache (Digital Twin) */
   metadataCache?: SiteMetadataCache;
+  /** Job run durations and timestamps (spec 6, Task 2) */
+  jobRunStore?: import('./background/JobRunStore').JobRunStore;
   /**
    * Called after settings are successfully saved. Used to restart interval
    * schedulers (e.g. OpportunisticScheduler) when the user changes preferences.
@@ -416,7 +418,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
     getStartupStatus,
-    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
+    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache, jobRunStore,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
 
@@ -1459,6 +1461,42 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // had actually changed (the registryStorage.set above never ran). Return the untouched
       // current settings instead, with an explicit error marker the caller can check.
       return { ...current, _error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.GET_JOB_RUN_DATA, () => {
+    try {
+      if (!jobRunStore) return {};
+      const keys: import('./background/JobRunStore').JobKey[] = [
+        'wpeRefresh', 'wpeSync', 'wpeContentIndex',
+        'externalRefresh', 'externalContentIndex',
+        'localContentIndex', 'haltedSiteRefresh',
+      ];
+      const result: Record<string, { averageMs: number | null; lastRunAt: number | null }> = {};
+      for (const key of keys) {
+        result[key] = {
+          averageMs: jobRunStore.averageMs(key),
+          lastRunAt: jobRunStore.lastRunAt(key),
+        };
+      }
+      return result;
+    } catch (err) {
+      localLogger.error('[NexusAI] GET_JOB_RUN_DATA failed:', (err as Error).message);
+      return {};
+    }
+  });
+
+  safeHandle('nexus-ai:get-vector-store-size', () => {
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(deps.vectorDbPath)) {
+        const stats = fs.statSync(deps.vectorDbPath);
+        return { success: true, sizeMB: Math.round(stats.size / (1024 * 1024)) };
+      }
+      return { success: true, sizeMB: undefined };
+    } catch (err) {
+      deps.localLogger.error('[NexusAI] get-vector-store-size failed:', (err as Error).message);
+      return { success: false };
     }
   });
 
@@ -4331,6 +4369,36 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
       return { success: true, siteCount, docCount, dropped };
     } catch (err: any) {
       localLogger.error('[NexusAI] Content index reset failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Hard-delete WPE installs the CAPI sync already soft-deleted (is_active=0),
+  // plus any rows orphaned by that delete.
+  //
+  // This handler shipped in c509c938 and was dropped in the ipc-handlers
+  // decomposition (d69ec3a0) without its caller being removed. The Advanced
+  // section's "Remove ghost installs" row therefore invoked a channel nothing
+  // listened on: ipcMain.handle rejects an unregistered channel, which the
+  // renderer swallowed, leaving the button on "Running…" forever. Restored
+  // rather than deleting the row — the absence was a refactor accident, not a
+  // product decision, and the capability is one of the five Advanced exists
+  // to reach.
+  safeHandle(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS, async () => {
+    try {
+      const db = graphService.getDb();
+      if (!db) return { success: false, error: 'Graph DB not available' };
+      const result = db.prepare(
+        "DELETE FROM sites WHERE source='wpe' AND is_active=0",
+      ).run();
+      // Orphans left behind by the delete above.
+      db.prepare('DELETE FROM plugins WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      db.prepare('DELETE FROM content WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      db.prepare('DELETE FROM users WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      localLogger.info(`[NexusAI] Cleaned up ${result.changes} ghost installs`);
+      return { success: true, removed: result.changes };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Ghost install cleanup failed:', err.message);
       return { success: false, error: err.message };
     }
   });
