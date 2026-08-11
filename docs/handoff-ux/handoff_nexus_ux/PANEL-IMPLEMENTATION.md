@@ -29,24 +29,53 @@ If that still holds, this is mostly repackaging what is already mounted. Verify 
 
 One state. Model it as a **single enum** — `closed | docked | wide | full` — with exhaustive
 branches. Do not model it as two booleans (`isOpen`, `size`): the combination `closed + full` then
-exists, renders nothing, and strands the user with no way back. That trap was in the prototype until
-it was caught.
+exists, renders nothing, and strands the user with no way back.
 
-| Mode | Form | Purpose |
+### The rule that overrides all of the below
+
+**The panel must never compress Local's content below its minimum usable width.** Local's site screen
+needs roughly **1000px** before its header actions clip and its rows start wrapping. An earlier
+revision of this document specified every size as an in-flow column, which is wrong: at 620px in
+flow, on anything but a very large window, the host app visibly breaks — clipped `Open site` button,
+two-line SSL note, squeezed tab row.
+
+Nexus is a guest on these screens. A guest does not resize the room.
+
+| Mode | Form | Behaviour |
 |---|---|---|
-| `closed` | 48px rail, right edge | Resting state. Carries signal — see §3. |
-| `docked` | 380px column | Default. Reading answers, glancing at insights. |
-| `wide` | 620px column | An answer with a table in it, site still visible behind. |
-| `full` | Overlay across the app frame, 760px centred column | Sustained conversation. |
+| `closed` | 48px rail | **In flow, always.** Reserves 48px. Carries signal — see §3. |
+| `docked` | 380px column | **In flow only if** `available − 380 ≥ 1000`. Otherwise overlay. |
+| `wide` | 620px column | **Always an overlay.** Never in flow. |
+| `full` | Overlay across the app frame | Overlay. |
+
+**Overlay treatment:** the panel floats above the content with a left border and a soft shadow
+(`0 0 24px rgba(17,24,39,0.10)`), no scrim for `docked`/`wide` — the user is still working with what
+is behind it — and no layout change to the host. `full` may use a scrim.
+
+**Why `wide` is never in flow:** 620px is the mode a user picks when the conversation is the task. At
+that moment they are not reading the screen behind it, so there is nothing to gain by compressing it
+and a working host layout to lose.
+
+**Compute against actual available width**, not window width — Local's own sites sidebar is
+collapsible, so the figure moves. Re-evaluate on resize and on sidebar collapse: a `docked` panel
+that was in flow on a wide window becomes an overlay when the window narrows, without changing mode.
+
+**Never auto-collapse Local's sidebar** to make room. That mutates the user's own setting to solve
+Nexus's problem.
 
 **Transitions.** `docked ⇄ wide` is a toggle in the header. `→ full` is a separate control and
-**switches to the Chat tab**, because that is what people maximize for. `full → docked` via a
-labelled control, not just an icon. Closing from any open size goes to `closed`; opening from
-`closed` returns to `docked`.
+**switches to the Chat tab**. `full → docked` via a labelled control. Closing from any open size goes
+to `closed`; opening from `closed` returns to `docked`.
 
 **The conversation is identical in all four.** Maximize is a size change, never a different surface —
-same history, same scroll position, same draft text. If a user loses their place when resizing, the
-model is wrong.
+same history, same scroll position, same draft text.
+
+### Acceptance for this section
+
+- At a typical window size, opening `wide` does not move or clip anything in Local.
+- `Open site` and `WP Admin` are never clipped in any panel state.
+- Narrowing the window with the panel docked converts it to an overlay rather than squeezing Local.
+- Collapsing Local's sites sidebar with the panel open does not break either.
 
 ---
 
