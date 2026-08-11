@@ -1465,20 +1465,25 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.GET_JOB_RUN_DATA, () => {
-    if (!jobRunStore) return {};
-    const keys: import('./background/JobRunStore').JobKey[] = [
-      'wpeRefresh', 'wpeSync', 'wpeContentIndex',
-      'externalRefresh', 'externalContentIndex',
-      'localContentIndex', 'haltedSiteRefresh',
-    ];
-    const result: Record<string, { averageMs: number | null; lastRunAt: number | null }> = {};
-    for (const key of keys) {
-      result[key] = {
-        averageMs: jobRunStore.averageMs(key),
-        lastRunAt: jobRunStore.lastRunAt(key),
-      };
+    try {
+      if (!jobRunStore) return {};
+      const keys: import('./background/JobRunStore').JobKey[] = [
+        'wpeRefresh', 'wpeSync', 'wpeContentIndex',
+        'externalRefresh', 'externalContentIndex',
+        'localContentIndex', 'haltedSiteRefresh',
+      ];
+      const result: Record<string, { averageMs: number | null; lastRunAt: number | null }> = {};
+      for (const key of keys) {
+        result[key] = {
+          averageMs: jobRunStore.averageMs(key),
+          lastRunAt: jobRunStore.lastRunAt(key),
+        };
+      }
+      return result;
+    } catch (err) {
+      localLogger.error('[NexusAI] GET_JOB_RUN_DATA failed:', (err as Error).message);
+      return {};
     }
-    return result;
   });
 
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {

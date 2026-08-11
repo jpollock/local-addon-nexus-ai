@@ -31,11 +31,12 @@ interface SettingsShellState {
   externalHosts: Array<{ alias: string; site: string; environment: string; domain: string }>;
   loading: boolean;
   active: Section;
-  fleetCounts: { installs: number; local: number; wpe: number; external: number } | null;
+  fleetCounts: { wpe: number; external: number; local: number } | null;
   jobRunData: Record<string, { averageMs: number | null; lastRunAt: number | null }> | null;
 }
 
 export class SettingsShell extends React.Component<{ electron: any }, SettingsShellState> {
+  static displayName = 'SettingsTab';
   private mounted = false;
 
   state: SettingsShellState = {
@@ -76,7 +77,6 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
     // Extract fleet counts from dashboardStats.counts
     const counts = dashboardStats?.counts ?? null;
     const fleetCounts = counts ? {
-      installs: counts.wpe?.count ?? 0,
       wpe: counts.wpe?.count ?? 0,
       external: counts.external?.count ?? 0,
       local: counts.local?.count ?? 0,
@@ -106,7 +106,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
   render(): React.ReactElement {
     if (this.state.loading) {
       return React.createElement('div', {
-        style: { padding: 24, color: 'var(--nxai-text, #e6edf3)' },
+        style: { padding: 24, color: 'var(--nxai-card-text)' },
       }, 'Loading…');
     }
 
@@ -124,7 +124,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
       }
       derived = computeDerived({
         settings: s,
-        installCount: fleetCounts.installs,
+        installCount: fleetCounts.wpe,
         externalHostCount: fleetCounts.external,
         localSiteCount: fleetCounts.local,
         durations,
@@ -148,8 +148,8 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
         style: {
           padding: '10px 16px',
           cursor: 'pointer',
-          borderLeft: active ? '2px solid var(--nxai-brand-blue, #3b82f6)' : '2px solid transparent',
-          background: active ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+          borderLeft: active ? '2px solid var(--nxai-accent)' : '2px solid transparent',
+          background: active ? 'var(--nxai-section-bg)' : 'transparent',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -159,13 +159,13 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
           style: {
             fontSize: 13,
             fontWeight: active ? 600 : 400,
-            color: active ? 'var(--nxai-text, #e6edf3)' : 'var(--nxai-text-muted, #9ca3af)',
+            color: active ? 'var(--nxai-card-text)' : 'var(--nxai-status-neutral)',
           },
         }, label),
         note ? React.createElement('span', {
           style: {
             fontSize: 11,
-            color: 'var(--nxai-text-dim, #6b7280)',
+            color: 'var(--nxai-card-sub)',
           },
         }, note) : null,
       );
@@ -174,9 +174,9 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
     const nav = React.createElement('div', {
       style: {
         width: 232,
-        borderRight: '1px solid var(--nxai-card-border, #30363d)',
+        borderRight: '1px solid var(--nxai-card-border)',
         padding: '16px 0',
-        background: 'var(--nxai-bg, #0d1117)',
+        background: 'var(--nxai-card-bg)',
       },
     },
       navItem('connections', 'Connections'),
@@ -192,7 +192,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
         flex: 1,
         padding: 24,
         overflowY: 'auto',
-        color: 'var(--nxai-text, #e6edf3)',
+        color: 'var(--nxai-card-text)',
       },
     }, `${this.state.active} section — placeholder`);
 
@@ -215,7 +215,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        background: 'var(--nxai-bg, #0d1117)',
+        background: 'var(--nxai-section-bg)',
       },
     },
       React.createElement('div', {
