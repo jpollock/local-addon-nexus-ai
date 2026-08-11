@@ -158,13 +158,14 @@ export class EventStatsCards extends React.Component<EventStatsCardsProps, Event
     if (!stats) return UI_COLORS.STATUS_HALTED;
 
     switch (stats.healthStatus) {
-      case 'good':
+      case 'ok':
         return UI_COLORS.STATUS_RUNNING;
-      case 'warning':
+      case 'degraded':
         return UI_COLORS.STATUS_WARNING;
-      case 'error':
+      case 'failing':
         return UI_COLORS.STATUS_ERROR;
       default:
+        // 'unknown' (or anything unrecognized) — never green on missing input.
         return UI_COLORS.STATUS_HALTED;
     }
   }
@@ -174,30 +175,31 @@ export class EventStatsCards extends React.Component<EventStatsCardsProps, Event
     if (!stats) return 'Unknown';
 
     switch (stats.healthStatus) {
-      case 'good':
-        return 'All Systems Healthy';
-      case 'warning':
-        return 'Pending Events';
-      case 'error':
-        return 'Failed Events Detected';
+      case 'ok':
+        return 'Everything is running';
+      case 'degraded':
+        return 'Something needs attention';
+      case 'failing':
+        return 'Something is broken';
       default:
-        return 'Unknown';
+        // Never green on missing input — say so plainly.
+        return "Can't tell right now";
     }
   }
 
   getHealthIcon(): string {
     const { stats } = this.state;
-    if (!stats) return '○';
+    if (!stats) return '?';
 
     switch (stats.healthStatus) {
-      case 'good':
+      case 'ok':
         return '✓';
-      case 'warning':
-        return '⚠';
-      case 'error':
-        return '✗';
+      case 'degraded':
+        return '!';
+      case 'failing':
+        return '✕';
       default:
-        return '○';
+        return '?';
     }
   }
 
@@ -267,8 +269,13 @@ export class EventStatsCards extends React.Component<EventStatsCardsProps, Event
     const healthLabel = this.getHealthLabel();
     const healthIcon = this.getHealthIcon();
 
-    const pending = stats?.pending ?? 0;
-    const failed = stats?.failed ?? 0;
+    // systemHealth.reasons is already ordered most-severe-first (from rollUpSystemHealth).
+    const reasons = stats?.systemHealth?.reasons ?? [];
+    const badgeText = reasons.length > 0
+      ? reasons.length === 1
+        ? reasons[0]
+        : `${reasons[0]} (+${reasons.length - 1} more)`
+      : 'No issues detected';
 
     return React.createElement(
       'div',
@@ -303,11 +310,7 @@ export class EventStatsCards extends React.Component<EventStatsCardsProps, Event
         React.createElement(
           'span',
           null,
-          failed > 0
-            ? `${failed} failed event${failed === 1 ? '' : 's'}`
-            : pending > 0
-            ? `${pending} pending event${pending === 1 ? '' : 's'}`
-            : 'No issues detected',
+          badgeText,
         ),
       ),
     );

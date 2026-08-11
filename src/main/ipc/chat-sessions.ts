@@ -22,11 +22,22 @@ export function createSessionTables(db: Database.Database): void {
       content     TEXT NOT NULL,
       tool_calls  TEXT,
       segments    TEXT,
-      timestamp   INTEGER NOT NULL
+      timestamp   INTEGER NOT NULL,
+      incomplete  INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
   `);
+  // Migration: add incomplete column to existing tables
+  try {
+    const tableInfo = db.pragma('table_info(chat_messages)') as Array<{ name: string }>;
+    const hasIncomplete = tableInfo.some((col) => col.name === 'incomplete');
+    if (!hasIncomplete) {
+      db.exec('ALTER TABLE chat_messages ADD COLUMN incomplete INTEGER');
+    }
+  } catch (e) {
+    // Table doesn't exist yet; creation above will include the column
+  }
 }
 
 function rowToSession(row: any): ChatSession {
@@ -52,6 +63,7 @@ function rowToMessage(row: any): ChatMessage {
     toolCalls: row.tool_calls ? JSON.parse(row.tool_calls) : undefined,
     segments: row.segments ? JSON.parse(row.segments) : undefined,
     timestamp: row.timestamp,
+    incomplete: row.incomplete === 1 ? true : undefined,
   };
 }
 
@@ -92,12 +104,13 @@ export function saveSession(
   `);
 
   const upsertMessage = db.prepare(`
-    INSERT INTO chat_messages (id, session_id, role, content, tool_calls, segments, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO chat_messages (id, session_id, role, content, tool_calls, segments, timestamp, incomplete)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       content = excluded.content,
       tool_calls = excluded.tool_calls,
-      segments = excluded.segments
+      segments = excluded.segments,
+      incomplete = excluded.incomplete
   `);
 
   const tx = db.transaction(() => {
@@ -121,6 +134,7 @@ export function saveSession(
         msg.toolCalls != null ? JSON.stringify(msg.toolCalls) : null,
         msg.segments != null ? JSON.stringify(msg.segments) : null,
         msg.timestamp,
+        msg.incomplete === true ? 1 : null,
       );
     }
   });
@@ -129,6 +143,10 @@ export function saveSession(
 
 export function deleteSession(db: Database.Database, sessionId: string): void {
   db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(sessionId);
+}
+
+export function deleteAllSessions(db: Database.Database): void {
+  db.prepare('DELETE FROM chat_sessions').run();
 }
 
 export function pruneSessions(db: Database.Database, nowMs: number = Date.now()): void {

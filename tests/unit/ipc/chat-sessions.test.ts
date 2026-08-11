@@ -5,6 +5,7 @@ import {
   getSession,
   saveSession,
   deleteSession,
+  deleteAllSessions,
   pruneSessions,
 } from '../../../src/main/ipc/chat-sessions';
 import type { ChatSession, ChatMessage } from '../../../src/common/types';
@@ -111,6 +112,59 @@ describe('deleteSession', () => {
     expect(getSession(db, 'sess-1')).toBeNull();
     const msgCount = (db.prepare('SELECT COUNT(*) as n FROM chat_messages WHERE session_id = ?').get('sess-1') as any).n;
     expect(msgCount).toBe(0);
+  });
+});
+
+describe('deleteAllSessions', () => {
+  it('deletes all sessions and their messages via CASCADE', () => {
+    const db = makeDb();
+    const msg1: ChatMessage = {
+      id: 'msg-1',
+      sessionId: 'sess-1',
+      role: 'user',
+      content: 'Hello',
+      timestamp: 1000,
+    };
+    const msg2: ChatMessage = {
+      id: 'msg-2',
+      sessionId: 'sess-2',
+      role: 'assistant',
+      content: 'Hi',
+      timestamp: 2000,
+    };
+
+    saveSession(db, makeSession({ id: 'sess-1', pinned: false }), [msg1]);
+    saveSession(db, makeSession({ id: 'sess-2', pinned: false }), [msg2]);
+
+    // Verify both sessions and messages exist
+    expect(listSessions(db)).toHaveLength(2);
+    const msgCount = (db.prepare('SELECT COUNT(*) as n FROM chat_messages').get() as any).n;
+    expect(msgCount).toBe(2);
+
+    // Delete all
+    deleteAllSessions(db);
+
+    // Both sessions and messages should be gone
+    expect(listSessions(db)).toHaveLength(0);
+    const msgCountAfter = (db.prepare('SELECT COUNT(*) as n FROM chat_messages').get() as any).n;
+    expect(msgCountAfter).toBe(0);
+  });
+
+  it('deletes pinned sessions (unlike pruneSessions)', () => {
+    const db = makeDb();
+    saveSession(db, makeSession({ id: 'pinned', pinned: true }), []);
+    saveSession(db, makeSession({ id: 'unpinned', pinned: false }), []);
+
+    deleteAllSessions(db);
+
+    // Both should be deleted
+    expect(listSessions(db)).toHaveLength(0);
+  });
+
+  it('is a no-op when no sessions exist', () => {
+    const db = makeDb();
+    expect(() => deleteAllSessions(db)).not.toThrow();
+    expect(listSessions(db)).toHaveLength(0);
   });
 });
 

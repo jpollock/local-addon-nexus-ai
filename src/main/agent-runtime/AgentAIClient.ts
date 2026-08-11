@@ -1,12 +1,16 @@
 import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from '../chat/providers/types';
-import type { ChatMessage, ToolCallRequest, ProviderStreamEvent } from '../../common/chat-types';
+import type { ChatMessage, ToolCallRequest, ProviderStreamEvent, TokenUsage } from '../../common/chat-types';
 import type { AIClient } from '../agent-sdk/types';
 import { AgentAILoopError } from '../agent-sdk/types';
-import type { NexusToolProvider } from './NexusToolProvider';
+import type { NexusToolProvider, ToolEventContext } from './NexusToolProvider';
+import { estimateCostUsd } from '../logging/modelPricing';
+import type { TranscriptWriter } from '../logging/transcript';
+import { randomUUID } from 'crypto';
 
 interface StreamResult {
   content: string;
   toolCalls: ToolCallRequest[];
+  usage?: TokenUsage;
 }
 
 /**
@@ -28,21 +32,28 @@ function unwrapOutputArguments(raw: Record<string, unknown> | undefined): Record
   return raw;
 }
 
-async function collectStream(gen: AsyncGenerator<ProviderStreamEvent>): Promise<StreamResult> {
+/** Exported for test: the usage plumbing is worth pinning directly, not only through a client. */
+export async function collectStream(gen: AsyncGenerator<ProviderStreamEvent>): Promise<StreamResult> {
   let content = '';
   const toolCalls: ToolCallRequest[] = [];
+  let usage: TokenUsage | undefined;
 
   for await (const event of gen) {
     if (event.type === 'token') {
       content += event.text;
     } else if (event.type === 'tool_call_end') {
       toolCalls.push({ id: event.id, name: event.name, arguments: event.arguments });
+    } else if (event.type === 'done') {
+      // Merge rather than replace: a provider may report the two directions on separate events,
+      // and a later partial report must not drop a count already captured. Later values win on
+      // the fields they carry; fields they omit keep what came before.
+      if (event.usage) usage = { ...usage, ...event.usage };
     } else if (event.type === 'error') {
       throw new Error(`Provider error: ${event.message}`);
     }
   }
 
-  return { content, toolCalls };
+  return { content, toolCalls, usage };
 }
 
 export class AgentAIClient implements AIClient {
@@ -52,13 +63,58 @@ export class AgentAIClient implements AIClient {
   /** Direct provider (bypasses gateway) — used for generateObject forced-tool calls */
   private directProvider?: AIProvider;
   private directConfig?: ChatProviderConfig;
+  private events?: ToolEventContext;
+  /** Off unless the agent opted in — see buildAgentContext.ts. Never throws on append. */
+  private transcript?: TranscriptWriter;
 
-  constructor(provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider, directProvider?: AIProvider, directConfig?: ChatProviderConfig) {
+  constructor(
+    provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider,
+    directProvider?: AIProvider, directConfig?: ChatProviderConfig, events?: ToolEventContext,
+    transcript?: TranscriptWriter,
+  ) {
     this.provider = provider;
     this.directProvider = directProvider;
     this.directConfig = directConfig;
     this.config = config;
     this.toolProvider = toolProvider;
+    this.events = events;
+    this.transcript = transcript;
+  }
+
+  /**
+   * One model call, recorded. The runtime does this rather than the agent, because an agent
+   * cannot forget to log a call it never mentions — the same reason tool.call is emitted here
+   * and not in agent code. Never throws: a logging fault must not fail a model call.
+   */
+  private emitLlmCall(model: string, turn: number, startedAt: number, usage?: TokenUsage): void {
+    const ctx = this.events;
+    if (!ctx?.eventLog) return;
+    try {
+      ctx.eventLog.write({
+        level: 'INFO', source: ctx.agentName, sourceKind: 'agent', runId: ctx.runId,
+        event: 'llm.call',
+        fields: {
+          model, turn,
+          in: usage?.inputTokens, out: usage?.outputTokens,
+          cost: estimateCostUsd(model, usage),
+          dur: `${Date.now() - startedAt}ms`,
+          transcript: this.transcript?.path(),
+        },
+      } as any);
+    } catch { /* never fail a model call for a log line */ }
+  }
+
+  private emitLlmError(model: string, turn: number, startedAt: number, message: string): void {
+    const ctx = this.events;
+    if (!ctx?.eventLog) return;
+    try {
+      ctx.eventLog.write({
+        level: 'WARN', source: ctx.agentName, sourceKind: 'agent', runId: ctx.runId,
+        event: 'llm.error',
+        fields: { model, turn, dur: `${Date.now() - startedAt}ms` },
+        message,
+      } as any);
+    } catch { /* never fail a model call for a log line */ }
   }
 
   async run(prompt: string, opts?: { maxTurns?: number; model?: string }): Promise<string> {
@@ -75,7 +131,27 @@ export class AgentAIClient implements AIClient {
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < maxTurns; turn++) {
-      const response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
+      // FIX 2: Generate a per-call id to pair prompt and response entries
+      const callId = randomUUID();
+      this.transcript?.append({
+        turn: turn + 1, role: 'prompt', model: config.model,
+        content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+        callId,
+      });
+      // FIX 4: Move startedAt to immediately before the provider call so dur= excludes the transcript write
+      const startedAt = Date.now();
+      let response;
+      try {
+        response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
+      } catch (err: unknown) {
+        this.emitLlmError(config.model, turn + 1, startedAt, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+      this.emitLlmCall(config.model, turn + 1, startedAt, response.usage);
+      this.transcript?.append({
+        turn: turn + 1, role: 'response', model: config.model, content: response.content,
+        callId,
+      });
 
       if (response.toolCalls.length === 0) {
         return response.content;
@@ -129,7 +205,27 @@ export class AgentAIClient implements AIClient {
       // API key lives there when useLocalGateway=true.
       const forcedConfig = { ...this.config, forceTool: '__output__' };
       const signal = new AbortController().signal;
-      const response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
+      // FIX 2: Generate a per-call id to pair prompt and response entries
+      const callId = randomUUID();
+      this.transcript?.append({
+        turn: 1, role: 'prompt', model: forcedConfig.model,
+        content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+        callId,
+      });
+      // FIX 4: Move startedAt to immediately before the provider call
+      const startedAt = Date.now();
+      let response;
+      try {
+        response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
+      } catch (err: unknown) {
+        this.emitLlmError(forcedConfig.model, 1, startedAt, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+      this.emitLlmCall(forcedConfig.model, 1, startedAt, response.usage);
+      this.transcript?.append({
+        turn: 1, role: 'response', model: forcedConfig.model, content: response.content,
+        callId,
+      });
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
         return unwrapOutputArguments(outputCall.arguments) as T;
@@ -155,7 +251,27 @@ export class AgentAIClient implements AIClient {
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < 5; turn++) {
-      const response = await collectStream(this.provider.streamChat(messages, tools, this.config, signal));
+      // FIX 2: Generate a per-call id to pair prompt and response entries
+      const callId = randomUUID();
+      this.transcript?.append({
+        turn: turn + 1, role: 'prompt', model: this.config.model,
+        content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
+        callId,
+      });
+      // FIX 4: Move startedAt to immediately before the provider call
+      const startedAt = Date.now();
+      let response;
+      try {
+        response = await collectStream(this.provider.streamChat(messages, tools, this.config, signal));
+      } catch (err: unknown) {
+        this.emitLlmError(this.config.model, turn + 1, startedAt, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+      this.emitLlmCall(this.config.model, turn + 1, startedAt, response.usage);
+      this.transcript?.append({
+        turn: turn + 1, role: 'response', model: this.config.model, content: response.content,
+        callId,
+      });
 
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {

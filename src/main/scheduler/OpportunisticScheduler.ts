@@ -78,5 +78,13 @@ export class OpportunisticScheduler {
       siteNames: deps.buildSiteNames(siteIds),
       options: { autoStartStop: true },
     });
+    // Duration not recorded: BulkOperationManager.execute() dispatches work
+    // fire-and-forget and returns immediately with an operation id. The actual
+    // indexing happens asynchronously over minutes/hours. Awaiting
+    // waitForCompletion(opId) would block the setInterval callback and change
+    // the scheduler's semantic from "dispatch every N hours" to "wait for
+    // completion then N more hours", which violates the task constraint.
+    // Result: averageMs('localContentIndex') returns null, the UI omits the
+    // duration clause, and the screen tells the truth.
   }
 }

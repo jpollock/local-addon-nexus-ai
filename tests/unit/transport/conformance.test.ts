@@ -130,13 +130,17 @@ describe('WpeSshTransport', () => {
     expect(cmd).toBe('ssh');
     expect(args.at(-2)).toBe('local+ssh+acmeprod@acmeprod.ssh.wpengine.net');
     expect(args.at(-1)).toBe("wp --skip-plugins --skip-themes 'plugin' 'list' '--format=json'");
-    expect(opts.timeout).toBe(35000);
+    expect(opts.timeout).toBe(60000);  // raised from 35s; see REMOTE_SSH_TIMEOUT_MS
   });
 
-  it('runWpCli returns stderr on failure (legacy remoteWpCliRun shape)', async () => {
+  it('runWpCli names the failure and keeps stderr as context', async () => {
+    // Was `stdout: 'boom'` — the raw stderr, reported as the cause of every failure.
+    // On a real WP Engine install OpenSSH writes a post-quantum key-exchange advisory to
+    // stderr on every connection, so a timeout surfaced as that advisory. The failure now
+    // leads with what actually happened and keeps the output as context.
     spawnMock.mockImplementation(() => fakeProc({ code: 1, stdout: 'partial', stderr: 'boom' }));
     await expect(new WpeSshTransport('acmeprod').runWpCli(['core', 'version']))
-      .resolves.toEqual({ stdout: 'boom', success: false });
+      .resolves.toEqual({ stdout: 'Command exited with code 1 — output: boom', success: false });
   });
 
   it('deleteRemoteFile issues a bare rm -f and returns stdout on failure (legacy remoteSshRaw shape)', async () => {

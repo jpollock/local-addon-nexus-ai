@@ -9,16 +9,57 @@
  * triggers React Router navigation without a page reload.
  */
 
+import { nexusMarkSvg } from './utils/nexusMark';
+
 const NEXUS_NAV_ITEM_ID = 'nexus-ai-overview-nav';
 const STYLE_ID = 'nexus-ai-nav-styles';
 
-// Dashboard/gauge SVG icon for Nexus AI
-const NEXUS_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
-  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/>
-  <path d="M12 6c-3.31 0-6 2.69-6 6h2c0-2.21 1.79-4 4-4s4 1.79 4 4h2c0-3.31-2.69-6-6-6z" fill="currentColor"/>
-  <circle cx="12" cy="12" r="2" fill="currentColor"/>
-  <path d="M12 12l3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-</svg>`;
+/**
+ * The rendered size, kept in sync with the `svg { width/height }` rule below — the CSS
+ * overrides whatever the markup declares, and the two disagreeing is how the ring-minimum
+ * rule would get bypassed without anyone noticing.
+ */
+const NAV_ICON_SIZE = 32;
+
+/**
+ * Local's own vertical-nav palette, read from
+ * `local-components/src/components/modules/VerticalNav/VerticalNav.scss` and
+ * `styles/_partials/_variables.scss`. Copied rather than imported because the addon does
+ * not compile against Local's SCSS — so if Local restyles its nav, these drift and have
+ * to be re-read from those two files.
+ *
+ * The icon used to be 70% white, which is why it stood out against every neighbour: Local
+ * fills its nav icons dark green on the green rail, and reserves white for the active
+ * state alone.
+ */
+const NAV_COLORS = {
+  /** $green-dark — inactive icon, light theme. */
+  iconLight: '#267048',
+  /** $gray75 — inactive icon, dark theme. */
+  iconDark: '#9f9c9c',
+  /** Active icon: white on light, $green75 on dark. */
+  iconActiveLight: '#ffffff',
+  iconActiveDark: '#add9b8',
+  /** Active background: $green-dark50 on light, $gray-darker on dark. */
+  activeBgLight: '#419564',
+  activeBgDark: '#131313',
+  /** Hover background. Local hardcodes both of these in VerticalNav.scss. */
+  hoverBgLight: '#4bac72',
+  hoverBgDark: '#383839',
+} as const;
+
+/**
+ * Local treats light as the default and scopes dark under `.Theme__Dark`
+ * (`styles/_partials/_theme.scss`). Same convention here so the two track each other.
+ */
+const DARK = '.Theme__Dark';
+
+/**
+ * The Nexus mark, from the same geometry the docked panel draws. This slot used to carry
+ * an unrelated gauge dial — a circle, an arc and a needle — so Local's nav and the panel
+ * were showing different marks for the same product. Neither read the SVG assets.
+ */
+const NEXUS_SVG = nexusMarkSvg(NAV_ICON_SIZE);
 
 export class NavItemInjector {
   private observer: MutationObserver | null = null;
@@ -52,24 +93,39 @@ export class NavItemInjector {
         cursor: pointer;
         transition: background-color 0.1s ease;
       }
-      #${NEXUS_NAV_ITEM_ID} a:hover {
-        background: rgba(255, 255, 255, 0.15);
+      /* Hover moves the background only — Local scales its icon and leaves the fill
+         alone, reserving the colour change for the active state. */
+      #${NEXUS_NAV_ITEM_ID} a:hover:not(.__Active) {
+        background: ${NAV_COLORS.hoverBgLight};
+      }
+      ${DARK} #${NEXUS_NAV_ITEM_ID} a:hover:not(.__Active) {
+        background: ${NAV_COLORS.hoverBgDark};
       }
       #${NEXUS_NAV_ITEM_ID} a:hover svg {
         transform: scale(1.05);
       }
       #${NEXUS_NAV_ITEM_ID} a.__Active {
-        background: rgba(0, 0, 0, 0.2);
+        background: ${NAV_COLORS.activeBgLight};
+      }
+      ${DARK} #${NEXUS_NAV_ITEM_ID} a.__Active {
+        background: ${NAV_COLORS.activeBgDark};
       }
       #${NEXUS_NAV_ITEM_ID} svg {
-        width: 38px;
-        height: 38px;
-        color: rgba(255, 255, 255, 0.7);
+        width: ${NAV_ICON_SIZE}px;
+        height: ${NAV_ICON_SIZE}px;
+        /* The mark is drawn entirely in currentColor — ring stroke and centre dot — so
+           these four rules are the whole of its colour. */
+        color: ${NAV_COLORS.iconLight};
         transition: transform 0.1s ease;
       }
-      #${NEXUS_NAV_ITEM_ID} a:hover svg,
+      ${DARK} #${NEXUS_NAV_ITEM_ID} svg {
+        color: ${NAV_COLORS.iconDark};
+      }
       #${NEXUS_NAV_ITEM_ID} a.__Active svg {
-        color: #fff;
+        color: ${NAV_COLORS.iconActiveLight};
+      }
+      ${DARK} #${NEXUS_NAV_ITEM_ID} a.__Active svg {
+        color: ${NAV_COLORS.iconActiveDark};
       }
     `;
     document.head.appendChild(style);

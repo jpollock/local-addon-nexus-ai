@@ -1,0 +1,1729 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`panel chrome — characterization renders collapsed rail 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": null,
+          "key": null,
+          "props": {
+            "size": 22,
+          },
+          "type": "NexusGlyph",
+        },
+        null,
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-rail-mark-bg)",
+          "borderRadius": 8,
+          "color": "#05262e",
+          "display": "flex",
+          "height": 34,
+          "justifyContent": "center",
+          "position": "relative",
+          "width": 34,
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": "INSIGHTS",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-card-sub)",
+          "fontSize": 10,
+          "fontWeight": 800,
+          "letterSpacing": "0.1em",
+          "margin": "2px 0",
+          "textTransform": "uppercase",
+          "writingMode": "vertical-rl",
+        },
+      },
+      "type": "div",
+    },
+    null,
+  ],
+  "key": null,
+  "props": {
+    "aria-label": "Nexus AI panel (closed)",
+    "onClick": "[fn]",
+    "onKeyDown": "[fn]",
+    "onMouseEnter": "[fn]",
+    "onMouseLeave": "[fn]",
+    "role": "button",
+    "style": {
+      "alignItems": "center",
+      "background": "var(--nxai-card-bg)",
+      "border": "1px solid var(--nxai-card-border)",
+      "borderRadius": "11px 0 0 11px",
+      "borderRight": "none",
+      "boxShadow": "-2px 0 10px rgba(17, 24, 39, 0.08)",
+      "cursor": "pointer",
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": 9,
+      "padding": "14px 0 16px",
+      "pointerEvents": "all",
+      "position": "fixed",
+      "right": 0,
+      "top": "50%",
+      "transform": "translateY(-50%)",
+      "userSelect": "none",
+      "width": 52,
+      "zIndex": 8999,
+    },
+    "tabIndex": 0,
+    "title": "Open Nexus AI panel",
+  },
+  "type": "div",
+}
+`;
+
+exports[`panel chrome — characterization renders docked 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": {
+            "children": null,
+            "key": null,
+            "props": {
+              "size": 20,
+            },
+            "type": "NexusGlyph",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "background": "#0ECAD4",
+              "borderRadius": "50%",
+              "color": "#05262e",
+              "display": "flex",
+              "flexShrink": 0,
+              "height": 34,
+              "justifyContent": "center",
+              "width": 34,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Nexus",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 15,
+                  "fontWeight": 600,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+            null,
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Chat",
+              "key": "chat",
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Insights",
+              "key": "insights",
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconSessions",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Sessions",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Sessions",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconNewChat",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "New chat",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "New chat",
+              },
+              "type": "button",
+            },
+            null,
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconWide",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Wide view",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Wide view",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconCollapse",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Collapse to bubble",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "display": "flex",
+              "gap": 2,
+              "marginLeft": "auto",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-card-bg)",
+          "borderBottom": "1px solid var(--nxai-card-border)",
+          "display": "flex",
+          "flexShrink": 0,
+          "gap": 11,
+          "padding": "15px 16px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        null,
+        {
+          "children": "chat",
+          "key": null,
+          "props": {
+            "data-test": "chat-body",
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "flex": 1,
+          "flexDirection": "column",
+          "overflow": "hidden",
+          "position": "relative",
+        },
+      },
+      "type": "div",
+    },
+  ],
+  "key": null,
+  "props": {
+    "aria-label": "Nexus AI chat panel",
+    "role": "complementary",
+    "style": {
+      "background": "var(--nxai-card-bg)",
+      "borderLeft": "1px solid var(--nxai-card-border)",
+      "bottom": 0,
+      "boxShadow": "none",
+      "display": "flex",
+      "flexDirection": "column",
+      "fontFamily": "inherit",
+      "left": undefined,
+      "pointerEvents": "all",
+      "position": "fixed",
+      "right": 0,
+      "top": 0,
+      "width": 380,
+      "zIndex": 8999,
+    },
+  },
+  "type": "div",
+}
+`;
+
+exports[`panel chrome — characterization renders full 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": {
+            "children": null,
+            "key": null,
+            "props": {
+              "size": 20,
+            },
+            "type": "NexusGlyph",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "background": "#0ECAD4",
+              "borderRadius": "50%",
+              "color": "#05262e",
+              "display": "flex",
+              "flexShrink": 0,
+              "height": 34,
+              "justifyContent": "center",
+              "width": 34,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Nexus",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 15,
+                  "fontWeight": 600,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+            null,
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Chat",
+              "key": "chat",
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Insights",
+              "key": "insights",
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            null,
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconNewChat",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "New chat",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "New chat",
+              },
+              "type": "button",
+            },
+            null,
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconContract",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Back to docked",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconCollapse",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Collapse to bubble",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "display": "flex",
+              "gap": 2,
+              "marginLeft": "auto",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-card-bg)",
+          "borderBottom": "1px solid var(--nxai-card-border)",
+          "display": "flex",
+          "flexShrink": 0,
+          "gap": 11,
+          "padding": "15px 16px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": null,
+          "key": null,
+          "props": {
+            "style": {
+              "borderRight": "1px solid var(--nxai-card-border)",
+              "flexShrink": 0,
+              "overflow": "hidden",
+              "width": 264,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": {
+            "children": "chat",
+            "key": null,
+            "props": {
+              "data-test": "chat-body",
+            },
+            "type": "div",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "flex": 1,
+              "margin": "0 auto",
+              "maxWidth": 720,
+              "overflow": "hidden",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "flex": 1,
+          "overflow": "hidden",
+        },
+      },
+      "type": "div",
+    },
+  ],
+  "key": null,
+  "props": {
+    "aria-label": "Nexus AI chat panel",
+    "role": "complementary",
+    "style": {
+      "background": "var(--nxai-card-bg)",
+      "borderLeft": "1px solid var(--nxai-card-border)",
+      "bottom": 0,
+      "boxShadow": "none",
+      "display": "flex",
+      "flexDirection": "column",
+      "fontFamily": "inherit",
+      "left": 68,
+      "pointerEvents": "all",
+      "position": "fixed",
+      "right": 0,
+      "top": 0,
+      "width": undefined,
+      "zIndex": 8999,
+    },
+  },
+  "type": "div",
+}
+`;
+
+exports[`panel chrome — characterization renders sessions open 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": {
+            "children": null,
+            "key": null,
+            "props": {
+              "size": 20,
+            },
+            "type": "NexusGlyph",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "background": "#0ECAD4",
+              "borderRadius": "50%",
+              "color": "#05262e",
+              "display": "flex",
+              "flexShrink": 0,
+              "height": 34,
+              "justifyContent": "center",
+              "width": 34,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Nexus",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 15,
+                  "fontWeight": 600,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+            null,
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Chat",
+              "key": "chat",
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Insights",
+              "key": "insights",
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconSessions",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Sessions",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "var(--nxai-table-hover)",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "#0ECAD4",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Sessions",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconNewChat",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "New chat",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "New chat",
+              },
+              "type": "button",
+            },
+            null,
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconWide",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Wide view",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Wide view",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconCollapse",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Collapse to bubble",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "display": "flex",
+              "gap": 2,
+              "marginLeft": "auto",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-card-bg)",
+          "borderBottom": "1px solid var(--nxai-card-border)",
+          "display": "flex",
+          "flexShrink": 0,
+          "gap": 11,
+          "padding": "15px 16px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": {
+            "children": "sessions",
+            "key": null,
+            "props": {},
+            "type": "div",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-card-bg)",
+              "inset": 0,
+              "position": "absolute",
+              "zIndex": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": "chat",
+          "key": null,
+          "props": {
+            "data-test": "chat-body",
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "flex": 1,
+          "flexDirection": "column",
+          "overflow": "hidden",
+          "position": "relative",
+        },
+      },
+      "type": "div",
+    },
+  ],
+  "key": null,
+  "props": {
+    "aria-label": "Nexus AI chat panel",
+    "role": "complementary",
+    "style": {
+      "background": "var(--nxai-card-bg)",
+      "borderLeft": "1px solid var(--nxai-card-border)",
+      "bottom": 0,
+      "boxShadow": "none",
+      "display": "flex",
+      "flexDirection": "column",
+      "fontFamily": "inherit",
+      "left": undefined,
+      "pointerEvents": "all",
+      "position": "fixed",
+      "right": 0,
+      "top": 0,
+      "width": 380,
+      "zIndex": 8999,
+    },
+  },
+  "type": "div",
+}
+`;
+
+exports[`panel chrome — characterization renders streaming 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": {
+            "children": null,
+            "key": null,
+            "props": {
+              "size": 20,
+            },
+            "type": "NexusGlyph",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "background": "#0ECAD4",
+              "borderRadius": "50%",
+              "color": "#05262e",
+              "display": "flex",
+              "flexShrink": 0,
+              "height": 34,
+              "justifyContent": "center",
+              "width": 34,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Nexus",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 15,
+                  "fontWeight": 600,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+            {
+              "children": [
+                {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "background": "#0ECAD4",
+                      "borderRadius": "50%",
+                      "display": "inline-block",
+                      "flexShrink": 0,
+                      "height": 6,
+                      "width": 6,
+                    },
+                  },
+                  "type": "span",
+                },
+                "Thinking…",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "alignItems": "center",
+                  "color": "#0ECAD4",
+                  "display": "flex",
+                  "fontSize": 12,
+                  "gap": 5,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Chat",
+              "key": "chat",
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Insights",
+              "key": "insights",
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconSessions",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Sessions",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Sessions",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconNewChat",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "New chat",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "New chat",
+              },
+              "type": "button",
+            },
+            null,
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconWide",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Wide view",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Wide view",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconCollapse",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Collapse to bubble",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "display": "flex",
+              "gap": 2,
+              "marginLeft": "auto",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-card-bg)",
+          "borderBottom": "1px solid var(--nxai-card-border)",
+          "display": "flex",
+          "flexShrink": 0,
+          "gap": 11,
+          "padding": "15px 16px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        null,
+        {
+          "children": "chat",
+          "key": null,
+          "props": {
+            "data-test": "chat-body",
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "flex": 1,
+          "flexDirection": "column",
+          "overflow": "hidden",
+          "position": "relative",
+        },
+      },
+      "type": "div",
+    },
+  ],
+  "key": null,
+  "props": {
+    "aria-label": "Nexus AI chat panel",
+    "role": "complementary",
+    "style": {
+      "background": "var(--nxai-card-bg)",
+      "borderLeft": "1px solid var(--nxai-card-border)",
+      "bottom": 0,
+      "boxShadow": "none",
+      "display": "flex",
+      "flexDirection": "column",
+      "fontFamily": "inherit",
+      "left": undefined,
+      "pointerEvents": "all",
+      "position": "fixed",
+      "right": 0,
+      "top": 0,
+      "width": 380,
+      "zIndex": 8999,
+    },
+  },
+  "type": "div",
+}
+`;
+
+exports[`panel chrome — characterization renders wide 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": {
+            "children": null,
+            "key": null,
+            "props": {
+              "size": 20,
+            },
+            "type": "NexusGlyph",
+          },
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "background": "#0ECAD4",
+              "borderRadius": "50%",
+              "color": "#05262e",
+              "display": "flex",
+              "flexShrink": 0,
+              "height": 34,
+              "justifyContent": "center",
+              "width": 34,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Nexus",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 15,
+                  "fontWeight": 600,
+                  "lineHeight": 1.2,
+                },
+              },
+              "type": "span",
+            },
+            null,
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": 1,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "Chat",
+              "key": "chat",
+              "props": {
+                "aria-label": "Chat",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "var(--nxai-card-bg)",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-text)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": "Insights",
+              "key": "insights",
+              "props": {
+                "aria-label": "Insights",
+                "onClick": "[fn]",
+                "style": {
+                  "background": "transparent",
+                  "border": "none",
+                  "borderRadius": 5,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "padding": "5px 11px",
+                  "transition": "all 0.15s ease",
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "background": "var(--nxai-table-hover)",
+              "borderRadius": 6,
+              "display": "flex",
+              "gap": 2,
+              "padding": 2,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconSessions",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Sessions",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Sessions",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconNewChat",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "New chat",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "New chat",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconContract",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Back to docked",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+                "title": "Back to docked",
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconExpand",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Expand to full screen",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+            {
+              "children": {
+                "children": null,
+                "key": null,
+                "props": {
+                  "size": 17,
+                },
+                "type": "IconCollapse",
+              },
+              "key": null,
+              "props": {
+                "aria-label": "Collapse to bubble",
+                "onClick": "[fn]",
+                "onMouseEnter": "[fn]",
+                "onMouseLeave": "[fn]",
+                "style": {
+                  "alignItems": "center",
+                  "background": "none",
+                  "border": "none",
+                  "borderRadius": 6,
+                  "color": "var(--nxai-card-sub)",
+                  "cursor": "pointer",
+                  "display": "flex",
+                  "justifyContent": "center",
+                  "lineHeight": 1,
+                  "padding": 6,
+                },
+              },
+              "type": "button",
+            },
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "alignItems": "center",
+              "display": "flex",
+              "gap": 2,
+              "marginLeft": "auto",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-card-bg)",
+          "borderBottom": "1px solid var(--nxai-card-border)",
+          "display": "flex",
+          "flexShrink": 0,
+          "gap": 11,
+          "padding": "15px 16px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        null,
+        {
+          "children": "chat",
+          "key": null,
+          "props": {
+            "data-test": "chat-body",
+          },
+          "type": "div",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "flex": 1,
+          "flexDirection": "column",
+          "overflow": "hidden",
+          "position": "relative",
+        },
+      },
+      "type": "div",
+    },
+  ],
+  "key": null,
+  "props": {
+    "aria-label": "Nexus AI chat panel",
+    "role": "complementary",
+    "style": {
+      "background": "var(--nxai-card-bg)",
+      "borderLeft": "1px solid var(--nxai-card-border)",
+      "bottom": 0,
+      "boxShadow": "none",
+      "display": "flex",
+      "flexDirection": "column",
+      "fontFamily": "inherit",
+      "left": undefined,
+      "pointerEvents": "all",
+      "position": "fixed",
+      "right": 0,
+      "top": 0,
+      "width": 620,
+      "zIndex": 8999,
+    },
+  },
+  "type": "div",
+}
+`;

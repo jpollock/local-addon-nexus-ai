@@ -800,6 +800,13 @@ export default defineAgent({
   // the conservative choice.
   effect: 'writes',
 
+  // run() produces a Site Content Report (markdown, attached to AgentResult.summary) — a
+  // finished artifact meant to be read, not an action awaiting sign-off. No gated action exists
+  // today for this agent to pause on, so producesApprovals stays false; if a remediation-style
+  // action is added later (e.g. auto-applying an SEO fix), that's the point to flip it.
+  producesApprovals: false,
+  producesReports: true,
+
   timeoutMs: 20 * 60 * 1000,   // 20 min — WPE pull + analysis can take 10+ min (same as sentinel)
 
   credentials: [

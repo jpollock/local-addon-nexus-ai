@@ -560,6 +560,26 @@ export const typeDefs = gql`
     indexed: Int!
   }
 
+  "A single population count, always carrying the scope it was measured over — see collectFleetCounts."
+  type FleetPopulationCount {
+    count: Int!
+    scope: String!
+  }
+
+  "The canonical fleet counts (collectFleetCounts) — local from Local's own store, WPE/external from the graph."
+  type FleetCountsResult {
+    installs: FleetPopulationCount!
+    local: FleetPopulationCount!
+    wpe: FleetPopulationCount!
+    external: FleetPopulationCount!
+  }
+
+  "A shared scope for a group of figures measured over the SAME population — see nexusFleetSummary's twinScope."
+  type FleetTwinScope {
+    measured: Int!
+    label: String!
+  }
+
   type FleetSummaryResult {
     success: Boolean!
     error: String
@@ -571,6 +591,22 @@ export const typeDefs = gql`
     staleCount: Int!
     neverScannedCount: Int!
     recentActivityCount: Int!
+    """
+    The canonical fleet counts, from collectFleetCounts — the same source
+    GET_FLEET_SUMMARY/GET_DASHBOARD_STATS use. totalSites above, and
+    completeness/staleCount/neverScannedCount/recentActivityCount, are
+    a DIFFERENT, twin-cache-scoped population (see the doc comment on the
+    nexusFleetSummary resolver) — do not divide one against the other.
+    """
+    counts: FleetCountsResult!
+    """
+    The ONE shared scope for totalSites, sitesWithFullData, completeness,
+    staleCount, neverScannedCount, recentActivityCount, wpVersions and
+    phpVersions — twinScope.measured always equals totalSites. Its label
+    names the population (twin cache for local, graph for WPE/external) so
+    it is never confused with counts, a different population.
+    """
+    twinScope: FleetTwinScope!
   }
 
   type FleetPluginEntry {
@@ -2062,6 +2098,28 @@ export const typeDefs = gql`
     allowsProduction: Boolean
     "Whether this agent only investigates ('readonly') or writes to the sites it runs on ('writes'). Drives the production-warning verb in the site scope picker."
     effect: String
+    "Whether this agent ever creates review-status activity requiring user sign-off"
+    producesApprovals: Boolean
+    "Whether this agent produces a standalone report/artifact (e.g. seo-insights' Site Content Report)"
+    producesReports: Boolean
+    "Whether this agent's work is per-site. False = no site picker on any surface, and Run Now performs exactly one run."
+    siteScoped: Boolean
+    "OAuth/API-key providers this agent declares. Drives which connect card its Settings tab shows, and which scopes that card requests."
+    credentials: [AgentCredentialDecl!]
+  }
+
+  "A credential an agent declares it needs, straight from its own definition."
+  type AgentCredentialDecl {
+    "Provider id, e.g. 'google' or 'aws'"
+    provider: String!
+    "'oauth' (default) or 'api_key'"
+    type: String
+    "OAuth scopes this agent needs. Requested verbatim — never a UI-side constant."
+    scopes: [String!]
+    "When true the agent still runs without it, with reduced capability"
+    optional: Boolean
+    "Plain-language reason, shown to the user before they authorise"
+    reason: String
   }
 
   type AgentRunRecord {

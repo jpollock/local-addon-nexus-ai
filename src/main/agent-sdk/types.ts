@@ -60,6 +60,13 @@ export interface AgentLogger {
   action(action: AgentAction): void;
   phase(name: string, description?: string): void;
   siteStatus(site: string, status: 'running' | 'clean' | 'findings' | 'escalated' | 'error' | string): void;
+  /**
+   * A change this agent made to a site, with what it changed from and to.
+   *
+   * Logging the intent ("ran wp plugin update") does not answer "what did it change?". The
+   * before/after pair is what makes an unexpected modification auditable from the log alone.
+   */
+  mutation(m: { op: string; target: string; before?: string; after?: string; ok?: boolean }): void;
 }
 
 export interface AIClient {
@@ -144,6 +151,41 @@ export interface AgentDefinition {
    * remediation action must update this at the same time.
    */
   effect?: 'readonly' | 'writes';
+  /**
+   * Whether this agent ever creates review-status activity — a finding or action the user must
+   * explicitly approve, dismiss, or act on. Default false: the safer failure mode is an agent
+   * with something to show missing its Approvals tab (rare, quickly noticed) rather than every
+   * agent getting a tab that's permanently empty (the status quo before this field existed).
+   * This is a capability declaration, not a live prediction — an agent set to fully-autonomous
+   * ('auto') might not actually pause for approval on a given run even with this true.
+   */
+  producesApprovals?: boolean;
+  /**
+   * Whether this agent produces a standalone report/artifact meant to be read on its own —
+   * e.g. seo-insights' Site Content Report — as opposed to a terse pass/fail activity line.
+   * Default false. Distinct from producesApprovals: a report needs no sign-off, just a place to
+   * read it. Today reports are folded into AgentResult.summary on a regular activity entry, with
+   * no dedicated browsing surface — a real "Reports" tab / artifact viewer is a separate,
+   * deliberately deferred piece of work (see SDK_requirements.md's artifact-model item). This
+   * field only distinguishes "this agent produces browsable reports" from "it doesn't" for
+   * whenever that surface exists; it does not build the surface itself.
+   */
+  producesReports?: boolean;
+  /**
+   * Whether this agent's work is per-site. Default **true** — the conservative assumption,
+   * matching `effect`'s default of 'writes'.
+   *
+   * Set false for an agent whose `run()` ignores site scope entirely: it reads neither the site
+   * on `ctx.event` nor `settings.scope.siteIds`, and does the same thing regardless of which
+   * sites are selected. `auth-probe` is the worked example — a fleet-wide auth diagnostic making
+   * three fixed calls, for which the picker offered 404 sites and Run Now would have fired 166
+   * identical runs.
+   *
+   * When false: no surface offers a site picker, and Run Now performs exactly ONE run with no
+   * scoped event. Declaring false while actually reading a site from `ctx.event` means the agent
+   * silently receives `undefined` — the declaration must match what `run()` does.
+   */
+  siteScoped?: boolean;
 }
 
 export interface AgentResult {
@@ -163,6 +205,8 @@ export interface AgentResult {
   logFile?: string;
   /** Absolute path to this run's report file (AgentResult.summary written to disk). */
   reportFile?: string;
+  /** Correlation id for this run — brackets every line this run produced with run.start/run.end. */
+  runId?: string;
 }
 
 // ─── Domain output types ──────────────────────────────────────────────────────

@@ -1,0 +1,203 @@
+# Rail Signal Gap — Analysis
+
+**Date:** 2026-08-11  
+**Context:** Chat panel rail implementation (§3 of PANEL-IMPLEMENTATION.md)  
+**Status:** Signal sources exist but are not wired to the rail
+
+## What §3 requires
+
+The rail must carry two indicators that scope together:
+
+1. **Count badge** — inbox items waiting for the user (amber on white, `#0ECAD4`, hidden at zero)
+2. **Stuck marker** — agents that are paused/blocked (amber `!` glyph, 30×30, only when something is stuck)
+
+Both must scope to what the rail is showing:
+- **Fleet context** (Nexus screens): badge shows total pending, stuck marker appears if any agent is stuck
+- **Site context** (Local site screens): badge shows that site's pending count, stuck marker is **suppressed**
+
+The spec is explicit: "Scoping the badge but not the marker — which the prototype did until review — puts a site-scoped number and a fleet-scoped alarm 40px apart with nothing saying they differ."
+
+## What is currently hardcoded
+
+```typescript
+const badgeCount = 0; // placeholder
+const hasStuck = false; // placeholder
+const railLabel = 'INSIGHTS'; // placeholder: should be 'THIS SITE' on site screens
+```
+
+All three are wrong by design — they were left as placeholders to get the rail rendering, not because the data doesn't exist.
+
+## Where the data lives
+
+### Badge count (inbox pending items)
+
+**Source:** `IPC_CHANNELS.GET_INBOX` → `PendingCounts` (type in `src/renderer/components/agents/pending.ts`)
+
+**Current consumers:**
+- `NexusOverview.tsx` (fetches via `ipc.invoke(IPC_CHANNELS.GET_INBOX)`)
+- `AgentStore.ts` (stores as `pendingBySource: Record<string, number>`)
+- `AgentsHub.tsx` (reads from AgentStore)
+
+**Helpers already exist:**
+- `totalPending(counts: PendingCounts): number` — sum across all agents
+- `pendingForAgent(counts, agentId): number` — per-agent count
+- `agentsWithPending(counts): number` — how many agents have pending items
+
+**What needs wiring:**
+1. `DockedPanelContainer` needs to subscribe to the same pending counts `NexusOverview` reads
+2. Pass `badgeCount: number` down to `DockedPanel`
+3. Scope it: fleet total on Nexus screens, site-specific count on Local site screens
+
+**The scoping question:** How does the rail know which site screen it's on?
+
+Possible approaches:
+- Read from Local's router/context (if exposed)
+- Compare `window.location` or URL fragments
+- Read from a shared store that tracks "current site id"
+- Wire through props from the root mount point
+
+This is the **actual dependency** — not the count itself (that exists), but knowing when to scope it.
+
+### Stuck marker (agents paused/blocked)
+
+**Source:** Unknown — no `AgentStatus` enum or `stuck`/`paused`/`blocked` state was found in `src/main/agent-runtime`.
+
+**Search performed:**
+```bash
+grep -r "stuck\|paused\|blocked" src/main/agent-runtime --include="*.ts" | grep -i "status\|state"
+# (no output)
+
+grep -rn "AgentStatus\|agentStatus" src/main/agent-runtime --include="*.ts"
+# (no output)
+```
+
+**Inbox has a `paused` field:**
+`GET_INBOX` returns `{ paused: string[] }` (agent IDs currently auto-paused), referenced in:
+- `InboxTab.tsx:11` — "Agent ids currently auto-paused, from GET_INBOX"
+- `AgentStore.ts:114-115` — `pendingBySource` and `pendingLoaded`
+
+**So the stuck marker source IS `paused.length > 0`** from the same `GET_INBOX` call.
+
+**What needs wiring:**
+1. Read `paused: string[]` from `GET_INBOX` alongside `pendingBySource`
+2. Pass `hasStuck: boolean` (derived as `paused.length > 0`) down to `DockedPanel`
+3. Scope it: show on fleet screens, **suppress on site screens** (per spec)
+
+## Rail label scoping
+
+**Current:** Hardcoded `'INSIGHTS'`  
+**Spec requires:** `'THIS SITE'` on Local site screens, `'INSIGHTS'` on fleet/Nexus screens
+
+**Same scoping dependency as the badge** — needs to know "am I on a site screen or a fleet screen?"
+
+## What to do next
+
+### Option 1: Wire the data now
+
+1. Add `GET_INBOX` subscription to `DockedPanelContainer` (same as `NexusOverview` does)
+2. Compute `badgeCount = totalPending(counts)` and `hasStuck = paused.length > 0`
+3. Pass both down to `DockedPanel` as props
+4. Defer scoping until the "which screen am I on" question is answered
+
+**Outcome:** Badge and marker appear, but always show fleet-wide counts (no site scoping yet).
+
+**Why this is incomplete but not wrong:** The rail would show signal, just not scoped signal. A fleet-wide count on a site screen is better than no count at all, and it's visible progress toward the spec.
+
+### Option 2: Solve scoping first, then wire data
+
+1. Determine how to detect "site screen vs fleet screen" context
+2. Add that detection to `DockedPanelContainer`
+3. Wire `GET_INBOX` with the scoping logic in place from the start
+
+**Outcome:** Signal appears correctly scoped when it lands.
+
+**Why this is harder:** The scoping question is architectural — it may require changes to how Local's router context is exposed, or a new shared store. That is not a "finish the rail" task, it is a "design the context propagation" task.
+
+### Option 3: Document the gap and move on
+
+The rail renders. The state enum works. The tests pass. The baseline is maintained.
+
+**What is missing:**
+- Badge count wiring (source exists: `GET_INBOX`)
+- Stuck marker wiring (source exists: `GET_INBOX.paused`)
+- Rail label and tooltip scoping (dependency: "which screen am I on?")
+
+**What blocks scoping:**
+The rail does not yet know whether it is on a site screen or a fleet screen. This is a real architectural question:
+- Does Local's router expose current context?
+- Should there be a `CurrentSiteContext` provider?
+- Should the rail read `window.location` and parse it?
+
+None of these is a "just wire it" task. They are design decisions with implications for how other Nexus surfaces detect their context.
+
+## Recommendation
+
+**Implement Option 1 (wire data without scoping) as the next commit**, with the following constraints:
+
+1. `DockedPanelContainer` subscribes to `GET_INBOX` on mount
+2. Computes `totalPending(counts)` and `paused.length > 0`
+3. Passes `badgeCount` and `hasStuck` to `DockedPanel`
+4. Documents in code: "TODO: scope to site when on site screens — see docs/planning/2026-08-11-rail-signal-gap.md"
+
+**Result:** The rail shows signal (§3's primary requirement), the scoping refinement is deferred as a known gap with a clear blocker.
+
+**Why this is the right cut:** The spec says the rail must carry signal. It does not say the signal must be perfectly scoped before the rail can ship. Scoping is a refinement that depends on solving "how does any Nexus surface know which Local screen it is on?" — a question bigger than this task.
+
+If you disagree and want to solve scoping as part of this task, say so explicitly and I will trace the context propagation architecture before proceeding.
+
+---
+
+## Investigation: Can the mount point tell us? (2026-08-11)
+
+**Checked:** `src/renderer/index.tsx` shows `DockedPanelContainer` is mounted globally on `document.body` via `DockedPanelGate`, not per-screen.
+
+**Two mount points exist in the addon:**
+1. **Global panel:** `DockedPanelContainer` on `document.body` (lines 232-268)
+2. **Per-site hook:** `hooks.addContent('routes[site-info]', ...)` mounts `NexusSiteTab` with site prop (lines 162-174)
+
+**The panel is NOT mounted through the per-site hook** — it is a single global instance that persists across all screens.
+
+**Local's routing:** Uses React Router with hash-based routes (`/main/nexus`, `/main/site-info/{id}/nexus`). The panel has no access to:
+- Route props (not a Route component)
+- Router context (mounted outside Router tree)
+- Site prop (only passed to per-route components via hooks)
+
+**Could we parse `window.location.hash`?** Yes, but explicitly forbidden: "Do NOT parse window.location; that is a guess dressed as a lookup and it will break the first time routing changes."
+
+**Conclusion:** The mount point cannot tell us. The panel is global, has no route context, and cannot detect which screen it is on without violating the "no window.location parsing" constraint.
+
+## Decision: Omit badge where scope is unknown
+
+**The honest interim:** Render the badge only where scope is known, omit it where it is not.
+
+The spec says "hidden at zero" — **hidden-at-unknown is the same principle**. A number misrepresenting its own context (fleet count on a site screen) is the same defect as "449 sites indexed" and the Agents banner contradicting the health pill.
+
+**Rule on this branch:** An absent clause beats a plausible wrong one.
+
+**Implementation:**
+- Badge count and stuck marker: **omitted** (rendered as `null`, never shown)
+- Rail label: `'NEXUS AI'` (generic, no scope claim)
+- Tooltip: `'Open Nexus AI panel'` (no scope claim)
+
+**What this preserves:**
+- The rail renders and functions
+- Opening/closing works
+- State transitions work
+- No false information is presented
+
+**What blocks showing the badge:**
+The panel does not know whether it is on a site screen or fleet screen. Solving this requires one of:
+
+1. **Router context exposure:** Local's React Router context made available to globally-mounted components
+2. **Context provider:** A `CurrentSiteContext` provider that tracks active site/screen
+3. **Event-based signaling:** Local emits a custom event when route changes, panel subscribes
+4. **Prop threading:** Re-architect panel to mount per-screen instead of globally
+
+None is a "just wire it" task — each is an architectural change with implications for how other Nexus surfaces detect context.
+
+**Smallest real fix:** Option 3 (event-based signaling) is likely the least invasive:
+- Local's routing layer emits `window.dispatchEvent(new CustomEvent('local:route-change', { detail: { siteId, screen } }))` on navigation
+- Panel subscribes to this event and updates internal state
+- No React context wiring needed, no re-architecture required
+
+**Next step:** Document this as the blocker and move on. The rail exists, functions, and presents no false information. Signal wiring awaits context propagation architecture.

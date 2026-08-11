@@ -16,6 +16,7 @@ interface ModalProps {
   effect: 'readonly' | 'writes';
   /** The agent's persisted schedule/event scope. Undefined = never configured. */
   scheduleScope?: AgentScope;
+  siteScoped: boolean;
   onCancel: () => void;
   onRun: (siteNames: string[]) => void;
 }
@@ -82,9 +83,11 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   private async handleRun() {
     if (this.state.isRunning) return;
     this.setState({ isRunning: true });
-    const { onRun, electron, agentId } = this.props;
+    const { onRun, electron, agentId, siteScoped } = this.props;
     const bySite = new Map(this.state.sites.map(s => [s.id, s]));
-    const toRun = [...this.state.selection].map(id => bySite.get(id)?.name).filter((n): n is string => !!n);
+    const toRun = siteScoped
+      ? [...this.state.selection].map(id => bySite.get(id)?.name).filter((n): n is string => !!n)
+      : [];
 
     try {
       await electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_NOW, {
@@ -100,7 +103,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   }
 
   render() {
-    const { agentName, allowsProduction, effect, onCancel, supportsFullRun } = this.props;
+    const { agentName, allowsProduction, effect, onCancel, supportsFullRun, siteScoped } = this.props;
     const { loading, sites, selection, fullRun, isRunning } = this.state;
     const { added, removed, modified } = this.getDelta();
     const scheduleCount = this.props.scheduleScope?.siteIds?.length ?? 0;
@@ -120,7 +123,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
         style: {
           position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
           width: 760, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-          background: '#0f141d', border: '1px solid #232c38', borderRadius: 18,
+          background: 'var(--ag-picker-bg-raised)', border: '1px solid var(--ag-picker-border-strong)', borderRadius: 18,
           boxShadow: '0 24px 60px rgba(0,0,0,0.5)', zIndex: 51, overflow: 'hidden',
         },
       },
@@ -130,23 +133,23 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
           React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 14 } },
             React.createElement('div', {
               style: { width: 38, height: 38, borderRadius: 11, background: 'rgba(53,224,197,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-            }, React.createElement('span', { style: { fontSize: 16, color: '#35e0c5' } }, '▶')),
+            }, React.createElement('span', { style: { fontSize: 16, color: 'var(--ag-picker-teal)' } }, '▶')),
             React.createElement('div', { style: { flex: 1 } },
               React.createElement('div', { style: { fontSize: 20, fontWeight: 800, color: 'var(--ag-text-primary)', marginBottom: 3 } }, `Run ${agentName} now`),
-              React.createElement('div', { style: { fontSize: 14, color: '#8a94a2' } }, 'Runs once, immediately. Does not change the schedule.'),
+              React.createElement('div', { style: { fontSize: 14, color: 'var(--ag-picker-text-faint-alt)' } }, 'Runs once, immediately. Does not change the schedule.'),
               supportsFullRun && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 } },
                 React.createElement('div', {
                   onClick: () => this.setState(s => ({ fullRun: !s.fullRun })),
-                  style: { width: 40, height: 22, borderRadius: 999, cursor: 'pointer', position: 'relative', background: fullRun ? '#22c088' : '#2a3441' },
+                  style: { width: 40, height: 22, borderRadius: 999, cursor: 'pointer', position: 'relative', background: fullRun ? 'var(--ag-picker-success)' : 'var(--ag-picker-control-border)' },
                 },
-                  React.createElement('div', { style: { position: 'absolute', top: 3, left: fullRun ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .15s' } }),
+                  React.createElement('div', { style: { position: 'absolute', top: 3, left: fullRun ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: 'var(--ag-picker-on-teal)', transition: 'left .15s' } }),
                 ),
                 React.createElement('span', { style: { fontSize: 14, color: 'var(--ag-text-secondary)' } }, 'Always do full run'),
               ),
             ),
             React.createElement('button', {
               onClick: onCancel,
-              style: { background: 'none', border: 'none', color: '#6b7684', cursor: 'pointer', fontSize: 20, padding: 4, lineHeight: 1 },
+              style: { background: 'none', border: 'none', color: 'var(--ag-picker-text-faint)', cursor: 'pointer', fontSize: 20, padding: 4, lineHeight: 1 },
             }, '×'),
           ),
         ),
@@ -165,34 +168,40 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
             ),
             modified && React.createElement('button', {
               onClick: this.resetToScheduleScope,
-              style: { fontSize: 13, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: '1px solid #2a3441', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap' },
+              style: { fontSize: 13, fontWeight: 600, color: 'var(--ag-picker-text-dim)', background: 'transparent', border: '1px solid var(--ag-picker-control-border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', whiteSpace: 'nowrap' },
             }, 'Reset to schedule scope'),
           ),
         ),
 
-        // Picker
+        // Picker — or a single explanatory block for non-scoped agents
         React.createElement('div', { style: { padding: '0 24px', flex: 1, overflow: 'hidden', display: 'flex' } },
-          loading
-            ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: 'var(--ag-text-muted)', width: '100%' } }, 'Loading sites…')
-            : React.createElement(SitePicker, {
-                sites,
-                selection,
-                onChange: (next: Set<string>) => this.setState({ selection: next }),
-                allowsProduction,
-              }),
+          siteScoped
+            ? (loading
+                ? React.createElement('div', { style: { padding: '40px', textAlign: 'center', color: 'var(--ag-text-muted)', width: '100%' } }, 'Loading sites…')
+                : React.createElement(SitePicker, {
+                    sites,
+                    selection,
+                    onChange: (next: Set<string>) => this.setState({ selection: next }),
+                    allowsProduction,
+                  }))
+            : React.createElement('div', {
+                style: { padding: '28px 24px', fontSize: 13.5, color: 'var(--ag-text-secondary)', lineHeight: 1.55 },
+              },
+                'This agent does not run per site — it performs the same fleet-wide checks every time. Running it now performs one run.',
+              ),
         ),
 
         // Footer — the production warning sentence takes over the note slot and tints the whole
         // bar (escalation signal 3); the primary button turns red (signal 4). Neither blocks.
         React.createElement('div', {
           style: {
-            display: 'flex', alignItems: 'center', gap: 12, padding: '18px 24px', borderTop: '1px solid #1c232e',
-            background: hasProd ? 'rgba(255,107,122,0.07)' : '#0d1119',
+            display: 'flex', alignItems: 'center', gap: 12, padding: '18px 24px', borderTop: '1px solid var(--ag-picker-border-subtle)',
+            background: hasProd ? 'rgba(255,107,122,0.07)' : 'var(--ag-picker-bg-footer)',
             ...(hasProd ? { borderTop: '1px solid rgba(255,107,122,0.24)' } : {}),
           },
         },
           React.createElement('span', {
-            style: { flex: 1, fontSize: 13, fontWeight: hasProd ? 600 : 400, color: hasProd ? '#ff8a95' : '#7b8593' },
+            style: { flex: 1, fontSize: 13, fontWeight: hasProd ? 600 : 400, color: hasProd ? 'var(--ag-picker-danger)' : 'var(--ag-picker-text-dimmer)' },
           },
             warningSentence
               ?? (modified ? 'This selection applies to this run only. Save it to the schedule from Settings.' : 'Same sites the schedule uses.'),
@@ -203,14 +212,14 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
           }, 'Cancel'),
           React.createElement('button', {
             onClick: () => this.handleRun(),
-            disabled: selection.size === 0 || isRunning,
+            disabled: siteScoped ? (selection.size === 0 || isRunning) : isRunning,
             style: {
               padding: '10px 22px', borderRadius: 9, border: 'none', fontSize: 13.5, fontWeight: 700,
-              cursor: selection.size === 0 ? 'not-allowed' : 'pointer',
-              background: selection.size === 0 ? 'var(--ag-bg-elevated)' : hasProd ? '#ff8a95' : '#35e0c5',
-              color: selection.size === 0 ? 'var(--ag-text-faint)' : '#0b0e14',
+              cursor: (siteScoped && selection.size === 0) || isRunning ? 'not-allowed' : 'pointer',
+              background: (siteScoped && selection.size === 0) ? 'var(--ag-bg-elevated)' : hasProd ? 'var(--ag-picker-danger)' : 'var(--ag-picker-teal)',
+              color: (siteScoped && selection.size === 0) ? 'var(--ag-text-faint)' : 'var(--ag-picker-bg-page)',
             },
-          }, `Run on ${selection.size} site${selection.size === 1 ? '' : 's'}`),
+          }, siteScoped ? `Run on ${selection.size} site${selection.size === 1 ? '' : 's'}` : 'Run now'),
         ),
       ),
     );

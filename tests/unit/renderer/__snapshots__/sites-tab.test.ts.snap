@@ -1,0 +1,512 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`SitesTab snapshot 1`] = `
+{
+  "children": [
+    {
+      "children": {
+        "children": [
+          {
+            "children": "1",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-text)",
+                "fontSize": "20px",
+                "fontWeight": 700,
+                "marginRight": "6px",
+              },
+            },
+            "type": "span",
+          },
+          "installs on this Mac, WP Engine and other hosts",
+        ],
+        "key": null,
+        "props": {
+          "style": {
+            "color": "var(--nxai-card-sub)",
+            "fontSize": "13px",
+          },
+        },
+        "type": "div",
+      },
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "baseline",
+          "display": "flex",
+          "gap": "16px",
+          "justifyContent": "space-between",
+          "marginBottom": "12px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": "All",
+          "key": "all",
+          "props": {
+            "onClick": "[fn]",
+            "style": {
+              "backgroundColor": "var(--nxai-accent)",
+              "border": "1px solid var(--nxai-card-border)",
+              "borderRadius": "6px",
+              "color": "var(--nxai-accent-text)",
+              "cursor": "pointer",
+              "fontSize": "12px",
+              "fontWeight": 500,
+              "padding": "4px 12px",
+            },
+            "type": "button",
+          },
+          "type": "button",
+        },
+        {
+          "children": "This Mac",
+          "key": "local",
+          "props": {
+            "onClick": "[fn]",
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg)",
+              "border": "1px solid var(--nxai-card-border)",
+              "borderRadius": "6px",
+              "color": "var(--nxai-card-text)",
+              "cursor": "pointer",
+              "fontSize": "12px",
+              "fontWeight": 500,
+              "padding": "4px 12px",
+            },
+            "type": "button",
+          },
+          "type": "button",
+        },
+        {
+          "children": "WP Engine",
+          "key": "wpe",
+          "props": {
+            "onClick": "[fn]",
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg)",
+              "border": "1px solid var(--nxai-card-border)",
+              "borderRadius": "6px",
+              "color": "var(--nxai-card-text)",
+              "cursor": "pointer",
+              "fontSize": "12px",
+              "fontWeight": 500,
+              "padding": "4px 12px",
+            },
+            "type": "button",
+          },
+          "type": "button",
+        },
+        {
+          "children": "External",
+          "key": "external",
+          "props": {
+            "onClick": "[fn]",
+            "style": {
+              "backgroundColor": "var(--nxai-card-bg)",
+              "border": "1px solid var(--nxai-card-border)",
+              "borderRadius": "6px",
+              "color": "var(--nxai-card-text)",
+              "cursor": "pointer",
+              "fontSize": "12px",
+              "fontWeight": 500,
+              "padding": "4px 12px",
+            },
+            "type": "button",
+          },
+          "type": "button",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "gap": "6px",
+          "marginBottom": "12px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": [
+            "0 of 1 selected",
+            null,
+          ],
+          "key": null,
+          "props": {
+            "style": {
+              "color": "var(--nxai-card-sub)",
+              "fontSize": "12px",
+              "marginRight": "auto",
+            },
+          },
+          "type": "span",
+        },
+        [
+          {
+            "children": "Refresh metadata",
+            "key": "sync-graph",
+            "props": {
+              "disabled": true,
+              "onClick": "[fn]",
+              "style": {
+                "backgroundColor": "var(--nxai-accent)",
+                "border": "none",
+                "borderRadius": "6px",
+                "color": "var(--nxai-accent-text)",
+                "cursor": "not-allowed",
+                "fontSize": "12px",
+                "fontWeight": 500,
+                "opacity": 0.5,
+                "padding": "5px 12px",
+              },
+              "type": "button",
+            },
+            "type": "button",
+          },
+          {
+            "children": "Index content",
+            "key": "reindex",
+            "props": {
+              "disabled": true,
+              "onClick": "[fn]",
+              "style": {
+                "backgroundColor": "var(--nxai-accent)",
+                "border": "none",
+                "borderRadius": "6px",
+                "color": "var(--nxai-accent-text)",
+                "cursor": "not-allowed",
+                "fontSize": "12px",
+                "fontWeight": 500,
+                "opacity": 0.5,
+                "padding": "5px 12px",
+              },
+              "type": "button",
+            },
+            "type": "button",
+          },
+        ],
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "backgroundColor": "var(--nxai-section-bg)",
+          "border": "1px solid var(--nxai-card-border)",
+          "borderRadius": "8px",
+          "display": "flex",
+          "gap": "10px",
+          "marginBottom": "12px",
+          "padding": "8px 12px",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": [
+        {
+          "children": {
+            "children": [
+              {
+                "children": {
+                  "children": null,
+                  "key": null,
+                  "props": {
+                    "aria-label": "Select all sites",
+                    "checked": false,
+                    "onChange": "[fn]",
+                    "type": "checkbox",
+                  },
+                  "type": "input",
+                },
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
+              {
+                "children": "Name",
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
+              {
+                "children": "Type",
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
+              {
+                "children": "Knowledge",
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
+              {
+                "children": "WP",
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
+              {
+                "children": "PHP",
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
+              {
+                "children": "Last sync",
+                "key": null,
+                "props": {
+                  "style": {
+                    "borderBottom": "1px solid var(--nxai-card-border)",
+                    "color": "var(--nxai-card-label)",
+                    "fontSize": "11px",
+                    "fontWeight": 600,
+                    "letterSpacing": "0.6px",
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "textTransform": "uppercase",
+                    "whiteSpace": "nowrap",
+                  },
+                },
+                "type": "th",
+              },
+            ],
+            "key": null,
+            "props": {},
+            "type": "tr",
+          },
+          "key": null,
+          "props": {},
+          "type": "thead",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": {
+                    "children": null,
+                    "key": null,
+                    "props": {
+                      "aria-label": "Select My Site",
+                      "checked": false,
+                      "onChange": "[fn]",
+                      "type": "checkbox",
+                    },
+                    "type": "input",
+                  },
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+                {
+                  "children": [
+                    {
+                      "children": "My Site",
+                      "key": null,
+                      "props": {
+                        "style": {
+                          "fontWeight": 600,
+                        },
+                      },
+                      "type": "div",
+                    },
+                    null,
+                  ],
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+                {
+                  "children": [
+                    {
+                      "children": "This Mac",
+                      "key": null,
+                      "props": {},
+                      "type": "div",
+                    },
+                    null,
+                  ],
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+                {
+                  "children": "Searchable",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+                {
+                  "children": "6.5",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+                {
+                  "children": "8.2",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+                {
+                  "children": "—",
+                  "key": null,
+                  "props": {
+                    "style": {
+                      "borderBottom": "1px solid var(--nxai-card-border)",
+                      "padding": "8px 10px",
+                      "verticalAlign": "top",
+                    },
+                  },
+                  "type": "td",
+                },
+              ],
+              "key": "L1",
+              "props": {
+                "style": undefined,
+              },
+              "type": "tr",
+            },
+          ],
+          "key": null,
+          "props": {},
+          "type": "tbody",
+        },
+      ],
+      "key": null,
+      "props": {
+        "style": {
+          "borderCollapse": "collapse",
+          "color": "var(--nxai-card-text)",
+          "fontSize": "13px",
+          "width": "100%",
+        },
+      },
+      "type": "table",
+    },
+  ],
+  "key": null,
+  "props": {
+    "style": {
+      "padding": "4px 0",
+    },
+  },
+  "type": "div",
+}
+`;

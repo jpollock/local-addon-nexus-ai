@@ -9,9 +9,11 @@ import { SentinelReviewOverlay, AccountDecisionMap } from './SentinelReviewOverl
 import { ExecuteModal } from './ExecuteModal';
 import type { SentinelCase } from './SentinelTypes';
 import { rendererGql } from '../../utils/rendererGql';
+import { isReviewStatus, totalPending } from './pending';
 
 interface AgentConsoleTabProps {
   electron: any;
+  onNavigateToInbox?: () => void;
 }
 
 interface AgentConsoleTabState {
@@ -175,7 +177,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
         `${s.ok ? '✅' : '❌'} ${s.label} — ${(s.durationMs / 1000).toFixed(1)}s`,
       );
       const updated = agentStore.getState().activityEvents.map(e =>
-        e.status === 'review' && (e.siteName === sc.site || e.sub?.includes(sc.site))
+        isReviewStatus(e) && (e.siteName === sc.site || e.sub?.includes(sc.site))
           ? { ...e, status: 'done' as const, count: executedSteps?.length, children }
           : e,
       );
@@ -265,10 +267,10 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
   private async refreshAgents() {
     try {
       const result = await rendererGql<{ agentStatus: any[] }>(
-        `{ agentStatus { name version description cronExpression lastRunAt lastRunStatus lastRunDurationMs lastRunError supportsFullRun allowsProduction effect } }`,
+        `{ agentStatus { name version description cronExpression lastRunAt lastRunStatus lastRunDurationMs lastRunError supportsFullRun allowsProduction effect producesApprovals producesReports siteScoped credentials { provider type scopes optional reason } } }`,
       );
       if (result?.agentStatus) {
-        agentStore.setState({ statuses: result.agentStatus });
+        agentStore.setStatuses(result.agentStatus);
       }
     } catch (err) {
       console.warn('[AgentConsoleTab] Failed to load agent statuses:', err);
@@ -301,7 +303,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     }
 
     // Hub / ledger home view
-    const pendingCount = agentStore.getState().activityEvents.filter(e => e.status === 'review').length;
+    const pendingCount = totalPending(agentStore.getState().pendingBySource);
 
     return React.createElement('div', { style: { padding: '24px 40px 0' } },
       // Shared heading area
@@ -343,7 +345,11 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
       ),
       // Content
       homeTab === 'agents'
-        ? React.createElement(AgentsHub, { onSelectAgent: (id: string) => this.setState({ selectedAgentId: id }) })
+        ? React.createElement(AgentsHub, {
+            onSelectAgent: (id: string) => this.setState({ selectedAgentId: id }),
+            onNavigateToInbox: this.props.onNavigateToInbox,
+            electron: this.props.electron,
+          })
         : React.createElement(FleetActivityLedger, { onReviewEvent: (eventId: string) => this.openSentinelReview(eventId) }),
       ...this.renderSentinelModals(),
     );

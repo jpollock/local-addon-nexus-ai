@@ -31,6 +31,7 @@ import type { NexusServices } from '../types/nexus-services';
 import type { LocalSite, LocalSiteDataAccessor } from '../types/site-data';
 import pLimit from 'p-limit';
 import { withQueue, parseTarget } from './resolver-utils';
+import { collectFleetCounts } from '../fleet/collectFleetCounts';
 import { probeExternalHost } from '../external/probeExternalHost';
 import type { ProbeReport } from '../external/probeExternalHost';
 import { probeHostMultiIssue } from '../external/probeHostMultiIssue';
@@ -1608,9 +1609,53 @@ export function createResolvers(context: ResolverContext) {
       /**
        * Fleet-wide summary from twin cache — WP/PHP version distribution,
        * completeness breakdown, recent post activity, stale count.
+       *
+       * `counts` (below) is the canonical fleet population from
+       * collectFleetCounts — the same source GET_FLEET_SUMMARY and
+       * GET_DASHBOARD_STATS use. Every OTHER figure this resolver returns
+       * (totalSites, sitesWithFullData, completeness, staleCount,
+       * neverScannedCount, recentActivityCount, wpVersions, phpVersions) is
+       * deliberately NOT recomputed from `counts` — they are all derived by
+       * iterating `twins`, whose local portion comes from the twin cache
+       * (services.twinService.getAll()), a legitimate but DIFFERENT
+       * population than Local's own site store (see CLAUDE.md, "Fleet
+       * counts"). Swapping only `totalSites`'s source while leaving
+       * `sitesWithFullData` (a subset of `twins`) scoped to the twin cache
+       * would let sitesWithFullData exceed totalSites whenever the two
+       * populations briefly disagree — the exact numerator/denominator
+       * mismatch this whole task exists to remove. `counts` is exposed as
+       * its own field so a caller gets the canonical numbers without that
+       * risk.
+       *
+       * collectFleetCounts is called INSIDE the try guard (not before it), so
+       * a throwing siteData service turns into {success:false,…} rather than a
+       * raw GraphQL error.
+       *
+       * `twinScope` (below) is the ONE shared scope object for every
+       * twin-derived figure — totalSites, sitesWithFullData, completeness,
+       * staleCount, neverScannedCount, recentActivityCount, wpVersions and
+       * phpVersions all describe this SAME population (twinScope.measured
+       * equals totalSites, always, by construction — they are both
+       * `twins.length`). Mirrors the pattern GET_FLEET_SUMMARY already uses
+       * (ipc-handlers.ts, `twinScope`) rather than inventing a differently-
+       * named near-duplicate. Its label deliberately does NOT match
+       * counts.installs.scope: this population's local share comes from the
+       * twin cache, counts.local's comes from Local's own site store — two
+       * different populations that happen, in the common case, to agree.
        */
       nexusFleetSummary: () => {
+        const twinScopeLabel =
+          'sites on this Mac (twin read-model), plus WP Engine and external installs (graph)';
         try {
+          // collectFleetCounts is called INSIDE the try, so a throwing
+          // siteData service returns {success:false,…} rather than crashing.
+          // Defensive call — siteData.getSites() can throw if the service is
+          // partially initialized. Optional-chain the method itself (not just
+          // the service) to match the early-exit branch below.
+          const counts = collectFleetCounts({
+            getSites: () => services.siteData?.getSites?.() ?? {},
+            getDb: () => services.graphService?.getDb?.() as never,
+          });
           if (!services.twinService) {
             return {
               success: false,
@@ -1623,6 +1668,8 @@ export function createResolvers(context: ResolverContext) {
               staleCount: 0,
               neverScannedCount: 0,
               recentActivityCount: 0,
+              counts,
+              twinScope: { measured: 0, label: twinScopeLabel },
             };
           }
 
@@ -1721,8 +1768,16 @@ export function createResolvers(context: ResolverContext) {
             staleCount,
             neverScannedCount,
             recentActivityCount,
+            counts,
+            twinScope: { measured: twins.length, label: twinScopeLabel },
           };
         } catch (err: any) {
+          // counts is inside the try, so on this path it's unavailable — return
+          // a zeroed-out object. This is the "couldn't compute anything" path.
+          const emptyCounts = {
+            local: { running: 0, halted: 0, total: 0, scope: 'unknown' },
+            installs: { wpe: 0, external: 0, total: 0, scope: 'unknown' },
+          };
           return {
             success: false,
             error: err.message,
@@ -1734,6 +1789,8 @@ export function createResolvers(context: ResolverContext) {
             staleCount: 0,
             neverScannedCount: 0,
             recentActivityCount: 0,
+            counts: emptyCounts,
+            twinScope: { measured: 0, label: twinScopeLabel },
           };
         }
       },
@@ -5571,7 +5628,7 @@ export function createResolvers(context: ResolverContext) {
         }
         const agent = registry.get(name);
         if (!agent) throw new Error(`Agent "${name}" not found`);
-        const result = await runner.run(agent);
+        const result = await runner.run(agent, undefined, { trigger: 'manual' });
         return {
           agentName:  result.agentName,
           status:     result.status,
@@ -6058,6 +6115,19 @@ export function createResolvers(context: ResolverContext) {
             supportsFullRun: (def as any).supportsFullRun ?? false,
             allowsProduction: (def as any).allowsProduction ?? true,
             effect: (def as any).effect ?? 'writes',
+            producesApprovals: (def as any).producesApprovals ?? false,
+            producesReports: (def as any).producesReports ?? false,
+            siteScoped: (def as any).siteScoped ?? true,
+            // Passed through verbatim from the agent's own definition. The renderer used to keep
+            // its own hardcoded agent list and scope constant, which meant a new Google agent got
+            // no connect button and the wrong scopes if it ever did.
+            credentials: ((def as any).credentials ?? []).map((c: any) => ({
+              provider: c?.provider ?? '',
+              type: c?.type ?? 'oauth',
+              scopes: Array.isArray(c?.scopes) ? c.scopes : [],
+              optional: c?.optional ?? false,
+              reason: c?.reason ?? null,
+            })).filter((c: any) => c.provider),
           };
         });
       },

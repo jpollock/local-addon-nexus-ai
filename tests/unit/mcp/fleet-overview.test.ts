@@ -28,12 +28,24 @@ function makeDb(wpeCount: number, wpeAggRow?: any) {
     wpe_count: wpeCount, wpe_with_wp_version: wpeCount, wpe_with_post_count: wpeCount,
     external_count: 0, external_with_wp_version: 0,
   };
+  // fleet_overview now derives its wpeCount gate from collectFleetCounts,
+  // which runs its own `id, source, wpe_site_id` query — synthesize rows
+  // matching the aggregate row's wpe_count/external_count split so
+  // collectFleetCounts() agrees with the aggregate row used further down.
+  const rawRows = [
+    ...Array.from({ length: aggRow.wpe_count }, (_, i) => ({ id: `wpe-${i}`, source: 'wpe', wpe_site_id: null })),
+    ...Array.from({ length: aggRow.external_count }, (_, i) => ({ id: `ext-${i}`, source: 'external', wpe_site_id: null })),
+  ];
   return {
     prepare: jest.fn().mockImplementation((sql: string) => {
       // The probe query selects "as c" only; the aggregate selects "as count".
+      // collectFleetCounts selects raw id/source/wpe_site_id columns.
       // Discriminate by checking for "as count," which only appears in the aggregate.
       if (sql.includes('as count,')) {
         return { all: jest.fn().mockReturnValue(wpeCount > 0 ? [aggRow] : []) };
+      }
+      if (sql.includes('wpe_site_id')) {
+        return { all: jest.fn().mockReturnValue(rawRows) };
       }
       return { get: jest.fn().mockReturnValue({ c: wpeCount }) };
     }),

@@ -33,6 +33,34 @@ export function injectThemeVars(): void {
       --nxai-chat-assistant-bg: #fef3c7;
       --nxai-filter-bg: #f0fdf4;
       --nxai-error-bg: #fef2f2;
+      /* Reset-row styling — amber and red levels from COPY.md.
+         Amber follows the same light → dark darkening pattern as warn/error:
+         --nxai-warn-text (#d97706 → #fbbf24) establishes the amber-text precedent,
+         and the amber backgrounds follow --nxai-error-bg's (#fef2f2 → #450a0a) darkening ratio. */
+      --nxai-amber-border: #fde68a;
+      --nxai-amber-row-bg: #fffdf7;
+      --nxai-amber-button-bg: #fffbeb;
+      --nxai-amber-text: #b45309;
+      --nxai-red-border: #fecaca;
+      --nxai-red-row-bg: #fff5f5;
+      --nxai-keeps-text: #4b5563;
+      /* Primary action fill. Deliberately NOT UI_COLORS.WPE_BRAND (#0ECAD4):
+         measured, the brand cyan is 2.02:1 against white and fails WCAG AA at
+         any text size. #0a8189 is 4.65:1 against white, so white-on-accent
+         passes AA in both themes — which is why the value is identical below.
+         Use it as a FILL behind --nxai-accent-text, not as a text colour: as
+         text on the dark card (#2a2a2a) it is 3.09:1 and fails AA for body copy. */
+      --nxai-accent: #0a8189;
+      --nxai-accent-text: #ffffff;
+      /* Rail-specific tokens from PANEL-IMPLEMENTATION.md §3:
+         - Teal tint (#ecfcfd) for the rail mark background
+         - Amber pair (#fffbeb / #b45309) for the stuck marker
+         - White (#fff) for badge border shadow
+         All are spec-defined literals with no existing token. */
+      --nxai-rail-mark-bg: #ecfcfd;
+      --nxai-rail-stuck-bg: #fffbeb;
+      --nxai-rail-stuck-text: #b45309;
+      --nxai-rail-badge-shadow: #fff;
     }
     .Theme__Dark {
       --nxai-card-bg: #2a2a2a;
@@ -55,6 +83,28 @@ export function injectThemeVars(): void {
       --nxai-chat-assistant-bg: #78350f;
       --nxai-filter-bg: #052e16;
       --nxai-error-bg: #450a0a;
+      /* Reset-row styling — dark theme. Derived from the light → dark pattern:
+         --nxai-error-bg goes #fef2f2 → #450a0a (very dark red).
+         Amber follows the same darkening ratio, and amber-text follows
+         --nxai-warn-text (#d97706 → #fbbf24). */
+      --nxai-amber-border: #92400e;
+      --nxai-amber-row-bg: #451a03;
+      --nxai-amber-button-bg: #78350f;
+      --nxai-amber-text: #fbbf24;
+      --nxai-red-border: #991b1b;
+      --nxai-red-row-bg: #450a0a;
+      --nxai-keeps-text: #9ca3af;
+      /* Same value as light: the pair is judged on accent-vs-accent-text
+         (4.65:1), which does not change with the surrounding theme. */
+      --nxai-accent: #0a8189;
+      --nxai-accent-text: #ffffff;
+      /* Rail tokens in dark theme — same values as light.
+         The teal tint and amber pair are visually identical in both themes
+         per the spec's non-theme-variant treatment of the rail. */
+      --nxai-rail-mark-bg: #ecfcfd;
+      --nxai-rail-stuck-bg: #fffbeb;
+      --nxai-rail-stuck-text: #b45309;
+      --nxai-rail-badge-shadow: var(--nxai-card-bg);
     }
   `;
   document.head.appendChild(style);

@@ -58,7 +58,7 @@ describe('buildWpeSshArgs', () => {
       '-o', 'StrictHostKeyChecking=accept-new',
       '-o', 'ControlMaster=auto',
       '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-      '-o', 'ControlPersist=30s',
+      '-o', 'ControlPersist=600s',
       '-i', STUB_KEY,
       'local+ssh+acmeprod@acmeprod.ssh.wpengine.net',
       'rm -f /tmp/x',
@@ -88,5 +88,8 @@ describe('wpeSshKeyPath', () => {
 });
 
 it('pins the SSH timeout', () => {
-  expect(WPE_SSH_TIMEOUT_MS).toBe(35000);
+  // Was 35000. Raised to 60s on main after a `wp plugin list` was killed at 35.07s on a real
+  // install — the deadline itself, not the server giving up. WP Engine cold start is 13–30s.
+  // This file re-exports the constant rather than declaring its own, so there is one value.
+  expect(WPE_SSH_TIMEOUT_MS).toBe(60000);
 });

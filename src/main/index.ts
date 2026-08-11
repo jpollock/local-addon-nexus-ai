@@ -36,12 +36,16 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
-import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing } from './ipc-handlers';
+import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing, getAgentLogLevel } from './ipc-handlers';
+import { EventLog } from './logging/eventLog';
+import { resolveLogLevel } from './logging/resolveLogLevel';
+import { applyRetention } from './logging/retention';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
 import { createSessionTables, pruneSessions } from './ipc/chat-sessions';
 import { GraphService } from './events/GraphService';
+import { runOrphanSweep } from './fleet/collectFleetCounts';
 import { EventProcessor } from './events/EventProcessor';
 import { HttpEventInterface } from './events/HttpEventInterface';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
@@ -73,6 +77,7 @@ import { ContributedToolRegistry } from './agent-runtime/ContributedToolRegistry
 import { AgentDispatcher } from './agent-runtime/AgentDispatcher';
 import { AgentDbManager } from './agent-runtime/AgentDbManager';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
+import { InboxStore } from './inbox/InboxStore';
 import { CredentialManager } from './credentials/CredentialManager';
 import type { CredentialEvent } from './credentials/types';
 import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
@@ -80,6 +85,7 @@ import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events
 import { getAIProvider } from './ai/getAIProvider';
 import { refreshProviderWhenEncryptionReady } from './ai/refreshProviderWhenEncryptionReady';
 import type { Unsubscribe, AgentDefinition } from './agent-sdk/types';
+import { JobRunStore } from './background/JobRunStore';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -170,6 +176,9 @@ export default function main(context: any): void {
       }
     },
   };
+
+  // Job run duration store for Settings → Background work
+  const jobRunStore = new JobRunStore(registryStorage);
 
   // Digital Twin: Site metadata cache (created early for lifecycle hooks)
   const metadataCache = new SiteMetadataCache(registryStorage);
@@ -482,13 +491,22 @@ export default function main(context: any): void {
   // WPE content index timer — inline interval-based scheduler for indexAllWpeContent.
   // Declared here so the onSettingsUpdated closure can restart/stop it reactively.
   let wpeContentIndexTimer: ReturnType<typeof setInterval> | null = null;
+
+  // EventLog — declared before the async IIFE so the onSettingsUpdated closure can restart
+  // it when the log level changes. Assigned inside the IIFE once AGENTS_DIR is available.
+  let eventLog: EventLog;
   const startWpeContentIndexScheduler = (hours: number) => {
     if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
     wpeContentIndexTimer = setInterval(async () => {
-      if (!wpeSyncService) return;
-      localLogger.info(`[NexusAI] WPE content index scheduler running (every ${hours}h)`);
-      try { await wpeSyncService.indexAllWpeContent(); } catch (e: any) {
-        localLogger.warn('[NexusAI] WPE content index scheduler failed:', e?.message);
+      const startedAt = Date.now();
+      try {
+        if (!wpeSyncService) return;
+        localLogger.info(`[NexusAI] WPE content index scheduler running (every ${hours}h)`);
+        try { await wpeSyncService.indexAllWpeContent(); } catch (e: any) {
+          localLogger.warn('[NexusAI] WPE content index scheduler failed:', e?.message);
+        }
+      } finally {
+        jobRunStore.record('wpeContentIndex', startedAt, Date.now() - startedAt);
       }
     }, hours * 60 * 60 * 1000);
   };
@@ -502,6 +520,17 @@ export default function main(context: any): void {
     const names: Record<string, string> = {};
     ids.forEach(id => { names[id] = sites[id]?.name ?? id; });
     return names;
+  };
+
+  /**
+   * Shared helper to check if background work is paused. Read from one place so
+   * every gate checks the same source — startup schedulers, the settings-change
+   * reactive path, and the WPE auto-sync paths.
+   */
+  const isBackgroundWorkPaused = () => {
+    const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+      { backgroundWorkPaused?: boolean } | null;
+    return settings?.backgroundWorkPaused === true;
   };
 
   /**
@@ -523,6 +552,40 @@ export default function main(context: any): void {
    * has constructed them.
    */
   const onSettingsUpdated = () => {
+    // Update event log level when settings change.
+    //
+    // The `if` is not a dropped update, and it should not be "fixed" into a deferred-apply
+    // queue. `eventLog` is constructed inside the async startup IIFE, and that construction
+    // resolves the level by reading `registryStorage` at that moment — not at process start.
+    // The settings IPC handler persists before it calls this, so a change made during startup
+    // is already on disk when construction reads it, and lands as the initial level. Skipping
+    // here loses nothing.
+    //
+    // Outside the pause branch below: the log level is not background work, and a paused
+    // user still wants their level change to take.
+    if (eventLog) {
+      const logSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+      eventLog.setMinLevel(resolveLogLevel(logSettings ?? undefined, process.env));
+    }
+
+    const paused = isBackgroundWorkPaused();
+
+    if (paused) {
+      // Stop everything. The per-job flags are read but never written, so
+      // unpausing restores exactly the configuration the user had.
+      opportunisticScheduler.stop();
+      haltedRefreshScheduler?.stop();
+      wpeRefreshScheduler?.stop();
+      externalRefreshScheduler?.stop();
+      externalContentIndexScheduler?.stop();
+      if (wpeContentIndexTimer) {
+        clearInterval(wpeContentIndexTimer);
+        wpeContentIndexTimer = null;
+      }
+      localLogger.info('[NexusAI] Background work paused — all schedulers stopped');
+      return;
+    }
+
     if (nexusServices?.bulkOpManager) {
       opportunisticScheduler.restart({
         bulkOpManager: nexusServices.bulkOpManager,
@@ -614,6 +677,17 @@ export default function main(context: any): void {
       await graphService.initialize();
       localLogger.info('[NexusAI] GraphService initialized');
 
+      // Deleted local sites leave their graph row at is_active = 1 forever — nothing
+      // else reconciles them. Measured 2026-08-09: 22 of 56 active local rows were
+      // sandbox sites that no longer existed. runOrphanSweep owns its own try/catch
+      // (a sweep failure must never block startup) and the empty-store circuit
+      // breaker lives inside sweepOrphanedLocalRows — see collectFleetCounts.ts.
+      runOrphanSweep({
+        getSites: () => siteDataAccessor.getSites() as Record<string, unknown>,
+        getDb: () => graphService.getDb() as never,
+        logger: localLogger,
+      });
+
       // Wire SmartSearch stores + handler into the HTTP interface
       const graphDb = graphService.getDb();
       if (graphDb) {
@@ -641,6 +715,31 @@ export default function main(context: any): void {
         localLogger.warn('[NexusAI] GraphDB not available — SmartSearch disabled');
       }
 
+      // EventLog and retention setup — independent of graph DB, moved out from the conditional
+      // below so retention continues working even when the database fails to open.
+      const nexusLogRoot = path.join(
+        os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'logs',
+      );
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+      const minLevel = resolveLogLevel(settings ?? undefined, process.env);
+      eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
+
+      // Apply retention on startup and daily — bounds log growth.
+      // Policy reads from settings if present, falls back to hardcoded defaults.
+      // Pure filesystem work with no database dependency, so it runs even when agentDb is unavailable.
+      const getRetentionPolicy = () => {
+        const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+        return {
+          logDays: s?.logRetentionDays ?? 14,
+          transcriptDays: s?.transcriptRetentionDays ?? 3,
+          budgetBytes: s?.logBudgetBytes ?? 250 * 1024 * 1024,
+        };
+      };
+      applyRetention(nexusLogRoot, getRetentionPolicy());
+      setInterval(() => {
+        try { applyRetention(nexusLogRoot, getRetentionPolicy()); } catch { /* never throw */ }
+      }, 24 * 60 * 60 * 1000);
+
       // Agent Platform initialization — requires GraphDB (same connection as SmartSearch)
       // contributedRegistry and dispatcher are hoisted so McpServer can consume them
       // even when agentDb is unavailable (they'll simply be empty/unused).
@@ -653,6 +752,18 @@ export default function main(context: any): void {
         agentEventBus.pruneOldEvents(30); // prune events older than 30 days on startup
 
         const agentStateStore = new AgentStateStore(agentDb);
+        const inboxStore = new InboxStore(agentDb);
+
+        // Retention sweep at startup. Without a caller this is just a method
+        // nobody runs, and `inbox_items` grows forever — the table has no other
+        // delete path. Startup is the right moment: it is once per session, off
+        // the hot path, and the same place the other stores prune.
+        try {
+          const pruned = inboxStore.prune();
+          if (pruned > 0) localLogger.info(`[NexusAI] inbox: pruned ${pruned} item(s)`);
+        } catch (err) {
+          localLogger.warn(`[NexusAI] inbox prune failed: ${(err as Error).message}`);
+        }
 
         const resolvedAgentProvider = getAIProvider(
           registryStorage,
@@ -669,12 +780,18 @@ export default function main(context: any): void {
           resolvedAgentProvider,
           agentStateStore,
           agentDbManager,
+          eventLog,
         );
         const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager);
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
-        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager);
+        const agentRunner = new AgentRunner(
+          agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager, eventLog,
+        );
         agentScheduler = new AgentScheduler(agentRunner);
+        // Exposed so AGENT_SETTINGS_UPDATE can re-register an agent as soon as its cadence
+        // changes, rather than the new schedule waiting for a restart.
+        (nexusServices as any).agentScheduler = agentScheduler;
         daemonManager = new DaemonManager(agentEventBus);
 
         // Wire the wp-events bridge (releases the forward reference set at construction time)
@@ -701,7 +818,7 @@ export default function main(context: any): void {
                 agentEventBus.subscribe(trigger.pattern, async (event) => {
                   // `enabled` too — see canAutoRun. A disabled agent must not run on an event.
                   if (!canAutoRun(agent.name, 'event')) return;
-                  await agentRunner.run(agent, event).catch((err: Error) => {
+                  await agentRunner.run(agent, event, { trigger: 'event' }).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" event trigger failed: ${err.message}`);
                   });
                 }),
@@ -709,7 +826,7 @@ export default function main(context: any): void {
             } else if (trigger.type === 'webhook') {
               unsubs.push(
                 agentEventBus.subscribe(`webhook:${trigger.path ?? '*'}`, async (event) => {
-                  await agentRunner.run(agent, event).catch((err: Error) => {
+                  await agentRunner.run(agent, event, { trigger: 'event' }).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" webhook trigger failed: ${err.message}`);
                   });
                 }),
@@ -776,6 +893,7 @@ export default function main(context: any): void {
         nexusServices.agentRunner = agentRunner;
         nexusServices.agentEventBus = agentEventBus;
         nexusServices.agentStateStore = agentStateStore;
+        nexusServices.inboxStore = inboxStore;
         nexusServices.agentReload = agentReload;
         nexusServices.contributedRegistry = contributedRegistry;
         nexusServices.dispatcher = dispatcher;
@@ -804,6 +922,12 @@ export default function main(context: any): void {
         localLogger.warn('[NexusAI] GraphDB not available — agent platform disabled');
       }
 
+      // Expose EventLog on services — assigned outside the agentDb conditional so it is always
+      // available. Declared field on NexusServices (src/main/mcp/types.ts) — reached the same way
+      // agentRunner/dispatcher are, so a future gate wrapper (e.g. the IPC AGENT_RUN_NOW handler)
+      // can write to the same EventLog instance without constructing a second one.
+      nexusServices.eventLog = eventLog;
+
       setStartupPhase('EventProcessor');
       await eventProcessor.initialize();
       localLogger.info('[NexusAI] EventProcessor initialized');
@@ -829,13 +953,15 @@ export default function main(context: any): void {
 
       // Start opportunistic local-site indexer now that bulkOpManager is wired
       if (nexusServices?.bulkOpManager) {
-        opportunisticScheduler.start({
-          bulkOpManager: nexusServices.bulkOpManager,
-          siteData: siteDataAccessor,
-          getSettings: getSchedulerSettings,
-          buildSiteNames: buildSiteNamesLocal,
-          logger: localLogger,
-        });
+        if (!isBackgroundWorkPaused()) {
+          opportunisticScheduler.start({
+            bulkOpManager: nexusServices.bulkOpManager,
+            siteData: siteDataAccessor,
+            getSettings: getSchedulerSettings,
+            buildSiteNames: buildSiteNamesLocal,
+            logger: localLogger,
+          });
+        }
       }
 
       const instructionRegistry = new InstructionRegistry();
@@ -895,21 +1021,26 @@ export default function main(context: any): void {
       };
 
       const runWpeAutoSyncIncremental = async (reason: string) => {
-        if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
-        const hours = getWpeSyncIntervalHours();
-        localLogger.info(`[NexusAI] WPE incremental sync triggered: ${reason} (threshold: ${hours}h)`);
-        // Signal sync started so UI shows active state immediately
-        emitNexusState({ wpeSyncProgress: { active: true, current: 0, total: 0, currentSite: '', phase: 'metadata' } });
+        const startedAt = Date.now();
         try {
-          const result = await wpeSyncService.syncAllWPESites(undefined, hours);
-          localLogger.info(
-            `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
-          );
-          // Clear progress and push fresh wpeStatus
-          emitNexusState({ wpeSyncProgress: null });
-        } catch (err) {
-          localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
-          emitNexusState({ wpeSyncProgress: null });
+          if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
+          const hours = getWpeSyncIntervalHours();
+          localLogger.info(`[NexusAI] WPE incremental sync triggered: ${reason} (threshold: ${hours}h)`);
+          // Signal sync started so UI shows active state immediately
+          emitNexusState({ wpeSyncProgress: { active: true, current: 0, total: 0, currentSite: '', phase: 'metadata' } });
+          try {
+            const result = await wpeSyncService.syncAllWPESites(undefined, hours);
+            localLogger.info(
+              `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
+            );
+            // Clear progress and push fresh wpeStatus
+            emitNexusState({ wpeSyncProgress: null });
+          } catch (err) {
+            localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
+            emitNexusState({ wpeSyncProgress: null });
+          }
+        } finally {
+          jobRunStore.record('wpeSync', startedAt, Date.now() - startedAt);
         }
       };
 
@@ -956,8 +1087,11 @@ export default function main(context: any): void {
         },
         intervalMs: haltedIntervalHours * 60 * 60 * 1000,
         logger: localLogger,
+        jobRunStore,
       });
-      haltedRefreshScheduler.start();
+      if (!isBackgroundWorkPaused()) {
+        haltedRefreshScheduler.start();
+      }
 
       // Phase 5: Scheduled SSH WP-CLI refresh for stale WPE installs.
       // Runs once every 24h; updates plugins, themes, site URL, admin email,
@@ -975,8 +1109,9 @@ export default function main(context: any): void {
           return s?.wpeAccountFilter ?? null;
         },
         logger: localLogger,
+        jobRunStore,
       });
-      if (wpeRefreshEnabled) {
+      if (wpeRefreshEnabled && !isBackgroundWorkPaused()) {
         wpeRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] WPE SSH refresh auto-run disabled by preference — scheduler not started');
@@ -994,8 +1129,9 @@ export default function main(context: any): void {
         services: nexusServices,
         intervalMs: externalRefreshHours * 60 * 60 * 1000,
         logger: localLogger,
+        jobRunStore,
       });
-      if (externalRefreshEnabled) {
+      if (externalRefreshEnabled && !isBackgroundWorkPaused()) {
         externalRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] External SSH host refresh auto-run disabled by preference — scheduler not started');
@@ -1021,8 +1157,9 @@ export default function main(context: any): void {
         indexService: externalContentIndexService,
         intervalMs: externalContentIndexHours * 60 * 60 * 1000,
         logger: localLogger,
+        jobRunStore,
       });
-      if (externalContentIndexEnabled) {
+      if (externalContentIndexEnabled && !isBackgroundWorkPaused()) {
         externalContentIndexScheduler.start();
       } else {
         localLogger.info('[NexusAI] External SSH content indexing auto-run disabled by preference — scheduler not started');
@@ -1056,6 +1193,10 @@ export default function main(context: any): void {
 
         // Tier 2: SSH sync only if auto-sync enabled and data is stale
         try {
+          if (isBackgroundWorkPaused()) {
+            localLogger.info('[NexusAI] Background work paused — skipping WPE SSH sync');
+            return;
+          }
           if (!isWpeSyncAutoEnabled()) {
             localLogger.info('[NexusAI] WPE auto-sync disabled — skipping SSH sync');
             return;
@@ -1083,6 +1224,7 @@ export default function main(context: any): void {
         } catch { /* non-fatal */ }
         // Tier 2: SSH only if enabled and data is stale
         try {
+          if (isBackgroundWorkPaused()) return;
           if (!isWpeSyncAutoEnabled()) return;
           const hours = getWpeSyncIntervalHours();
           const stale = await wpeSyncService.isStale(hours);
@@ -1170,6 +1312,7 @@ export default function main(context: any): void {
     nexusServices,
     wpeSyncService,
     metadataCache,
+    jobRunStore,
     onSettingsUpdated,
     emitNexusState,
   });

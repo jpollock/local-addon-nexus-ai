@@ -337,8 +337,10 @@ export class WPESyncService {
 
     // Helper: run a WP-CLI command with 1 retry.
     // The first call establishes the SSH ControlMaster (~13-30s cold start).
-    // If it times out, ControlPersist=30s may have kept the master daemon alive,
-    // so a retry completes in 1-3s via the existing socket.
+    // If it times out, the multiplexed socket (see SSH_CONTROL_PERSIST in remoteFailure.ts,
+    // currently 600s) will have kept the master daemon alive, so a retry completes in 1-3s
+    // via the existing socket. With the current persist window, socket survival is effectively
+    // certain for any retry on this path.
     const runWithRetry = async (args: string[]): Promise<{ stdout: string; success: boolean }> => {
       const norm = (r: any) => ({ stdout: r.stdout ?? '', success: !!r.success });
       const first = norm(await this.localServices.remoteWpCliRun(install.install_name, args).catch(() => ({ stdout: '', success: false })));
@@ -641,6 +643,25 @@ export class WPESyncService {
 
     this.logger.info(`[WPESyncService] indexAllWpeContent complete: ${indexed} indexed, ${errors} errors`);
     return { indexed, errors };
+  }
+
+  /**
+   * Content-index a single WPE install.
+   *
+   * `syncContent` is private and `indexAllWpeContent` is fleet-wide, so a
+   * selection-scoped bulk index had no entry point. Unlike the fleet-wide
+   * version, this THROWS when its dependencies are missing rather than warning
+   * and returning zero: the caller is BulkOperationManager, which records a
+   * per-site error, and a silent no-op there would report "indexed" for a site
+   * nothing ran against.
+   */
+  async indexOneWpeContent(siteId: string, installName: string): Promise<void> {
+    if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
+      throw new Error(
+        'WP Engine content indexing is unavailable — SSH key or embedding service not configured.',
+      );
+    }
+    await this.syncContent(siteId, installName);
   }
 
   /**

@@ -38,7 +38,9 @@ export const fleetHealthSummaryHandler: McpToolHandler = {
       siteIds.push(entry.siteId);
       siteInfoMap[entry.siteId] = {
         domain: site?.domain || '',
-        phpVersion: (site as any)?.phpVersion || '8.0',
+        // Never invent a version to keep a score computable — the calculator
+        // already has an honest path for undefined ("PHP version unknown").
+        phpVersion: (site as any)?.phpVersion || undefined,
       };
     }
 

@@ -1,0 +1,125 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`InboxTab renders a decide item under its group 1`] = `
+{
+  "children": [
+    null,
+    {
+      "children": [
+        {
+          "children": "Needs a decision · 1",
+          "key": null,
+          "props": {
+            "style": {
+              "color": "var(--nxai-card-text)",
+              "fontSize": 13,
+              "fontWeight": 700,
+              "marginBottom": 10,
+            },
+          },
+          "type": "div",
+        },
+        {
+          "children": [
+            {
+              "children": "File permissions are too open",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 14.5,
+                  "fontWeight": 600,
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": "wp-config.php is world-readable.",
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub)",
+                  "fontSize": 13,
+                  "marginTop": 4,
+                },
+              },
+              "type": "div",
+            },
+            {
+              "children": [
+                "Site A · security-sentinel",
+                "",
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-sub)",
+                  "fontSize": 12,
+                  "marginTop": 6,
+                },
+              },
+              "type": "div",
+            },
+            null,
+            {
+              "children": [
+                {
+                  "children": "Approve",
+                  "key": null,
+                  "props": {
+                    "onClick": "[fn]",
+                  },
+                  "type": "button",
+                },
+                {
+                  "children": "Not now",
+                  "key": null,
+                  "props": {
+                    "onClick": "[fn]",
+                  },
+                  "type": "button",
+                },
+              ],
+              "key": null,
+              "props": {
+                "style": {
+                  "display": "flex",
+                  "gap": 8,
+                  "marginTop": 12,
+                },
+              },
+              "type": "div",
+            },
+          ],
+          "key": "1",
+          "props": {
+            "style": {
+              "background": "var(--nxai-card-bg)",
+              "border": "1px solid var(--nxai-card-border)",
+              "borderRadius": 10,
+              "marginBottom": 10,
+              "padding": "14px 16px",
+            },
+          },
+          "type": "div",
+        },
+      ],
+      "key": "decide",
+      "props": {
+        "style": {
+          "marginBottom": 24,
+        },
+      },
+      "type": "div",
+    },
+    null,
+  ],
+  "key": null,
+  "props": {
+    "style": {
+      "padding": "0 0 24px",
+    },
+  },
+  "type": "div",
+}
+`;

@@ -312,6 +312,15 @@ export class StorageHealthPanel extends React.Component<StorageHealthPanelProps,
     return this.renderStorageBar('Vector Database', health.vectorDb.sizeBytes, meta);
   }
 
+  renderLogs(): React.ReactNode {
+    const logs = (this.state.health as any)?.logs;
+    // Absent while LOGGING_STATS is still in flight — render nothing rather than "0 B", which
+    // would read as "the logs take no space" on a directory that may hold hundreds of megabytes.
+    if (!logs) return null;
+    const meta = React.createElement('span', null, 'Agent runs, tool calls, model calls');
+    return this.renderStorageBar('Logs', logs.sizeBytes, meta);
+  }
+
   renderActions(): React.ReactNode {
     const { cleaning, cleanupSuccess } = this.state;
 
@@ -382,6 +391,7 @@ export class StorageHealthPanel extends React.Component<StorageHealthPanelProps,
             null,
             this.renderGraphDb(),
             this.renderVectorDb(),
+            this.renderLogs(),
             this.renderActions(),
           )
         : this.renderLoading(),

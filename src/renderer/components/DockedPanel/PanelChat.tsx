@@ -1,6 +1,6 @@
 import React from 'react';
 import { marked, Renderer } from 'marked';
-import { IPC_CHANNELS } from '../../../common/constants';
+import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 
@@ -24,6 +24,7 @@ interface UIMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   streaming?: boolean;
+  incomplete?: boolean;  // Message was interrupted; response is partial
   toolCalls?: Array<{
     id: string;
     name: string;
@@ -37,6 +38,7 @@ interface Props {
   electron: any;
   sessionId: string | null;
   selectedSiteIds: string[];
+  visible: boolean;
   onSessionCreated: (id: string) => void;
   onSessionSaved: (session: ChatSession, messages: ChatMessage[]) => void;
   onStreamingStatusChange?: (status: string | null) => void;
@@ -77,8 +79,8 @@ const styles = {
   },
   userBubble: {
     alignSelf: 'flex-end',
-    background: '#29b6cf',
-    color: '#05262e',
+    background: UI_COLORS.WPE_BRAND,
+    color: UI_COLORS.NEXUS_MARK,
     borderRadius: '12px 12px 2px 12px',
     padding: '8px 12px',
     fontSize: 13,
@@ -87,8 +89,8 @@ const styles = {
   },
   assistantBubble: {
     alignSelf: 'flex-start',
-    background: '#2c313a',
-    color: '#e4e7ec',
+    background: 'var(--nxai-card-border)',
+    color: 'var(--nxai-card-text)',
     borderRadius: '2px 12px 12px 12px',
     padding: '8px 12px',
     fontSize: 13,
@@ -98,8 +100,8 @@ const styles = {
   },
   systemLine: {
     alignSelf: 'center',
-    background: '#10262b',
-    color: '#5fd2e5',
+    background: 'var(--nxai-section-bg)',
+    color: UI_COLORS.WPE_BRAND,
     borderRadius: 12,
     padding: '3px 10px',
     fontSize: 11,
@@ -109,16 +111,16 @@ const styles = {
     display: 'flex',
     gap: 8,
     padding: '10px 14px',
-    borderTop: '1px solid #2c313a',
-    background: '#1a1e24',
+    borderTop: `1px solid var(--nxai-card-border)`,
+    background: 'var(--nxai-card-bg)',
     flexShrink: 0,
   },
   textarea: {
     flex: 1,
-    background: '#23272f',
-    border: '1px solid #2c313a',
+    background: 'var(--nxai-input-bg)',
+    border: `1px solid var(--nxai-card-border)`,
     borderRadius: 6,
-    color: '#e4e7ec',
+    color: 'var(--nxai-card-text)',
     fontSize: 13,
     padding: '8px 10px',
     resize: 'none' as const,
@@ -128,10 +130,10 @@ const styles = {
     maxHeight: 120,
   },
   sendBtn: (disabled: boolean) => ({
-    background: disabled ? '#2c313a' : '#29b6cf',
+    background: disabled ? 'var(--nxai-card-border)' : UI_COLORS.WPE_BRAND,
     border: 'none',
     borderRadius: 6,
-    color: disabled ? '#868d98' : '#05262e',
+    color: disabled ? 'var(--nxai-card-sub)' : UI_COLORS.NEXUS_MARK,
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: 18,
     padding: '0 14px',
@@ -233,6 +235,7 @@ export class PanelChat extends React.Component<Props, State> {
   private inputRef = React.createRef<HTMLTextAreaElement>();
   private streamListener: ((_event: any, sessionId: string, event: any) => void) | null = null;
   private actionListener: ((...args: any[]) => void) | null = null;
+  private clearListener: (() => void) | null = null;
   private offlineListener: (() => void) | null = null;
   private onlineListener: (() => void) | null = null;
 
@@ -275,6 +278,13 @@ export class PanelChat extends React.Component<Props, State> {
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
 
+    // Listen for chat-all-cleared (fired when user deletes all history via Settings)
+    this.clearListener = () => {
+      // Drop in-memory session and messages so the next persistSession has nothing to resurrect
+      this.setState({ activeSessionId: null, messages: [], actionCount: 0 });
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+
     // Listen for offline/online events
     this.offlineListener = () => this.setState({ offline: true });
     this.onlineListener = () => this.setState({ offline: false });
@@ -305,6 +315,10 @@ export class PanelChat extends React.Component<Props, State> {
     if (this.actionListener) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
       this.actionListener = null;
+    }
+    if (this.clearListener) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+      this.clearListener = null;
     }
     if (this.offlineListener) window.removeEventListener('offline', this.offlineListener);
     if (this.onlineListener) window.removeEventListener('online', this.onlineListener);
@@ -359,6 +373,7 @@ export class PanelChat extends React.Component<Props, State> {
         id: m.id,
         role: m.role,
         content: m.content,
+        incomplete: m.incomplete,
       }));
       // Restore the DB-persisted action count so persistSession never resets it to 0.
       const actionCount: number = result.session?.actionCount ?? 0;
@@ -523,13 +538,15 @@ export class PanelChat extends React.Component<Props, State> {
       };
 
       const chatMessages: ChatMessage[] = messages
-        .filter((m) => m.role !== 'system' && !m.streaming)
+        .filter((m) => m.role !== 'system')
+        .filter((m) => !(m.role === 'assistant' && m.content === ''))
         .map((m) => ({
           id: m.id,
           sessionId,
           role: m.role,
           content: m.content,
           timestamp: Date.now(),
+          incomplete: m.streaming ? true : undefined,
         }));
 
       console.log('[NexusAI] persistSession — saving', chatMessages.length, 'messages, title:', title);
@@ -594,9 +611,9 @@ export class PanelChat extends React.Component<Props, State> {
       {
         key,
         style: {
-          marginTop: 4, marginBottom: 4, borderLeft: '2px solid #29b6cf', paddingLeft: 10,
-          fontSize: 12, color: '#c9d1d9', maxHeight: 300, overflowY: 'auto' as const,
-          background: '#1a1e24', borderRadius: '0 4px 4px 0',
+          marginTop: 4, marginBottom: 4, borderLeft: `2px solid ${UI_COLORS.WPE_BRAND}`, paddingLeft: 10,
+          fontSize: 12, color: 'var(--nxai-card-text)', maxHeight: 300, overflowY: 'auto' as const,
+          background: 'var(--nxai-card-bg)', borderRadius: '0 4px 4px 0',
         },
       },
       React.createElement('pre', { style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const } }, truncated),
@@ -616,8 +633,8 @@ export class PanelChat extends React.Component<Props, State> {
       .filter((tc) => tc.status === 'running')
       .map((tc) => React.createElement(
         'div',
-        { key: tc.id, style: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', color: '#868d98', fontSize: 12 } },
-        React.createElement('span', { style: { color: '#5fd2e5', fontSize: 13 } }, '⚡'),
+        { key: tc.id, style: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', color: 'var(--nxai-card-sub)', fontSize: 12 } },
+        React.createElement('span', { style: { color: UI_COLORS.WPE_BRAND, fontSize: 13 } }, '⚡'),
         React.createElement('span', null, toolDisplayName(tc.name)),
         React.createElement('span', { style: { opacity: 0.5 } }, '…'),
       ));
@@ -657,14 +674,14 @@ export class PanelChat extends React.Component<Props, State> {
         React.createElement(
           'div',
           {
-            style: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', color: '#868d98', fontSize: 12, cursor: 'pointer', userSelect: 'none' as const },
+            style: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', color: 'var(--nxai-card-sub)', fontSize: 12, cursor: 'pointer', userSelect: 'none' as const },
             onClick: () => this.setState((s) => {
               const next = new Set(s.expandedTools);
               next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey);
               return { expandedTools: next };
             }),
           },
-          React.createElement('span', { style: { color: '#22c55e', fontSize: 13 } }, '✓'),
+          React.createElement('span', { style: { color: UI_COLORS.STATUS_RUNNING, fontSize: 13 } }, '✓'),
           React.createElement('span', null, label),
           React.createElement('span', { style: { fontSize: 10, opacity: 0.6, marginLeft: 2 } }, isExpanded ? '▾' : '▸'),
         ),
@@ -696,11 +713,31 @@ export class PanelChat extends React.Component<Props, State> {
           ),
         );
       } else {
-        bubbleElement = React.createElement('div', {
-          style: { ...styles.assistantBubble, whiteSpace: 'normal' as const },
-          className: 'nexus-md',
-          dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) },
-        });
+        bubbleElement = React.createElement(
+          'div',
+          null,
+          React.createElement('div', {
+            style: { ...styles.assistantBubble, whiteSpace: 'normal' as const },
+            className: 'nexus-md',
+            dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) },
+          }),
+          msg.incomplete
+            ? React.createElement(
+                'div',
+                {
+                  style: {
+                    fontSize: 11,
+                    color: 'var(--nxai-card-sub)',
+                    fontStyle: 'italic' as const,
+                    marginTop: 6,
+                    paddingLeft: 12,
+                    borderLeft: '2px solid var(--nxai-card-border)',
+                  },
+                },
+                'Response interrupted',
+              )
+            : null,
+        );
       }
     } else {
       // User bubble — plain text, no markdown
@@ -733,8 +770,8 @@ export class PanelChat extends React.Component<Props, State> {
           messages.length === 0
             ? React.createElement(
                 'div',
-                { style: { padding: '24px 0', color: '#868d98', textAlign: 'center' as const, fontSize: 13 } },
-                React.createElement('div', { style: { color: '#29b6cf', fontSize: 18, marginBottom: 8 } }, 'Nexus'),
+                { style: { padding: '24px 0', color: 'var(--nxai-card-sub)', textAlign: 'center' as const, fontSize: 13 } },
+                React.createElement('div', { style: { color: UI_COLORS.WPE_BRAND, fontSize: 18, marginBottom: 8 } }, 'Nexus'),
                 React.createElement('div', null, 'Ask anything about your WordPress sites.'),
               )
             : null,
@@ -747,11 +784,11 @@ export class PanelChat extends React.Component<Props, State> {
             {
               style: {
                 padding: 12,
-                color: '#e0a94b',
+                color: 'var(--nxai-warn-text)',
                 textAlign: 'center' as const,
                 fontSize: 12,
-                background: '#1a1e24',
-                borderTop: '1px solid #2c313a',
+                background: 'var(--nxai-card-bg)',
+                borderTop: `1px solid var(--nxai-card-border)`,
               },
             },
             'No network connection — history is still available.',
@@ -783,7 +820,7 @@ export class PanelChat extends React.Component<Props, State> {
           ),
       React.createElement(
         'div',
-        { style: { padding: '3px 14px 6px', color: '#868d98', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },
+        { style: { padding: '3px 14px 6px', color: 'var(--nxai-card-sub)', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },
         React.createElement('span', null, `${providerName} · ${modelName}`),
         React.createElement('span', null, '· Confirm required for destructive actions'),
       ),

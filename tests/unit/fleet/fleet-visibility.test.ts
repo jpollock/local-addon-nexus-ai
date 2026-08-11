@@ -130,6 +130,69 @@ describe('fleet queries include external sites', () => {
     expect(phpVersions).toContain('8.1'); // wpe site
   });
 
+  it('nexusFleetSummary.counts reads local from siteData, never from the graph', async () => {
+    // The fixture's graph has ONE 'local' row (local-site-1, from the
+    // beforeEach seed) alongside the wpe and external rows, but ctx()'s
+    // siteData.getSites() mock returns {} — zero local sites. If
+    // counts.local ever read the graph's source='local' rows instead of
+    // Local's own store, this would be 1, not 0 — see CLAUDE.md, "Fleet
+    // counts": "Never count local sites from the graph."
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSummary(null, {});
+    expect(r.success).toBe(true);
+    expect(r.counts).toBeDefined();
+    expect(r.counts.local.count).toBe(0);
+    expect(r.counts.wpe.count).toBe(1);
+    expect(r.counts.external.count).toBe(1);
+    expect(r.counts.installs.count).toBe(2);
+    expect(r.counts.installs.count).toBe(r.counts.local.count + r.counts.wpe.count + r.counts.external.count);
+
+    // Every population count carries a scope string.
+    for (const key of ['local', 'wpe', 'external', 'installs'] as const) {
+      expect(typeof r.counts[key].scope).toBe('string');
+      expect(r.counts[key].scope.length).toBeGreaterThan(0);
+    }
+
+    // counts.installs (2) is a DIFFERENT population than totalSites (2 here
+    // only by coincidence — both happen to equal localTwins.length(0) +
+    // graph wpe/external(2)). They must never be assumed interchangeable;
+    // this resolver keeps them as two separately-labelled fields rather than
+    // collapsing one into the other. See the doc comment on the resolver.
+    expect(r.totalSites).toBe(r.counts.installs.count);
+  });
+
+  it('nexusFleetSummary.twinScope labels totalSites and its siblings, and diverges from counts when the twin cache does', async () => {
+    // Force a genuine divergence: the twin cache reports 3 local twins, but
+    // siteData.getSites() (counts.local's authority) still reports 0. This
+    // is the exact "twin cache and Local's store briefly disagree" scenario
+    // the resolver's doc comment warns about — twinScope must describe the
+    // twins population honestly, distinct from counts.
+    const context = ctx();
+    context.services.twinService = {
+      getAll: jest.fn().mockReturnValue([
+        { siteName: 'a', completeness: 'indexed', asOf: Date.now(), wpVersion: '6.8', phpVersion: '8.2', lastPostAt: null },
+        { siteName: 'b', completeness: 'indexed', asOf: Date.now(), wpVersion: '6.8', phpVersion: '8.2', lastPostAt: null },
+        { siteName: 'c', completeness: 'indexed', asOf: Date.now(), wpVersion: '6.8', phpVersion: '8.2', lastPostAt: null },
+      ]),
+    };
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetSummary(null, {});
+    expect(r.success).toBe(true);
+
+    // 3 twin-cache local + 1 wpe + 1 external (graph) = 5.
+    expect(r.totalSites).toBe(5);
+    expect(r.twinScope).toBeDefined();
+    expect(r.twinScope.measured).toBe(r.totalSites);
+    expect(typeof r.twinScope.label).toBe('string');
+    expect(r.twinScope.label.length).toBeGreaterThan(0);
+
+    // counts.local is still 0 (siteData.getSites() is still {}) — the two
+    // populations genuinely disagree here, which is exactly why they must
+    // never share a label or be divided against each other.
+    expect(r.counts.local.count).toBe(0);
+    expect(r.twinScope.measured).not.toBe(r.counts.installs.count);
+    expect(r.twinScope.label).not.toBe(r.counts.installs.scope);
+  });
+
   it('nexusFleetPlugins includes the external site', async () => {
     const r = await (createResolvers(ctx()).Mutation as any).nexusFleetPlugins(null, {});
     expect(r.success).toBe(true);
@@ -1447,6 +1510,46 @@ describe('FLEET_COMPLETENESS counts external hosts', () => {
     expect(r.scanned).toBe(3);
     expect(r.configured).toBe(3); // all three have wp_version
     expect(r.searchable).toBe(0); // none indexed — honest, not hidden
+  });
+
+  it('does not count a graph "local" row that no longer exists in Local\'s own store (dead sentinel-* row)', async () => {
+    // The one real local site — present in both the graph and siteData.getSites().
+    await graphService.upsertSite({
+      id: 'local-1',
+      name: 'local-site',
+      source: 'local',
+      host: 'local',
+      domain: 'local.local',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // A SECOND active graph 'local' row whose id is deliberately NOT in the
+    // mocked siteData.getSites() below — the dead sentinel-* shape measured
+    // on a real machine (56 active graph 'local' rows vs 37 in Local's
+    // store). It carries a wp_version, so a graph-sourced COUNT would wrongly
+    // include it in `configured`.
+    await graphService.upsertSite({
+      id: 'sentinel-dead-1',
+      name: 'sentinel-dead',
+      source: 'local',
+      host: 'local',
+      domain: 'sentinel-dead.local',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Local's store only knows about the one real site.
+    registerDeps({ 'local-1': { id: 'local-1', name: 'local-site' } });
+    const r: any = mockIpc.invoke(IPC_CHANNELS.FLEET_COMPLETENESS);
+
+    // Only the real local site is counted, even though the graph has 2
+    // active 'local' rows with wp_version set.
+    expect(r.configured).toBe(1);
   });
 
   it('excludes an inactive (removed) external host from the count', async () => {

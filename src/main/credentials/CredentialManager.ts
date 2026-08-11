@@ -270,6 +270,11 @@ export class CredentialManager implements ICredentialManager {
           grant_type: 'refresh_token',
           refresh_token: rt,
           client_id: cfg.clientId,
+          // Google requires client_secret on the refresh grant exactly as it does on the initial
+          // code exchange. Omitting it here — while exchangeCode sent it — meant every connection
+          // worked until its first access token expired (~1 hour) and then failed forever, which
+          // reads as "it broke on its own" rather than as a missing credential.
+          ...(cfg.clientSecret ? { client_secret: cfg.clientSecret } : {}),
         });
 
         const res = await this.fetchFn(cfg.tokenEndpoint, {
@@ -279,12 +284,17 @@ export class CredentialManager implements ICredentialManager {
         });
 
         if (!res.ok) {
-          const errBody = await res.json().catch(() => ({})) as { error?: string };
+          const errBody = await res.json().catch(() => ({})) as { error?: string; error_description?: string };
           if (errBody.error === 'invalid_grant') {
             await this.handleRefreshFailure(conn.id, 'invalid_grant');
             throw new RevokedError(provider);
           }
-          throw new Error(`Refresh failed: ${res.status}`);
+          // Every Google OAuth failure is a 400; the body is the only thing that distinguishes
+          // `invalid_client` (missing/wrong secret) from the rest, so it has to survive.
+          const detail = errBody.error
+            ? ` — ${errBody.error}${errBody.error_description ? `: ${errBody.error_description}` : ''}`
+            : '';
+          throw new Error(`Refresh failed: ${res.status}${detail}`);
         }
 
         const data = await res.json() as { access_token: string; expires_in: number; scope?: string };
@@ -303,7 +313,13 @@ export class CredentialManager implements ICredentialManager {
         }
       }
     }
-    throw new TemporarilyUnavailableError(provider);
+    // Carry the last real reason. `TemporarilyUnavailableError` alone said "failed after retries",
+    // which describes the loop rather than the fault and sent the user to reconnect an account
+    // that was never the problem.
+    throw new TemporarilyUnavailableError(
+      provider,
+      lastErr instanceof Error ? lastErr.message : undefined,
+    );
   }
 
   private async withMutex<T>(key: string, fn: () => Promise<T>): Promise<T> {

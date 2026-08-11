@@ -1,4 +1,5 @@
 import type { McpToolHandler, McpToolResult } from '../../types';
+import { collectFleetCounts } from '../../../fleet/collectFleetCounts';
 
 function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
@@ -21,8 +22,20 @@ export const fleetOverviewHandler: McpToolHandler = {
   async execute(_args, services): Promise<McpToolResult> {
     const db = (services as any).graphService?.getDb?.();
 
+    // The canonical fleet counts — same population `collectFleetCounts` gives
+    // every other surface (GET_FLEET_SUMMARY, GET_DASHBOARD_STATS). Used below
+    // to replace the ad hoc `source IN ('wpe','external')` probe query with a
+    // single shared definition, so this tool can't drift from theirs.
+    const counts = collectFleetCounts({
+      getSites: () => (services as any).siteData?.getSites?.() ?? {},
+      getDb: () => db ?? null,
+    });
+
     // ── Detect fleet type from data presence ──────────────────────────────
-    let wpeCount = 0;
+    // wpeCount here means "any remote install, WPE or external" — same value
+    // the old `source IN ('wpe','external')` probe query produced, now sourced
+    // from collectFleetCounts instead of a second, separately-maintained query.
+    const wpeCount = counts.wpe.count + counts.external.count;
     let wpeRows: Array<{
       count: number;
       total_posts: number | null;
@@ -40,13 +53,6 @@ export const fleetOverviewHandler: McpToolHandler = {
 
     if (db) {
       try {
-        // Remote sites of every kind: WPE installs and external SSH hosts.
-        // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
-        const probe = db.prepare(
-          "SELECT COUNT(*) as c FROM sites WHERE source IN ('wpe', 'external') AND is_active=1"
-        ).get() as { c: number };
-        wpeCount = probe?.c ?? 0;
-
         if (wpeCount > 0) {
           // Every coverage metric is counted over the same population it is
           // divided by. A numerator spanning both sources over a WPE-only
@@ -71,6 +77,19 @@ export const fleetOverviewHandler: McpToolHandler = {
     }
 
     // ── Local site data from twin service ─────────────────────────────────
+    // Deliberately NOT collectFleetCounts().local.count here: every figure in
+    // this section (localIndexed, post/user totals, WP version histogram) is
+    // computed by iterating `twins`, and localCount is the denominator those
+    // figures are reported against. Swapping only localCount's source to
+    // Local's own site store while leaving the rest twin-scoped would let
+    // localIndexed (a subset of twins) exceed localCount whenever the twin
+    // cache and Local's store briefly disagree — the exact "numerator and
+    // denominator from different populations" bug this file's own comment
+    // below already guards against for the WPE/external split. The twin cache
+    // is a legitimate, documented population for local detail (CLAUDE.md,
+    // "Fleet counts") — counts.local.count is used above only for the
+    // combined `wpeCount` gate, whose population (WPE + external, from the
+    // graph) is unrelated to `twins`.
     const twins = (services as any).twinService?.getAll?.() ?? [];
     const localCount = twins.length;
     const localIndexed = twins.filter((t: any) =>

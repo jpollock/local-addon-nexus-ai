@@ -1,5 +1,5 @@
 import React from 'react';
-import { IPC_CHANNELS } from '../../../common/constants';
+import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import type { ChatSession } from '../../../common/types';
 
 interface Props {
@@ -24,31 +24,31 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    background: '#1a1e24',
-    borderRight: '1px solid #2c313a',
+    background: 'var(--nxai-card-bg)',
+    borderRight: `1px solid var(--nxai-card-border)`,
   },
   toolbar: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
     padding: '8px 12px',
-    borderBottom: '1px solid #2c313a',
+    borderBottom: `1px solid var(--nxai-card-border)`,
   },
   searchInput: {
     flex: 1,
-    background: '#23272f',
-    border: '1px solid #2c313a',
+    background: 'var(--nxai-input-bg)',
+    border: `1px solid var(--nxai-card-border)`,
     borderRadius: 4,
-    color: '#e4e7ec',
+    color: 'var(--nxai-card-text)',
     fontSize: 12,
     padding: '4px 8px',
     outline: 'none',
   },
   newBtn: {
-    background: '#29b6cf',
+    background: UI_COLORS.WPE_BRAND,
     border: 'none',
     borderRadius: 4,
-    color: '#05262e',
+    color: UI_COLORS.NEXUS_MARK,
     cursor: 'pointer',
     fontSize: 16,
     lineHeight: 1,
@@ -63,14 +63,14 @@ const styles = {
   row: (active: boolean) => ({
     padding: '8px 12px',
     cursor: 'pointer',
-    background: active ? '#29b6cf22' : 'transparent',
-    borderLeft: active ? '2px solid #29b6cf' : '2px solid transparent',
+    background: active ? 'rgba(14, 202, 212, 0.13)' : 'transparent',
+    borderLeft: active ? `2px solid ${UI_COLORS.WPE_BRAND}` : '2px solid transparent',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: 2,
   }),
   rowTitle: {
-    color: '#e4e7ec',
+    color: 'var(--nxai-card-text)',
     fontSize: 12,
     fontWeight: 500,
     overflow: 'hidden',
@@ -78,23 +78,23 @@ const styles = {
     whiteSpace: 'nowrap' as const,
   },
   rowMeta: {
-    color: '#868d98',
+    color: 'var(--nxai-card-sub)',
     fontSize: 11,
     display: 'flex',
     gap: 6,
     alignItems: 'center',
   },
   actionBadge: {
-    color: '#5fd2e5',
+    color: UI_COLORS.WPE_BRAND,
     fontSize: 10,
     fontWeight: 600,
   },
   expiryBadge: {
-    color: '#e0a94b',
+    color: 'var(--nxai-warn-text)',
     fontSize: 10,
   },
   empty: {
-    color: '#868d98',
+    color: 'var(--nxai-card-sub)',
     fontSize: 12,
     padding: '24px 12px',
     textAlign: 'center' as const,
@@ -105,10 +105,10 @@ const styles = {
     marginTop: 4,
   },
   renameInput: {
-    background: '#23272f',
-    border: '1px solid #29b6cf',
+    background: 'var(--nxai-input-bg)',
+    border: `1px solid ${UI_COLORS.WPE_BRAND}`,
     borderRadius: 3,
-    color: '#e4e7ec',
+    color: 'var(--nxai-card-text)',
     fontSize: 12,
     padding: '2px 6px',
     outline: 'none',
@@ -131,6 +131,8 @@ function daysUntilExpiry(expiresAt: number): number {
 }
 
 export class SessionsSidebar extends React.Component<Props, State> {
+  private clearListener: (() => void) | null = null;
+
   constructor(props: Props) {
     super(props);
     this.state = { sessions: [], search: '', loading: false, hoveredId: null, renamingId: null, renameValue: '' };
@@ -142,12 +144,26 @@ export class SessionsSidebar extends React.Component<Props, State> {
   }
 
   componentDidMount() {
+    // Listen for chat-all-cleared (fired when user deletes all history via Settings)
+    this.clearListener = () => {
+      // Clear sessions list immediately so stale sessions don't linger
+      this.setState({ sessions: [] });
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+
     this.loadSessions();
   }
 
   componentDidUpdate(prevProps: Props) {
     if (prevProps.version !== this.props.version) {
       this.loadSessions();
+    }
+  }
+
+  componentWillUnmount() {
+    if (this.clearListener) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+      this.clearListener = null;
     }
   }
 
@@ -204,7 +220,7 @@ export class SessionsSidebar extends React.Component<Props, State> {
       background: 'none',
       border: 'none',
       cursor: 'pointer',
-      color: '#868d98',
+      color: 'var(--nxai-card-sub)',
       padding: '2px 4px',
       fontSize: 11,
     };
@@ -324,7 +340,7 @@ export class SessionsSidebar extends React.Component<Props, State> {
                       React.createElement(
                         'button',
                         {
-                          style: { ...smallIconBtn, color: '#e05252' },
+                          style: { ...smallIconBtn, color: 'var(--nxai-danger-text)' },
                           onClick: (e: React.MouseEvent) => this.handleDelete(e, session.id),
                         },
                         '✕',

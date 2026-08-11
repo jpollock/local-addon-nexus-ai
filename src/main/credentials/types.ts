@@ -57,7 +57,12 @@ export type CredentialDeclaration = OAuthCredentialDeclaration | ApiKeyCredentia
 export type FlowResult =
   | { outcome: 'success'; accessToken: string; refreshToken: string; expiresIn: number; scopes: string[]; accountLabel: string }
   | { outcome: 'cancelled' }
-  | { outcome: 'state_mismatch' };
+  | { outcome: 'state_mismatch' }
+  /** The user consented but the flow could not be completed — token exchange rejected, network
+   * failure, or a malformed response. Distinct from 'cancelled' because the user did their part:
+   * reporting it as a cancellation makes a real fault look like a choice, and the flow ends with
+   * nothing on screen. */
+  | { outcome: 'error'; message: string };
 
 // ─── IPC events ───────────────────────────────────────────────────────────────
 
@@ -100,8 +105,14 @@ export class SafeStorageUnavailableError extends Error {
 }
 
 export class TemporarilyUnavailableError extends Error {
-  constructor(provider: string) {
-    super(`Token refresh for provider "${provider}" failed after retries`);
+  /** `reason` is the last real failure from the refresh attempts. Without it the message
+   * described the retry loop rather than the fault, which pointed users at reconnecting an
+   * account that was never the problem. */
+  constructor(provider: string, reason?: string) {
+    super(
+      `Token refresh for provider "${provider}" failed after retries`
+      + (reason ? ` — last error: ${reason}` : ''),
+    );
     this.name = 'TemporarilyUnavailableError';
   }
 }

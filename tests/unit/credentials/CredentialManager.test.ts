@@ -115,3 +115,70 @@ describe('CredentialManager', () => {
     expect(emitCredentialEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'credential:revoked' }));
   });
 });
+
+describe('the refresh grant', () => {
+  // Snapshot a COPY and restore into a fresh object. Assigning the captured reference back leaves
+  // whatever this suite added visible to later files in the same jest worker.
+  const OLD_ENV = { ...process.env };
+  afterEach(() => { process.env = { ...OLD_ENV }; });
+
+  /** Drive one refresh and hand back the form body Google was sent. */
+  async function captureRefreshBody(): Promise<URLSearchParams> {
+    const bodies: string[] = [];
+    const mockFetch = jest.fn(async (_url: string, init: any) => {
+      bodies.push(String(init.body));
+      return { ok: true, json: async () => ({ access_token: 'at', expires_in: 3600, scope: GSC_SCOPE }) };
+    });
+    const mgr = makeManager({ mockFetch });
+    await mgr.connect('google', 'agent-a', '', [GSC_SCOPE]);
+    // Expire the cached token so the next read has to refresh.
+    (mgr as any).tokenCache.set(
+      (mgr as any).store.listConnections()[0].id,
+      { token: 'stale', expiresAt: Date.now() - 1, scopes: [GSC_SCOPE] },
+    );
+    await mgr.getTokenForGrant('google', 'agent-a', '');
+    return new URLSearchParams(bodies[bodies.length - 1]);
+  }
+
+  it('sends client_secret, exactly as the initial code exchange does', async () => {
+    // Omitting it meant every connection worked until its first access token expired (~1 hour)
+    // and then failed permanently — which reads as the app breaking on its own rather than as a
+    // missing credential. exchangeCode always sent it; this path never did.
+    process.env = {
+      ...OLD_ENV,
+      NEXUS_GOOGLE_CLIENT_ID: 'cid.apps.googleusercontent.com',
+      NEXUS_GOOGLE_CLIENT_SECRET: 'a-secret',
+    };
+    const body = await captureRefreshBody();
+    expect(body.get('grant_type')).toBe('refresh_token');
+    expect(body.get('client_id')).toBe('cid.apps.googleusercontent.com');
+    expect(body.get('client_secret')).toBe('a-secret');
+  });
+
+  it('omits client_secret rather than sending an empty one when none is configured', async () => {
+    process.env = { ...OLD_ENV, NEXUS_GOOGLE_CLIENT_ID: 'cid.apps.googleusercontent.com' };
+    delete process.env.NEXUS_GOOGLE_CLIENT_SECRET;
+    const body = await captureRefreshBody();
+    expect(body.has('client_secret')).toBe(false);
+  });
+
+  it('carries Google’s reason instead of only describing the retry loop', async () => {
+    // "failed after retries" describes the loop, not the fault, and sent users to reconnect an
+    // account that was never the problem.
+    const mockFetch = jest.fn(async (_url: string, init: any) => {
+      if (String(init.body).includes('grant_type=refresh_token')) {
+        return { ok: false, status: 400, json: async () => ({ error: 'invalid_client', error_description: 'Unauthorized' }) };
+      }
+      return { ok: true, json: async () => ({ access_token: 'at', expires_in: 3600, scope: GSC_SCOPE }) };
+    });
+    const mgr = makeManager({ mockFetch });
+    await mgr.connect('google', 'agent-a', '', [GSC_SCOPE]);
+    (mgr as any).tokenCache.set(
+      (mgr as any).store.listConnections()[0].id,
+      { token: 'stale', expiresAt: Date.now() - 1, scopes: [GSC_SCOPE] },
+    );
+
+    await expect(mgr.getTokenForGrant('google', 'agent-a', '')).rejects.toThrow(/invalid_client/);
+    await expect(mgr.getTokenForGrant('google', 'agent-a', '')).rejects.toThrow(TemporarilyUnavailableError);
+  });
+});

@@ -345,6 +345,9 @@ export interface NexusSettings {
   wpeSyncIntervalHours?: number; // How often to auto-sync WPE sites (default: 8)
   wpeSyncAutoEnabled?: boolean;  // Whether WPE SSH metadata sync is enabled (default: false — opt-in)
   haltedSiteRefreshIntervalHours?: number; // How often to refresh halted local sites (default: 24)
+  /** Master pause for scheduled background work (default: false). Per-job
+   *  AutoEnabled flags are preserved while paused. */
+  backgroundWorkPaused?: boolean;
   wpeRefreshIntervalHours?: number;         // How often to run WPE SSH refresh cycle (default: 24)
   wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH site-info refresh is enabled (default: false — opt-in)
   externalRefreshIntervalHours?: number;    // How often to refresh external SSH hosts (default: 24)
@@ -383,6 +386,14 @@ export interface NexusSettings {
   dockedPanelEnabled?: boolean;
   /** Which embedding model to use for semantic search. Default: 'minilm' (22MB, fast). 'nomic' = 522MB download, better quality. */
   embeddingModel?: 'minilm' | 'bge-small';
+  /** Level the structured event log writes at. NEXUS_LOG_LEVEL overrides it. Default INFO. */
+  logLevel?: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
+  /** Days to keep log files. Default: 14. */
+  logRetentionDays?: number;
+  /** Days to keep transcript files. Default: 3. */
+  transcriptRetentionDays?: number;
+  /** Disk budget for all logging in bytes. Default: 250MB. */
+  logBudgetBytes?: number;
 }
 
 export interface SiteAIConfig {
@@ -448,6 +459,7 @@ export interface ChatMessage {
   toolCalls?: unknown;       // JSON-serialised tool calls
   segments?: unknown;        // JSON-serialised MessageSegment[]
   timestamp: number;
+  incomplete?: boolean;      // Message was streaming when saved; response may be partial
 }
 
 // ===== Unified Search Types =====
@@ -628,6 +640,34 @@ export interface EventTimelineEntry {
 /**
  * Event statistics for dashboard
  */
+/**
+ * Structurally identical to `SystemHealth` / `HealthState` in
+ * `src/main/health/SystemHealth.ts` — duplicated here rather than imported
+ * because `common/` is shared with the renderer and must not depend on
+ * `main/`. Keep the two in sync if either changes.
+ */
+export type HealthState = 'ok' | 'degraded' | 'failing' | 'unknown';
+
+export interface HealthSignal {
+  state: HealthState;
+  /** Plain-language cause. Null only when state is 'ok'. */
+  reason: string | null;
+}
+
+export interface SystemHealthInputs {
+  agentRuns: HealthSignal;
+  syncStaleness: HealthSignal;
+  credentials: HealthSignal;
+  eventQueue: HealthSignal;
+}
+
+export interface SystemHealth {
+  overall: HealthState;
+  inputs: SystemHealthInputs;
+  /** Reasons from every non-ok input, most severe first. */
+  reasons: string[];
+}
+
 export interface EventStats {
   total: number;
   today: number;
@@ -635,7 +675,16 @@ export interface EventStats {
   pending: number;
   failed: number;
   byType: Record<string, number>;
-  healthStatus: 'good' | 'warning' | 'error';
+  /**
+   * Rolled up from four signals (agents, sync freshness, credentials, event
+   * queue) by `collectSystemHealth` / `rollUpSystemHealth` — see
+   * `src/main/health/SystemHealth.ts`. `'unknown'` means an input could not be
+   * read; it is never treated as healthy. `'ok'` requires every input to have
+   * actually answered.
+   */
+  healthStatus: HealthState;
+  /** The full rollup — per-input states and human-readable reasons. */
+  systemHealth?: SystemHealth;
 }
 
 /**
@@ -653,6 +702,9 @@ export interface StorageHealth {
     sizeBytes: number;
     path: string;
     tableCount: number;
+  };
+  logs?: {
+    sizeBytes: number;
   };
   pendingEvents: number;
   failedEvents: number;

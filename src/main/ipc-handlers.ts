@@ -13,9 +13,12 @@ import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/const
 import { getApiKey } from './security/KeyVault';
 import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
+import { AUTO_PAUSED_KEY, resumeAgent, isAutoPaused } from './inbox/autoPause';
+import type { InboxItem } from './inbox/types';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
+import { localDay } from './logging/eventLog';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -37,6 +40,7 @@ import {
 } from './ipc/chat-sessions';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
+import { isNoiseEvent } from './events/timelineFilter';
 import type { EventTimelineEntry, EventStats, StartupStatus } from '../common/types';
 import { SearchService } from './search/SearchService';
 import { HealthScoreCalculator } from './health/HealthScoreCalculator';
@@ -92,7 +96,9 @@ import {
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
+import * as fs from 'fs';
+import * as path from 'path';
 import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 import { vectorSiteId } from './vector-store/vectorSiteId';
 import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from './external/hostKeyTrust';
@@ -100,6 +106,10 @@ import { resolveSshConfig, defaultSshExec } from './external/sshExec';
 import { detectCollision, writeHostBlock, generateHostKey, previewHostBlock } from './external/sshConfigWriter';
 import { listSshConfigHosts } from './external/sshConfigParser';
 import { getExternalProfile, upsertExternalProfile } from './external/externalSiteStore';
+import { collectFleetCounts } from './fleet/collectFleetCounts';
+import { buildSiteRows } from './fleet/siteRows';
+import { createExternalBulkOps } from './bulk/externalBulkOps';
+import { collectSystemHealth } from './health/collectSystemHealth';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -150,6 +160,8 @@ export interface IpcHandlerDeps {
   wpeSyncService?: WPESyncService;
   /** Site metadata cache (Digital Twin) */
   metadataCache?: SiteMetadataCache;
+  /** Job run durations and timestamps (spec 6, Task 2) */
+  jobRunStore?: import('./background/JobRunStore').JobRunStore;
   /**
    * Called after settings are successfully saved. Used to restart interval
    * schedulers (e.g. OpportunisticScheduler) when the user changes preferences.
@@ -276,7 +288,11 @@ async function withSiteRunning<T>(
   }
 }
 
-import { canAutoRunWith, AutoRunKind } from './agent-runtime/auto-run-gate';
+import { canAutoRunWith, AutoRunKind, AutoRunDecision, SkipTrigger } from './agent-runtime/auto-run-gate';
+import type { CadenceSettings } from './agent-runtime/schedule';
+import { newRunId } from './logging/runId';
+import type { EventLog } from './logging/eventLog';
+import { asLevel } from './logging/resolveLogLevel';
 
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
@@ -286,15 +302,143 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
 }
 
 /**
+ * The cadence the user picked for this agent, if they picked one.
+ *
+ * Read by `AgentScheduler` through `resolveAgentCron`, which decides whether it outranks the
+ * agent's manifest schedule. Returns undefined before the settings cache is seeded, which
+ * correctly means "no user choice" — the manifest schedule then applies.
+ */
+export function getAgentCadence(agentId: string): CadenceSettings | undefined {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const s = cache?.get(agentId);
+  if (!s) return undefined;
+  return { cadence: s.cadence, cadenceSetAt: s.cadenceSetAt };
+}
+
+/**
+ * The log level override the user set for this agent, if they set one.
+ *
+ * Read by `EventLog.write()` through the `levelFor` callback. Returns undefined when no override
+ * is set (falls back to the global level) or before the settings cache is seeded.
+ *
+ * Routes through `asLevel` so an unrecognised value is ignored rather than honoured. A typo in
+ * agent-settings.json (hand-edited in practice) must not silently maximise verbosity — the same
+ * fail-safe the global level gets.
+ */
+export function getAgentLogLevel(agentId: string): 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | undefined {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const raw = cache?.get(agentId)?.logLevel;
+  return asLevel(raw);
+}
+
+/**
+ * Reach the process-wide EventLog via `deps.nexusServices` — a declared field on
+ * `IpcHandlerDeps` (unlike `__agentSettingsCache`, which is not, hence the `as any` on that one
+ * below), so no fresh cast is needed here. `nexusServices.eventLog` is itself a declared-but-
+ * optional field on `NexusServices` (src/main/mcp/types.ts), assigned in src/main/index.ts
+ * inside an `if (agentDb)` block — it can legitimately be undefined (agentDb missing, or called
+ * before that block runs), so every caller must optional-chain rather than assume it exists.
+ * A missing log must never break the gate itself.
+ */
+function getEventLog(): EventLog | undefined {
+  return _agentSettingsDepsRef?.nexusServices?.eventLog;
+}
+
+/**
+ * Write the `run.skip` event for a refused automatic trigger, or do nothing when the run was
+ * allowed.
+ *
+ * Extracted out of `canAutoRun` so this — the actual behaviour this task adds — can be
+ * exercised by a real test. `_agentSettingsDepsRef` is populated only inside
+ * `registerIpcHandlers()`, which needs Electron and does far more startup work than a unit test
+ * should have to run just to reach this one side effect; taking `log` as a parameter instead of
+ * reading it off module state lets a test hand in a fake and assert on it directly, with no
+ * Electron or IPC-registration machinery involved.
+ *
+ * `log` is optional and un-thrown-on: it is `undefined` by default in every environment until
+ * the `if (agentDb)` block in `src/main/index.ts` runs (see `getEventLog` above), and that must
+ * never be the thing that breaks the gate.
+ */
+
+/**
+ * The last skip reason emitted for each agent per day, so a steady state is stated once rather
+ * than every tick, while guaranteeing each day's log file contains at least one line.
+ * Keyed by `agentId:YYYY-MM-DD`. Cleared only on process restart (bounded by agent count × days).
+ */
+const lastSkipReason = new Map<string, string>();
+
+/**
+ * Clear the skip-reason cache. For tests only — production never calls this.
+ * @internal
+ */
+export function resetRunSkipCache(): void {
+  lastSkipReason.clear();
+}
+
+export function emitRunSkip(
+  agentId: string,
+  kind: SkipTrigger,
+  decision: AutoRunDecision,
+  log?: EventLog,
+): void {
+  if (decision.allowed) return;
+
+  // Emit on transition: the first refusal for an agent on a given day, or when the reason changes.
+  // Keyed by day so each log file (nexus-YYYY-MM-DD.log) contains exactly one line per agent per
+  // reason — a user on Thursday asking "why didn't my agent run today" finds the answer in
+  // today's file, not only in Monday's. Without day-keying, an agent disabled on Monday emits
+  // one line Monday and zero lines every day after, while it goes on refusing every fifteen minutes.
+  // The trigger kind is part of the key so manual/schedule/event refusals are independently tracked —
+  // without it, the scheduler's first tick consumes the day's slot and Run Now writes nothing.
+  const day = localDay(new Date());
+  const key = `${agentId}:${day}:${kind}`;
+  const lastReason = lastSkipReason.get(key);
+  if (lastReason === decision.reason) return;
+
+  // "The agent didn't run" is the first thing a user reports — before this, a refused
+  // scheduled or event-triggered run produced zero bytes anywhere. write() returns whether
+  // the line reached disk (false when dropped by the level gate or on append failure), so
+  // the slot is claimed only when the write actually happened. Otherwise raising the level
+  // later produces nothing — the slot was burned by a dropped write.
+  const written = log?.write({
+    level: 'INFO',
+    source: agentId,
+    sourceKind: 'agent',
+    runId: newRunId('agent'),
+    event: 'run.skip',
+    fields: { trigger: kind, reason: decision.reason },
+  });
+
+  if (written) {
+    lastSkipReason.set(key, decision.reason);
+  }
+}
+
+/**
  * May an automatic trigger start this agent right now?
  *
  * Thin wrapper: reads the settings cache and delegates to the pure predicate in
  * agent-runtime/auto-run-gate.ts, where the reasoning lives. Both the cron path
- * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart.
+ * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart —
+ * which is also why the refusal is logged here, once, instead of at each trigger site.
  */
 export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
-  return canAutoRunWith(cache?.get(agentId), kind);
+  const cachedSettings = cache?.get(agentId);
+
+  // Merge the auto-pause marker from AgentStateStore into the settings object.
+  // The marker lives in SQLite, not in the renderer-synced settings cache.
+  const agentStateStore = _agentSettingsDepsRef?.nexusServices?.agentStateStore;
+  const autoPausedAt: number | undefined = (agentStateStore as any)?.get(agentId, AUTO_PAUSED_KEY);
+
+  const decision = canAutoRunWith(
+    autoPausedAt !== undefined ? { ...cachedSettings, autoPausedAt } : cachedSettings,
+    kind,
+  );
+  // An auto-paused agent is the case most worth logging: nobody switched it off, so without
+  // this line the only record of why it stopped running is a row in SQLite.
+  emitRunSkip(agentId, kind, decision, getEventLog());
+  return decision.allowed;
 }
 
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
@@ -399,7 +543,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
     getStartupStatus,
-    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
+    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache, jobRunStore,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
 
@@ -594,6 +738,90 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  // One row per site across all three sources, for the Sites table. Unlike
+  // GET_SITES above (local only), this is the whole fleet.
+  safeHandle(IPC_CHANNELS.GET_SITE_ROWS, async () => {
+    try {
+      const db = graphService?.getDb?.();
+      const allLocal = Object.values(siteData.getSites() ?? {}) as any[];
+      const statuses = localServicesBridge.getAllSiteStatuses();
+
+      // `content_indexed_at` is NOT in the base schema and is NOT created by
+      // GraphService.initialize(). Its only creator is ensureContentIndexedAtColumn,
+      // whose two callers are ExternalContentIndexScheduler and `nexus host index
+      // <alias>` — neither of which runs while externalContentIndexAutoEnabled is
+      // false, and false is the default. Selecting it unconditionally therefore
+      // throws `no such column` on any machine that never opted in, and the catch
+      // below would report the ENTIRE fleet as unreadable over one optional column.
+      // Degrade instead: no column means no writer ever stamped it, so NULL is the
+      // true value for every row, and indexedSiteIds below still carries the live
+      // signal. A read handler must not ALTER the schema to make its own query work.
+      const hasIndexedAt = db
+        ? !!(db.prepare(
+            "SELECT COUNT(*) AS c FROM pragma_table_info('sites') WHERE name = 'content_indexed_at'",
+          ).get() as { c: number }).c
+        : false;
+
+      // No `completeness` column exists — buildSiteRows derives the rung instead.
+      // `is_active = 1` is required: nexusHostRemove soft-deletes, and a removed
+      // host must never reappear in a list (CLAUDE.md records this exact bug in
+      // `sites list`, `sites get` and nexusFleetSiteHealth).
+      //
+      // `host` is selected as the row genuinely has it, but it is NOT the SSH
+      // alias — it mirrors `source`. buildSiteRows ignores it and parses the
+      // alias out of the id; passing it through keeps the row honest rather
+      // than substituting a null the database does not contain.
+      const graphRows = db ? db.prepare(`
+        SELECT id, source, name, domain, wp_version, php_version, host,
+               ${hasIndexedAt ? 'content_indexed_at' : 'NULL AS content_indexed_at'},
+               last_sync_at
+        FROM sites WHERE source IN ('wpe','external') AND is_active = 1
+      `).all() as any[] : [];
+
+      // 'stale' counts as searchable — the content is indexed, just ageing.
+      // Same definition as SiteNexusSection.tsx:723; do not invent a second one.
+      const indexedSiteIds = new Set<string>(
+        (indexRegistry.listAll() ?? [])
+          .filter((e: any) => e.state === 'indexed' || e.state === 'stale')
+          .map((e: any) => e.siteId),
+      );
+
+      // Local site objects do NOT have wpVersion/phpVersion at the top level.
+      // A real sites.json entry has: name domain path environment xdebugEnabled
+      // workspace mysql ports hostConnections id localVersion services.
+      // PHP lives at services.php.version ('8.2.29'); `domain` is top-level; and
+      // WP version is not there at all — it comes from the graph.
+      //
+      // So: Local's store decides WHICH local sites exist (never the graph — it
+      // keeps rows for deleted ones), and the graph supplies extra facts for those
+      // that happen to have a row. Enrich, do not select.
+      const localGraph = new Map<string, any>(
+        db ? (db.prepare(
+          "SELECT id, wp_version FROM sites WHERE source = 'local' AND is_active = 1",
+        ).all() as any[]).map((r: any) => [r.id, r]) : [],
+      );
+
+      const { rows, total } = buildSiteRows({
+        localSites: allLocal.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          status: statuses[s.id],
+          domain: s.domain ?? null,
+          phpVersion: s.services?.php?.version ?? null,
+          wpVersion: localGraph.get(s.id)?.wp_version ?? null,
+        })),
+        graphRows,
+        indexedSiteIds,
+      });
+
+      return { success: true, rows, total };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-site-rows failed:', (err as Error).message);
+      // NOT an empty fleet. The renderer must say "couldn't read your sites".
+      return { success: false, rows: [], total: { count: 0, scope: '' } };
+    }
+  });
+
   // Sites log-processor already has a bound S3 source for (agents/log-processor/db.ts's
   // `sources` table). The site scope picker for this agent only offers these — a site in scope
   // with no bound source would silently do nothing on the nightly cron (see run()'s
@@ -608,6 +836,46 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     } catch (err) {
       localLogger.error('[NexusAI] log-processor connected-sites failed:', (err as Error).message);
       return [];
+    }
+  });
+
+  // web-analytics' Sites tab payload — which site is bound to which GA4 property. Read-only:
+  // binding and unbinding go through the agent's own tool so they stay on the audited chokepoint.
+  safeHandle(IPC_CHANNELS.AGENT_WEB_ANALYTICS_STATE, () => {
+    try {
+      const { getWebAnalyticsState } = require('./agent-runtime/web-analytics-sites') as typeof import('./agent-runtime/web-analytics-sites');
+      return getWebAnalyticsState(graphService?.getDb?.());
+    } catch (err) {
+      localLogger.error('[NexusAI] web-analytics state failed:', (err as Error).message);
+      return { bindings: {} };
+    }
+  });
+
+  // The Sites tab's whole payload: the one account-level bucket plus every install found in it.
+  safeHandle(IPC_CHANNELS.AGENT_LOG_PROCESSOR_STATE, () => {
+    try {
+      const { AGENTS_DIR } = require('./agent-runtime/AgentRegistry') as typeof import('./agent-runtime/AgentRegistry');
+      const { getLogProcessorState } = require('./agent-runtime/log-processor-sites') as typeof import('./agent-runtime/log-processor-sites');
+      return getLogProcessorState(AGENTS_DIR);
+    } catch (err) {
+      localLogger.error('[NexusAI] log-processor state failed:', (err as Error).message);
+      return { bucket: null, installs: [] };
+    }
+  });
+
+  // Generic contributed-tool invocation for renderer-driven flows that need a tool's actual
+  // return value (not just "fire and let Activity show the result") — e.g. the Connect the log
+  // bucket modal parsing set_log_bucket's structured JSON. Routes through the same
+  // AgentDispatcher.dispatch() chokepoint chat/MCP calls use, so this is audited and
+  // settings-aware identically to a chat-issued command; no new audit path needed.
+  safeHandle(IPC_CHANNELS.AGENT_TOOL_INVOKE, async (_event, { agentId, toolName, args }: { agentId: string; toolName: string; args?: Record<string, unknown> }) => {
+    const dispatcher = (deps as any).nexusServices?.dispatcher;
+    if (!dispatcher) return { content: [{ type: 'text', text: 'Agent runtime not ready.' }], isError: true };
+    try {
+      return await dispatcher.dispatch(agentId, toolName, args ?? {});
+    } catch (err) {
+      localLogger.error(`[NexusAI] agent tool invoke failed (${agentId}/${toolName}):`, (err as Error).message);
+      return { content: [{ type: 'text', text: `⚠ ${(err as Error).message}` }], isError: true };
     }
   });
 
@@ -640,6 +908,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // Local sites
       const totalSites = siteList.length;
       const runningSites = siteList.filter((s: any) => statuses[s.id] === 'running').length;
+
+      // The canonical fleet figures. `remoteSites.total` below stays CAPI-derived
+      // because it is about link state, and is labelled as such.
+      const counts = collectFleetCounts({
+        getSites: () => allSites as Record<string, unknown>,
+        getDb: () => graphService.getDb() as never,
+      });
 
       // WPE-connected local sites
       let wpeConnectedSites = 0;
@@ -701,8 +976,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       return {
         localSites: { total: totalSites, running: runningSites, halted: totalSites - runningSites },
+        counts,
         wpeConnected: { count: wpeConnectedSites },
-        remoteSites: { total: totalRemoteInstalls, unlinked: remoteInstalls, capiAvailable, wpeAuthenticated },
+        remoteSites: {
+          total: totalRemoteInstalls,
+          unlinked: remoteInstalls,
+          capiAvailable,
+          wpeAuthenticated,
+          // Live from WP Engine's API, so it can differ from counts.wpe (the graph).
+          scope: 'installs reported by the WP Engine API',
+        },
         mcpServer: {
           running: !!mcpInfo,
           toolCount: mcpInfo?.tools?.length ?? 0,
@@ -756,12 +1039,31 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
       } catch { /* graph may not be ready */ }
 
-      const totalLocal = twins.length;
-      const totalWpe = wpeSites.length;
-      const totalExternal = externalSites.length;
-      const total = totalLocal + totalWpe + totalExternal;
+      // One definition, one source. Local comes from Local's own store (not the
+      // twin cache, not the graph), WPE and external from the graph.
+      const counts = collectFleetCounts({
+        getSites: () => siteData.getSites() as Record<string, unknown>,
+        getDb: () => graphService.getDb() as never,
+      });
+      const totalLocal = counts.local.count;
+      const totalWpe = counts.wpe.count;
+      const totalExternal = counts.external.count;
+      const total = counts.installs.count;
 
-      // Completeness counts (local twins only)
+      // `completeness`, `staleCount`'s and `neverScannedCount`'s local share, and
+      // the local rows folded into the WP/PHP version histograms below are all
+      // derived by iterating `twins` — the twin read-model — not by iterating
+      // Local's own site store. `twins.length` can diverge from `totalLocal`
+      // above: they are two different populations (see collectFleetCounts),
+      // so this ONE shared scope object, not `total`/`totalLocal`, is the
+      // honest denominator for the *local* share of every figure below that
+      // reads `twins`. (staleCount and the version histograms also fold in
+      // wpeSites/externalSites, whose counts track counts.wpe/counts.external
+      // structurally — identical `source=... AND is_active=1` filter — so only
+      // their local share is at risk of drifting from the fleet total.) Label
+      // is deliberately distinguishable from `counts.local.scope` ('sites on
+      // this Mac') — two different populations must never share a label.
+      const twinScope = { measured: twins.length, label: 'sites on this Mac (twin read-model)' };
       const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
       let staleCount = 0;
       let neverScannedCount = 0;
@@ -850,6 +1152,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         externalSync,
         staleCount,
         neverScannedCount,
+        // One shared scope, covering completeness, staleCount/neverScannedCount's
+        // local share, and the local rows in wpVersions/phpVersions above — see
+        // the comment on `twinScope`'s definition. Not named `completenessScope`:
+        // it scopes more than just `completeness`, and a name promising only
+        // that would mislead a consumer of the other fields.
+        twinScope,
+        counts,
       };
     } catch (err) {
       localLogger.error('[NexusAI] get-fleet-summary failed:', (err as Error).message);
@@ -1320,6 +1629,140 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.GET_JOB_RUN_DATA, () => {
+    try {
+      if (!jobRunStore) return {};
+      const keys: import('./background/JobRunStore').JobKey[] = [
+        'wpeRefresh', 'wpeSync', 'wpeContentIndex',
+        'externalRefresh', 'externalContentIndex',
+        'localContentIndex', 'haltedSiteRefresh',
+      ];
+      const result: Record<string, { averageMs: number | null; lastRunAt: number | null }> = {};
+      for (const key of keys) {
+        result[key] = {
+          averageMs: jobRunStore.averageMs(key),
+          lastRunAt: jobRunStore.lastRunAt(key),
+        };
+      }
+      return result;
+    } catch (err) {
+      localLogger.error('[NexusAI] GET_JOB_RUN_DATA failed:', (err as Error).message);
+      return {};
+    }
+  });
+
+  safeHandle('nexus-ai:get-vector-store-size', () => {
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(deps.vectorDbPath)) {
+        const stats = fs.statSync(deps.vectorDbPath);
+        return { success: true, sizeMB: Math.round(stats.size / (1024 * 1024)) };
+      }
+      return { success: true, sizeMB: undefined };
+    } catch (err) {
+      deps.localLogger.error('[NexusAI] get-vector-store-size failed:', (err as Error).message);
+      return { success: false };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_STATS, () => {
+    try {
+      const { scanLogDirectories } = require('./logging/scanLogDirectories');
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const logDays = settings?.logRetentionDays ?? 14;
+      const transcriptDays = settings?.transcriptRetentionDays ?? 3;
+      const budgetBytes = settings?.logBudgetBytes ?? 250 * 1024 * 1024;
+
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      const sizes = scanLogDirectories(app.getPath('userData'));
+
+      return {
+        root: logRoot,
+        totalBytes: sizes.total,
+        byCategory: { combined: sizes.combined, agent: sizes.agent, transcript: sizes.transcript, audit: sizes.audit },
+        policy: { logDays, transcriptDays, budgetBytes },
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-stats failed:', (err as Error).message);
+      return null;
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_REVEAL, async (_event: any, logPath: string) => {
+    try {
+      const { shell } = require('electron');
+      await shell.showItemInFolder(logPath);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-reveal failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_PLAN_CLEAR, async () => {
+    try {
+      const { planRetention } = require('./logging/retention');
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      // Clear means "delete everything except preserved files" — zero-day retention, zero budget.
+      const clearPolicy = { logDays: 0, transcriptDays: 0, budgetBytes: 0 };
+
+      // Scan the log directory to get files
+      const fs = require('fs');
+      const files: any[] = [];
+      const DAY_IN_NAME = /(\d{4}-\d{2}-\d{2})/;
+      const scan = (dir: string, category: 'combined' | 'agent' | 'transcript') => {
+        let entries: string[] = [];
+        try { entries = fs.readdirSync(dir); } catch { return; }
+        for (const name of entries) {
+          const full = path.join(dir, name);
+          let bytes = 0;
+          let mtime: Date | undefined;
+          try {
+            const st = fs.statSync(full);
+            if (!st.isFile()) continue;
+            bytes = st.size;
+            mtime = st.mtime;
+          } catch { continue; }
+          let day = DAY_IN_NAME.exec(name)?.[1];
+          if (!day && mtime) {
+            const { localDay } = require('./logging/eventLog');
+            day = localDay(mtime);
+          }
+          if (!day) continue;
+          files.push({ path: full, category, day, bytes, preserved: false });
+        }
+      };
+      scan(logRoot, 'combined');
+      scan(path.join(logRoot, 'agents'), 'agent');
+      scan(path.join(logRoot, 'transcripts'), 'transcript');
+
+      const plan = planRetention(files, clearPolicy);
+
+      return { success: true, freedBytes: plan.freedBytes, keptBytes: plan.keptBytes, filesDeleted: plan.deletePaths.length };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-plan-clear failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_CLEAR, async () => {
+    try {
+      const { applyRetention } = require('./logging/retention');
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      // Clear means "delete everything except preserved files" — zero-day retention, zero budget.
+      // Preserved files (failed runs, Tier 3 operations) are exempt from both passes.
+      const clearPolicy = { logDays: 0, transcriptDays: 0, budgetBytes: 0 };
+
+      const plan = applyRetention(logRoot, clearPolicy);
+
+      localLogger.info(`[NexusAI] Cleared logs: deleted ${plan.deletePaths.length} files, freed ${plan.freedBytes} bytes`);
+      return { success: true, filesDeleted: plan.deletePaths.length, bytesFreed: plan.freedBytes };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-clear failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
       // Validate input
@@ -1769,8 +2212,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       const events = await graphService.getRecentEvents(validated as any);
 
+      // Filter WordPress background churn (auto-drafts, revisions) before
+      // mapping. event_queue has no post_type/action column — this data
+      // lives inside the parsed `payload` (payload.post_type is the WP post
+      // type, payload.status is the WP post status, e.g. 'auto-draft'). See
+      // src/main/events/timelineFilter.ts for the full field-shape note.
+      const filtered = events.filter(
+        e => !isNoiseEvent({ postType: e.payload?.post_type, action: e.payload?.status }),
+      );
+
       // Transform to renderer-safe format with site names
-      const timeline: EventTimelineEntry[] = events.map(e => {
+      const timeline: EventTimelineEntry[] = filtered.map(e => {
         const site = siteData.getSite(e.site_id);
         return {
           id: e.id,
@@ -1795,13 +2247,121 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     try {
       const stats = await graphService.getEventStats();
 
-      // Determine health status
-      let healthStatus: 'good' | 'warning' | 'error' = 'good';
-      if (stats.failed > 0) {
-        healthStatus = 'error';
-      } else if (stats.pending > 10) {
-        healthStatus = 'warning';
-      }
+      // The pill rolls up four signals. The event queue is one of them and can
+      // contribute red, but can never produce green on its own — it only ever
+      // covers Local sites (see collectSystemHealth / rollUpSystemHealth).
+      const systemHealth = await collectSystemHealth({
+        // Same pair of services the `agentStatus` GraphQL resolver uses
+        // (src/main/graphql/resolvers.ts, `agentStatus` field) — registry for
+        // the definitions, state store for the last run.
+        getAgents: async () => {
+          const registry = deps.nexusServices?.agentRegistry;
+          const store = deps.nexusServices?.agentStateStore;
+          if (!registry) throw new Error('agent registry not available');
+          return registry.list().map((def: any) => {
+            const last = store?.getLastRun(def.name);
+            return {
+              id: def.name,
+              lastRunStatus: last ? last.status : null,
+              lastRunAt: last ? last.startedAt : null,
+            };
+          });
+        },
+        // `refreshEnabled` says whether background refresh is actually
+        // switched on for THIS row's source. The rule: find what actually
+        // WRITES `sites.last_sync_at` (or `ssh_last_sync_at`) for that source
+        // on a recurring/automatic basis, and gate on the setting that
+        // controls THAT writer — never on a setting that merely sounds
+        // related. Manual, on-demand actions (a "sync now" button, `nexus
+        // host refresh <alias>`) are deliberately excluded even though they
+        // also write the column: they have no persistent "on" state to read,
+        // so they can't make a stale row "expected to be fresh" the way an
+        // enabled background schedule does.
+        //
+        //   - wpe: `wpeSyncAutoEnabled` gates `WPESyncService.syncContent`
+        //     (writes `last_sync_at` on its periodic CAPI sync);
+        //     `wpeRefreshAutoEnabled` gates `WpeRefreshScheduler` (writes
+        //     `ssh_last_sync_at` on its periodic SSH refresh — confirmed by
+        //     reading its `UPDATE sites SET ... ssh_last_sync_at = ?`, which
+        //     does not touch `last_sync_at`). Two independent schedulers writing
+        //     two different columns, so either one being on counts (OR).
+        //   - external: `externalRefreshAutoEnabled` gates
+        //     `ExternalRefreshScheduler` → `writeExternalHostData`, which
+        //     writes both columns together in the same cycle.
+        //   - local: `autoIndex` (NOT `localContentIndexAutoEnabled`, despite
+        //     the name sounding right) gates the `siteStarted` lifecycle hook
+        //     (`content/lifecycle-hooks.ts`, `settings?.autoIndex === false` →
+        //     skip; default true) — the ONLY writer of `last_sync_at` for
+        //     local sites that runs on a recurring basis (every site start).
+        //     `localContentIndexAutoEnabled` gates `OpportunisticScheduler`,
+        //     whose `executeReindex` op only calls `contentPipeline.indexSite`
+        //     and `graphService.updateSiteStats()` (post/user counts) — it
+        //     never calls `upsertSite` and never touches `last_sync_at` at all
+        //     (verified by reading `BulkOperationManager.executeReindex`).
+        //     `HaltedSiteRefreshScheduler` was also checked and ruled out: it
+        //     only calls `StartupSiteScanner.scanSite`, which writes the
+        //     in-memory `SiteMetadataCache`, never `graphService`/`sites`.
+        //     The lifecycle hook also skips a site individually when it's in
+        //     `excludedSiteIds` — same gate, same code path — so an excluded
+        //     site never gets `refreshEnabled: true` even if `autoIndex` is on.
+        //     `SYNC_GRAPH_ALL` (a manual "sync all to graph" IPC action,
+        //     `ipc/handlers/bulk.ts`'s `executeGraphSync`) does write
+        //     `last_sync_at` for local sites too, but has no gating setting at
+        //     all — excluded for the same "manual action" reason as above.
+        //
+        // All the settings actually used here default false EXCEPT `autoIndex`
+        // (default true) — that's real, not a bug: `autoIndex` predates the
+        // other three opt-in flags and already runs by default via the
+        // lifecycle hook, so a default install's local sites genuinely do get
+        // checked on every site start, unlike WPE/external which need explicit
+        // opt-in for anything to run in the background at all.
+        getSyncAges: () => {
+          const db = graphService.getDb();
+          if (!db) throw new Error('graph not ready');
+          const settings = (registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null) ?? DEFAULT_SETTINGS;
+          const excludedSiteIds = new Set(settings.excludedSiteIds ?? []);
+          const rows = db.prepare(
+            'SELECT id, source, last_sync_at, ssh_last_sync_at FROM sites WHERE is_active = 1'
+          ).all() as Array<{ id: string; source: string | null; last_sync_at: number | null; ssh_last_sync_at: number | null }>;
+          return rows.map((r) => {
+            let refreshEnabled = false;
+            if (r.source === 'wpe') {
+              refreshEnabled = settings.wpeSyncAutoEnabled === true || settings.wpeRefreshAutoEnabled === true;
+            } else if (r.source === 'external') {
+              refreshEnabled = settings.externalRefreshAutoEnabled === true;
+            } else if (r.source === 'local') {
+              refreshEnabled = settings.autoIndex !== false && !excludedSiteIds.has(r.id);
+            }
+            // WPE/external carry two freshness timestamps (the light sync and
+            // the deeper SSH refresh); either one having run counts as checked.
+            const lastSyncAt = Math.max(r.last_sync_at ?? 0, r.ssh_last_sync_at ?? 0) || null;
+            return { id: String(r.id), lastSyncAt, refreshEnabled };
+          });
+        },
+        // OAuth connections carry 'active' | 'revoked' | 'error'; API-key
+        // connections carry 'active' | 'revoked'. A user-disconnected key
+        // ('revoked') is not a failure — exclude it from the signal. Only
+        // 'active' (ok) and 'error' (broken) are relevant.
+        getCredentialStates: async () => {
+          const mgr = deps.nexusServices?.credentialManager;
+          if (!mgr) throw new Error('credential manager not available');
+          const oauth = mgr.listConnections().map((c: any) => ({
+            // c.provider is the OAuth provider name (e.g. 'wpe'), not a leaky field.
+            name: c.provider, ok: c.status === 'active',
+          }));
+          const apiKeys = mgr.listApiKeyConnections()
+            // A revoked API key is not a problem — the user chose to disconnect it.
+            .filter((c: any) => c.status !== 'revoked')
+            .map((c: any) => ({
+              // c.provider is safe to log; c.label is not (it can be a full ARN or key name).
+              // Use provider instead; it is a well-known string like 'wpe' or 'anthropic'.
+              name: c.provider, ok: c.status === 'active',
+            }));
+          return [...oauth, ...apiKeys];
+        },
+        getEventStats: async () => ({ failed: stats.failed, pending: stats.pending }),
+      });
+      const healthStatus = systemHealth.overall;
 
       const eventStats: EventStats = {
         total: stats.total,
@@ -1811,6 +2371,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         failed: stats.failed,
         byType: stats.by_type as Record<string, number>,
         healthStatus,
+        systemHealth,
       };
 
       return { success: true, stats: eventStats };
@@ -1825,8 +2386,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // vectorDbPath is passed as a dep
       const rawHealth = await graphService.getStorageHealth(vectorDbPath);
 
+      // Fetch logging stats for the logs section
+      let logsSize: number | undefined;
+      try {
+        const { scanLogDirectories } = require('./logging/scanLogDirectories');
+        const sizes = scanLogDirectories(app.getPath('userData'));
+        logsSize = sizes.total;
+      } catch {
+        // If logging stats fail, just leave logs undefined
+      }
+
       // Transform snake_case to camelCase for renderer
-      const health = {
+      const health: any = {
         graphDb: {
           sizeBytes: rawHealth.graph_db.size_bytes,
           path: rawHealth.graph_db.path,
@@ -1842,6 +2413,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         pendingEvents: rawHealth.pending_events,
         failedEvents: rawHealth.failed_events,
       };
+
+      // Only add logs if we successfully gathered the data
+      if (logsSize !== undefined) {
+        health.logs = { sizeBytes: logsSize };
+      }
 
       return { success: true, health };
     } catch (err) {
@@ -2063,17 +2639,28 @@ Answer:`,
       );
 
       // ── Local sites ──────────────────────────────────────────────────────
-      // L2 (Configured): read from graph.db where source='local' AND wp_version IS NOT NULL.
-      // This survives restarts — SiteMetadataCache is a session cache only and resets on startup.
-      // Falls back to SiteMetadataCache if graph.db not ready yet (startup race).
+      // L2 (Configured): Local's own store (allLocalSites) is authoritative
+      // for WHICH local sites exist — the graph is consulted only for the
+      // per-site wp_version fact, never as the source of the local id list.
+      // Reading `COUNT(*) FROM sites WHERE source='local'` directly counted
+      // graph rows instead, which include sites that no longer exist locally
+      // (measured on this machine: 56 active graph 'local' rows vs 37 in
+      // Local's store — 22 dead sentinel-* sandbox rows with a stale
+      // wp_version still set). See CLAUDE.md, "Fleet counts": "Never count
+      // local sites from the graph." This survives restarts — SiteMetadataCache
+      // is a session cache only and resets on startup. Falls back to
+      // SiteMetadataCache if graph.db not ready yet (startup race).
       let localConfigured = 0;
       let localSearchable = 0;
 
       if (db) {
-        const localConfiguredCount = (db.prepare(
-          "SELECT COUNT(*) as c FROM sites WHERE source='local' AND wp_version IS NOT NULL AND is_active=1"
-        ).get() as { c: number } | undefined)?.c ?? 0;
-        localConfigured = localConfiguredCount;
+        const localWpVersionRows = db.prepare(
+          "SELECT id FROM sites WHERE source='local' AND wp_version IS NOT NULL AND is_active=1"
+        ).all() as Array<{ id: string }>;
+        const localConfiguredIds = new Set(localWpVersionRows.map(r => r.id));
+        for (const site of allLocalSites) {
+          if (localConfiguredIds.has(site.id)) localConfigured++;
+        }
       } else {
         // graph.db not ready — fall back to SiteMetadataCache
         for (const site of allLocalSites) {
@@ -2109,9 +2696,10 @@ Answer:`,
 
       // ── External SSH hosts ───────────────────────────────────────────────
       // Same shape as the WPE block: Configured means the graph has a
-      // wp_version, Searchable means an IndexRegistry entry exists. Until
-      // Spec 4b there is no external content indexing, so searchable will
-      // read 0 — that is the true number, not a gap to hide.
+      // wp_version, Searchable means an IndexRegistry entry exists. External
+      // content indexing has since shipped (ExternalContentIndexScheduler,
+      // `nexus host index <alias>`), so this can be non-zero — but it is
+      // opt-in and off by default, so on most machines it will read 0.
       let externalTotal = 0, externalConfigured = 0, externalSearchable = 0;
       if (db) {
         const externalSites = db.prepare(
@@ -2424,6 +3012,19 @@ Answer:`,
     graphService,
     metadataCache: metadataCache ?? undefined,
     auditServices: deps.nexusServices,
+    // Remote adapters. Without these a WP Engine or external id in a bulk
+    // selection resolves through Local's store and fails "Site not found" —
+    // 334 of 369 rows on a real machine. Both are absent-tolerant by design:
+    // BulkOperationManager reports "not available" per site rather than
+    // pretending the work was done.
+    wpeOps: deps.wpeSyncService
+      ? {
+          syncSingleSite: (installId: string) => deps.wpeSyncService!.syncSingleSite(installId),
+          indexOne: (siteId: string, installName: string) =>
+            deps.wpeSyncService!.indexOneWpeContent(siteId, installName),
+        }
+      : undefined,
+    externalOps: createExternalBulkOps(deps.nexusServices, localLogger),
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const provider = options?.provider ?? settings?.aiProvider;
@@ -2620,6 +3221,9 @@ Answer:`,
       for (const siteId of siteIds) {
         const site = allSites[siteId];
         if (site) {
+          // Local-only path: `site` came from Local's own store, which supplies a
+          // real PHP version. Deliberately NOT the fabricating fallback removed
+          // from the fleet-intelligence modules — see CLAUDE.md, "Fleet counts".
           siteInfoMap[siteId] = { domain: site.domain || '', phpVersion: site.phpVersion || '8.0' };
         }
       }
@@ -4047,6 +4651,36 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
     }
   });
 
+  // Hard-delete WPE installs the CAPI sync already soft-deleted (is_active=0),
+  // plus any rows orphaned by that delete.
+  //
+  // This handler shipped in c509c938 and was dropped in the ipc-handlers
+  // decomposition (d69ec3a0) without its caller being removed. The Advanced
+  // section's "Remove ghost installs" row therefore invoked a channel nothing
+  // listened on: ipcMain.handle rejects an unregistered channel, which the
+  // renderer swallowed, leaving the button on "Running…" forever. Restored
+  // rather than deleting the row — the absence was a refactor accident, not a
+  // product decision, and the capability is one of the five Advanced exists
+  // to reach.
+  safeHandle(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS, async () => {
+    try {
+      const db = graphService.getDb();
+      if (!db) return { success: false, error: 'Graph DB not available' };
+      const result = db.prepare(
+        "DELETE FROM sites WHERE source='wpe' AND is_active=0",
+      ).run();
+      // Orphans left behind by the delete above.
+      db.prepare('DELETE FROM plugins WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      db.prepare('DELETE FROM content WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      db.prepare('DELETE FROM users WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      localLogger.info(`[NexusAI] Cleaned up ${result.changes} ghost installs`);
+      return { success: true, removed: result.changes };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Ghost install cleanup failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
   // Factory reset: wipe ALL Nexus AI data — same as `nexus reset --factory`
   // Deletes: IndexRegistry, SiteMetadataCache, Settings, API key status,
   //          Site AI configs, WPE install cache, DB scan cache,
@@ -5123,6 +5757,9 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   safeHandle(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, (_event, settings: Record<string, any>) => {
+    // Note which agents had their schedule changed, before the cache is overwritten — a cadence
+    // the user picks must take effect now, not at the next restart.
+    const rescheduled: string[] = [];
     for (const [agentId, s] of Object.entries(settings ?? {})) {
       // `...s` first so any field beyond the four core toggles (scanScope, scope,
       // savedScopes, ...) survives — narrowing to a hand-picked key list here silently
@@ -5135,14 +5772,31 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       // payload is still usable from chat; only the two flags that make an agent start ITSELF
       // default to off, matching seedAgentDefaultsIfMissing.
       const prev = agentSettingsCache.get(agentId);
-      agentSettingsCache.set(agentId, {
+      const next = {
         ...prev,
         ...s,
         enabled:         s.enabled         ?? prev?.enabled         ?? true,
         scheduleEnabled: s.scheduleEnabled ?? prev?.scheduleEnabled ?? false,
         eventsEnabled:   s.eventsEnabled   ?? prev?.eventsEnabled   ?? false,
         autonomy:        s.autonomy        ?? prev?.autonomy        ?? 'ask',
-      });
+      };
+      // Deliberately NOT main's `withCoreDefaults`, which this replaced: it defaulted
+      // scheduleEnabled and eventsEnabled to `?? true` with no reference to the previous
+      // value, which is the regression described above. Merging it back would re-arm every
+      // agent the renderer has no entry for.
+      if (prev?.cadence !== next.cadence || prev?.cadenceSetAt !== next.cadenceSetAt) {
+        rescheduled.push(agentId);
+      }
+      agentSettingsCache.set(agentId, next);
+    }
+
+    // Re-register after the cache is updated, so the scheduler reads the new cadence.
+    // `register()` unregisters any existing tasks for that agent first, so this is not additive.
+    for (const agentId of rescheduled) {
+      try {
+        const agent = deps.nexusServices?.agentRegistry?.get(agentId);
+        if (agent) deps.nexusServices?.agentScheduler?.register(agent);
+      } catch { /* a scheduling fault must not fail the settings write the user just made */ }
     }
     // Persist to disk so next startup respects user's saved toggle state
     try {
@@ -5154,7 +5808,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames, fullRun }: { agentId: string; siteNames: string[]; fullRun?: boolean }) => {
-    const runId = `run-${Date.now()}`;
+    const correlationId = `run-${Date.now()}`;
     const logFileName = `run-${Date.now()}.log`;
     const logDir = require('path').join(
       require('os').homedir(),
@@ -5166,6 +5820,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
     // Guard: refuse to run a disabled agent
     if (getAgentSetting(agentId, 'enabled') === false) {
+      emitRunSkip(agentId, 'manual', { allowed: false, reason: 'agent-disabled' }, getEventLog());
       return { error: 'agent-disabled', message: `Agent ${agentId} is disabled` };
     }
 
@@ -5179,14 +5834,14 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       });
     };
 
-    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId, agentId, agentName, siteNames, logFile: logFilePath });
+    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId: correlationId, agentId, agentName, siteNames, logFile: logFilePath });
 
-    // Cancel support — register an AbortController keyed by runId
+    // Cancel support — register an AbortController keyed by correlationId
     const abortController = new AbortController();
     const { signal } = abortController;
     const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap ??
       ((deps as any).__runAbortMap = new Map());
-    runAbortMap.set(runId, abortController);
+    runAbortMap.set(correlationId, abortController);
 
     // Run agent directly via agentRunner — awaits actual completion, no log polling races.
     // Everything from here on is wraped in one try/catch whose catch ALWAYS broadcasts a
@@ -5199,7 +5854,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     (async () => {
       const runner = deps.nexusServices?.agentRunner;
       if (!runner || !agent) {
-        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 1, findingsSites: [] });
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], doneCount: 0, failedCount: 1, findingsSites: [] });
         return;
       }
 
@@ -5208,16 +5863,35 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const logPath = logFilePath;
       const lastSize = _fs.existsSync(logPath) ? _fs.statSync(logPath).size : 0;
 
+      const { collectRunIds } = require('./agent-runtime/runNowIds') as typeof import('./agent-runtime/runNowIds');
+      const runs: Array<{ site: string; result: any }> = [];
       let lastRunResult: unknown;
       try {
-        // Run one site at a time via scoped event — agentRunner.run() resolves when done
-        for (const siteName of siteNames) {
-          if (signal.aborted) break;
-          const scopedEvent = {
-            namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
-            siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
-          };
-          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName });
+        // AGENT_RUN_NOW is the only fan-out point in the system — cron, events, GraphQL and MCP
+        // all run once. An agent that declares siteScoped:false reads neither ctx.event's site
+        // nor settings.scope, so looping it per site produces N identical runs (measured: 166
+        // selected sites x ~8.5s for auth-probe) and N unrelated run ids for one user action.
+        if ((agent as any).siteScoped === false) {
+          lastRunResult = await runner.run(agent, undefined, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
+          runs.push({ site: '', result: lastRunResult || {} });
+        } else {
+          // Defense-in-depth: a scoped agent with no sites selected should report that nothing ran,
+          // not broadcast a completion indistinguishable from a successful run of zero sites.
+          // The UI already disables Run on empty selection, but the CLI and other callers reach this too.
+          if (siteNames.length === 0) {
+            runAbortMap.delete(correlationId);
+            broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], agentId, siteNames: [], doneCount: 0, failedCount: 0, findingsSites: [], emptySelection: true });
+            return;
+          }
+          for (const siteName of siteNames) {
+            if (signal.aborted) break;
+            const scopedEvent = {
+              namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
+              siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
+            };
+            lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
+            runs.push({ site: siteName, result: lastRunResult || {} });
+          }
         }
       } catch (err: any) {
         if (!signal.aborted) {
@@ -5225,12 +5899,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         }
       }
 
-      runAbortMap.delete(runId);
+      runAbortMap.delete(correlationId);
 
       if (signal.aborted) {
-        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
+        // Cancelled runs don't collect runIds — the drawer dismisses ~800ms after Cancel is clicked,
+        // so the ids would never be usable anyway. Broadcasting them reads as working when it doesn't.
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
         return;
       }
+
+      const runIds = collectRunIds(runs);
 
       // Parse outcomes from the new log content written since we started
       let logContent = '';
@@ -5240,9 +5918,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       } catch {}
 
       const outcomes = parseRunOutcomes(logContent, siteNames);
+
+      // Inbox write and auto-pause now happen in AgentRunner.run() for ALL trigger paths
+      // (manual, scheduled, event-triggered). This was previously only in the manual path,
+      // which meant scheduled runs never wrote to the inbox — the exact scenario the inbox
+      // was built for.
+
       try {
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-          runId,
+          runId: correlationId,
+          runIds,
           agentId,
           siteNames,
           doneCount: outcomes.doneCount,
@@ -5257,7 +5942,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         // Send a minimal payload so the UI at least exits the 'running' state.
         console.error('[AGENT_RUN_NOW] broadcast failed, sending minimal completion:', broadcastErr?.message);
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-          runId, agentId, siteNames,
+          runId: correlationId, runIds, agentId, siteNames,
           doneCount: outcomes.doneCount,
           failedCount: outcomes.failedCount,
           findingsSites: outcomes.findingsSites,
@@ -5268,11 +5953,11 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       // parseRunOutcomes itself). The run may well have finished on the backend — the UI must
       // still be told, or it spins forever with no way to recover short of a full reload.
       console.error('[AGENT_RUN_NOW] unhandled error in run pipeline:', err?.message);
-      runAbortMap.delete(runId);
-      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
+      runAbortMap.delete(correlationId);
+      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
     });
 
-    return { runId };
+    return { runId: correlationId };
   });
 
   // Remove an agent — deletes its directory and unloads from registry
@@ -5316,6 +6001,153 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap;
     if (runAbortMap) runAbortMap.get(runId)?.abort();
     return { ok: true };
+  });
+
+  // ---------------------------------------------------------------------------
+  // Agent Inbox — open items, decisions, resume
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_INBOX, async () => {
+    try {
+      const inboxStore = deps.nexusServices?.inboxStore;
+      const agentStateStore = deps.nexusServices?.agentStateStore;
+
+      // Missing store is NOT an empty inbox — it's a failure to read the inbox.
+      // The renderer must distinguish "nothing needs you" from "couldn't check".
+      if (!inboxStore) {
+        return {
+          success: false,
+          items: [],
+          total: 0,
+          counts: { decide: 0, problem: 0, know: 0 },
+          pendingBySource: {},
+          pausedSources: [],
+          recentlyDecided: [],
+        };
+      }
+
+      const { items, total } = inboxStore.listOpen();
+      const counts = inboxStore.countsByKind();
+      const pendingBySource = inboxStore.pendingBySource();
+      const recentlyDecided = inboxStore.listRecentlyDecided(20);
+
+      // Derive pausedSources from the union of agents-with-open-items and all registered agents.
+      // Using pendingBySource alone misses a paused agent whose items were all dismissed — that
+      // agent has no open items, so it never appears in pendingBySource, no "Try again" renders,
+      // and nothing else clears _autoPausedAt. Silently and permanently disabled.
+      const pausedSources: string[] = [];
+      if (agentStateStore) {
+        const candidateSources = new Set<string>(Object.keys(pendingBySource));
+        // Also check every registered agent, in case one is paused but has no open items.
+        const agentRegistry = deps.nexusServices?.agentRegistry;
+        if (agentRegistry) {
+          for (const agent of agentRegistry.list()) {
+            candidateSources.add(agent.name);
+          }
+        }
+        for (const source of candidateSources) {
+          if (isAutoPaused(agentStateStore, source)) {
+            pausedSources.push(source);
+          }
+        }
+      }
+
+      return {
+        success: true,
+        items,
+        total,
+        counts,
+        pendingBySource,
+        pausedSources,
+        recentlyDecided,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-inbox failed:', (err as Error).message);
+      return {
+        success: false,
+        items: [],
+        total: 0,
+        counts: { decide: 0, problem: 0, know: 0 },
+        pendingBySource: {},
+        pausedSources: [],
+        recentlyDecided: [],
+      };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.INBOX_DECIDE, async (
+    _e: any,
+    payload: { id: number; decision: string; status: 'dismissed' | 'done' } | undefined,
+  ) => {
+    try {
+      const inboxStore = deps.nexusServices?.inboxStore;
+      if (!inboxStore) {
+        return { success: false, error: 'Inbox store not available' };
+      }
+
+      const id = payload?.id;
+      const decision = payload?.decision;
+      const status = payload?.status;
+
+      if (typeof id !== 'number' || !Number.isFinite(id)) {
+        return { success: false, error: `Invalid id: ${String(id)}` };
+      }
+      if (typeof decision !== 'string') {
+        return { success: false, error: `Invalid decision: ${String(decision)}` };
+      }
+      if (status !== 'dismissed' && status !== 'done') {
+        // The annotation is erased at runtime and this value crosses a process
+        // boundary. An unknown status would make the row invisible to every
+        // query while leaving it in the table.
+        return { success: false, error: `Invalid status: ${String(status)}` };
+      }
+
+      inboxStore.decide(id, decision, status);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] inbox-decide failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.INBOX_REOPEN, async (_e: any, payload: { id: number } | undefined) => {
+    try {
+      const inboxStore = deps.nexusServices?.inboxStore;
+      if (!inboxStore) {
+        return { success: false, error: 'Inbox store not available' };
+      }
+
+      const id = payload?.id;
+      if (typeof id !== 'number' || !Number.isFinite(id)) {
+        return { success: false, error: `Invalid id: ${String(id)}` };
+      }
+
+      inboxStore.reopen(id);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] inbox-reopen failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AGENT_RESUME, async (_e: any, payload: { agentId: string } | undefined) => {
+    try {
+      const agentStateStore = deps.nexusServices?.agentStateStore;
+      if (!agentStateStore) {
+        return { success: false, error: 'Agent state store not available' };
+      }
+
+      const agentId = payload?.agentId;
+      if (typeof agentId !== 'string' || !agentId) {
+        return { success: false, error: `Invalid agentId: ${String(agentId)}` };
+      }
+
+      resumeAgent(agentStateStore, agentId);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] agent-resume failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   // Sentinel Review UI: execute remediation commands on a WPE install via SSH
@@ -5470,17 +6302,37 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
   // ── Credential Manager ────────────────────────────────────────────────────
 
-  safeHandle(IPC_CHANNELS.CREDENTIAL_STATUS, async () => {
+  // `connections` is account-wide; `agentStatus` answers the *per-agent* question, which is the
+  // one that actually gates a tool call. They differ routinely and the difference is not a bug:
+  // an OAuth connection is one Google account, but access is granted per agent, so an agent does
+  // not silently inherit what another agent authorised. A UI that gates on `connections` alone
+  // reports "connected" for an agent the runtime will refuse — which is exactly what
+  // web-analytics' Sites tab did before this argument existed.
+  safeHandle(IPC_CHANNELS.CREDENTIAL_STATUS, async (_event: any, args?: { provider?: string; agentId?: string }) => {
     const mgr = deps.nexusServices?.credentialManager;
-    if (!mgr) return { connections: [], grants: [] };
-    return { connections: mgr.listConnections() };
+    if (!mgr) return { connections: [], agentStatus: null };
+    const connections = mgr.listConnections();
+    let agentStatus: string | null = null;
+    if (args?.agentId && args?.provider) {
+      try {
+        agentStatus = await mgr.getStatusForAgent(args.provider, args.agentId, '');
+      } catch {
+        agentStatus = null;
+      }
+    }
+    return { connections, agentStatus };
   });
 
   safeHandle(IPC_CHANNELS.CREDENTIAL_CONNECT, async (_event: any, args: { provider: string; agentId: string; siteId: string; scopes: string[] }) => {
     const mgr = deps.nexusServices?.credentialManager;
     if (!mgr) throw new Error('Credential manager not available');
-    await mgr.connect(args.provider, args.agentId, args.siteId, args.scopes);
-    return { ok: true };
+    // Report what actually happened. This used to answer `{ok:true}` unconditionally, so a failed
+    // token exchange and a completed connection were the same value to every caller.
+    const result = await mgr.connect(args.provider, args.agentId, args.siteId, args.scopes);
+    if (!result.ok) {
+      localLogger.warn(`[NexusAI] credential connect (${args.provider}/${args.agentId}) did not complete: ${result.reason}${result.message ? ` — ${result.message}` : ''}`);
+    }
+    return result;
   });
 
   safeHandle(IPC_CHANNELS.CREDENTIAL_DISCONNECT, async (_event: any, args: { connectionId: string }) => {

@@ -17,6 +17,14 @@ describe('seo-insights — agent.effect', () => {
   });
 });
 
+describe('seo-insights — producesApprovals / producesReports', () => {
+  it('produces reports (the Site Content Report), not approvals — no gated action exists to pause on', () => {
+    const a = agent as unknown as { producesApprovals?: boolean; producesReports?: boolean };
+    expect(a.producesApprovals).toBe(false);
+    expect(a.producesReports).toBe(true);
+  });
+});
+
 describe('seo-insights — wpe:sync.completed trigger removed (2026-08-07 incident class)', () => {
   it('does not subscribe to wpe:sync.completed — its only real publisher is the fleet-wide, opt-in WpeRefreshScheduler', () => {
     expect(agent.triggers.some((t: { type: string; pattern?: string }) => t.type === 'event' && t.pattern === 'wpe:sync.completed')).toBe(false);

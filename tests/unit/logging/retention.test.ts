@@ -1,0 +1,283 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { planRetention, applyRetention } from '../../../src/main/logging/retention';
+
+const POLICY = { logDays: 14, transcriptDays: 3, budgetBytes: 250 * 1024 * 1024 };
+const f = (over: Partial<any> = {}) => ({
+  path: '/logs/nexus-2026-08-01.log', category: 'combined' as const,
+  day: '2026-08-01', bytes: 1024, preserved: false, ...over,
+});
+
+describe('planRetention', () => {
+  it('keeps everything inside the day windows and under budget', () => {
+    // Use relative days to avoid calendar-date brittleness
+    const now = () => new Date('2026-08-09T12:00:00Z');
+    const plan = planRetention([f({ day: '2026-08-09' }), f({ day: '2026-08-08' })], POLICY, now);
+    expect(plan.deletePaths).toEqual([]);
+  });
+
+  it('drops logs older than logDays', () => {
+    // Use relative days to avoid calendar-date brittleness
+    const now = () => new Date('2026-08-09T12:00:00Z');
+    const old = f({ day: '2026-07-01', path: '/logs/old.log' });
+    const plan = planRetention([old, f({ day: '2026-08-09' })], POLICY, now);
+    expect(plan.deletePaths).toEqual(['/logs/old.log']);
+  });
+
+  it('holds transcripts to a shorter window than logs', () => {
+    // Transcripts carry prompt text, so they age out faster than the lines that reference them.
+    // Use relative days to avoid calendar-date brittleness
+    const now = () => new Date('2026-08-09T12:00:00Z');
+    const t = f({ day: '2026-08-04', category: 'transcript', path: '/logs/t.jsonl' });
+    const l = f({ day: '2026-08-04', path: '/logs/keep.log' });
+    const plan = planRetention([t, l], POLICY, now);
+    expect(plan.deletePaths).toEqual(['/logs/t.jsonl']);
+  });
+
+  it('NEVER deletes a preserved file, however old', () => {
+    // A run that errored or performed a Tier 3 operation is the one most worth auditing; ageing
+    // it out on the same schedule as a quiet run defeats the point of keeping logs at all.
+    const kept = f({ day: '2020-01-01', preserved: true, path: '/logs/failed-run.log' });
+    const plan = planRetention([kept], POLICY);
+    expect(plan.deletePaths).toEqual([]);
+  });
+
+  it('evicts oldest-first when the budget is exceeded', () => {
+    // Use relative days to avoid calendar-date brittleness — starts failing 2026-08-23.
+    const now = () => new Date('2026-08-09T12:00:00Z');
+    const big = { ...POLICY, budgetBytes: 2048 };
+    const plan = planRetention([
+      f({ day: '2026-08-09', bytes: 1024, path: '/logs/new.log' }),
+      f({ day: '2026-08-08', bytes: 1024, path: '/logs/mid.log' }),
+      f({ day: '2026-08-07', bytes: 1024, path: '/logs/old.log' }),
+    ], big, now);
+    expect(plan.deletePaths).toEqual(['/logs/old.log']);
+    expect(plan.keptBytes).toBeLessThanOrEqual(2048);
+  });
+
+  it('will not breach the budget by deleting a preserved file', () => {
+    // The budget yields to preservation: going over disk is recoverable, losing the evidence of a
+    // failed production run is not. The caller surfaces this rather than silently deleting.
+    const tiny = { ...POLICY, budgetBytes: 10 };
+    const plan = planRetention([f({ bytes: 5000, preserved: true, path: '/logs/keep.log' })], tiny);
+    expect(plan.deletePaths).toEqual([]);
+    expect(plan.keptBytes).toBe(5000);
+  });
+
+  it('reports how much it would free, so the UI can say so before deleting', () => {
+    const plan = planRetention([f({ day: '2026-07-01', bytes: 4096, path: '/logs/old.log' })], POLICY);
+    expect(plan.freedBytes).toBe(4096);
+  });
+
+  it('preserved files are exempt from BOTH day and budget passes', () => {
+    // A preserved file that is recent enough to pass the day window should ALSO be exempt
+    // from the budget pass. This catches the bug where preserved check is only in one pass.
+    const tiny = { ...POLICY, budgetBytes: 2000 };
+    const plan = planRetention([
+      f({ day: '2026-08-09', bytes: 1000, preserved: false, path: '/logs/unpres.log' }),
+      f({ day: '2026-08-08', bytes: 2000, preserved: true, path: '/logs/pres.log' }),
+    ], tiny);
+    // The preserved file survived the day pass (recent). Now budget is 2000, total is 3000.
+    // Only the unpreserved file should be deleted, even though it's newer.
+    expect(plan.deletePaths).toEqual(['/logs/unpres.log']);
+    expect(plan.keptBytes).toBe(2000);
+  });
+
+  it('keeps files at exactly the cutoff boundary', () => {
+    // The cutoff is exclusive — a file from exactly logDays ago survives, one day older does not.
+    // This catches the off-by-one bug: f.day < cut vs f.day <= cut.
+    const now = new Date();
+    const cutoff14 = new Date(now);
+    cutoff14.setDate(cutoff14.getDate() - 14);
+    const boundary = cutoff14.toLocaleDateString('en-CA'); // exactly 14 days ago
+    const oneDayInside = new Date(cutoff14);
+    oneDayInside.setDate(oneDayInside.getDate() + 1);
+    const inside = oneDayInside.toLocaleDateString('en-CA'); // 13 days ago
+    const oneDayOutside = new Date(cutoff14);
+    oneDayOutside.setDate(oneDayOutside.getDate() - 1);
+    const outside = oneDayOutside.toLocaleDateString('en-CA'); // 15 days ago
+
+    const plan = planRetention([
+      f({ day: boundary, path: '/logs/boundary.log' }),
+      f({ day: inside, path: '/logs/inside.log' }),
+      f({ day: outside, path: '/logs/outside.log' }),
+    ], POLICY);
+    // Boundary and inside survive; outside is deleted.
+    expect(plan.deletePaths).toEqual(['/logs/outside.log']);
+  });
+
+  it('does not mutate a shared-instance clock (Date mutation fix substitution check)', () => {
+    // Issue #5: the Date mutation bug. With the fix removed (`const d = now(); d.setDate(...)` instead of
+    // `const d = new Date(now() ? now() : new Date())`), a clock returning a shared instance yields
+    // transcriptCutoff = today - logDays - transcriptDays instead of today - transcriptDays.
+    const shared = new Date('2026-08-09T12:00:00Z');
+    const clock = () => shared;
+
+    const transcript = f({ day: '2026-08-05', category: 'transcript', path: '/logs/t.jsonl' });
+    // 2026-08-05 is 4 days before 2026-08-09, so with transcriptDays: 3 it SHOULD be deleted.
+    // But with the mutation bug, transcriptCutoff would be 2026-07-26 (14+3=17 days back) and the file would be kept.
+
+    const plan = planRetention([transcript], POLICY, clock);
+
+    // The transcript should be deleted (it's 4 days old, transcriptDays is 3)
+    expect(plan.deletePaths).toEqual(['/logs/t.jsonl']);
+
+    // The shared Date should NOT be mutated
+    expect(shared.toISOString()).toBe('2026-08-09T12:00:00.000Z');
+  });
+});
+
+describe('applyRetention — marker detection', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'retention-test-'));
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch { /* cleanup is best-effort */ }
+  });
+
+  it('detects a marker straddling a 64 KB chunk boundary', () => {
+    // FIX 1: chunk overlap ensures a marker at exactly position 65536 is found.
+    const CHUNK_SIZE = 64 * 1024;
+    const marker = ' mutation op=wp_plugin_update';
+
+    // Build a file with the marker starting exactly at the chunk boundary.
+    // Fill the first chunk with padding, then place the marker.
+    const padding = 'x'.repeat(CHUNK_SIZE - 5); // Leave 5 chars before boundary
+    const straddler = 'yyyy' + marker + ' target=mysite';
+    const content = padding + straddler;
+
+    const logPath = path.join(tmpDir, 'nexus-2026-08-09.log');
+    fs.writeFileSync(logPath, content);
+
+    // Marker straddles the boundary: starts at position CHUNK_SIZE - 1.
+    // The overlap (marker.length - 1) carried forward must include it.
+    const policy = { logDays: 0, transcriptDays: 0, budgetBytes: 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // File should NOT be deleted — it is preserved (contains mutation marker).
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(logPath)).toBe(true);
+  });
+
+  it('detects run.end status=error in a multi-chunk file', () => {
+    const CHUNK_SIZE = 64 * 1024;
+    const marker = 'run.end status=error';
+
+    // Place the marker well into the second chunk
+    const content = 'a'.repeat(CHUNK_SIZE + 1000) + marker + ' message=failed';
+
+    const logPath = path.join(tmpDir, 'nexus-2026-08-05.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 0, transcriptDays: 0, budgetBytes: 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(logPath)).toBe(true);
+  });
+
+  it('deletes a file with no markers', () => {
+    const content = 'This is a normal log line\nAnother line\nNo errors here\n';
+    const logPath = path.join(tmpDir, 'nexus-2026-07-01.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 1, transcriptDays: 1, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    expect(plan.deletePaths).toContain(logPath);
+    expect(fs.existsSync(logPath)).toBe(false);
+  });
+
+  it('ignores prose that looks like a mutation', () => {
+    // FIX 2: " mutation op=" is the real marker, not " mutation ".
+    // A log line saying "no mutation needed" must NOT be preserved.
+    const content = 'Agent decided no mutation needed for this site';
+    const logPath = path.join(tmpDir, 'nexus-2026-07-01.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 1, transcriptDays: 1, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // File SHOULD be deleted — it does not contain the real marker.
+    expect(plan.deletePaths).toContain(logPath);
+    expect(fs.existsSync(logPath)).toBe(false);
+  });
+
+  it('preserves a run that timed out', () => {
+    // I1: timeout is a preservation marker alongside error
+    const content = 'run.end status=timeout after 10 minutes';
+    const logPath = path.join(tmpDir, 'nexus-2026-07-01.log');
+    fs.writeFileSync(logPath, content);
+
+    const policy = { logDays: 1, transcriptDays: 1, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // File should NOT be deleted — it is preserved (contains timeout marker).
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(logPath)).toBe(true);
+  });
+
+  it('processes transcripts without dates in their names via mtime', () => {
+    // C1: transcripts are named r_<base36> with no date; must use mtime
+    const transcriptDir = path.join(tmpDir, 'transcripts');
+    fs.mkdirSync(transcriptDir, { recursive: true });
+    const transcriptPath = path.join(transcriptDir, 'r_abc123.jsonl');
+    fs.writeFileSync(transcriptPath, 'transcript content');
+
+    // Set mtime to 10 days ago
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    fs.utimesSync(transcriptPath, tenDaysAgo, tenDaysAgo);
+
+    const policy = { logDays: 14, transcriptDays: 3, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // Transcript is 10 days old, transcriptDays is 3 — should be deleted
+    expect(plan.deletePaths).toContain(transcriptPath);
+    expect(fs.existsSync(transcriptPath)).toBe(false);
+  });
+
+  it('keeps recent transcripts without dates in their names', () => {
+    // C1: transcripts are named r_<base36> with no date; must use mtime
+    const transcriptDir = path.join(tmpDir, 'transcripts');
+    fs.mkdirSync(transcriptDir, { recursive: true });
+    const transcriptPath = path.join(transcriptDir, 'r_xyz789.jsonl');
+    fs.writeFileSync(transcriptPath, 'recent transcript');
+
+    // mtime is now (just created)
+    const policy = { logDays: 14, transcriptDays: 3, budgetBytes: 1024 * 1024 };
+    const plan = applyRetention(tmpDir, policy);
+
+    // Transcript is fresh — should be kept
+    expect(plan.deletePaths).toEqual([]);
+    expect(fs.existsSync(transcriptPath)).toBe(true);
+  });
+
+  it('keeps preserved files even when they push the directory over budget', () => {
+    // The budget yields to preservation: going over disk is recoverable, losing evidence is not.
+    // Write a preserved file that exceeds the budget and verify the result keeps it and reports
+    // the overage (rather than deleting it or crashing).
+    const logPath = path.join(tmpDir, 'nexus-2026-08-09.log');
+    const preservedSize = 100 * 1024; // 100 KB
+    fs.writeFileSync(logPath, 'run.end status=error' + 'x'.repeat(preservedSize));
+
+    const tinyBudget = { logDays: 14, transcriptDays: 3, budgetBytes: 10 * 1024 }; // 10 KB budget
+
+    const plan = applyRetention(tmpDir, tinyBudget);
+
+    // File should be kept (preserved)
+    expect(fs.existsSync(logPath)).toBe(true);
+
+    // keptBytes should exceed the budget
+    expect(plan.keptBytes).toBeGreaterThan(tinyBudget.budgetBytes);
+
+    // freedBytes should be zero (nothing deleted)
+    expect(plan.freedBytes).toBe(0);
+  });
+});

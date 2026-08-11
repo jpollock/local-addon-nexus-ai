@@ -1,8 +1,9 @@
 /**
  * Nexus Overview Dashboard
  *
- * Simplified addon dashboard with Overview and Operations tabs only.
- * Sites, Content, and Chat have been extracted to separate interfaces.
+ * Addon dashboard with six tabs: Overview, Inbox, Sites, Activity, Agents, Settings.
+ * Operations was retired in spec 6a (Task 11); its five maintenance actions moved
+ * to Settings → Advanced.
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
@@ -17,13 +18,12 @@ import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
-import { AIGatewayPanel } from './AIGatewayPanel';
-import { LoadingSpinner } from './LoadingSpinner';
-import { SystemTab } from './SystemTab';
+// The other three imports that arrived with this one — AIGatewayPanel, LoadingSpinner,
+// SystemTab — belong to the Dashboard/Operations surfaces spec 6a retired, and are gone with
+// them. localDay stays: the run-complete handler below still needs its ICU guard.
+import { localDay } from './localDay';
 import { SettingsTab } from './SettingsTab';
-import { FleetCompletenessWidget } from './FleetCompletenessWidget';
 import { AssistantPanel } from './AssistantPanel';
-import { ChatTab } from './ChatTab';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
 import { agentStore } from './agents/AgentStore';
 import { runStore } from './agents/RunStore';
@@ -31,6 +31,15 @@ import { RunToast } from './agents/RunToast';
 import { RunPill } from './agents/RunPill';
 import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
+import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
+import { InboxTab } from './tabs/InboxTab';
+import { SitesTab, BULK_CONFIRM_THRESHOLD, type BulkJobView } from './tabs/SitesTab';
+// Types only — a value import would pull main-process code into the renderer
+// bundle. Precedent: credentials/ConnectionsPanel.tsx:3.
+import type { SiteRow } from '../../main/fleet/siteRows';
+import type { PopulationCount } from '../../main/fleet/FleetCounts';
+import type { DashboardStats, McpInfo, StartupStatus, AiProxyInfo, FleetVersionEntry, FleetSummaryData } from './tabs/shared/types';
+import type { InboxItem } from '../../main/inbox/types';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -43,36 +52,6 @@ try {
 interface NexusOverviewProps {
   NavLink: any;
   electron: any;
-}
-
-interface DashboardStats {
-  localSites: { total: number; running: number; halted: number };
-  wpeConnected: { count: number };
-  remoteSites: { total: number; unlinked: number; capiAvailable: boolean; wpeAuthenticated: boolean };
-  mcpServer: { running: boolean; toolCount: number; port: number | null; version: string | null };
-  embedding: { ready: boolean; model: string; quantized: boolean; dimensions: number; maxSequenceLength: number };
-  index: { localIndexed: number; localTotal: number; wpeIndexed: number; wpeTotal: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
-}
-
-interface McpInfo {
-  url: string;
-  authToken: string;
-  port: number;
-  version: string;
-  tools: string[];
-  stdioPath: string;
-}
-
-interface StartupStatus {
-  ready: boolean;
-  phase: string | null;
-  error: {
-    message: string;
-    name: string;
-    code: string | null;
-    phase: string;
-    hint: string | null;
-  } | null;
 }
 
 interface SiteListItem {
@@ -119,36 +98,25 @@ interface SetupAIResult {
   message: string;
 }
 
-interface AiProxyInfo {
-  url: string;
-  port: number;
-  running: boolean;
-  models: string[];
-  toolCapableModels: string[];
-}
+/**
+ * The tab registry. This array is the single source of truth for which tabs
+ * exist — `TabKey` is derived from it, so adding or removing a tab is one edit
+ * here rather than one here plus one in a hand-maintained union.
+ *
+ * Note the dispatch is deliberately NOT folded in: `renderActiveTab`'s arms need
+ * instance context (`this.renderActivityTab()`, the built `overviewProps`), and
+ * `agents` bypasses that switch entirely because it has no stats dependency.
+ * Moving them here would cost more in binding than the duplication saves.
+ */
+const TABS = [
+  { key: 'sites',      label: 'Sites' },
+  { key: 'inbox',      label: 'Inbox' },
+  { key: 'activity',   label: 'Activity' },
+  { key: 'agents',     label: 'Agents' },
+  { key: 'settings',   label: 'Settings' },
+] as const;
 
-interface FleetVersionEntry {
-  version: string;
-  count: number;
-}
-
-interface FleetSummaryData {
-  total: number;
-  totalLocal: number;
-  totalWpe: number;
-  wpVersions: FleetVersionEntry[];
-  phpVersions: FleetVersionEntry[];
-  completeness: { none: number; filesystem: number; metadata: number; indexed: number };
-  wpeSync?: { synced: number; neverSynced: number };
-  staleCount: number;
-  neverScannedCount: number;
-}
-
-interface FleetPlugin {
-  slug: string;
-  title: string;
-  siteCount: number;
-}
+type TabKey = typeof TABS[number]['key'];
 
 interface NexusOverviewState {
   stats: DashboardStats | null;
@@ -161,15 +129,17 @@ interface NexusOverviewState {
   searching: boolean;
   indexingId: string | null;
   togglingId: string | null;
-  setupId: string | null;
-  setupResults: Record<string, SetupAIResult>;
-  copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'activity' | 'operations' | 'ask' | 'settings' | 'agents';
-  // Chat state lifted here so it survives tab switches (ChatTab remounts but picks these up)
-  chatMessages: any[];
-  chatSessionId: string;
+  activeTab: TabKey;
+  /** Sites table. `siteRowsFailed` is distinct from an empty list — see SitesTab. */
+  siteRows: SiteRow[];
+  siteRowsTotal: PopulationCount;
+  siteRowsLoaded: boolean;
+  siteRowsFailed: boolean;
+  selectedSiteIds: string[];
+  /** The bulk job started from the Sites bar, or null. Replaces the selection bar. */
+  bulkJob: BulkJobView | null;
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -193,7 +163,6 @@ interface NexusOverviewState {
   wpeSyncProgress: { total: number; current: number; skipped: number; currentSite: string; status: string } | null;
   wpeSyncedCount: number;
   wpeSyncError: string | null;
-  wpeStopping: boolean;
   diagInstall: string;
   diagRunning: boolean;
   diagResults: Array<{ cmd: string; success: boolean; stdout: string; durationMs: number; error?: string }>;
@@ -203,15 +172,8 @@ interface NexusOverviewState {
   indexResetRunning: boolean;
   indexResetResult: { siteCount: number; docCount: number } | null;
   _resetConfirmChecked: boolean;
-  wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
-  wpeSyncThresholdHours: number;
   // Fleet Intelligence panels
   fleetSummary: FleetSummaryData | null;
-  fleetPlugins: FleetPlugin[];
-  // Credential sync state
-  syncStatus: Record<string, { lastSync: number; success: boolean }>;
-  syncing: boolean;
-  syncResults: Array<{ siteId: string; siteName: string; success: boolean; providers: string[]; error?: string }> | null;
   wpeAuthError: boolean;
   // WPE action buttons
   wpeBackupRunning: boolean;
@@ -226,59 +188,18 @@ interface NexusOverviewState {
   factoryResetRunning: boolean;
   factoryResetDone: boolean;
   factoryResetChecked: boolean;
-  dashboardDraft: string;
-  dashboardPrompt: string | null;
-  wpeBannerDismissed: boolean;
-  wpeNotConnectedDismissed: boolean;
   credentialRequest: NexusState['credentialConnectRequest'];
+  // Inbox
+  inboxLoaded: boolean;
+  inboxFailed: boolean;
+  inboxItems: InboxItem[];
+  inboxTotal: number;
+  inboxCounts: { decide: number; problem: number; know: number };
+  inboxPausedSources: string[];
+  inboxRecentlyDecided: InboxItem[];
 }
 
 // -- Shared styles --
-
-const cardContainerStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: '16px',
-  marginBottom: '24px',
-};
-
-const cardStyle: React.CSSProperties = {
-  borderRadius: '10px',
-  padding: '20px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-};
-
-const cardTitleStyle: React.CSSProperties = {
-  fontSize: '11px',
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.8px',
-  color: 'var(--nxai-card-label, #6b7280)',
-  marginBottom: '12px',
-};
-
-const bigNumberStyle: React.CSSProperties = {
-  fontSize: '36px',
-  fontWeight: 700,
-  lineHeight: 1,
-  marginBottom: '8px',
-};
-
-const subStatStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: 'var(--nxai-card-sub, #6b7280)',
-  lineHeight: 1.6,
-};
-
-const dotStyle = (color: string): React.CSSProperties => ({
-  display: 'inline-block',
-  width: '8px',
-  height: '8px',
-  borderRadius: '50%',
-  backgroundColor: color,
-  marginRight: '6px',
-});
 
 const tagStyle = (bg: string, fg: string): React.CSSProperties => ({
   display: 'inline-block',
@@ -292,56 +213,16 @@ const tagStyle = (bg: string, fg: string): React.CSSProperties => ({
   verticalAlign: 'middle',
 });
 
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: '13px',
-  fontWeight: 600,
-  color: 'var(--nxai-section-label, #374151)',
-  marginBottom: '12px',
-  marginTop: '8px',
-};
-
-const btnStyle: React.CSSProperties = {
+const btnPrimaryStyle: React.CSSProperties = {
   padding: '6px 14px',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  backgroundColor: UI_COLORS.WPE_BRAND,
+  color: '#fff',
+  border: 'none',
   fontSize: '12px',
   fontWeight: 500,
   cursor: 'pointer',
 };
-
-const btnPrimaryStyle: React.CSSProperties = {
-  ...btnStyle,
-  backgroundColor: UI_COLORS.WPE_BRAND,
-  color: '#fff',
-  border: 'none',
-};
-
-const codeBlockStyle: React.CSSProperties = {
-  fontFamily: 'monospace',
-  fontSize: '12px',
-  backgroundColor: 'var(--nxai-code-bg, #f3f4f6)',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  borderRadius: '8px',
-  padding: '14px',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-all',
-  lineHeight: 1.5,
-  color: 'var(--nxai-card-text, #111827)',
-};
-
-function formatTimeAgo(timestamp: number): string {
-  if (!timestamp) return 'Never';
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return 'Just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -356,6 +237,9 @@ function navigateToPreferences(electron: any): void {
 
 export class NexusOverview extends React.Component<NexusOverviewProps, NexusOverviewState> {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** Id of the job the Sites bar is showing, and its own poll. Separate from the fleet poll. */
+  private bulkOpId: string | null = null;
+  private bulkPollTimer: ReturnType<typeof setInterval> | null = null;
   private contentScrollEl: HTMLDivElement | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private wpeSyncPassivePoll: ReturnType<typeof setInterval> | null = null;
@@ -377,12 +261,17 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     searching: false,
     indexingId: null,
     togglingId: null,
-    setupId: null,
-    setupResults: {},
-    copiedField: null,
     loading: true,
     error: null,
-    activeTab: 'overview',
+    activeTab: 'sites',
+    siteRows: [],
+    // Not zero-with-a-scope: nothing has been read yet, and the empty scope
+    // string is what `loaded: false` renders behind anyway.
+    siteRowsTotal: { count: 0, scope: '' },
+    siteRowsLoaded: false,
+    siteRowsFailed: false,
+    selectedSiteIds: [],
+    bulkJob: null,
     aiProxy: null,
     fleetSetupOpId: null,
     fleetSetupRunning: false,
@@ -398,8 +287,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     aiSearchMode: false,
     hasLLM: false,
     settings: null,
-    chatMessages: [],
-    chatSessionId: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     showLocalSites: true,
     showWpeSites: true,
     wpeSites: [],
@@ -408,7 +295,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeSyncProgress: null,
     wpeSyncedCount: 0,
     wpeSyncError: null,
-    wpeStopping: false,
     diagInstall: '',
     diagRunning: false,
     diagResults: [],
@@ -418,14 +304,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     indexResetRunning: false,
     indexResetResult: null,
     _resetConfirmChecked: false,
-    wpeSyncStats: null,
-    wpeSyncThresholdHours: 8,
-    syncStatus: {},
-    syncing: false,
-    syncResults: null,
     wpeAuthError: false,
     fleetSummary: null,
-    fleetPlugins: [],
     wpeBackupRunning: false,
     wpeBackupInstallId: null,
     wpeBackupInstallName: null,
@@ -437,11 +317,14 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     factoryResetRunning: false,
     factoryResetDone: false,
     factoryResetChecked: false,
-    dashboardDraft: '',
-    dashboardPrompt: null,
-    wpeBannerDismissed: false,
-    wpeNotConnectedDismissed: false,
     credentialRequest: null,
+    inboxLoaded: false,
+    inboxFailed: false,
+    inboxItems: [],
+    inboxTotal: 0,
+    inboxCounts: { decide: 0, problem: 0, know: 0 },
+    inboxPausedSources: [],
+    inboxRecentlyDecided: [],
   };
 
   componentDidMount(): void {
@@ -519,7 +402,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         const now = new Date();
         const hh = now.getHours().toString().padStart(2, '0');
         const mm = now.getMinutes().toString().padStart(2, '0');
-        const day = now.toISOString().slice(0, 10);
+        // Local time, not UTC — the time is local (getHours), so the date must be too.
+        // Mixing them made the date and time disagree for seven hours a day in PDT.
+        // Use localDay() with its ICU guard, not raw toLocaleDateString().
+        const day = localDay(now);
         const cleanCount = payload.doneCount - (payload.failedCount || 0);
         const findingsCount = payload.findingsSites?.length || 0;
         const sub = findingsCount > 0
@@ -568,6 +454,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
   componentWillUnmount(): void {
     this.mounted = false;
+    this.stopBulkPolling();
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.searchTimer) clearTimeout(this.searchTimer);
     if (this.wpeSyncPassivePoll) clearInterval(this.wpeSyncPassivePoll);
@@ -601,7 +488,14 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, wpeAccounts, startupStatus] = await Promise.all([
+      // This destructuring is POSITIONAL. Append new channels at the END of both
+      // the array and the pattern — inserting anywhere else silently shifts every
+      // later variable onto the wrong response, which is not a compile error.
+      //
+      // Specs 4 and 5 both appended here and conflicted on the same slot. The
+      // resolution keeps both, and the two trailing entries below are in the
+      // SAME order as the two trailing names here. Do not reorder one alone.
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus, inboxResult, siteRowsResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -609,11 +503,16 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
-        ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
-        ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
         ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.GET_STARTUP_STATUS),
+        // These two are positionally bound to `inboxResult` and `siteRowsResult`
+        // above, in this order. A rejected invoke would reject the whole
+        // Promise.all and blank every other panel, so each resolves to the same
+        // failure shape its handler returns. `success: false` is NOT an empty
+        // result — SitesTab renders "couldn't read your sites" for it.
+        ipc.invoke(IPC_CHANNELS.GET_INBOX).catch(() => ({ success: false })),
+        ipc.invoke(IPC_CHANNELS.GET_SITE_ROWS).catch(() => ({ success: false, rows: [], total: { count: 0, scope: '' } })),
       ]);
       if (!this.mounted) return;
 
@@ -669,23 +568,37 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         mcpInfo: mcpInfo ?? null,
         startupStatus: startupStatus ?? null,
         sites: sites ?? [],
+        siteRows: siteRowsResult?.rows ?? [],
+        siteRowsTotal: siteRowsResult?.total ?? { count: 0, scope: '' },
+        // Loaded means "a response came back", true even when that response was
+        // a failure — otherwise the error state never renders behind the spinner.
+        siteRowsLoaded: true,
+        siteRowsFailed: !siteRowsResult?.success,
         wpeSites,
         indexEntries: indexEntries ?? [],
         aiProxy: proxyResult?.proxy ?? null,
         settings: settings ?? null,
         hasLLM,
-        syncStatus: syncStatus ?? {},
-        wpeSyncStats: wpeSyncStatsResult?.stats ?? null,
-        wpeSyncThresholdHours: wpeSyncStatsResult?.thresholdHours ?? 8,
         loading: false,
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
         fleetSummary: fleetSummaryResult ?? null,
         wpeAccounts: Array.isArray(wpeAccounts) ? wpeAccounts : [],
         wpeAccountFilter: settings?.wpeAccountFilter ?? null,
-        wpeBannerDismissed: settings?.wpeBannerDismissed ?? false,
-        wpeNotConnectedDismissed: settings?.wpeNotConnectedBannerDismissed ?? false,
+        inboxLoaded: true,
+        inboxFailed: !inboxResult?.success,
+        inboxItems: inboxResult?.items ?? [],
+        inboxTotal: inboxResult?.total ?? 0,
+        inboxCounts: inboxResult?.counts ?? { decide: 0, problem: 0, know: 0 },
+        inboxPausedSources: inboxResult?.pausedSources ?? [],
+        inboxRecentlyDecided: inboxResult?.recentlyDecided ?? [],
       });
+
+      // Push pending counts to agentStore only when successfully read.
+      // On failure, leave the previous value in place — a false all-clear is worse than stale data.
+      if (inboxResult?.success) {
+        agentStore.setState({ pendingBySource: inboxResult.pendingBySource, pendingLoaded: true });
+      }
     } catch (err: any) {
       if (!this.mounted) return;
       this.setState({ error: err.message || 'Failed to load', loading: false });
@@ -743,29 +656,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     if (this.mounted) this.setState({ togglingId: null });
   };
 
-  handleSetupAI = async (siteId: string): Promise<void> => {
-    this.setState({ setupId: siteId });
-    try {
-      const result: SetupAIResult = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SETUP_AI, siteId,
-      );
-      if (!this.mounted) return;
-      this.setState((prev) => ({
-        setupId: null,
-        setupResults: { ...prev.setupResults, [siteId]: result },
-      }));
-    } catch {
-      if (!this.mounted) return;
-      this.setState((prev) => ({
-        setupId: null,
-        setupResults: {
-          ...prev.setupResults,
-          [siteId]: { success: false, aiPlugin: 'failed', providerPlugins: 'failed', aiFeatures: 'failed', credentials: 'failed', acfAbilities: 'failed', message: 'Setup failed' },
-        },
-      }));
-    }
-  };
-
   handleSetupAIFleet = async (): Promise<void> => {
     this.setState({ fleetSetupRunning: true });
     try {
@@ -778,18 +668,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     }
   };
 
-  handleIndexAllFleet = async (): Promise<void> => {
-    this.setState({ fleetIndexRunning: true });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_FLEET);
-      if (!this.mounted) return;
-      this.setState({ fleetIndexOpId: result?.opId ?? null, fleetIndexRunning: false });
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ fleetIndexRunning: false });
-    }
-  };
-
   handleSetupAllAuto = async (): Promise<void> => {
     this.setState({ setupAllAutoRunning: true });
     try {
@@ -799,18 +677,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     } catch {
       if (!this.mounted) return;
       this.setState({ setupAllAutoRunning: false });
-    }
-  };
-
-  handleIndexAllAuto = async (): Promise<void> => {
-    this.setState({ indexAllAutoRunning: true });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_AUTO);
-      if (!this.mounted) return;
-      this.setState({ indexAllAutoOpId: result?.opId ?? null, indexAllAutoRunning: false });
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ indexAllAutoRunning: false });
     }
   };
 
@@ -870,885 +736,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     }
   };
 
-  handleSyncGraph = async (): Promise<void> => {
-    this.setState({ syncGraphRunning: true });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_GRAPH_ALL);
-      if (!this.mounted) return;
-      this.setState({ syncGraphOpId: result?.opId ?? null, syncGraphRunning: false });
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ syncGraphRunning: false });
-    }
-  };
-
-  copyToClipboard = (text: string, field: string): void => {
-    navigator.clipboard.writeText(text).then(() => {
-      this.setState({ copiedField: field });
-      setTimeout(() => {
-        if (this.mounted) this.setState({ copiedField: null });
-      }, 2000);
-    });
-  };
-
   // -- Card renders (unchanged from original) --
 
-  renderSectionLabel(text: string): React.ReactNode {
-    return React.createElement('div', { style: sectionLabelStyle }, text);
-  }
-
-  renderLocalSitesCard(stats: DashboardStats): React.ReactNode {
-    const { localSites } = stats;
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Local Sites'),
-      React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } }, localSites.total),
-      React.createElement('div', { style: subStatStyle },
-        React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
-        `${localSites.running} running`,
-        React.createElement('br'),
-        React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_HALTED) }),
-        `${localSites.halted} halted`,
-      ),
-    );
-  }
-
-  renderWpeConnectedCard(stats: DashboardStats): React.ReactNode {
-    const { wpeConnected } = stats;
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'WPE-Connected'),
-      React.createElement('div', { style: { ...bigNumberStyle, color: UI_COLORS.WPE_BRAND } }, wpeConnected.count),
-      React.createElement('div', { style: subStatStyle },
-        'Local sites linked to',
-        React.createElement('br'),
-        'WP Engine environments',
-      ),
-    );
-  }
-
-  renderRemoteSitesCard(stats: DashboardStats): React.ReactNode {
-    const { remoteSites } = stats;
-    if (!remoteSites.capiAvailable) {
-      return React.createElement('div', { style: cardStyle },
-        React.createElement('div', { style: cardTitleStyle }, 'Remote Sites'),
-        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '\u2014'),
-        React.createElement('div', { style: subStatStyle }, 'WPE not authenticated'),
-      );
-    }
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Remote Sites'),
-      React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } }, remoteSites.total),
-      React.createElement('div', { style: subStatStyle }, `${remoteSites.total - remoteSites.unlinked} linked · ${remoteSites.unlinked} not linked`),
-    );
-  }
-
-  renderMcpCard(stats: DashboardStats): React.ReactNode {
-    const { mcpServer: mcp } = stats;
-    const statusColor = mcp.running ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR;
-    const statusLabel = mcp.running ? 'Running' : 'Stopped';
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'MCP Server'),
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
-        React.createElement('span', { style: dotStyle(statusColor) }),
-        React.createElement('span', { style: { fontSize: '18px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, statusLabel),
-      ),
-      React.createElement('div', { style: subStatStyle },
-        `${mcp.toolCount} tools available`,
-        mcp.port ? React.createElement('span', null, React.createElement('br'), `Port ${mcp.port}`) : null,
-        mcp.version ? React.createElement('span', null, React.createElement('br'), `v${mcp.version}`) : null,
-      ),
-    );
-  }
-
-  renderEmbeddingCard(stats: DashboardStats): React.ReactNode {
-    const { embedding } = stats;
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Embedding Model'),
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
-        React.createElement('span', { style: dotStyle(embedding.ready ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_WARNING) }),
-        React.createElement('span', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, embedding.model),
-        embedding.quantized
-          ? React.createElement('span', { style: tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND) }, 'QUANTIZED')
-          : null,
-      ),
-      React.createElement('div', { style: subStatStyle },
-        `${embedding.dimensions}d vectors`,
-        React.createElement('br'),
-        `${embedding.maxSequenceLength} max tokens`,
-        React.createElement('br'),
-        embedding.ready ? 'Model loaded' : 'Loading...',
-      ),
-    );
-  }
-
-  renderIndexCard(stats: DashboardStats): React.ReactNode {
-    const { index } = stats;
-    const totalIndexed = index.localIndexed + index.wpeIndexed;
-    const totalSites = index.localTotal + index.wpeTotal;
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Context Index'),
-      React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } },
-        `${totalIndexed}`,
-        React.createElement('span', { style: { fontSize: '14px', fontWeight: 400, color: 'var(--nxai-card-sub)' } },
-          ` / ${totalSites} sites`,
-        ),
-      ),
-      React.createElement('div', { style: subStatStyle },
-        React.createElement('span', null, `${index.localIndexed} local · ${index.wpeIndexed} remote`),
-        React.createElement('br'),
-        `${index.totalDocuments.toLocaleString()} documents`,
-        React.createElement('br'),
-        `Last indexed: ${index.lastIndexed ? formatTimeAgo(index.lastIndexed) : 'Never'}`,
-      ),
-    );
-  }
-
-  renderGraphCard(): React.ReactNode {
-    const { wpeSyncStats } = this.state;
-    const total = wpeSyncStats?.total ?? 0;
-    const hasWp = wpeSyncStats?.has_wp_version ?? 0;
-    const hasPhp = wpeSyncStats?.has_php_version ?? 0;
-    const plugins = 0; // could query graph but keep simple for now
-
-    if (!wpeSyncStats) {
-      return React.createElement('div', { style: cardStyle },
-        React.createElement('div', { style: cardTitleStyle }, 'Site Graph'),
-        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '—'),
-        React.createElement('div', { style: subStatStyle }, 'No WPE data yet'),
-      );
-    }
-
-    const wpPct = total > 0 ? Math.round((hasWp / total) * 100) : 0;
-    const phpPct = total > 0 ? Math.round((hasPhp / total) * 100) : 0;
-    const wpColor = wpPct === 100 ? UI_COLORS.STATUS_RUNNING : wpPct > 50 ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_ERROR;
-
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Site Graph'),
-      React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } },
-        total,
-        React.createElement('span', { style: { fontSize: '13px', fontWeight: 400, color: 'var(--nxai-card-sub)' } }, ' WPE installs'),
-      ),
-      React.createElement('div', { style: subStatStyle },
-        React.createElement('span', { style: { color: wpColor } }, `WP version: ${hasWp}/${total} (${wpPct}%)`),
-        React.createElement('br'),
-        `PHP version: ${hasPhp}/${total} (${phpPct}%)`,
-        React.createElement('br'),
-        `Plugins synced for ${total > 0 ? total : '—'} installs`,
-      ),
-    );
-  }
-
-  renderWpeSyncCard(): React.ReactNode {
-    const { wpeSyncStats, wpeSyncThresholdHours, wpeSyncing } = this.state;
-
-    if (wpeSyncing) {
-      return React.createElement('div', { style: cardStyle },
-        React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
-        React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
-          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
-          React.createElement('span', { style: { fontSize: '18px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, 'Syncing…'),
-        ),
-        React.createElement('div', { style: subStatStyle }, 'Sync in progress'),
-      );
-    }
-
-    if (!wpeSyncStats || !wpeSyncStats.last_sync_at) {
-      return React.createElement('div', { style: cardStyle },
-        React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
-        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '—'),
-        React.createElement('div', { style: subStatStyle }, 'Never synced'),
-      );
-    }
-
-    const ageMs = Date.now() - wpeSyncStats.last_sync_at;
-    const ageHours = Math.round(ageMs / 3600000);
-    const ageMins = Math.round(ageMs / 60000);
-    const ageLabel = ageHours > 0 ? `${ageHours}h ago` : `${ageMins}m ago`;
-    const isStale = ageMs > wpeSyncThresholdHours * 3600000;
-    const statusColor = isStale ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING;
-    const staleCount = wpeSyncStats.stale_count ?? 0;
-    const freshCount = wpeSyncStats.fresh_count ?? 0;
-
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
-        React.createElement('span', { style: dotStyle(statusColor) }),
-        React.createElement('span', { style: { fontSize: '16px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, ageLabel),
-      ),
-      React.createElement('div', { style: subStatStyle },
-        React.createElement('span', { style: { color: UI_COLORS.STATUS_RUNNING } }, `${freshCount} fresh`),
-        staleCount > 0
-          ? React.createElement('span', { style: { color: UI_COLORS.STATUS_WARNING } }, ` · ${staleCount} stale`)
-          : React.createElement('span', null, ' · all current ✓'),
-        React.createElement('br'),
-        `SSH sync threshold: ${wpeSyncThresholdHours}h`,
-      ),
-    );
-  }
-
-  renderAiProxyCard(): React.ReactNode {
-    const { aiProxy } = this.state;
-    const running = aiProxy?.running ?? false;
-    const statusColor = running ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-card-sub)';
-
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'AI Proxy'),
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
-        React.createElement('span', { style: dotStyle(statusColor) }),
-        React.createElement('span', { style: { fontSize: '18px', fontWeight: 600, color: 'var(--nxai-card-text)' } },
-          running ? 'Running' : 'Stopped',
-        ),
-      ),
-      React.createElement('div', { style: subStatStyle },
-        aiProxy?.port ? `Port ${aiProxy.port}` : 'Not configured',
-        aiProxy?.models?.length
-          ? React.createElement('span', null,
-              React.createElement('br'),
-              `${aiProxy.models.length} model${aiProxy.models.length !== 1 ? 's' : ''} available`,
-            )
-          : null,
-        aiProxy?.toolCapableModels?.length
-          ? React.createElement('span', null,
-              React.createElement('br'),
-              `${aiProxy.toolCapableModels.length} tool-capable`,
-            )
-          : null,
-      ),
-    );
-  }
-
-  // -- New sections --
-
-  renderSetupBanner(stats: DashboardStats): React.ReactNode {
-    if (stats.embedding.ready) return null;
-    return React.createElement('div', {
-      style: {
-        padding: '12px 16px',
-        borderRadius: '8px',
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-        border: `1px solid ${UI_COLORS.STATUS_WARNING}`,
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-      },
-    },
-      React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
-      React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)' } },
-        'Setting up Nexus AI\u2026 Embedding model loading.',
-      ),
-    );
-  }
-
-  handleWpeConnect = (): void => {
-    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_LOGIN_START).catch(() => {});
-  };
-
-  renderWpeAuthBanner(): React.ReactNode {
-    const { wpeAuthError } = this.state;
-    if (!wpeAuthError) return null;
-    return React.createElement('div', {
-      style: {
-        padding: '12px 16px',
-        borderRadius: '8px',
-        backgroundColor: 'rgba(59, 130, 246, 0.08)',
-        border: '1px solid rgba(59, 130, 246, 0.35)',
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-      },
-    },
-      React.createElement('span', { style: { fontSize: '15px', lineHeight: 1, flexShrink: 0 } }, '\u{1F512}'),
-      React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)', flex: 1 } },
-        React.createElement('strong', null, 'Not connected to WP Engine.'),
-        ' Sign in to enable WPE site management, deep scans, backups, and content indexing.',
-      ),
-      React.createElement('button', {
-        style: { padding: '6px 14px', borderRadius: '6px', border: 'none', backgroundColor: '#0ECAD4', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 },
-        onClick: this.handleWpeConnect,
-      }, 'Connect'),
-    );
-  }
-
-
-  renderMcpPanel(): React.ReactNode {
-    const { mcpInfo, copiedField, startupStatus } = this.state;
-    if (!mcpInfo) {
-      // When async init failed, show the real error + actionable hint rather
-      // than an indefinite "waiting" banner — see issue #36.
-      if (startupStatus?.error) {
-        const err = startupStatus.error;
-        return React.createElement(
-          'div',
-          {
-            style: {
-              ...cardStyle,
-              marginBottom: '24px',
-              padding: '20px',
-              borderLeft: '4px solid var(--nxai-danger, #d14343)',
-              backgroundColor: 'var(--nxai-danger-bg, rgba(209, 67, 67, 0.06))',
-            },
-          },
-          React.createElement('div', {
-            style: { fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '8px' },
-          }, `MCP server failed to start (phase: ${err.phase})`),
-          React.createElement('div', {
-            style: { fontFamily: 'monospace', fontSize: '12px', color: 'var(--nxai-card-text)', marginBottom: err.hint ? '12px' : '0', whiteSpace: 'pre-wrap' as const },
-          }, err.message),
-          err.hint
-            ? React.createElement('div', {
-              style: { fontSize: '13px', color: 'var(--nxai-card-text)' },
-            },
-              React.createElement('strong', null, 'Suggested fix: '),
-              err.hint,
-            )
-            : null,
-        );
-      }
-      const phaseLabel = startupStatus?.phase ? ` (${startupStatus.phase})` : '';
-      return React.createElement('div', {
-        style: { ...cardStyle, marginBottom: '24px', textAlign: 'center' as const, padding: '24px', color: 'var(--nxai-card-sub)' },
-      }, `MCP server not yet running. Waiting for initialization${phaseLabel}...`);
-    }
-
-    // Both Claude Code and Claude Desktop use the stdio bridge so configs
-    // survive Local restarts without needing to update port/token.
-    const claudeCodeCmd = `claude mcp add local-nexus-ai -- node "${mcpInfo.stdioPath}"`;
-    const claudeDesktopConfig = JSON.stringify({
-      mcpServers: {
-        'local-nexus-ai': {
-          command: 'node',
-          args: [mcpInfo.stdioPath],
-        },
-      },
-    }, null, 2);
-
-    const copyBtn = (text: string, field: string) =>
-      React.createElement('button', {
-        style: { ...btnStyle, marginTop: '8px', fontSize: '11px' },
-        onClick: () => this.copyToClipboard(text, field),
-      }, copiedField === field ? 'Copied!' : 'Copy');
-
-    const { settings } = this.state;
-    const activeProvider = settings?.aiProvider
-      ? settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1)
-      : 'Not configured';
-    const activeModel = settings?.aiModel || 'default';
-
-    const codeStyle = { fontFamily: 'monospace', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px', fontSize: '11px' };
-
-    return React.createElement('div', { style: { marginBottom: '24px' } },
-      this.renderSectionLabel('Connect to AI Tools'),
-      React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' },
-      },
-        React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
-        React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)' } },
-          `Server running on port ${mcpInfo.port}`,
-        ),
-        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
-          `\u2022 ${mcpInfo.tools.length} tools \u2022 v${mcpInfo.version}`,
-        ),
-      ),
-      React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingLeft: '24px' },
-      },
-        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
-          `Active AI: ${activeProvider}`,
-        ),
-        settings?.aiModel
-          ? React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-text)' } },
-              `(${activeModel})`,
-            )
-          : null,
-      ),
-
-      React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
-      },
-        // Claude Code — unique command
-        React.createElement('div', { style: cardStyle },
-          React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--nxai-card-text)' } }, 'Claude Code'),
-          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '6px' } }, 'Run in your terminal:'),
-          React.createElement('div', { style: { ...codeBlockStyle, fontSize: '10px' } }, claudeCodeCmd),
-          copyBtn(claudeCodeCmd, 'claude-code'),
-        ),
-
-        // All other agents share the same stdio config
-        React.createElement('div', { style: cardStyle },
-          React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--nxai-card-text)' } },
-            'Claude Desktop · Cursor · Windsurf · Cline · Gemini',
-          ),
-          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '6px' } },
-            'All use the same config — auto-install with:',
-          ),
-          React.createElement('div', { style: { ...codeBlockStyle, fontSize: '10px' } },
-            'nexus mcp setup --agent <name> --write',
-          ),
-          copyBtn('nexus mcp setup --agent <name> --write', 'other-agents'),
-          React.createElement('div', { style: { marginTop: '8px', fontSize: '10px', color: 'var(--nxai-card-sub)' } },
-            'Names: ',
-            React.createElement('code', { style: codeStyle }, 'claude-desktop'),
-            ' · ',
-            React.createElement('code', { style: codeStyle }, 'cursor'),
-            ' · ',
-            React.createElement('code', { style: codeStyle }, 'windsurf'),
-            ' · ',
-            React.createElement('code', { style: codeStyle }, 'cline'),
-            ' · ',
-            React.createElement('code', { style: codeStyle }, 'gemini'),
-          ),
-        ),
-      ),
-    );
-  }
-
-  renderSetupAICell(site: SiteListItem): React.ReactNode {
-    const { setupId, setupResults } = this.state;
-    const result = setupResults[site.id];
-    const isSettingUp = setupId === site.id;
-
-    const tdStyle: React.CSSProperties = {
-      padding: '10px 12px',
-      fontSize: '13px',
-      color: 'var(--nxai-card-text)',
-      borderBottom: '1px solid var(--nxai-card-border)',
-    };
-
-    // WPE sites can't have AI setup (remote)
-    if (site.source === 'wpe') {
-      return React.createElement('td', { style: tdStyle },
-        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'N/A'),
-      );
-    }
-
-    if (site.status !== 'running') {
-      return React.createElement('td', { style: tdStyle },
-        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, '\u2014'),
-      );
-    }
-
-    if (isSettingUp) {
-      return React.createElement('td', { style: tdStyle },
-        React.createElement('button', {
-          style: { ...btnStyle, opacity: 0.6, cursor: 'not-allowed' },
-          disabled: true,
-        }, 'Setting up...'),
-      );
-    }
-
-    if (result) {
-      if (result.success) {
-        const summaryParts: string[] = [];
-        if (result.aiPlugin === 'installed') summaryParts.push('Plugin installed');
-        else if (result.aiPlugin === 'activated') summaryParts.push('Plugin activated');
-        else if (result.aiPlugin === 'already_active') summaryParts.push('Plugin active');
-        if (result.aiFeatures === 'enabled') summaryParts.push('experiments on');
-        if (result.credentials === 'synced') summaryParts.push('keys synced');
-        const summary = summaryParts.length > 0 ? summaryParts.join(', ') : 'Set up';
-        return React.createElement('td', { style: tdStyle },
-          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
-          React.createElement('span', { style: { fontSize: '12px' }, title: result.message }, summary),
-        );
-      }
-      // Failed
-      return React.createElement('td', { style: tdStyle },
-        React.createElement('span', {
-          style: { fontSize: '12px', color: UI_COLORS.STATUS_ERROR },
-          title: result.message,
-        }, 'Setup failed'),
-      );
-    }
-
-    return React.createElement('td', { style: tdStyle },
-      React.createElement('button', {
-        style: btnPrimaryStyle,
-        onClick: () => this.handleSetupAI(site.id),
-      }, 'Setup for AI'),
-    );
-  }
-
-  renderFleetSummaryCard(): React.ReactNode {
-    const { fleetSummary } = this.state;
-    if (!fleetSummary) {
-      return React.createElement('div', { style: { ...cardStyle, gridColumn: '1 / 3' } },
-        React.createElement('div', { style: cardTitleStyle }, 'Fleet Summary'),
-        React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontSize: '13px' } }, 'Loading fleet data\u2026'),
-      );
-    }
-
-    const { total, totalLocal, totalWpe, wpVersions, phpVersions, completeness, wpeSync, staleCount, neverScannedCount } = fleetSummary;
-
-    // Show top 3 WP versions
-    const topWp = wpVersions.slice(0, 3);
-    const otherWpCount = wpVersions.slice(3).reduce((s, e) => s + (e.version !== 'unknown' ? e.count : 0), 0);
-
-    // Show top 3 PHP versions; track unknown separately so it's always surfaced
-    const knownPhp = phpVersions.filter(e => e.version !== 'unknown');
-    const unknownPhpEntry = phpVersions.find(e => e.version === 'unknown');
-    const topPhp = knownPhp.slice(0, 3);
-    const otherPhpCount = knownPhp.slice(3).reduce((s, e) => s + e.count, 0);
-
-    const versionListStyle: React.CSSProperties = {
-      fontSize: '12px',
-      color: 'var(--nxai-card-text)',
-      lineHeight: '1.8',
-    };
-
-    const colStyle: React.CSSProperties = {
-      flex: 1,
-    };
-
-    const labelStyle: React.CSSProperties = {
-      fontSize: '11px',
-      fontWeight: 600,
-      textTransform: 'uppercase' as const,
-      letterSpacing: '0.5px',
-      color: 'var(--nxai-card-label)',
-      marginBottom: '6px',
-    };
-
-    return React.createElement('div', { style: { ...cardStyle, gridColumn: '1 / 3' } },
-      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' } },
-        React.createElement('div', { style: cardTitleStyle }, 'Fleet Intelligence'),
-        React.createElement('div', { style: { fontSize: '22px', fontWeight: 700, color: 'var(--nxai-card-text)' } },
-          `${total} sites`,
-          React.createElement('span', { style: { fontSize: '12px', fontWeight: 400, color: 'var(--nxai-card-sub)', marginLeft: '8px' } },
-            `${totalLocal} local \u00B7 ${totalWpe} WPE`,
-          ),
-        ),
-      ),
-
-      React.createElement('div', { style: { display: 'flex', gap: '24px' } },
-        // WP Versions column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'WordPress'),
-          React.createElement('div', { style: versionListStyle },
-            ...topWp.map(e =>
-              React.createElement('div', { key: e.version },
-                React.createElement('span', { style: { fontWeight: 500 } }, e.version),
-                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, `${e.count} site${e.count !== 1 ? 's' : ''}`),
-              )
-            ),
-            otherWpCount > 0
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } }, `+${otherWpCount} on other versions`)
-              : null,
-          ),
-        ),
-
-        // PHP Versions column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'PHP'),
-          React.createElement('div', { style: versionListStyle },
-            ...topPhp.map(e =>
-              React.createElement('div', { key: e.version },
-                React.createElement('span', { style: { fontWeight: 500 } }, e.version),
-                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, `${e.count} site${e.count !== 1 ? 's' : ''}`),
-              )
-            ),
-            otherPhpCount > 0
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } }, `+${otherPhpCount} on other versions`)
-              : null,
-            unknownPhpEntry
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic' } },
-                  `${unknownPhpEntry.count} unknown (need SSH sync)`,
-                )
-              : null,
-          ),
-        ),
-
-        // Local Twins + WPE Sync column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'Local Twins'),
-          React.createElement('div', { style: versionListStyle },
-            completeness.indexed > 0
-              ? React.createElement('div', null, `\u2705 indexed: ${completeness.indexed}`)
-              : null,
-            completeness.metadata > 0
-              ? React.createElement('div', null, `\u2705 metadata: ${completeness.metadata}`)
-              : null,
-            completeness.filesystem > 0
-              ? React.createElement('div', null, `\uD83D\uDD36 filesystem: ${completeness.filesystem}`)
-              : null,
-            completeness.none > 0
-              ? React.createElement('div', null, `\u274C none: ${completeness.none}`)
-              : null,
-          ),
-          wpeSync && totalWpe > 0
-            ? React.createElement('div', { style: { marginTop: 10 } },
-                React.createElement('div', { style: { ...labelStyle, marginBottom: 4 } }, 'WPE Sync'),
-                React.createElement('div', { style: versionListStyle },
-                  React.createElement('div', null,
-                    React.createElement('span', { style: { fontWeight: 500 } }, `${wpeSync.synced}/${totalWpe}`),
-                    React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, 'synced'),
-                  ),
-                  wpeSync.neverSynced > 0
-                    ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic' } },
-                        `${wpeSync.neverSynced} need SSH sync`,
-                      )
-                    : null,
-                ),
-              )
-            : null,
-        ),
-
-        // Freshness column
-        React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'Freshness'),
-          React.createElement('div', { style: versionListStyle },
-            staleCount > 0
-              ? React.createElement('div', { style: { color: UI_COLORS.STATUS_WARNING } },
-                  `\u26A0\uFE0F ${staleCount} need${staleCount !== 1 ? '' : 's'} refresh`,
-                )
-              : React.createElement('div', { style: { color: UI_COLORS.STATUS_RUNNING } }, '\u2713 All current'),
-            neverScannedCount > 0
-              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } },
-                  `${neverScannedCount} never scanned`,
-                )
-              : null,
-          ),
-        ),
-      ),
-    );
-  }
-
-  renderFleetPluginsCard(): React.ReactNode {
-    const { fleetPlugins } = this.state;
-
-    const topPlugins = fleetPlugins.slice(0, 10);
-
-    return React.createElement('div', { style: cardStyle },
-      React.createElement('div', { style: cardTitleStyle }, 'Top Plugins'),
-      topPlugins.length === 0
-        ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontSize: '13px' } },
-            'No plugin data yet. Run fleet refresh to populate.',
-          )
-        : React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '6px' } },
-            ...topPlugins.map((plugin, idx) =>
-              React.createElement('div', {
-                key: plugin.slug,
-                style: {
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '4px 0',
-                  borderBottom: idx < topPlugins.length - 1 ? '1px solid var(--nxai-card-border)' : 'none',
-                },
-              },
-                React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-                  React.createElement('div', {
-                    style: { fontSize: '12px', fontWeight: 500, color: 'var(--nxai-card-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
-                    title: plugin.slug,
-                  }, plugin.title !== plugin.slug ? plugin.title : plugin.slug),
-                  plugin.title !== plugin.slug
-                    ? React.createElement('div', { style: { fontSize: '10px', color: 'var(--nxai-card-sub)', fontFamily: 'monospace' } }, plugin.slug)
-                    : null,
-                ),
-                React.createElement('div', {
-                  style: { fontSize: '12px', color: 'var(--nxai-card-sub)', marginLeft: '12px', whiteSpace: 'nowrap' as const, flexShrink: 0 },
-                }, `${plugin.siteCount} site${plugin.siteCount !== 1 ? 's' : ''}`),
-              )
-            ),
-          ),
-    );
-  }
-  handleDashboardSend = (): void => {
-    const { dashboardDraft } = this.state;
-    if (!dashboardDraft.trim()) return;
-    this.setState({ dashboardPrompt: dashboardDraft, dashboardDraft: '', activeTab: 'ask' });
-  };
-
-  renderAskCard(): React.ReactNode {
-    const { dashboardDraft } = this.state;
-    return React.createElement('div', {
-      style: { ...cardStyle, marginBottom: 24, padding: '14px 18px' },
-    },
-      React.createElement('div', { style: { ...cardTitleStyle, marginBottom: 6 } }, 'Ask Nexus AI'),
-      React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 } },
-        'Ask about your fleet, sites, or plugins.',
-      ),
-      React.createElement('div', { style: { display: 'flex', gap: 8 } },
-        React.createElement('textarea', {
-          value: dashboardDraft,
-          onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => this.setState({ dashboardDraft: e.target.value }),
-          onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleDashboardSend(); }
-          },
-          placeholder: 'e.g. Which sites have ACF installed?',
-          rows: 2,
-          style: {
-            flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: 12,
-            border: '1px solid var(--nxai-card-border, #30363d)',
-            background: 'var(--nxai-code-bg, #1f1f1f)', color: 'var(--nxai-card-text)',
-            fontFamily: 'inherit', resize: 'none' as const, outline: 'none',
-          },
-        }),
-        React.createElement('button', {
-          onClick: () => this.handleDashboardSend(),
-          disabled: !dashboardDraft.trim(),
-          style: {
-            padding: '0 16px', borderRadius: 6, fontSize: 14, fontWeight: 700,
-            background: dashboardDraft.trim() ? '#51BB7B' : 'rgba(107,114,128,0.2)',
-            color: dashboardDraft.trim() ? '#fff' : 'var(--nxai-card-sub, #6b7280)',
-            border: 'none', cursor: dashboardDraft.trim() ? 'pointer' : 'default',
-            fontFamily: 'inherit', alignSelf: 'stretch',
-          },
-        }, '→'),
-      ),
-    );
-  }
-
-  renderWpeBanner(): React.ReactNode {
-    const { stats, wpeBannerDismissed } = this.state;
-    if (!stats) return null;
-    const wpeTotal = stats.remoteSites?.total ?? 0;
-    if (wpeTotal === 0 || wpeBannerDismissed) return null;
-
-    const dismissBanner = (): void => {
-      this.setState({ wpeBannerDismissed: true });
-      this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.UPDATE_SETTINGS,
-        { wpeBannerDismissed: true },
-      ).catch(() => {});
-    };
-
-    return React.createElement('div', {
-      'data-testid': 'wpe-onboarding-banner',
-      style: {
-        ...cardStyle,
-        marginBottom: 16,
-        borderColor: '#0ECAD4',
-        borderLeftWidth: 4,
-        position: 'relative' as const,
-      },
-    },
-      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } },
-        React.createElement('div', { style: { fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#0ECAD4' } },
-          `WP Engine connected — ${wpeTotal} install${wpeTotal !== 1 ? 's' : ''}`,
-        ),
-        React.createElement('button', {
-          'data-testid': 'wpe-banner-dismiss',
-          onClick: dismissBanner,
-          style: {
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            fontSize: 16, color: 'var(--nxai-card-sub, #6b7280)', padding: '0 4px',
-            fontFamily: 'inherit',
-          },
-        }, '×'),
-      ),
-      React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', lineHeight: 1.6 } },
-        React.createElement('div', { style: { marginBottom: 4 } },
-          '● CAPI data (domain, PHP version, environment) syncs automatically — no SSH required.',
-        ),
-        React.createElement('div', null,
-          '● WP version, plugins, and users require SSH sync — opt in via Settings → WP Engine Installs.',
-        ),
-      ),
-      React.createElement('div', { style: { marginTop: 10 } },
-        React.createElement('button', {
-          onClick: () => this.setState({ activeTab: 'settings' }),
-          style: {
-            padding: '4px 12px', borderRadius: 5, fontSize: 11, fontWeight: 600,
-            background: 'rgba(14,202,212,.12)', color: '#0ECAD4',
-            border: '1px solid rgba(14,202,212,.3)', cursor: 'pointer', fontFamily: 'inherit',
-          },
-        }, 'Open Settings'),
-      ),
-    );
-  }
-
-  renderWpeNotConnectedBanner(): React.ReactNode {
-    const { stats, wpeNotConnectedDismissed } = this.state;
-    if (!stats || wpeNotConnectedDismissed) return null;
-    // Only show when WPE is genuinely not connected (no remote sites)
-    if ((stats.remoteSites?.total ?? 0) > 0) return null;
-
-    const dismiss = (): void => {
-      this.setState({ wpeNotConnectedDismissed: true });
-      this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.UPDATE_SETTINGS,
-        { wpeNotConnectedBannerDismissed: true },
-      ).catch(() => {});
-    };
-
-    return React.createElement('div', {
-      'data-testid': 'wpe-not-connected-banner',
-      style: {
-        ...cardStyle,
-        marginBottom: 16,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '10px 16px',
-        fontSize: 12,
-        color: 'var(--nxai-card-sub, #6b7280)',
-      },
-    },
-      React.createElement('span', null,
-        '☁ Have WP Engine sites? ',
-        React.createElement('span', {
-          style: { color: '#0ECAD4', cursor: 'pointer', textDecoration: 'underline' },
-          onClick: () => {
-            // Open Local's Connect panel — use the WPE auth banner hint
-            this.setState({ activeTab: 'settings' });
-          },
-        }, 'Connect via Local → Connect'),
-        ' to manage your full fleet.',
-      ),
-      React.createElement('button', {
-        'data-testid': 'wpe-not-connected-dismiss',
-        onClick: dismiss,
-        style: {
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          fontSize: 14, color: 'var(--nxai-card-sub, #6b7280)', padding: '0 4px',
-          fontFamily: 'inherit',
-        },
-      }, '×'),
-    );
-  }
-
-  renderOverviewTab(): React.ReactNode {
-    const { stats } = this.state;
-    if (!stats) return null;
-
-    return React.createElement('div', null,
-      // Banners
-      this.renderSetupBanner(stats),
-      this.renderWpeAuthBanner(),
-      this.renderWpeNotConnectedBanner(),
-      this.renderWpeBanner(),
-
-      // Ask/Tell quick card
-      this.renderAskCard(),
-
-      // Connect AI Tools — MCP connection panel
-      this.renderMcpPanel(),
-
-      // Fleet Intelligence — site counts + completeness + summary
-      this.renderSectionLabel('Fleet Intelligence'),
-      React.createElement('div', { style: cardContainerStyle },
-        this.renderLocalSitesCard(stats),
-        this.renderWpeConnectedCard(stats),
-        this.renderRemoteSitesCard(stats),
-      ),
-      React.createElement('div', { style: { marginTop: 16 } },
-        React.createElement(FleetCompletenessWidget, {
-          electron: this.props.electron,
-          onSchedule: () => this.setState({ activeTab: 'settings' }),
-          onIndexSites: () => this.setState({ activeTab: 'operations' }),
-        }),
-      ),
-      React.createElement('div', { style: { marginTop: 16 } }, this.renderFleetSummaryCard()),
-
-      // AI Integration — MCP status + proxy + gateway usage
-      this.renderSectionLabel('AI Integration'),
-      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(2, 1fr)' } },
-        this.renderMcpCard(stats),
-        this.renderAiProxyCard(),
-      ),
-      React.createElement(AIGatewayPanel, { electron: this.props.electron }),
-    );
-  }
 
   renderActivityTab(): React.ReactNode {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 } },
@@ -1774,14 +763,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
 renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
-    const tabs: { key: NexusOverviewState['activeTab']; label: string }[] = [
-      { key: 'overview',     label: 'Dashboard' },
-      { key: 'ask' as const, label: 'Ask/Tell' },
-      { key: 'operations',   label: 'Operations' },
-      { key: 'activity',     label: 'Activity' },
-      { key: 'agents',       label: 'Agents' },
-      { key: 'settings',     label: 'Settings' },
-    ];
+    const tabs = TABS;
 
     return React.createElement('div', {
       style: {
@@ -1830,632 +812,265 @@ renderTabBar(): React.ReactNode {
     );
   }
 
-  renderOpsButton(
-    label: string,
-    loadingLabel: string,
-    isRunning: boolean,
-    opId: string | null,
-    handler: () => void,
-    description?: string,
-    disabled?: boolean,
-  ): React.ReactNode {
-    const inactive = isRunning || disabled;
-    return React.createElement('div', { style: { flex: '1', minWidth: '220px' } },
-      React.createElement('button', {
-        style: inactive
-          ? { ...btnPrimaryStyle, opacity: 0.4, cursor: 'not-allowed', width: '100%' }
-          : { ...btnPrimaryStyle, width: '100%' },
-        onClick: inactive ? undefined : handler,
-        disabled: inactive,
-        title: disabled ? 'Requires WP Engine login' : undefined,
-      }, isRunning ? loadingLabel : label),
-      description
-        ? React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub, #6b7280)', marginTop: '4px', lineHeight: '1.3' } }, description)
-        : null,
-      opId
-        ? React.createElement('div', { style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' } }, 'Started — check progress below.')
-        : null,
-    );
-  }
-
-  renderOperationsTab(): React.ReactNode {
-    const { wpeAccounts, wpeAccountFilter, opsAdvancedExpanded } = this.state;
-    const wpeDisabled = !(this.state.stats?.remoteSites.wpeAuthenticated ?? false);
-    const btnRow = { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const };
-    const divider = React.createElement('hr', { style: { border: 'none', borderTop: '1px solid var(--nxai-card-border, #e5e7eb)', margin: '28px 0 22px' } });
-
-    // Compact inline WPE account scope badge
-    const allAccountIds = wpeAccounts.map(a => a.id);
-    const includedIds = wpeAccountFilter ?? allAccountIds;
-    const scopeBadge = wpeAccounts.length > 0
-      ? React.createElement('span', {
-          style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', fontWeight: 400, marginLeft: 8 },
-        }, `· ${includedIds.length === allAccountIds.length ? 'All accounts' : `${includedIds.length} of ${allAccountIds.length} accounts`}`)
-      : null;
-
-    // ── Zone 1: Keep data current ─────────────────────────────────────────────
-    const zone1 = React.createElement('div', null,
-
-      // Local sites
-      React.createElement('div', {
-        style: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 },
-      }, 'Local'),
-      React.createElement('div', { style: btnRow },
-        this.renderOpsButton(
-          'Refresh metadata', 'Refreshing…',
-          this.state.syncGraphRunning, this.state.syncGraphOpId,
-          this.handleSyncGraph,
-          'WP-CLI: active plugins, WP version, PHP version, themes. Starts halted sites temporarily.',
-        ),
-        this.renderOpsButton(
-          'Index content', 'Indexing…',
-          this.state.indexAllAutoRunning, this.state.indexAllAutoOpId,
-          this.handleIndexAllAuto,
-          'Vector index of posts/pages for search. Starts halted sites temporarily.',
-        ),
-      ),
-
-      // WP Engine sites
-      React.createElement('div', {
-        style: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10, display: 'flex', alignItems: 'center' },
-      }, 'WP Engine', scopeBadge),
-      React.createElement('div', { style: btnRow },
-        this.renderOpsButton(
-          'Sync metadata', 'Syncing…',
-          this.state.wpeSyncing, null,
-          this.handleWpeSync,
-          'SSH: plugins, WP/PHP version, themes for all WPE installs. Progress shown below.',
-          wpeDisabled,
-        ),
-        this.renderOpsButton(
-          'Index content', 'Indexing…',
-          this.state.fleetIndexRunning, this.state.fleetIndexOpId,
-          this.handleIndexAllFleet,
-          'Extracts posts/pages via SSH WP-CLI and builds searchable index. Requires SSH key.',
-          wpeDisabled,
-        ),
-      ),
-
-      // WPE sync inline progress (shows while metadata sync is running)
-      this.state.wpeSyncing && this.state.wpeSyncProgress
-        ? React.createElement('div', {
-            'data-testid': 'wpe-sync-progress',
-            style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: 8, padding: '12px 16px', marginBottom: 12 },
-          },
-            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
-              React.createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, 'WPE metadata sync'),
-              React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
-                `${this.state.wpeSyncProgress.current} / ${this.state.wpeSyncProgress.total} sites`,
-              ),
-            ),
-            React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
-              this.state.wpeSyncProgress.currentSite ? `Syncing: ${this.state.wpeSyncProgress.currentSite}` : 'Starting…',
-            ),
-          )
-        : null,
-
-      // WPE content index inline progress (shows while SSH indexing is running)
-      this.state.fleetIndexRunning
-        ? React.createElement('div', {
-            style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: 8, padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 },
-          },
-            React.createElement('div', { style: { width: 12, height: 12, borderRadius: '50%', background: '#0ECAD4', animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0 } }),
-            React.createElement('div', null,
-              React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, 'WPE content indexing'),
-              React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
-                'Extracting posts via SSH and building search index. This may take several minutes.',
-              ),
-            ),
-          )
-        : null,
-
-      // Bulk ops progress — directly below buttons for immediate feedback
-      React.createElement(BulkOperationsPanel, {
-        electron: this.props.electron,
-        siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
-      }),
-    );
-
-    // ── Zone 2: Site status ───────────────────────────────────────────────────
-    const zone2 = React.createElement('div', null,
-      divider,
-      this.renderSectionLabel('Site Status'),
-      React.createElement(SystemTab, {
-        electron: this.props.electron,
-        sites: this.state.sites.map((s) => ({ id: s.id, name: s.name, status: s.status })),
-        indexEntries: (this.state.indexEntries ?? []).map((e: any) => ({
-          siteId: e.siteId, siteName: e.siteName ?? '', state: e.state,
-          documentCount: e.documentCount, chunkCount: e.chunkCount,
-          lastIndexed: e.lastIndexed, durationMs: e.durationMs, errors: e.errors,
-        })),
-      }),
-    );
-
-    // ── Zone 3: Advanced (collapsed by default) ───────────────────────────────
-    const advancedItems = [
-      'Factory Reset',
-      'Reset Content Index',
-      'Database Health',
-      'Housekeeping',
-      'SSH Diagnostics',
-    ];
-
-    const zone3 = React.createElement('div', null,
-      divider,
-      // Collapsible header
-      React.createElement('div', {
-        'data-testid': 'ops-advanced-toggle',
-        onClick: () => this.setState({ opsAdvancedExpanded: !opsAdvancedExpanded }),
-        style: {
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 14px', cursor: 'pointer', userSelect: 'none' as const,
-          border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: opsAdvancedExpanded ? '8px 8px 0 0' : 8,
-          background: 'var(--nxai-card-bg, #fff)',
-        },
-      },
-        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-          React.createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, 'Advanced'),
-          React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', opacity: 0.7 } },
-            advancedItems.join(' · '),
-          ),
-        ),
-        React.createElement('span', {
-          style: { fontSize: 9, color: 'var(--nxai-card-sub, #6b7280)', display: 'inline-block', transform: opsAdvancedExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' },
-        }, '▶'),
-      ),
-
-      // Expanded body
-      opsAdvancedExpanded
-        ? React.createElement('div', {
-            style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '20px 20px 8px', background: 'var(--nxai-card-bg, #fff)' },
-          },
-            this.renderSectionLabel('Factory Reset'),
-            this.renderFactoryReset(),
-            this.renderSectionLabel('Reset Content Index'),
-            this.renderContentIndexReset(),
-            this.renderSectionLabel('Database Health'),
-            this.renderDbScanSection(),
-            this.renderSectionLabel('Housekeeping'),
-            this.renderContentMaintenance(),
-            this.renderSectionLabel('SSH Diagnostics'),
-            this.renderSshDiagnostics(),
-          )
-        : null,
-    );
-
-    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const } },
-      zone1,
-      zone2,
-      zone3,
-    );
-  }
-
-  renderFactoryReset(): React.ReactNode {
-    const { factoryResetConfirming, factoryResetRunning, factoryResetDone, factoryResetChecked } = this.state;
-
-    if (factoryResetDone) {
-      return React.createElement('div', {
-        style: { padding: '10px 14px', background: 'rgba(81,187,123,0.06)', border: '1px solid rgba(81,187,123,0.2)', borderRadius: 7, marginBottom: 24, fontSize: 12, color: '#51BB7B' },
-      },
-        '✓ All Nexus AI data deleted. ',
-        React.createElement('strong', null, 'Restart Local'),
-        ' to complete the reset.',
-        React.createElement('button', {
-          onClick: () => this.setState({ factoryResetDone: false }),
-          style: { marginLeft: 12, background: 'none', border: 'none', color: '#51BB7B', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' },
-        }, 'Dismiss'),
-      );
-    }
-
-    return React.createElement('div', { style: { marginBottom: 24 } },
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: factoryResetConfirming ? 10 : 0 } },
-        React.createElement('button', {
-          onClick: () => this.setState(prev => ({ factoryResetConfirming: !prev.factoryResetConfirming, factoryResetChecked: false })),
-          style: {
-            padding: '7px 14px', borderRadius: 5, fontSize: 12, fontWeight: 600,
-            cursor: factoryResetRunning ? 'not-allowed' : 'pointer',
-            border: '1px solid rgba(239,68,68,0.35)',
-            background: factoryResetConfirming ? 'rgba(239,68,68,0.08)' : 'var(--nxai-card-bg)',
-            color: '#ef4444', opacity: factoryResetRunning ? 0.5 : 1,
-          },
-          disabled: factoryResetRunning,
-        }, factoryResetRunning ? 'Resetting…' : '⚠ Factory Reset'),
+  /**
+   * Inline progress for a WP Engine metadata sync.
+   *
+   * Survived the gutting of Operations' zone 1 because it is not driven by the
+   * button that lived there: `checkWpeSyncStatus` runs on mount and starts
+   * polling whenever a sync is already in flight, which is the normal case for
+   * one the scheduler began. Renders nothing when no sync is running.
+   */
+  renderWpeSyncProgress(): React.ReactNode {
+    if (!this.state.wpeSyncing || !this.state.wpeSyncProgress) return null;
+    return React.createElement('div', {
+      'data-testid': 'wpe-sync-progress',
+      style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: 8, padding: '12px 16px', marginTop: 12 },
+    },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
+        React.createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, 'WPE metadata sync'),
         React.createElement('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
-          'Deletes all Nexus AI data — graph, vectors, settings, site configs.',
+          `${this.state.wpeSyncProgress.current} / ${this.state.wpeSyncProgress.total} sites`,
         ),
       ),
-
-      factoryResetConfirming ? React.createElement('div', {
-        style: { padding: '12px 14px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 7 },
-      },
-        React.createElement('div', { style: { fontSize: 12, marginBottom: 10, lineHeight: 1.55 } },
-          React.createElement('strong', { style: { color: '#ef4444' } }, 'Permanently deletes:'),
-          React.createElement('ul', { style: { margin: '5px 0 5px 16px', color: 'var(--nxai-card-sub, #6b7280)', fontSize: 11 } },
-            React.createElement('li', null, 'IndexRegistry · SiteMetadataCache · Settings'),
-            React.createElement('li', null, 'API key status · Site AI configs · WPE install cache'),
-            React.createElement('li', null, 'Graph DB (plugins, themes, users, events)'),
-            React.createElement('li', null, 'Vector store — all embeddings'),
-          ),
-          React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginTop: 5 } },
-            '✓ API keys (Keychain), WPE OAuth, and telemetry ID are ',
-            React.createElement('strong', null, 'not affected'),
-            '. Restart Local after reset.',
-          ),
-        ),
-        React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 10 } },
-          React.createElement('input', {
-            type: 'checkbox', checked: factoryResetChecked,
-            onChange: (e: any) => this.setState({ factoryResetChecked: e.target.checked }),
-          }),
-          'I understand — this cannot be undone',
-        ),
-        React.createElement('div', { style: { display: 'flex', gap: 8 } },
-          React.createElement('button', {
-            disabled: !factoryResetChecked || factoryResetRunning,
-            onClick: async () => {
-              this.setState({ factoryResetRunning: true });
-              const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.FACTORY_RESET);
-              if (result?.success) {
-                this.setState({ factoryResetRunning: false, factoryResetConfirming: false, factoryResetDone: true, factoryResetChecked: false });
-              } else {
-                this.setState({ factoryResetRunning: false });
-                (window as any).showToast?.(`Reset failed: ${result?.error}`, 'error');
-              }
-            },
-            style: {
-              padding: '6px 14px', borderRadius: 5, border: 'none', fontSize: 12, fontWeight: 600,
-              cursor: !factoryResetChecked || factoryResetRunning ? 'not-allowed' : 'pointer',
-              background: !factoryResetChecked ? '#444' : '#ef4444', color: '#fff',
-              opacity: !factoryResetChecked ? 0.5 : 1, fontFamily: 'inherit',
-            },
-          }, factoryResetRunning ? 'Resetting…' : 'Reset Everything'),
-          React.createElement('button', {
-            onClick: () => this.setState({ factoryResetConfirming: false, factoryResetChecked: false }),
-            style: { padding: '6px 14px', borderRadius: 5, border: '1px solid var(--nxai-card-border)', fontSize: 12, background: 'var(--nxai-card-bg)', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' },
-          }, 'Cancel'),
-        ),
-      ) : null,
+      React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)' } },
+        this.state.wpeSyncProgress.currentSite ? `Syncing: ${this.state.wpeSyncProgress.currentSite}` : 'Starting…',
+      ),
     );
   }
 
-  renderContentIndexReset(): React.ReactNode {
-    const { indexResetConfirming, indexResetRunning, indexResetResult, indexEntries, _resetConfirmChecked } = this.state;
-    const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
+  toggleSiteSelection = (id: string): void => {
+    this.setState(prev => ({
+      selectedSiteIds: prev.selectedSiteIds.indexOf(id) === -1
+        ? prev.selectedSiteIds.concat(id)
+        : prev.selectedSiteIds.filter(x => x !== id),
+    }));
+  };
 
-    const indexedCount = (indexEntries ?? []).filter((e: any) => e.state === 'indexed' || e.state === 'stale').length;
-    const totalDocs = (indexEntries ?? []).reduce((s: number, e: any) => s + (e.documentCount ?? 0), 0);
+  /**
+   * Select-all is scoped to the ids handed in — the rows currently visible under
+   * the host-type filter — never to the whole fleet. Ticking "all" while filtered
+   * to External must not silently arm an action against 331 WP Engine installs.
+   */
+  toggleAllSiteSelection = (ids: string[]): void => {
+    this.setState(prev => {
+      const allSelected = ids.length > 0 && ids.every(id => prev.selectedSiteIds.indexOf(id) !== -1);
+      if (allSelected) {
+        return { selectedSiteIds: prev.selectedSiteIds.filter(id => ids.indexOf(id) === -1) };
+      }
+      const next = prev.selectedSiteIds.slice();
+      for (const id of ids) if (next.indexOf(id) === -1) next.push(id);
+      return { selectedSiteIds: next };
+    });
+  };
 
-    if (indexResetResult) {
-      return React.createElement('div', { style: { marginBottom: '24px' } },
-        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'rgba(81,187,123,0.06)', border: '1px solid rgba(81,187,123,0.2)', borderRadius: '7px', fontSize: '12px', color: '#51BB7B' } },
-          '✓ Content index cleared — ',
-          React.createElement('span', { style: { color: 'var(--nxai-card-sub)' } }, `${indexResetResult.siteCount} site${indexResetResult.siteCount !== 1 ? 's' : ''}, ${indexResetResult.docCount.toLocaleString()} documents removed. Content will be re-indexed when sites start.`),
-          React.createElement('button', {
-            onClick: () => this.setState({ indexResetResult: null }),
-            style: { marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--nxai-card-sub)', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', padding: '0 4px' },
-          }, 'Dismiss'),
-        ),
-      );
+  /**
+   * Runs a bulk operation over exactly the ticked rows.
+   *
+   * Goes through BULK_EXECUTE — the one audited bulk path — never a second one.
+   * The empty guard is duplicated from SitesTab's `handleBulk` on purpose: an
+   * empty selection must never be re-interpreted as "the whole fleet", and this
+   * is the last place that could happen before 369 sites are dispatched.
+   */
+  handleSiteBulk = async (type: string, siteIds: string[]): Promise<void> => {
+    if (siteIds.length === 0) return;
+
+    if (siteIds.length > BULK_CONFIRM_THRESHOLD && !this.confirmLargeBulk(type, siteIds)) return;
+
+    // Set the job bar BEFORE awaiting, so the selection bar becomes the job bar in the
+    // same paint as the click. Awaiting first leaves a frame in which the button has been
+    // pressed and nothing on screen says anything happened.
+    this.setState({
+      bulkJob: {
+        phase: 'starting',
+        type,
+        siteIds,
+        startedAt: Date.now(),
+        completed: 0,
+        total: siteIds.length,
+        failed: 0,
+        failedIds: [],
+      },
+    });
+
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_EXECUTE, {
+        type,
+        siteIds,
+        siteNames: this.state.siteRows.reduce((acc: Record<string, string>, r) => {
+          if (siteIds.indexOf(r.id) !== -1) acc[r.id] = r.name;
+          return acc;
+        }, {}),
+        options: {},
+      });
+      if (result?.success && result.opId) {
+        // `success` here means the manager accepted the job, NOT that it finished — it
+        // returns an opId immediately and runs asynchronously. Clearing the selection on
+        // this used to be the bug: rows unticked the instant the work started.
+        this.bulkOpId = result.opId;
+        this.setState(prev => ({ bulkJob: prev.bulkJob ? { ...prev.bulkJob, phase: 'running' } : null }));
+        this.startBulkPolling();
+      } else {
+        this.setState(prev => ({
+          bulkJob: prev.bulkJob
+            ? { ...prev.bulkJob, phase: 'error', error: result?.error || 'Could not start' }
+            : null,
+        }));
+      }
+    } catch (err) {
+      console.error('[NexusAI] bulk operation failed:', err);
+      this.setState(prev => ({
+        bulkJob: prev.bulkJob ? { ...prev.bulkJob, phase: 'error', error: (err as Error).message } : null,
+      }));
     }
+  };
 
-    return React.createElement('div', { style: { marginBottom: '24px' } },
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: indexResetConfirming ? '10px' : '0' } },
-        React.createElement('button', {
-          disabled: indexResetRunning,
-          onClick: () => this.setState({ indexResetConfirming: !indexResetConfirming, indexResetResult: null }),
-          style: {
-            padding: '7px 14px', borderRadius: '5px', border: '1px solid var(--nxai-card-border)', fontSize: '12px',
-            fontWeight: 600, cursor: indexResetRunning ? 'not-allowed' : 'pointer',
-            background: 'var(--nxai-card-bg)', color: indexResetConfirming ? '#f87171' : 'inherit',
-            opacity: indexResetRunning ? 0.6 : 1,
-          },
-        }, indexResetRunning ? 'Resetting…' : 'Reset Content Index'),
-        React.createElement('span', { style: sub },
-          indexedCount > 0
-            ? `${indexedCount} site${indexedCount !== 1 ? 's' : ''} · ${totalDocs.toLocaleString()} documents · vectors only, graph and metadata untouched`
-            : 'Clears vector index and registry — graph DB, metadata, and settings are untouched',
-        ),
-      ),
-
-      // Inline confirmation panel
-      indexResetConfirming ? React.createElement('div', {
-        style: { padding: '12px 14px', background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '7px' },
-      },
-        React.createElement('div', { style: { fontSize: '12px', marginBottom: '10px', lineHeight: 1.5 } },
-          React.createElement('strong', { style: { color: '#f87171' } }, 'This will permanently delete:'),
-          React.createElement('ul', { style: { margin: '6px 0 0 16px', color: 'var(--nxai-card-sub)' } },
-            React.createElement('li', null, `sqlite-vec vector tables for ${indexedCount} site${indexedCount !== 1 ? 's' : ''} (${totalDocs.toLocaleString()} documents)`),
-            React.createElement('li', null, 'All IndexRegistry entries (sites will show as unindexed)'),
-          ),
-          React.createElement('div', { style: { marginTop: '6px', color: 'var(--nxai-card-sub)' } },
-            '✓ Graph DB, site metadata, AI config, WPE cache, and settings are ',
-            React.createElement('strong', null, 'not affected'),
-            '. Auto-index will rebuild when sites start.',
-          ),
-        ),
-        React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', marginBottom: '10px' } },
-          React.createElement('input', {
-            type: 'checkbox',
-            id: 'reset-index-confirm',
-            onChange: (e: any) => this.setState({ _resetConfirmChecked: e.target.checked }),
-          }),
-          'I understand — auto-index will rebuild when sites start',
-        ),
-        React.createElement('div', { style: { display: 'flex', gap: '8px' } },
-          React.createElement('button', {
-            disabled: indexResetRunning || !_resetConfirmChecked,
-            onClick: async () => {
-              this.setState({ indexResetRunning: true });
-              const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.RESET_CONTENT_INDEX);
-              this.setState({
-                indexResetRunning: false,
-                indexResetConfirming: false,
-                indexResetResult: result.success ? { siteCount: result.siteCount, docCount: result.docCount } : null,
-                _resetConfirmChecked: false,
-              });
-              if (!result.success) {
-                (window as any).showToast?.(`Reset failed: ${result.error}`, 'error');
-              }
-            },
-            style: {
-              padding: '6px 14px', borderRadius: '5px', border: 'none', fontSize: '12px', fontWeight: 600,
-              cursor: !_resetConfirmChecked || indexResetRunning ? 'not-allowed' : 'pointer',
-              background: !_resetConfirmChecked ? '#444' : '#ef4444',
-              color: '#fff', opacity: !_resetConfirmChecked ? 0.5 : 1,
-              fontFamily: 'inherit',
-            },
-          }, indexResetRunning ? 'Resetting…' : 'Reset Index'),
-          React.createElement('button', {
-            onClick: () => this.setState({ indexResetConfirming: false, _resetConfirmChecked: false }),
-            style: { padding: '6px 14px', borderRadius: '5px', border: '1px solid var(--nxai-card-border)', fontSize: '12px', background: 'var(--nxai-card-bg)', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' },
-          }, 'Cancel'),
-        ),
-      ) : null,
-    );
+  /**
+   * Names the count and what it costs. Deliberately states no duration: nothing here
+   * measures how long a pass takes, and an invented "about 40 minutes" is the kind of
+   * plausible-looking default that gets believed.
+   */
+  private confirmLargeBulk(type: string, siteIds: string[]): boolean {
+    const action = type === 'reindex' ? 'Index content' : 'Refresh metadata';
+    const remote = this.state.siteRows.filter(
+      r => siteIds.indexOf(r.id) !== -1 && r.source !== 'local',
+    ).length;
+    const cost = remote > 0
+      ? ` This opens a connection to each of the ${remote} not on this Mac.`
+      : '';
+    return confirm(`${action} on ${siteIds.length} sites?${cost} You can cancel it once it starts.`);
   }
 
-  renderDbScanSection(): React.ReactNode {
-    const { dbScanRunning, dbScanResults } = this.state;
-    const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
-
-    const scoreColor = (score?: number) => {
-      if (score === undefined) return '#6b7280';
-      if (score >= 90) return UI_COLORS.STATUS_RUNNING;
-      if (score >= 70) return UI_COLORS.STATUS_WARNING;
-      return UI_COLORS.STATUS_ERROR;
-    };
-
-    return React.createElement('div', { style: { marginBottom: '24px' } },
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' } },
-        React.createElement('button', {
-          style: {
-            padding: '7px 14px', borderRadius: '5px', border: 'none', fontSize: '12px',
-            fontWeight: 600, cursor: dbScanRunning ? 'not-allowed' : 'pointer',
-            backgroundColor: dbScanRunning ? '#9ca3af' : '#3b82f6', color: '#fff',
-            opacity: dbScanRunning ? 0.7 : 1,
-          },
-          disabled: dbScanRunning,
-          onClick: async () => {
-            this.setState({ dbScanRunning: true, dbScanResults: null });
-            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.DB_SCAN_ALL);
-            this.setState({
-              dbScanRunning: false,
-              dbScanResults: result.success ? result.scans : null,
-            });
-            if (!result.success) {
-              (window as any).showToast?.(`DB scan failed: ${result.error}`, 'error');
-            }
-          },
-        }, dbScanRunning ? 'Scanning...' : 'Scan All Running Sites'),
-        dbScanResults
-          ? React.createElement('span', { style: sub }, `${dbScanResults.length} site${dbScanResults.length !== 1 ? 's' : ''} scanned`)
-          : React.createElement('span', { style: sub }, 'Scans all running local sites for database health issues'),
-      ),
-
-      // Results table
-      dbScanResults && dbScanResults.length > 0
-        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '6px' } },
-            dbScanResults.map((scan) =>
-              React.createElement('div', {
-                key: scan.siteId,
-                style: {
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '8px 12px', borderRadius: '5px',
-                  backgroundColor: 'var(--nxai-card-bg, #fff)',
-                  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-                },
-              },
-                React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, color: 'var(--nxai-card-text)' } },
-                  scan.siteName,
-                ),
-                scan.error
-                  ? React.createElement('span', { style: { fontSize: '12px', color: UI_COLORS.STATUS_ERROR } }, `Error: ${scan.error}`)
-                  : React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
-                      React.createElement('span', {
-                        style: { fontSize: '14px', fontWeight: 700, color: scoreColor(scan.healthScore) },
-                      }, `${scan.healthScore ?? '?'}/100`),
-                      scan.issues && scan.issues.length > 0
-                        ? React.createElement('span', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } },
-                            `${scan.issues.length} issue${scan.issues.length !== 1 ? 's' : ''}`,
-                          )
-                        : React.createElement('span', { style: { fontSize: '11px', color: UI_COLORS.STATUS_RUNNING } }, '✓ clean'),
-                    ),
-              ),
-            ),
-          )
-        : null,
-    );
+  private startBulkPolling(): void {
+    if (this.bulkPollTimer !== null) return;
+    this.bulkPollTimer = setInterval(() => { void this.pollBulkStatus(); }, 2000);
   }
 
-  renderContentMaintenance(): React.ReactNode {
-    const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
-    const dangerBtn: React.CSSProperties = {
-      padding: '7px 14px', borderRadius: '5px', border: '1px solid #ef4444', fontSize: '12px',
-      fontWeight: 600, cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444',
-    };
-    const grayBtn: React.CSSProperties = {
-      padding: '7px 14px', borderRadius: '5px', border: 'none', fontSize: '12px',
-      fontWeight: 600, cursor: 'pointer', backgroundColor: '#6b7280', color: '#fff',
-    };
-
-    return React.createElement('div', { style: { marginBottom: '24px' } },
-      React.createElement('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap' as const } },
-
-        React.createElement('button', {
-          style: grayBtn,
-          title: 'Remove WPE installs that no longer exist in CAPI (marked inactive after CAPI sync)',
-          onClick: async () => {
-            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS);
-            if (result.success) {
-              (window as any).showToast?.(`Removed ${result.removed} ghost install${result.removed !== 1 ? 's' : ''} from graph`, 'success');
-              await this.fetchAll();
-            }
-          },
-        }, 'Remove Ghost Installs'),
-
-        React.createElement('button', {
-          style: dangerBtn,
-          onClick: async () => {
-            if (!(window as any).confirm?.('This will clear all graph and vector data then run a full sync. Continue?')) return;
-            (window as any).showToast?.('Resetting data — full sync starting, this will take a while...', 'info');
-            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.RESET_AND_REFRESH);
-            if (result.success) {
-              (window as any).showToast?.(
-                `Reset complete: ${result.capiInstalls} CAPI installs, ${result.sshSynced} SSH synced, ${result.vectorTablesDropped} vector tables cleared`,
-                'success',
-              );
-              await this.fetchAll();
-            } else {
-              (window as any).showToast?.(`Reset failed: ${result.error}`, 'error');
-            }
-          },
-        }, 'Reset & Refresh All Data'),
-      ),
-
-      React.createElement('div', { style: { ...sub, marginTop: '8px' } },
-        'Reset: clears graph + vector store, then runs full CAPI + SSH sync. Takes ~30 min for full fleet.',
-      ),
-    );
+  private stopBulkPolling(): void {
+    if (this.bulkPollTimer !== null) {
+      clearInterval(this.bulkPollTimer);
+      this.bulkPollTimer = null;
+    }
   }
 
-  renderSshDiagnostics(): React.ReactNode {
-    const { diagInstall, diagRunning, diagResults } = this.state;
-    const sub: React.CSSProperties = { fontSize: '11px', color: 'var(--nxai-card-sub)' };
-    const btnStyle: React.CSSProperties = {
-      padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--nxai-card-border, #30363d)',
-      backgroundColor: 'var(--nxai-card-bg, #21262d)', color: 'var(--nxai-card-text, #e6edf3)',
-      fontSize: '11px', cursor: diagRunning ? 'not-allowed' : 'pointer',
-      opacity: diagRunning ? 0.5 : 1, fontFamily: 'monospace',
-    };
-
-    const PRESETS: Array<{ label: string; args: string[] }> = [
-      { label: 'wp core version', args: ['core', 'version'] },
-      { label: 'wp plugin list', args: ['plugin', 'list', '--format=json'] },
-      { label: 'wp user list', args: ['user', 'list', '--format=json'] },
-      { label: 'wp post-type list', args: ['post-type', 'list', '--format=json'] },
-      { label: 'wp post list (5)', args: ['post', 'list', '--format=json', '--posts_per_page=5', '--fields=ID,post_title,post_type'] },
-      { label: 'wp cli info', args: ['cli', 'info'] },
-    ];
-
-    return React.createElement('div', { style: { marginBottom: '24px' } },
-      React.createElement('div', { style: { ...sub, marginBottom: '8px' } },
-        'Run WP-CLI commands against any WPE install to diagnose SSH/timing issues.',
-      ),
-
-      // Install input
-      React.createElement('div', { style: { display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' } },
-        React.createElement('input', {
-          type: 'text',
-          placeholder: 'install-name (e.g. acfrecipes)',
-          value: diagInstall,
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ diagInstall: e.target.value }),
-          style: {
-            padding: '5px 10px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace',
-            border: '1px solid var(--color-border-primary, #ccc)', width: '220px',
-            backgroundColor: 'var(--nxai-input-bg, transparent)',
-          },
-        }),
-        diagRunning
-          ? React.createElement('span', { style: { ...sub, fontStyle: 'italic' } }, 'running…')
+  private async pollBulkStatus(): Promise<void> {
+    if (!this.bulkOpId) return;
+    try {
+      const s = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_STATUS, this.bulkOpId);
+      if (!s?.success) return;
+      const results: Record<string, { status: string }> = s.siteResults || {};
+      const failedIds = Object.keys(results).filter(id => results[id]?.status === 'failed');
+      const done = s.status !== 'running';
+      this.setState(prev => ({
+        bulkJob: prev.bulkJob
+          ? {
+              ...prev.bulkJob,
+              phase: done ? 'result' : 'running',
+              completed: s.progress?.completed ?? prev.bulkJob.completed,
+              total: s.progress?.total ?? prev.bulkJob.total,
+              failed: failedIds.length,
+              failedIds,
+            }
           : null,
-      ),
-
-      // Preset command buttons
-      React.createElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '8px' } },
-        PRESETS.map(({ label, args }) =>
-          React.createElement('button', {
-            key: label,
-            style: btnStyle,
-            disabled: diagRunning || !diagInstall.trim(),
-            onClick: () => this.handleDiag(args),
-          }, label),
-        ),
-      ),
-
-      // Custom command input
-      React.createElement('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center' } },
-        React.createElement('input', {
-          type: 'text',
-          placeholder: 'wp post list --post_type=recipe --format=json',
-          style: {
-            padding: '5px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace',
-            border: '1px solid var(--color-border-primary, #ccc)',
-            backgroundColor: 'var(--nxai-input-bg, transparent)',
-            flex: 1,
-          },
-          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter' && !diagRunning && diagInstall.trim()) {
-              const raw = (e.target as HTMLInputElement).value.trim();
-              if (raw) {
-                // Strip leading "wp " if user typed it
-                const normalized = raw.startsWith('wp ') ? raw.slice(3) : raw;
-                const args = normalized.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map(a => a.replace(/^['"]|['"]$/g, '')) ?? [];
-                this.handleDiag(args);
-              }
-            }
-          },
-        }),
-        React.createElement('span', { style: sub }, '↵'),
-      ),
-
-      // Results
-      diagResults.length > 0
-        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' } },
-            diagResults.map((r, i) =>
-              React.createElement('div', {
-                key: i,
-                style: {
-                  padding: '8px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace',
-                  backgroundColor: r.success ? 'rgba(81,187,123,0.07)' : 'rgba(239,68,68,0.07)',
-                  border: `1px solid ${r.success ? 'rgba(81,187,123,0.2)' : 'rgba(239,68,68,0.2)'}`,
-                },
-              },
-                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
-                  React.createElement('span', { style: { fontWeight: 600, color: 'var(--nxai-card-text)' } }, r.cmd),
-                  React.createElement('span', { style: { color: r.success ? '#51BB7B' : '#ef4444' } },
-                    `${r.success ? '✓' : '✗'} ${r.durationMs}ms`,
-                  ),
-                ),
-                React.createElement('pre', {
-                  style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
-                    maxHeight: '200px', overflow: 'auto', color: 'var(--nxai-card-sub)', fontSize: '10px',
-                    userSelect: 'text' as const, cursor: 'text' },
-                }, r.error ?? (r.stdout?.slice(0, 2000) || '(empty)') + (r.stdout && r.stdout.length > 2000 ? '\n… (truncated)' : '')),
-              ),
-            ),
-          )
-        : null,
-    );
+      }));
+      if (done) {
+        this.stopBulkPolling();
+        this.bulkOpId = null;
+        // Fleet data changed underneath us — the table's own rows are now stale.
+        void this.fetchAll();
+      }
+    } catch {
+      /* transient IPC failure; the next tick retries rather than declaring the job dead */
+    }
   }
+
+  /** Dismissing a finished job is one of the two moments the selection is released. */
+  dismissBulkJob = (): void => {
+    this.stopBulkPolling();
+    this.bulkOpId = null;
+    this.setState({ bulkJob: null, selectedSiteIds: [] });
+  };
+
+  cancelBulkJob = (): void => {
+    if (!this.bulkOpId) return;
+    void this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_CANCEL, this.bulkOpId);
+    // Do not clear the job here — the poll will observe 'cancelled' and land on a result
+    // state, so the user still sees what happened rather than the bar vanishing.
+  };
 
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
-      case 'overview': return this.renderOverviewTab();
+      case 'inbox': return React.createElement(InboxTab, {
+        loaded: this.state.inboxLoaded,
+        failed: this.state.inboxFailed,
+        items: this.state.inboxItems,
+        total: this.state.inboxTotal,
+        counts: this.state.inboxCounts,
+        pausedSources: this.state.inboxPausedSources,
+        recentlyDecided: this.state.inboxRecentlyDecided,
+        onDecide: async (id: number, decision: string, status: 'dismissed' | 'done') => {
+          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INBOX_DECIDE, { id, decision, status });
+          void this.fetchAll();
+        },
+        onReopen: async (id: number) => {
+          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INBOX_REOPEN, { id });
+          void this.fetchAll();
+        },
+        onResumeAgent: async (agentId: string) => {
+          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RESUME, { agentId });
+          void this.fetchAll();
+        },
+        onRetry: () => { void this.fetchAll(); },
+      });
+      // Progress readouts sit BELOW the table rather than inside SitesTab, so
+      // the tab component stays a pure function of its props.
+      //
+      // Both moved here from Operations' zone 1 when it was gutted, and both
+      // had to survive it. BulkOperationsPanel is the only progress readout for
+      // BULK_EXECUTE, which is exactly what this tab's bulk bar dispatches.
+      // The WPE sync block is NOT the deleted button's: `checkWpeSyncStatus`
+      // runs on mount and fills `wpeSyncProgress` for a sync the scheduler
+      // started, so dropping it would hide background syncs entirely.
+      case 'sites': return React.createElement('div', null,
+        React.createElement(SitesTab, {
+        loaded: this.state.siteRowsLoaded,
+        failed: this.state.siteRowsFailed,
+        rows: this.state.siteRows,
+        total: this.state.siteRowsTotal,
+        selected: this.state.selectedSiteIds,
+        onToggle: this.toggleSiteSelection,
+        onToggleAll: this.toggleAllSiteSelection,
+        onBulk: (type: string, ids: string[]) => { void this.handleSiteBulk(type, ids); },
+        // One site, through the same audited bulk path as everything else —
+        // not `nexus host index <alias>`, which fans out over the connection.
+        onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
+        onRetry: () => { void this.fetchAll(); },
+        job: this.state.bulkJob,
+        onCancelJob: this.cancelBulkJob,
+        onDismissJob: this.dismissBulkJob,
+        onSelectFailed: (ids: string[]) => this.setState({ selectedSiteIds: ids, bulkJob: null }),
+        }),
+        this.renderWpeSyncProgress(),
+        React.createElement(BulkOperationsPanel, {
+          electron: this.props.electron,
+          siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
+        }),
+      );
       case 'activity': return this.renderActivityTab();
-      case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
-      // 'ask' and 'agents' cases handled in render() directly (no stats dependency)
-      default: return this.renderOverviewTab();
+      // 'agents' case handled in render() directly (no stats dependency)
+      // Sites is the landing tab; fallback points there to handle any stale/in-flight 'overview' value
+      default: return React.createElement(SitesTab, {
+        loaded: this.state.siteRowsLoaded,
+        failed: this.state.siteRowsFailed,
+        rows: this.state.siteRows,
+        total: this.state.siteRowsTotal,
+        selected: this.state.selectedSiteIds,
+        onToggle: this.toggleSiteSelection,
+        onToggleAll: this.toggleAllSiteSelection,
+        onBulk: (type: string, ids: string[]) => { void this.handleSiteBulk(type, ids); },
+        onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
+        onRetry: () => { void this.fetchAll(); },
+      });
     }
   }
 
@@ -2513,42 +1128,6 @@ renderTabBar(): React.ReactNode {
     }
   };
 
-  // Credential Sync methods
-  handleSyncAll = async (): Promise<void> => {
-    this.setState({ syncing: true, syncResults: null });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
-      if (!this.mounted) return;
-
-      const results = result?.results ?? [];
-      this.setState({ syncing: false, syncResults: results });
-
-      // Show toast notification
-      const successCount = results.filter((r: any) => r.success).length;
-      const failCount = results.length - successCount;
-
-      if (toast) {
-        if (failCount === 0 && successCount > 0) {
-          toast({ type: 'success', content: `Successfully synced credentials to ${successCount} site${successCount === 1 ? '' : 's'}` });
-        } else if (failCount > 0 && successCount > 0) {
-          toast({ type: 'error', content: `Synced ${successCount} site${successCount === 1 ? '' : 's'}, ${failCount} failed` });
-        } else if (failCount > 0) {
-          toast({ type: 'error', content: `Failed to sync credentials to ${failCount} site${failCount === 1 ? '' : 's'}` });
-        }
-      }
-
-      // Refresh sync status
-      const syncStatus = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS);
-      if (this.mounted) this.setState({ syncStatus: syncStatus ?? {} });
-    } catch (err) {
-      if (!this.mounted) return;
-      this.setState({ syncing: false, syncResults: [] });
-      if (toast) {
-        toast({ type: 'error', content: 'Failed to sync credentials' });
-      }
-    }
-  };
-
   handleDiag = async (args: string[]): Promise<void> => {
     const { diagInstall } = this.state;
     if (!diagInstall.trim() || this.state.diagRunning) return;
@@ -2562,74 +1141,6 @@ renderTabBar(): React.ReactNode {
       diagRunning: false,
       diagResults: [{ cmd, ...result }, ...prev.diagResults].slice(0, 20),
     }));
-  };
-
-  handleWpeSyncStop = (): void => {
-    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STOP);
-    this.setState({ wpeStopping: true });
-  };
-
-  handleWpeSync = async (): Promise<void> => {
-    if (this.state.wpeSyncing) return;
-
-    this.setState({ wpeSyncing: true, wpeSyncProgress: null, wpeSyncError: null });
-
-    // Start polling for progress
-    this.startWpeSyncProgressPolling();
-
-    try {
-      // Sync all WPE sites
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_ALL);
-
-      // Stop polling
-      this.stopWpeSyncProgressPolling();
-
-      if (result.success) {
-        const syncedCount = result.synced || 0;
-        this.setState({
-          wpeSyncedCount: syncedCount,
-          wpeSyncing: false,
-          wpeStopping: false,
-          wpeSyncProgress: null,
-          wpeSyncError: null,
-        });
-
-        // Show success toast
-        if (toast) {
-          if (syncedCount > 0) {
-            toast({ type: 'success', content: `Successfully synced ${syncedCount} WP Engine site${syncedCount === 1 ? '' : 's'}` });
-          } else {
-            toast({ type: 'cta', content: 'No WP Engine sites found to sync' });
-          }
-        }
-
-        // Refresh data
-        await this.fetchAll();
-      } else {
-        const errorMsg = result.error || 'Unknown error occurred during sync';
-        this.setState({
-          wpeSyncing: false,
-          wpeSyncProgress: null,
-          wpeSyncError: errorMsg,
-        });
-        if (toast) {
-          toast({ type: 'error', content: `WPE sync failed: ${errorMsg}` });
-        }
-        console.error('[NexusOverview] WPE sync failed:', errorMsg);
-      }
-    } catch (error) {
-      this.stopWpeSyncProgressPolling();
-      const errorMsg = error instanceof Error ? error.message : 'Failed to sync WPE sites';
-      this.setState({
-        wpeSyncing: false,
-        wpeSyncProgress: null,
-        wpeSyncError: errorMsg,
-      });
-      if (toast) {
-        toast({ type: 'error', content: `WPE sync error: ${errorMsg}` });
-      }
-      console.error('[NexusOverview] WPE sync error:', error);
-    }
   };
 
   handleCreateWPEBackup = async (): Promise<void> => {
@@ -2707,211 +1218,6 @@ renderTabBar(): React.ReactNode {
     }
   };
 
-  renderCredentialSyncSection(): React.ReactNode {
-    const { syncStatus, syncing, syncResults, sites } = this.state;
-    const runningSites = sites.filter((s) => s.status === 'running');
-    const syncEntries = Object.entries(syncStatus);
-    const hasSyncData = syncEntries.length > 0;
-
-    const sectionStyle: React.CSSProperties = { marginBottom: '24px' };
-    const descStyle: React.CSSProperties = {
-      fontSize: '13px',
-      color: 'var(--nxai-card-sub, #6b7280)',
-      marginBottom: '16px',
-      lineHeight: 1.5,
-    };
-    const rowStyle: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      marginBottom: '12px',
-    };
-    const btnSmallStyle: React.CSSProperties = {
-      padding: '6px 12px',
-      borderRadius: '6px',
-      border: '1px solid var(--nxai-card-border, #e5e7eb)',
-      backgroundColor: 'var(--nxai-card-bg, #fff)',
-      color: 'var(--nxai-card-text, #111827)',
-      fontSize: '12px',
-      fontWeight: 500,
-      cursor: 'pointer',
-    };
-
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: descStyle },
-        'Push API keys to running WordPress sites so their AI features can use your configured providers.',
-      ),
-
-      // Sync status summary
-      hasSyncData
-        ? React.createElement('div', { style: { marginBottom: '12px' } },
-            ...syncEntries.map(([siteId, status]: [string, any]) => {
-              const site = sites.find((s) => s.id === siteId);
-              const color = status.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR;
-              const ago = status.lastSync ? formatTimeAgo(status.lastSync) : 'Never';
-              return React.createElement('div', {
-                key: siteId,
-                style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', fontSize: '13px' },
-              },
-                React.createElement('span', { style: dotStyle(color) }),
-                React.createElement('span', { style: { color: 'var(--nxai-card-text)' } }, site?.name ?? siteId),
-                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', fontSize: '12px' } }, `(${ago})`),
-              );
-            }),
-          )
-        : React.createElement('div', { style: { ...descStyle, fontStyle: 'italic' } },
-            'No credentials have been synced yet.',
-          ),
-
-      // Sync All button
-      React.createElement('div', { style: { ...rowStyle, alignItems: 'center' } },
-        React.createElement('button', {
-          style: {
-            ...btnSmallStyle,
-            ...(syncing ? { opacity: 0.6, cursor: 'not-allowed' } : { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' }),
-          },
-          onClick: syncing ? undefined : this.handleSyncAll,
-          disabled: syncing || runningSites.length === 0,
-        }, syncing ? 'Syncing...' : `Sync All (${runningSites.length} running)`),
-        syncing ? React.createElement(LoadingSpinner, { size: 16, inline: true }) : null,
-      ),
-
-      // Results
-      syncResults && syncResults.length > 0
-        ? React.createElement('div', { style: { marginTop: '8px' } },
-            ...syncResults.map((r) =>
-              React.createElement('div', {
-                key: r.siteId,
-                style: { fontSize: '12px', padding: '2px 0', color: r.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR },
-              }, `${r.siteName}: ${r.success ? `synced (${r.providers.join(', ')})` : r.error ?? 'failed'}`),
-            ),
-          )
-        : null,
-    );
-  }
-
-  renderWpeSyncSection(): React.ReactNode {
-    const { wpeSyncing, wpeStopping, wpeSyncProgress, wpeSyncError, wpeSyncStats, wpeSyncThresholdHours } = this.state;
-
-    const subStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)' };
-
-    // Format last sync time
-    let lastSyncLabel = 'Never synced';
-    if (wpeSyncStats?.last_sync_at) {
-      const ageMs = Date.now() - wpeSyncStats.last_sync_at;
-      const ageHours = Math.floor(ageMs / 3600000);
-      const ageMins = Math.floor((ageMs % 3600000) / 60000);
-      lastSyncLabel = ageHours > 0
-        ? `Last synced ${ageHours}h${ageMins > 0 ? ` ${ageMins}m` : ''} ago`
-        : `Last synced ${ageMins}m ago`;
-    }
-
-    return React.createElement('div', { style: { marginBottom: '24px' } },
-
-      // Sync button row
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' as const } },
-        React.createElement('button', {
-          onClick: this.handleWpeSync,
-          disabled: wpeSyncing,
-          style: {
-            padding: '8px 16px', borderRadius: '6px', border: 'none',
-            backgroundColor: wpeSyncing ? '#3b82f680' : '#3b82f6',
-            color: '#fff', fontSize: '13px', fontWeight: 600,
-            cursor: wpeSyncing ? 'not-allowed' : 'pointer',
-          },
-        }, wpeSyncing ? 'Syncing...' : 'Sync All'),
-        wpeSyncing
-          ? React.createElement('button', {
-              onClick: this.handleWpeSyncStop,
-              style: {
-                padding: '8px 14px', borderRadius: '6px', border: '1px solid #ef4444',
-                backgroundColor: 'transparent', color: '#ef4444', fontSize: '13px',
-                fontWeight: 600, cursor: 'pointer',
-              },
-            }, 'Stop')
-          : null,
-        wpeSyncing ? React.createElement(LoadingSpinner, { size: 14, inline: true }) : null,
-      ),
-
-      // In-progress / stopping message
-      wpeSyncing && wpeSyncProgress
-        ? React.createElement('div', { style: { marginBottom: '8px' } },
-            React.createElement('div', { style: { ...subStyle, fontStyle: 'italic' } },
-              `${wpeSyncProgress.currentSite} (${wpeSyncProgress.current}/${wpeSyncProgress.total}` +
-              (wpeSyncProgress.skipped > 0 ? `, ${wpeSyncProgress.skipped} skipped` : '') + ')',
-            ),
-            wpeStopping
-              ? React.createElement('div', {
-                  style: { fontSize: '12px', color: 'var(--nxai-warn-text, #f59e0b)', marginTop: '4px', fontWeight: 500 },
-                }, '⚠ Stopping after current batch completes…')
-              : null,
-          )
-        : null,
-
-      // Stats row (persists across restarts, per-site freshness)
-      wpeSyncStats
-        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '4px' } },
-            React.createElement('div', { style: subStyle }, lastSyncLabel),
-            React.createElement('div', { style: subStyle },
-              `${wpeSyncStats.fresh_count}/${wpeSyncStats.total} fresh`,
-              wpeSyncStats.stale_count > 0
-                ? React.createElement('span', { style: { color: 'var(--nxai-warn-text, #f59e0b)' } },
-                    ` · ${wpeSyncStats.stale_count} need refresh (>${wpeSyncThresholdHours}h old)`,
-                  )
-                : React.createElement('span', { style: { color: '#51BB7B' } }, ' · all up to date ✓'),
-            ),
-            React.createElement('div', { style: subStyle },
-              `WP version: ${wpeSyncStats.has_wp_version}/${wpeSyncStats.total}`,
-              wpeSyncStats.total - wpeSyncStats.has_wp_version > 0
-                ? React.createElement('span', {
-                    style: { opacity: 0.7 },
-                    title: 'WP version requires SSH — installs without SSH access show unknown',
-                  }, ` (${wpeSyncStats.total - wpeSyncStats.has_wp_version} need SSH)`)
-                : null,
-              ` · PHP: ${wpeSyncStats.has_php_version}/${wpeSyncStats.total}`,
-            ),
-          )
-        : React.createElement('div', { style: subStyle }, 'No sync data yet. Click Sync to fetch WP Engine site metadata.'),
-
-      // Single-site sync (when not running a full sync)
-      !wpeSyncing
-        ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px' } },
-            React.createElement('input', {
-              type: 'text',
-              placeholder: 'install-name (sync single)',
-              style: {
-                padding: '5px 10px', borderRadius: '5px', fontSize: '12px',
-                border: '1px solid var(--color-border-primary, #ccc)',
-                backgroundColor: 'var(--nxai-input-bg, transparent)',
-                width: '180px',
-              },
-              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
-                if (e.key === 'Enter') {
-                  const installName = (e.target as HTMLInputElement).value.trim();
-                  if (installName) {
-                    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_SINGLE, { installId: installName });
-                    (e.target as HTMLInputElement).value = '';
-                  }
-                }
-              },
-            }),
-            React.createElement('span', { style: { ...subStyle, fontSize: '11px' } }, '↵ to sync'),
-          )
-        : null,
-
-      // Error
-      wpeSyncError
-        ? React.createElement('div', {
-            style: {
-              padding: '10px 12px', marginTop: '10px', borderRadius: '6px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
-              fontSize: '12px', color: '#dc2626',
-            },
-          }, `Sync error: ${wpeSyncError}`)
-        : null,
-    );
-  }
-
   render(): React.ReactNode {
     const { loading, error, stats, activeTab } = this.state;
 
@@ -2934,36 +1240,9 @@ renderTabBar(): React.ReactNode {
         ? React.createElement('div', {
             style: { flexGrow: 1, overflow: 'auto' as const, display: 'flex', flexDirection: 'column' as const },
           },
-            React.createElement(AgentConsoleTab, { electron: this.props.electron }),
-          )
-        : activeTab === 'ask'
-        // Ask/Tell: same flexGrow:1 + overflow:hidden wrapper that all other tabs use,
-        // so ChatTab participates in the flex layout exactly like Overview/Search/etc.
-        ? React.createElement('div', {
-            style: { flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const },
-          },
-            React.createElement('div', {
-              style: {
-                flexShrink: 0, padding: '8px 32px',
-                background: 'rgba(167,139,250,0.06)',
-                borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)',
-                fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', lineHeight: 1.5,
-              },
-            },
-              '💡 Ask/Tell is a quick way to try Nexus AI. For a richer experience with full tool support, use the ',
-              React.createElement('strong', null, 'MCP server'),
-              ' or ',
-              React.createElement('strong', null, 'CLI'),
-              ' with your AI tool of choice.',
-            ),
-            React.createElement(ChatTab, {
+            React.createElement(AgentConsoleTab, {
               electron: this.props.electron,
-              initialMessages: this.state.chatMessages,
-              initialSessionId: this.state.chatSessionId,
-              onMessagesChange: (msgs: any[]) => this.setState({ chatMessages: msgs }),
-              onSessionIdChange: (id: string) => this.setState({ chatSessionId: id }),
-              initialPrompt: this.state.dashboardPrompt ?? undefined,
-              onPromptConsumed: () => this.setState({ dashboardPrompt: null }),
+              onNavigateToInbox: () => this.setState({ activeTab: 'inbox' }),
             }),
           )
         : loading

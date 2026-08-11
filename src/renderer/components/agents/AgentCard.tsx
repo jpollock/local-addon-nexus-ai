@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { agentStore, AgentStatus } from './AgentStore';
+import { pendingForAgent } from './pending';
+import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
 
 interface AgentCardProps {
   status: AgentStatus;
@@ -16,14 +18,6 @@ const ACCENTS: Record<string, string> = {
   'backup-verifier':       '#3ecf8e',
   'dependency-auditor':    '#f5b544',
   'cost-watch':            '#e07acc',
-};
-
-const CADENCE_LABELS: Record<string, string> = {
-  '*/15 * * * *': 'Every 15 minutes',
-  '0 * * * *':    'Hourly',
-  '0 */6 * * *':  'Every 6 hours',
-  '0 0 * * *':    'Daily',
-  '0 0 * * 0':    'Weekly',
 };
 
 function formatLastRun(ms: number | null): string {
@@ -47,12 +41,14 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
     const accent = ACCENTS[agentId] || '#9aa1ac';
     const derivedStatus = agentStore.getAgentDerivedStatus(agentId);
     const settings = agentStore.getOrInitSettings(agentId);
-    const cadenceLabel = CADENCE_LABELS[settings.cadence] || 'Custom schedule';
+    // The schedule that actually runs — the agent's manifest cron unless the user picked a
+    // cadence. Reading settings.cadence alone announced a schedule the scheduler never used.
+    const effectiveCron = effectiveCadenceExpression(settings, status.cronExpression);
+    const cadenceLabel = effectiveCron ? describeCron(effectiveCron) : 'Not scheduled';
 
     const isDisabled = derivedStatus === 'disabled';
-    const pendingCount = agentStore.getState().activityEvents.filter(
-      e => e.agentId === agentId && e.status === 'review'
-    ).length;
+    const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
+    const pendingLoaded = agentStore.getState().pendingLoaded;
 
     return React.createElement('div', {
       onClick: onSelect,
@@ -92,8 +88,9 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
             React.createElement('span', {
               className: `ag-pill ${isDisabled ? 'ag-pill--disabled' : 'ag-pill--healthy'}`,
             }, isDisabled ? 'Disabled' : 'Enabled'),
-            // Workload pill — only when there are pending items
-            !isDisabled && pendingCount > 0 && React.createElement('span', {
+            // Workload pill — only when there are pending items AND pending has loaded.
+            // Before pendingLoaded, suppress the badge entirely rather than showing 0.
+            !isDisabled && pendingLoaded && pendingCount > 0 && React.createElement('span', {
               className: 'ag-pill ag-pill--review',
               style: { fontSize: 11, padding: '2px 8px' },
             }, `${pendingCount} need review`),

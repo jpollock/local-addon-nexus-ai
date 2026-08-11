@@ -141,13 +141,18 @@ export class ToolRegistry {
    *
    * @param accessMethod - 'mcp' if called from MCP server, 'cli' if called from CLI/GraphQL, 'agent' if called from an agent tool loop (NexusToolProvider, AiProxyServer)
    * @param requireConfirmation - defaults to true; pass false only when the caller has already obtained an equivalent human confirmation through its own interface (see checkTierThreeConfirmation's doc comment for the residual gap this leaves for accessMethod: 'agent')
+   * @param runId - optional agent run identifier, joins operation-audit.log to the diagnostic log
    */
   async call(
     name: string,
     args: Record<string, unknown>,
     services: NexusServices,
     accessMethod?: 'mcp' | 'cli' | 'agent',
+    // Position 5 stays the confirmation gate: two callers already pass it positionally, and
+    // demoting a safety parameter below an optional diagnostic id invites passing a runId
+    // where a `false` was meant. runId is appended instead.
     requireConfirmation: boolean = true,
+    runId?: string,
   ): Promise<McpToolResult> {
     const startTime = Date.now();
     logger.debug(`call: name="${name}" via ${accessMethod || 'unknown'}`, { args });
@@ -226,6 +231,7 @@ export class ToolRegistry {
             parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
             outcome: result.isError ? 'failure' : 'success',
             error: result.isError ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+            runId,
           });
         }
       } catch { /* never throw from an audit path */ }
@@ -265,6 +271,7 @@ export class ToolRegistry {
             parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
             outcome: 'failure',
             error: message,
+            runId,
           });
         }
       } catch { /* never throw from an audit path */ }
