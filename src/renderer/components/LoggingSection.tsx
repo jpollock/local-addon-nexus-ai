@@ -49,8 +49,22 @@ interface LoggingSectionState {
   error: string | null;
 }
 
+/**
+ * Writes go through `onSave`, the same path every other setting in Settings uses — it
+ * updates the shell optimistically and reverts with a toast if the IPC write fails. This
+ * component used to call UPDATE_SETTINGS itself and separately notify the parent, which
+ * meant a logging change was the one setting with no failure handling, and (once it was
+ * re-homed under a parent that also saves) would have written twice, restarting every
+ * settings-driven scheduler for each write.
+ */
 export class LoggingSection extends React.Component<
-  { stats: LoggingStats | null; electron: any; settings: NexusSettings; notifyChange?: (settings: NexusSettings) => void; refreshStats?: () => void },
+  {
+    stats: LoggingStats | null;
+    electron: any;
+    settings: NexusSettings;
+    onSave: (patch: Partial<NexusSettings>) => void;
+    refreshStats?: () => void;
+  },
   LoggingSectionState
 > {
   state: LoggingSectionState = {
@@ -77,10 +91,7 @@ export class LoggingSection extends React.Component<
   }
 
   handleLevelChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-    const logLevel = e.target.value as 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
-    const next = { ...this.props.settings, logLevel };
-    this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logLevel });
-    this.props.notifyChange?.(next);
+    this.props.onSave({ logLevel: e.target.value as 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' });
   };
 
   handleLogDaysChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -108,11 +119,7 @@ export class LoggingSection extends React.Component<
       this.setState({ confirmingShrink: { freedBytes: 0, newValue: val, field: 'logDays' } });
     } else {
       // Growing or unchanged — apply immediately
-      const next = { ...this.props.settings, logRetentionDays: val };
-      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: val }).then(() => {
-        this.props.refreshStats?.();
-      });
-      this.props.notifyChange?.(next);
+      this.props.onSave({ logRetentionDays: val });
     }
   };
 
@@ -121,35 +128,14 @@ export class LoggingSection extends React.Component<
     if (!confirmingShrink) return;
 
     const { field, newValue } = confirmingShrink;
-    if (field === 'logDays') {
-      const next = { ...this.props.settings, logRetentionDays: newValue };
-      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: newValue }).then(() => {
-        this.props.refreshStats?.();
-        this.setState({ confirmingShrink: null });
-      }).catch((err: Error) => {
-        this.setState({ error: `Failed to apply retention: ${err.message}`, confirmingShrink: null });
-      });
-      this.props.notifyChange?.(next);
-    } else if (field === 'transcriptDays') {
-      const next = { ...this.props.settings, transcriptRetentionDays: newValue };
-      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { transcriptRetentionDays: newValue }).then(() => {
-        this.props.refreshStats?.();
-        this.setState({ confirmingShrink: null });
-      }).catch((err: Error) => {
-        this.setState({ error: `Failed to apply retention: ${err.message}`, confirmingShrink: null });
-      });
-      this.props.notifyChange?.(next);
-    } else if (field === 'budgetMB') {
-      const budgetBytes = newValue * 1024 * 1024;
-      const next = { ...this.props.settings, logBudgetBytes: budgetBytes };
-      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logBudgetBytes: budgetBytes }).then(() => {
-        this.props.refreshStats?.();
-        this.setState({ confirmingShrink: null });
-      }).catch((err: Error) => {
-        this.setState({ error: `Failed to apply retention: ${err.message}`, confirmingShrink: null });
-      });
-      this.props.notifyChange?.(next);
-    }
+    // Shrinking deletes files, so the stats panel is stale the moment this lands.
+    const patch: Partial<NexusSettings> =
+      field === 'logDays'        ? { logRetentionDays: newValue }
+      : field === 'transcriptDays' ? { transcriptRetentionDays: newValue }
+      : { logBudgetBytes: newValue * 1024 * 1024 };
+    this.props.onSave(patch);
+    this.setState({ confirmingShrink: null });
+    this.props.refreshStats?.();
   };
 
   commitTranscriptDays = (): void => {
@@ -163,11 +149,7 @@ export class LoggingSection extends React.Component<
       // Shrinking — show confirmation
       this.setState({ confirmingShrink: { freedBytes: 0, newValue: val, field: 'transcriptDays' } });
     } else {
-      const next = { ...this.props.settings, transcriptRetentionDays: val };
-      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { transcriptRetentionDays: val }).then(() => {
-        this.props.refreshStats?.();
-      });
-      this.props.notifyChange?.(next);
+      this.props.onSave({ transcriptRetentionDays: val });
     }
   };
 
@@ -182,12 +164,7 @@ export class LoggingSection extends React.Component<
       // Shrinking — show confirmation
       this.setState({ confirmingShrink: { freedBytes: 0, newValue: val, field: 'budgetMB' } });
     } else {
-      const budgetBytes = val * 1024 * 1024;
-      const next = { ...this.props.settings, logBudgetBytes: budgetBytes };
-      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.UPDATE_SETTINGS, { logBudgetBytes: budgetBytes }).then(() => {
-        this.props.refreshStats?.();
-      });
-      this.props.notifyChange?.(next);
+      this.props.onSave({ logBudgetBytes: val * 1024 * 1024 });
     }
   };
 

@@ -520,3 +520,53 @@ describe('AdvancedSection', () => {
     });
   });
 });
+
+describe('logs on disk', () => {
+  test('the section is reachable from Advanced', () => {
+    // The point of this test is reachability, not markup. LoggingSection and its four IPC
+    // handlers shipped on main while spec 6a was gutting the screen that rendered it, so the
+    // component sat in the tree with zero importers — working code nobody could get to.
+    expect(tree()).toContain('Logs on disk');
+  });
+
+  test('renders LoggingSection, not a reimplementation of it', () => {
+    const inst = unmounted();
+    const panel = inst.renderLogging();
+    const child = (Array.isArray(panel.props.children) ? panel.props.children : [panel.props.children])
+      .filter(Boolean)
+      .find((c: any) => typeof c?.type === 'function');
+    expect(child).toBeDefined();
+    expect(child.type.name).toBe('LoggingSection');
+  });
+
+  test('hands LoggingSection the section save path, so a failed write reverts', () => {
+    // Writing through onSave rather than its own UPDATE_SETTINGS invoke is what gives logging
+    // settings the optimistic-update-and-revert every other setting in Settings gets.
+    const onSave = jest.fn();
+    const inst = unmounted({ onSave });
+    const panel = inst.renderLogging();
+    const child = (Array.isArray(panel.props.children) ? panel.props.children : [panel.props.children])
+      .filter(Boolean)
+      .find((c: any) => typeof c?.type === 'function');
+    expect(child.props.onSave).toBe(onSave);
+  });
+
+  test('stats start absent, and absent is not zero bytes', () => {
+    // LOGGING_STATS returning null means "could not read". Seeding 0 here would render
+    // "0.0 MB of 250.0 MB" — a measurement nobody took.
+    expect(unmounted().state.loggingStats).toBeNull();
+  });
+
+  test('refetches usage when retention changes, because shrinking deletes files', () => {
+    // Starts AT 14 so the no-change case is genuinely no-change; the default harness passes
+    // `settings: {}`, which differs from every prev and would make the first call refetch.
+    const inst = unmounted({ settings: { logRetentionDays: 14 } });
+    let refetched = 0;
+    inst.loadLoggingStats = async () => { refetched += 1; };
+    void inst.componentDidUpdate({ settings: { logRetentionDays: 14 } });
+    expect(refetched).toBe(0);          // nothing changed
+    inst.props = { ...inst.props, settings: { logRetentionDays: 7 } };
+    void inst.componentDidUpdate({ settings: { logRetentionDays: 14 } });
+    expect(refetched).toBe(1);
+  });
+});

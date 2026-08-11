@@ -13,6 +13,7 @@
 import * as React from 'react';
 import type { NexusSettings } from '../../../common/types';
 import { IPC_CHANNELS } from '../../../common/constants';
+import { LoggingSection, type LoggingStats } from '../LoggingSection';
 
 interface Props {
   settings: NexusSettings;
@@ -60,6 +61,9 @@ interface State {
 
   // Auto-index exclusions
   excludedExpanded: boolean;
+
+  /** Disk usage and retention policy for the log tree. null until it loads. */
+  loggingStats: LoggingStats | null;
 }
 
 export class AdvancedSection extends React.Component<Props, State> {
@@ -80,10 +84,37 @@ export class AdvancedSection extends React.Component<Props, State> {
     factoryResetTyped: '',
     vectorStoreSizeMB: null,
     excludedExpanded: false,
+    loggingStats: null,
   };
 
   async componentDidMount() {
     await this.loadVectorStoreSize();
+    await this.loadLoggingStats();
+  }
+
+  async componentDidUpdate(prev: Props) {
+    // Retention and budget changes delete files, so the usage figures above them go stale
+    // the moment the write lands. Refetching here rather than in LoggingSection's own save
+    // path means the panel is also correct when the setting is changed from somewhere else.
+    const { settings } = this.props;
+    if (
+      prev.settings.logRetentionDays !== settings.logRetentionDays ||
+      prev.settings.transcriptRetentionDays !== settings.transcriptRetentionDays ||
+      prev.settings.logBudgetBytes !== settings.logBudgetBytes
+    ) {
+      await this.loadLoggingStats();
+    }
+  }
+
+  async loadLoggingStats() {
+    try {
+      const stats = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.LOGGING_STATS);
+      // A null result is "could not read", not "zero bytes" — the panel renders its loading
+      // line rather than claiming an empty log tree.
+      if (stats) this.setState({ loggingStats: stats });
+    } catch {
+      /* leaves loggingStats null */
+    }
   }
 
   async loadVectorStoreSize() {
@@ -263,11 +294,40 @@ export class AdvancedSection extends React.Component<Props, State> {
       // SSH diagnostics
       this.renderSshDiagnostics(),
 
+      // Logs on disk
+      this.renderLogging(),
+
       // Auto-indexing section
       this.renderAutoIndexingSection(),
 
       // Rebuilding and starting over
       this.renderResetsGroup(),
+    );
+  }
+
+  renderLogging(): React.ReactNode {
+    return React.createElement('div', {
+      style: {
+        marginBottom: 24,
+        padding: 16,
+        background: 'var(--nxai-card-bg)',
+        border: '1px solid var(--nxai-card-border)',
+        borderRadius: 6,
+      },
+    },
+      React.createElement('div', {
+        style: { fontSize: 14, fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: 8 },
+      }, 'Logs on disk'),
+      React.createElement('div', {
+        style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 12 },
+      }, 'How much Nexus is writing, how long it keeps it, and how to clear it out'),
+      React.createElement(LoggingSection, {
+        stats: this.state.loggingStats,
+        electron: this.props.electron,
+        settings: this.props.settings,
+        onSave: this.props.onSave,
+        refreshStats: () => { void this.loadLoggingStats(); },
+      }),
     );
   }
 

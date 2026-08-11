@@ -45,18 +45,23 @@ describe('LoggingSection', () => {
     logBudgetBytes: 250 * 1024 * 1024,
   };
 
+  // Settings writes go through the parent's save path (optimistic update + revert on
+  // failure), not a direct UPDATE_SETTINGS invoke from this component.
+  const mockSave = jest.fn();
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSave.mockClear();
   });
 
   describe('Behavior tests (guards for defects #2 and #3)', () => {
     it('writes logRetentionDays (not logDays) - the settings key guard', () => {
       // When growing retention, it writes immediately
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave });
       spySetState(wrapper);
       wrapper.setState({ localLogDays: '20' });
       wrapper.commitLogDays();
-      expect(mockElectron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: 20 });
+      expect(mockSave).toHaveBeenCalledWith({ logRetentionDays: 20 });
     });
 
     it('Clear logs fetches a plan BEFORE showing confirmation - the honest-number guard', async () => {
@@ -64,7 +69,7 @@ describe('LoggingSection', () => {
       const planResult = { success: true, freedBytes: 10 * 1024 * 1024, keptBytes: 2 * 1024 * 1024, filesDeleted: 8 };
       mockElectron.ipcRenderer.invoke.mockResolvedValueOnce(planResult);
 
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave });
       spySetState(wrapper);
 
       await wrapper.startClearLogs();
@@ -75,52 +80,54 @@ describe('LoggingSection', () => {
     });
 
     it('shrinking retention shows confirmation before applying', () => {
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave });
       spySetState(wrapper);
       wrapper.setState({ localLogDays: '7' });
       wrapper.commitLogDays();
 
-      // Should NOT invoke UPDATE_SETTINGS immediately (shrinking from 14 to 7)
-      expect(mockElectron.ipcRenderer.invoke).not.toHaveBeenCalled();
+      // Should NOT save immediately (shrinking from 14 to 7)
+      expect(mockSave).not.toHaveBeenCalled();
 
       // Should set confirmingShrink state
       expect(wrapper.state.confirmingShrink).toEqual({ freedBytes: 0, newValue: 7, field: 'logDays' });
     });
 
     it('growing retention applies immediately without confirmation', () => {
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings });
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave });
       spySetState(wrapper);
       wrapper.setState({ localLogDays: '20' });
       wrapper.commitLogDays();
 
-      // Should invoke UPDATE_SETTINGS immediately (growing from 14 to 20)
-      expect(mockElectron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.UPDATE_SETTINGS, { logRetentionDays: 20 });
+      // Should save immediately (growing from 14 to 20)
+      expect(mockSave).toHaveBeenCalledWith({ logRetentionDays: 20 });
       expect(wrapper.state.confirmingShrink).toBeNull();
     });
   });
 
   describe('C3: No retention deletion on keystroke', () => {
-    it('does not invoke UPDATE_SETTINGS while typing in retention days field', () => {
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings }, { localValue: '14' });
+    it('does not save while typing in retention days field', () => {
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave }, { localValue: '14' });
 
-      // Simulate onChange firing — should NOT invoke UPDATE_SETTINGS
+      // Simulate onChange firing — should NOT write
       wrapper.handleLogDaysChange({ target: { value: '3' } } as any);
 
+      expect(mockSave).not.toHaveBeenCalled();
       expect(mockElectron.ipcRenderer.invoke).not.toHaveBeenCalled();
     });
 
-    it('does not invoke UPDATE_SETTINGS while typing in budget field', () => {
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings }, { localBudget: '250' });
+    it('does not save while typing in budget field', () => {
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave }, { localBudget: '250' });
 
       wrapper.handleBudgetChange({ target: { value: '5' } } as any);
 
+      expect(mockSave).not.toHaveBeenCalled();
       expect(mockElectron.ipcRenderer.invoke).not.toHaveBeenCalled();
     });
   });
 
   describe('C2: Clear and Reveal channels exist and are invoked', () => {
     it('invokes correct channel when Reveal button is clicked', () => {
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings }, {});
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave }, {});
 
       wrapper.handleRevealLogs();
 
@@ -128,7 +135,7 @@ describe('LoggingSection', () => {
     });
 
     it('invokes correct channel when Delete button is clicked after confirmation', () => {
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings }, { confirmingClear: true });
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave }, { confirmingClear: true });
 
       wrapper.handleClearLogs();
 
@@ -136,7 +143,7 @@ describe('LoggingSection', () => {
     });
 
     it('does NOT invoke a wrong channel name', () => {
-      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings }, {});
+      const wrapper = new LoggingSection({ stats: mockStats, electron: mockElectron, settings: mockSettings, onSave: mockSave }, {});
 
       wrapper.handleRevealLogs();
 
