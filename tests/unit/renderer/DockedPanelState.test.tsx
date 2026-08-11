@@ -1,5 +1,5 @@
 import React from 'react';
-import { DockedPanel, type PanelState } from '../../../src/renderer/components/DockedPanel/DockedPanel';
+import { DockedPanel, NexusGlyph, RING_MIN_SIZE, type PanelState } from '../../../src/renderer/components/DockedPanel/DockedPanel';
 
 describe('DockedPanel — state enum', () => {
   const noop = () => {};
@@ -103,6 +103,66 @@ describe('DockedPanel — state enum', () => {
       expect(findByText(renderTab({ scopeLabel: 'THIS SITE' }), 'THIS SITE')).not.toBeNull();
       expect(findByText(renderTab({ scopeLabel: 'INSIGHTS' }), 'INSIGHTS')).not.toBeNull();
     });
+  });
+
+  describe('the Orbit mark', () => {
+    const glyph = (size: number) => (NexusGlyph as any)({ size });
+    const kids = (g: any) => (Array.isArray(g.props.children) ? g.props.children : [g.props.children]);
+
+    it('is a ring plus a centre dot, not the four-point star', () => {
+      const g = glyph(22);
+      const types = kids(g).filter(Boolean).map((c: any) => c.type);
+      expect(types).toEqual(['ellipse', 'circle']);
+    });
+
+    it('never renders the old star path', () => {
+      // The star was hard-coded inline, so swapping the SVG assets alone left it on screen.
+      expect(JSON.stringify(glyph(22))).not.toContain('M12 2l2.2');
+    });
+
+    it('takes its colour from the wrapper, never its own fill', () => {
+      // A fill on the svg is what forces a new hard-coded colour per placement.
+      const g = glyph(22);
+      expect(g.props.fill).toBe('none');
+      const [ring, dot] = kids(g);
+      expect(ring.props.stroke).toBe('currentColor');
+      expect(dot.props.fill).toBe('currentColor');
+    });
+
+    it('drops the ring below the minimum size, keeping the dot', () => {
+      // The stroke is 1.9 viewBox units, so a smaller declared size thins it until it
+      // greys out. Under the threshold the mark is the solid dot alone, not a faint ring.
+      const small = kids(glyph(RING_MIN_SIZE - 1)).filter(Boolean);
+      expect(small.map((c: any) => c.type)).toEqual(['circle']);
+    });
+
+    it('keeps the ring exactly at the minimum size', () => {
+      const at = kids(glyph(RING_MIN_SIZE)).filter(Boolean);
+      expect(at.map((c: any) => c.type)).toEqual(['ellipse', 'circle']);
+    });
+
+    it('asks for the mark at or above the ring minimum at every call site', () => {
+      // The tab and the header avatar. If either drops below the threshold the mark
+      // silently degrades to a bare dot — a brand change nobody asked for, and one that
+      // shows up in a screenshot rather than a failure. Sizes are read from the element
+      // props: render() is shallow, so the glyph's own output is not in this tree.
+      const sizes = (state: PanelState) => collectGlyphSizes(renderPanel(state));
+      expect(sizes('closed')).toEqual([22]);
+      expect(sizes('docked')).toEqual([20]);
+      [...sizes('closed'), ...sizes('docked')].forEach((s) => {
+        expect(s).toBeGreaterThanOrEqual(RING_MIN_SIZE);
+      });
+    });
+
+    /** Every `size` passed to NexusGlyph anywhere in an element tree. */
+    function collectGlyphSizes(node: any, out: number[] = []): number[] {
+      if (!node || typeof node !== 'object') return out;
+      if (node.type === NexusGlyph) out.push(node.props.size);
+      const kids = node.props?.children;
+      const flat = Array.isArray(kids) ? kids : [kids];
+      flat.forEach((k: any) => collectGlyphSizes(k, out));
+      return out;
+    }
   });
 
   describe('docked state', () => {

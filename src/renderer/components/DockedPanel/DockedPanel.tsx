@@ -48,11 +48,36 @@ const TAB_WIDTH = 52;
 
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────
 
-function NexusGlyph({ size }: { size: number }) {
+/**
+ * The Orbit mark: a tilted ring with a solid centre. Replaces the four-point star.
+ *
+ * Colour comes from `currentColor` on the wrapper, never a fill on the svg — that is what
+ * lets the same component sit on the tab, on the brand avatar, and on a dark background
+ * without a third hard-coded colour being invented for each.
+ *
+ * **The ring drops below 20px, automatically.** Its stroke is 1.9 viewBox units, so a
+ * smaller declared size thins it until it greys out and the mark reads as a smudge. The
+ * threshold lives here rather than at the call sites: a rule every caller has to remember
+ * is one a caller will eventually forget, and the failure is silent.
+ *
+ * Note the mark now looks slightly larger at the same declared size. The star was
+ * symmetric about y=10 in a 24-unit box, so it sat two units high; Orbit is centred on
+ * (12,12). That is the centring being corrected — do not shrink it to compensate.
+ */
+export const RING_MIN_SIZE = 20;
+
+export function NexusGlyph({ size }: { size: number }) {
   return React.createElement(
     'svg',
-    { width: size, height: size, viewBox: '0 0 24 24', fill: UI_COLORS.NEXUS_MARK, style: { display: 'block' } },
-    React.createElement('path', { d: 'M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8z' }),
+    { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', style: { display: 'block' } },
+    size >= RING_MIN_SIZE
+      ? React.createElement('ellipse', {
+          cx: 12, cy: 12, rx: 10.4, ry: 4.7,
+          transform: 'rotate(-32 12 12)',
+          fill: 'none', stroke: 'currentColor', strokeWidth: 1.9,
+        })
+      : null,
+    React.createElement('circle', { cx: 12, cy: 12, r: 2.9, fill: 'currentColor' }),
   );
 }
 
@@ -157,6 +182,8 @@ const styles = {
     height: 34,
     borderRadius: 8,
     background: 'var(--nxai-rail-mark-bg)',
+    // The mark reads currentColor — the wrapper is where its colour is decided.
+    color: UI_COLORS.NEXUS_MARK,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -230,6 +257,9 @@ const styles = {
     height: 34,
     borderRadius: '50%' as const,
     background: UI_COLORS.WPE_BRAND,
+    // Unchanged from the star: dark mark on the brand circle. Stated explicitly now
+    // because the glyph no longer carries its own fill.
+    color: UI_COLORS.NEXUS_MARK,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -293,7 +323,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
         React.createElement(
           'div',
           { style: styles.railMark },
-          React.createElement(NexusGlyph, { size: 20 }),
+          React.createElement(NexusGlyph, { size: 22 }),
           badgeCount !== null && badgeCount > 0
             ? React.createElement('div', { style: styles.railBadge }, String(badgeCount))
             : null,
@@ -366,7 +396,9 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       'div',
       { style: styles.header },
       // Brand block — avatar
-      React.createElement('div', { style: styles.avatar }, React.createElement(NexusGlyph, { size: 18 })),
+      // 20, not 18: below RING_MIN_SIZE the mark degrades to a bare dot, which is a
+      // bigger change to the brand block than the two pixels.
+      React.createElement('div', { style: styles.avatar }, React.createElement(NexusGlyph, { size: 20 })),
       // Brand block — title stack
       React.createElement(
         'div',
