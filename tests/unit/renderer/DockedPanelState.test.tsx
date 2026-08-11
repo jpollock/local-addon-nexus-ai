@@ -39,11 +39,11 @@ describe('DockedPanel — state enum', () => {
   });
 
   describe('docked state', () => {
-    it('renders the panel at 384px, not the rail', () => {
+    it('renders the panel at 380px content width, not the rail', () => {
       const tree = renderPanel('docked');
       const props = (tree as any).props;
       expect(props.role).toBe('complementary');
-      expect(props.style.width).toBe(384);
+      expect(props.style.width).toBe(380);
     });
 
     it('includes the header with segmented control', () => {
