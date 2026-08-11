@@ -11,33 +11,34 @@ describe('DockedPanelContainer localStorage persistence', () => {
     jest.resetModules();
   });
 
-  it('reads size and activeSessionId from localStorage but always starts closed', () => {
+  it('reads panelState and activeSessionId from localStorage but always starts closed', () => {
+    // Migration test: old open+size format should be migrated to panelState
     localStorage.setItem('nexus-panel-state', JSON.stringify({ open: true, size: 'full', activeSessionId: 'abc' }));
     // Import after setting localStorage so the constructor reads it
     const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
     const inst = new DockedPanelContainer({});
-    expect(inst.state.open).toBe(false); // always collapsed on load — prevents blocking Local
-    expect(inst.state.size).toBe('full');
+    expect(inst.state.panelState).toBe('closed'); // always collapsed on load — prevents blocking Local
     expect(inst.state.activeSessionId).toBe('abc');
   });
 
-  it('defaults to closed docked with no session when localStorage is empty', () => {
+  it('defaults to closed with no session when localStorage is empty', () => {
     const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
     const inst = new DockedPanelContainer({});
-    expect(inst.state.open).toBe(false);
-    expect(inst.state.size).toBe('docked');
+    expect(inst.state.panelState).toBe('closed');
     expect(inst.state.activeSessionId).toBeNull();
   });
 
-  it('round-trips the wide size through localStorage', () => {
+  it('migrates old open+size format to panelState enum', () => {
     localStorage.setItem('nexus-panel-state', JSON.stringify({ open: true, size: 'wide', activeSessionId: null }));
     const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
-    expect(new DockedPanelContainer({}).state.size).toBe('wide');
+    // open:true + size:'wide' is migrated, but always starts closed
+    expect(new DockedPanelContainer({}).state.panelState).toBe('closed');
   });
 
-  it('still coerces an unrecognised size to docked', () => {
-    localStorage.setItem('nexus-panel-state', JSON.stringify({ open: true, size: 'enormous', activeSessionId: null }));
+  it('coerces unrecognised panelState to closed on load', () => {
+    localStorage.setItem('nexus-panel-state', JSON.stringify({ panelState: 'enormous', activeSessionId: null }));
     const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
-    expect(new DockedPanelContainer({}).state.size).toBe('docked');
+    // Unrecognized states coerce to 'docked', but readState forces 'closed' on startup
+    expect(new DockedPanelContainer({}).state.panelState).toBe('closed');
   });
 });

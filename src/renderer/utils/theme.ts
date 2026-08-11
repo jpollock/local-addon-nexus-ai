@@ -52,6 +52,15 @@ export function injectThemeVars(): void {
          text on the dark card (#2a2a2a) it is 3.09:1 and fails AA for body copy. */
       --nxai-accent: #0a8189;
       --nxai-accent-text: #ffffff;
+      /* Rail-specific tokens from PANEL-IMPLEMENTATION.md §3:
+         - Teal tint (#ecfcfd) for the rail mark background
+         - Amber pair (#fffbeb / #b45309) for the stuck marker
+         - White (#fff) for badge border shadow
+         All are spec-defined literals with no existing token. */
+      --nxai-rail-mark-bg: #ecfcfd;
+      --nxai-rail-stuck-bg: #fffbeb;
+      --nxai-rail-stuck-text: #b45309;
+      --nxai-rail-badge-shadow: #fff;
     }
     .Theme__Dark {
       --nxai-card-bg: #2a2a2a;
@@ -89,6 +98,13 @@ export function injectThemeVars(): void {
          (4.65:1), which does not change with the surrounding theme. */
       --nxai-accent: #0a8189;
       --nxai-accent-text: #ffffff;
+      /* Rail tokens in dark theme — same values as light.
+         The teal tint and amber pair are visually identical in both themes
+         per the spec's non-theme-variant treatment of the rail. */
+      --nxai-rail-mark-bg: #ecfcfd;
+      --nxai-rail-stuck-bg: #fffbeb;
+      --nxai-rail-stuck-text: #b45309;
+      --nxai-rail-badge-shadow: var(--nxai-card-bg);
     }
   `;
   document.head.appendChild(style);

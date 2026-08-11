@@ -4,12 +4,11 @@ import { serializeTree } from './helpers/serializeTree';
 
 function makePanel(overrides: Record<string, any> = {}): any {
   return new (DockedPanel as any)({
-    open: true,
-    size: 'docked',
+    panelState: 'docked',
     activeTab: 'chat',
     onOpen: jest.fn(),
     onClose: jest.fn(),
-    onSetSize: jest.fn(),
+    onSetPanelState: jest.fn(),
     onSetActiveTab: jest.fn(),
     onNewChat: jest.fn(),
     onToggleSessions: jest.fn(),
@@ -22,12 +21,12 @@ function makePanel(overrides: Record<string, any> = {}): any {
 }
 
 const VARIANTS: Array<[string, Record<string, any>]> = [
-  ['collapsed bubble', { open: false }],
+  ['collapsed rail', { panelState: 'closed' }],
   ['docked', {}],
-  ['full', { size: 'full' }],
+  ['full', { panelState: 'full' }],
   ['streaming', { streamingStatus: 'Thinking…' }],
   ['sessions open', { showSessions: true, sessionsSidebar: React.createElement('div', null, 'sessions') }],
-  ['wide', { size: 'wide' }],
+  ['wide', { panelState: 'wide' }],
 ];
 
 describe('panel chrome — characterization', () => {
@@ -38,8 +37,8 @@ describe('panel chrome — characterization', () => {
 
 describe('panel chrome — control interactions', () => {
   it('docked expand goes to wide, not full', () => {
-    const onSetSize = jest.fn();
-    const panel = makePanel({ size: 'docked', onSetSize });
+    const onSetPanelState = jest.fn();
+    const panel = makePanel({ panelState: 'docked', onSetPanelState });
     const tree = panel.render();
 
     // Find the expand button in the control cluster
@@ -53,11 +52,11 @@ describe('panel chrome — control interactions', () => {
 
     expect(expandBtn).toBeDefined();
     expandBtn.props.onClick();
-    expect(onSetSize).toHaveBeenCalledWith('wide');
+    expect(onSetPanelState).toHaveBeenCalledWith('wide');
   });
 
   it('wide mode has sessions button', () => {
-    const panel = makePanel({ size: 'wide' });
+    const panel = makePanel({ panelState: 'wide' });
     const tree = panel.render();
 
     // Header now has: [0] avatar, [1] title stack, [2] segmented control, [3] control cluster

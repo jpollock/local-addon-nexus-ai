@@ -1,40 +1,116 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`panel chrome — characterization renders collapsed bubble 1`] = `
+exports[`panel chrome — characterization renders collapsed rail 1`] = `
 {
-  "children": {
-    "children": null,
-    "key": null,
-    "props": {
-      "size": 26,
+  "children": [
+    {
+      "children": {
+        "children": null,
+        "key": null,
+        "props": {
+          "size": 18,
+        },
+        "type": "IconChevronLeft",
+      },
+      "key": null,
+      "props": {
+        "onClick": "[fn]",
+        "onKeyDown": "[fn]",
+        "role": "button",
+        "style": {
+          "alignItems": "center",
+          "color": "var(--nxai-card-sub)",
+          "cursor": "pointer",
+          "display": "flex",
+          "height": 30,
+          "justifyContent": "center",
+          "width": 30,
+        },
+        "tabIndex": 0,
+        "title": "Expand panel",
+      },
+      "type": "div",
     },
-    "type": "NexusGlyph",
-  },
+    {
+      "children": [
+        {
+          "children": null,
+          "key": null,
+          "props": {
+            "size": 18,
+          },
+          "type": "NexusGlyph",
+        },
+        null,
+      ],
+      "key": null,
+      "props": {
+        "onClick": "[fn]",
+        "onKeyDown": "[fn]",
+        "role": "button",
+        "style": {
+          "alignItems": "center",
+          "background": "var(--nxai-rail-mark-bg)",
+          "borderRadius": 8,
+          "cursor": "pointer",
+          "display": "flex",
+          "height": 38,
+          "justifyContent": "center",
+          "position": "relative",
+          "width": 38,
+        },
+        "tabIndex": 0,
+        "title": "Insights across all sites",
+      },
+      "type": "div",
+    },
+    {
+      "children": "INSIGHTS",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-card-sub)",
+          "fontSize": 11,
+          "fontWeight": 600,
+          "letterSpacing": 1.2,
+          "textTransform": "uppercase",
+          "writingMode": "vertical-rl",
+        },
+      },
+      "type": "div",
+    },
+    {
+      "children": null,
+      "key": null,
+      "props": {
+        "style": {
+          "flex": 1,
+        },
+      },
+      "type": "div",
+    },
+    null,
+  ],
   "key": null,
   "props": {
-    "aria-label": "Open Nexus AI chat panel",
-    "onClick": "[fn]",
-    "onKeyDown": "[fn]",
-    "role": "button",
+    "aria-label": "Nexus AI panel (closed)",
     "style": {
       "alignItems": "center",
-      "background": "#0ECAD4",
-      "borderRadius": "50%",
-      "bottom": 20,
-      "boxShadow": "0 4px 16px rgba(0,0,0,0.4)",
-      "cursor": "pointer",
+      "background": "var(--nxai-card-bg)",
+      "borderLeft": "1px solid var(--nxai-card-border)",
+      "bottom": 0,
       "display": "flex",
-      "height": 52,
-      "justifyContent": "center",
+      "flexDirection": "column",
+      "gap": 14,
+      "padding": "14px 0",
       "pointerEvents": "all",
       "position": "fixed",
-      "right": 20,
+      "right": 0,
+      "top": 0,
       "userSelect": "none",
-      "width": 52,
-      "zIndex": 9000,
+      "width": 48,
+      "zIndex": 8999,
     },
-    "tabIndex": 0,
-    "title": "Open Nexus",
   },
   "type": "div",
 }
