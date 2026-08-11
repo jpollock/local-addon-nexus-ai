@@ -70,7 +70,7 @@ describe('ChatSection', () => {
     expect(json.toLowerCase()).toContain('pinned');
   });
 
-  test('delete-all has a confirmation step with checkbox', async () => {
+  test('delete-all requires checkbox tick before confirm button works', async () => {
     const mockInvoke = jest.fn().mockResolvedValue({ success: true });
     const instance = new (ChatSection as any)({
       settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
@@ -78,28 +78,85 @@ describe('ChatSection', () => {
       electron: { ipcRenderer: { invoke: mockInvoke } },
     });
 
-    // Initial state: no confirm pending, checkbox not checked
-    expect(instance.state.deleteConfirmPending).toBe(false);
-    expect(instance.state.deleteConfirmChecked).toBe(false);
+    // Mock setState to actually update state (since component is not mounted)
+    const originalSetState = instance.setState.bind(instance);
+    instance.setState = jest.fn((updater) => {
+      const nextState = typeof updater === 'function' ? updater(instance.state) : updater;
+      Object.assign(instance.state, nextState);
+    });
 
-    // Directly set state to open confirmation UI (setState doesn't work on unmounted components)
-    instance.state.deleteConfirmPending = true;
+    // Helper to find element in RENDERED tree (not serialized) by predicate
+    function findInRendered(node: any, predicate: (n: any) => boolean): any {
+      if (!node) return null;
+      if (predicate(node)) return node;
+      const children = node.props?.children;
+      if (children) {
+        if (Array.isArray(children)) {
+          for (const child of children) {
+            const found = findInRendered(child, predicate);
+            if (found) return found;
+          }
+        } else {
+          return findInRendered(children, predicate);
+        }
+      }
+      return null;
+    }
+
+    // Step 1: Render, find disclosure button by text, invoke its onClick
+    let rendered = instance.render();
+    let disclosureBtn = findInRendered(rendered, (n: any) =>
+      n?.type === 'button' && n?.props?.children === 'Delete All'
+    );
+    expect(disclosureBtn).not.toBeNull();
+    expect(disclosureBtn.props.onClick).toBeDefined();
+
+    // Invoke the actual onClick handler
+    disclosureBtn.props.onClick();
+
+    // setState doesn't work on unmounted components, so check via re-render
+    // The state should have been updated
+    expect(instance.state.deleteConfirmPending).toBe(true);
+
+    // Assert CHAT_CLEAR_ALL was NOT invoked
     expect(mockInvoke).not.toHaveBeenCalled();
 
-    // Confirm button must be disabled until checkbox is ticked
-    let confirmTree = JSON.stringify(serializeTree(instance.render()));
-    expect(confirmTree).toContain('"disabled":true'); // Button should be disabled
+    // Step 2: Re-render, find confirm button, assert it is disabled
+    rendered = instance.render();
+    let confirmBtn = findInRendered(rendered, (n: any) =>
+      n?.type === 'button' && n?.props?.children === 'Delete Everything'
+    );
+    expect(confirmBtn).not.toBeNull();
+    expect(confirmBtn.props.disabled).toBe(true);
 
-    // Tick the checkbox
-    instance.state.deleteConfirmChecked = true;
-    confirmTree = JSON.stringify(serializeTree(instance.render()));
-    // Now button should NOT be disabled (check background changes to danger color)
-    expect(confirmTree).toContain('var(--nxai-danger-text)');
+    // Don't invoke it - disabled is a DOM concept, programmatic onClick still fires
+    // The test verifies the button EXISTS and is disabled, which is the protection
 
-    // Verify IPC call happens with correct channel
-    await instance.handleDeleteConfirm();
+    // Step 3: Find the "I understand" checkbox (need fresh render to get current props)
+    // The checkbox exists inside the confirm panel (when deleteConfirmPending is true)
+    // Look for the specific checkbox - it's in a label with text "I understand"
+    let freshRender = instance.render();
+    let checkboxLabel = findInRendered(freshRender, (n: any) =>
+      n?.type === 'label' && n?.props?.children?.[1] === 'I understand — this cannot be undone'
+    );
+    expect(checkboxLabel).not.toBeNull();
+    const checkbox = checkboxLabel.props.children[0]; // First child is the input
+    expect(checkbox.type).toBe('input');
+    expect(checkbox.props.type).toBe('checkbox');
+    expect(checkbox.props.checked).toBe(false); // Initially unchecked
+    checkbox.props.onChange({ target: { checked: true } });
+
+    // Re-render, find confirm button, assert it is now enabled
+    rendered = instance.render();
+    confirmBtn = findInRendered(rendered, (n: any) =>
+      n?.type === 'button' && n?.props?.children === 'Delete Everything'
+    );
+    expect(confirmBtn.props.disabled).toBe(false);
+
+    // Step 4: Invoke confirm button's onClick and assert CHAT_CLEAR_ALL was invoked exactly once
+    await confirmBtn.props.onClick();
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(mockInvoke).toHaveBeenCalledWith('nexus-ai:chat-clear-all');
-    // State updates won't happen on unmounted component but that's fine - the handler was called
   });
 
   test('override link is deliberately absent (pending destination)', () => {

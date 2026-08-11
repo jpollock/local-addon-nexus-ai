@@ -131,6 +131,8 @@ function daysUntilExpiry(expiresAt: number): number {
 }
 
 export class SessionsSidebar extends React.Component<Props, State> {
+  private clearListener: (() => void) | null = null;
+
   constructor(props: Props) {
     super(props);
     this.state = { sessions: [], search: '', loading: false, hoveredId: null, renamingId: null, renameValue: '' };
@@ -142,12 +144,26 @@ export class SessionsSidebar extends React.Component<Props, State> {
   }
 
   componentDidMount() {
+    // Listen for chat-all-cleared (fired when user deletes all history via Settings)
+    this.clearListener = () => {
+      // Clear sessions list immediately so stale sessions don't linger
+      this.setState({ sessions: [] });
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+
     this.loadSessions();
   }
 
   componentDidUpdate(prevProps: Props) {
     if (prevProps.version !== this.props.version) {
       this.loadSessions();
+    }
+  }
+
+  componentWillUnmount() {
+    if (this.clearListener) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+      this.clearListener = null;
     }
   }
 

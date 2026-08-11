@@ -234,6 +234,7 @@ export class PanelChat extends React.Component<Props, State> {
   private inputRef = React.createRef<HTMLTextAreaElement>();
   private streamListener: ((_event: any, sessionId: string, event: any) => void) | null = null;
   private actionListener: ((...args: any[]) => void) | null = null;
+  private clearListener: (() => void) | null = null;
   private offlineListener: (() => void) | null = null;
   private onlineListener: (() => void) | null = null;
 
@@ -276,6 +277,13 @@ export class PanelChat extends React.Component<Props, State> {
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
 
+    // Listen for chat-all-cleared (fired when user deletes all history via Settings)
+    this.clearListener = () => {
+      // Drop in-memory session and messages so the next persistSession has nothing to resurrect
+      this.setState({ activeSessionId: null, messages: [], actionCount: 0 });
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+
     // Listen for offline/online events
     this.offlineListener = () => this.setState({ offline: true });
     this.onlineListener = () => this.setState({ offline: false });
@@ -306,6 +314,10 @@ export class PanelChat extends React.Component<Props, State> {
     if (this.actionListener) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
       this.actionListener = null;
+    }
+    if (this.clearListener) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_ALL_CLEARED, this.clearListener);
+      this.clearListener = null;
     }
     if (this.offlineListener) window.removeEventListener('offline', this.offlineListener);
     if (this.onlineListener) window.removeEventListener('online', this.onlineListener);
