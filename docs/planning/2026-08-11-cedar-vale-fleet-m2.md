@@ -56,6 +56,38 @@ Platform pathologies (`CV-C-01` version drift, `CV-E-01` halted) have no corpus 
 
 ---
 
+## Site inventory — the one mapping table
+
+`fleet.json`'s `id` is mechanical and exists for the build. Everything a viewer
+sees is the `label`, and everything an operator types is the third column. The
+same naming rule governs all of them (see Task 1 Step 4): a name must fit its
+clinics' geography, must not read as a serial number, and must not belong to a
+real practice.
+
+| Id | Practice (`label`) | Host | Addressed as | Pathology | Status |
+|---|---|---|---|---|---|
+| — | Cedar & Vale Health | WPE + Local | `cedarvale` / `cedarvale.local` | — | Local build done, 848 posts |
+| `cedar-vale-a` | Summit Dermatology Partners | WPE `w7579` | `summitderm` | `CV-A-01` | to create |
+| `cedar-vale-b` | Ridgeline Skin Institute | WPE `w7579` | `ridgelineskin` | `CV-B-01` | to create |
+| `cedar-vale-c` | Willow Creek Dermatology | SpinupWP | `ssh:willowcreekderm` | `CV-C-01` | site live, unseeded |
+| `cedar-vale-d` | Piedmont Dermatology Group | SpinupWP | `ssh:piedmontdermgroup` | `CV-D-01` | site live, unseeded |
+| `cedar-vale-e` | Papago Park Dermatology | Local | `Papago Park Dermatology` | `CV-E-01` | to create |
+| `cedar-vale-f` | Copper Basin Skin Clinic | Local | `Copper Basin Skin Clinic` | `CV-F-01` | to create |
+| `cedar-vale-g` | Table Mesa Dermatology | SpinupWP | `ssh:tablemesaderm` | `CV-G-01` | site live, unseeded |
+
+**WP Engine account: `w7579`** (`b97e432b-c10a-4f0a-9ce7-55cedd575099`), chosen
+2026-08-11. It already carries Alpine Outfitters (`alpineoutfitte`), so the
+canonical demo properties stay together. It holds 35 active installs; the CAPI
+limits endpoint returns no data for it, so **headroom is unverified** — check it
+in the WP Engine portal before Task 7 Step 3 rather than discovering the cap on
+the third `wpe_create_install`. None of `cedarvale`, `summitderm` or
+`ridgelineskin` collides with an existing install name there.
+
+Install names are `[a-z0-9-]`, 20 characters maximum — `create-install.ts`
+rejects 21 or more. All three fit.
+
+---
+
 ## Measured against the live corpus, 2026-08-11
 
 Read before assuming a count is safe. All figures come from
@@ -1945,11 +1977,17 @@ Task 6 has no dependencies beyond Phase A.
 Use the Nexus MCP tool, not the Local UI — Jeremy authorised this route (spec §10):
 
 ```
-local_create_site  name="cedar-vale-e"   (PHP 8.2, WP latest)
-local_create_site  name="cedar-vale-f"   (PHP 8.2, WP latest)
+local_create_site  name="Papago Park Dermatology"   (PHP 8.2, WP latest)
+local_create_site  name="Copper Basin Skin Clinic"   (PHP 8.2, WP latest)
 ```
 
-Confirm with `local_list_sites` and record each site id — the `wp_*` tools key on it.
+Named for the practice, not `cedar-vale-e` — Local's site name is what appears
+in `nexus_list_sites` and every Task 9 acceptance output, and the fleet's whole
+argument is that these are independent businesses. The `id` in `fleet.json`
+stays mechanical; see the site inventory table.
+
+Confirm with `local_list_sites` and record each site id — the `wp_*` tools key
+on it, and Local's generated `.local` domain will differ from the display name.
 
 - [ ] **Step 2: Install the plugin, theme and ACF Pro on each**
 
@@ -2017,8 +2055,8 @@ git commit -m "docs(fleet): Local provisioning runbook for sites E and F"
 
 ### Task 7: WP Engine provisioning — flagship, A and B
 
-**Blocked on:** which of the 14 authenticated accounts to use. Do not guess —
-creating installs in the wrong account is billable and visible to other people.
+**Not blocked.** Account chosen 2026-08-11: `w7579`. One caveat carried into
+Step 1 — its install headroom could not be read from the API.
 
 **Files:**
 - Modify: `canonical-demos/docs/fleet-provisioning.md` (add the `## WP Engine` section)
@@ -2026,32 +2064,42 @@ creating installs in the wrong account is billable and visible to other people.
 - [ ] **Step 1: Confirm the account and its headroom**
 
 ```
-wpe_get_accounts
-wpe_get_account_limits   account_id=<chosen>
-wpe_installs_by_account  account_id=<chosen>
+wpe_get_account_limits   account_id=b97e432b-c10a-4f0a-9ce7-55cedd575099
+wpe_installs_by_account
 ```
 
-Three installs are needed. If headroom is under three, stop and report — do not
-delete anything to make room.
+The account is **`w7579`** (`b97e432b-c10a-4f0a-9ce7-55cedd575099`), chosen
+2026-08-11 because it already carries Alpine Outfitters and keeps the canonical
+demo properties together.
+
+**Measured 2026-08-11: 35 active installs, and `wpe_get_account_limits` returns
+"No limit data found" for this account** — so headroom could not be verified
+through the API. Check the plan's install cap in the WP Engine portal before
+creating anything. If headroom is under three, stop and report; do not delete an
+existing install to make room, and note that 21 of the 35 are other people's or
+other projects'.
 
 - [ ] **Step 2: Build each site locally first**
 
 WP Engine refuses `wpcli` writes on `production`, and these are registered
 `production` deliberately (spec §1.3). So each WPE site is built as a scratch
 Local site and pushed, exactly as an agency would. For `cedar-vale-a` and
-`cedar-vale-b`, repeat Task 6 Steps 1–3 against a scratch Local site of the same
-name. The flagship is already built as `cedarvale.local`.
+`cedar-vale-b`, repeat Task 6 Steps 1–3 against a scratch Local site named for
+the practice (Summit Dermatology Partners, Ridgeline Skin Institute). The flagship is already built as `cedarvale.local`.
 
 - [ ] **Step 3: Create the installs**
 
 ```
-wpe_create_install  account_id=<chosen>  name="cedarvale"    environment=production
-wpe_create_install  account_id=<chosen>  name="cedarvale-a"  environment=production
-wpe_create_install  account_id=<chosen>  name="cedarvale-b"  environment=production
+wpe_create_install  account_id=b97e432b-c10a-4f0a-9ce7-55cedd575099  name="cedarvale"      environment=production
+wpe_create_install  account_id=b97e432b-c10a-4f0a-9ce7-55cedd575099  name="summitderm"     environment=production
+wpe_create_install  account_id=b97e432b-c10a-4f0a-9ce7-55cedd575099  name="ridgelineskin"  environment=production
 ```
 
-Install names are `[a-z0-9-]`, 20 characters maximum — `create-install.ts` rejects
-21 or more.
+`summitderm` and `ridgelineskin`, not `cedarvale-a` and `cedarvale-b` — the
+install name is what `nexus_list_sites` and `compare_sites` print, and a serial
+number there tells a viewer the independent-practices framing is staged. Names
+are `[a-z0-9-]`, 20 characters maximum (`create-install.ts` rejects 21 or more);
+all three fit and none collides with an existing install in `w7579`.
 
 - [ ] **Step 4: Push each build up**
 
@@ -2066,8 +2114,8 @@ otherwise the first page views serve the pre-import cache and read as an empty s
 - [ ] **Step 5: Verify over SSH (read-only, allowed on production)**
 
 ```bash
-nexus wp core version wpe:<account>/cedarvale-a@production
-nexus wp plugin list  wpe:<account>/cedarvale-a@production
+nexus wp core version wpe:w7579/summitderm@production
+nexus wp plugin list  wpe:w7579/summitderm@production
 ```
 
 Expected: WP current; `advanced-custom-fields-pro` and `cedar-vale-seeder` both
