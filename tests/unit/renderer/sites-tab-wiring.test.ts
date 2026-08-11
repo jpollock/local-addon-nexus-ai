@@ -130,10 +130,39 @@ describe('bulk dispatch', () => {
     expect(invoke.mock.calls.find(c => c[0] === IPC_CHANNELS.BULK_EXECUTE)).toBeUndefined();
   });
 
-  test('clears the selection on success', async () => {
+  test('keeps the selection when the job starts — it is the input, not the fuel', async () => {
+    // This asserted the opposite until BULK-OPERATIONS.md criterion 4. BULK_EXECUTE
+    // returns an opId the instant the manager ACCEPTS the job, not when it finishes, so
+    // clearing on `success` unticked the rows the moment the work began — and with them
+    // the user's only record of which sites they had just acted on.
     const { shell } = bulkShell();
     await shell.handleSiteBulk('reindex', ['L1']);
+    expect(shell.state.selectedSiteIds).toEqual(['L1']);
+  });
+
+  test('the selection bar becomes a job bar in the same paint as the click', async () => {
+    // No frame in which neither is present: the job is set before the await, so a
+    // pending BULK_EXECUTE still has something on screen saying work started.
+    const { shell } = bulkShell(() => new Promise(() => { /* never settles */ }));
+    void shell.handleSiteBulk('reindex', ['L1']);
+    expect(shell.state.bulkJob).toBeTruthy();
+    expect(shell.state.bulkJob.phase).toBe('starting');
+    expect(shell.state.bulkJob.siteIds).toEqual(['L1']);
+  });
+
+  test('dismissing the finished job is what releases the selection', async () => {
+    const { shell } = bulkShell();
+    await shell.handleSiteBulk('reindex', ['L1']);
+    shell.dismissBulkJob();
     expect(shell.state.selectedSiteIds).toEqual([]);
+    expect(shell.state.bulkJob).toBeNull();
+  });
+
+  test('a failed start surfaces on the bar instead of vanishing', async () => {
+    const { shell } = bulkShell(async () => ({ success: false, error: 'nope' }));
+    await shell.handleSiteBulk('reindex', ['L1']);
+    expect(shell.state.bulkJob.phase).toBe('error');
+    expect(shell.state.bulkJob.error).toBe('nope');
   });
 
   test('keeps the selection when the operation fails, so it can be retried', async () => {

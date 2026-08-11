@@ -29,7 +29,7 @@ import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
 import { InboxTab } from './tabs/InboxTab';
-import { SitesTab } from './tabs/SitesTab';
+import { SitesTab, BULK_CONFIRM_THRESHOLD, type BulkJobView } from './tabs/SitesTab';
 // Types only — a value import would pull main-process code into the renderer
 // bundle. Precedent: credentials/ConnectionsPanel.tsx:3.
 import type { SiteRow } from '../../main/fleet/siteRows';
@@ -134,6 +134,8 @@ interface NexusOverviewState {
   siteRowsLoaded: boolean;
   siteRowsFailed: boolean;
   selectedSiteIds: string[];
+  /** The bulk job started from the Sites bar, or null. Replaces the selection bar. */
+  bulkJob: BulkJobView | null;
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -231,6 +233,9 @@ function navigateToPreferences(electron: any): void {
 
 export class NexusOverview extends React.Component<NexusOverviewProps, NexusOverviewState> {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** Id of the job the Sites bar is showing, and its own poll. Separate from the fleet poll. */
+  private bulkOpId: string | null = null;
+  private bulkPollTimer: ReturnType<typeof setInterval> | null = null;
   private contentScrollEl: HTMLDivElement | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private wpeSyncPassivePoll: ReturnType<typeof setInterval> | null = null;
@@ -262,6 +267,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     siteRowsLoaded: false,
     siteRowsFailed: false,
     selectedSiteIds: [],
+    bulkJob: null,
     aiProxy: null,
     fleetSetupOpId: null,
     fleetSetupRunning: false,
@@ -441,6 +447,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
   componentWillUnmount(): void {
     this.mounted = false;
+    this.stopBulkPolling();
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.searchTimer) clearTimeout(this.searchTimer);
     if (this.wpeSyncPassivePoll) clearInterval(this.wpeSyncPassivePoll);
@@ -859,6 +866,25 @@ renderTabBar(): React.ReactNode {
    */
   handleSiteBulk = async (type: string, siteIds: string[]): Promise<void> => {
     if (siteIds.length === 0) return;
+
+    if (siteIds.length > BULK_CONFIRM_THRESHOLD && !this.confirmLargeBulk(type, siteIds)) return;
+
+    // Set the job bar BEFORE awaiting, so the selection bar becomes the job bar in the
+    // same paint as the click. Awaiting first leaves a frame in which the button has been
+    // pressed and nothing on screen says anything happened.
+    this.setState({
+      bulkJob: {
+        phase: 'starting',
+        type,
+        siteIds,
+        startedAt: Date.now(),
+        completed: 0,
+        total: siteIds.length,
+        failed: 0,
+        failedIds: [],
+      },
+    });
+
     try {
       const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_EXECUTE, {
         type,
@@ -869,12 +895,99 @@ renderTabBar(): React.ReactNode {
         }, {}),
         options: {},
       });
-      // Only clear on success. Keeping the selection after a failure lets the
-      // user retry without re-ticking rows they already chose.
-      if (result?.success) this.setState({ selectedSiteIds: [] });
+      if (result?.success && result.opId) {
+        // `success` here means the manager accepted the job, NOT that it finished — it
+        // returns an opId immediately and runs asynchronously. Clearing the selection on
+        // this used to be the bug: rows unticked the instant the work started.
+        this.bulkOpId = result.opId;
+        this.setState(prev => ({ bulkJob: prev.bulkJob ? { ...prev.bulkJob, phase: 'running' } : null }));
+        this.startBulkPolling();
+      } else {
+        this.setState(prev => ({
+          bulkJob: prev.bulkJob
+            ? { ...prev.bulkJob, phase: 'error', error: result?.error || 'Could not start' }
+            : null,
+        }));
+      }
     } catch (err) {
       console.error('[NexusAI] bulk operation failed:', err);
+      this.setState(prev => ({
+        bulkJob: prev.bulkJob ? { ...prev.bulkJob, phase: 'error', error: (err as Error).message } : null,
+      }));
     }
+  };
+
+  /**
+   * Names the count and what it costs. Deliberately states no duration: nothing here
+   * measures how long a pass takes, and an invented "about 40 minutes" is the kind of
+   * plausible-looking default that gets believed.
+   */
+  private confirmLargeBulk(type: string, siteIds: string[]): boolean {
+    const action = type === 'reindex' ? 'Index content' : 'Refresh metadata';
+    const remote = this.state.siteRows.filter(
+      r => siteIds.indexOf(r.id) !== -1 && r.source !== 'local',
+    ).length;
+    const cost = remote > 0
+      ? ` This opens a connection to each of the ${remote} not on this Mac.`
+      : '';
+    return confirm(`${action} on ${siteIds.length} sites?${cost} You can cancel it once it starts.`);
+  }
+
+  private startBulkPolling(): void {
+    if (this.bulkPollTimer !== null) return;
+    this.bulkPollTimer = setInterval(() => { void this.pollBulkStatus(); }, 2000);
+  }
+
+  private stopBulkPolling(): void {
+    if (this.bulkPollTimer !== null) {
+      clearInterval(this.bulkPollTimer);
+      this.bulkPollTimer = null;
+    }
+  }
+
+  private async pollBulkStatus(): Promise<void> {
+    if (!this.bulkOpId) return;
+    try {
+      const s = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_STATUS, this.bulkOpId);
+      if (!s?.success) return;
+      const results: Record<string, { status: string }> = s.siteResults || {};
+      const failedIds = Object.keys(results).filter(id => results[id]?.status === 'failed');
+      const done = s.status !== 'running';
+      this.setState(prev => ({
+        bulkJob: prev.bulkJob
+          ? {
+              ...prev.bulkJob,
+              phase: done ? 'result' : 'running',
+              completed: s.progress?.completed ?? prev.bulkJob.completed,
+              total: s.progress?.total ?? prev.bulkJob.total,
+              failed: failedIds.length,
+              failedIds,
+            }
+          : null,
+      }));
+      if (done) {
+        this.stopBulkPolling();
+        this.bulkOpId = null;
+        // Fleet data changed underneath us — the table's own rows are now stale.
+        void this.fetchAll();
+      }
+    } catch {
+      /* transient IPC failure; the next tick retries rather than declaring the job dead */
+    }
+  }
+
+  /** Dismissing a finished job is one of the two moments the selection is released. */
+  dismissBulkJob = (): void => {
+    this.stopBulkPolling();
+    this.bulkOpId = null;
+    this.setState({ bulkJob: null, selectedSiteIds: [] });
+  };
+
+  cancelBulkJob = (): void => {
+    if (!this.bulkOpId) return;
+    void this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_CANCEL, this.bulkOpId);
+    // Do not clear the job here — the poll will observe 'cancelled' and land on a result
+    // state, so the user still sees what happened rather than the bar vanishing.
   };
 
   renderActiveTab(): React.ReactNode {
@@ -924,6 +1037,10 @@ renderTabBar(): React.ReactNode {
         // not `nexus host index <alias>`, which fans out over the connection.
         onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
         onRetry: () => { void this.fetchAll(); },
+        job: this.state.bulkJob,
+        onCancelJob: this.cancelBulkJob,
+        onDismissJob: this.dismissBulkJob,
+        onSelectFailed: (ids: string[]) => this.setState({ selectedSiteIds: ids, bulkJob: null }),
         }),
         this.renderWpeSyncProgress(),
         React.createElement(BulkOperationsPanel, {

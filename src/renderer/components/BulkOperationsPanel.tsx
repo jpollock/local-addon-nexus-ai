@@ -15,6 +15,33 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../common/constants';
 import type { BulkOperationStatus } from '../../common/types';
+// Type only — a value import would pull main-process code into the renderer bundle.
+// Typing the map by BulkOpType makes it exhaustive: a new job type fails the build here
+// rather than silently rendering its raw identifier to a user.
+import type { BulkOpType } from '../../main/bulk/types';
+
+/**
+ * Job class names are implementation identifiers. A user who pressed "Refresh metadata"
+ * and then watched something called `sync-graph` has no way to tell whether it is the
+ * thing they started. Unmapped types fall back to a de-slugged form rather than the raw
+ * value, so a new BulkOpType reads as words even before it is added here.
+ */
+const BULK_TYPE_LABELS: Record<BulkOpType, string> = {
+  'sync-graph': 'Refresh metadata',
+  reindex: 'Index content',
+  'setup-ai': 'Set up AI',
+  'plugin-update': 'Update plugins',
+  'health-refresh': 'Refresh health',
+  start: 'Start sites',
+  stop: 'Stop sites',
+};
+
+export function bulkTypeLabel(type: string): string {
+  const known = BULK_TYPE_LABELS[type as BulkOpType];
+  if (known) return known;
+  const words = type.replace(/[-_]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 interface BulkOperationsPanelProps {
   electron: any;
@@ -419,7 +446,7 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
         React.createElement(
           'div',
           { style: cardInfoStyle },
-          React.createElement('div', { style: operationTypeStyle }, op.type),
+          React.createElement('div', { style: operationTypeStyle }, bulkTypeLabel(op.type)),
           React.createElement(
             'div',
             { style: operationMetaStyle },

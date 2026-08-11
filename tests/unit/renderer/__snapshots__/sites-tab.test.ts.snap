@@ -134,7 +134,10 @@ exports[`SitesTab snapshot 1`] = `
     {
       "children": [
         {
-          "children": "0 of 1 selected",
+          "children": [
+            "0 of 1 selected",
+            null,
+          ],
           "key": null,
           "props": {
             "style": {
@@ -475,7 +478,9 @@ exports[`SitesTab snapshot 1`] = `
                 },
               ],
               "key": "L1",
-              "props": {},
+              "props": {
+                "style": undefined,
+              },
               "type": "tr",
             },
           ],
