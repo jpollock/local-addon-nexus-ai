@@ -20,11 +20,15 @@ interface ChatSectionProps {
 
 interface ChatSectionState {
   deleteConfirmPending: boolean;
+  deleteInFlight: boolean;
+  deleteError: string | null;
 }
 
 export class ChatSection extends React.Component<ChatSectionProps, ChatSectionState> {
   state: ChatSectionState = {
     deleteConfirmPending: false,
+    deleteInFlight: false,
+    deleteError: null,
   };
 
   handleDockedPanelToggle = (enabled: boolean): void => {
@@ -37,17 +41,34 @@ export class ChatSection extends React.Component<ChatSectionProps, ChatSectionSt
 
   handleDeleteAll = async (): Promise<void> => {
     if (!this.state.deleteConfirmPending) {
-      this.setState({ deleteConfirmPending: true });
+      this.setState({ deleteConfirmPending: true, deleteError: null });
       return;
     }
 
     // Confirmed — delete all chat history
-    await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR_ALL);
-    this.setState({ deleteConfirmPending: false });
+    this.setState({ deleteInFlight: true, deleteError: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR_ALL);
+      if (!result.success) {
+        this.setState({
+          deleteInFlight: false,
+          deleteConfirmPending: false,
+          deleteError: result.error || 'Failed to delete chat history',
+        });
+        return;
+      }
+      this.setState({ deleteInFlight: false, deleteConfirmPending: false, deleteError: null });
+    } catch (err: any) {
+      this.setState({
+        deleteInFlight: false,
+        deleteConfirmPending: false,
+        deleteError: err.message || 'An unexpected error occurred',
+      });
+    }
   };
 
   handleCancelDelete = (): void => {
-    this.setState({ deleteConfirmPending: false });
+    this.setState({ deleteConfirmPending: false, deleteError: null });
   };
 
   render(): React.ReactElement {

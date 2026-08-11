@@ -10,7 +10,7 @@ import type { ChatProviderConfig } from './providers/types';
 import { adaptToolsForChat } from './tool-adapter';
 import { buildFleetContext } from '../assistant/AssistantService';
 import { buildWordPressSystemPrompt } from '../assistant/wordpress-knowledge';
-import { getSession } from '../ipc/chat-sessions';
+import { getSession, deleteAllSessions } from '../ipc/chat-sessions';
 
 // ---------------------------------------------------------------------------
 // Site Lifecycle — tools that require a running local site
@@ -526,14 +526,19 @@ export class ChatService {
 
   /**
    * Clear all chat history (in-memory sessions and database).
+   * Returns { success: false, error } if database is not available.
+   * Emits CHAT_ALL_CLEARED to renderer to invalidate UI state.
    */
-  clearAllSessions(): void {
+  clearAllSessions(): { success: boolean; error?: string } {
     this.sessions.clear();
     const db = this.services.graphService?.getDb();
-    if (db) {
-      const { deleteAllSessions } = require('../ipc/chat-sessions');
-      deleteAllSessions(db);
+    if (!db) {
+      return { success: false, error: 'Database not available' };
     }
+    deleteAllSessions(db);
+    // Notify renderer to invalidate chat state (active sessions, sidebar)
+    this.sendToRenderer(IPC_CHANNELS.CHAT_ALL_CLEARED);
+    return { success: true };
   }
 
   /**
