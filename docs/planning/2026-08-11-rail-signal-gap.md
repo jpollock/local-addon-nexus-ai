@@ -144,3 +144,60 @@ None of these is a "just wire it" task. They are design decisions with implicati
 **Why this is the right cut:** The spec says the rail must carry signal. It does not say the signal must be perfectly scoped before the rail can ship. Scoping is a refinement that depends on solving "how does any Nexus surface know which Local screen it is on?" — a question bigger than this task.
 
 If you disagree and want to solve scoping as part of this task, say so explicitly and I will trace the context propagation architecture before proceeding.
+
+---
+
+## Investigation: Can the mount point tell us? (2026-08-11)
+
+**Checked:** `src/renderer/index.tsx` shows `DockedPanelContainer` is mounted globally on `document.body` via `DockedPanelGate`, not per-screen.
+
+**Two mount points exist in the addon:**
+1. **Global panel:** `DockedPanelContainer` on `document.body` (lines 232-268)
+2. **Per-site hook:** `hooks.addContent('routes[site-info]', ...)` mounts `NexusSiteTab` with site prop (lines 162-174)
+
+**The panel is NOT mounted through the per-site hook** — it is a single global instance that persists across all screens.
+
+**Local's routing:** Uses React Router with hash-based routes (`/main/nexus`, `/main/site-info/{id}/nexus`). The panel has no access to:
+- Route props (not a Route component)
+- Router context (mounted outside Router tree)
+- Site prop (only passed to per-route components via hooks)
+
+**Could we parse `window.location.hash`?** Yes, but explicitly forbidden: "Do NOT parse window.location; that is a guess dressed as a lookup and it will break the first time routing changes."
+
+**Conclusion:** The mount point cannot tell us. The panel is global, has no route context, and cannot detect which screen it is on without violating the "no window.location parsing" constraint.
+
+## Decision: Omit badge where scope is unknown
+
+**The honest interim:** Render the badge only where scope is known, omit it where it is not.
+
+The spec says "hidden at zero" — **hidden-at-unknown is the same principle**. A number misrepresenting its own context (fleet count on a site screen) is the same defect as "449 sites indexed" and the Agents banner contradicting the health pill.
+
+**Rule on this branch:** An absent clause beats a plausible wrong one.
+
+**Implementation:**
+- Badge count and stuck marker: **omitted** (rendered as `null`, never shown)
+- Rail label: `'NEXUS AI'` (generic, no scope claim)
+- Tooltip: `'Open Nexus AI panel'` (no scope claim)
+
+**What this preserves:**
+- The rail renders and functions
+- Opening/closing works
+- State transitions work
+- No false information is presented
+
+**What blocks showing the badge:**
+The panel does not know whether it is on a site screen or fleet screen. Solving this requires one of:
+
+1. **Router context exposure:** Local's React Router context made available to globally-mounted components
+2. **Context provider:** A `CurrentSiteContext` provider that tracks active site/screen
+3. **Event-based signaling:** Local emits a custom event when route changes, panel subscribes
+4. **Prop threading:** Re-architect panel to mount per-screen instead of globally
+
+None is a "just wire it" task — each is an architectural change with implications for how other Nexus surfaces detect context.
+
+**Smallest real fix:** Option 3 (event-based signaling) is likely the least invasive:
+- Local's routing layer emits `window.dispatchEvent(new CustomEvent('local:route-change', { detail: { siteId, screen } }))` on navigation
+- Panel subscribes to this event and updates internal state
+- No React context wiring needed, no re-architecture required
+
+**Next step:** Document this as the blocker and move on. The rail exists, functions, and presents no false information. Signal wiring awaits context propagation architecture.

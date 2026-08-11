@@ -251,10 +251,14 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
     // Render 48px rail when closed
     if (panelState === 'closed') {
-      // TODO: Wire badge count and stuck marker from real data
-      const badgeCount = 0; // placeholder
-      const hasStuck = false; // placeholder
-      const railLabel = 'INSIGHTS'; // placeholder: should be 'THIS SITE' on site screens
+      // Badge and stuck marker omitted: scope is unknown (see docs/planning/2026-08-11-rail-signal-gap.md).
+      // The panel is mounted globally and cannot determine if it's on a site screen or fleet screen
+      // without parsing window.location (forbidden) or accessing router context (unavailable).
+      // Per spec, both indicators must scope together — showing a fleet count on a site screen is
+      // false information. Omitting them is honest; showing the wrong number is a lie.
+      const badgeCount = null; // omitted where scope unknown
+      const hasStuck = null;   // omitted where scope unknown
+      const railLabel = 'NEXUS AI'; // generic, no scope claim
 
       return React.createElement(
         'div',
@@ -281,13 +285,13 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           {
             style: styles.railMark,
             onClick: onOpen,
-            title: `Insights across all sites`, // TODO: scoped tooltip
+            title: 'Open Nexus AI panel', // generic, no scope claim
             role: 'button',
             tabIndex: 0,
             onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') onOpen(); },
           },
           React.createElement(NexusGlyph, { size: 18 }),
-          badgeCount > 0
+          badgeCount !== null && badgeCount > 0
             ? React.createElement('div', { style: styles.railBadge }, String(badgeCount))
             : null,
         ),
@@ -295,8 +299,8 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
         React.createElement('div', { style: styles.railLabel }, railLabel),
         // Spacer
         React.createElement('div', { style: { flex: 1 } }),
-        // Stuck marker at bottom (only when hasStuck is true)
-        hasStuck
+        // Stuck marker at bottom (only when hasStuck is true, never when null/unknown)
+        hasStuck === true
           ? React.createElement('div', { style: styles.railStuck, title: 'Agent stuck' }, '!')
           : null,
       );
