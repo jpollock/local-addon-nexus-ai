@@ -801,6 +801,12 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     // remain here, because that approval must not be reachable from anything but
     // Local itself (it is deliberately IPC-only, never GraphQL).
 
+    // This panel is NOT the settings home, so it must not carry the settings
+    // home's footer: rendered here, "everything is here, with one exception …
+    // Local → Preferences → Nexus AI" asserted that everything was configurable
+    // on the very screen it was pointing away from, and never named the actual
+    // destination. It points TO Settings instead, and says why this one thing
+    // stayed behind.
     const pointer = React.createElement('div', {
       style: {
         padding: '12px 16px',
@@ -810,12 +816,12 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         borderRadius: 6,
         fontSize: 12,
         lineHeight: 1.5,
-        color: '#9ca3af',
+        color: 'var(--nxai-card-sub, #6b7280)',
       },
     },
-      'Everything Nexus can be configured with is here, with one exception: approving a new host the first time you connect to it stays in ',
-      React.createElement('span', { style: { color: '#6b7280', fontWeight: 700 } }, 'Local → Preferences → Nexus AI'),
-      ', because that approval must not be reachable from anything but Local itself.',
+      'Everything else Nexus can be configured with now lives in ',
+      React.createElement('span', { style: { color: 'var(--nxai-card-text, #111827)', fontWeight: 700 } }, 'Nexus AI → Settings'),
+      '. Only external SSH hosts stay here, because approving a new host the first time you connect to it must not be reachable from anything but Local itself.',
     );
 
     return React.createElement('div', { style: { padding: '24px', maxWidth: '600px', boxSizing: 'border-box' as const } },

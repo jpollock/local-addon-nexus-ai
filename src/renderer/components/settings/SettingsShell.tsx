@@ -107,13 +107,43 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
     });
   }
 
+  /**
+   * Optimistic write, with a real failure path.
+   *
+   * UPDATE_SETTINGS NEVER REJECTS. Its handler catches every internal failure
+   * and resolves with `{ ...current, _error }` (ipc-handlers.ts), so a
+   * `.catch()` is dead code and checking only the happy path made a rejected
+   * save — a stale field, a schema violation — indistinguishable from success:
+   * no toast, no console line, and the optimistic value left on screen
+   * asserting a change that never reached disk. `src/renderer/index.tsx`
+   * already checks `_error` explicitly for exactly this reason; this is the
+   * same check for every setting on the page.
+   *
+   * On failure only the keys in THIS patch are rolled back, so a concurrent
+   * successful save is not clobbered by the revert.
+   */
   saveSetting = (patch: Partial<NexusSettings>): void => {
-    if (!this.state.settings) return;
-    const next = { ...this.state.settings, ...patch };
-    this.setState({ settings: next });
+    const prev = this.state.settings;
+    if (!prev) return;
+    this.setState({ settings: { ...prev, ...patch } });
+
+    const revert = (reason: string): void => {
+      if (!this.mounted) return;
+      this.setState((s) => {
+        if (!s.settings) return null;
+        const restored: any = { ...s.settings };
+        for (const key of Object.keys(patch)) restored[key] = (prev as any)[key];
+        return { settings: restored } as Pick<SettingsShellState, 'settings'>;
+      });
+      (window as any).showToast?.(`Could not save that setting: ${reason}`, 'error');
+    };
+
     this.props.electron.ipcRenderer
       .invoke(IPC_CHANNELS.UPDATE_SETTINGS, patch)
-      .catch(() => {});
+      .then((result: any) => {
+        if (result?._error) revert(result._error);
+      })
+      .catch((err: any) => revert(err?.message ?? String(err)));
   };
 
   render(): React.ReactElement {
@@ -148,7 +178,12 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
 
     const navNote = (section: Section): string | null => {
       if (section === 'background') return derived?.navNote ?? null;
-      if (section === 'chat') return (s as any).dockedPanelEnabled ? 'panel on' : 'panel off';
+      // `!== false`, not truthiness. `dockedPanelEnabled` is absent from
+      // DEFAULT_SETTINGS, and both the real gate (index.tsx's DockedPanelGate)
+      // and ChatSection's own toggle default an absent value to ON. Truthiness
+      // put "panel off" in the nav beside a ticked toggle and a running panel
+      // on every fresh install.
+      if (section === 'chat') return (s as any).dockedPanelEnabled !== false ? 'panel on' : 'panel off';
       return null;
     };
 
@@ -245,6 +280,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
         indexEntries,
         mcpInfo,
         sites,
+        fleetCounts,
         onSave: this.saveSetting,
         electron: this.props.electron,
       });
@@ -259,17 +295,22 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
       },
     }, sectionContent);
 
+    // #9ca3af on --nxai-section-bg measures 2.43:1 in light theme — below AA on
+    // the acceptance-test sentence itself. --nxai-card-sub is a declared token
+    // that already carries the "secondary body text" role in both themes
+    // (#6b7280 light / #9ca3af dark), and --nxai-card-text the emphasis role.
+    // Tokenised rather than invented.
     const footer = React.createElement('div', {
       style: {
         padding: '16px 24px',
-        borderTop: '1px solid var(--nxai-card-border, #30363d)',
+        borderTop: '1px solid var(--nxai-card-border)',
         fontSize: 12,
         lineHeight: 1.5,
-        color: '#9ca3af',
+        color: 'var(--nxai-card-sub)',
       },
     },
       'Everything Nexus can be configured with is here, with one exception: approving a new host the first time you connect to it stays in ',
-      React.createElement('span', { style: { color: '#6b7280', fontWeight: 700 } }, 'Local → Preferences → Nexus AI'),
+      React.createElement('span', { style: { color: 'var(--nxai-card-text)', fontWeight: 700 } }, 'Local → Preferences → Nexus AI'),
       ', because that approval must not be reachable from anything but Local itself.',
     );
 

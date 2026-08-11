@@ -131,10 +131,20 @@ export function computeDerived(input: DerivedInput): Derived {
   const hasExternal = input.externalHostCount > 0;
   const hasWpe = input.installCount > 0;
 
-  // Filter out ext rows when no external hosts, and wpe rows when no WPE installs.
-  const visible = JOBS.filter((j) =>
-    (j.group !== 'ext' || hasExternal) && (j.group !== 'wpe' || hasWpe)
-  );
+  // ONLY the ext rows are conditional. MEMBERSHIP.md:30 — "Rows 4 and 5 exist
+  // only when at least one external host is connected" — conditions those two
+  // and nothing else, and MEMBERSHIP.md:72-73 allows exactly two nav-note
+  // denominators, 6 and 4.
+  //
+  // Hiding the wpe rows on `installCount === 0` as well made six settings
+  // unreachable for a user with no WP Engine account yet — including
+  // `wpeSyncAutoEnabled`, which is what populates that very count, so the
+  // condition was self-perpetuating — and produced a third denominator
+  // ("0 of 1 on") that MEMBERSHIP.md does not allow.
+  //
+  // `hasWpe` still gates the *figure* below: "0 connections a day across 0
+  // installs" is noise, and a summary column is not a setting.
+  const visible = JOBS.filter((j) => j.group !== 'ext' || hasExternal);
 
   const rows: JobRow[] = visible.map((j) => {
     const alwaysOn = j.enableKey === null;

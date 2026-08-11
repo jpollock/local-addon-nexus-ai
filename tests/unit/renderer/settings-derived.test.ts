@@ -269,10 +269,40 @@ describe('derived — FIX 7: pause applied uniformly', () => {
 });
 
 describe('derived — FIX 8: summary.wpe collapses to null with installCount=0', () => {
-  test('with installCount=0, summary.wpe is null and wpe rows vanish', () => {
+  test('with installCount=0, summary.wpe is null — but the wpe ROWS stay', () => {
+    // The figure collapses ("0 connections a day across 0 installs" is noise).
+    // The rows must not: MEMBERSHIP.md:30 conditions rows 4 and 5 only, on
+    // external hosts. Hiding the wpe rows here stranded six settings —
+    // `wpeSyncAutoEnabled` among them, which is what makes the count non-zero.
     const d = computeDerived(base({ installCount: 0 }));
     expect(d.summary.wpe).toBeNull();
-    expect(d.rows.filter(r => r.group === 'wpe').length).toBe(0);
+    expect(d.rows.filter(r => r.group === 'wpe').map(r => r.key))
+      .toEqual(['wpeRefresh', 'wpeSync', 'wpeContentIndex']);
+  });
+
+  test('with installCount=0 the nav-note denominator is still 6, not 3', () => {
+    // MEMBERSHIP.md:72-73 allows exactly two denominators: 6 with an external
+    // host connected, 4 without. A third ("N of 3", or "0 of 1") means rows
+    // were dropped from the switchable set.
+    const d = computeDerived(base({ installCount: 0 }));
+    expect(d.switchableTotal).toBe(6);
+    expect(d.navNote).toBe('6 of 6 on');
+  });
+
+  test('with installCount=0 AND no external host, the denominator is 4', () => {
+    const d = computeDerived(base({ installCount: 0, externalHostCount: 0 }));
+    expect(d.switchableTotal).toBe(4);
+    expect(d.navNote).toBe('4 of 4 on');
+    expect(d.summary.wpe).toBeNull();
+    expect(d.summary.ext).toBeNull();
+  });
+
+  test('a wpe row with 0 installs still reads its passes, and costs 0 connections', () => {
+    const d = computeDerived(base({ installCount: 0 }));
+    const row = d.rows.find(r => r.key === 'wpeRefresh')!;
+    expect(row.costLabel).toBe('6 passes a day · 0 connections');
+    // The toggle is still operable — that is the whole point.
+    expect(row.enableKey).toBe('wpeRefreshAutoEnabled');
   });
 });
 

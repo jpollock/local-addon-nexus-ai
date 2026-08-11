@@ -19,6 +19,9 @@ interface Props {
   indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
   mcpInfo: { port: number } | null;
   sites: Array<{ id: string; name: string }>;
+  /** Live fleet counts from GET_DASHBOARD_STATS. null until they load — the
+   *  reset copy then omits its count clause rather than inventing one. */
+  fleetCounts: { wpe: number; external: number; local: number } | null;
   onSave: (patch: Partial<NexusSettings>) => void;
   electron: {
     ipcRenderer: {
@@ -109,13 +112,22 @@ export class AdvancedSection extends React.Component<Props, State> {
 
   handleGhostCleanup = async () => {
     this.setState({ ghostRunning: true });
-    const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS);
-    this.setState({ ghostRunning: false });
-    if (result.success) {
-      (window as any).showToast?.(
-        `Removed ${result.removed} ghost install${result.removed !== 1 ? 's' : ''} from graph`,
-        'success',
-      );
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS);
+      if (result?.success) {
+        (window as any).showToast?.(
+          `Removed ${result.removed} ghost install${result.removed !== 1 ? 's' : ''} from graph`,
+          'success',
+        );
+      } else {
+        (window as any).showToast?.(`Ghost cleanup failed: ${result?.error ?? 'Unknown error'}`, 'error');
+      }
+    } catch (error: any) {
+      // A rejected invoke — an unregistered channel is the one that bit us —
+      // must not leave the button reading "Running…" forever.
+      (window as any).showToast?.(`Ghost cleanup failed: ${error?.message ?? error}`, 'error');
+    } finally {
+      this.setState({ ghostRunning: false });
     }
   };
 
@@ -346,22 +358,52 @@ export class AdvancedSection extends React.Component<Props, State> {
       }, 'AI gateway'),
       React.createElement('div', {
         style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 12 },
-      }, 'Gateway running on port 13100'),
+      },
+        // No port, and no running/stopped claim. Nothing here checks either:
+        // the literal "Gateway running on port 13100" was true of no user in
+        // particular — the gateway routes are served by HttpEventInterface,
+        // which binds the FIRST free port in 13000–13100, and 13100 is the
+        // unrelated AiProxyServer's base. Same fabricated-value class as the
+        // `mcpInfo ?? { port: 0 }` defect fixed in renderMcpPanel above, and
+        // there is no IPC channel exposing the gateway's real port to check
+        // against. Describe what it does; assert nothing unverified.
+        'Routes AI requests from your WordPress sites through Nexus to your configured provider.'),
       React.createElement('button', {
         onClick: async () => {
-          const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.AI_GATEWAY_GET_STATS);
-          if (result.success) {
-            const { totalRequests, totalCost, providers } = result.stats;
+          try {
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.AI_GATEWAY_GET_STATS);
+            if (!result?.success) {
+              (window as any).showToast?.('Failed to load gateway stats', 'error');
+              return;
+            }
+            // AI_GATEWAY_GET_STATS returns
+            //   { totalRequests, totalCost, totalTokens,
+            //     lastHour: { requests, cost }, lastDay: {…}, lastWeek: {…},
+            //     uniqueSites, mostActiveSite: { siteId, requests } | null }
+            // There is no `providers` key. Destructuring one and calling
+            // Object.entries on undefined threw a TypeError inside an
+            // unguarded async onClick — an unhandled rejection, no dialog.
+            const s = result.stats ?? {};
+            const money = (n: number) => `$${(n ?? 0).toFixed(4)}`;
+            const num = (n: number) => (n ?? 0).toLocaleString();
             alert(
-              `Gateway Usage:\n\n` +
-              `Total requests: ${totalRequests.toLocaleString()}\n` +
-              `Total cost: $${totalCost.toFixed(4)}\n\n` +
-              Object.entries(providers)
-                .map(([p, stats]: [string, any]) => `${p}: ${stats.requests} requests`)
-                .join('\n'),
+              'Gateway usage\n\n' +
+              `Total requests: ${num(s.totalRequests)}\n` +
+              `Total cost: ${money(s.totalCost)}\n` +
+              `Total tokens: ${num(s.totalTokens)}\n\n` +
+              `Last hour: ${num(s.lastHour?.requests)} requests · ${money(s.lastHour?.cost)}\n` +
+              `Last day: ${num(s.lastDay?.requests)} requests · ${money(s.lastDay?.cost)}\n` +
+              `Last week: ${num(s.lastWeek?.requests)} requests · ${money(s.lastWeek?.cost)}\n\n` +
+              `Sites seen: ${num(s.uniqueSites)}` +
+              (s.mostActiveSite
+                ? `\nBusiest site: ${s.mostActiveSite.siteId} (${num(s.mostActiveSite.requests)} requests)`
+                : ''),
             );
-          } else {
-            (window as any).showToast?.('Failed to load gateway stats', 'error');
+          } catch (error: any) {
+            (window as any).showToast?.(
+              `Failed to load gateway stats: ${error?.message ?? error}`,
+              'error',
+            );
           }
         },
         style: {
@@ -730,8 +772,13 @@ export class AdvancedSection extends React.Component<Props, State> {
                       style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' },
                     },
                       React.createElement('input', {
+                        // Ticked = excluded, under a heading reading "Excluded
+                        // sites" and beside a count reading "N excluded". The
+                        // surface this replaced (SettingsTab@e20b2f6a:359) read
+                        // the same way; `!isExcluded` inverted it, so ticking a
+                        // box under "Excluded sites" un-excluded the site.
                         type: 'checkbox',
-                        checked: !isExcluded,
+                        checked: isExcluded,
                         onChange: () => {
                           const updated = isExcluded
                             ? excludedSiteIds.filter((id: string) => id !== site.id)
@@ -828,13 +875,12 @@ export class AdvancedSection extends React.Component<Props, State> {
         ),
         React.createElement('button', {
           disabled: resetIndexRunning,
-          onClick: () => {
-            if (resetIndexConfirming) {
-              this.handleResetIndex();
-            } else {
-              this.setState({ resetIndexConfirming: true });
-            }
-          },
+          // Toggles the confirmation panel — it never executes. A second click
+          // on the SAME button in the SAME position used to run the rebuild
+          // with no disabled window, which is exactly the defect Task 8 fixed
+          // on delete-all. renderResetAll and renderFactoryReset both toggle;
+          // the destructive act lives on "Confirm Rebuild" below.
+          onClick: () => this.setState({ resetIndexConfirming: !resetIndexConfirming }),
           style: {
             padding: '6px 14px',
             fontSize: 12,
@@ -896,6 +942,18 @@ export class AdvancedSection extends React.Component<Props, State> {
 
   renderResetAll(): React.ReactNode {
     const { resetAllConfirming, resetAllRunning } = this.state;
+    const { fleetCounts } = this.props;
+
+    // RESET_AND_REFRESH clears the graph, then re-runs the CAPI sync and a full
+    // SSH sync — i.e. it re-reads the WP Engine installs. The branch's
+    // governing rule forbids restating a fleet number in a string literal, and
+    // the literal that was here ("reads all 367 again") was one user's figure
+    // on one day, wrong for everyone else. Omit the clause entirely rather than
+    // guess when the counts have not loaded or there is no WP Engine account.
+    const installs = fleetCounts?.wpe ?? null;
+    const reReadClause = installs
+      ? ` and re-reads all ${installs.toLocaleString('en-US')} WP Engine install${installs === 1 ? '' : 's'} from scratch`
+      : ' and reads it all again from scratch';
 
     return React.createElement('div', {
       style: {
@@ -915,7 +973,7 @@ export class AdvancedSection extends React.Component<Props, State> {
           }, 'Rebuild what Nexus knows'),
           React.createElement('div', {
             style: { fontSize: 12, color: 'var(--nxai-keeps-text)', marginBottom: 4 },
-          }, 'Keeps your connections and settings. Throws away everything Nexus worked out about your sites and reads all 367 again from scratch.'),
+          }, `Keeps your connections and settings. Throws away everything Nexus worked out about your sites${reReadClause}.`),
           React.createElement('div', {
             style: { fontSize: 12, color: 'var(--nxai-amber-text)' },
           }, 'About 30 minutes · Nexus cannot answer questions about your fleet until it finishes'),

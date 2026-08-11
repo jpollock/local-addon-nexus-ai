@@ -4373,6 +4373,36 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
     }
   });
 
+  // Hard-delete WPE installs the CAPI sync already soft-deleted (is_active=0),
+  // plus any rows orphaned by that delete.
+  //
+  // This handler shipped in c509c938 and was dropped in the ipc-handlers
+  // decomposition (d69ec3a0) without its caller being removed. The Advanced
+  // section's "Remove ghost installs" row therefore invoked a channel nothing
+  // listened on: ipcMain.handle rejects an unregistered channel, which the
+  // renderer swallowed, leaving the button on "Running…" forever. Restored
+  // rather than deleting the row — the absence was a refactor accident, not a
+  // product decision, and the capability is one of the five Advanced exists
+  // to reach.
+  safeHandle(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS, async () => {
+    try {
+      const db = graphService.getDb();
+      if (!db) return { success: false, error: 'Graph DB not available' };
+      const result = db.prepare(
+        "DELETE FROM sites WHERE source='wpe' AND is_active=0",
+      ).run();
+      // Orphans left behind by the delete above.
+      db.prepare('DELETE FROM plugins WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      db.prepare('DELETE FROM content WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      db.prepare('DELETE FROM users WHERE site_id NOT IN (SELECT id FROM sites)').run();
+      localLogger.info(`[NexusAI] Cleaned up ${result.changes} ghost installs`);
+      return { success: true, removed: result.changes };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Ghost install cleanup failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
   // Factory reset: wipe ALL Nexus AI data — same as `nexus reset --factory`
   // Deletes: IndexRegistry, SiteMetadataCache, Settings, API key status,
   //          Site AI configs, WPE install cache, DB scan cache,

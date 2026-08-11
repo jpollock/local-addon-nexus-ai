@@ -13,6 +13,19 @@ const tree = (over: any = {}) => JSON.stringify(serializeTree(
  * effect on state is observable. React's real setState is a warn-and-no-op
  * before mount, which silently swallows every assertion about the result.
  */
+/** Depth-first search for the first element whose rendered text is exactly `text`. */
+const findByText = (node: any, text: string): any => {
+  if (!node || typeof node !== 'object') return null;
+  const kids = node.props?.children;
+  const list = Array.isArray(kids) ? kids : [kids];
+  if (list.length === 1 && list[0] === text) return node;
+  for (const k of list) {
+    const hit = findByText(k, text);
+    if (hit) return hit;
+  }
+  return null;
+};
+
 const unmounted = (over: any = {}) => {
   const { invoke, ...propsOver } = over;
   const inst: any = new (AdvancedSection as any)({
@@ -196,10 +209,61 @@ describe('AdvancedSection', () => {
       expect(t).toContain('npx -y @modelcontextprotocol/inspector http://localhost:10801/sse');
     });
 
-    test('gateway panel shows port 13100', () => {
+    test('gateway panel claims no port and no running state — nothing checks either', () => {
+      // "Gateway running on port 13100" was hardcoded with no status check.
+      // The gateway routes are served by HttpEventInterface, which binds the
+      // first free port in 13000–13100; 13100 is the unrelated AiProxyServer's
+      // base. Same fabricated-value class as the mcpInfo `?? { port: 0 }`
+      // defect fixed in the function directly above it.
       const t = tree();
-      expect(t).toContain('port 13100');
       expect(t).toContain('AI gateway');
+      expect(t).not.toContain('13100');
+      expect(t).not.toContain('Gateway running on port');
+    });
+
+    test('the gateway stats dialog reads the keys AI_GATEWAY_GET_STATS actually returns', async () => {
+      // The handler returns { totalRequests, totalCost, totalTokens, lastHour,
+      // lastDay, lastWeek, uniqueSites, mostActiveSite }. There is no
+      // `providers` key; destructuring one and calling Object.entries on
+      // undefined threw a TypeError inside an unguarded async onClick.
+      const invoke = jest.fn().mockResolvedValue({
+        success: true,
+        stats: {
+          totalRequests: 12, totalCost: 0.5, totalTokens: 900,
+          lastHour: { requests: 1, cost: 0.01 },
+          lastDay: { requests: 4, cost: 0.2 },
+          lastWeek: { requests: 12, cost: 0.5 },
+          uniqueSites: 3,
+          mostActiveSite: { siteId: 'abc', requests: 7 },
+        },
+      });
+      const alertSpy = jest.fn();
+      (global as any).alert = alertSpy;
+      const instance = unmounted({ invoke });
+      const button = findByText(instance.renderGatewayPanel(), 'View usage');
+      await button.props.onClick();
+
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      const text = alertSpy.mock.calls[0][0];
+      expect(text).toContain('Total requests: 12');
+      expect(text).toContain('Total cost: $0.5000');
+      expect(text).toContain('Total tokens: 900');
+      expect(text).toContain('Sites seen: 3');
+      expect(text).toContain('Busiest site: abc (7 requests)');
+      delete (global as any).alert;
+    });
+
+    test('a failed stats call toasts instead of throwing out of an async onClick', async () => {
+      const invoke = jest.fn().mockRejectedValue(new Error('no handler'));
+      const showToast = jest.fn();
+      (global as any).window = { showToast };
+      const instance = unmounted({ invoke });
+      const button = findByText(instance.renderGatewayPanel(), 'View usage');
+      await expect(button.props.onClick()).resolves.toBeUndefined();
+      expect(showToast).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to load gateway stats'),
+        'error',
+      );
     });
   });
 
@@ -313,6 +377,123 @@ describe('AdvancedSection', () => {
       expect(t).toContain('start over');
       expect(t).toContain('Confirm Reset');
     });
+  });
+
+  describe('ghost cleanup never sticks on "Running…"', () => {
+    beforeEach(() => { (global as any).window = { showToast: jest.fn() }; });
+    afterEach(() => { delete (global as any).window; });
+
+    test('a rejected invoke clears ghostRunning and toasts', async () => {
+      // CLEANUP_GHOST_INSTALLS had no handler at all; ipcMain rejects an
+      // unregistered channel, and the un-caught await left the button reading
+      // "Running…" for the rest of the session.
+      const invoke = jest.fn().mockRejectedValue(new Error("No handler registered for 'x'"));
+      const instance = unmounted({ invoke });
+      await instance.handleGhostCleanup();
+      expect(instance.state.ghostRunning).toBe(false);
+      expect((global as any).window.showToast).toHaveBeenCalledWith(
+        expect.stringContaining('Ghost cleanup failed'), 'error',
+      );
+    });
+
+    test('a { success: false } result clears ghostRunning and toasts', async () => {
+      const invoke = jest.fn().mockResolvedValue({ success: false, error: 'Graph DB not available' });
+      const instance = unmounted({ invoke });
+      await instance.handleGhostCleanup();
+      expect(instance.state.ghostRunning).toBe(false);
+      expect((global as any).window.showToast).toHaveBeenCalledWith(
+        expect.stringContaining('Graph DB not available'), 'error',
+      );
+    });
+
+    test('success reports the handler\'s `removed` count', async () => {
+      const invoke = jest.fn().mockResolvedValue({ success: true, removed: 2 });
+      const instance = unmounted({ invoke });
+      await instance.handleGhostCleanup();
+      expect(instance.state.ghostRunning).toBe(false);
+      expect((global as any).window.showToast).toHaveBeenCalledWith(
+        'Removed 2 ghost installs from graph', 'success',
+      );
+    });
+  });
+
+  describe('the 30-minute reset states no number it has not been given', () => {
+    test('the fleet count comes from the fleetCounts prop', () => {
+      expect(tree({ fleetCounts: { wpe: 412, external: 3, local: 100 } }))
+        .toContain('re-reads all 412 WP Engine installs from scratch');
+    });
+
+    test('the literal 367 is gone', () => {
+      expect(tree({ fleetCounts: { wpe: 412, external: 3, local: 100 } })).not.toContain('367');
+      expect(tree()).not.toContain('367');
+    });
+
+    test('with no counts loaded the clause is omitted, not guessed', () => {
+      const t = tree({ fleetCounts: null });
+      expect(t).toContain('reads it all again from scratch');
+      expect(t).not.toMatch(/re-reads all \d/);
+    });
+
+    test('with no WP Engine account the clause is omitted too', () => {
+      expect(tree({ fleetCounts: { wpe: 0, external: 2, local: 9 } }))
+        .not.toMatch(/re-reads all \d/);
+    });
+
+    test('one install is singular', () => {
+      expect(tree({ fleetCounts: { wpe: 1, external: 0, local: 0 } }))
+        .toContain('re-reads all 1 WP Engine install from scratch');
+    });
+  });
+
+  describe('Rebuild search cannot fire from a second click of the same button', () => {
+    test('the top button only toggles the confirm panel', () => {
+      const invoke = jest.fn();
+      const instance = unmounted({ invoke });
+      const first = findByText(instance.renderResetIndex(), 'Rebuild');
+      first.props.onClick();
+      expect(instance.state.resetIndexConfirming).toBe(true);
+
+      // Same button, same position, second click. It must NOT execute — it
+      // closes the panel, exactly as renderResetAll's button does.
+      const second = findByText(instance.renderResetIndex(), 'Rebuild');
+      second.props.onClick();
+      expect(invoke).not.toHaveBeenCalled();
+      expect(instance.state.resetIndexConfirming).toBe(false);
+    });
+
+    test('the destructive act lives on Confirm Rebuild, as it does for reset-all', async () => {
+      const invoke = jest.fn().mockResolvedValue({ success: true, siteCount: 1, docCount: 2 });
+      const instance = unmounted({ invoke });
+      instance.state.resetIndexConfirming = true;
+      const confirm = findByText(instance.renderResetIndex(), 'Confirm Rebuild');
+      await confirm.props.onClick();
+      expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.RESET_CONTENT_INDEX);
+    });
+  });
+
+  test('a ticked exclusion checkbox means EXCLUDED, matching its heading', () => {
+    // The surface this replaced (SettingsTab@e20b2f6a:359) read
+    // `checked: excludedSiteIds.includes(site.id)`. `!isExcluded` inverted it
+    // under a heading reading "Excluded sites" and a count reading "1 excluded".
+    const instance = unmounted({
+      settings: { autoIndex: true, excludedSiteIds: ['s1'] },
+      sites: [{ id: 's1', name: 'Excluded One' }, { id: 's2', name: 'Included Two' }],
+    });
+    instance.state.excludedExpanded = true;
+    const rendered = instance.render();
+    const boxes: any[] = [];
+    const walk = (n: any, parentText: string) => {
+      if (!n || typeof n !== 'object') return;
+      if (n.props?.type === 'checkbox' && n.props?.onChange) boxes.push({ node: n, key: parentText });
+      const kids = n.props?.children;
+      const list = Array.isArray(kids) ? kids : [kids];
+      for (const k of list) walk(k, n.key ?? parentText);
+    };
+    walk(rendered, '');
+    const s1 = boxes.find(b => b.key === 's1');
+    const s2 = boxes.find(b => b.key === 's2');
+    expect(s1.node.props.checked).toBe(true);   // excluded → ticked
+    expect(s2.node.props.checked).toBe(false);  // not excluded → unticked
   });
 
   // Mutation tests — verify each test goes red when the production code is broken
