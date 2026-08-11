@@ -47,7 +47,7 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
       // on the way out of the database, so nothing downstream sees both shapes.
       const rows = db
         .prepare(
-          "SELECT id, source, wpe_site_id, account_id, last_sync_at, content_indexed_at FROM sites WHERE source IN ('wpe','external') AND is_active = 1",
+          "SELECT id, source, wpe_site_id, account_id, last_sync_at FROM sites WHERE source IN ('wpe','external') AND is_active = 1",
         )
         .all() as Array<{
           id: unknown;
@@ -55,7 +55,6 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
           wpe_site_id: unknown;
           account_id: unknown;
           last_sync_at: unknown;
-          content_indexed_at: unknown;
         }>;
       graphRows = rows.map((r) => ({
         id: String(r.id),
@@ -63,7 +62,7 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
         wpeSiteId: r.wpe_site_id == null ? null : String(r.wpe_site_id),
         accountId: r.account_id == null ? null : String(r.account_id),
         lastSyncAt: r.last_sync_at == null ? null : Number(r.last_sync_at),
-        contentIndexedAt: r.content_indexed_at == null ? null : Number(r.content_indexed_at),
+        contentIndexedAt: null, // Not in schema; would come from content table join if needed
       }));
     }
   } catch {

@@ -7,9 +7,9 @@ describe('completenessRatio', () => {
   const counts = computeFleetCounts({
     localSiteIds: ['l1', 'l2'],
     graphRows: [
-      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'a', accountId: null, lastSyncAt: null, contentIndexedAt: null },
-      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'b', accountId: null, lastSyncAt: null, contentIndexedAt: null },
-      { id: 'e1', source: 'external' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
+      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'a', accountId: null, lastSyncAt: null },
+      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'b', accountId: null, lastSyncAt: null },
+      { id: 'e1', source: 'external' as const, wpeSiteId: null, accountId: null, lastSyncAt: null },
     ],
     wpeAccountFilter: null,
     siteRows: null,

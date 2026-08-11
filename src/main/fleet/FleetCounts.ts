@@ -17,7 +17,6 @@ export interface FleetCountsInput {
     wpeSiteId: string | null;
     accountId: string | null;
     lastSyncAt: number | null;
-    contentIndexedAt: number | null;
   }>;
   /** Account IDs to include in WPE scope. Null = all accounts in scope. */
   wpeAccountFilter: string[] | null;

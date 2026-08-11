@@ -4,10 +4,10 @@ describe('computeFleetCounts', () => {
   const input = {
     localSiteIds: ['l1', 'l2', 'l3'],
     graphRows: [
-      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: 'acc1', lastSyncAt: null, contentIndexedAt: null },
-      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: 'acc1', lastSyncAt: null, contentIndexedAt: null },
-      { id: 'w3', source: 'wpe' as const, wpeSiteId: 'siteB', accountId: 'acc2', lastSyncAt: null, contentIndexedAt: null },
-      { id: 'e1', source: 'external' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
+      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: 'acc1', lastSyncAt: null },
+      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: 'acc1', lastSyncAt: null },
+      { id: 'w3', source: 'wpe' as const, wpeSiteId: 'siteB', accountId: 'acc2', lastSyncAt: null },
+      { id: 'e1', source: 'external' as const, wpeSiteId: null, accountId: null, lastSyncAt: null },
     ],
     wpeAccountFilter: null,
     siteRows: null,
@@ -51,9 +51,9 @@ describe('computeFleetCounts', () => {
     const c = computeFleetCounts({
       localSiteIds: [],
       graphRows: [
-        { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: null, lastSyncAt: null, contentIndexedAt: null },
-        { id: 'w2', source: 'wpe' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
-        { id: 'w3', source: 'wpe' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
+        { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: null, lastSyncAt: null },
+        { id: 'w2', source: 'wpe' as const, wpeSiteId: null, accountId: null, lastSyncAt: null },
+        { id: 'w3', source: 'wpe' as const, wpeSiteId: null, accountId: null, lastSyncAt: null },
       ],
       wpeAccountFilter: null,
       siteRows: null,
