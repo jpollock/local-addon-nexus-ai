@@ -66,25 +66,46 @@ real practice.
 
 | Id | Practice (`label`) | Host | Addressed as | Pathology | Status |
 |---|---|---|---|---|---|
-| — | Cedar & Vale Health | WPE + Local | `cedarvale` / `cedarvale.local` | — | Local build done, 848 posts |
-| `cedar-vale-a` | Summit Dermatology Partners | WPE `w7579` | `summitderm` | `CV-A-01` | to create |
-| `cedar-vale-b` | Ridgeline Skin Institute | WPE `w7579` | `ridgelineskin` | `CV-B-01` | to create |
+| — | Cedar & Vale Health | WPE + Local | `cedarvalehealt` / `cedarvale` | — | install created; Local build done, 848 posts |
+| `cedar-vale-a` | Summit Dermatology Partners | WPE `w7579` | `summitdermatol` | `CV-A-01` | install created, empty |
+| `cedar-vale-b` | Ridgeline Skin Institute | WPE `w7579` | `ridgelineskini` | `CV-B-01` | install created, empty |
 | `cedar-vale-c` | Willow Creek Dermatology | SpinupWP | `ssh:willowcreekderm` | `CV-C-01` | site live, unseeded |
 | `cedar-vale-d` | Piedmont Dermatology Group | SpinupWP | `ssh:piedmontdermgroup` | `CV-D-01` | site live, unseeded |
-| `cedar-vale-e` | Papago Park Dermatology | Local | `Papago Park Dermatology` | `CV-E-01` | to create |
-| `cedar-vale-f` | Copper Basin Skin Clinic | Local | `Copper Basin Skin Clinic` | `CV-F-01` | to create |
+| `cedar-vale-e` | Papago Park Dermatology | Local | `kJvRnMcIs` / `papago-park-dermatology.local` | `CV-E-01` | created 2026-08-11, WP 7.0.3, running |
+| `cedar-vale-f` | Copper Basin Skin Clinic | Local | `ISGeox9ZH` / `copper-basin-skin-clinic.local` | `CV-F-01` | created 2026-08-11, WP 7.0.3, running |
 | `cedar-vale-g` | Table Mesa Dermatology | SpinupWP | `ssh:tablemesaderm` | `CV-G-01` | site live, unseeded |
 
 **WP Engine account: `w7579`** (`b97e432b-c10a-4f0a-9ce7-55cedd575099`), chosen
-2026-08-11. It already carries Alpine Outfitters (`alpineoutfitte`), so the
-canonical demo properties stay together. It holds 35 active installs; the CAPI
-limits endpoint returns no data for it, so **headroom is unverified** — check it
-in the WP Engine portal before Task 7 Step 3 rather than discovering the cap on
-the third `wpe_create_install`. None of `cedarvale`, `summitderm` or
-`ridgelineskin` collides with an existing install name there.
+2026-08-11 because it already carries Alpine Outfitters. The three installs were
+created in the WP Engine portal, not through Nexus — see the note below. The
+account now holds 38 installs, up from 35, which also settles the earlier
+open question: **it was not at an install cap.**
 
-Install names are `[a-z0-9-]`, 20 characters maximum — `create-install.ts`
-rejects 21 or more. All three fit.
+### WP Engine install names are capped at 14 characters, not 20
+
+Measured across all 331 WPE installs in the graph: **none exceeds 14 characters**
+and 155 sit exactly at it. The portal silently truncates to that ceiling, which
+is why the three installs are `cedarvalehealt`, `ridgelineskini` and
+`summitdermatol` rather than the fuller names this plan first specified.
+
+`src/main/mcp/modules/wpe/create-install.ts` validates `name.length > 20`. That
+is wrong, and its own comment says the check exists so that "invalid names
+[don't] return unhelpful 400 errors" — so an 18-character name passed local
+validation and produced exactly the unhelpful `HTTP 400` the guard was written
+to prevent. **Two separate causes were behind the failed attempts:**
+
+- `summitderm` (10 chars) — refused because the name is already taken by another
+  WP Engine customer. Install names are globally unique. `summitderm.wpengine.com`
+  resolves to a real cluster IP rather than the `*.wpengine.com` wildcard
+  (`130.211.29.77`), which is a usable pre-flight check.
+- `summitdermpartners` (18 chars) — refused for exceeding the real 14-char cap.
+
+Neither reason was visible, because `capiDirect` discarded CAPI's response body.
+That is a separate defect and a separate decision; it is not fixed as part of
+this plan.
+
+Install names are `[a-z0-9-]` and **14 characters maximum** — measured, not the
+20 the addon's validator claims.
 
 ---
 
@@ -1977,9 +1998,21 @@ Task 6 has no dependencies beyond Phase A.
 Use the Nexus MCP tool, not the Local UI — Jeremy authorised this route (spec §10):
 
 ```
-local_create_site  name="Papago Park Dermatology"   (PHP 8.2, WP latest)
-local_create_site  name="Copper Basin Skin Clinic"   (PHP 8.2, WP latest)
+local_create_site  name="Papago Park Dermatology"
+local_create_site  name="Copper Basin Skin Clinic"
 ```
+
+**Done 2026-08-11.** `local_create_site` takes only `name` — it has no PHP-version
+parameter, so both took Local's default; do not plan around setting one here.
+
+| Site | Id | Domain | Path |
+|---|---|---|---|
+| E | `kJvRnMcIs` | `papago-park-dermatology.local` | `~/PW-Local-Functional-Sites/papago-park-dermatology` |
+| F | `ISGeox9ZH` | `copper-basin-skin-clinic.local` | `~/PW-Local-Functional-Sites/copper-basin-skin-clinic` |
+
+Both WordPress 7.0.3, running, no plugins, `admin`/`admin`. That credential is
+fine for E and F, which are never pushed anywhere — but the scratch Local builds
+for A and B in Task 7 **do** get pushed to WP Engine, so change it there.
 
 Named for the practice, not `cedar-vale-e` — Local's site name is what appears
 in `nexus_list_sites` and every Task 9 acceptance output, and the fleet's whole
