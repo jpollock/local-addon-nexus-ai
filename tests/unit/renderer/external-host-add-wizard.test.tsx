@@ -172,7 +172,7 @@ describe('ExternalHostAddWizard', () => {
     await instance.componentDidMount();
     instance.setState({
       step1Mode: 'new',
-      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', identityFile: '' },
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', keySource: 'agent', identityFile: '' },
       preview: { block: 'Host x', collision: { kind: 'pattern', pattern: '*.example.com', file: '~/.ssh/config' } },
     });
     const tree = instance.render();
@@ -195,7 +195,7 @@ describe('ExternalHostAddWizard', () => {
     await instance.componentDidMount();
     instance.setState({
       step1Mode: 'new',
-      newEntry: { alias: 'x', hostname: '', user: 'u', port: '22', identityFile: '' },
+      newEntry: { alias: 'x', hostname: '', user: 'u', port: '22', keySource: 'agent', identityFile: '' },
       preview: { block: '', collision: { kind: 'none' } },
     });
     const tree = instance.render();
@@ -211,7 +211,7 @@ describe('ExternalHostAddWizard', () => {
     await instance.componentDidMount();
     instance.setState({
       step1Mode: 'new',
-      newEntry: { alias: 'x', hostname: 'h', user: '', port: '22', identityFile: '' },
+      newEntry: { alias: 'x', hostname: 'h', user: '', port: '22', keySource: 'agent', identityFile: '' },
       preview: { block: '', collision: { kind: 'none' } },
     });
     const tree = instance.render();
@@ -227,7 +227,7 @@ describe('ExternalHostAddWizard', () => {
     await instance.componentDidMount();
     instance.setState({
       step1Mode: 'new',
-      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '', identityFile: '' },
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '', keySource: 'agent', identityFile: '' },
       preview: { block: '', collision: { kind: 'none' } },
     });
     const tree = instance.render();
@@ -243,7 +243,7 @@ describe('ExternalHostAddWizard', () => {
     await instance.componentDidMount();
     instance.setState({
       step1Mode: 'new',
-      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', identityFile: '' },
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', keySource: 'agent', identityFile: '' },
       preview: { block: 'Host x', collision: { kind: 'none' } },
     });
     const tree = instance.render();
@@ -263,7 +263,7 @@ describe('ExternalHostAddWizard', () => {
     await instance.componentDidMount();
     instance.setState({
       step1Mode: 'new',
-      newEntry: { alias: 'newbox', hostname: 'h', user: 'u', port: '22', identityFile: '' },
+      newEntry: { alias: 'newbox', hostname: 'h', user: 'u', port: '22', keySource: 'agent', identityFile: '' },
       preview: { block: 'Host newbox', collision: { kind: 'none' } },
     });
     await instance.writeEntryAndProbe();
@@ -734,5 +734,106 @@ describe('ExternalHostAddWizard', () => {
 
   it('does not imply Nexus stores a secret', () => {
     expect(wiz()).toContain('Nexus keeps no secrets of its own');
+  });
+
+  it('renders two distinct key options in the create form', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({ step1Mode: 'new' });
+    const tree = instance.render();
+    const text = textOf(tree);
+    expect(text).toContain('Use the SSH agent');
+    expect(text).toContain('Use a specific key file');
+  });
+
+  it('when the SSH agent option is selected, the identity file input is not visible', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', keySource: 'agent', identityFile: '' },
+    });
+    const tree = instance.render();
+    const inputs = findAll(tree, (n) => n.type === 'input' && n.props.name === 'identityFile');
+    expect(inputs).toHaveLength(0);
+  });
+
+  it('when the key file option is selected, the identity file input is visible', async () => {
+    const props = noProps();
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', keySource: 'file', identityFile: '' },
+    });
+    const tree = instance.render();
+    const inputs = findAll(tree, (n) => n.type === 'input' && n.props.name === 'identityFile');
+    expect(inputs).toHaveLength(1);
+  });
+
+  it('choosing the agent option submits an empty identityFile to PREVIEW_SSH_HOST_ENTRY', async () => {
+    const electron = mockElectron({
+      [IPC_CHANNELS.PREVIEW_SSH_HOST_ENTRY]: { success: true, block: 'Host x\n  HostName h\n  User u\n  Port 22\n', collision: { kind: 'none' } },
+    });
+    const props = { electron, onClose: jest.fn(), onCompleted: jest.fn(), onProbeClean: jest.fn() };
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', keySource: 'agent', identityFile: '' },
+    });
+    await instance.previewEntry();
+    const call = (electron.ipcRenderer.invoke as jest.Mock).mock.calls.find((c) => c[0] === IPC_CHANNELS.PREVIEW_SSH_HOST_ENTRY);
+    expect(call).toBeDefined();
+    expect(call[1].identityFile).toBe('');
+  });
+
+  it('the previewed block when agent is selected contains no IdentityFile line', async () => {
+    const electron = mockElectron({
+      [IPC_CHANNELS.PREVIEW_SSH_HOST_ENTRY]: { success: true, block: 'Host x\n  HostName h\n  User u\n  Port 22\n', collision: { kind: 'none' } },
+    });
+    const props = { electron, onClose: jest.fn(), onCompleted: jest.fn(), onProbeClean: jest.fn() };
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', keySource: 'agent', identityFile: '' },
+    });
+    await instance.previewEntry();
+    expect(instance.state.preview?.block).toBeDefined();
+    expect(instance.state.preview.block).not.toContain('IdentityFile');
+  });
+
+  it('choosing the key file option submits the entered path to WRITE_SSH_HOST_ENTRY', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue(gqlResponse({ checks: baseChecks(), issues: [], wpCliVersion: '2.9', installs: [] }));
+    const electron = mockElectron({
+      [IPC_CHANNELS.WRITE_SSH_HOST_ENTRY]: { success: true, error: null },
+    });
+    const props = { electron, onClose: jest.fn(), onCompleted: jest.fn(), onProbeClean: jest.fn() };
+    const instance: any = new ExternalHostAddWizard(props);
+    spySetState(instance);
+    instance.mounted = true;
+    await instance.componentDidMount();
+    instance.setState({
+      step1Mode: 'new',
+      newEntry: { alias: 'x', hostname: 'h', user: 'u', port: '22', keySource: 'file', identityFile: '~/.ssh/my_key' },
+      preview: { block: 'Host x', collision: { kind: 'none' } },
+    });
+    await instance.writeEntryAndProbe();
+    const call = (electron.ipcRenderer.invoke as jest.Mock).mock.calls.find((c) => c[0] === IPC_CHANNELS.WRITE_SSH_HOST_ENTRY);
+    expect(call).toBeDefined();
+    expect(call[1].identityFile).toBe('~/.ssh/my_key');
   });
 });

@@ -76,6 +76,7 @@ interface NewEntryForm {
   hostname: string;
   user: string;
   port: string;
+  keySource: 'agent' | 'file';
   identityFile: string;
 }
 
@@ -225,7 +226,7 @@ interface ExternalHostAddWizardState {
   retryingIndex: number | null;
 }
 
-const emptyNewEntry: NewEntryForm = { alias: '', hostname: '', user: '', port: '22', identityFile: '' };
+const emptyNewEntry: NewEntryForm = { alias: '', hostname: '', user: '', port: '22', keySource: 'agent', identityFile: '' };
 
 // ---------------------------------------------------------------------------
 // Style palette — reuses GenericApprovalDrawer's --ag-* custom properties.
@@ -407,18 +408,25 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
   // ── Step 1b: create-entry form ───────────────────────────────────────────
 
   updateNewEntryField = (field: keyof NewEntryForm, value: string): void => {
-    this.setState(prev => ({ newEntry: { ...prev.newEntry, [field]: value } }));
+    this.setState(prev => {
+      const updated = { ...prev.newEntry, [field]: value };
+      // When switching to agent mode, clear the identity file path
+      if (field === 'keySource' && value === 'agent') {
+        updated.identityFile = '';
+      }
+      return { newEntry: updated };
+    });
     // Fire-and-forget: preview updates live as the user types.
     void this.previewEntry();
   };
 
   async previewEntry(): Promise<void> {
     const mySeq = ++this.previewSeq;
-    const { alias, hostname, user, port, identityFile } = this.state.newEntry;
+    const { alias, hostname, user, port, keySource, identityFile } = this.state.newEntry;
     if (!alias || !hostname) return;
     try {
       const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_SSH_HOST_ENTRY, {
-        alias, hostname, user, port, identityFile,
+        alias, hostname, user, port, identityFile: keySource === 'agent' ? '' : identityFile,
       });
       if (!this.mounted || mySeq !== this.previewSeq) return;
       if (result?.success) {
@@ -437,7 +445,7 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
     try {
       const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WRITE_SSH_HOST_ENTRY, {
         alias: newEntry.alias, hostname: newEntry.hostname, user: newEntry.user,
-        port: newEntry.port, identityFile: newEntry.identityFile,
+        port: newEntry.port, identityFile: newEntry.keySource === 'agent' ? '' : newEntry.identityFile,
       });
       if (!this.mounted) return;
       if (!result?.success) {
@@ -606,12 +614,51 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
       field('Port', 'port', '22'),
       React.createElement('div', { style: { marginTop: 12 } },
         React.createElement('div', { style: labelStyle }, 'Which key should Nexus use?'),
-        React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', marginTop: 6, marginBottom: 8 } },
+        React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', marginTop: 6, marginBottom: 12 } },
           'Nexus connects on a schedule with nobody watching, so there is no one to answer a password prompt — it needs a key.'),
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+          React.createElement('label', {
+            style: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' },
+          },
+            React.createElement('input', {
+              type: 'radio',
+              name: 'keySource',
+              value: 'agent',
+              checked: newEntry.keySource === 'agent',
+              onChange: (e: any) => this.updateNewEntryField('keySource', e.target.value),
+              style: { cursor: 'pointer' },
+            }),
+            React.createElement('span', { style: { fontSize: 13, color: 'var(--ag-text-primary)' } }, 'Use the SSH agent'),
+          ),
+          React.createElement('label', {
+            style: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' },
+          },
+            React.createElement('input', {
+              type: 'radio',
+              name: 'keySource',
+              value: 'file',
+              checked: newEntry.keySource === 'file',
+              onChange: (e: any) => this.updateNewEntryField('keySource', e.target.value),
+              style: { cursor: 'pointer' },
+            }),
+            React.createElement('span', { style: { fontSize: 13, color: 'var(--ag-text-primary)' } }, 'Use a specific key file'),
+          ),
+        ),
+        newEntry.keySource === 'file'
+          ? React.createElement('div', { style: { marginTop: 8 } },
+              React.createElement('input', {
+                type: 'text',
+                placeholder: '~/.ssh/id_ed25519',
+                name: 'identityFile',
+                value: newEntry.identityFile,
+                onChange: (e: any) => this.updateNewEntryField('identityFile', e.target.value),
+                style: inputStyle,
+              }),
+            )
+          : null,
+        React.createElement('div', { style: { fontSize: 11.5, color: 'var(--ag-text-muted)', marginTop: 6, fontStyle: 'italic' } },
+          'Nexus keeps no secrets of its own — it remembers which key to ask for, and the key stays where it already lives.'),
       ),
-      field('Identity file (optional)', 'identityFile', '~/.ssh/id_ed25519'),
-      React.createElement('div', { style: { fontSize: 11.5, color: 'var(--ag-text-muted)', marginTop: 6, fontStyle: 'italic' } },
-        'Nexus keeps no secrets of its own — it remembers which key to ask for, and the key stays where it already lives.'),
       preview?.collision.kind === 'exact'
         ? React.createElement('div', { style: { ...failCardStyle, marginTop: 12 } },
             `'${newEntry.alias}' already exists in ${preview.collision.file}:${preview.collision.line}.`)
