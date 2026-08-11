@@ -7,15 +7,14 @@ import { PanelChat } from './PanelChat';
 import { PanelInsights } from './PanelInsights';
 import { SessionsSidebar } from './SessionsSidebar';
 
-type PanelSize = 'docked' | 'wide' | 'full';
+type PanelState = 'closed' | 'docked' | 'wide' | 'full';
 
 interface ContainerProps {
   electron: any;
 }
 
 interface ContainerState {
-  open: boolean;
-  size: PanelSize;
+  panelState: PanelState;
   activeTab: PanelTab;
   activeSessionId: string | null;
   showSessions: boolean;
@@ -37,15 +36,22 @@ function readState(): ContainerState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Accept all three valid sizes, coerce anything unrecognised to 'docked'
-      const validSizes: PanelSize[] = ['docked', 'wide', 'full'];
-      const size: PanelSize = validSizes.includes(parsed.size) ? parsed.size : 'docked';
+      // Migrate old open+size format to panelState enum
+      let panelState: PanelState;
+      if (parsed.panelState !== undefined) {
+        const valid: PanelState[] = ['closed', 'docked', 'wide', 'full'];
+        panelState = valid.includes(parsed.panelState) ? parsed.panelState : 'docked';
+      } else if (parsed.open === false) {
+        panelState = 'closed';
+      } else {
+        const validSizes: PanelState[] = ['docked', 'wide', 'full'];
+        panelState = validSizes.includes(parsed.size) ? parsed.size : 'docked';
+      }
       // Accept both valid tabs, coerce anything unrecognised to 'chat'
       const validTabs: PanelTab[] = ['insights', 'chat'];
       const activeTab: PanelTab = validTabs.includes(parsed.activeTab) ? parsed.activeTab : 'chat';
       return {
-        open: false, // always start collapsed — never block Local on load
-        size,
+        panelState: 'closed', // always start collapsed — never block Local on load
         activeTab,
         activeSessionId: parsed.activeSessionId ?? null,
         showSessions: false,
@@ -55,11 +61,12 @@ function readState(): ContainerState {
       };
     }
   } catch { /* ignore */ }
-  return { open: false, size: 'docked', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null };
+  return { panelState: 'closed', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
   private openSessionListener: ((_: any, payload: { sessionId: string }) => void) | null = null;
+  private chatRef = React.createRef<PanelChat>();
 
   constructor(props: ContainerProps) {
     super(props);
@@ -74,14 +81,17 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   componentDidUpdate(_: {}, prevState: ContainerState) {
-    const { open, size, activeTab, activeSessionId } = this.state;
+    const { panelState, activeTab, activeSessionId } = this.state;
     if (
-      prevState.open !== open ||
-      prevState.size !== size ||
+      prevState.panelState !== panelState ||
       prevState.activeTab !== activeTab ||
       prevState.activeSessionId !== activeSessionId
     ) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open, size, activeTab, activeSessionId }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ panelState, activeTab, activeSessionId }));
+    }
+    // Persist session when closing the panel
+    if (prevState.panelState !== 'closed' && panelState === 'closed') {
+      this.persistChatSession();
     }
     this.syncReflowStyle();
   }
@@ -92,7 +102,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     // Deep-link: open panel and activate a specific session from the Activity tab.
     // Receives from Activity tab "View chat →" link once activity events carry session_id.
     this.openSessionListener = (_: any, { sessionId }: { sessionId: string }) => {
-      this.setState({ open: true, activeSessionId: sessionId, activeTab: 'chat' });
+      this.setState({ panelState: 'docked', activeSessionId: sessionId, activeTab: 'chat' });
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.OPEN_CHAT_SESSION, this.openSessionListener);
   }
@@ -106,7 +116,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   private syncReflowStyle() {
-    if (this.state.open && (this.state.size === 'docked' || this.state.size === 'wide')) {
+    if (this.state.panelState === 'docked' || this.state.panelState === 'wide') {
       this.injectReflowStyle();
     } else {
       this.removeReflowStyle();
@@ -114,7 +124,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   private injectReflowStyle() {
-    const marginRight = this.state.size === 'wide' ? WIDE_WIDTH : PANEL_WIDTH;
+    const marginRight = this.state.panelState === 'wide' ? WIDE_WIDTH : PANEL_WIDTH;
     const existing = document.getElementById(REFLOW_STYLE_ID);
     if (existing) {
       // Update existing style element on size change
@@ -134,16 +144,23 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   openPanel() {
-    this.setState({ open: true });
-    try { track(this.props.electron.ipcRenderer, 'nexus_panel_opened', { size: this.state.size }); } catch (_) {}
+    this.setState({ panelState: 'docked' });
+    try { track(this.props.electron.ipcRenderer, 'nexus_panel_opened', { state: 'docked' }); } catch (_) {}
   }
 
   closePanel() {
-    this.setState({ open: false });
+    this.setState({ panelState: 'closed' });
   }
 
-  setSize(size: PanelSize) {
-    this.setState({ size });
+  setSize(state: PanelState) {
+    this.setState({ panelState: state });
+  }
+
+  private persistChatSession() {
+    const chatRef = this.chatRef.current;
+    if (chatRef && typeof (chatRef as any).persistSession === 'function') {
+      (chatRef as any).persistSession().catch(() => {});
+    }
   }
 
   setActiveTab(activeTab: PanelTab) {
@@ -166,7 +183,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   render() {
-    const { open, size, activeTab, activeSessionId, showSessions, sessionListVersion, selectedSiteIds } = this.state;
+    const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, selectedSiteIds } = this.state;
 
     const panelContent = activeTab === 'insights'
       ? React.createElement(PanelInsights, {
@@ -174,9 +191,11 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
           onOpenAgents: this.openAgentsHub,
         })
       : React.createElement(PanelChat, {
+          ref: this.chatRef,
           electron: this.props.electron,
           sessionId: activeSessionId,
           selectedSiteIds,
+          visible: panelState !== 'closed',
           onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
           onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
           onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
@@ -185,7 +204,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     // ContextSelector hidden — site scope selection not yet exposed in UI
     const panelBody = panelContent;
 
-    const sessionsSidebar = size === 'full' || showSessions
+    const sessionsSidebar = panelState === 'full' || showSessions
       ? React.createElement(SessionsSidebar, {
           electron: this.props.electron,
           activeSessionId,
@@ -198,13 +217,12 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     return React.createElement(
       DockedPanel,
       {
-        open,
-        size,
+        panelState,
         activeTab,
         onSetActiveTab: this.setActiveTab,
         onOpen: this.openPanel,
         onClose: this.closePanel,
-        onSetSize: this.setSize,
+        onSetPanelState: this.setSize,
         onNewChat: this.newChat,
         sessionsSidebar,
         showSessions,

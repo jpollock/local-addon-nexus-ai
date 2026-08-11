@@ -1,17 +1,16 @@
 import React from 'react';
 import { UI_COLORS } from '../../../common/constants';
 
-export type PanelSize = 'docked' | 'wide' | 'full';
+export type PanelState = 'closed' | 'docked' | 'wide' | 'full';
 export type PanelTab = 'insights' | 'chat';
 
 export interface Props {
-  open: boolean;
-  size: PanelSize;
+  panelState: PanelState;
   activeTab?: PanelTab;
   onSetActiveTab?: (tab: PanelTab) => void;
   onOpen: () => void;
   onClose: () => void;
-  onSetSize: (size: PanelSize) => void;
+  onSetPanelState: (state: PanelState) => void;
   onNewChat?: () => void;
   children?: React.ReactNode;
   sessionsSidebar?: React.ReactNode;
@@ -26,7 +25,7 @@ interface DockedPanelState {
 
 export const PANEL_WIDTH = 384;
 export const WIDE_WIDTH = 620;
-const BUBBLE_SIZE = 52;
+const RAIL_WIDTH = 48;
 
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────
 
@@ -79,6 +78,14 @@ function IconCollapse({ size }: { size: number }) {
   );
 }
 
+function IconChevronLeft({ size }: { size: number }) {
+  return React.createElement(
+    'svg',
+    { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } },
+    React.createElement('path', { d: 'M15 18l-6-6 6-6' }),
+  );
+}
+
 function IconWide({ size }: { size: number }) {
   return React.createElement(
     'svg',
@@ -106,30 +113,88 @@ function iconBtnStyle(hovered: boolean, active = false) {
 }
 
 const styles = {
-  bubble: {
-    position: 'fixed' as const,
-    bottom: 20,
-    right: 20,
-    width: BUBBLE_SIZE,
-    height: BUBBLE_SIZE,
-    borderRadius: '50%',
-    background: UI_COLORS.WPE_BRAND,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-    zIndex: 9000,
-    userSelect: 'none' as const,
-    pointerEvents: 'all' as const,
-  },
-  panel: (size: PanelSize) => ({
+  rail: {
     position: 'fixed' as const,
     top: 0,
     right: 0,
     bottom: 0,
-    width: size === 'full' ? undefined : size === 'wide' ? WIDE_WIDTH : PANEL_WIDTH,
-    left: size === 'full' ? 68 : undefined,
+    width: RAIL_WIDTH,
+    background: 'var(--nxai-card-bg)',
+    borderLeft: `1px solid var(--nxai-card-border)`,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    padding: '14px 0',
+    gap: 14,
+    zIndex: 8999,
+    userSelect: 'none' as const,
+    pointerEvents: 'all' as const,
+  },
+  railExpand: {
+    width: 30,
+    height: 30,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: 'var(--nxai-card-sub)',
+  },
+  railMark: {
+    position: 'relative' as const,
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    background: '#ecfcfd',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  railBadge: {
+    position: 'absolute' as const,
+    top: -5,
+    right: -8,
+    minWidth: 18,
+    height: 15,
+    padding: '0 4px',
+    borderRadius: 3,
+    background: UI_COLORS.WPE_BRAND,
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 0 2px var(--nxai-card-bg)',
+  },
+  railLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--nxai-card-sub)',
+    writingMode: 'vertical-rl' as const,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase' as const,
+  },
+  railStuck: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    background: '#fffbeb',
+    color: '#b45309',
+    fontSize: 16,
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  panel: (state: PanelState) => ({
+    position: 'fixed' as const,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: state === 'full' ? undefined : state === 'wide' ? WIDE_WIDTH : PANEL_WIDTH,
+    left: state === 'full' ? 68 : undefined,
     background: 'var(--nxai-card-bg)',
     borderLeft: `1px solid var(--nxai-card-border)`,
     display: 'flex',
@@ -180,27 +245,65 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
   render() {
     const {
-      open, size, activeTab = 'chat', onSetActiveTab, onOpen, onClose, onSetSize, onNewChat,
+      panelState, activeTab = 'chat', onSetActiveTab, onOpen, onClose, onSetPanelState, onNewChat,
       children, sessionsSidebar, onToggleSessions, showSessions, streamingStatus,
     } = this.props;
 
-    if (!open) {
+    // Render 48px rail when closed
+    if (panelState === 'closed') {
+      // TODO: Wire badge count and stuck marker from real data
+      const badgeCount = 0; // placeholder
+      const hasStuck = false; // placeholder
+      const railLabel = 'INSIGHTS'; // placeholder: should be 'THIS SITE' on site screens
+
       return React.createElement(
         'div',
         {
-          style: styles.bubble,
-          onClick: onOpen,
-          title: 'Open Nexus',
-          'aria-label': 'Open Nexus AI chat panel',
-          role: 'button',
-          tabIndex: 0,
-          onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') onOpen(); },
+          style: styles.rail,
+          'aria-label': 'Nexus AI panel (closed)',
         },
-        React.createElement(NexusGlyph, { size: 26 }),
+        // Expand chevron
+        React.createElement(
+          'div',
+          {
+            style: styles.railExpand,
+            onClick: onOpen,
+            title: 'Expand panel',
+            role: 'button',
+            tabIndex: 0,
+            onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') onOpen(); },
+          },
+          React.createElement(IconChevronLeft, { size: 18 }),
+        ),
+        // Nexus mark with badge
+        React.createElement(
+          'div',
+          {
+            style: styles.railMark,
+            onClick: onOpen,
+            title: `Insights across all sites`, // TODO: scoped tooltip
+            role: 'button',
+            tabIndex: 0,
+            onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') onOpen(); },
+          },
+          React.createElement(NexusGlyph, { size: 18 }),
+          badgeCount > 0
+            ? React.createElement('div', { style: styles.railBadge }, String(badgeCount))
+            : null,
+        ),
+        // Vertical label
+        React.createElement('div', { style: styles.railLabel }, railLabel),
+        // Spacer
+        React.createElement('div', { style: { flex: 1 } }),
+        // Stuck marker at bottom (only when hasStuck is true)
+        hasStuck
+          ? React.createElement('div', { style: styles.railStuck, title: 'Agent stuck' }, '!')
+          : null,
       );
     }
 
-    const isFull = size === 'full';
+    // Panel is open (docked, wide, or full)
+    const isFull = panelState === 'full';
 
     // Segmented control for Insights / Chat
     const segmentedControl = React.createElement(
@@ -306,11 +409,11 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           React.createElement(IconNewChat, { size: 17 }),
         ),
         // #3 Contract (wide only) — back to docked
-        size === 'wide' ? React.createElement(
+        panelState === 'wide' ? React.createElement(
           'button',
           {
             style: iconBtnStyle(this.hov('contract-docked')),
-            onClick: () => onSetSize('docked'),
+            onClick: () => onSetPanelState('docked'),
             title: 'Back to docked',
             'aria-label': 'Back to docked',
             onMouseEnter: this.onEnter('contract-docked'),
@@ -319,12 +422,12 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           React.createElement(IconContract, { size: 17 }),
         ) : null,
         // #4 Expand (docked→wide, wide→full) OR Contract (full→docked)
-        size === 'docked'
+        panelState === 'docked'
           ? React.createElement(
               'button',
               {
                 style: iconBtnStyle(this.hov('expand')),
-                onClick: () => onSetSize('wide'),
+                onClick: () => onSetPanelState('wide'),
                 title: 'Wide view',
                 'aria-label': 'Wide view',
                 onMouseEnter: this.onEnter('expand'),
@@ -332,12 +435,12 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
               },
               React.createElement(IconWide, { size: 17 }),
             )
-          : size === 'wide'
+          : panelState === 'wide'
           ? React.createElement(
               'button',
               {
                 style: iconBtnStyle(this.hov('expand')),
-                onClick: () => onSetSize('full'),
+                onClick: () => onSetPanelState('full'),
                 'aria-label': 'Expand to full screen',
                 onMouseEnter: this.onEnter('expand'),
                 onMouseLeave: this.onLeave(),
@@ -348,7 +451,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
               'button',
               {
                 style: iconBtnStyle(this.hov('contract')),
-                onClick: () => onSetSize('docked'),
+                onClick: () => onSetPanelState('docked'),
                 'aria-label': 'Back to docked',
                 onMouseEnter: this.onEnter('contract'),
                 onMouseLeave: this.onLeave(),
@@ -400,7 +503,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
 
     return React.createElement(
       'div',
-      { style: styles.panel(size), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
+      { style: styles.panel(panelState), role: 'complementary', 'aria-label': 'Nexus AI chat panel' },
       header,
       body,
     );

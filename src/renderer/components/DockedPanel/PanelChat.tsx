@@ -38,6 +38,7 @@ interface Props {
   electron: any;
   sessionId: string | null;
   selectedSiteIds: string[];
+  visible: boolean;
   onSessionCreated: (id: string) => void;
   onSessionSaved: (session: ChatSession, messages: ChatMessage[]) => void;
   onStreamingStatusChange?: (status: string | null) => void;
