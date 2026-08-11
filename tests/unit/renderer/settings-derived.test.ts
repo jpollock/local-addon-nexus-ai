@@ -24,6 +24,8 @@ const base = (over: any = {}) => {
     externalHostCount: 13,
     localSiteCount: 37,
     durations: {} as Record<string, number | null>,
+    lastRunAt: {} as Record<string, number | null>,
+    now: Date.now(),
     ...rest,
   };
 };
@@ -60,7 +62,7 @@ describe('derived — membership is three different subsets', () => {
 
   test('externalRefresh feeds the other-hosts figure, not the WP Engine one', () => {
     const d = computeDerived(base());
-    // 331 installs × 6 passes (wpeRefresh) + 331 × 6 (wpeSync) = 3,972
+    // 331 installs × 6 passes (wpeRefresh) + 331 × 6 (wpeSync at 4h from fixture) = 3,972
     expect(d.summary.wpe!.figure).toBe(3972);
     // 13 hosts × 2 passes × 2 external jobs = 52
     expect(d.summary.ext!.figure).toBe(52);
@@ -90,7 +92,8 @@ describe('derived — membership is three different subsets', () => {
     const d = computeDerived(base());
     const row = d.rows.find(r => r.key === 'haltedSiteRefresh')!;
     expect(row.alwaysOn).toBe(true);
-    expect(row.enabled).toBe(true);
+    expect(row.userEnabled).toBe(true);
+    expect(row.canRun).toBe(true);
     expect(row.costLabel).toBe('free');
     // 6 switchable, and it is not one of them
     expect(d.switchableTotal).toBe(6);
@@ -155,6 +158,138 @@ describe('derived — the master pause', () => {
     expect(d.summary.time.nextInHours).toBeNull();
     // The flags the user set are untouched — this is the whole point.
     expect(input.settings.wpeRefreshAutoEnabled).toBe(true);
-    expect(d.rows.find(r => r.key === 'wpeRefresh')!.enabled).toBe(true);
+    expect(d.rows.find(r => r.key === 'wpeRefresh')!.userEnabled).toBe(true);
+  });
+});
+
+// NEW TESTS for the 8 fixes
+
+describe('derived — FIX 1: correct defaultHours', () => {
+  test('wpeSync defaults to 8h, not 24h', () => {
+    const d = computeDerived(base({ settings: { wpeSyncIntervalHours: undefined } }));
+    const row = d.rows.find(r => r.key === 'wpeSync')!;
+    expect(row.hours).toBe(8);
+    expect(JOBS.find(j => j.key === 'wpeSync')!.defaultHours).toBe(8);
+  });
+
+  test('localContentIndex defaults to 8h, not 4h', () => {
+    const d = computeDerived(base({ settings: { localContentIndexIntervalHours: undefined } }));
+    const row = d.rows.find(r => r.key === 'localContentIndex')!;
+    expect(row.hours).toBe(8);
+    expect(JOBS.find(j => j.key === 'localContentIndex')!.defaultHours).toBe(8);
+  });
+});
+
+describe('derived — FIX 2: amber keys on conn, not group', () => {
+  test('wpeContentIndex never ambers (conn=null, group=wpe)', () => {
+    // At ≤2h, a wpe-group job with conn=wpe would amber. wpeContentIndex has conn=null.
+    const d = computeDerived(base({ settings: { wpeContentIndexIntervalHours: 2 } }));
+    const row = d.rows.find(r => r.key === 'wpeContentIndex')!;
+    expect(row.amber).toBe(false);
+  });
+});
+
+describe('derived — FIX 3: singular "1 pass a day"', () => {
+  test('24h interval renders "1 pass a day", not "1 passes"', () => {
+    const d = computeDerived(base({ settings: { wpeRefreshIntervalHours: 24 } }));
+    const row = d.rows.find(r => r.key === 'wpeRefresh')!;
+    expect(row.costLabel).toContain('1 pass a day');
+    expect(row.costLabel).not.toContain('1 passes');
+  });
+});
+
+describe('derived — FIX 4: expose per-group job counts', () => {
+  test('summary.wpe includes jobsOn and jobsTotal', () => {
+    const d = computeDerived(base());
+    expect(d.summary.wpe!.jobsOn).toBe(3);
+    expect(d.summary.wpe!.jobsTotal).toBe(3);
+  });
+
+  test('summary.ext includes jobsOn and jobsTotal', () => {
+    const d = computeDerived(base());
+    expect(d.summary.ext!.jobsOn).toBe(2);
+    expect(d.summary.ext!.jobsTotal).toBe(2);
+  });
+});
+
+describe('derived — FIX 5: nextInHours is a countdown from lastRunAt', () => {
+  test('with no runs, nextInHours is null', () => {
+    const d = computeDerived(base({ lastRunAt: {} }));
+    expect(d.summary.time.nextInHours).toBeNull();
+  });
+
+  test('with one run 2h ago on a 4h job, nextInHours is 2h', () => {
+    const now = Date.now();
+    const twoHoursAgo = now - 2 * 3600_000;
+    const d = computeDerived(base({
+      settings: { wpeRefreshIntervalHours: 4 },
+      lastRunAt: { wpeRefresh: twoHoursAgo },
+      now,
+    }));
+    expect(d.summary.time.nextInHours).toBeCloseTo(2, 1);
+  });
+});
+
+describe('derived — FIX 6: userEnabled vs canRun separation', () => {
+  test('userEnabled=true + interval=0 gives userEnabled=true, canRun=false', () => {
+    const d = computeDerived(base({ settings: {
+      localContentIndexAutoEnabled: true,
+      localContentIndexIntervalHours: 0,
+    }}));
+    const row = d.rows.find(r => r.key === 'localContentIndex')!;
+    expect(row.userEnabled).toBe(true);
+    expect(row.canRun).toBe(false);
+  });
+});
+
+describe('derived — FIX 7: pause applied uniformly', () => {
+  test('paused snapshot is internally consistent', () => {
+    const d = computeDerived(base({ settings: { backgroundWorkPaused: true } }));
+
+    // Figures are zero
+    expect(d.summary.wpe!.figure).toBe(0);
+    expect(d.summary.ext!.figure).toBe(0);
+    expect(d.summary.time.minsPerDay).toBeNull();
+    expect(d.summary.time.nextInHours).toBeNull();
+
+    // Every row with userEnabled=true reads "nothing while off · paused"
+    const enabledRows = d.rows.filter(r => r.userEnabled);
+    enabledRows.forEach(row => {
+      if (row.key !== 'haltedSiteRefresh') {
+        expect(row.costLabel).toBe('nothing while off · paused');
+      }
+    });
+
+    // canRun is false for all paused rows
+    expect(d.rows.filter(r => r.canRun).length).toBe(0);
+
+    // navNote reflects userEnabled, not canRun
+    expect(d.navNote).toBe('6 of 6 on');
+  });
+});
+
+describe('derived — FIX 8: summary.wpe collapses to null with installCount=0', () => {
+  test('with installCount=0, summary.wpe is null and wpe rows vanish', () => {
+    const d = computeDerived(base({ installCount: 0 }));
+    expect(d.summary.wpe).toBeNull();
+    expect(d.rows.filter(r => r.group === 'wpe').length).toBe(0);
+  });
+});
+
+describe('derived — FIX 9: ≥49h intervals do not render "0 passes a day"', () => {
+  test('168h interval omits passes clause, shows connections only', () => {
+    const d = computeDerived(base({ settings: { wpeRefreshIntervalHours: 168 } }));
+    const row = d.rows.find(r => r.key === 'wpeRefresh')!;
+    // round(24/168) = 0, so passes clause is omitted
+    expect(row.costLabel).not.toContain('passes');
+    expect(row.costLabel).not.toContain('0');
+    // But connections figure is computed from unrounded rate: round(24/168 * 331) = 47
+    expect(row.costLabel).toContain('47 connections');
+  });
+
+  test('168h job contributes real load to the figure, not 0', () => {
+    const d = computeDerived(base({ settings: { wpeRefreshIntervalHours: 168 } }));
+    // round(24/168 * 331) = 47 from wpeRefresh, plus wpeSync at 4h (fixture) = 6*331 = 1986
+    expect(d.summary.wpe!.figure).toBe(2033); // 47 + 1986
   });
 });
