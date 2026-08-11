@@ -39,7 +39,7 @@ interface SettingsShellState {
   fleetCounts: { wpe: number; external: number; local: number } | null;
   jobRunData: Record<string, { averageMs: number | null; lastRunAt: number | null }> | null;
   indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
-  mcpInfo: { port: number } | null;
+  mcpInfo: { port: number; stdioPath: string } | null;
 }
 
 export class SettingsShell extends React.Component<{ electron: any }, SettingsShellState> {

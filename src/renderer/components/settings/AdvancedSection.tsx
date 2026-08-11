@@ -17,7 +17,7 @@ import { IPC_CHANNELS } from '../../../common/constants';
 interface Props {
   settings: NexusSettings;
   indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
-  mcpInfo: { port: number } | null;
+  mcpInfo: { port: number; stdioPath: string } | null;
   sites: Array<{ id: string; name: string }>;
   /** Live fleet counts from GET_DASHBOARD_STATS. null until they load — the
    *  reset copy then omits its count clause rather than inventing one. */

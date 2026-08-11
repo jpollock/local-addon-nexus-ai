@@ -28,7 +28,6 @@ import { RunPill } from './agents/RunPill';
 import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
-import { OverviewTab } from './tabs/OverviewTab';
 import { InboxTab } from './tabs/InboxTab';
 import { SitesTab } from './tabs/SitesTab';
 // Types only — a value import would pull main-process code into the renderer
@@ -106,9 +105,8 @@ interface SetupAIResult {
  * Moving them here would cost more in binding than the duplication saves.
  */
 const TABS = [
-  { key: 'overview',   label: 'Dashboard' },
-  { key: 'inbox',      label: 'Inbox' },
   { key: 'sites',      label: 'Sites' },
+  { key: 'inbox',      label: 'Inbox' },
   { key: 'activity',   label: 'Activity' },
   { key: 'agents',     label: 'Agents' },
   { key: 'settings',   label: 'Settings' },
@@ -256,7 +254,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     togglingId: null,
     loading: true,
     error: null,
-    activeTab: 'overview',
+    activeTab: 'sites',
     siteRows: [],
     // Not zero-with-a-scope: nothing has been read yet, and the empty scope
     // string is what `loaded: false` renders behind anyway.
@@ -880,21 +878,7 @@ renderTabBar(): React.ReactNode {
   };
 
   renderActiveTab(): React.ReactNode {
-    const overviewProps = {
-      electron: this.props.electron,
-      stats: this.state.stats,
-      fleetSummary: this.state.fleetSummary,
-      settings: this.state.settings,
-      wpeAuthError: this.state.wpeAuthError,
-      aiProxy: this.state.aiProxy,
-      mcpInfo: this.state.mcpInfo,
-      startupStatus: this.state.startupStatus,
-      onNavigate: (tab: 'overview' | 'activity' | 'settings' | 'agents' | 'inbox') => this.setState({ activeTab: tab }),
-      onRefresh: () => { void this.fetchAll(); },
-    };
-
     switch (this.state.activeTab) {
-      case 'overview': return React.createElement(OverviewTab, overviewProps);
       case 'inbox': return React.createElement(InboxTab, {
         loaded: this.state.inboxLoaded,
         failed: this.state.inboxFailed,
@@ -950,7 +934,19 @@ renderTabBar(): React.ReactNode {
       case 'activity': return this.renderActivityTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
       // 'agents' case handled in render() directly (no stats dependency)
-      default: return React.createElement(OverviewTab, overviewProps);
+      // Sites is the landing tab; fallback points there to handle any stale/in-flight 'overview' value
+      default: return React.createElement(SitesTab, {
+        loaded: this.state.siteRowsLoaded,
+        failed: this.state.siteRowsFailed,
+        rows: this.state.siteRows,
+        total: this.state.siteRowsTotal,
+        selected: this.state.selectedSiteIds,
+        onToggle: this.toggleSiteSelection,
+        onToggleAll: this.toggleAllSiteSelection,
+        onBulk: (type: string, ids: string[]) => { void this.handleSiteBulk(type, ids); },
+        onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
+        onRetry: () => { void this.fetchAll(); },
+      });
     }
   }
 
