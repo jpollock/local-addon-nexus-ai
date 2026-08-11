@@ -1,12 +1,13 @@
 /**
  * ChatSection — panel toggle, retention, and delete-all
  *
- * Ported from NexusPreferences Chat History section (Operations tab, lines 1802-1846).
- * Panel toggle with descriptive text; retention dropdown; delete-all with confirmation.
+ * Ported from NexusPreferences Chat History section (Operations tab, lines 1801-1846).
+ * Panel toggle with descriptive text; retention dropdown; delete-all with confirmation
+ * following the factory reset pattern (checkbox + disabled confirm button).
  *
  * Per-site AI provider override link is specified in the design but deferred pending
  * a defined destination (which sites, how to navigate, what the link says). When that
- * is defined, add it below the delete-all button.
+ * is defined, add it below the delete-all section.
  */
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
@@ -20,6 +21,7 @@ interface ChatSectionProps {
 
 interface ChatSectionState {
   deleteConfirmPending: boolean;
+  deleteConfirmChecked: boolean;
   deleteInFlight: boolean;
   deleteError: string | null;
 }
@@ -27,6 +29,7 @@ interface ChatSectionState {
 export class ChatSection extends React.Component<ChatSectionProps, ChatSectionState> {
   state: ChatSectionState = {
     deleteConfirmPending: false,
+    deleteConfirmChecked: false,
     deleteInFlight: false,
     deleteError: null,
   };
@@ -39,41 +42,46 @@ export class ChatSection extends React.Component<ChatSectionProps, ChatSectionSt
     this.props.onSave({ chatRetentionDays: days });
   };
 
-  handleDeleteAll = async (): Promise<void> => {
-    if (!this.state.deleteConfirmPending) {
-      this.setState({ deleteConfirmPending: true, deleteError: null });
-      return;
-    }
+  handleDeleteDisclosure = (): void => {
+    this.setState({ deleteConfirmPending: true, deleteConfirmChecked: false, deleteError: null });
+  };
 
-    // Confirmed — delete all chat history
+  handleDeleteConfirmCheck = (checked: boolean): void => {
+    this.setState({ deleteConfirmChecked: checked });
+  };
+
+  handleDeleteConfirm = async (): Promise<void> => {
     this.setState({ deleteInFlight: true, deleteError: null });
     try {
       const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR_ALL);
       if (!result.success) {
         this.setState({
           deleteInFlight: false,
-          deleteConfirmPending: false,
           deleteError: result.error || 'Failed to delete chat history',
         });
         return;
       }
-      this.setState({ deleteInFlight: false, deleteConfirmPending: false, deleteError: null });
-    } catch (err: any) {
       this.setState({
         deleteInFlight: false,
         deleteConfirmPending: false,
+        deleteConfirmChecked: false,
+        deleteError: null,
+      });
+    } catch (err: any) {
+      this.setState({
+        deleteInFlight: false,
         deleteError: err.message || 'An unexpected error occurred',
       });
     }
   };
 
   handleCancelDelete = (): void => {
-    this.setState({ deleteConfirmPending: false, deleteError: null });
+    this.setState({ deleteConfirmPending: false, deleteConfirmChecked: false, deleteError: null });
   };
 
   render(): React.ReactElement {
     const { settings } = this.props;
-    const { deleteConfirmPending } = this.state;
+    const { deleteConfirmPending, deleteConfirmChecked, deleteInFlight, deleteError } = this.state;
     const panelEnabled = settings.dockedPanelEnabled !== false;
     const retentionDays = settings.chatRetentionDays !== undefined ? settings.chatRetentionDays : 30;
 
@@ -122,7 +130,7 @@ export class ChatSection extends React.Component<ChatSectionProps, ChatSectionSt
         }, 'Show the AI chat panel bubble in the bottom-right corner of every screen in Local.'),
       ),
 
-      // Retention and delete-all (shown only when panel is enabled)
+      // Retention (shown only when panel is enabled)
       panelEnabled ? React.createElement('div', {
         style: {
           padding: 16,
@@ -147,7 +155,6 @@ export class ChatSection extends React.Component<ChatSectionProps, ChatSectionSt
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            marginBottom: 16,
           },
         },
           React.createElement('label', {
@@ -178,66 +185,145 @@ export class ChatSection extends React.Component<ChatSectionProps, ChatSectionSt
             React.createElement('option', { value: 'null' }, 'Forever'),
           ),
         ),
+      ) : null,
 
-        // Delete all chat history
+      // Delete all chat history (always shown, even when panel is disabled)
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-card-border)',
+          borderRadius: 6,
+          marginBottom: 12,
+        },
+      },
         React.createElement('div', {
           style: {
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 6,
+          },
+        }, 'Delete All Chat History'),
+        React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-sub)',
+            lineHeight: 1.4,
+            marginBottom: 12,
+          },
+        }, 'Deletes every conversation across all sessions, including pinned sessions. Indexed content is unaffected — only chat messages are removed. This cannot be undone.'),
+
+        // Error banner
+        deleteError ? React.createElement('div', {
+          style: {
+            padding: '8px 12px',
+            background: 'var(--nxai-error-bg)',
+            border: '1px solid var(--nxai-danger-text)',
+            borderRadius: 4,
+            fontSize: 12,
+            color: 'var(--nxai-danger-text)',
+            marginBottom: 12,
+          },
+        }, deleteError) : null,
+
+        // Initial disclosure button
+        !deleteConfirmPending ? React.createElement('button', {
+          onClick: this.handleDeleteDisclosure,
+          disabled: deleteInFlight,
+          style: {
+            padding: '6px 12px',
+            fontSize: 13,
+            borderRadius: 4,
+            background: 'var(--nxai-card-bg)',
+            border: '1px solid var(--nxai-input-border)',
+            color: 'var(--nxai-card-text)',
+            cursor: deleteInFlight ? 'not-allowed' : 'pointer',
+            opacity: deleteInFlight ? 0.5 : 1,
+          },
+        }, deleteInFlight ? 'Deleting…' : 'Delete All') : null,
+
+        // Confirmation panel with checkbox
+        deleteConfirmPending ? React.createElement('div', {
+          style: {
             padding: 12,
-            background: deleteConfirmPending ? 'var(--nxai-error-bg)' : 'transparent',
-            border: deleteConfirmPending ? '1px solid var(--nxai-danger-text)' : 'none',
+            background: 'var(--nxai-error-bg)',
+            border: '1px solid var(--nxai-danger-text)',
             borderRadius: 6,
           },
         },
           React.createElement('div', {
             style: {
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--nxai-card-text)',
-              marginBottom: 6,
-            },
-          }, 'Delete All Chat History'),
-          React.createElement('div', {
-            style: {
               fontSize: 12,
-              color: 'var(--nxai-card-sub)',
-              lineHeight: 1.4,
-              marginBottom: 12,
-            },
-          }, 'Deletes every conversation across all sessions. Indexed content is unaffected — only chat messages are removed. This cannot be undone.'),
-          React.createElement('div', {
-            style: {
-              display: 'flex',
-              gap: 8,
+              marginBottom: 10,
+              lineHeight: 1.55,
+              color: 'var(--nxai-card-text)',
             },
           },
-            React.createElement('button', {
-              onClick: this.handleDeleteAll,
+            React.createElement('strong', { style: { color: 'var(--nxai-danger-text)' } }, 'Permanently deletes:'),
+            React.createElement('ul', {
               style: {
-                padding: '6px 12px',
-                fontSize: 13,
-                borderRadius: 4,
-                background: deleteConfirmPending ? 'var(--nxai-error-bg)' : 'var(--nxai-card-bg)',
-                border: '1px solid var(--nxai-input-border)',
-                color: deleteConfirmPending ? 'var(--nxai-danger-text)' : 'var(--nxai-card-text)',
-                cursor: 'pointer',
-                fontWeight: deleteConfirmPending ? 600 : 400,
+                margin: '5px 0 5px 16px',
+                color: 'var(--nxai-card-sub)',
+                fontSize: 11,
               },
-            }, deleteConfirmPending ? 'Confirm Delete' : 'Delete All'),
-            deleteConfirmPending ? React.createElement('button', {
-              onClick: this.handleCancelDelete,
-              style: {
-                padding: '6px 12px',
-                fontSize: 13,
-                borderRadius: 4,
-                background: 'var(--nxai-card-bg)',
-                border: '1px solid var(--nxai-input-border)',
-                color: 'var(--nxai-card-text)',
-                cursor: 'pointer',
-              },
-            }, 'Cancel') : null,
+            },
+              React.createElement('li', null, 'All chat conversations and messages'),
+              React.createElement('li', null, 'All chat sessions, including pinned ones'),
+            ),
           ),
-        ),
-      ) : null,
+          React.createElement('label', {
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 12,
+              cursor: 'pointer',
+              marginBottom: 10,
+            },
+          },
+            React.createElement('input', {
+              type: 'checkbox',
+              checked: deleteConfirmChecked,
+              onChange: (e: any) => this.handleDeleteConfirmCheck(e.target.checked),
+            }),
+            'I understand — this cannot be undone',
+          ),
+          React.createElement('div', { style: { display: 'flex', gap: 8 } },
+            React.createElement('button', {
+              disabled: !deleteConfirmChecked || deleteInFlight,
+              onClick: this.handleDeleteConfirm,
+              style: {
+                padding: '6px 14px',
+                borderRadius: 5,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: !deleteConfirmChecked || deleteInFlight ? 'not-allowed' : 'pointer',
+                background: !deleteConfirmChecked ? '#444' : 'var(--nxai-danger-text)',
+                color: '#fff',
+                opacity: !deleteConfirmChecked ? 0.5 : 1,
+                fontFamily: 'inherit',
+              },
+            }, deleteInFlight ? 'Deleting…' : 'Delete Everything'),
+            React.createElement('button', {
+              onClick: this.handleCancelDelete,
+              disabled: deleteInFlight,
+              style: {
+                padding: '6px 14px',
+                borderRadius: 5,
+                border: '1px solid var(--nxai-card-border)',
+                fontSize: 12,
+                background: 'var(--nxai-card-bg)',
+                color: 'inherit',
+                cursor: deleteInFlight ? 'not-allowed' : 'pointer',
+                opacity: deleteInFlight ? 0.5 : 1,
+                fontFamily: 'inherit',
+              },
+            }, 'Cancel'),
+          ),
+        ) : null,
+      ),
     );
   }
 }

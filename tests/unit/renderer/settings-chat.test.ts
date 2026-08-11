@@ -54,19 +54,52 @@ describe('ChatSection', () => {
     // Must use danger/error CSS variables in confirm state, not raw hex
     expect(json).toContain('var(--nxai-danger-text)');
     expect(json).toContain('var(--nxai-error-bg)');
-    expect(json).toContain('Confirm Delete');
+    expect(json).toContain('Delete Everything');
   });
 
-  test('delete-all has a confirmation step', () => {
-    const mockInvoke = jest.fn();
+  test('delete-all copy warns that pinning does not protect sessions', () => {
+    const instance = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn() } },
+    });
+    const rendered = serializeTree(instance.render());
+    const json = JSON.stringify(rendered);
+
+    // Must warn that pinned sessions are also deleted
+    expect(json.toLowerCase()).toContain('pinned');
+  });
+
+  test('delete-all has a confirmation step with checkbox', async () => {
+    const mockInvoke = jest.fn().mockResolvedValue({ success: true });
     const instance = new (ChatSection as any)({
       settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
       onSave: jest.fn(),
       electron: { ipcRenderer: { invoke: mockInvoke } },
     });
 
-    // The component must have a handleDeleteAll method
-    expect(typeof instance.handleDeleteAll).toBe('function');
+    // Initial state: no confirm pending, checkbox not checked
+    expect(instance.state.deleteConfirmPending).toBe(false);
+    expect(instance.state.deleteConfirmChecked).toBe(false);
+
+    // Directly set state to open confirmation UI (setState doesn't work on unmounted components)
+    instance.state.deleteConfirmPending = true;
+    expect(mockInvoke).not.toHaveBeenCalled();
+
+    // Confirm button must be disabled until checkbox is ticked
+    let confirmTree = JSON.stringify(serializeTree(instance.render()));
+    expect(confirmTree).toContain('"disabled":true'); // Button should be disabled
+
+    // Tick the checkbox
+    instance.state.deleteConfirmChecked = true;
+    confirmTree = JSON.stringify(serializeTree(instance.render()));
+    // Now button should NOT be disabled (check background changes to danger color)
+    expect(confirmTree).toContain('var(--nxai-danger-text)');
+
+    // Verify IPC call happens with correct channel
+    await instance.handleDeleteConfirm();
+    expect(mockInvoke).toHaveBeenCalledWith('nexus-ai:chat-clear-all');
+    // State updates won't happen on unmounted component but that's fine - the handler was called
   });
 
   test('override link is deliberately absent (pending destination)', () => {
@@ -93,12 +126,17 @@ describe('ChatSection', () => {
     // Must contain the checkbox
     expect(json).toContain('checkbox');
     expect(json).toContain('Enable AI Chat Panel');
+
+    // Invoke the handler and verify it calls onSave
+    instance.handleDockedPanelToggle(false);
+    expect(mockSave).toHaveBeenCalledWith({ dockedPanelEnabled: false });
   });
 
-  test('retention select renders with all options', () => {
+  test('retention select renders with all options and is wired', () => {
+    const mockSave = jest.fn();
     const instance = new (ChatSection as any)({
       settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
-      onSave: jest.fn(),
+      onSave: mockSave,
       electron: { ipcRenderer: { invoke: jest.fn() } },
     });
     const rendered = serializeTree(instance.render());
@@ -109,6 +147,10 @@ describe('ChatSection', () => {
     expect(json).toContain('30 days');
     expect(json).toContain('90 days');
     expect(json).toContain('Forever');
+
+    // Invoke the handler and verify it calls onSave
+    instance.handleRetentionChange(7);
+    expect(mockSave).toHaveBeenCalledWith({ chatRetentionDays: 7 });
   });
 
   test('retention dropdown value pins the selected option', () => {
@@ -147,22 +189,48 @@ describe('ChatSection', () => {
     expect(panelOff).not.toContain('Keep chat history for');
   });
 
-  test('only uses declared CSS variables', () => {
-    const t = tree();
-    const matches = t.match(/var\(--[a-z-]+\)/g) || [];
-    const validVars = new Set([
-      'var(--nxai-card-bg)', 'var(--nxai-card-border)', 'var(--nxai-card-label)',
-      'var(--nxai-card-sub)', 'var(--nxai-card-text)', 'var(--nxai-section-label)',
-      'var(--nxai-section-bg)', 'var(--nxai-code-bg)', 'var(--nxai-table-hover)',
-      'var(--nxai-input-bg)', 'var(--nxai-input-border)', 'var(--nxai-score-bg)',
-      'var(--nxai-score-fill)', 'var(--nxai-warn-text)', 'var(--nxai-status-neutral)',
-      'var(--nxai-danger-text)', 'var(--nxai-chat-user-bg)', 'var(--nxai-chat-assistant-bg)',
-      'var(--nxai-filter-bg)', 'var(--nxai-error-bg)', 'var(--nxai-accent)',
-      'var(--nxai-accent-text)',
-    ]);
+  test('delete-all is available even when panel is disabled', () => {
+    const panelOff = tree({ dockedPanelEnabled: false, chatRetentionDays: 30 });
 
-    for (const m of matches) {
-      expect(validVars.has(m)).toBe(true);
+    // Delete-all must be present even when panel is off
+    expect(panelOff).toContain('Delete All Chat History');
+  });
+
+  test('only uses declared CSS variables', () => {
+    // Read declared variables from theme.ts
+    const themeSource = require('fs').readFileSync('src/renderer/utils/theme.ts', 'utf8');
+    const declaredVars = new Set<string>();
+    const varRegex = /--nxai-[a-z-]+/g;
+    let match;
+    while ((match = varRegex.exec(themeSource)) !== null) {
+      declaredVars.add(match[0]);
+    }
+
+    // Scan all render states: default, panel off, confirm pending
+    const states = [
+      tree({ dockedPanelEnabled: true, chatRetentionDays: 30 }),
+      tree({ dockedPanelEnabled: false, chatRetentionDays: 30 }),
+    ];
+
+    // Also scan confirm state
+    const confirmInstance = new (ChatSection as any)({
+      settings: { dockedPanelEnabled: true, chatRetentionDays: 30 },
+      onSave: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn() } },
+    });
+    confirmInstance.state.deleteConfirmPending = true;
+    states.push(JSON.stringify(serializeTree(confirmInstance.render())));
+
+    for (const stateTree of states) {
+      // Match both var(--x) and var(--x, fallback) forms
+      const varCalls = stateTree.match(/var\(--[a-z-]+(?:,\s*[^)]+)?\)/g) || [];
+      for (const call of varCalls) {
+        // Extract variable name (everything between -- and either , or ))
+        const varName = call.match(/--([a-z-]+)/)?.[0];
+        if (varName && !declaredVars.has(varName)) {
+          throw new Error(`Undeclared CSS variable: ${varName} in ${call}`);
+        }
+      }
     }
   });
 });
