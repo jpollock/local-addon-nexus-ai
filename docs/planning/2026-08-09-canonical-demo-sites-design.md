@@ -78,9 +78,48 @@ WPE-only path:
 
 | Source | Where |
 |---|---|
-| `wpe` | One production install per property (carries IW/Power + the real analytics pipes) |
-| `local` | Development clones; the demo laptop |
-| `external` | Cedar fleet site D, on an SSH-reachable non-WPE host |
+| `wpe` | Flagship production install per property (carries IW/Power + the real analytics pipes), plus Cedar fleet sites A and B |
+| `local` | Cedar fleet sites E and F; development clones; the demo laptop |
+| `external` | Cedar fleet sites C, D and G, on one SpinupWP server |
+
+**Amended 2026-08-11.** This table previously put a single site (`D`) on an
+external host and left the rest unassigned. The three-way split is deliberate,
+and each placement is forced by something:
+
+- **`local` is forced for E.** `CV-E-01` is "halted," and halted is a Local-only
+  concept — `getSiteStatus` has no remote equivalent and Nexus never starts or
+  stops a remote host. E cannot live anywhere else and remain the pathology it is.
+- **`external` is forced for C.** `CV-C-01` is two WP majors behind with ACF 5.x.
+  A self-managed cloud server is the honest home for an unpatched install; it is
+  also the only tier where nothing upstream will quietly fix the defect between
+  demos.
+- **Three external sites on ONE SpinupWP server, not three servers.** A SpinupWP
+  server hosts many sites under one SSH connection, which produces the
+  `ssh:<alias>/<site>` multi-site form. That form is worth exercising: it is the
+  shape that collided in `vectorSiteId()` and silently merged two hosts' indexed
+  content. One alias with three sites is a live regression target; three
+  single-site aliases are not.
+
+**SpinupWP is a WP Engine product** (via the 2022 Delicious Brains acquisition),
+so a fleet spanning WP Engine, SpinupWP and Local is three WP Engine surfaces —
+not a WP Engine site next to two competitors. To Nexus's code, however, SpinupWP
+is simply an SSH-reachable non-WPE host: `source='external'`, identical path to
+the existing Hostinger connection. It adds narrative and multi-site coverage, not
+a new transport.
+
+**Prerequisite, not yet met:** no SpinupWP alias exists in `~/.ssh/config` as of
+this amendment. The three registered external rows are all Hostinger. A SpinupWP
+account and a provisioned server are a hard dependency of the `external` row and
+must be stood up before those three sites can be built.
+
+**Seeding does not go through Nexus's write gate, and that is the point.**
+`wpcli` (write) is refused on `production` by default, on both WPE and external
+targets; only `wpcli_read` is allowed there. The corpus import is therefore a
+build step run with each host's own tooling — `local_wpe_push` from a Local
+build for WPE, the server's own WP-CLI over SSH for SpinupWP. The sites are then
+registered in Nexus as `production`, where the refusal to write to them is a
+capability to demonstrate rather than an obstacle to route around. Do not
+register a fleet site as `development` merely to make an importer run.
 
 ---
 
@@ -145,19 +184,32 @@ Every one is queryable through a structured field:
 
 One pathology per site, so every fleet tool has a target:
 
-| Id | Site | Planted defect | Proves |
-|---|---|---|---|
-| `CV-A-01` | A | `openingHoursSpecification` missing entirely | Schema governance at scale |
-| `CV-B-01` | B | Lists a provider who left 14 months ago — who also remains on the flagship roster | Cross-site contradiction |
-| `CV-C-01` | C | Two WP majors behind, ACF 5.x, one abandoned plugin | `detect_drift`, update exposure |
-| `CV-D-01` | D | Runs on an external SSH host, not WPE | `source='external'` end to end |
-| `CV-E-01` | E | Halted | Halted ≠ missing |
-| `CV-F-01` | F | 40 pages copy-pasted verbatim from the flagship | Cross-site cannibalization |
-| `CV-G-01` | G | 8 treatments with `review_date` > 36 months; 3 with no reviewer at all | Quantified compliance exposure |
+| Id | Site | Host | Planted defect | Proves |
+|---|---|---|---|---|
+| `CV-A-01` | A | WPE | `openingHoursSpecification` missing entirely | Schema governance at scale |
+| `CV-B-01` | B | WPE | Lists a provider who left 14 months ago — who also remains on the flagship roster | Cross-site contradiction (person) |
+| `CV-C-01` | C | SpinupWP | Two WP majors behind, ACF 5.x, one abandoned plugin | `detect_drift`, update exposure |
+| `CV-D-01` | D | SpinupWP | 4 clinics whose address and phone contradict the flagship's records for the same clinic | Cross-site contradiction (place); NAP integrity |
+| `CV-E-01` | E | Local | Halted | Halted ≠ missing |
+| `CV-F-01` | F | Local | 40 pages copy-pasted verbatim from the flagship | Cross-site cannibalization |
+| `CV-G-01` | G | SpinupWP | 8 treatments with `review_date` > 36 months; 3 with no reviewer at all | Quantified compliance exposure |
 
-`CV-B-01` is the strongest beat in either property: nothing on any single site is
-detectably wrong. The contradiction exists only at fleet level, which is the
-entire argument for fleet intelligence.
+**`CV-D-01` was rewritten on 2026-08-11.** It used to read "runs on an external
+SSH host, not WPE." Once §1.3 put three sites on SpinupWP, that stopped being a
+defect and became an address — a pathology every third site shares is not a
+pathology. `source='external'` end to end is still proven, by the Host column
+rather than by a row of the defect table. D now carries the *place*-level
+contradiction that pairs with B's *person*-level one: same clinic, two different
+addresses and phone numbers across two installs, each internally consistent.
+Inconsistent name/address/phone across a multi-location group is the canonical
+local-SEO defect for exactly this kind of business, and unlike A's missing
+schema it cannot be found by validating one site.
+
+`CV-B-01` remains the strongest beat in either property: nothing on any single
+site is detectably wrong. The contradiction exists only at fleet level, which is
+the entire argument for fleet intelligence. `CV-D-01` is the same argument made
+against structured field *values* rather than a roster, so `compare_sites` is
+exercised on both shapes.
 
 ---
 
@@ -439,7 +491,9 @@ folklore.
 | Dependency | Owner | Blocks |
 |---|---|---|
 | ~~ACF Pro installer~~ | ~~Jeremy~~ | **Resolved 2026-08-09** — `~/Downloads/plugins/advanced-custom-fields-pro.zip`, **v6.8.6**, the same version live on Alpine Outfitters. Version parity matters: Plan 1c's `acf-json` field groups must load against it. Alpine's `install-plugins.sh` already treats that path as the convention. |
-| A Local site for `cedarvale.local` | Jeremy | Plan 1c (plugin activation) and Plan 1d (import) |
+| ~~A Local site for `cedarvale.local`~~ | ~~Jeremy~~ | **Resolved 2026-08-09** — Jeremy authorized creating it through the Nexus AI MCP tools (`local_create_site`) rather than by hand, so Plan 1c is no longer gated on a human step. The same route covers M2's 7-install fleet, including putting a site into the halted state the pathology set calls for (`local_stop_site`). Note this makes the addon a dependency of its own demo corpus: Local must be running with the addon loaded for any of it to work. |
+| A SpinupWP account and one provisioned cloud server | Jeremy | M2 — Cedar fleet sites C, D and G (§1.3). No SpinupWP alias exists in `~/.ssh/config` today; the three registered `external` rows are all Hostinger. Needs the SpinupWP subscription, a server on any supported provider, and one `~/.ssh/config` alias whose user can read all three site roots — a per-site user cannot, and Nexus's `ssh:<alias>/<site>` multi-site form is the reason to use one alias rather than three. |
+| Choice of WP Engine account for the flagship + sites A and B | Jeremy | M2 — 14 accounts are authenticated; nothing in the spec says which one, and creating installs in the wrong account is billable and visible to other people. |
 | Two real domains (or subdomains of an owned domain), DNS-verifiable | Jeremy | M5 — GA4 property and Search Console verification |
 | HubSpot developer account | Jeremy | M5 — the backdatable CRM history |
 | Token budget approval for ~1,300 AI-written pieces | Jeremy | M3, M4 |
