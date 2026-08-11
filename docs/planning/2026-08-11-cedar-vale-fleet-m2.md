@@ -143,6 +143,13 @@ describe('fleet manifest', () => {
     expect(new Set(seeds).size).toBe(seeds.length);
   });
 
+  it('gives every SpinupWP site a domain, and no other site one', () => {
+    for (const s of manifest.sites) {
+      expect({ id: s.id, hasDomain: s.domain !== undefined })
+        .toEqual({ id: s.id, hasDomain: s.host === 'spinupwp' });
+    }
+  });
+
   it('gives CV-D-01 exactly the four clinics its pathology needs', () => {
     const d = manifest.sites.find((s) => s.id === 'cedar-vale-d')!;
     expect(d.locations).toHaveLength(4);
@@ -219,8 +226,15 @@ const FleetSiteSchema = z
     /** Spec §3.2 letter. */
     letter: z.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G']),
     host: z.enum(['local', 'wpe', 'spinupwp']),
-    /** Required for host === 'spinupwp'; one alias serves all three sites. */
+    /** Required for host === 'spinupwp'. One alias may serve several sites or
+     *  exactly one — see Global Constraints. */
     sshAlias: z.string().optional(),
+    /** Required for host === 'spinupwp'. SpinupWP keys a site on its domain, the
+     *  docroot is /sites/<domain>/files, and Nexus derives the site's displayed
+     *  name from it — so this string is what appears in nexus_list_sites and in
+     *  every Task 9 acceptance output. Local and WPE sites get their names from
+     *  Local and from the install name respectively and have no domain here. */
+    domain: z.string().regex(/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/).optional(),
     pathology: z.enum(PATHOLOGY_IDS),
     /** Deterministic sampling seed. Distinct per site. */
     seed: z.number().int().positive(),
@@ -248,6 +262,20 @@ const FleetSiteSchema = z
         code: z.ZodIssueCode.custom,
         path: ['sshAlias'],
         message: `sshAlias is meaningless for ${site.host} site ${site.id}`,
+      });
+    }
+    if (site.host === 'spinupwp' && !site.domain) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['domain'],
+        message: `domain is required for spinupwp site ${site.id}`,
+      });
+    }
+    if (site.host !== 'spinupwp' && site.domain !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['domain'],
+        message: `domain is meaningless for ${site.host} site ${site.id}`,
       });
     }
   });
@@ -303,14 +331,16 @@ practice is given a geographically coherent slice.
     },
     {
       "id": "cedar-vale-c", "label": "Willow Creek Dermatology", "letter": "C",
-      "host": "spinupwp", "sshAlias": "cedarvale-spin", "pathology": "CV-C-01", "seed": 20260813,
+      "host": "spinupwp", "sshAlias": "cedarvale-spin", "domain": "willowcreekderm.com",
+      "pathology": "CV-C-01", "seed": 20260813,
       "locations": ["cedar-vale-dermatology-seattle-98101"],
       "counts": { "treatment": 8, "condition": 14, "post": 30, "insurance_plan": 5 },
       "theme": "twentytwentyone"
     },
     {
-      "id": "cedar-vale-d", "label": "High Desert Skin Care", "letter": "D",
-      "host": "spinupwp", "sshAlias": "cedarvale-spin", "pathology": "CV-D-01", "seed": 20260814,
+      "id": "cedar-vale-d", "label": "Piedmont Dermatology Group", "letter": "D",
+      "host": "spinupwp", "sshAlias": "cedarvale-spin", "domain": "piedmontdermgroup.com",
+      "pathology": "CV-D-01", "seed": 20260814,
       "locations": [
         "cedar-vale-dermatology-raleigh-27601",
         "cedar-vale-dermatology-raleigh-27607",
@@ -321,7 +351,7 @@ practice is given a geographically coherent slice.
       "theme": "cedar-vale"
     },
     {
-      "id": "cedar-vale-e", "label": "Aspen Grove Dermatology", "letter": "E",
+      "id": "cedar-vale-e", "label": "Papago Park Dermatology", "letter": "E",
       "host": "local", "pathology": "CV-E-01", "seed": 20260815,
       "locations": ["cedar-vale-dermatology-phoenix-85004"],
       "counts": { "treatment": 8, "condition": 12, "post": 25, "insurance_plan": 4 },
@@ -336,8 +366,9 @@ practice is given a geographically coherent slice.
     },
     {
       "id": "cedar-vale-g", "label": "Table Mesa Dermatology", "letter": "G",
-      "host": "spinupwp", "sshAlias": "cedarvale-spin", "pathology": "CV-G-01", "seed": 20260817,
-      "locations": ["cedar-vale-dermatology-denver-80218"],
+      "host": "spinupwp", "sshAlias": "cedarvale-spin", "domain": "tablemesaderm.com",
+      "pathology": "CV-G-01", "seed": 20260817,
+      "locations": ["cedar-vale-dermatology-boulder-80304"],
       "counts": { "treatment": 14, "condition": 18, "post": 35, "insurance_plan": 7 },
       "theme": "cedar-vale"
     }
@@ -349,6 +380,35 @@ practice is given a geographically coherent slice.
 unreviewed and the two sets must be disjoint; a site with fewer than 11 cannot
 carry its own pathology. `cedar-vale-f` samples only 20 posts because CV-F-01
 appends 40 more.
+
+**Three rules govern the practice names, and the first draft broke two of them.**
+
+1. **A name must fit the geography of the clinics it operates.** Site D was
+   "High Desert Skin Care" while operating in Raleigh, Durham and Chapel Hill,
+   and site E was "Aspen Grove Dermatology" in Phoenix. Both are the kind of
+   detail that makes an audience stop believing the fiction, which costs more
+   than any planted pathology gains. D is now Piedmont Dermatology Group (the
+   NC Piedmont) and E is Papago Park Dermatology (a Phoenix park). Site G moved
+   from the Denver 80218 clinic to the otherwise-unused Boulder 80304 one,
+   because Table Mesa is a Boulder neighbourhood.
+2. **A name must not read as a serial number.** The demo's whole argument is
+   that CV-B-01 and CV-D-01 are contradictions between *independent businesses*.
+   Sites called `cedar-vale-c` would give that away on the first screen. The
+   `id` stays mechanical for the build; the `label` and `domain` are what a
+   viewer sees.
+3. **A domain must not belong to a real practice.** Checked 2026-08-11:
+   `highdesertskin.com` and `highdesertskincare.com` both resolve to live sites
+   on registered domains, so the original D naming would have put a fabricated
+   dermatology site at a real business's brand. `willowcreekderm.com`,
+   `piedmontdermgroup.com` and `tablemesaderm.com` have no NS records at all.
+   Re-check with `dig +short NS <domain>` before creating a site; an empty
+   answer is the pass condition.
+
+None of these domains resolve, and they do not need to. SpinupWP serves each
+site on a `Host` header — `curl -H 'Host: <domain>' http://159.65.76.95/`
+returns 200 against the existing site today — so browsing them means a
+`/etc/hosts` entry pointing the three names at 159.65.76.95, and nothing else.
+Only A and B need real DNS, and only at M5 for Search Console.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -2054,8 +2114,26 @@ multi-site form is exercised here as well as on Hostinger. If it forces a new
 user per site, accept that and plan for three aliases — see the Global
 Constraints; nothing depends on the outcome.
 
-Record each site's domain and docroot. SpinupWP's convention is
-`/sites/<domain>/files`, which is also `$HOME/files` for that site's user.
+The three domains, from `fleet.json`. All three were confirmed to have no NS
+records on 2026-08-11; none needs to resolve.
+
+| Site | Practice | Domain | Docroot |
+|---|---|---|---|
+| C | Willow Creek Dermatology | `willowcreekderm.com` | `/sites/willowcreekderm.com/files` |
+| D | Piedmont Dermatology Group | `piedmontdermgroup.com` | `/sites/piedmontdermgroup.com/files` |
+| G | Table Mesa Dermatology | `tablemesaderm.com` | `/sites/tablemesaderm.com/files` |
+
+The existing `cedarvale-spin.com` site is a placeholder and is **not** one of the
+three. Either change its primary domain to one of the above and reuse it — it
+already has WordPress 7.0.3 and the `spinupwp` plugin — or leave it and create
+all three fresh, then delete it so it does not appear as a fourth unexplained
+`external` row in Task 9's count.
+
+To browse the sites, add one line to `/etc/hosts`:
+
+```
+159.65.76.95  willowcreekderm.com piedmontdermgroup.com tablemesaderm.com
+```
 
 WordPress 7.0.3 is current, so `<two-majors-back>` for CV-C-01 in Step 4 means a
 6.x release — pick the latest 6.x minor and record which.
