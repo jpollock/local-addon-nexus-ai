@@ -9,16 +9,24 @@
  * triggers React Router navigation without a page reload.
  */
 
+import { nexusMarkSvg } from './utils/nexusMark';
+
 const NEXUS_NAV_ITEM_ID = 'nexus-ai-overview-nav';
 const STYLE_ID = 'nexus-ai-nav-styles';
 
-// Dashboard/gauge SVG icon for Nexus AI
-const NEXUS_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
-  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/>
-  <path d="M12 6c-3.31 0-6 2.69-6 6h2c0-2.21 1.79-4 4-4s4 1.79 4 4h2c0-3.31-2.69-6-6-6z" fill="currentColor"/>
-  <circle cx="12" cy="12" r="2" fill="currentColor"/>
-  <path d="M12 12l3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-</svg>`;
+/**
+ * The rendered size, kept in sync with the `svg { width/height }` rule below — the CSS
+ * overrides whatever the markup declares, and the two disagreeing is how the ring-minimum
+ * rule would get bypassed without anyone noticing.
+ */
+const NAV_ICON_SIZE = 38;
+
+/**
+ * The Nexus mark, from the same geometry the docked panel draws. This slot used to carry
+ * an unrelated gauge dial — a circle, an arc and a needle — so Local's nav and the panel
+ * were showing different marks for the same product. Neither read the SVG assets.
+ */
+const NEXUS_SVG = nexusMarkSvg(NAV_ICON_SIZE);
 
 export class NavItemInjector {
   private observer: MutationObserver | null = null;
@@ -62,8 +70,10 @@ export class NavItemInjector {
         background: rgba(0, 0, 0, 0.2);
       }
       #${NEXUS_NAV_ITEM_ID} svg {
-        width: 38px;
-        height: 38px;
+        width: ${NAV_ICON_SIZE}px;
+        height: ${NAV_ICON_SIZE}px;
+        /* The mark is drawn in currentColor, so this is what makes it dimmed-white on
+           Local's green nav, and full white on hover/active below. */
         color: rgba(255, 255, 255, 0.7);
         transition: transform 0.1s ease;
       }

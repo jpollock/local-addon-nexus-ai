@@ -1,5 +1,6 @@
 import React from 'react';
 import { UI_COLORS } from '../../../common/constants';
+import { MARK_VIEWBOX, MARK_RING, MARK_DOT, RING_MIN_SIZE } from '../../utils/nexusMark';
 
 export type PanelState = 'closed' | 'docked' | 'wide' | 'full';
 export type PanelTab = 'insights' | 'chat';
@@ -51,33 +52,36 @@ const TAB_WIDTH = 52;
 /**
  * The Orbit mark: a tilted ring with a solid centre. Replaces the four-point star.
  *
+ * Geometry comes from `utils/nexusMark`, shared with the SVG-string renderer that injects
+ * the same mark into Local's vertical nav. Two hand-maintained copies is how the panel
+ * ended up showing a star while the nav showed a gauge dial.
+ *
  * Colour comes from `currentColor` on the wrapper, never a fill on the svg — that is what
- * lets the same component sit on the tab, on the brand avatar, and on a dark background
- * without a third hard-coded colour being invented for each.
+ * lets the same component sit on the tab, on the brand avatar, and on Local's green nav
+ * without a hard-coded colour being invented for each.
  *
- * **The ring drops below 20px, automatically.** Its stroke is 1.9 viewBox units, so a
- * smaller declared size thins it until it greys out and the mark reads as a smudge. The
- * threshold lives here rather than at the call sites: a rule every caller has to remember
- * is one a caller will eventually forget, and the failure is silent.
+ * **The ring drops below RING_MIN_SIZE, automatically.** The threshold is applied here
+ * rather than at the call sites: a rule every caller has to remember is one a caller will
+ * eventually forget, and the failure is silent — a slightly grey smudge, not an error.
  *
- * Note the mark now looks slightly larger at the same declared size. The star was
- * symmetric about y=10 in a 24-unit box, so it sat two units high; Orbit is centred on
+ * Note the mark looks slightly larger than the star at the same declared size. The star
+ * was symmetric about y=10 in a 24-unit box, so it sat two units high; Orbit is centred on
  * (12,12). That is the centring being corrected — do not shrink it to compensate.
  */
-export const RING_MIN_SIZE = 20;
+export { RING_MIN_SIZE };
 
 export function NexusGlyph({ size }: { size: number }) {
   return React.createElement(
     'svg',
-    { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', style: { display: 'block' } },
+    { width: size, height: size, viewBox: MARK_VIEWBOX, fill: 'none', style: { display: 'block' } },
     size >= RING_MIN_SIZE
       ? React.createElement('ellipse', {
-          cx: 12, cy: 12, rx: 10.4, ry: 4.7,
-          transform: 'rotate(-32 12 12)',
-          fill: 'none', stroke: 'currentColor', strokeWidth: 1.9,
+          ...MARK_RING,
+          fill: 'none',
+          stroke: 'currentColor',
         })
       : null,
-    React.createElement('circle', { cx: 12, cy: 12, r: 2.9, fill: 'currentColor' }),
+    React.createElement('circle', { ...MARK_DOT, fill: 'currentColor' }),
   );
 }
 
