@@ -9,6 +9,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import type { AIProvider, NexusSettings } from '../../../common/types';
+import { OtherHostsPanel } from './OtherHostsPanel';
 
 interface WpeAccount { id: string; name: string; nickname?: string; }
 interface ExternalHost { alias: string; site: string; environment: string; domain: string; }
@@ -380,32 +381,10 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
       ),
 
       // Other hosts (External SSH)
-      React.createElement('div', {
-        style: {
-          padding: 16,
-          background: 'var(--nxai-card-bg)',
-          border: '1px solid var(--nxai-card-border)',
-          borderRadius: 6,
-          marginBottom: 8,
-        },
-      },
-        React.createElement('div', {
-          style: {
-            fontSize: 14,
-            fontWeight: 600,
-            color: 'var(--nxai-card-text)',
-            marginBottom: 4,
-          },
-        }, 'Other hosts'),
-        React.createElement('div', {
-          style: {
-            fontSize: 12,
-            color: 'var(--nxai-card-sub)',
-          },
-        }, extCount > 0
-          ? `${extCount} ${extCount === 1 ? 'host' : 'hosts'} registered`
-          : 'No external hosts registered yet'),
-      ),
+      React.createElement(OtherHostsPanel, {
+        externalHosts: this.props.externalHosts,
+        electron: this.props.electron,
+      }),
     );
   }
 
