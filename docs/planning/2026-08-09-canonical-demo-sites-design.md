@@ -126,12 +126,16 @@ the live fleet.** The registered Hostinger connection carries two sites,
 `account_id`. The `vectorSiteId()` regression target exists whether or not
 SpinupWP adds another.
 
-**Decision: three sites, three site users, three aliases** — SpinupWP's own
-model, and nothing real is lost. **Exception:** if SpinupWP's New Site form
-allows selecting an *existing* site user rather than creating one, put all three
-sites on `cedarvale-spin`; then one alias reaches all three roots and the
-one-alias form is recovered at no cost. Prefer that if it is offered; fall back
-to three aliases if it is not.
+**Decision, settled 2026-08-11: three sites, three site users, three aliases** —
+SpinupWP's own model, and nothing real is lost. The shared-user escape hatch was
+checked and is not offered: SpinupWP created a separate system user per site.
+The three are live and verified — `willowcreekderm`, `piedmontdermgroup` and
+`tablemesaderm`, each WordPress 7.0.3 at `/sites/<domain>/files`.
+
+`probeExternalHost` needs no change to discover them: its `SEARCH_ROOTS` already
+covers `"$HOME"` to depth 4 and SpinupWP puts `wp-config.php` at `$HOME/files/`,
+depth 1; WP-CLI is at `/usr/local/bin/wp`, the first `WP_CLI_FALLBACK_PATHS`
+entry. Do not add a SpinupWP-specific search root.
 
 **SpinupWP is a WP Engine product** (via the 2022 Delicious Brains acquisition),
 so a fleet spanning WP Engine, SpinupWP and Local is three WP Engine surfaces —

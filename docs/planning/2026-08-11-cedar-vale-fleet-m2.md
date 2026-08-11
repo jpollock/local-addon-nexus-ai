@@ -12,7 +12,8 @@
 
 - **Spec is `docs/planning/2026-08-09-canonical-demo-sites-design.md` §1.2, §1.3, §3.1, §3.2.** The pathology ids, host assignments and defect definitions there are binding. Do not invent an eighth pathology or move a site between host classes.
 - **Host split is fixed:** A, B → WP Engine. C, D, G → SpinupWP (one server). E, F → Local. Flagship → WP Engine production, with the existing `cedarvale.local` as its Local development clone.
-- **How many SpinupWP aliases depends on the site users, and is measured, not assumed.** This plan originally mandated one alias for all three sites. On the live server that is impossible unless the sites share a system user: `wp-config.php` is `0600`, owner-only, so no other user — sudo user included — can bootstrap `wp` in someone else's site, and Nexus never sudos. If SpinupWP's New Site form lets all three sites run as the existing `cedarvale-spin` user, use one alias; otherwise use three. Nothing rides on the outcome: the `ssh:<alias>/<site>` multi-site form is already live in the fleet via `ssh:hostinger-test`, which carries two sites. Whatever is true, `fleet.json` must state it, because Task 8 registers exactly what it says.
+- **Three SpinupWP aliases, one per site — settled 2026-08-11, measured not assumed.** This plan originally mandated one alias for all three. SpinupWP gave each site its own system user (`willowcreekderm`, `piedmontdermgroup`, `tablemesaderm`) and `wp-config.php` is `0600`, owner-only, so no user — the `spinupwp` sudo user included — can bootstrap `wp` in another site's install, and Nexus never sudos. One alias per site is therefore the only workable layout, and it is SpinupWP's own model. Nothing is lost: the `ssh:<alias>/<site>` multi-site form is already live in the fleet via `ssh:hostinger-test`, which carries two sites under one alias.
+- **The probe needs no changes for SpinupWP.** `probeExternalHost`'s `SEARCH_ROOTS` already includes `"$HOME"` at `SEARCH_MAXDEPTH` 4, and SpinupWP's `wp-config.php` sits at `$HOME/files/` — depth 1. WP-CLI is at `/usr/local/bin/wp`, the first entry in `WP_CLI_FALLBACK_PATHS`. Verified by running the probe's own `find` against the live server. Do not add a SpinupWP-specific search root.
 - **No corpus regeneration.** Fleet corpora are derived from `cedar-vale-health-demo/data/normalized.json`. Zero calls to any completion API in this plan. A task that adds one is wrong.
 - **Determinism.** Every sampling decision is seeded from the fleet manifest. Running the build twice must produce byte-identical corpora. No `Math.random()`, no `Date.now()`, no bare `new Date()` — in production code *or* in tests.
 - **No `cv_*` marker fields.** Every pathology must be detectable from fields that already exist in `scripts/src/acf/field-types.ts`. A new ACF key would have to be added to `FIELD_TYPES`, which would put it on the flagship's field groups too; worse, a corpus that flags its own defects proves nothing, because the demo would be finding the flag rather than the problem. If you cannot detect a pathology without a marker, the pathology is wrongly designed.
@@ -182,7 +183,7 @@ describe('fleet manifest', () => {
     expect(() =>
       parseFleetManifest({
         flagshipCorpus: 'data/normalized.json',
-        sites: [{ ...e, sshAlias: 'cedarvale-spin' }],
+        sites: [{ ...e, sshAlias: 'willowcreekderm' }],
       }),
     ).toThrow(/sshAlias/);
   });
@@ -331,7 +332,7 @@ practice is given a geographically coherent slice.
     },
     {
       "id": "cedar-vale-c", "label": "Willow Creek Dermatology", "letter": "C",
-      "host": "spinupwp", "sshAlias": "cedarvale-spin", "domain": "willowcreekderm.com",
+      "host": "spinupwp", "sshAlias": "willowcreekderm", "domain": "willowcreekderm.com",
       "pathology": "CV-C-01", "seed": 20260813,
       "locations": ["cedar-vale-dermatology-seattle-98101"],
       "counts": { "treatment": 8, "condition": 14, "post": 30, "insurance_plan": 5 },
@@ -339,7 +340,7 @@ practice is given a geographically coherent slice.
     },
     {
       "id": "cedar-vale-d", "label": "Piedmont Dermatology Group", "letter": "D",
-      "host": "spinupwp", "sshAlias": "cedarvale-spin", "domain": "piedmontdermgroup.com",
+      "host": "spinupwp", "sshAlias": "piedmontdermgroup", "domain": "piedmontdermgroup.com",
       "pathology": "CV-D-01", "seed": 20260814,
       "locations": [
         "cedar-vale-dermatology-raleigh-27601",
@@ -366,7 +367,7 @@ practice is given a geographically coherent slice.
     },
     {
       "id": "cedar-vale-g", "label": "Table Mesa Dermatology", "letter": "G",
-      "host": "spinupwp", "sshAlias": "cedarvale-spin", "domain": "tablemesaderm.com",
+      "host": "spinupwp", "sshAlias": "tablemesaderm", "domain": "tablemesaderm.com",
       "pathology": "CV-G-01", "seed": 20260817,
       "locations": ["cedar-vale-dermatology-boulder-80304"],
       "counts": { "treatment": 14, "condition": 18, "post": 35, "insurance_plan": 7 },
@@ -2089,45 +2090,38 @@ verification output to `docs/fleet-provisioning.md`; commit.
 
 ### Task 8: SpinupWP provisioning — C, D and G
 
-**Blocked on:** two more SpinupWP sites. The server is up and one site exists.
+**Not blocked.** All three sites exist and all three aliases authenticate.
 
 **Measured 2026-08-11.** `myfirstserver`, 159.65.76.95, DigitalOcean, Ubuntu
-26.04 LTS. WP-CLI 2.12.0 and PHP 8.3.33 installed globally. Sudo user
-`spinupwp` (uid 1000, sole member of `sudo`). One site: `cedarvale-spin.com`,
-site user `cedarvale-spin` (uid 1001, group `site-users`), docroot
-`/sites/cedarvale-spin.com/files`, WordPress **7.0.3**, plugins `spinupwp` and
-`limit-login-attempts-reloaded` active. Alias `cedarvale-spin` is in
-`~/.ssh/config` and authenticates.
+26.04 LTS. WP-CLI 2.12.0 at `/usr/local/bin/wp` and PHP 8.3.33, both global.
+Sudo user `spinupwp` (uid 1000, sole member of `sudo`). Each site has its own
+system user and a `0600` `wp-config.php`, so the aliases are not
+interchangeable.
+
+| Site | Alias / user | Docroot | WP | siteurl |
+|---|---|---|---|---|
+| C | `willowcreekderm` | `/sites/willowcreekderm.com/files` | 7.0.3 | `http://willowcreekderm.com` |
+| D | `piedmontdermgroup` | `/sites/piedmontdermgroup.com/files` | 7.0.3 | `http://piedmontdermgroup.com` |
+| G | `tablemesaderm` | `/sites/tablemesaderm.com/files` | 7.0.3 | `http://tablemesaderm.com` |
+
+All three blocks are already in `~/.ssh/config` and were verified end to end
+(`id`, `wp core version`, `wp option get siteurl`, `php -v`). A fourth site,
+`cedarvale-spin.com`, is a provisioning placeholder — see Step 1.
 
 **Files:**
 - Modify: `canonical-demos/docs/fleet-provisioning.md` (add the `## SpinupWP` section)
 
-- [ ] **Step 1: Create the two missing sites**
+- [x] **Step 1: Create the three sites** — DONE 2026-08-11
 
-One of the three already exists. In the SpinupWP dashboard, add two more on
-`myfirstserver`.
+All three exist on `myfirstserver`, each with its own system user (SpinupWP's
+default; the form did not offer reuse of an existing user). Domains, users and
+docroots are in the table above and in `fleet.json`. All three domains were
+confirmed to have no NS records before creation; none needs to resolve.
 
-**At the New Site step, check whether the form offers an existing system user.**
-If it does, put both new sites on `cedarvale-spin`: all three docroots then
-belong to one user, one alias reaches all three, and the `ssh:<alias>/<site>`
-multi-site form is exercised here as well as on Hostinger. If it forces a new
-user per site, accept that and plan for three aliases — see the Global
-Constraints; nothing depends on the outcome.
-
-The three domains, from `fleet.json`. All three were confirmed to have no NS
-records on 2026-08-11; none needs to resolve.
-
-| Site | Practice | Domain | Docroot |
-|---|---|---|---|
-| C | Willow Creek Dermatology | `willowcreekderm.com` | `/sites/willowcreekderm.com/files` |
-| D | Piedmont Dermatology Group | `piedmontdermgroup.com` | `/sites/piedmontdermgroup.com/files` |
-| G | Table Mesa Dermatology | `tablemesaderm.com` | `/sites/tablemesaderm.com/files` |
-
-The existing `cedarvale-spin.com` site is a placeholder and is **not** one of the
-three. Either change its primary domain to one of the above and reuse it — it
-already has WordPress 7.0.3 and the `spinupwp` plugin — or leave it and create
-all three fresh, then delete it so it does not appear as a fourth unexplained
-`external` row in Task 9's count.
+**One thing still outstanding: the `cedarvale-spin.com` placeholder.** It is not
+one of the three. Delete the site in SpinupWP and remove its block from
+`~/.ssh/config`, or it becomes a fourth unexplained `external` row in Task 9's
+count — which asserts exactly three.
 
 To browse the sites, add one line to `/etc/hosts`:
 
@@ -2135,42 +2129,53 @@ To browse the sites, add one line to `/etc/hosts`:
 159.65.76.95  willowcreekderm.com piedmontdermgroup.com tablemesaderm.com
 ```
 
-WordPress 7.0.3 is current, so `<two-majors-back>` for CV-C-01 in Step 4 means a
-6.x release — pick the latest 6.x minor and record which.
+WordPress **7.0.3** is current on all three, so `<two-majors-back>` for CV-C-01
+in Step 4 means a **6.x** release — pick the latest 6.x minor and record which.
 
-- [ ] **Step 2: Add the ssh alias(es)**
+- [x] **Step 2: Add the ssh aliases** — DONE 2026-08-11
 
-The first is already in `~/.ssh/config` and working:
+Three blocks, one per site, in `~/.ssh/config`. Not one for the server:
+SpinupWP gives each site its own user and a `0600` `wp-config.php`, so an alias
+can only reach the install it owns.
 
 ```
-Host cedarvale-spin
+Host willowcreekderm            # site C
   Hostname 159.65.76.95
-  User cedarvale-spin
+  User willowcreekderm
+  IdentityFile ~/.ssh/id_ed25519
+  IdentitiesOnly yes
+
+Host piedmontdermgroup          # site D
+  Hostname 159.65.76.95
+  User piedmontdermgroup
+  IdentityFile ~/.ssh/id_ed25519
+  IdentitiesOnly yes
+
+Host tablemesaderm              # site G
+  Hostname 159.65.76.95
+  User tablemesaderm
   IdentityFile ~/.ssh/id_ed25519
   IdentitiesOnly yes
 ```
 
-**One alias or three depends on Step 1's site-user choice.** If all three sites
-run as `cedarvale-spin`, this single block reaches all three roots and nothing
-more is needed. If each site got its own user — SpinupWP's default — add one
-block per site with that site's user, and set each site's `sshAlias` in
-`fleet.json` accordingly.
-
 `IdentitiesOnly yes` is not cosmetic. Without it ssh offers every key in
 `~/.ssh` on each connection, and each is a separate failed-auth line in the
 server log; SpinupWP installs fail2ban, whose default `sshd` jail bans after 5
-failures in 10 minutes. One apparent login attempt can trip it on its own.
+failures in 10 minutes. One apparent login attempt can trip it alone.
 
-Verify each alias before going further — `ssh -G` resolves but does not
-validate, and exits 0 for an alias in no config file at all:
+Verified end to end on all three — `ssh -G` resolves but does not validate, and
+exits 0 for an alias in no config file at all, so connectivity is the only real
+check:
 
 ```bash
-ssh <alias> 'id; wp --version; ls -d "$HOME"/files'
+for a in willowcreekderm piedmontdermgroup tablemesaderm; do
+  ssh "$a" 'cd "$HOME/files" && printf "%s %s %s\n" "$(id -un)" "$(wp core version)" "$(wp option get siteurl)"'
+done
 ```
 
-A site user cannot list `/sites` (the ACL grants `site-users` traverse only,
-`--x`), so `ls -d /sites/*/files` returns nothing even when the connection is
-healthy. Check `$HOME/files`, which is that site's docroot.
+A site user cannot list `/sites` — the ACL grants `site-users` traverse only,
+`--x` — so `ls -d /sites/*/files` returns nothing even on a healthy connection.
+Use `$HOME/files`, which is that site's docroot.
 
 - [ ] **Step 3: Seed each site with the server's own WP-CLI**
 
@@ -2180,8 +2185,8 @@ where `wpcli` writes are refused by design. The seeder plugin and theme must be
 on a remote server.
 
 ```bash
-scp cedar-vale-health-demo/data/fleet/cedar-vale-c/normalized.json cedarvale-spin:/tmp/cv-c.json
-ssh cedarvale-spin 'cd /sites/<c-domain>/files && \
+scp cedar-vale-health-demo/data/fleet/cedar-vale-c/normalized.json willowcreekderm:/tmp/cv-c.json
+ssh willowcreekderm 'cd "$HOME/files" && \
   wp plugin install /tmp/advanced-custom-fields-pro.zip --activate && \
   wp cedar import --file=/tmp/cv-c.json && \
   wp cedar verify --file=/tmp/cv-c.json'
@@ -2197,7 +2202,7 @@ breakage is the intended pathology — C is supposed to be broken — but a veri
 failure afterwards is indistinguishable from an import failure.
 
 ```bash
-ssh cedarvale-spin 'cd /sites/<c-domain>/files && \
+ssh willowcreekderm 'cd "$HOME/files" && \
   wp core update --version=<two-majors-back> --force && \
   wp plugin install advanced-custom-fields --version=5.12.6 --force --activate && \
   wp plugin install <an-abandoned-plugin> --activate && \
@@ -2213,12 +2218,14 @@ it gives `find_sites_with_theme` a real negative to return.
 - [ ] **Step 5: Register all three with Nexus**
 
 ```bash
-nexus host add <alias> --env production      # once per alias from Step 2
+nexus host add willowcreekderm   --env production
+nexus host add piedmontdermgroup --env production
+nexus host add tablemesaderm     --env production
 ```
 
-Registration lists every discovered WordPress install and lets you pick which to
-register. On a shared-user server, pick all three from the single alias; on
-per-site users, each `host add` will offer exactly one. Then:
+Three separate registrations, because each alias reaches exactly one install.
+Registration lists every discovered WordPress install and lets you pick; each of
+these will offer one. Then:
 
 ```bash
 nexus host list
@@ -2232,8 +2239,10 @@ true either way: three rows, `source='external'`, `is_active=1`.
 - [ ] **Step 6: Collect metadata and index**
 
 ```bash
-nexus host refresh cedarvale-spin
-nexus host index   cedarvale-spin
+for a in willowcreekderm piedmontdermgroup tablemesaderm; do
+  nexus host refresh "$a"
+  nexus host index   "$a"
+done
 ```
 
 `php_version` may come back NULL if the server disables `proc_open` — `wp --info`
@@ -2251,10 +2260,11 @@ search_site_content  site="ssh:<alias>/cedar-vale-g"  query="<the same term>"
 D must return hits and G must not. Both returning the same hits means the two
 sites share a sqlite-vec table.
 
-This check is worth running whichever alias layout Step 2 produced, but it is
-**not** the only coverage of that regression: `ssh:hostinger-test` already
-carries two registered sites under one alias, so the multi-site `vectorSiteId()`
-path has a live target independent of this server.
+These three ids contain no `/`-separated multi-site component of their own, so
+they cannot collide with each other the way `ssh:a/b-c` and `ssh:a-b/c` did.
+The multi-site `vectorSiteId()` path is covered instead by `ssh:hostinger-test`,
+which already carries two registered sites under one alias — run the same
+two-query check there if you want that regression exercised.
 
 - [ ] **Step 7: Record and commit**
 
