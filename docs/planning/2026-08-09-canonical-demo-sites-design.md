@@ -144,15 +144,28 @@ is simply an SSH-reachable non-WPE host: `source='external'`, identical path to
 the existing Hostinger connection. It adds narrative and multi-site coverage, not
 a new transport.
 
-**Prerequisite status, updated 2026-08-11:** the server exists.
-`myfirstserver` at 159.65.76.95 (DigitalOcean, Ubuntu 26.04 LTS) is provisioned
-and reachable, with WP-CLI 2.12.0 and PHP 8.3.33 installed globally and a
-`cedarvale-spin` alias in `~/.ssh/config`. **One** of the three sites exists —
-`cedarvale-spin.com`, WordPress 7.0.3, running the `spinupwp` and
-`limit-login-attempts-reloaded` plugins. Two more must be created in the
-SpinupWP dashboard before C, D and G can all be built. The three registered
-`external` rows in the graph are still all Hostinger; nothing on this server is
-registered with Nexus yet.
+**Prerequisite status, updated 2026-08-11 — infrastructure complete.**
+`myfirstserver` at 159.65.76.95 (DigitalOcean, Ubuntu 26.04 LTS) is provisioned,
+with WP-CLI 2.12.0 and PHP 8.3.33 installed globally. All three sites exist,
+each WordPress 7.0.3 with its own system user, ssh alias and `0600`
+`wp-config.php`:
+
+| Site | Alias / user | Docroot |
+|---|---|---|
+| C — Willow Creek Dermatology | `willowcreekderm` | `/sites/willowcreekderm.com/files` |
+| D — Piedmont Dermatology Group | `piedmontdermgroup` | `/sites/piedmontdermgroup.com/files` |
+| G — Table Mesa Dermatology | `tablemesaderm` | `/sites/tablemesaderm.com/files` |
+
+All three verified end to end over their own alias (`id`, `wp core version`,
+`wp option get siteurl`, `php -v`). None of the domains resolves and none needs
+to — SpinupWP serves each on a `Host` header.
+
+**Two residuals.** The `cedarvale-spin.com` provisioning placeholder is a fourth
+site on the server and must be deleted, or the fleet shows an unexplained fourth
+`external` row. And nothing on this server is registered with Nexus yet — the
+three `external` rows in the graph are still all Hostinger — because
+registration happens after seeding, so the sites are labelled `production` only
+once they hold their content.
 
 **Seeding does not go through Nexus's write gate, and that is the point.**
 `wpcli` (write) is refused on `production` by default, on both WPE and external
