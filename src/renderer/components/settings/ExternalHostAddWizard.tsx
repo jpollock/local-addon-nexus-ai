@@ -604,7 +604,14 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
       field('Hostname', 'hostname', 'example.com'),
       field('User', 'user', 'ssh-user'),
       field('Port', 'port', '22'),
+      React.createElement('div', { style: { marginTop: 12 } },
+        React.createElement('div', { style: labelStyle }, 'Which key should Nexus use?'),
+        React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', marginTop: 6, marginBottom: 8 } },
+          'Nexus connects on a schedule with nobody watching, so there is no one to answer a password prompt — it needs a key.'),
+      ),
       field('Identity file (optional)', 'identityFile', '~/.ssh/id_ed25519'),
+      React.createElement('div', { style: { fontSize: 11.5, color: 'var(--ag-text-muted)', marginTop: 6, fontStyle: 'italic' } },
+        'Nexus keeps no secrets of its own — it remembers which key to ask for, and the key stays where it already lives.'),
       preview?.collision.kind === 'exact'
         ? React.createElement('div', { style: { ...failCardStyle, marginTop: 12 } },
             `'${newEntry.alias}' already exists in ${preview.collision.file}:${preview.collision.line}.`)

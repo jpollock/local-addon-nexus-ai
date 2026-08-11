@@ -10,6 +10,13 @@ function findAll(node: any, pred: (n: any) => boolean, out: any[] = []): any[] {
   return out;
 }
 
+function spySetState(instance: any): void {
+  jest.spyOn(instance, 'setState').mockImplementation(function (this: any, updater: any) {
+    const update = typeof updater === 'function' ? updater(this.state) : updater;
+    Object.assign(this.state, update);
+  });
+}
+
 const inst = (over: any = {}) => {
   const i = new (OtherHostsPanel as any)({
     externalHosts: over.externalHosts ?? [],
@@ -109,5 +116,33 @@ describe('OtherHostsPanel — host list', () => {
     const row = i.hostRows().find((r: any) => r.alias === 'boxa');
     expect(row.connection).toBeNull();
     expect(row.configured).toBe(false);
+  });
+});
+
+describe('OtherHostsPanel — add screen', () => {
+  it('Add a host opens the wizard as the add screen', () => {
+    const i = inst();
+    spySetState(i);
+    i.setState({ screen: { name: 'add' } });
+    const t = JSON.stringify(serializeTree(i.render()));
+    expect(t).toContain('ExternalHostAddWizard');
+  });
+
+  it('closing the wizard returns to the list', () => {
+    const i = inst();
+    spySetState(i);
+    i.setState({ screen: { name: 'add' } });
+    i.closeAdd();
+    expect(i.state.screen).toEqual({ name: 'list' });
+  });
+
+  it('completing the wizard reloads the host list', () => {
+    const i = inst();
+    spySetState(i);
+    i.reload = jest.fn().mockResolvedValue(undefined);
+    i.setState({ screen: { name: 'add' } });
+    i.completeAdd('newbox');
+    expect(i.reload).toHaveBeenCalled();
+    expect(i.state.screen).toEqual({ name: 'list' });
   });
 });

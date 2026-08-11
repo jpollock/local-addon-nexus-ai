@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ExternalHostAddWizard } from '../../../src/renderer/components/settings/ExternalHostAddWizard';
 import { IPC_CHANNELS } from '../../../src/common/constants';
+import { serializeTree } from './helpers/serializeTree';
 
 // ---------------------------------------------------------------------------
 // Shared test helpers — copied from tests/unit/renderer/SettingsTab.test.tsx's
@@ -703,5 +704,35 @@ describe('ExternalHostAddWizard', () => {
     expect(closeButtons.length).toBeGreaterThan(0);
     closeButtons[0].props.onClick();
     expect(props.onCompleted).toHaveBeenCalledWith('multibox');
+  });
+
+  const wiz = () => {
+    const i = new (ExternalHostAddWizard as any)({
+      electron: { ipcRenderer: { invoke: jest.fn().mockResolvedValue({ success: true, hosts: [] }) } },
+      onClose: jest.fn(), onCompleted: jest.fn(), onProbeClean: jest.fn(),
+    });
+    spySetState(i);
+    i.setState({ step: 1, step1Mode: 'new' });
+    return JSON.stringify(serializeTree(i.render()));
+  };
+
+  it('asks which key to use, not how to sign in', () => {
+    expect(wiz()).toContain('Which key should Nexus use?');
+  });
+
+  it('offers no password route — BatchMode=yes means nobody can answer a prompt', () => {
+    expect(wiz().toLowerCase()).not.toContain('password prompt.');
+    // The word appears only in the explanation of why there is no password option.
+    const t = wiz();
+    const mentions = (t.match(/password/gi) ?? []).length;
+    expect(mentions).toBeLessThanOrEqual(1);
+  });
+
+  it('says why a key is required, rather than leaving the absence unexplained', () => {
+    expect(wiz()).toContain('no one to answer a password prompt');
+  });
+
+  it('does not imply Nexus stores a secret', () => {
+    expect(wiz()).toContain('Nexus keeps no secrets of its own');
   });
 });

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { externalHostCapabilities, Capability, CapabilityState } from './hostCapabilities';
+import { ExternalHostAddWizard } from './ExternalHostAddWizard';
 
 export interface ExternalHostRow { alias: string; site: string; environment: string; domain: string }
 interface SshConfigHost { alias: string; hostname: string; user: string; port: string; identityFile?: string; proxyJump?: string; alreadyRegistered: boolean }
@@ -59,6 +60,13 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
       sshConfigHosts: Array.isArray(cfg?.hosts) ? cfg.hosts : [],
       hosts: Array.isArray(hosts) ? hosts : this.state.hosts,
     });
+  };
+
+  closeAdd = (): void => { this.setState({ screen: { name: 'list' } }); };
+
+  completeAdd = (_alias: string): void => {
+    this.setState({ screen: { name: 'list' } });
+    this.reload();
   };
 
   /**
@@ -265,6 +273,16 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
   }
 
   render(): React.ReactElement {
+    // Add screen
+    if (this.state.screen.name === 'add') {
+      return React.createElement(ExternalHostAddWizard, {
+        electron: this.props.electron,
+        onClose: this.closeAdd,
+        onCompleted: this.completeAdd,
+        onProbeClean: () => undefined,
+      });
+    }
+
     const rows = this.hostRows();
 
     // Empty state when no hosts
@@ -277,7 +295,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
       return this.renderList();
     }
 
-    // Placeholder for other screens (Tasks 3-6)
+    // Placeholder for other screens (Tasks 4-6)
     return React.createElement('div', {}, `Screen: ${this.state.screen.name}`);
   }
 }
