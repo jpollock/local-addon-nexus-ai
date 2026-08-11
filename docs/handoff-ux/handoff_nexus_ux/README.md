@@ -199,8 +199,16 @@ independent numbers.
 
 Two-column: a 232px section list (`border-right: 1px solid #e5e7eb`) and content. Active section
 gets `border-left: 3px solid #0ECAD4`, `background #f3f4f6`. Each nav item carries a derived note
-(*"4 of 6 on"*, *"5 on"*, *"production safe"*). Footer line: *"Everything Nexus can be configured
-with is here. There is no second settings page."*
+(*"4 of 6 on"*, *"5 of 6 on"*, *"production safe"*). Footer line names the one exception rather than
+overclaiming: *"Everything Nexus can be configured with is here, with one exception: approving a new
+host the first time you connect to it stays in Local → Preferences → Nexus AI, because that approval
+must not be reachable from anything but Local itself."*
+
+**A rump native panel is expected and correct.** Trust-on-first-use host-key approval is
+deliberately IPC-only and must not be reachable over GraphQL — that is a security boundary, not
+leftover duplication, so it should be stated in the UI rather than quietly preserved. The acceptance
+test becomes *one settings home plus one named, justified exception*, which still retires the
+current overlap (six sections duplicated across two homes, Access & Permissions in both).
 
 This replaces **both** current homes — Preferences → Nexus AI and the dashboard Settings tab. All
 six current sections are covered.
@@ -222,18 +230,96 @@ screen in Local), retention 7/30/90/Forever with a sentence that tracks the choi
 and a link to the sites overriding the global AI provider.
 
 **Background work** — the section that carries the argument. A master switch, then a derived
-summary: **connections a day · minutes of work a day · until the next pass**. Below it one row per
+summary: **connections a day (WP Engine) · connections a day (other hosts) · minutes of work a day ·
+until the next pass**.
+
+**The master is a true pause, and needs a new setting to be one.** There are six per-job
+`AutoEnabled` flags and no global one. The master must *not* write `false` into all six — that
+destroys the user's configuration, and switching back on silently re-enables jobs they had
+deliberately turned off. Add a seventh field (`backgroundWorkPaused`); the scheduler checks it first
+and the six per-job flags are never touched. It costs a schema field and is worth it: a master
+switch that discards configuration is worse than no master switch. The copy says so —
+*"Pausing this stops every schedule below and keeps your per-job settings exactly as they are"*, and
+while paused, *"switching this back on restores them."*
+
+**One row has no toggle.** `haltedSiteRefresh` has an interval and has never had an enable flag. Its
+switch column shows a static **Always on** label — not a disabled toggle, which implies it could be
+enabled — and its interval column reads *"not adjustable"*. It is **excluded from the nav note's
+denominator**: the note counts switchable jobs only, since a count including an unswitchable row can
+never reach its own maximum. Below it one row per
 job with the cost stated **as the value in the row**, not as prose underneath:
-*"6 passes a day · 1,902 connections"*, *"no extra connections"* (for the job that rides along),
-*"free"* (for the disk scan). Interval steppers are 1/2/4/8/12/24h. Cost turns amber below 2h.
-Off jobs read *"nothing while off"*. All figures recompute live.
+*"6 passes a day · 1,902 connections"*, *"no extra connections"* (for the WP Engine index, which
+rides along), *"free"* (for the disk scan). Interval steppers are 1/2/4/8/12/24h. Off jobs read
+*"nothing while off"*. All figures recompute live.
 
-**What agents may do** — a 5×3 grid (actions × Local/Staging/Production) of clickable Allowed /
-Blocked cells replacing the accordion. Risky production cells are amber even when allowed. Reading
-is stated as always-on and is not rendered as a toggle.
+**External indexing is not free and gets its own row and its own figure.** Only the WP Engine index
+rides an existing connection; the external one opens a separate SSH session per host and
+structurally cannot share one. Its row says why, in the user's terms: *"This one cannot ride along —
+each host needs its own SSH session, and shared hosting limits how many you may open."*
 
-**Advanced** — MCP port, gateway, search index, reset. Opens with a line saying you shouldn't need
-this page unless something is wrong.
+**Two connection figures, two thresholds — grouped by where the load lands, not by what the job
+does.** `externalRefreshAutoEnabled` belongs in the external figure too: it opens its own session per
+host on exactly the same terms, so with both external jobs enabled a shared host takes two
+independent sessions per cycle. The group is therefore *"other people's servers"* rather than
+*"external indexing"*, and the 6h threshold applies to both rows in it. Do not sum the two figures
+into one headline. WP Engine connections turn amber **at or below 2h**; external sessions turn amber
+**below 6h**.
+
+The job table is **split into three destination groups** — *On your WP Engine account*, *On other
+people's servers*, *On this Mac* — each with a one-line explanation in its header. This is what
+carries the external-cost reasoning: it belongs to the destination, not to one row, so it sits in the
+group header and every row stays the same height. See `MEMBERSHIP.md` for which row feeds which
+figure, and `COPY.md` for the exact strings. The
+consequence differs by whose infrastructure it is — WP Engine's platform tolerates a tight interval,
+a third party's shared host caps `MaxSessions` and is not ours to hammer. A single blended total
+would hide exactly the load that matters most.
+
+**On run duration.** The prototype shows *"took 11 min"* per job and *"48 min of work a day"* in the
+summary. No scheduler currently records duration — **add it**: a start/end timestamp per run, keep
+the last few, average them. It is two `Date.now()` calls, and it is the figure that carries the row
+(connections tell you the load; minutes tell you whether the interval is reasonable).
+
+Until a real measurement exists, **omit the clause** — do not render *"not measured yet"*, *"—"* or
+an estimate. That is the same failure as printing `UNKNOWN` in the event timeline (review finding
+13): a field admitting it has nothing to say, at full weight. So:
+
+| State | Job row | Summary |
+|---|---|---|
+| No run recorded yet | `6 passes a day · 1,902 connections` | `1,902 connections a day · next pass in about 2h` |
+| At least one run recorded | `6 passes a day · 1,902 connections · took 11 min` | `1,902 connections a day · 48 min of work a day · next pass in about 2h` |
+
+Connections/day is derivable from the install count and the interval, so **nothing blocks** —
+Background work ships complete and becomes more informative once runs accumulate. The summary's
+minutes clause appears as soon as any one job has a duration, and sums only over jobs that have one.
+
+**What agents may do** — a **4×3** grid (actions × Local/Staging/Production) of clickable Allowed /
+Blocked cells replacing the accordion. Risky production cells are amber even when allowed.
+
+`wpcli_read` is **out of the grid entirely**, not greyed inside it, and becomes one sentence above:
+*"Reading a site is always allowed, everywhere, and is not listed below — it is how Nexus answers
+questions at all. Everything below changes something."* A disabled control in a grid of live ones
+still reads as a control and invites "why can't I change this"; it also spends three cells of
+weight on one fact. Below the grid, one line: *"Everything that changes a site starts off on
+production until you turn it on here."*
+
+**Advanced** — MCP port, gateway, search index. Opens with a line saying you shouldn't need this
+page unless something is wrong.
+
+Then a separate **Rebuilding and starting over** group holding all three destructive actions, which
+the earlier draft had scattered (one marked danger, one as a plain `Run` inside a Housekeeping row,
+one unlisted). Order them by what they cost to undo, and mark them by that cost — not by whether
+they touch credentials:
+
+| Intent | Label | Marking | Says |
+|---|---|---|---|
+| `RESET_CONTENT_INDEX` | Rebuild search | plain | *Keeps everything. Re-reads content you already have on this Mac.* · A few minutes · search results are patchy meanwhile |
+| `RESET_AND_REFRESH` | Rebuild what Nexus knows | amber | *Keeps your connections and settings. Throws away everything Nexus worked out about your sites and reads all 367 again from scratch.* · About 30 minutes · Nexus cannot answer questions about your fleet until it finishes |
+| `FACTORY_RESET` | Start over | red | *Keeps your connections. Forgets everything else, restores every setting on this page to its default and restarts Local.* · Restarts Local · nothing is rebuilt until you ask it to be |
+
+The rule: **danger marking tracks cost-to-undo, not what gets deleted.** Preserving credentials is
+not what makes an action safe — half an hour of an unanswerable fleet is the cost the user actually
+pays, so `RESET_AND_REFRESH` cannot carry a plain `Run`. Every row states what it keeps, what it
+loses and how long, in that order. All three take a confirm; only Start over needs a typed one.
 
 ### 6. First run
 
@@ -354,6 +440,8 @@ for evidence blocks, ports and identifiers.
 | `Nexus Redesign v1.dc.html` | The prototype. Eight screens via the switcher above the window. |
 | `Nexus UX Review.dc.html` | The review: 17 findings, the proposed IA, and the reasoning. |
 | `support.js` | Runtime for the two HTML files. Not part of the design. |
+| `COPY.md` | Every string to quote verbatim — resets, footer, pause, external, permissions. |
+| `MEMBERSHIP.md` | Which job rows belong to which set: denominator, WPE figure, external figure. |
 | `BUILD-ORDER.md` | Suggested sequence of shippable changes. |
 | `DECISIONS.md` | What was decided, what changed on contact, what is still open. |
 

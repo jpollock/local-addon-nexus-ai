@@ -30,9 +30,31 @@ They are not merely split — they **overlap**. WP Engine access is implemented 
 external hosts appear in both. The merge is therefore a reconciliation, not a relocation, and any
 task that only moves code has not done the job.
 
-The handoff's footer line is the acceptance test for the whole spec:
+The acceptance test for the whole spec is **one settings home plus one named, justified
+exception**. The footer states the exception rather than overclaiming (`COPY.md` § Settings
+footer):
 
-> *"Everything Nexus can be configured with is here. There is no second settings page."*
+> *"Everything Nexus can be configured with is here, with one exception: approving a new host the
+> first time you connect to it stays in Local → Preferences → Nexus AI, because that approval must
+> not be reachable from anything but Local itself."*
+
+The earlier *"There is no second settings page"* could never have been true: trust-on-first-use
+host-key approval is IPC-only by design and must not be reachable over GraphQL. That is a security
+boundary, so it is stated in the UI rather than quietly preserved. The test still retires the real
+overlap — six sections duplicated across two homes.
+
+## Copy and membership are quoted, not paraphrased
+
+Two handoff files are normative for this spec and must be quoted rather than restated:
+
+| File | Owns |
+|---|---|
+| `docs/handoff-ux/handoff_nexus_ux/COPY.md` | every user-visible string — the nine reset fragments, both halves of the pause copy, all eight row descriptions, the six cost-string forms, the grid's two framing lines |
+| `docs/handoff-ux/handoff_nexus_ux/MEMBERSHIP.md` | which rows belong to which subset, which figure each feeds, and each row's amber threshold |
+
+`MEMBERSHIP.md` was **reconciled against the code on 2026-08-10** and four of its eight flag names
+were corrected; the corrections are tabulated in that file. Read the corrected table, not the
+design's original mapping.
 
 ## Architecture
 
@@ -69,9 +91,11 @@ build:
 > *"Compute fleet figures **once**, in one module, and have every label read from it. Never restate
 > a number in a string literal."*
 
-`derived.ts` is that module for this screen. Every nav note (`"4 of 6 on"`, `"5 on"`,
-`"production safe"`), every cost string and the summary line come from it. Site counts come from
-`collectFleetCounts` — the foundation spec's deliverable — never re-derived from the graph.
+`derived.ts` is that module for this screen. Every nav note (`"4 of 6 on"`, `"5 of 6 on"`,
+`"production safe"`), **both** connection figures, every cost string and the three summary columns
+come from it. Site counts come from `collectFleetCounts` — the foundation spec's deliverable —
+never re-derived from the graph. Its row-to-subset mapping is `MEMBERSHIP.md`'s table, transcribed
+once.
 
 ### C. Absent data omits its clause
 
@@ -94,10 +118,12 @@ and after its first real run becomes:
 6 passes a day · 1,986 connections · took 11 min
 ```
 
-The summary line behaves the same way: `1,986 connections a day · next pass in about 2h` until at
-least one job has a duration, then the minutes clause appears between them. Nothing is blocked
-waiting for data — connections and passes are derivable from the interval and the install count on
-day one.
+The summary behaves the same way: the TIME column reads `next pass in about 2h` until at least one
+job has a duration, then gains `48 min of work a day` above it. Nothing is blocked waiting for
+data — connections and passes are derivable from the interval and the install count on day one.
+
+The same rule governs a whole group: with no external host connected, the *Other people's servers*
+column and its two rows **do not exist**, rather than rendering as `0`.
 
 ## The five sections
 
@@ -130,62 +156,94 @@ Source: `NexusPreferences.renderChatSection`.
 
 The section that carries the argument, and the only one that is substantially new.
 
-**Seven jobs, not the prototype's five.** The prototype was drawn before external became a
-first-class site type; spec 5 shipped it and surfaced `externalContentIndexAutoEnabled` in
-Settings. The real set, from `src/common/schemas.ts`:
+**Grouped by where the load lands, not by what the job does.** Three destination groups, each with
+its own header, its own figure and its own amber threshold:
 
-| Row | Setting pair | Connections? |
-|---|---|---|
-| Check WP Engine sites | `wpeRefreshAutoEnabled` / `wpeRefreshIntervalHours` | yes, one per install |
-| Refresh site details | `wpeSyncAutoEnabled` / `wpeSyncIntervalHours` | yes, one per install |
-| Make WP Engine content searchable | `wpeContentIndexAutoEnabled` / `wpeContentIndexIntervalHours` | **no extra** — rides along |
-| Check other hosts | `externalRefreshAutoEnabled` / `externalRefreshIntervalHours` | yes, one per host |
-| Make other hosts searchable | `externalContentIndexAutoEnabled` / `externalContentIndexIntervalHours` | **yes** — see below |
-| Index sites on this Mac | `localContentIndexAutoEnabled` / `localContentIndexIntervalHours` | local only |
-| Look over stopped local sites | `haltedSiteRefreshIntervalHours` | free |
+| Group | Header | Rows | Threshold |
+|---|---|---|---|
+| `wpe` | On your WP Engine account | Check WP Engine sites · Refresh site details · Make content searchable | ≤ 2h |
+| `ext` | On other people's servers | Check other hosts · Make other hosts searchable | < 6h |
+| `local` | On this Mac | Index sites on this Mac · Look over stopped local sites | never |
 
-**External content indexing is not "no extra connections".** Only the WP Engine one rides along.
-CLAUDE.md is explicit that `ExternalContentIndexScheduler` opens a separate SSH session per host
-because external SSH has no `ControlMaster` to piggyback on, and must not gain one — shared hosting
-caps `MaxSessions`, and `ControlPersist` would hold a socket open to a third party's production
-server. Copying the WPE row's copy here would understate the cost of the one job whose cost lands
-on someone else's server.
+Grouping by destination is what made the section coherent. The earlier framing pulled *external
+indexing* out for reasons that were verbatim true of *external refresh* — both open their own SSH
+session per host and neither can share one with the other, so with both enabled a shared host takes
+**two independent sessions per cycle**. `ExternalContentIndexScheduler.ts:58` says so in as many
+words. Naming the group by destination means adding a job is a question of which destination it
+hits, not of inventing a threshold.
 
-**`haltedSiteRefresh` has no on/off.** It has an interval and no enable setting; it always runs.
-The row shows its interval and reads `free`, matching the prototype's own cost for it. Inventing
+It also fixes the layout: the external-cost explanation lives **once, in the group header**, because
+it is a property of the destination rather than of either job. No per-row callout, and every row
+stays the same height.
+
+> **`README.md` §5 is stale on exactly this point.** It still carries the older per-row framing
+> (*"External indexing … gets its own row … Its row says why"*) with a per-row string. `COPY.md`
+> § Background work — group headers supersedes it. Quote `COPY.md`.
+
+**Row membership, the three subsets and every flag name come from `MEMBERSHIP.md`** — reconciled
+against the code, with four of the design's eight flag names corrected. Do not re-derive them here.
+The two facts that most often get assumed wrong:
+
+- **Group membership and cost contribution are different predicates.** "Make content searchable"
+  sits in the `wpe` group and contributes **nothing** to its figure, because it rides the connection
+  "Check WP Engine sites" already opened. A row can have a group and no `conn`.
+- **The switchable denominator is 6 with an external host connected and 4 without**, not the 7 and 5
+  the design's table gave. `haltedSiteRefresh` is the always-on row and is excluded from both.
+
+**`haltedSiteRefresh` has no on/off.** It has an interval and has never had an enable setting. Its
+switch column shows a static **Always on** label — *not* a disabled toggle, which would imply it
+could be enabled — and its interval column reads *"not adjustable"*. Inventing
 `haltedSiteRefreshAutoEnabled` would hand users a switch for something that has never been
-switchable — a behaviour change that deserves its own decision, not a side effect of a settings
+switchable, a behaviour change deserving its own decision rather than a side effect of a settings
 rewrite.
 
-**The arithmetic**, from the prototype, unchanged:
+**The master switch is a pause, not an all-off.** It gets its own persisted field,
+`backgroundWorkPaused`; the six per-job flags are never written to. A master that writes `false`
+into all six destroys the user's configuration and silently re-enables jobs they had deliberately
+turned off when switched back on. Both halves of `COPY.md`'s pause copy make that promise explicit,
+and the field is what keeps it.
+
+**The arithmetic:**
 
 ```
-per(h)      = round(24 / h)                    passes per day
-connPerDay  = Σ over connecting, enabled jobs of per(h) × siteCount
-minsPerDay  = Σ over enabled jobs of per(h) × avgDurationMin      (omitted if no durations)
-nextIn      = min(h) over enabled jobs
+per(h)       = h === 0 ? OFF : round(24 / h)      passes per day
+wpeConnPerDay = Σ over wpe-group rows with conn, enabled, of per(h) × installCount
+extSessPerDay = Σ over ext-group rows,           enabled, of per(h) × hostCount
+minsPerDay    = Σ over enabled jobs of per(h) × avgDurationMin   (omitted if no durations)
+nextIn        = min(h) over enabled jobs
 ```
 
-Interval steppers are 1/2/4/8/12/24h. Cost turns amber below 2h. Off jobs read `nothing while
-off` — never `0`. A master switch pauses everything.
+**Never sum the two connection figures.** A blended total hides the load that matters most. The
+summary renders them as three hairline-separated columns — *Your WP Engine account* / *Other
+people's servers* / *Time* — each with its own figure, unit and scope note, ambering independently.
+The units differ deliberately: `connections a day` versus `SSH sessions a day`. Two clauses on one
+line would re-blend them typographically even with separate numbers.
+
+**`h === 0` must be handled before the division.** Six of the seven intervals are `min(1)`, but
+`localContentIndexIntervalHours` is `min(0)` and 0 is a legal stored value meaning *off*.
+`round(24 / 0)` is `Infinity`, which renders as `"Infinity passes a day"`.
+
+Interval steppers are 1/2/4/8/12/24h. Off jobs read `nothing while off` — never `0`.
 
 ### 4. What agents may do
 
-A 5×3 grid of clickable Allowed / Blocked cells replacing the accordion — which exists in **both**
-current homes and is the clearest single case of the duplication this spec removes.
+A **4×3** grid of clickable Allowed / Blocked cells replacing the accordion — which exists in
+**both** current homes and is the clearest single case of the duplication this spec removes.
 
 | Row | Real permission key |
 |---|---|
 | Copy a site down to this Mac | `pull` |
-| Read what is installed | `wpcli_read` |
 | Install or update things | `wpcli` |
 | Push local changes up | `push` |
 | Delete or promote an environment | `delete` |
 
 Columns are Local / Staging / Production, mapping to `development` / `staging` / `production`.
-Risky production cells are amber even when allowed. **Reading is stated as always-on and is not
-rendered as a toggle** — `wpcli_read` is permitted on every environment by default and the grid
-should say so rather than offer a switch that misrepresents the default.
+Risky production cells are amber even when allowed.
+
+**`wpcli_read` is out of the grid entirely**, stated in one line above it rather than rendered as a
+fifth row. It is permitted on every environment by default and is how Nexus answers questions at
+all; a toggle for it would misrepresent the default, and a permanently-Allowed row would be four
+cells of noise. Both framing lines are in `COPY.md` § What agents may do.
 
 Writes to `remoteOperationPermissions`. The legacy `wpeAllowedEnvironments` is dead code and is not
 surfaced (CLAUDE.md: all four exported functions of `environment-filter.ts` have zero callers).
@@ -204,18 +262,44 @@ Operations tab alive was that deleting it would make them unreachable.
 |---|---|---|---|
 | Connect your own AI tools | `port 10801` | Copy command | Dashboard `renderMcpPanel` |
 | AI gateway | `port 13100` | View usage | existing gateway panel |
-| Search index | size · *N sites indexed* | Rebuild | `renderContentIndexReset` (`NexusOverview:966`) |
-| Database health | — | Scan | `renderDbScanSection` (`:1062`) — **added** |
-| Housekeeping | — | Run | `renderContentMaintenance` (`:1135`) — **added** |
+| Database health | — | Scan | `renderDbScanSection` (`NexusOverview:1062`) — **added** |
+| Remove ghost installs | — | Run | `renderContentMaintenance` (`:1135`), first button — **added** |
 | SSH diagnostics | — | Run | `renderSshDiagnostics` (`:1186`) — **added** |
-| Start over | — | Reset (danger) | `renderFactoryReset` (`:878`) |
 
-`Start over` is Factory Reset, not the content-index reset — *"forgets everything Nexus has
-learned"* is `FACTORY_RESET`, which also clears keychain entries, WPE OAuth and the telemetry id.
-The content index reset is the `Search index → Rebuild` row. Conflating them would put a
-credential-destroying action behind a button labelled "Rebuild".
+Plus the reset group below. Also moving here: `SettingsTab.renderAutoIndexingSection`
+("index internals").
 
-Also moving here: `SettingsTab.renderAutoIndexingSection` ("index internals").
+#### Rebuilding and starting over
+
+**Three destructive actions, not two, in one group ordered by cost-to-undo.** The third —
+`RESET_AND_REFRESH` — was invisible to the prototype because it is the *second button inside*
+`renderContentMaintenance`, under a row the earlier draft labelled "Housekeeping → Run". It
+`DELETE`s every graph table, drops all vectors, then re-syncs the fleet.
+
+| Order | Row | Channel | Level | Costs you |
+|---|---|---|---|---|
+| 1 | Rebuild search | `RESET_CONTENT_INDEX` | plain | a few minutes, patchy search meanwhile |
+| 2 | Rebuild what Nexus knows | `RESET_AND_REFRESH` | **amber** | ~30 min with the fleet unanswerable |
+| 3 | Start over | `FACTORY_RESET` | **red** | restarts Local; nothing rebuilt until asked |
+
+Each row states what it keeps, what it loses, then how long — nine fragments, verbatim in `COPY.md`
+§ Advanced. All three take a confirm; only **Start over** takes a typed one.
+
+**The ranking rule is cost-to-undo, not what gets deleted.** An earlier draft of this spec justified
+the split by claiming `FACTORY_RESET` "also clears keychain entries, WPE OAuth and the telemetry
+id." **That is false, in the opposite direction:**
+
+```
+src/main/ipc-handlers.ts:4342   // Survives: API keys (Keychain), WPE OAuth session, telemetry ID.
+src/renderer/components/NexusOverview.tsx:925
+                                '✓ API keys (Keychain), WPE OAuth, and telemetry ID are not affected'
+```
+
+Credentials survive `FACTORY_RESET` by design, so the user can recover. Preserving credentials is
+therefore *not* what makes an action safe — which is why `RESET_AND_REFRESH`, which preserves both
+credentials and settings, cannot carry a plain `Run`: half an hour of an unanswerable fleet is what
+the user actually pays. Any implementation that warns users their credentials will be destroyed is
+lying to them and contradicts confirmation copy already shipped 300 lines away in the same file.
 
 ## Operations dies here
 
@@ -227,7 +311,17 @@ Advanced.
 
 ## Data this spec adds
 
-`JobRunStore` — the only new persistence.
+### `backgroundWorkPaused` — a new setting
+
+The master pause needs its own boolean. It must be added to **`UpdateSettingsSchema` in
+`src/common/schemas.ts`**, which is `.strict()` — a field absent from that schema is silently
+stripped on write, the setting never persists, and the master switch appears to work until Local
+restarts. This is a known, previously-hit failure mode in this codebase.
+
+The scheduler checks it first; **the six per-job `AutoEnabled` flags are never written to.** That is
+the whole point of the field, and both halves of the pause copy promise it out loud.
+
+### `JobRunStore` — the only new persistence
 
 - `record(jobKey, startedAt, durationMs)` — called by each scheduler at the end of a cycle
 - `lastRunAt(jobKey)` → `number | null`
@@ -269,8 +363,27 @@ breaking:
 - With no recorded runs, the row has **no** duration clause and the summary has **no** minutes
   clause; with runs, both appear
 - The nav note for Connections equals the count of configured rows, not a literal
-- External content indexing does **not** read "no extra connections"
 - No hardcoded hex colours in any section's tree
+
+The membership rules need their own tests, because they are the part a reader will "simplify" back
+into a single set:
+
+- **The two figures are never summed.** The WP Engine figure and the other-hosts figure appear
+  under separate column heads with different units (`connections` vs `SSH sessions`), and no
+  rendered string contains their total.
+- **`externalRefreshAutoEnabled` contributes to the other-hosts figure**, not the WP Engine one —
+  the specific regression that grouping-by-destination fixed.
+- **"Make content searchable" contributes nothing** while still rendering under the WP Engine
+  header: group membership and cost contribution are separate predicates.
+- **The switchable denominator is 6 with an external host and 4 without**, and never counts
+  `haltedSiteRefresh`.
+- **The always-on row renders a static label**, not an `input` with `disabled: true`.
+- **`localContentIndexIntervalHours: 0` reads `nothing while off`**, never `Infinity passes a day`.
+- **Amber fires at ≤ 2h for `wpe` rows and < 6h for `ext` rows** — one threshold per destination.
+- **Toggling the master leaves all six per-job flags byte-identical**, and `backgroundWorkPaused`
+  survives a write through `UpdateSettingsSchema` (the `.strict()` guard).
+- **`RESET_AND_REFRESH` renders at the amber level and `FACTORY_RESET` at red**, and no reset row's
+  copy claims credentials are destroyed.
 
 ## Global constraints
 
@@ -286,12 +399,29 @@ breaking:
 
 ## Known limitations to record, not fix here
 
-- **Agent cards are spec 6b.** `AgentsHub.tsx` (164) and `AgentCard.tsx` (138) are untouched.
+- **Agent cards are spec 6b.** `src/renderer/components/agents/AgentsHub.tsx` (164) and
+  `AgentCard.tsx` (138) are untouched.
 - **`DECISIONS.md` still says external caps at Detailed.** Spec 5 shipped the opposite. The line is
   stale and should be corrected when someone next edits that file; it is not this spec's to change.
 - **The prototype's `mins` constants (11, 7, 26, 4, 1) are mock measurements.** Real averages come
   from `JobRunStore`; the constants are not seeded as defaults.
 - **`renderMcpCard` stays on the Dashboard.** Only the connection *panel* moves to Advanced. The
   card is a status rollup, the same argument that kept the three count cards in spec 5.
-- **Search index size** — the prototype shows `846 MB`. Whether a real size is cheaply available
-  from the vector store is unverified; if it is not, the value is omitted under the rule above.
+- **Search index size is available** — `SqliteVecStore` exposes no size API, but the store is a
+  single file (`nexus-ai/vectors.db`) and `statSync().size` gets it in two lines. Earlier drafts
+  recorded this as unverified; it is verified now, so the `846 MB` figure is real rather than
+  omitted.
+- **The cost string wraps at narrow widths.** In its 190px column it breaks as
+  `"6 passes a day · 1,902 / connections"`. Legible, but if it should never wrap the column wants
+  ~230px, or the two clauses want to be stacked by design rather than by accident. Designer's note
+  from the prototype build.
+
+## Open question for the designer
+
+**Row 8, "Notice when a local site stops", is not a scheduled job.** It is the `siteStopped` event
+hook (`src/main/content/lifecycle-hooks.ts:529`,
+`src/main/agent-event-bus/bridges/local-lifecycle-bridge.ts:24`) — no interval, no cycle, no cost,
+nothing to pause. It is genuinely always on and reassuring to see, but listing it in a table of
+*scheduled* work is a design call, not a correctness one. Both denominators are unaffected either
+way, since it is excluded from the count regardless. Recorded in `MEMBERSHIP.md`; implement the
+other seven rows and leave row 8 as the designer decides.

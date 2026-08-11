@@ -41,6 +41,24 @@ Still worth having; less obviously the landing surface.
 furniture; a marketing PM will never open it. One surface works because each persona ignores
 different screens — not because the screens serve both. Worth naming honestly.
 
+**Destructive actions are ranked by cost-to-undo, not by what they delete.** Keeping credentials
+does not make an action safe. `RESET_AND_REFRESH` costs half an hour of an unanswerable fleet and
+is therefore marked, while `RESET_CONTENT_INDEX` recovers on its own in minutes and is not.
+
+**One rump native panel survives, and is named in the UI.** Host-key approval on first connect is
+IPC-only by design. The footer states the exception rather than overclaiming a single home.
+
+**The background master switch is a pause, not an all-off.** It gets its own setting so per-job
+configuration survives it.
+
+**Background load is grouped by destination, not by job type.** Both external schedulers open their
+own SSH session per host and cannot share one, so both belong in the "other people's servers" figure
+under a 6h threshold. Naming the group by where the load lands means adding a job is a question of
+which destination it hits, not of inventing a threshold.
+
+**`UpdateSettingsSchema` is `.strict()`** — `backgroundWorkPaused` must be added there explicitly or
+it is silently dropped and the master switch never persists.
+
 ## Open
 
 **Staging and revert — the important one.** Every write surface in the prototype promises

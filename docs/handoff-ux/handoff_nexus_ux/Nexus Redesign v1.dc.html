@@ -461,7 +461,7 @@
                     <span style="{{ n.noteStyle }}">{{ n.note }}</span>
                   </div>
                 </sc-for>
-                <div style="margin: 16px 18px 0; padding-top: 14px; border-top: 1px solid #f3f4f6; font-size: 12.5px; color: #9ca3af; line-height: 1.55;">Everything Nexus can be configured with is here. There is no second settings page.</div>
+                <div style="margin: 16px 18px 0; padding-top: 14px; border-top: 1px solid #f3f4f6; font-size: 12.5px; color: #9ca3af; line-height: 1.55;">Everything Nexus can be configured with is here, with one exception: approving a new host the first time you connect to it stays in <span style="color: #6b7280; font-weight: 700;">Local → Preferences → Nexus AI</span>, because that approval must not be reachable from anything but Local itself.</div>
               </div>
 
               <div style="flex: 1; min-width: 0; padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 18px;">
@@ -549,7 +549,7 @@
                   <div style="display: flex; flex-direction: column; gap: 16px; max-width: 760px;">
                     <div>
                       <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.015em;">Background work</div>
-                      <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">What Nexus does on its own so answers stay current. All of it costs connections to your host.</div>
+                      <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">Nexus does some work on a schedule so it can answer questions without going out to your sites first. This is what that costs.</div>
                     </div>
 
                     <div style="{{ loadCardStyle }}">
@@ -560,26 +560,45 @@
                           <div style="font-size: 13.5px; color: #6b7280; margin-top: 3px;">{{ masterSub }}</div>
                         </div>
                       </div>
-                      <div style="display: flex; gap: 28px; flex-wrap: wrap; padding-top: 14px; margin-top: 14px; border-top: 1px solid #f3f4f6;">
-                        <div>
-                          <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">{{ loadPerDay }}</div>
-                          <div style="font-size: 12.5px; color: #6b7280; margin-top: 2px;">connections a day to WP Engine</div>
+                      <div style="display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; padding-top: 14px; margin-top: 14px; border-top: 1px solid #f3f4f6;">
+                        <div style="{{ loadWpeCellStyle }}">
+                          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #6b7280;">Your WP Engine account</div>
+                          <div style="{{ loadWpeStyle }}">{{ loadWpe }}</div>
+                          <div style="font-size: 12.5px; color: #6b7280;">connections a day</div>
+                          <div style="{{ loadWpeNoteStyle }}">{{ loadWpeNote }}</div>
                         </div>
-                        <div>
-                          <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">{{ loadMinutes }}</div>
-                          <div style="font-size: 12.5px; color: #6b7280; margin-top: 2px;">minutes of work a day</div>
-                        </div>
-                        <div>
-                          <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">{{ loadNext }}</div>
-                          <div style="font-size: 12.5px; color: #6b7280; margin-top: 2px;">until the next pass</div>
+                        <sc-if value="{{ showExtLoad }}" hint-placeholder-val="{{ false }}">
+                          <div style="{{ loadExtCellStyle }}">
+                            <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #6b7280;">Other people's servers</div>
+                            <div style="{{ loadExtStyle }}">{{ loadExt }}</div>
+                            <div style="font-size: 12.5px; color: #6b7280;">SSH sessions a day</div>
+                            <div style="{{ loadExtNoteStyle }}">{{ loadExtNote }}</div>
+                          </div>
+                        </sc-if>
+                        <div style="flex: 1; min-width: 150px; padding-left: 22px; display: flex; flex-direction: column; gap: 3px;">
+                          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #6b7280;">Time</div>
+                          <sc-if value="{{ showMinutes }}" hint-placeholder-val="{{ true }}">
+                            <div style="font-size: 15px; font-weight: 700;">{{ loadMinutes }} min of work a day</div>
+                          </sc-if>
+                          <div style="font-size: 15px; font-weight: 700;">next pass {{ loadNext }}</div>
                         </div>
                       </div>
                     </div>
 
+                    <sc-for list="{{ jobGroups }}" as="g" hint-placeholder-count="3">
                     <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; overflow: hidden;">
-                      <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="5">
+                      <div style="padding: 13px 18px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">
+                        <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #374151;">{{ g.title }}</div>
+                        <div style="font-size: 12.5px; color: #6b7280; margin-top: 4px; line-height: 1.55; max-width: 600px;">{{ g.hint }}</div>
+                      </div>
+                      <sc-for list="{{ g.rows }}" as="j" hint-placeholder-count="3">
                         <div style="{{ j.rowStyle }}">
-                          <div onClick="{{ j.onToggle }}" style="{{ j.switchStyle }}"><span style="{{ j.knobStyle }}"></span></div>
+                          <sc-if value="{{ j.isSwitchable }}" hint-placeholder-val="{{ true }}">
+                            <div onClick="{{ j.onToggle }}" style="{{ j.switchStyle }}"><span style="{{ j.knobStyle }}"></span></div>
+                          </sc-if>
+                          <sc-if value="{{ j.isAlways }}" hint-placeholder-val="{{ false }}">
+                            <div style="width: 40px; flex-shrink: 0; text-align: center; font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #9ca3af;">Always on</div>
+                          </sc-if>
                           <div style="flex: 1; min-width: 220px;">
                             <div style="font-size: 14.5px; font-weight: 700;">{{ j.name }}</div>
                             <div style="font-size: 13px; color: #6b7280; margin-top: 3px; line-height: 1.5;">{{ j.what }}</div>
@@ -588,14 +607,20 @@
                             <div style="{{ j.costStyle }}">{{ j.cost }}</div>
                             <div style="font-size: 12.5px; color: #9ca3af; margin-top: 3px;">{{ j.lastRun }}</div>
                           </div>
-                          <div style="display: flex; align-items: center; gap: 7px; flex-shrink: 0;">
-                            <span onClick="{{ j.slower }}" style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; cursor: pointer; color: #6b7280;" style-hover="border-color: #9ca3af; color: #111827;">−</span>
-                            <span style="min-width: 74px; text-align: center; font-size: 13px; font-weight: 700;">{{ j.every }}</span>
-                            <span onClick="{{ j.faster }}" style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; cursor: pointer; color: #6b7280;" style-hover="border-color: #9ca3af; color: #111827;">+</span>
-                          </div>
+                          <sc-if value="{{ j.isSwitchable }}" hint-placeholder-val="{{ true }}">
+                            <div style="display: flex; align-items: center; gap: 7px; flex-shrink: 0;">
+                              <span onClick="{{ j.slower }}" style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; cursor: pointer; color: #6b7280;" style-hover="border-color: #9ca3af; color: #111827;">−</span>
+                              <span style="min-width: 74px; text-align: center; font-size: 13px; font-weight: 700;">{{ j.every }}</span>
+                              <span onClick="{{ j.faster }}" style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; cursor: pointer; color: #6b7280;" style-hover="border-color: #9ca3af; color: #111827;">+</span>
+                            </div>
+                          </sc-if>
+                          <sc-if value="{{ j.isAlways }}" hint-placeholder-val="{{ false }}">
+                            <div style="width: 132px; flex-shrink: 0; text-align: center; font-size: 12.5px; color: #9ca3af;">not adjustable</div>
+                          </sc-if>
                         </div>
                       </sc-for>
                     </div>
+                    </sc-for>
                     <div style="font-size: 13px; color: #9ca3af; line-height: 1.6;">Turning something off does not delete anything Nexus already knows — it just stops refreshing it, and the site list will start showing older timestamps.</div>
                   </div>
                 </sc-if>
@@ -606,6 +631,7 @@
                       <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.015em;">What agents may do</div>
                       <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">Applies to every agent and to anything you ask for in chat. Click a box to allow or block it.</div>
                     </div>
+                    <div style="font-size: 13.5px; color: #4b5563; line-height: 1.6;">Reading a site is always allowed, everywhere, and is not listed below — it is how Nexus answers questions at all. Everything below changes something.</div>
                     <div style="border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; overflow: hidden;">
                       <div style="display: flex; align-items: center; gap: 12px; padding: 11px 18px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #6b7280;">
                         <div style="flex: 1; min-width: 200px;">Action</div>
@@ -625,10 +651,7 @@
                         </div>
                       </sc-for>
                     </div>
-                    <div style="display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb;">
-                      <span style="font-size: 15px;">🔒</span>
-                      <div style="font-size: 13.5px; color: #4b5563; line-height: 1.6;">Reading is always allowed and cannot be switched off — that is how Nexus answers questions at all. Everything that changes a site is off on production until you turn it on here.</div>
-                    </div>
+                    <div style="padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-size: 13.5px; color: #4b5563; line-height: 1.6;">Everything that changes a site starts off on production until you turn it on here.</div>
                   </div>
                 </sc-if>
 
@@ -646,6 +669,21 @@
                         </div>
                         <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #6b7280; flex-shrink: 0;">{{ a.value }}</div>
                         <div style="{{ a.actionStyle }}">{{ a.action }}</div>
+                      </div>
+                    </sc-for>
+
+                    <div style="margin-top: 12px;">
+                      <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #374151;">Rebuilding and starting over</div>
+                      <div style="font-size: 13.5px; color: #6b7280; margin-top: 6px; line-height: 1.5;">Three different things, in order of what they cost you. Each one says what it keeps and how long you are without it.</div>
+                    </div>
+                    <sc-for list="{{ resetRows }}" as="r" hint-placeholder-count="3">
+                      <div style="{{ r.rowStyle }}">
+                        <div style="flex: 1; min-width: 240px;">
+                          <div style="font-size: 15px; font-weight: 700;">{{ r.name }}</div>
+                          <div style="font-size: 13.5px; color: #4b5563; margin-top: 3px; line-height: 1.5;">{{ r.keeps }}</div>
+                          <div style="{{ r.takesStyle }}">{{ r.takes }}</div>
+                        </div>
+                        <div style="{{ r.actionStyle }}">{{ r.action }}</div>
                       </div>
                     </sc-for>
                   </div>
@@ -929,7 +967,7 @@ class Component extends DCLogic {
     externalAdded: 0,
     setSection: 'background',
     backgroundOn: true,
-    jobState: { meta: { on: true, hours: 4 }, details: { on: false, hours: 8 }, index: { on: true, hours: 12 }, localIndex: { on: true, hours: 4 }, scan: { on: true, hours: 1 } },
+    jobState: { meta: { on: true, hours: 4 }, details: { on: false, hours: 8 }, index: { on: true, hours: 12 }, extRefresh: { on: true, hours: 12 }, extIndex: { on: true, hours: 12 }, localIndex: { on: true, hours: 4 }, scan: { on: true, hours: 1 }, halted: { on: true, hours: 1 } },
     perms: { pull: [1, 1, 1], read: [1, 1, 1], write: [1, 1, 0], push: [1, 1, 0], destroy: [1, 0, 0] },
     frStep: 0,
     syncCount: 0,
@@ -1269,31 +1307,82 @@ class Component extends DCLogic {
     // ── settings: every cost figure below is derived from the same job state ──
     const per = (h) => Math.round(24 / h);
     const jobDefs = [
-      { key: 'meta', name: 'Check WP Engine sites', what: 'Reads which plugins, themes and versions are on each install. This is the expensive one.', heavy: true, mins: 11, conn: true, last: 'ran 22m ago · took 11 min',
+      { key: 'meta', group: 'wpe', name: 'Check WP Engine sites', what: 'Reads which plugins, themes and versions are on each install. This is the expensive one.', mins: 11, conn: 'wpe', last: 'ran 22m ago · took 11 min',
         cost: (h) => per(h) + ' passes a day · ' + (per(h) * C.wpe).toLocaleString() + ' connections' },
-      { key: 'details', name: 'Refresh site details', what: 'URLs, admin emails and post counts. Opens its own connection to each install.', heavy: true, mins: 7, conn: true, last: 'never run',
+      { key: 'details', group: 'wpe', name: 'Refresh site details', what: 'URLs, admin emails and post counts. Opens its own connection to each install.', mins: 7, conn: 'wpe', last: 'never run',
         cost: (h) => per(h) + ' passes a day · ' + (per(h) * C.wpe).toLocaleString() + ' connections' },
-      { key: 'index', name: 'Make content searchable', what: 'Indexes page and post text. Rides along with the check above, so it costs no extra connections.', mins: 26, last: 'ran 3h ago · took 26 min',
+      { key: 'index', group: 'wpe', name: 'Make content searchable', what: 'Indexes page and post text. Rides along with the check above.', mins: 26, last: 'ran 3h ago · took 26 min',
         cost: (h) => per(h) + ' passes a day · no extra connections' },
-      { key: 'localIndex', name: 'Index sites on this Mac', what: 'Starts a stopped site, reads its content, stops it again.', mins: 4, last: 'ran 1h ago',
+      { key: 'extRefresh', group: 'ext', name: 'Check other hosts', what: 'Reads plugins, themes and versions on sites that are not at WP Engine.', mins: 6, conn: 'ext', ext: true, last: 'ran 4h ago · took 6 min',
+        cost: (h) => per(h) + ' passes a day · ' + (per(h) * C.external).toLocaleString() + ' sessions' },
+      { key: 'extIndex', group: 'ext', name: 'Make other hosts searchable', what: 'Indexes page and post text on those same sites.', mins: 9, conn: 'ext', ext: true, last: 'ran 5h ago · took 9 min',
+        cost: (h) => per(h) + ' passes a day · ' + (per(h) * C.external).toLocaleString() + ' sessions' },
+      { key: 'localIndex', group: 'local', name: 'Index sites on this Mac', what: 'Starts a stopped site, reads its content, stops it again.', mins: 4, last: 'ran 1h ago',
         cost: (h) => per(h) + ' passes a day · ' + C.local + ' local sites' },
-      { key: 'scan', name: 'Look over stopped local sites', what: 'Reads files on disk. Nothing starts up and nothing connects anywhere.', mins: 1, last: 'ran 12m ago',
+      { key: 'scan', group: 'local', name: 'Look over stopped local sites', what: 'Reads files on disk. Nothing starts up and nothing connects anywhere.', mins: 1, last: 'ran 12m ago',
         cost: () => 'free' },
-    ];
-    let connPerDay = 0;
+      { key: 'halted', group: 'local', name: 'Notice when a local site stops', what: 'Keeps the running/stopped state on this Mac accurate. Has never been switchable and costs nothing.', mins: 0, always: true, last: 'continuous',
+        cost: () => 'free' },
+    ].filter(j => !j.ext || hasExt);
+
+    let connWpe = 0;
+    let connExt = 0;
     let minsPerDay = 0;
     let nextHours = null;
+    let anyMeasured = false;
     jobDefs.forEach(j => {
       const s = st.jobState[j.key];
+      if (j.always) return;
       if (!s.on || !st.backgroundOn) return;
-      if (j.conn) connPerDay += per(s.hours) * C.wpe;
-      minsPerDay += per(s.hours) * j.mins;
+      if (j.conn === 'wpe') connWpe += per(s.hours) * C.wpe;
+      if (j.conn === 'ext') connExt += per(s.hours) * C.external;
+      if (j.mins > 0) { minsPerDay += per(s.hours) * j.mins; anyMeasured = true; }
       nextHours = nextHours === null ? s.hours : Math.min(nextHours, s.hours);
     });
     minsPerDay = Math.round(minsPerDay);
-    const nextIn = nextHours === null ? '—' : nextHours === 1 ? 'under 1h' : 'about ' + nextHours + 'h';
-    const jobsOn = jobDefs.filter(j => st.jobState[j.key].on).length;
-    const bgNote = st.backgroundOn ? jobsOn + ' on' : 'paused';
+    const nextIn = nextHours === null ? '—' : nextHours === 1 ? 'in under 1h' : 'in about ' + nextHours + 'h';
+    const switchable = jobDefs.filter(j => !j.always);
+    const jobsOn = switchable.filter(j => st.jobState[j.key].on).length;
+    const bgNote = st.backgroundOn ? jobsOn + ' of ' + switchable.length + ' on' : 'paused';
+
+    // Thresholds differ by whose infrastructure the load lands on, not by which job caused it.
+    const liveIn = (g) => jobDefs.filter(j => j.group === g && !j.always && st.jobState[j.key].on && st.backgroundOn);
+    const wpeAmber = liveIn('wpe').some(j => st.jobState[j.key].hours <= 2);
+    const extLive = liveIn('ext');
+    const extAmber = extLive.some(j => st.jobState[j.key].hours < 6);
+    const cell = (amber, first) => 'flex: 1; min-width: 168px; display: flex; flex-direction: column; gap: 3px; padding: ' +
+      (first ? '0 22px 0 0' : '0 22px') + '; ' + (first ? '' : 'border-left: 1px solid #f3f4f6;') +
+      (amber ? ' color: #b45309;' : '');
+    const bigNum = (amber) => 'font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; color: ' + (amber ? '#b45309' : '#111827') + ';';
+    const noteStyle = (amber) => 'font-size: 12px; line-height: 1.45; margin-top: 3px; color: ' + (amber ? '#b45309' : '#9ca3af') + ';';
+
+    const mkRows = (list) => list.map(j => {
+      const s = st.jobState[j.key];
+      const on = j.always || (s.on && st.backgroundOn);
+      const amber = on && ((j.conn === 'wpe' && s.hours <= 2) || (j.conn === 'ext' && s.hours < 6));
+      return {
+        name: j.name,
+        what: j.what,
+        isSwitchable: !j.always,
+        isAlways: !!j.always,
+        every: s.hours === 1 ? 'every hour' : 'every ' + s.hours + 'h',
+        cost: on ? j.cost(s.hours) : 'nothing while off',
+        costStyle: 'font-size: 13px; font-weight: 700; color: ' + (amber ? '#b45309' : on ? '#374151' : '#9ca3af') + ';',
+        lastRun: on ? j.last : 'paused',
+        rowStyle: 'display: flex; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid #f3f4f6; ' + (on ? '' : 'background: #fbfbfc;'),
+        switchStyle: 'width: 40px; height: 23px; flex-shrink: 0; border-radius: 12px; padding: 3px; cursor: pointer; display: flex; background: ' + (on ? '#0a8189' : '#d1d5db') + '; justify-content: ' + (on ? 'flex-end' : 'flex-start') + ';',
+        knobStyle: 'width: 17px; height: 17px; border-radius: 50%; background: #fff;',
+        onToggle: () => this.toggleJob(j.key),
+        slower: () => this.bumpJob(j.key, 1),
+        faster: () => this.bumpJob(j.key, -1),
+      };
+    });
+
+    const groupMeta = {
+      wpe: { title: 'On your WP Engine account', hint: 'These reuse one connection per install where they can, so they can run often.' },
+      ext: { title: "On other people's servers", hint: 'Each of these opens its own SSH session per host and cannot share one with the other. Shared hosting limits how many you may open at once, so Nexus runs them less often on purpose.' },
+      local: { title: 'On this Mac', hint: 'Nothing here connects anywhere.' },
+    };
     const connGroupDefs = [
       { title: 'Where your sites are', hint: 'These are what make sites show up in Nexus.', items: [
         { name: 'WP Engine', detail: '11 of 14 accounts · ' + C.wpe + ' sites', badge: 'W', ok: true, status: 'Connected', action: 'Manage' },
@@ -1389,36 +1478,35 @@ class Component extends DCLogic {
       toggleBackground: () => this.setState(s => ({ backgroundOn: !s.backgroundOn })),
       masterLabel: st.backgroundOn ? 'Nexus is keeping itself up to date' : 'Background work is paused',
       masterSub: st.backgroundOn
-        ? 'Turn this off and nothing runs on a schedule — you can still run anything by hand.'
-        : 'Nothing is running on a schedule. What Nexus knows will go stale.',
+        ? 'Pausing this stops every schedule below and keeps your per-job settings exactly as they are — you can still run anything by hand.'
+        : 'Nothing is running on a schedule and what Nexus knows will go stale. Your settings below are kept — switching this back on restores them.',
       masterSwitchStyle: 'width: 46px; height: 26px; flex-shrink: 0; border-radius: 13px; padding: 3px; cursor: pointer; display: flex; background: ' + (st.backgroundOn ? '#0a8189' : '#d1d5db') + '; justify-content: ' + (st.backgroundOn ? 'flex-end' : 'flex-start') + ';',
       masterKnobStyle: 'width: 20px; height: 20px; border-radius: 50%; background: #fff;',
       loadCardStyle: 'border: 1px solid ' + (st.backgroundOn ? '#e5e7eb' : '#fde68a') + '; border-radius: 10px; background: ' + (st.backgroundOn ? '#fff' : '#fffbeb') + '; padding: 16px 18px;',
-      loadPerDay: st.backgroundOn ? connPerDay.toLocaleString() : '0',
-      loadMinutes: st.backgroundOn ? String(minsPerDay) : '0',
-      loadNext: st.backgroundOn ? nextIn : '—',
-      jobs: jobDefs.map(j => {
-        const s = st.jobState[j.key];
-        const on = s.on && st.backgroundOn;
-        return {
-          name: j.name,
-          what: j.what,
-          every: s.hours === 1 ? 'every hour' : 'every ' + s.hours + 'h',
-          cost: on ? j.cost(s.hours) : 'nothing while off',
-          costStyle: 'font-size: 13px; font-weight: 700; color: ' + (on ? (j.heavy && s.hours <= 2 ? '#b45309' : '#374151') : '#9ca3af') + ';',
-          lastRun: on ? j.last : 'paused',
-          rowStyle: 'display: flex; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid #f3f4f6; ' + (on ? '' : 'background: #fbfbfc;'),
-          switchStyle: 'width: 40px; height: 23px; flex-shrink: 0; border-radius: 12px; padding: 3px; cursor: pointer; display: flex; background: ' + (on ? '#0a8189' : '#d1d5db') + '; justify-content: ' + (on ? 'flex-end' : 'flex-start') + ';',
-          knobStyle: 'width: 17px; height: 17px; border-radius: 50%; background: #fff;',
-          onToggle: () => this.toggleJob(j.key),
-          slower: () => this.bumpJob(j.key, 1),
-          faster: () => this.bumpJob(j.key, -1),
-        };
-      }),
+      loadWpe: st.backgroundOn ? connWpe.toLocaleString() : '0',
+      loadWpeCellStyle: cell(false, true),
+      loadWpeStyle: bigNum(wpeAmber),
+      loadWpeNoteStyle: noteStyle(wpeAmber),
+      loadWpeNote: connWpe === 0 || !st.backgroundOn ? 'nothing scheduled' : 'across ' + C.wpe + ' installs' + (wpeAmber ? ' · very frequent' : ''),
+      showExtLoad: hasExt,
+      loadExt: st.backgroundOn ? connExt.toLocaleString() : '0',
+      loadExtCellStyle: cell(false, false),
+      loadExtStyle: bigNum(extAmber),
+      loadExtNoteStyle: noteStyle(extAmber),
+      loadExtNote: connExt === 0 || !st.backgroundOn
+        ? 'nothing scheduled'
+        : 'across ' + C.external + ' sites · ' + extLive.length + ' of 2 jobs on' + (extAmber ? ' · too frequent for shared hosting' : ''),
+      showMinutes: anyMeasured && st.backgroundOn,
+      loadMinutes: String(minsPerDay),
+      loadNext: st.backgroundOn ? nextIn : 'paused',
+      jobGroups: ['wpe', 'ext', 'local'].map(g => ({
+        title: groupMeta[g].title,
+        hint: groupMeta[g].hint,
+        rows: mkRows(jobDefs.filter(j => j.group === g)),
+      })).filter(g => g.rows.length > 0),
 
       permRows: [
         { key: 'pull', name: 'Copy a site down to this Mac', what: 'Files and database, one way' },
-        { key: 'read', name: 'Read what is installed', what: 'Plugins, themes, versions, users' },
         { key: 'write', name: 'Install or update things', what: 'Plugin and theme updates, core updates' },
         { key: 'push', name: 'Push local changes up', what: 'Overwrites the remote files and database' },
         { key: 'destroy', name: 'Delete or promote an environment', what: 'Cannot be undone' },
@@ -1438,18 +1526,41 @@ class Component extends DCLogic {
       })),
 
       advancedRows: [
-        { name: 'Connect your own AI tools', what: 'Lets Claude Code, Cursor or anything else drive Nexus', value: 'port 10801', action: 'Copy command', plain: true },
-        { name: 'AI gateway', what: 'Routes model requests and records what they cost', value: 'port 13100', action: 'View usage', plain: true },
-        { name: 'Search index', what: 'What makes site content searchable · ' + C.searchable + ' sites indexed', value: '846 MB', action: 'Rebuild', plain: true },
-        { name: 'Start over', what: 'Forgets everything Nexus has learned and re-reads every site', value: '', action: 'Reset', plain: false },
+        { name: 'Connect your own AI tools', what: 'Lets Claude Code, Cursor or anything else drive Nexus', value: 'port 10801', action: 'Copy command' },
+        { name: 'AI gateway', what: 'Routes model requests and records what they cost', value: 'port 13100', action: 'View usage' },
+        { name: 'Search index', what: C.searchable + ' sites indexed', value: '846 MB', action: 'Show details' },
       ].map(a => ({
         name: a.name,
         what: a.what,
         value: a.value,
         action: a.action,
-        actionStyle: 'padding: 8px 14px; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; flex-shrink: 0; ' +
-          (a.plain ? 'border: 1px solid #d1d5db; background: #fff; color: #374151;' : 'border: 1px solid #fecaca; background: #fef2f2; color: #ef4444;'),
+        actionStyle: 'padding: 8px 14px; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; flex-shrink: 0; border: 1px solid #d1d5db; background: #fff; color: #374151;',
       })),
+
+      // Ordered by what you lose and how long you are without it — cheapest first.
+      resetRows: [
+        { name: 'Rebuild search', keeps: 'Keeps everything. Re-reads content you already have on this Mac.',
+          takes: 'A few minutes · search results are patchy meanwhile', level: 'plain', action: 'Rebuild' },
+        { name: 'Rebuild what Nexus knows', keeps: 'Keeps your connections and settings. Throws away everything Nexus worked out about your sites and reads all ' + C.total + ' again from scratch.',
+          takes: 'About 30 minutes · Nexus cannot answer questions about your fleet until it finishes', level: 'warn', action: 'Rebuild everything' },
+        { name: 'Start over', keeps: 'Keeps your connections. Forgets everything else, restores every setting on this page to its default and restarts Local.',
+          takes: 'Restarts Local · nothing is rebuilt until you ask it to be', level: 'danger', action: 'Start over' },
+      ].map(r => {
+        const c = r.level === 'danger'
+          ? { bd: '#fecaca', bg: '#fef2f2', fg: '#ef4444', tint: '#fff5f5' }
+          : r.level === 'warn'
+          ? { bd: '#fde68a', bg: '#fffbeb', fg: '#b45309', tint: '#fffdf7' }
+          : { bd: '#d1d5db', bg: '#fff', fg: '#374151', tint: '#fff' };
+        return {
+          name: r.name,
+          keeps: r.keeps,
+          takes: r.takes,
+          action: r.action,
+          rowStyle: 'border: 1px solid ' + (r.level === 'plain' ? '#e5e7eb' : c.bd) + '; border-radius: 10px; background: ' + c.tint + '; padding: 16px 18px; display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;',
+          takesStyle: 'font-size: 12.5px; font-weight: 700; margin-top: 6px; color: ' + c.fg + ';',
+          actionStyle: 'padding: 8px 14px; border-radius: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer; flex-shrink: 0; border: 1px solid ' + c.bd + '; background: ' + c.bg + '; color: ' + c.fg + ';',
+        };
+      }),
       tabLocal: this.seg(screen === 'local'),
       isLocal: screen === 'local',
       chromeNexus: screen !== 'local',
@@ -1641,8 +1752,8 @@ class Component extends DCLogic {
         };
       }).concat([{ name: 'Security sweep', status: 'paused', style: 'color: #b45309; font-weight: 700;' }]),
       panelJobsNote: st.backgroundOn
-        ? (connPerDay > 0
-            ? 'About ' + connPerDay.toLocaleString() + ' connections a day to WP Engine. Change this under Settings → Background work.'
+        ? (connWpe + connExt > 0
+            ? 'About ' + connWpe.toLocaleString() + ' connections a day to WP Engine' + (connExt > 0 ? ' and ' + connExt.toLocaleString() + ' to other hosts' : '') + '. Change this under Settings → Background work.'
             : 'Nothing is connecting to WP Engine on a schedule right now.')
         : 'Background work is paused, so nothing is refreshing on its own.',
 
