@@ -42,11 +42,12 @@ export const JOBS: JobSpec[] = [
 ];
 
 /** Amber thresholds key on conn (what figure the job feeds), not group (where it appears).
- *  null conn = never amber. MEMBERSHIP.md:18 specifies wpeContentIndex as "Amber when: never". */
+ *  null conn = never amber. MEMBERSHIP.md:18 specifies wpeContentIndex as "Amber when: never".
+ *  'local' is present for type completeness but unreachable (no job has conn: 'local'). */
 const AMBER: Record<Destination | 'never', (h: number) => boolean> = {
   wpe:   (h) => h <= 2,
   ext:   (h) => h < 6,
-  local: () => false,
+  local: () => false,  // Unreachable — no job carries conn: 'local'
   never: () => false,
 };
 
@@ -138,7 +139,7 @@ export function computeDerived(input: DerivedInput): Derived {
     const ms = input.durations[j.key];
     const durationMin = ms == null ? null : Math.round(ms / 60_000);
 
-    // For ≥49h intervals, round(24/h) is 0. Compute the unrounded rate for the figure.
+    // Unrounded rate for figures and for ≥49h labels where passes clause is omitted.
     const passesUnrounded = hours > 0 ? 24 / hours : 0;
 
     let costLabel: string;
@@ -149,13 +150,18 @@ export function computeDerived(input: DerivedInput): Derived {
     } else if (j.key === 'haltedSiteRefresh') {
       costLabel = 'free';
     } else if (j.conn === 'wpe') {
-      // Omit passes clause when rounded value is <1; show connections only.
-      const conns = Math.round(passesUnrounded * input.installCount);
+      // When passes clause is shown, use rounded × installCount so the label's arithmetic is self-consistent.
+      // When omitted (≥49h), use unrounded rate so the figure reflects real load.
+      const conns = passesRounded >= 1
+        ? passesRounded * input.installCount
+        : Math.round(passesUnrounded * input.installCount);
       costLabel = passesRounded >= 1
         ? `${passesRounded} ${passes(passesRounded)} a day · ${n(conns)} connections`
         : `${n(conns)} connections`;
     } else if (j.conn === 'ext') {
-      const sessions = Math.round(passesUnrounded * input.externalHostCount);
+      const sessions = passesRounded >= 1
+        ? passesRounded * input.externalHostCount
+        : Math.round(passesUnrounded * input.externalHostCount);
       costLabel = passesRounded >= 1
         ? `${passesRounded} ${passes(passesRounded)} a day · ${n(sessions)} sessions`
         : `${n(sessions)} sessions`;
@@ -173,10 +179,14 @@ export function computeDerived(input: DerivedInput): Derived {
     const amberKey = j.conn ?? 'never';
     const amber = canRun && AMBER[amberKey](hours);
 
+    // passesPerDay uses unrounded rate to ensure it's never 0 when canRun is true.
+    // At 168h, passesRounded is 0 but passesUnrounded is ~0.143, so this stays truthy.
+    const passesPerDay = canRun ? passesUnrounded : null;
+
     return {
       key: j.key, name: j.name, group: j.group,
       userEnabled, canRun, alwaysOn, hours,
-      passesPerDay: canRun ? passesRounded : null,
+      passesPerDay,
       costLabel, durationMin, amber,
     };
   });
@@ -205,13 +215,14 @@ export function computeDerived(input: DerivedInput): Derived {
 
   // nextInHours is time until next run, computed from lastRunAt + interval - now.
   // When no enabled job has ever run, the clause is omitted (null).
+  // Overdue jobs (negative time) are clamped to 0.
   const nextTimes = rows
     .filter((r) => r.canRun)
     .map((r) => {
-      const last = input.lastRunAt[r.key];
+      const last = input.lastRunAt?.[r.key];
       if (last == null) return null;
-      const nextMs = last + r.hours * 3600_000 - input.now;
-      return nextMs / 3600_000; // Convert ms to hours
+      const nextMs = last + r.hours * 3600_000 - (input.now ?? Date.now());
+      return Math.max(0, nextMs / 3600_000); // Clamp to 0 for overdue jobs
     })
     .filter((t): t is number => t !== null);
 

@@ -293,3 +293,63 @@ describe('derived — FIX 9: ≥49h intervals do not render "0 passes a day"', (
     expect(d.summary.wpe!.figure).toBe(2033); // 47 + 1986
   });
 });
+
+// THIRD FIX REPORT tests
+
+describe('derived — FIX 10: row label arithmetic is self-consistent', () => {
+  test('at 48h, label shows 1 pass × 331 = 331 connections (not unrounded rate)', () => {
+    const d = computeDerived(base({ settings: { wpeRefreshIntervalHours: 48 } }));
+    const row = d.rows.find(r => r.key === 'wpeRefresh')!;
+    // 48h: passesRounded = round(24/48) = 1 (not 0)
+    // Label must show: 1 pass × 331 = 331
+    expect(row.costLabel).toContain('1 pass a day');
+    expect(row.costLabel).toContain('331 connections');
+    expect(row.costLabel).not.toContain('166'); // Would be round(0.5 * 331) from unrounded
+  });
+
+  test('at 7h, label shows 3 passes × 331 = 993 connections', () => {
+    const d = computeDerived(base({ settings: { wpeRefreshIntervalHours: 7 } }));
+    const row = d.rows.find(r => r.key === 'wpeRefresh')!;
+    // 7h: passesRounded = round(24/7) = 3
+    expect(row.costLabel).toContain('3 passes a day');
+    expect(row.costLabel).toContain('993 connections'); // 3 × 331
+    expect(row.costLabel).not.toContain('1,135'); // Would be round(3.43 * 331) from unrounded
+  });
+});
+
+describe('derived — FIX 11: nextInHours never goes negative', () => {
+  test('overdue job (ran 25h ago on 4h interval) clamps to 0', () => {
+    const now = Date.now();
+    const twentyFiveHoursAgo = now - 25 * 3600_000;
+    const d = computeDerived(base({
+      settings: { wpeRefreshIntervalHours: 4 },
+      lastRunAt: { wpeRefresh: twentyFiveHoursAgo },
+      now,
+    }));
+    // Should be: last + 4h - now = -21h, clamped to 0
+    expect(d.summary.time.nextInHours).toBe(0);
+    expect(d.summary.time.nextInHours).not.toBeLessThan(0);
+  });
+});
+
+describe('derived — FIX 12: weekly job passesPerDay is never 0', () => {
+  test('168h job with canRun=true has truthy passesPerDay', () => {
+    const d = computeDerived(base({ settings: { wpeRefreshIntervalHours: 168 } }));
+    const row = d.rows.find(r => r.key === 'wpeRefresh')!;
+    expect(row.canRun).toBe(true);
+    expect(row.passesPerDay).toBeTruthy(); // ~0.143, not 0
+    expect(row.passesPerDay).toBeCloseTo(0.143, 2);
+  });
+
+  test('minsPerDay for 168h job is non-zero when duration exists', () => {
+    const d = computeDerived(base({
+      settings: { wpeRefreshIntervalHours: 168 },
+      durations: { wpeRefresh: 660_000 }, // 11 min
+    }));
+    const row = d.rows.find(r => r.key === 'wpeRefresh')!;
+    expect(row.durationMin).toBe(11);
+    // minsPerDay = passesPerDay (0.143) × 11 ≈ 1.57, not 0
+    // But we need to account for all enabled jobs, so check it's > 0
+    expect(d.summary.time.minsPerDay).toBeGreaterThan(0);
+  });
+});
