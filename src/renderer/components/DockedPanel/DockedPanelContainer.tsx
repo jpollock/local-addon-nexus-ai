@@ -1,7 +1,6 @@
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { injectThemeVars } from '../../utils/theme';
-import { ContextSelector } from './ContextSelector';
 import { DockedPanel, PanelTab } from './DockedPanel';
 import { PanelChat } from './PanelChat';
 import { PanelInsights } from './PanelInsights';
@@ -356,11 +355,6 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
           onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
         });
 
-    const contextSelector = React.createElement(ContextSelector, {
-      electron: this.props.electron,
-      selectedSiteIds,
-      onChange: (ids: string[]) => this.setState({ selectedSiteIds: ids }),
-    });
 
     const sessionsSidebar = panelState === 'full' || showSessions
       ? React.createElement(SessionsSidebar, {
@@ -387,7 +381,6 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         onToggleSessions: () => this.setState((s) => ({ showSessions: !s.showSessions })),
         streamingStatus: this.state.streamingStatus,
         isOverlay: reflowMode === 'overlay',
-        contextSelector,
         ...this.tabSignals(),
       },
       panelContent,

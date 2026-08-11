@@ -18,8 +18,6 @@ export interface Props {
   showSessions?: boolean;
   streamingStatus?: string | null;
   isOverlay?: boolean;
-  /** Rendered in the header in place of a static tagline. */
-  contextSelector?: React.ReactNode;
   /** Decisions waiting, scoped to what's on screen. null = not knowable; renders nothing. */
   badgeCount?: number | null;
   /** Whether anything is stuck. null = not knowable; renders nothing. */
@@ -262,7 +260,6 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
     const {
       panelState, activeTab = 'chat', onSetActiveTab, onOpen, onClose, onSetPanelState, onNewChat,
       children, sessionsSidebar, onToggleSessions, showSessions, streamingStatus, isOverlay = false,
-      contextSelector,
     } = this.props;
 
     // Render the floating tab when closed
@@ -375,10 +372,10 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
         'div',
         { style: { display: 'flex', flexDirection: 'column' as const, gap: 1 } },
         React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: 'var(--nxai-card-text)', lineHeight: 1.2 } }, 'Nexus'),
-        // The second line says what the panel is pointed at. It used to say "Follows you
-        // across tabs" — three lines of header spent restating a behaviour the user can see,
-        // on a panel that showed no context at all. Streaming status displaces it because
-        // "what is happening now" outranks "what this is scoped to" while a run is live.
+        // Second line carries live status only. It used to say "Follows you across tabs" —
+        // header space spent restating a behaviour the user can already see — and briefly
+        // held a site picker, which was removed: the panel's scope is not something the
+        // user manages from here. Nothing to say means nothing rendered.
         streamingStatus
           ? React.createElement(
               'span',
@@ -386,7 +383,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
               React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: UI_COLORS.WPE_BRAND, flexShrink: 0, display: 'inline-block' } }),
               streamingStatus,
             )
-          : contextSelector ?? null,
+          : null,
       ),
       // Segmented control
       segmentedControl,
