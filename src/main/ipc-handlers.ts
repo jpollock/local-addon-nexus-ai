@@ -157,6 +157,8 @@ export interface IpcHandlerDeps {
   wpeSyncService?: WPESyncService;
   /** Site metadata cache (Digital Twin) */
   metadataCache?: SiteMetadataCache;
+  /** Job run durations and timestamps (spec 6, Task 2) */
+  jobRunStore?: import('./background/JobRunStore').JobRunStore;
   /**
    * Called after settings are successfully saved. Used to restart interval
    * schedulers (e.g. OpportunisticScheduler) when the user changes preferences.
@@ -416,7 +418,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
     getStartupStatus,
-    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
+    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache, jobRunStore,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
 
@@ -1460,6 +1462,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // current settings instead, with an explicit error marker the caller can check.
       return { ...current, _error: (err as Error).message };
     }
+  });
+
+  safeHandle(IPC_CHANNELS.GET_JOB_RUN_DATA, () => {
+    if (!jobRunStore) return {};
+    const keys: import('./background/JobRunStore').JobKey[] = [
+      'wpeRefresh', 'wpeSync', 'wpeContentIndex',
+      'externalRefresh', 'externalContentIndex',
+      'localContentIndex', 'haltedSiteRefresh',
+    ];
+    const result: Record<string, { averageMs: number | null; lastRunAt: number | null }> = {};
+    for (const key of keys) {
+      result[key] = {
+        averageMs: jobRunStore.averageMs(key),
+        lastRunAt: jobRunStore.lastRunAt(key),
+      };
+    }
+    return result;
   });
 
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {

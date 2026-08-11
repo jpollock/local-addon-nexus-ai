@@ -1252,6 +1252,7 @@ export default function main(context: any): void {
     nexusServices,
     wpeSyncService,
     metadataCache,
+    jobRunStore,
     onSettingsUpdated,
     emitNexusState,
   });
