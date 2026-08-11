@@ -37,6 +37,7 @@ const tree = (over: any = {}) => {
     exceptions: [],
     wpeInstalls: [],
     externalHosts: [],
+    wpeAccounts: [],
     onSave: jest.fn(),
   };
   // Destructure nested objects out of override to avoid clobbering merged defaults
@@ -84,6 +85,12 @@ describe('PermissionsSection', () => {
     expect(JSON.stringify(serializeTree(tree())).toLowerCase()).not.toContain('0ecad4');
   });
 
+  test('scope badges appear on grid rows', () => {
+    const t = textOf(tree());
+    expect(t).toContain('WPE only');
+    expect(t).toContain('WPE + SSH');
+  });
+
   // ── Grid Interactivity ─────────────────────────────────────────────────────
 
   test('each cell is clickable and invokes onSave with the updated permissions', () => {
@@ -99,6 +106,7 @@ describe('PermissionsSection', () => {
       exceptions: [],
       wpeInstalls: [],
       externalHosts: [],
+      wpeAccounts: [],
       onSave,
     });
     const rendered = instance.render();
@@ -123,6 +131,50 @@ describe('PermissionsSection', () => {
     expect(savedPerms.remoteOperationPermissions.pull.production).toBe(true);
   });
 
+  // ── Account Scope Filter ───────────────────────────────────────────────────
+
+  test('account scope filter renders when wpeAccounts is non-empty', () => {
+    const t = textOf(tree({
+      wpeAccounts: [
+        { id: 'acc-1', name: 'Acme Corp', nickname: 'Acme' },
+      ],
+    }));
+    expect(t).toContain('Account scope');
+    expect(t).toContain('Acme');
+  });
+
+  test('account chips are clickable and invoke onSave with wpeAccountFilter', () => {
+    const onSave = jest.fn();
+    const instance: any = new (PermissionsSection as any)({
+      permissions: {},
+      exceptions: [],
+      wpeInstalls: [],
+      externalHosts: [],
+      wpeAccounts: [
+        { id: 'acc-1', name: 'Acme Corp', nickname: 'Acme' },
+        { id: 'acc-2', name: 'Beta Inc' },
+      ],
+      onSave,
+    });
+    const rendered = instance.render();
+
+    // Find the first account chip
+    const chips = findAll(rendered, (n) => {
+      const t = textOf(n);
+      return (t.includes('Acme') || t.includes('Beta')) && n.props?.onClick;
+    });
+
+    expect(chips.length).toBeGreaterThan(0);
+
+    // Click the first chip to exclude it
+    chips[0].props.onClick();
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const update = onSave.mock.calls[0][0];
+    expect(update).toHaveProperty('wpeAccountFilter');
+    expect(Array.isArray(update.wpeAccountFilter)).toBe(true);
+  });
+
   // ── Exception Display & Editing ────────────────────────────────────────────
 
   test('shows WPE and external site exceptions', () => {
@@ -136,21 +188,100 @@ describe('PermissionsSection', () => {
     expect(t).toContain('myhost/site');
   });
 
-  test('exception picker lists both WPE installs and external hosts', () => {
-    const t = textOf(tree({
+  test('+ Add site exception button exists', () => {
+    const instance: any = new (PermissionsSection as any)({
+      permissions: {},
+      exceptions: [],
+      wpeInstalls: [],
+      externalHosts: [],
+      wpeAccounts: [],
+      onSave: jest.fn(),
+    });
+
+    const rendered = instance.render();
+    const addButtons = findAll(rendered, (n) => textOf(n) === '+ Add site exception' && n.props?.onClick);
+    expect(addButtons.length).toBeGreaterThan(0);
+  });
+
+  test('exception picker shows both WPE installs and external hosts with group labels and kind badges', () => {
+    const instance: any = new (PermissionsSection as any)({
+      permissions: {},
+      exceptions: [],
       wpeInstalls: [
         { installName: 'store1', environment: 'production', primaryDomain: 'store1.com' },
       ],
       externalHosts: [
         { alias: 'host1', site: 'site1', environment: 'staging', domain: 'host1.com' },
       ],
-    }));
-    // The picker is shown when adding an exception — simulate that state
-    // For now, just verify the component accepts these props without error
-    expect(() => tree({
-      wpeInstalls: [{ installName: 'store1', environment: 'production', primaryDomain: 'store1.com' }],
-      externalHosts: [{ alias: 'host1', site: 'site1', environment: 'staging', domain: 'host1.com' }],
-    })).not.toThrow();
+      wpeAccounts: [],
+      onSave: jest.fn(),
+    });
+
+    // Open the picker by setting state directly (React 16 doesn't allow setState on unmounted components)
+    instance.state = {
+      ...instance.state,
+      addingException: {
+        operation: 'wpcli',
+        targetRef: '',
+        environment: 'production',
+        allowing: false,
+      },
+    };
+
+    const rendered = instance.render();
+    const t = textOf(rendered);
+
+    // Group labels
+    expect(t).toContain('WP Engine installs');
+    expect(t).toContain('External SSH hosts');
+
+    // Targets
+    expect(t).toContain('store1');
+    expect(t).toContain('host1/site1');
+
+    // Kind badges
+    expect(t).toContain('wpe');
+    expect(t).toContain('ssh');
+  });
+
+  test('exception picker Save button is wired and invokes onSave', () => {
+    const onSave = jest.fn();
+    const instance: any = new (PermissionsSection as any)({
+      permissions: {},
+      exceptions: [],
+      wpeInstalls: [
+        { installName: 'store1', environment: 'production', primaryDomain: 'store1.com' },
+      ],
+      externalHosts: [],
+      wpeAccounts: [],
+      onSave,
+    });
+
+    // Open picker and select a target (set state directly)
+    instance.state = {
+      ...instance.state,
+      addingException: {
+        operation: 'wpcli',
+        targetRef: 'wpe:store1',
+        environment: 'production',
+        allowing: false,
+      },
+    };
+
+    const rendered = instance.render();
+
+    // Find the Save button
+    const saveButtons = findAll(rendered, (n) => textOf(n) === 'Save' && n.props?.onClick);
+    expect(saveButtons.length).toBeGreaterThan(0);
+
+    // Click it
+    saveButtons[0].props.onClick();
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const update = onSave.mock.calls[0][0];
+    expect(update).toHaveProperty('remoteSiteExceptions');
+    expect(update.remoteSiteExceptions.length).toBe(1);
+    expect(update.remoteSiteExceptions[0].targetRef).toBe('wpe:store1');
   });
 
   test('remove exception button exists and is wired', () => {
@@ -162,6 +293,7 @@ describe('PermissionsSection', () => {
       ],
       wpeInstalls: [],
       externalHosts: [],
+      wpeAccounts: [],
       onSave,
     });
     const rendered = instance.render();
@@ -214,6 +346,7 @@ describe('PermissionsSection', () => {
       exceptions: [],
       wpeInstalls: [],
       externalHosts: [],
+      wpeAccounts: [],
       onSave,
     });
     const rendered = instance.render();
@@ -244,6 +377,7 @@ describe('PermissionsSection', () => {
       exceptions: [],
       wpeInstalls: [],
       externalHosts: [],
+      wpeAccounts: [],
       onSave,
     });
     const rendered = instance.render();
