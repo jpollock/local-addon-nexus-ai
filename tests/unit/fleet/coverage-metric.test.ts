@@ -7,10 +7,14 @@ describe('completenessRatio', () => {
   const counts = computeFleetCounts({
     localSiteIds: ['l1', 'l2'],
     graphRows: [
-      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'a' },
-      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'b' },
-      { id: 'e1', source: 'external' as const, wpeSiteId: null },
+      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'a', accountId: null, lastSyncAt: null, contentIndexedAt: null },
+      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'b', accountId: null, lastSyncAt: null, contentIndexedAt: null },
+      { id: 'e1', source: 'external' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
     ],
+    wpeAccountFilter: null,
+    siteRows: null,
+    pendingBySite: null,
+    indexEntries: null,
   });
 
   test('a local-scoped numerator divides by the local denominator', () => {
@@ -34,7 +38,14 @@ describe('completenessRatio', () => {
   });
 
   test('an empty population is 0%, not a division by zero', () => {
-    const empty = computeFleetCounts({ localSiteIds: [], graphRows: [] });
+    const empty = computeFleetCounts({
+      localSiteIds: [],
+      graphRows: [],
+      wpeAccountFilter: null,
+      siteRows: null,
+      pendingBySite: null,
+      indexEntries: null,
+    });
     const r = completenessRatio({ measured: 0, scope: 'local' }, empty);
     expect(r.percent).toBe(0);
     expect(Number.isFinite(r.percent)).toBe(true);

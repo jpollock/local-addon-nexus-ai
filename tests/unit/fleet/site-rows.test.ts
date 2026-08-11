@@ -172,7 +172,18 @@ describe('buildSiteRows', () => {
     });
     const counts = computeFleetCounts({
       localSiteIds: ['L1', 'L2'],
-      graphRows: graphRows.map((g: any) => ({ id: g.id, source: g.source, wpeSiteId: null })),
+      graphRows: graphRows.map((g: any) => ({
+        id: g.id,
+        source: g.source,
+        wpeSiteId: null,
+        accountId: null,
+        lastSyncAt: null,
+        contentIndexedAt: null,
+      })),
+      wpeAccountFilter: null,
+      siteRows: null,
+      pendingBySite: null,
+      indexEntries: null,
     });
     // Anchor to a known-correct value as well as to agreement. Two functions
     // that agree can still both be wrong; only the literal catches that.

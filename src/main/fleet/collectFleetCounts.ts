@@ -19,12 +19,27 @@ export interface FleetCountsDeps {
   getDb: () => {
     prepare: (sql: string) => { all: (...a: unknown[]) => unknown[]; run: (...a: unknown[]) => unknown };
   } | null;
+  /** Optional: WPE account filter from settings. */
+  getWpeAccountFilter?: () => string[] | null;
+  /** Optional: Site rows for needs-attention calculation. */
+  getSiteRows?: () => Array<{ id: string; knowledge: 'Unknown' | 'Basic' | 'Familiar' | 'Deep'; lastSyncFailed: boolean }>;
+  /** Optional: Pending items per site. */
+  getPendingBySite?: () => Record<string, number>;
+  /** Optional: Index registry entries. */
+  getIndexEntries?: () => Array<{ siteId: string; state: 'indexed' | 'stale' | 'indexing' | 'error' | 'never'; documentCount: number }>;
 }
 
 export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
   const localSiteIds = Object.keys(deps.getSites() ?? {});
 
-  let graphRows: Array<{ id: string; source: 'wpe' | 'external'; wpeSiteId: string | null }> = [];
+  let graphRows: Array<{
+    id: string;
+    source: 'wpe' | 'external';
+    wpeSiteId: string | null;
+    accountId: string | null;
+    lastSyncAt: number | null;
+    contentIndexedAt: number | null;
+  }> = [];
   try {
     const db = deps.getDb();
     if (db) {
@@ -32,13 +47,23 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
       // on the way out of the database, so nothing downstream sees both shapes.
       const rows = db
         .prepare(
-          "SELECT id, source, wpe_site_id FROM sites WHERE source IN ('wpe','external') AND is_active = 1",
+          "SELECT id, source, wpe_site_id, account_id, last_sync_at, content_indexed_at FROM sites WHERE source IN ('wpe','external') AND is_active = 1",
         )
-        .all() as Array<{ id: unknown; source: unknown; wpe_site_id: unknown }>;
+        .all() as Array<{
+          id: unknown;
+          source: unknown;
+          wpe_site_id: unknown;
+          account_id: unknown;
+          last_sync_at: unknown;
+          content_indexed_at: unknown;
+        }>;
       graphRows = rows.map((r) => ({
         id: String(r.id),
         source: r.source as 'wpe' | 'external',
         wpeSiteId: r.wpe_site_id == null ? null : String(r.wpe_site_id),
+        accountId: r.account_id == null ? null : String(r.account_id),
+        lastSyncAt: r.last_sync_at == null ? null : Number(r.last_sync_at),
+        contentIndexedAt: r.content_indexed_at == null ? null : Number(r.content_indexed_at),
       }));
     }
   } catch {
@@ -46,7 +71,20 @@ export function collectFleetCounts(deps: FleetCountsDeps): FleetCounts {
     // with their scope labels intact rather than the whole call failing.
   }
 
-  return computeFleetCounts({ localSiteIds, graphRows });
+  // Optional extended inputs — defaults make them null when unavailable.
+  const wpeAccountFilter = deps.getWpeAccountFilter?.() ?? null;
+  const siteRows = deps.getSiteRows?.() ?? null;
+  const pendingBySite = deps.getPendingBySite?.() ?? null;
+  const indexEntries = deps.getIndexEntries?.() ?? null;
+
+  return computeFleetCounts({
+    localSiteIds,
+    graphRows,
+    wpeAccountFilter,
+    siteRows,
+    pendingBySite,
+    indexEntries,
+  });
 }
 
 /** Deactivates graph local rows whose site no longer exists in Local. Returns the count. */

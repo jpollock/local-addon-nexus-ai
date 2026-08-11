@@ -4,11 +4,15 @@ describe('computeFleetCounts', () => {
   const input = {
     localSiteIds: ['l1', 'l2', 'l3'],
     graphRows: [
-      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA' },
-      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'siteA' },
-      { id: 'w3', source: 'wpe' as const, wpeSiteId: 'siteB' },
-      { id: 'e1', source: 'external' as const, wpeSiteId: null },
+      { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: 'acc1', lastSyncAt: null, contentIndexedAt: null },
+      { id: 'w2', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: 'acc1', lastSyncAt: null, contentIndexedAt: null },
+      { id: 'w3', source: 'wpe' as const, wpeSiteId: 'siteB', accountId: 'acc2', lastSyncAt: null, contentIndexedAt: null },
+      { id: 'e1', source: 'external' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
     ],
+    wpeAccountFilter: null,
+    siteRows: null,
+    pendingBySite: null,
+    indexEntries: null,
   };
 
   test('the fleet total is the sum of the three populations', () => {
@@ -31,7 +35,14 @@ describe('computeFleetCounts', () => {
   });
 
   test('an empty fleet is zeros with scopes intact', () => {
-    const c = computeFleetCounts({ localSiteIds: [], graphRows: [] });
+    const c = computeFleetCounts({
+      localSiteIds: [],
+      graphRows: [],
+      wpeAccountFilter: null,
+      siteRows: null,
+      pendingBySite: null,
+      indexEntries: null,
+    });
     expect(c.installs.count).toBe(0);
     expect(c.installs.scope.length).toBeGreaterThan(0);
   });
@@ -40,10 +51,14 @@ describe('computeFleetCounts', () => {
     const c = computeFleetCounts({
       localSiteIds: [],
       graphRows: [
-        { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA' },
-        { id: 'w2', source: 'wpe' as const, wpeSiteId: null },
-        { id: 'w3', source: 'wpe' as const, wpeSiteId: null },
+        { id: 'w1', source: 'wpe' as const, wpeSiteId: 'siteA', accountId: null, lastSyncAt: null, contentIndexedAt: null },
+        { id: 'w2', source: 'wpe' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
+        { id: 'w3', source: 'wpe' as const, wpeSiteId: null, accountId: null, lastSyncAt: null, contentIndexedAt: null },
       ],
+      wpeAccountFilter: null,
+      siteRows: null,
+      pendingBySite: null,
+      indexEntries: null,
     });
     // One real parent + two unparented rows that must NOT collapse together.
     expect(c.wpeSites.count).toBe(3);
