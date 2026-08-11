@@ -2,6 +2,13 @@ import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { externalHostCapabilities, Capability, CapabilityState } from './hostCapabilities';
 import { ExternalHostAddWizard } from './ExternalHostAddWizard';
+import { rendererGql } from '../../utils/rendererGql';
+
+/**
+ * Same value as HOST_PROBE_CLIENT_TIMEOUT_MS in ExternalHostAddWizard.
+ * Duplicated deliberately to avoid cross-file coupling on a magic timeout constant.
+ */
+const HOST_PROBE_CLIENT_TIMEOUT_MS = 210000;
 
 export interface ExternalHostRow { alias: string; site: string; environment: string; domain: string }
 interface SshConfigHost { alias: string; hostname: string; user: string; port: string; identityFile?: string; proxyJump?: string; alreadyRegistered: boolean }
@@ -25,6 +32,10 @@ interface OtherHostsPanelState {
   screen: HostScreen;
   sshConfigHosts: SshConfigHost[];
   hosts: ExternalHostRow[];
+  /** Newly-discovered installs per alias, not yet followed. */
+  discovered: Record<string, string[]>;
+  /** Which host is currently being re-probed, if any. */
+  checking: string | null;
 }
 
 export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, OtherHostsPanelState> {
@@ -34,6 +45,8 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     screen: { name: 'list' },
     sshConfigHosts: [],
     hosts: this.props.externalHosts,
+    discovered: {},
+    checking: null,
   };
 
   componentDidMount(): void {
@@ -67,6 +80,66 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
   completeAdd = (_alias: string): void => {
     this.setState({ screen: { name: 'list' } });
     this.reload();
+  };
+
+  /**
+   * Re-probe one host. Returns an object with installs array from the probe, or empty on failure.
+   */
+  runProbe = async (alias: string): Promise<{ installs: string[] }> => {
+    try {
+      const data = await rendererGql<{ nexusHostProbe: { success: boolean; error: string | null; multiIssue: { installs: string[] } | null } }>(`
+        query ProbeHost($alias: String!) {
+          nexusHostProbe(alias: $alias) {
+            success
+            error
+            multiIssue {
+              installs
+            }
+          }
+        }
+      `, { alias }, HOST_PROBE_CLIENT_TIMEOUT_MS);
+
+      const result = data.nexusHostProbe;
+      if (!result.success || !result.multiIssue) {
+        return { installs: [] };
+      }
+      return { installs: result.multiIssue.installs || [] };
+    } catch {
+      return { installs: [] };
+    }
+  };
+
+  /**
+   * Re-run discovery for one host and surface newly-discovered installs.
+   * Already-followed sites are never modified, unfollowed, or re-verified.
+   */
+  checkItNow = async (alias: string): Promise<void> => {
+    this.setState({ checking: alias });
+    const result = await this.runProbe(alias);
+    if (!this.mounted) return;
+
+    // Filter out installs that are already followed.
+    // The hosts array contains site slugs, but for a simple match we compare
+    // the path basename or the full path against known sites.
+    const followedPaths = new Set(
+      this.state.hosts.filter(h => h.alias === alias).map(h => h.site)
+    );
+    const newInstalls = result.installs.filter(path => !followedPaths.has(path));
+
+    this.setState({
+      checking: null,
+      discovered: {
+        ...this.state.discovered,
+        [alias]: newInstalls,
+      },
+    });
+  };
+
+  /**
+   * Persist the root-mode setting for one host.
+   */
+  setRootMode = async (alias: string, allowRoot: boolean): Promise<void> => {
+    await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, alias, allowRoot);
   };
 
   /**
@@ -272,6 +345,295 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     );
   }
 
+  renderDetail(alias: string): React.ReactElement {
+    const capabilities = externalHostCapabilities();
+    const hostSites = this.state.hosts.filter(h => h.alias === alias);
+    const discovered = this.state.discovered[alias] || [];
+    const cfg = this.state.sshConfigHosts.find(c => c.alias === alias);
+
+    return React.createElement('div', {},
+      // Back button
+      React.createElement('div', {
+        onClick: () => this.setState({ screen: { name: 'list' } }),
+        style: {
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--nxai-accent)',
+          marginBottom: 16,
+          cursor: 'pointer',
+        },
+      }, '← Back to hosts'),
+
+      // Connection card
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-card-border)',
+          borderRadius: 6,
+          marginBottom: 16,
+        },
+      },
+        React.createElement('div', {
+          style: {
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 8,
+          },
+        }, alias),
+        cfg && React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-sub)',
+            marginBottom: 4,
+          },
+        }, `${cfg.user}@${cfg.hostname}:${cfg.port}`),
+        React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-sub)',
+            marginTop: 12,
+          },
+        }, `Nexus opens at most 3 connections at a time to a host other than WP Engine, and batches its questions into one session where it can. That is a fixed limit on our side, not something read from your server — which is why checks here run less often than on WP Engine.`),
+      ),
+
+      // Sites
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-card-border)',
+          borderRadius: 6,
+          marginBottom: 16,
+        },
+      },
+        React.createElement('div', {
+          style: {
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 8,
+          },
+        }, 'Sites'),
+        hostSites.length === 0 && discovered.length === 0
+          ? React.createElement('div', {
+              style: {
+                fontSize: 12,
+                color: 'var(--nxai-card-sub)',
+              },
+            }, 'No sites followed yet')
+          : null,
+        hostSites.map((site, idx) =>
+          React.createElement('div', {
+            key: idx,
+            style: {
+              fontSize: 12,
+              color: 'var(--nxai-card-text)',
+              padding: '8px 0',
+              borderBottom: idx < hostSites.length - 1 || discovered.length > 0 ? '1px solid var(--nxai-card-border)' : 'none',
+            },
+          },
+            React.createElement('div', {
+              style: {
+                fontWeight: 600,
+                marginBottom: 2,
+              },
+            }, site.domain || site.site),
+            React.createElement('div', {
+              style: {
+                color: 'var(--nxai-card-sub)',
+              },
+            }, `${site.site} · ${site.environment}`),
+          ),
+        ),
+        discovered.map((path, idx) =>
+          React.createElement('div', {
+            key: `discovered-${idx}`,
+            style: {
+              fontSize: 12,
+              color: 'var(--nxai-card-text)',
+              padding: '8px 0',
+              borderBottom: idx < discovered.length - 1 ? '1px solid var(--nxai-card-border)' : 'none',
+            },
+          },
+            React.createElement('div', {
+              style: {
+                fontWeight: 600,
+                marginBottom: 2,
+              },
+            }, path),
+            React.createElement('div', {
+              style: {
+                color: 'var(--nxai-card-sub)',
+              },
+            }, 'Not yet followed'),
+          ),
+        ),
+        React.createElement('div', {
+          onClick: this.state.checking === alias ? undefined : () => this.checkItNow(alias),
+          style: {
+            display: 'inline-block',
+            padding: '6px 12px',
+            background: this.state.checking === alias ? 'var(--nxai-status-neutral)' : 'var(--nxai-accent)',
+            color: 'var(--nxai-accent-text)',
+            borderRadius: 4,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: this.state.checking === alias ? 'default' : 'pointer',
+            marginTop: 12,
+          },
+        }, this.state.checking === alias ? 'Checking...' : 'Check it now'),
+      ),
+
+      // Capabilities
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-card-border)',
+          borderRadius: 6,
+          marginBottom: 16,
+        },
+      },
+        React.createElement('div', {
+          style: {
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 8,
+          },
+        }, 'What Nexus may do here'),
+        capabilities.map((cap, idx) =>
+          React.createElement('div', {
+            key: cap.id,
+            style: {
+              fontSize: 12,
+              padding: '8px 0',
+              borderBottom: idx < capabilities.length - 1 ? '1px solid var(--nxai-card-border)' : 'none',
+            },
+          },
+            React.createElement('div', {
+              style: {
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+              },
+            },
+              React.createElement('div', {
+                style: {
+                  fontSize: 14,
+                  color: cap.state === 'allowed' ? 'var(--nxai-accent)' : cap.state === 'gated' ? 'var(--nxai-amber-text)' : 'var(--nxai-card-sub)',
+                  minWidth: 16,
+                },
+              }, cap.state === 'allowed' ? '✓' : cap.state === 'gated' ? '~' : '—'),
+              React.createElement('div', { style: { flex: 1 } },
+                React.createElement('div', {
+                  style: {
+                    color: 'var(--nxai-card-text)',
+                    fontWeight: 600,
+                    marginBottom: cap.note ? 4 : 0,
+                  },
+                }, cap.label),
+                cap.note && React.createElement('div', {
+                  style: {
+                    color: cap.state === 'gated' ? 'var(--nxai-amber-text)' : 'var(--nxai-card-sub)',
+                    fontSize: 11,
+                  },
+                }, cap.note),
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      // Root mode control
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-card-border)',
+          borderRadius: 6,
+          marginBottom: 16,
+        },
+      },
+        React.createElement('div', {
+          style: {
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 8,
+          },
+        }, 'Root mode'),
+        React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-sub)',
+            marginBottom: 12,
+          },
+        }, 'Allow commands to run as root on this host'),
+        React.createElement('label', {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: 'pointer',
+          },
+        },
+          React.createElement('input', {
+            type: 'checkbox',
+            onChange: (e: any) => this.setRootMode(alias, e.target.checked),
+          }),
+          React.createElement('span', {
+            style: {
+              fontSize: 12,
+              color: 'var(--nxai-card-text)',
+            },
+          }, 'Allow root access'),
+        ),
+      ),
+
+      // Removal
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-error-border)',
+          borderRadius: 6,
+        },
+      },
+        React.createElement('div', {
+          style: {
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 8,
+          },
+        }, 'Remove this host'),
+        React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-sub)',
+            marginBottom: 12,
+          },
+        }, 'Disconnect from this host and remove all its sites from Nexus'),
+        React.createElement('div', {
+          onClick: () => this.setState({ screen: { name: 'remove', alias } }),
+          style: {
+            display: 'inline-block',
+            padding: '6px 12px',
+            background: 'var(--nxai-error-bg)',
+            color: 'var(--nxai-error-text)',
+            borderRadius: 4,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+          },
+        }, 'Remove'),
+      ),
+    );
+  }
+
   render(): React.ReactElement {
     // Add screen
     if (this.state.screen.name === 'add') {
@@ -290,12 +652,17 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
       return this.renderEmpty();
     }
 
+    // Detail screen
+    if (this.state.screen.name === 'detail') {
+      return this.renderDetail(this.state.screen.alias);
+    }
+
     // List state
     if (this.state.screen.name === 'list') {
       return this.renderList();
     }
 
-    // Placeholder for other screens (Tasks 4-6)
+    // Placeholder for other screens (Tasks 5-6)
     return React.createElement('div', {}, `Screen: ${this.state.screen.name}`);
   }
 }
