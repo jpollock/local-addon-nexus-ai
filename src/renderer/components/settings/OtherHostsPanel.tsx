@@ -88,8 +88,13 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
 
   renderEmpty(): React.ReactElement {
     const capabilities = externalHostCapabilities();
-    const allowed = capabilities.filter(c => c.state === 'allowed' || c.state === 'gated');
     const unavailable = capabilities.filter(c => c.state === 'unavailable');
+
+    // Derive the cannot list from unavailable capabilities
+    const cannotItems = unavailable.map(c => c.label).join(', ');
+    const cannotText = cannotItems
+      ? `${cannotItems} — those are WP Engine only. Backups and staging stay with your host's own tools.`
+      : "Backups and staging stay with your host's own tools.";
 
     return React.createElement('div', {
       style: {
@@ -154,7 +159,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
               color: 'var(--nxai-card-sub)',
               lineHeight: 1.4,
             },
-          }, "Copy a site down, push local changes up, or delete and promote environments — those are WP Engine only. Backups and staging stay with your host's own tools."),
+          }, cannotText),
         ),
       ),
 
@@ -165,7 +170,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
           display: 'inline-block',
           padding: '6px 12px',
           background: 'var(--nxai-accent)',
-          color: '#fff',
+          color: 'var(--nxai-accent-text)',
           borderRadius: 4,
           fontSize: 12,
           fontWeight: 600,

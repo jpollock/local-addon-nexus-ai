@@ -39,6 +39,42 @@ describe('OtherHostsPanel — empty state', () => {
   it('offers a way to add a host', () => {
     expect(text()).toContain('Add a host');
   });
+
+  it('couples the cannot column to externalHostCapabilities() — drift on a capability becoming available fails here', () => {
+    const { externalHostCapabilities } = require('../../../src/renderer/components/settings/hostCapabilities');
+    const capabilities = externalHostCapabilities();
+    const unavailable = capabilities.filter((c: any) => c.state === 'unavailable');
+    const allowed = capabilities.filter((c: any) => c.state === 'allowed' || c.state === 'gated');
+    const t = text();
+
+    // "Cannot" column must list every unavailable capability's label
+    for (const cap of unavailable) {
+      expect(t).toContain(cap.label);
+    }
+
+    // "Can do" column must represent every allowed/gated capability by label or evident equivalent.
+    // The test is one-directional: it catches drift when a capability becomes available.
+    // The prose is allowed to name things the permission model does not represent.
+    for (const cap of allowed) {
+      const id = cap.id;
+      const labelLower = cap.label.toLowerCase();
+      const tLower = t.toLowerCase();
+
+      // Each capability must be represented by its label or an evident equivalent.
+      // "Read what is installed, and make it searchable" is represented by
+      // "read what is installed · index page and post text so they are searchable"
+      if (id === 'read') {
+        expect(tLower).toContain('read what is installed');
+        expect(tLower).toContain('searchable');
+      } else if (id === 'wpcli') {
+        // "Install or update things" appears as "install or update things, if you allow it"
+        expect(tLower).toContain('install or update things');
+      } else {
+        // Fallback: exact label match (case-insensitive)
+        expect(tLower).toContain(labelLower);
+      }
+    }
+  });
 });
 
 describe('OtherHostsPanel — host list', () => {
