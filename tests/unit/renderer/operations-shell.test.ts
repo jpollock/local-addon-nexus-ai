@@ -1,65 +1,49 @@
 /**
- * Operations after spec 5 guts it.
- *
- * Zones 1 and 2 move to the Sites table. Zone 3 stays, because Factory Reset
- * and friends are app-level maintenance with no per-site meaning — they cannot
- * become bulk actions, and their destination is the Advanced section spec 6
- * builds. Deleting the tab now would strand them for the whole gap.
- *
- * These read the source rather than rendering, because what they guard is
- * "this capability is still reachable from somewhere", which survives a
- * refactor of how it is rendered.
+ * Spec 5 kept Operations alive only because deleting it would strand five
+ * maintenance actions with nowhere to go. Spec 6a built that destination, so
+ * this inverts: the five must now be reachable from Advanced, and Operations
+ * must be gone.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 
-const OVERVIEW = path.join(__dirname, '../../../src/renderer/components/NexusOverview.tsx');
-const src = () => fs.readFileSync(OVERVIEW, 'utf8');
+const read = (p: string) =>
+  fs.readFileSync(path.join(__dirname, '../../../src/renderer/components', p), 'utf8');
 
-test('Operations still reaches every Advanced maintenance action', () => {
-  // Five, not the four the plan lists — SSH Diagnostics is in the same zone and
-  // would be stranded just as silently.
+test('Advanced reaches every maintenance action Operations used to hold', () => {
+  const advanced = read('settings/AdvancedSection.tsx');
   for (const action of [
-    'Factory Reset',
-    'Reset Content Index',
-    'Database Health',
-    'Housekeeping',
-    'SSH Diagnostics',
-  ]) {
-    expect(src()).toContain(action);
-  }
+    'Start over', 'Rebuild search', 'Database health',
+    'Remove ghost installs', 'SSH diagnostics',
+  ]) expect(advanced).toContain(action);
 });
 
-test('the retired zone-1 bulk buttons are gone from Operations', () => {
-  expect(src()).not.toContain('Refresh metadata');
-  expect(src()).not.toContain('Sync metadata');
+test('the third reset is reachable too — it was buried inside Housekeeping', () => {
+  expect(read('settings/AdvancedSection.tsx')).toContain('Rebuild what Nexus knows');
 });
 
-test('the per-site list is gone from Operations', () => {
-  // Zone 2 was SystemTab. The Sites table replaces it.
-  expect(src()).not.toContain('SystemTab');
+test('Operations is gone from the dashboard', () => {
+  const overview = read('NexusOverview.tsx');
+  expect(overview).not.toContain('renderOperationsTab');
+  expect(overview).not.toContain("case 'operations'");
 });
 
-test('bulk progress survives the gutting', () => {
-  // BulkOperationsPanel lived inside zone 1. It is the ONLY progress readout
-  // for BULK_EXECUTE, which is what the Sites table's bulk bar dispatches — so
-  // deleting it with the buttons would leave every bulk action running blind.
-  expect(src()).toContain('BulkOperationsPanel');
+test('bulk progress survived the move', () => {
+  // BulkOperationsPanel is the ONLY progress readout for BULK_EXECUTE, which
+  // the Sites table's bulk bar dispatches. Deleting it with the tab would
+  // leave every bulk action running blind.
+  expect(read('NexusOverview.tsx')).toContain('BulkOperationsPanel');
 });
 
-test('WPE sync progress survives, because the scheduler drives it too', () => {
-  // `checkWpeSyncStatus` runs on mount and sets wpeSyncing for a sync started
-  // by the scheduler, not by the deleted button. Removing this readout would
-  // hide background syncs entirely.
-  expect(src()).toContain('wpe-sync-progress');
+test('WPE sync progress survived — the scheduler drives it, not a button', () => {
+  expect(read('NexusOverview.tsx')).toContain('wpe-sync-progress');
 });
 
-test('the dashboard no longer carries the two fleet cards', () => {
-  const overviewTab = fs.readFileSync(
-    path.join(__dirname, '../../../src/renderer/components/tabs/OverviewTab.tsx'), 'utf8');
-  // Usage, not mention: a comment explaining where they went is worth keeping,
-  // and a bare `not.toContain(name)` would forbid writing one.
-  expect(overviewTab).not.toContain('React.createElement(FleetCompletenessWidget');
-  expect(overviewTab).not.toContain('this.renderFleetSummaryCard(');
-  expect(overviewTab).not.toContain("from '../FleetCompletenessWidget'");
+test('the native panel keeps only the host-key boundary', () => {
+  const prefs = read('NexusPreferences.tsx');
+  expect(prefs).toContain('renderExternalHostsSection');
+  // These moved to the one settings home.
+  expect(prefs).not.toContain('renderChatSection');
+  expect(prefs).not.toContain('renderWpeAccessControlSection');
+  expect(prefs).not.toContain('renderAwsCredsSection');
 });

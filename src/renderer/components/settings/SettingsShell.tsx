@@ -10,6 +10,11 @@ import { injectThemeVars } from '../../utils/theme';
 import { computeDerived } from './derived';
 import type { NexusSettings } from '../../../common/types';
 import type { Derived, JobKey } from './derived';
+import { ConnectionsSection } from './ConnectionsSection';
+import { ChatSection } from './ChatSection';
+import { BackgroundWorkSection } from './BackgroundWorkSection';
+import { PermissionsSection } from './PermissionsSection';
+import { AdvancedSection } from './AdvancedSection';
 
 export interface SectionProps<T> {
   data: T;
@@ -33,6 +38,8 @@ interface SettingsShellState {
   active: Section;
   fleetCounts: { wpe: number; external: number; local: number } | null;
   jobRunData: Record<string, { averageMs: number | null; lastRunAt: number | null }> | null;
+  indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
+  mcpInfo: { port: number } | null;
 }
 
 export class SettingsShell extends React.Component<{ electron: any }, SettingsShellState> {
@@ -49,6 +56,8 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
     active: 'background',
     fleetCounts: null,
     jobRunData: null,
+    indexEntries: [],
+    mcpInfo: null,
   };
 
   componentDidMount(): void {
@@ -63,7 +72,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
 
   async loadAll(): Promise<void> {
     const ipc = this.props.electron.ipcRenderer;
-    const [settings, sitesResult, accounts, installs, externalHosts, dashboardStats, jobRunData] = await Promise.all([
+    const [settings, sitesResult, accounts, installs, externalHosts, dashboardStats, jobRunData, indexEntries, mcpInfo] = await Promise.all([
       ipc.invoke(IPC_CHANNELS.GET_SETTINGS).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => ({ sites: [] })),
       ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
@@ -71,6 +80,8 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
       ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_JOB_RUN_DATA).catch(() => ({})),
+      ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS).catch(() => []),
+      ipc.invoke(IPC_CHANNELS.GET_MCP_INFO).catch(() => null),
     ]);
     if (!this.mounted) return;
 
@@ -90,6 +101,8 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
       externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
       fleetCounts,
       jobRunData: jobRunData ?? {},
+      indexEntries: Array.isArray(indexEntries) ? indexEntries : [],
+      mcpInfo: mcpInfo ?? null,
       loading: false,
     });
   }
@@ -186,15 +199,65 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
       navItem('advanced', 'Advanced'),
     );
 
-    // Placeholders for the five sections (Tasks 6-10 will fill these in)
-    const sectionContent = React.createElement('div', {
+    // Dispatch to the appropriate section
+    let sectionContent: React.ReactElement;
+    const { active, settings, wpeAccounts, wpeInstalls, externalHosts, sites, indexEntries, mcpInfo } = this.state;
+
+    if (active === 'connections') {
+      sectionContent = React.createElement(ConnectionsSection, {
+        settings: settings ?? {} as NexusSettings,
+        wpeAccounts,
+        externalHosts,
+        onSave: this.saveSetting,
+        electron: this.props.electron,
+      });
+    } else if (active === 'chat') {
+      sectionContent = React.createElement(ChatSection, {
+        settings: settings ?? {} as NexusSettings,
+        onSave: this.saveSetting,
+        electron: this.props.electron,
+      });
+    } else if (active === 'background') {
+      if (!derived) {
+        sectionContent = React.createElement('div', {
+          style: { padding: 24, color: 'var(--nxai-card-text)' },
+        }, 'Loading background work data…');
+      } else {
+        sectionContent = React.createElement(BackgroundWorkSection, {
+          derived,
+          onSave: this.saveSetting,
+        });
+      }
+    } else if (active === 'permissions') {
+      const exceptions = (settings?.remoteSiteExceptions ?? []) as any[];
+      sectionContent = React.createElement(PermissionsSection, {
+        permissions: settings ?? {} as NexusSettings,
+        exceptions,
+        wpeInstalls,
+        externalHosts,
+        wpeAccounts,
+        onSave: this.saveSetting,
+      });
+    } else {
+      // advanced
+      sectionContent = React.createElement(AdvancedSection, {
+        settings: settings ?? {} as NexusSettings,
+        indexEntries,
+        mcpInfo: mcpInfo ?? { port: 0 },
+        sites,
+        onSave: this.saveSetting,
+        electron: this.props.electron,
+      });
+    }
+
+    const sectionWrapper = React.createElement('div', {
       style: {
         flex: 1,
         padding: 24,
         overflowY: 'auto',
         color: 'var(--nxai-card-text)',
       },
-    }, `${this.state.active} section — placeholder`);
+    }, sectionContent);
 
     const footer = React.createElement('div', {
       style: {
@@ -224,7 +287,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
           flex: 1,
           overflow: 'hidden',
         },
-      }, nav, sectionContent),
+      }, nav, sectionWrapper),
       footer,
     );
   }

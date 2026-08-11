@@ -108,7 +108,6 @@ const TABS = [
   { key: 'overview',   label: 'Dashboard' },
   { key: 'inbox',      label: 'Inbox' },
   { key: 'sites',      label: 'Sites' },
-  { key: 'operations', label: 'Operations' },
   { key: 'activity',   label: 'Activity' },
   { key: 'agents',     label: 'Agents' },
   { key: 'settings',   label: 'Settings' },
@@ -1382,7 +1381,7 @@ renderTabBar(): React.ReactNode {
       aiProxy: this.state.aiProxy,
       mcpInfo: this.state.mcpInfo,
       startupStatus: this.state.startupStatus,
-      onNavigate: (tab: 'overview' | 'activity' | 'operations' | 'settings' | 'agents' | 'inbox') => this.setState({ activeTab: tab }),
+      onNavigate: (tab: 'overview' | 'activity' | 'settings' | 'agents' | 'inbox') => this.setState({ activeTab: tab }),
       onRefresh: () => { void this.fetchAll(); },
     };
 
@@ -1441,7 +1440,6 @@ renderTabBar(): React.ReactNode {
         }),
       );
       case 'activity': return this.renderActivityTab();
-      case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
       // 'agents' case handled in render() directly (no stats dependency)
       default: return React.createElement(OverviewTab, overviewProps);
