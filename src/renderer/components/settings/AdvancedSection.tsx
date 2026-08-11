@@ -17,7 +17,7 @@ import { IPC_CHANNELS } from '../../../common/constants';
 interface Props {
   settings: NexusSettings;
   indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
-  mcpInfo: { port: number };
+  mcpInfo: { port: number } | null;
   sites: Array<{ id: string; name: string }>;
   onSave: (patch: Partial<NexusSettings>) => void;
   electron: {
@@ -254,6 +254,26 @@ export class AdvancedSection extends React.Component<Props, State> {
 
   renderMcpPanel(): React.ReactNode {
     const { mcpInfo } = this.props;
+
+    if (!mcpInfo) {
+      return React.createElement('div', {
+        style: {
+          marginBottom: 24,
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-card-border)',
+          borderRadius: 6,
+        },
+      },
+        React.createElement('div', {
+          style: { fontSize: 14, fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: 8 },
+        }, 'Connect your own AI tools'),
+        React.createElement('div', {
+          style: { fontSize: 12, color: 'var(--nxai-card-sub)' },
+        }, 'MCP server not running'),
+      );
+    }
+
     const command = `npx -y @modelcontextprotocol/inspector http://localhost:${mcpInfo.port}/sse`;
 
     return React.createElement('div', {

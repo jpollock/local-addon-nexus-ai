@@ -410,30 +410,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
-  handleGatewayToggle = (): void => {
-    this.setState((prev) => {
-      const next = { ...prev.settings, useLocalGateway: !(prev.settings as any).useLocalGateway };
-      this.notifyChange(next);
-      return { settings: next };
-    });
-  };
-
-  handleDockedPanelToggle = (enabled: boolean): void => {
-    this.setState((prev) => {
-      const next = { ...prev.settings, dockedPanelEnabled: enabled };
-      this.notifyChange(next);
-      return { settings: next };
-    }, () => { this.saveNow(this.state.settings); });
-  };
-
-  handleRetentionChange = (days: 7 | 30 | 90 | null): void => {
-    this.setState((prev) => {
-      const next = { ...prev.settings, chatRetentionDays: days };
-      this.notifyChange(next);
-      return { settings: next };
-    }, () => { this.saveNow(this.state.settings); });
-  };
-
   handleAutoIndexToggle = (): void => {
     this.setState((prev) => {
       const next = { ...prev.settings, autoIndex: !prev.settings.autoIndex };
@@ -839,80 +815,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       return React.createElement('div', { style: { padding: '24px', opacity: 0.7 } }, 'Loading preferences...');
     }
 
-    // Section 1: AI Provider
-    // Section 2: Local AI Gateway
-    const section2 = React.createElement('div', { style: sectionStyle },
-      this.renderSectionHeader('gateway', 'Local AI Gateway'),
-      expandedSections.has('gateway')
-        ? React.createElement('div', null,
-            React.createElement('div', { style: descStyle },
-              'When enabled, all AI requests from WordPress sites are proxied through the Local AI Gateway, which routes them to your configured AI provider above.',
-            ),
-            React.createElement('label', {
-              style: checkboxRowStyle,
-              title: 'Route all WordPress AI plugin requests through the Local AI Gateway running on this machine.',
-            },
-              React.createElement('input', {
-                type: 'checkbox',
-                checked: !!((settings as any).useLocalGateway),
-                onChange: this.handleGatewayToggle,
-                style: { width: '16px', height: '16px', cursor: 'pointer' },
-              }),
-              React.createElement('span', { style: { fontSize: '14px' } },
-                'Route WordPress AI requests through Local AI Gateway',
-              ),
-            ),
-          )
-        : null,
-    );
-
-    // Section 5: Chat History
-    const panelEnabled = settings.dockedPanelEnabled !== false;
-    const section5 = React.createElement('div', { style: sectionStyle },
-      this.renderSectionHeader('chat-history', 'Chat History'),
-      expandedSections.has('chat-history')
-        ? React.createElement('div', null,
-            React.createElement('label', {
-              style: checkboxRowStyle,
-              title: 'Show the AI chat panel bubble in the bottom-right corner of Local.',
-            },
-              React.createElement('input', {
-                type: 'checkbox',
-                checked: panelEnabled,
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-                  this.handleDockedPanelToggle(e.target.checked);
-                },
-                style: { width: '16px', height: '16px', cursor: 'pointer' },
-              }),
-              React.createElement('span', { style: { fontSize: '14px' } }, 'Enable AI Chat Panel'),
-            ),
-            panelEnabled
-              ? React.createElement(
-                  'div',
-                  { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 } },
-                  React.createElement('label', { style: { color: '#868d98', fontSize: 12 } }, 'Keep chat history for'),
-                  React.createElement(
-                    'select',
-                    {
-                      style: { background: '#23272f', border: '1px solid #2c313a', borderRadius: 4, color: '#e4e7ec', fontSize: 12, padding: '4px 8px' },
-                      value: String(settings.chatRetentionDays ?? 30),
-                      onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-                        const raw = e.target.value;
-                        const val = raw === 'null' ? null : Number(raw) as 7 | 30 | 90;
-                        this.handleRetentionChange(val);
-                      },
-                    },
-                    React.createElement('option', { value: '7' }, '7 days'),
-                    React.createElement('option', { value: '30' }, '30 days'),
-                    React.createElement('option', { value: '90' }, '90 days'),
-                    React.createElement('option', { value: 'null' }, 'Forever'),
-                  ),
-                )
-              : null,
-          )
-        : null,
-    );
-
     // Section 6: External SSH Hosts
     const section6 = React.createElement('div', { style: sectionStyle },
       this.renderSectionHeader('external-hosts', 'External SSH Hosts'),
@@ -921,15 +823,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         : null,
     );
 
-    // Note: Auto-Indexing, Sync Schedule, and WPE Access & Permissions have
-    // moved to the Nexus AI Settings tab for a cleaner separation of concerns.
+    // Note: Auto-Indexing, Sync Schedule, WPE Access & Permissions, AI Provider,
+    // Local AI Gateway, and Chat History have all moved to the Nexus AI Settings
+    // tab. Only External SSH Hosts and the trust-on-first-use host-key approval
+    // remain here, because that approval must not be reachable from anything but
+    // Local itself (it is deliberately IPC-only, never GraphQL).
 
     return React.createElement('div', { style: { padding: '24px', maxWidth: '600px', boxSizing: 'border-box' as const } },
       React.createElement('style', null, `
         .nexus-password-input { -webkit-text-fill-color: unset !important; }
       `),
-      section2,
-      section5,
       section6,
     );
   }

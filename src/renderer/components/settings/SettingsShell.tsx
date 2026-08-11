@@ -74,7 +74,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
     const ipc = this.props.electron.ipcRenderer;
     const [settings, sitesResult, accounts, installs, externalHosts, dashboardStats, jobRunData, indexEntries, mcpInfo] = await Promise.all([
       ipc.invoke(IPC_CHANNELS.GET_SETTINGS).catch(() => null),
-      ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => ({ sites: [] })),
+      ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
@@ -95,7 +95,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
 
     this.setState({
       settings: settings ?? { autoIndex: true, excludedSiteIds: [] } as any,
-      sites: sitesResult?.sites ?? [],
+      sites: Array.isArray(sitesResult) ? sitesResult : [],
       wpeAccounts: Array.isArray(accounts) ? accounts : [],
       wpeInstalls: Array.isArray(installs) ? installs : [],
       externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
@@ -243,7 +243,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
       sectionContent = React.createElement(AdvancedSection, {
         settings: settings ?? {} as NexusSettings,
         indexEntries,
-        mcpInfo: mcpInfo ?? { port: 0 },
+        mcpInfo,
         sites,
         onSave: this.saveSetting,
         electron: this.props.electron,

@@ -1,8 +1,9 @@
 /**
  * Nexus Overview Dashboard
  *
- * Simplified addon dashboard with Overview and Operations tabs only.
- * Sites, Content, and Chat have been extracted to separate interfaces.
+ * Addon dashboard with six tabs: Overview, Inbox, Sites, Activity, Agents, Settings.
+ * Operations was retired in spec 6a (Task 11); its five maintenance actions moved
+ * to Settings → Advanced.
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
@@ -800,20 +801,12 @@ renderTabBar(): React.ReactNode {
   }
 
   /**
-   * Operations is a HOLDING PEN, not a destination. Do not "finish the job" by
-   * deleting it.
+   * Inline progress for a WP Engine metadata sync.
    *
-   * Spec 5 moved its two real zones out: the data-currency buttons became
-   * selection-scoped actions on the Sites table, and the per-site list (
-   * the per-site list) became the table itself. What is left is zone 3 — Factory
-   * Reset, Reset Content Index, Database Health, Housekeeping, SSH Diagnostics.
-   *
-   * Those are app-level maintenance with no per-site meaning, so they cannot
-   * become bulk actions. Their destination is the Advanced section **spec 6**
-   * builds in Settings. Deleting this tab before that lands would make all five
-   * unreachable from the UI for the entire gap between the two specs.
-   *
-   * Spec 6 empties this and removes the tab. Until then it stays.
+   * Survived the gutting of Operations' zone 1 because it is not driven by the
+   * button that lived there: `checkWpeSyncStatus` runs on mount and starts
+   * polling whenever a sync is already in flight, which is the normal case for
+   * one the scheduler began. Renders nothing when no sync is running.
    */
   renderWpeSyncProgress(): React.ReactNode {
     if (!this.state.wpeSyncing || !this.state.wpeSyncProgress) return null;
