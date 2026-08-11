@@ -2,6 +2,16 @@ import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import type { ToolProvider } from '../agent-sdk/types';
 import type { ProviderToolDefinition } from '../chat/providers/types';
+import type { EventLog } from '../logging/eventLog';
+import { getToolSafety } from '../mcp/safety';
+import { isMutatingTool, mutationTarget } from './toolEvents';
+
+/** What an agent run needs in order for its tool calls to appear in the structured log. */
+export interface ToolEventContext {
+  eventLog?: EventLog;
+  runId?: string;
+  agentName: string;
+}
 
 /**
  * Implements ToolProvider by wrapping ToolRegistry with scope enforcement.
@@ -14,10 +24,77 @@ export class NexusToolProvider implements ToolProvider {
   /** Site IDs this provider may target with wp_eval. Empty = any site allowed (MCP mode). */
   private sandboxSiteIds: Set<string> = new Set();
 
-  constructor(registry: ToolRegistry, services: NexusServices, tools: string[] | undefined) {
+  /** Absent in MCP mode and in tests; tool events are simply not written then. */
+  private events: ToolEventContext | undefined;
+
+  /** Counts how many tool calls threw — either failed or refused. */
+  private _failedCallCount = 0;
+
+  constructor(
+    registry: ToolRegistry,
+    services: NexusServices,
+    tools: string[] | undefined,
+    events?: ToolEventContext,
+  ) {
     this.registry = registry;
     this.services = services;
     this.allowedTools = tools !== undefined ? new Set(tools) : undefined;
+    this.events = events;
+  }
+
+  /** Returns how many tool calls failed or were refused. */
+  failedCallCount(): number {
+    return this._failedCallCount;
+  }
+
+  /**
+   * Record what the agent just did.
+   *
+   * `tool.call` for every invocation, so no action an agent takes is invisible. `mutation`
+   * additionally for the tools that change a site — but only once the call actually reached the
+   * tool: a call refused by scope enforcement changed nothing, and labelling it a mutation would
+   * put a non-event in the one query someone runs after an unexpected change.
+   *
+   * A failed execution still emits `mutation ok=false`: "it tried to update the plugin and
+   * failed" is a different fact from "it never tried", and both matter when reconstructing a run.
+   *
+   * Never throws. `EventLog.write` is already fault-isolated; the guard here covers the field
+   * derivation, which touches caller-supplied argument values.
+   */
+  private emitToolEvents(
+    name: string,
+    args: Record<string, unknown>,
+    durationMs: number,
+    ok: boolean,
+    reachedTool: boolean,
+    error?: string,
+  ): void {
+    const ctx = this.events;
+    if (!ctx?.eventLog) return;
+    try {
+      const target = mutationTarget(args);
+      const base = {
+        level: ok ? ('INFO' as const) : ('WARN' as const),
+        source: ctx.agentName,
+        sourceKind: 'agent' as const,
+        runId: ctx.runId,
+      };
+      ctx.eventLog.write({
+        ...base,
+        event: 'tool.call',
+        fields: { tool: name, target, tier: getToolSafety(name).tier, dur: `${durationMs}ms`, ok },
+        message: ok ? undefined : error,
+      } as any);
+
+      if (reachedTool && isMutatingTool(name)) {
+        ctx.eventLog.write({
+          ...base,
+          event: 'mutation',
+          fields: { op: name, target, ok },
+          message: ok ? undefined : error,
+        } as any);
+      }
+    } catch { /* a logging fault must never fail the tool call that succeeded */ }
   }
 
   /** Register a sandbox site ID so wp_eval may target it. Agent calls this once after sandbox creation. */
@@ -36,7 +113,34 @@ export class NexusToolProvider implements ToolProvider {
       }));
   }
 
+  /**
+   * Every agent tool call passes through here, so this is where the structured log learns what
+   * an agent did. `invokeInner` holds the original logic untouched; wrapping it means the scope
+   * refusals, the contributed-tool fallback and both error paths are all recorded from one
+   * place rather than four.
+   */
   async invoke(name: string, args: Record<string, unknown>): Promise<unknown> {
+    const started = Date.now();
+    // Distinguishes "refused before it ran" from "ran and failed" — only the latter may be
+    // called a mutation.
+    const reached = { tool: false };
+    try {
+      const value = await this.invokeInner(name, args, reached);
+      this.emitToolEvents(name, args, Date.now() - started, true, reached.tool);
+      return value;
+    } catch (err: unknown) {
+      this._failedCallCount++;
+      const message = err instanceof Error ? err.message : String(err);
+      this.emitToolEvents(name, args, Date.now() - started, false, reached.tool, message);
+      throw err;
+    }
+  }
+
+  private async invokeInner(
+    name: string,
+    args: Record<string, unknown>,
+    reached: { tool: boolean },
+  ): Promise<unknown> {
     // Enforce tool scope: if allowedTools is defined, only those tools are permitted
     if (this.allowedTools && !this.allowedTools.has(name)) {
       throw new Error(`Tool "${name}" is not declared in this agent's tools list`);
@@ -60,8 +164,14 @@ export class NexusToolProvider implements ToolProvider {
     // Audit: agents bypass McpSafetyWrapper, so we log tool calls here instead.
     const startTime = Date.now();
 
-    // Call the registry with 'agent' as the access method
-    const result = await this.registry.call(name, args, this.services, 'agent');
+    // Past every gate — from here on a failure means the tool ran and failed, not that it was
+    // refused, which is what decides whether a `mutation` event is honest.
+    reached.tool = true;
+
+    // Call the registry with 'agent' as the access method and the run ID for audit trail joining.
+    // requireConfirmation stays true: an agent loop has obtained no human confirmation of its
+    // own, so it must not be the caller that waives the Tier 3 gate.
+    const result = await this.registry.call(name, args, this.services, 'agent', true, this.events?.runId);
 
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
     const duration_ms = Date.now() - startTime;

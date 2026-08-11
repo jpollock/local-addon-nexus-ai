@@ -172,3 +172,77 @@ describe('AgentWorkspace — renderApprovalsTab() smoke tests', () => {
     expect(() => instance['renderApprovalsTab']()).not.toThrow();
   });
 });
+
+describe('AgentWorkspace — Approvals tab visibility follows producesApprovals', () => {
+  function makeWorkspace(producesApprovals: boolean | undefined) {
+    const instance: any = new AgentWorkspace({
+      agentId: 'log-processor',
+      onBack: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn(() => Promise.resolve(null)) } },
+      onReviewEvent: jest.fn(),
+    });
+    instance.state.status = producesApprovals === undefined ? null : { producesApprovals };
+    return instance;
+  }
+
+  function flattenText(node: any): string {
+    if (node === null || node === undefined || typeof node === 'boolean') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(flattenText).join(' ');
+    if (node?.props?.children !== undefined) return flattenText(node.props.children);
+    return '';
+  }
+
+  it('hides the Approvals tab when the agent declares producesApprovals: false', () => {
+    const instance = makeWorkspace(false);
+    expect(flattenText(instance['renderTabBar']())).not.toContain('Approvals');
+  });
+
+  it('shows the Approvals tab when the agent declares producesApprovals: true', () => {
+    const instance = makeWorkspace(true);
+    expect(flattenText(instance['renderTabBar']())).toContain('Approvals');
+  });
+
+  it('shows the Approvals tab while status is still loading, to avoid a flash on mount', () => {
+    const instance = makeWorkspace(undefined);
+    expect(flattenText(instance['renderTabBar']())).toContain('Approvals');
+  });
+});
+
+describe('AgentWorkspace — header Autonomy line follows producesApprovals', () => {
+  function makeWorkspace(producesApprovals: boolean | undefined) {
+    const instance: any = new AgentWorkspace({
+      agentId: 'log-processor',
+      onBack: jest.fn(),
+      electron: { ipcRenderer: { invoke: jest.fn(() => Promise.resolve(null)) } },
+      onReviewEvent: jest.fn(),
+    });
+    instance.state.status = producesApprovals === undefined ? null : { producesApprovals };
+    return instance;
+  }
+
+  function flattenText(node: any): string {
+    if (node === null || node === undefined || typeof node === 'boolean') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(flattenText).join(' ');
+    if (node?.props?.children !== undefined) return flattenText(node.props.children);
+    return '';
+  }
+
+  it('hides the sandbox/remediation copy when producesApprovals is false — it never applies to this agent', () => {
+    const instance = makeWorkspace(false);
+    const text = flattenText(instance['renderHeader']());
+    expect(text).not.toContain('sandbox');
+    expect(text).not.toContain('production approval');
+  });
+
+  it('shows the autonomy line when producesApprovals is true', () => {
+    const instance = makeWorkspace(true);
+    expect(flattenText(instance['renderHeader']())).toContain('Investigates on its own');
+  });
+
+  it('shows the autonomy line while status is still loading, to avoid a flash', () => {
+    const instance = makeWorkspace(undefined);
+    expect(flattenText(instance['renderHeader']())).toContain('Investigates on its own');
+  });
+});

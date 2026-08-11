@@ -255,10 +255,19 @@ export const IPC_CHANNELS = {
   AGENT_SETTINGS_GET:   `${ADDON_PREFIX}:agent:settings-get`,
   AGENT_REMOVE:         `${ADDON_PREFIX}:agent:remove`,
   AGENT_LOG_OPEN:       `${ADDON_PREFIX}:agent:log-open`,
-  /** Sites already bound to a log source via log-processor's connect_log_source tool — the
-   * site scope picker for this agent only offers these, since an unconnected site's presence
-   * in scope would silently do nothing (see agents/log-processor/agent.ts's run()). */
+  /** Installs with apache-style objects in log-processor's connected bucket. Run Now offers only
+   * these — an install with nothing to read cannot be a run target (BEHAVIOR.md §5). */
   AGENT_LOG_PROCESSOR_CONNECTED_SITES: `${ADDON_PREFIX}:agent:log-processor:connected-sites`,
+  /** The Sites tab's whole payload: the account's one bucket, plus every install found in it
+   * with object counts, date range and last sync. */
+  AGENT_LOG_PROCESSOR_STATE: `${ADDON_PREFIX}:agent:log-processor:state`,
+  /** web-analytics' Sites tab payload: which site is bound to which GA4 property. */
+  AGENT_WEB_ANALYTICS_STATE: `${ADDON_PREFIX}:agent:web-analytics:state`,
+  /** Generic contributed-tool invocation from the renderer — routes through the same
+   * AgentDispatcher.dispatch() chokepoint chat/MCP calls use (audited, settings-aware), so a
+   * UI-driven call (e.g. the Connect a log source modal) is indistinguishable in the audit log
+   * from an equivalent chat command. */
+  AGENT_TOOL_INVOKE: `${ADDON_PREFIX}:agent:tool-invoke`,
 
   // Agent Inbox — open items, decisions, resume
   GET_INBOX:      `${ADDON_PREFIX}:inbox:get`,
@@ -287,6 +296,12 @@ export const IPC_CHANNELS = {
 
   // Telemetry (fire-and-forget from renderer → main)
   TELEMETRY_TRACK: `${ADDON_PREFIX}:telemetry`,
+
+  // Logging stats (Preferences → Logging panel)
+  LOGGING_STATS: `${ADDON_PREFIX}:logging-stats`,
+  LOGGING_REVEAL: `${ADDON_PREFIX}:logging-reveal`,
+  LOGGING_CLEAR: `${ADDON_PREFIX}:logging-clear`,
+  LOGGING_PLAN_CLEAR: `${ADDON_PREFIX}:logging-plan-clear`,
 } as const;
 
 // ---------------------------------------------------------------------------

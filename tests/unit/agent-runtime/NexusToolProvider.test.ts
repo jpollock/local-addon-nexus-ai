@@ -19,7 +19,9 @@ describe('NexusToolProvider', () => {
     const provider = new NexusToolProvider(registry as any, fakeServices, ['nexus_list_sites']);
     const result = await provider.invoke('nexus_list_sites', {});
     expect(result).toEqual([{ name: 'mysite' }]);
-    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent');
+    // requireConfirmation sits at position 5 — an agent loop has no human confirmation of its
+    // own, so it must never be the caller that waives the Tier 3 gate. runId follows it.
+    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', true, undefined);
   });
 
   it('throws for an undeclared tool', async () => {
@@ -36,6 +38,21 @@ describe('NexusToolProvider', () => {
     const provider = new NexusToolProvider(registry as any, fakeServices, undefined);
     const result = await provider.invoke('wp_eval', {});
     expect(result).toBe('ok');
+  });
+
+  it('passes runId to registry.call when events context is provided', async () => {
+    const registry = makeRegistry({
+      nexus_list_sites: () => [{ name: 'mysite' }],
+    });
+    const provider = new NexusToolProvider(
+      registry as any,
+      fakeServices,
+      ['nexus_list_sites'],
+      { agentName: 'test-agent', runId: 'r_abc123' }
+    );
+    const result = await provider.invoke('nexus_list_sites', {});
+    expect(result).toEqual([{ name: 'mysite' }]);
+    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', true, 'r_abc123');
   });
 
   it('throws when tool returns isError=true', async () => {

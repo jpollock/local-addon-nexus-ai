@@ -18,6 +18,10 @@ import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
+// The other three imports that arrived with this one — AIGatewayPanel, LoadingSpinner,
+// SystemTab — belong to the Dashboard/Operations surfaces spec 6a retired, and are gone with
+// them. localDay stays: the run-complete handler below still needs its ICU guard.
+import { localDay } from './localDay';
 import { SettingsTab } from './SettingsTab';
 import { AssistantPanel } from './AssistantPanel';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
@@ -398,7 +402,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         const now = new Date();
         const hh = now.getHours().toString().padStart(2, '0');
         const mm = now.getMinutes().toString().padStart(2, '0');
-        const day = now.toISOString().slice(0, 10);
+        // Local time, not UTC — the time is local (getHours), so the date must be too.
+        // Mixing them made the date and time disagree for seven hours a day in PDT.
+        // Use localDay() with its ICU guard, not raw toLocaleDateString().
+        const day = localDay(now);
         const cleanCount = payload.doneCount - (payload.failedCount || 0);
         const findingsCount = payload.findingsSites?.length || 0;
         const sub = findingsCount > 0

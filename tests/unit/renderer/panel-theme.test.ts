@@ -46,7 +46,12 @@ describe('panel theming', () => {
     const agentConsoleCss = fs.readFileSync(AGENT_CONSOLE_CSS, 'utf8');
     const missing: string[] = [];
 
-    for (const [file, src] of panelSourcesWithCss()) {
+    for (const [file, rawSrc] of panelSourcesWithCss()) {
+      // Strip comments before scanning. A docblock describing a namespace — "gets its own
+      // `--ag-picker-*` prefix" — is prose, not a reference, and the trailing `*` made it
+      // scan as a variable called `--ag-picker-` that no stylesheet will ever define.
+      const src = rawSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
       // TSX files reference --nxai-* from theme.ts
       for (const ref of src.match(/--nxai-[a-z-]+/g) ?? []) {
         // A typo compiles and renders transparent — this is the only thing that catches it.

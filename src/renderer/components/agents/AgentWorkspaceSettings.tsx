@@ -1,15 +1,41 @@
 import * as React from 'react';
-import { agentStore, AgentSettings } from './AgentStore';
+import { agentStore, AgentSettings, AgentCredentialDecl } from './AgentStore';
 import { IPC_CHANNELS } from '../../../common/constants';
+import type { NexusSettings } from '../../../common/types';
 import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
 import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
+import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
 
 interface SettingsProps {
   agentId: string;
   electron?: any;
   /** From this agent's AgentStatus. Undefined while status is still loading upstream. */
   allowsProduction?: boolean;
+  /**
+   * The agent's own cron, from AgentStatus. This is what runs unless the user picks a cadence,
+   * so every schedule label here derives from it — labelling `settings.cadence` alone stated a
+   * schedule the scheduler never used.
+   */
+  cronExpression?: string | null;
   effect?: 'readonly' | 'writes';
+  /** Gates the Autonomy level card — its copy is security-sentinel's own remediation model, not
+   * generic, and it sets a value (settings.autonomy) only security-sentinel's runtime reads. */
+  producesApprovals?: boolean;
+  /** The agent's own credential declarations, from AgentStatus. Drives whether a connect card
+   * appears and which scopes it requests — never a list kept here. */
+  credentials?: AgentCredentialDecl[];
+  /** True for agents whose Sites tab owns `scope.siteIds` directly (log-processor). Settings then
+   * shows one line pointing there instead of a second, competing site list. */
+  scopeLivesInSitesTab?: boolean;
+  /** Opens the Sites tab. Only meaningful alongside scopeLivesInSitesTab. */
+  onOpenSitesTab?: () => void;
+  /** How many sites this agent actually covers — the same derived set the Sites tab's badge uses.
+   * Passed in rather than recomputed, so the two surfaces cannot disagree. */
+  sitesTabCount?: number;
+  /** What a row is called, and what having one is called, for this agent. */
+  sitesTabNoun?: string;
+  sitesTabVerb?: string;
+  siteScoped?: boolean;
 }
 
 interface GoogleConnection {
@@ -29,6 +55,8 @@ interface SettingsState {
   /** Non-null while the picker is open — edits happen here first; Save commits, Cancel discards. */
   scopeDraftSelection: Set<string> | null;
   driftDismissed: boolean;
+  /** Global settings, loaded once on mount to read logLevel for the override control. */
+  globalSettings: NexusSettings | null;
 }
 
 const CADENCE_OPTIONS = [
@@ -83,8 +111,24 @@ class ToggleSwitch extends React.Component<{ checked: boolean; onChange: (v: boo
 }
 
 // Agents that declare Google credentials — drives whether the Connections card shows
-const AGENTS_WITH_GOOGLE_CREDENTIALS = new Set(['seo-insights']);
-const GSC_SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly'];
+/**
+ * What a Google connection is *for*, per scope. The scope strings come from the agent's own
+ * declaration; this only turns them into something a human can consent to.
+ *
+ * This replaced a hardcoded `AGENTS_WITH_GOOGLE_CREDENTIALS = {'seo-insights'}` plus a
+ * `GSC_SCOPES` constant. That pairing meant a second Google agent got no connect button at all,
+ * and would have been handed Search Console scopes if it ever did — authorising the wrong API.
+ */
+const GOOGLE_SCOPE_LABELS: Record<string, string> = {
+  'https://www.googleapis.com/auth/webmasters.readonly': 'Google Search Console',
+  'https://www.googleapis.com/auth/analytics.readonly': 'Google Analytics',
+};
+
+function googleScopeSummary(scopes: string[]): string {
+  const named = scopes.map(s => GOOGLE_SCOPE_LABELS[s]).filter(Boolean);
+  if (named.length === 0) return 'Google';
+  return Array.from(new Set(named)).join(' · ');
+}
 
 export class AgentWorkspaceSettings extends React.Component<SettingsProps, SettingsState> {
   state: SettingsState = {
@@ -97,6 +141,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     scopeExpanded: false,
     scopeDraftSelection: null,
     driftDismissed: false,
+    globalSettings: null,
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -107,9 +152,10 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     this.unsubscribe = () => agentStore.unsubscribe(update);
 
     this.loadScopeSites();
+    this.loadGlobalSettings();
 
     // Load Google connection status if this agent uses Google credentials
-    if (AGENTS_WITH_GOOGLE_CREDENTIALS.has(this.props.agentId)) {
+    if (this.googleDecl()) {
       this.loadGoogleStatus();
       // React to credential changes pushed from main
       const IPC_CHANNELS = (window as any).__nexusIpcChannels;
@@ -124,6 +170,19 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     if (this.credEventHandler) {
       this.props.electron?.ipcRenderer?.removeListener('nexus-ai:credential:event', this.credEventHandler);
     }
+  }
+
+  /** The agent's Google declaration, if it has one. Single source for both the gate and scopes. */
+  private googleDecl(): AgentCredentialDecl | undefined {
+    return (this.props.credentials ?? []).find(c => c.provider === 'google');
+  }
+
+  private async loadGlobalSettings() {
+    if (!this.props.electron?.ipcRenderer) return;
+    try {
+      const settings = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS);
+      this.setState({ globalSettings: settings ?? null });
+    } catch { /* Local not running */ }
   }
 
   private async loadGoogleStatus() {
@@ -142,7 +201,9 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         provider: 'google',
         agentId: this.props.agentId,
         siteId: '',
-        scopes: GSC_SCOPES,
+        // Verbatim from the agent — asking for more than it declared is over-authorising, and
+        // asking for the wrong API's scope fails at the first call.
+        scopes: this.googleDecl()?.scopes ?? [],
       });
     } catch { /* handled by credential event */ } finally {
       this.setState({ connectingGoogle: false });
@@ -238,13 +299,64 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
       return React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, 'No sites selected — this agent will not run.');
     }
     if (n === total && total > 0 && p > 0) {
-      return React.createElement('span', { style: { color: '#ff8a95' } }, `Every site on the account, including ${p} in production`);
+      return React.createElement('span', { style: { color: 'var(--ag-picker-danger)' } }, `Every site on the account, including ${p} in production`);
     }
     if (p === 0) {
       return React.createElement('span', { style: { color: 'var(--ag-text-primary)' } }, `${n} site${n === 1 ? '' : 's'} — no production`);
     }
-    return React.createElement('span', { style: { color: '#ff8a95' } },
+    return React.createElement('span', { style: { color: 'var(--ag-picker-danger)' } },
       n === 1 ? `1 site, in production` : `${n} sites, ${p} of them in production`);
+  }
+
+  /**
+   * The Settings-tab stand-in for the scope editor, for agents whose Sites tab owns coverage.
+   *
+   * The count comes from the caller, not from `scope.siteIds`, because the two agents decide
+   * coverage differently: log-processor's switches write that field, while web-analytics has no
+   * scope at all — a GA4 binding *is* the opt-in. Reading the field directly reported "nothing
+   * switched on" for an agent that was, in fact, running.
+   */
+  /**
+   * Stand-in for the scope editor for an agent that declares siteScoped:false. Its run() reads
+   * neither ctx.event's site nor settings.scope, so a picker here would write a field nothing
+   * consumes — the same "two lists answering one question" failure renderScopeElsewhereLine
+   * exists to avoid.
+   */
+  private renderNotSiteScopedLine() {
+    return React.createElement('div', {
+      style: {
+        marginBottom: 14, padding: '11px 14px', borderRadius: 10,
+        background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border-subtle)',
+        fontSize: 13, color: 'var(--ag-text-secondary)',
+      },
+    }, 'This agent is not scoped to sites — each run performs the same fleet-wide checks.');
+  }
+
+  private renderScopeElsewhereLine() {
+    const count = this.props.sitesTabCount ?? this.currentScopeSiteIds().length;
+    const noun = this.props.sitesTabNoun ?? 'install';
+    const verb = this.props.sitesTabVerb ?? 'switched on';
+    return React.createElement('div', {
+      style: {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        marginBottom: 14, padding: '11px 14px', borderRadius: 10,
+        background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border-subtle)',
+      },
+    },
+      React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-secondary)' } },
+        count === 0
+          ? `No ${noun}s are ${verb} yet — nothing will run on this schedule.`
+          : `${count} ${noun}${count === 1 ? '' : 's'} ${verb}. Each scheduled run makes one pass per ${noun}.`,
+      ),
+      React.createElement('button', {
+        onClick: () => this.props.onOpenSitesTab?.(),
+        style: {
+          flexShrink: 0, background: 'transparent', border: '1px solid var(--ag-border-control)',
+          borderRadius: 8, padding: '6px 13px', fontSize: 12.5, fontWeight: 600,
+          color: 'var(--ag-text-primary)', cursor: 'pointer',
+        },
+      }, 'Open Sites'),
+    );
   }
 
   private renderScanScope() {
@@ -254,7 +366,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const drifted = this.getDriftedSites();
     const allowsProduction = this.props.allowsProduction ?? true;
     const effect = this.props.effect ?? 'writes';
-    const cadence = CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.every ?? 'on the configured schedule';
+    const effectiveCron = effectiveCadenceExpression(settings, this.props.cronExpression);
+    const cadence = effectiveCron ? describeCron(effectiveCron).toLowerCase() : 'on the configured schedule';
 
     const draftProdCount = scopeDraftSelection ? selectedProductionCount(scopeSites, scopeDraftSelection) : 0;
 
@@ -284,11 +397,11 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         React.createElement('div', { style: { display: 'flex', gap: 10, flexShrink: 0 } },
           React.createElement('button', {
             onClick: this.openScopeEditor,
-            style: { fontSize: 13, fontWeight: 700, color: '#0b0e14', background: '#f0b52e', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' },
+            style: { fontSize: 13, fontWeight: 700, color: 'var(--ag-picker-bg-page)', background: 'var(--ag-picker-warning)', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' },
           }, `Review ${drifted.length}`),
           React.createElement('button', {
             onClick: () => this.setState({ driftDismissed: true }),
-            style: { fontSize: 13, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: 'none', cursor: 'pointer' },
+            style: { fontSize: 13, fontWeight: 600, color: 'var(--ag-picker-text-dim)', background: 'transparent', border: 'none', cursor: 'pointer' },
           }, 'Dismiss'),
         ),
       ),
@@ -297,9 +410,9 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         React.createElement('button', {
           onClick: scopeExpanded ? this.cancelScopeEdit : this.openScopeEditor,
           style: {
-            background: scopeExpanded ? 'transparent' : '#35e0c5',
-            color: scopeExpanded ? '#9aa4b2' : '#0b0e14',
-            border: scopeExpanded ? '1px solid #2a3441' : 'none',
+            background: scopeExpanded ? 'transparent' : 'var(--ag-picker-teal)',
+            color: scopeExpanded ? 'var(--ag-picker-text-dim)' : 'var(--ag-picker-bg-page)',
+            border: scopeExpanded ? '1px solid var(--ag-picker-control-border)' : 'none',
             borderRadius: 9, padding: '9px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
           },
         }, scopeExpanded ? 'Close list' : 'Edit sites'),
@@ -315,20 +428,20 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
           allowsProduction,
         }),
         React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12 } },
-          React.createElement('span', { style: { flex: 1, fontSize: 13, fontWeight: 600, color: draftProdCount > 0 ? '#ff8a95' : 'transparent' } },
+          React.createElement('span', { style: { flex: 1, fontSize: 13, fontWeight: 600, color: draftProdCount > 0 ? 'var(--ag-picker-danger)' : 'transparent' } },
             draftProdCount > 0
               ? `${draftProdCount} live production site${draftProdCount === 1 ? '' : 's'} will be ${productionWarningVerb(effect)} ${cadence}.`
               : ' ',
           ),
           React.createElement('button', {
             onClick: this.cancelScopeEdit,
-            style: { fontSize: 14, fontWeight: 600, color: '#9aa4b2', background: 'transparent', border: '1px solid #2a3441', borderRadius: 9, padding: '9px 16px', cursor: 'pointer' },
+            style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-picker-text-dim)', background: 'transparent', border: '1px solid var(--ag-picker-control-border)', borderRadius: 9, padding: '9px 16px', cursor: 'pointer' },
           }, 'Cancel'),
           React.createElement('button', {
             onClick: this.saveScopeEdit,
             style: {
-              fontSize: 14, fontWeight: 700, color: '#0b0e14', border: 'none', borderRadius: 9, padding: '9px 16px', cursor: 'pointer',
-              background: draftProdCount > 0 ? '#ff8a95' : '#35e0c5',
+              fontSize: 14, fontWeight: 700, color: 'var(--ag-picker-bg-page)', border: 'none', borderRadius: 9, padding: '9px 16px', cursor: 'pointer',
+              background: draftProdCount > 0 ? 'var(--ag-picker-danger)' : 'var(--ag-picker-teal)',
             },
           }, `Save ${scopeDraftSelection.size} site${scopeDraftSelection.size === 1 ? '' : 's'}`),
         ),
@@ -347,15 +460,38 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const { cadence } = this.state.settings;
     const idx = CADENCE_OPTIONS.findIndex(o => o.value === cadence);
     const next = CADENCE_OPTIONS[(idx + 1) % CADENCE_OPTIONS.length];
-    this.updateSettings({ cadence: next.value });
+    // `cadenceSetAt` is what gives this value authority over the agent's own manifest schedule.
+    // Every agent carries a seeded `cadence` from getDefaultSettings that nobody picked; without
+    // this stamp the scheduler cannot tell those apart from a real choice, and honouring them
+    // would silently move agents to schedules their users never asked for.
+    this.updateSettings({ cadence: next.value, cadenceSetAt: Date.now() });
+  }
+
+  private cycleLogLevel() {
+    const LOG_LEVEL_OPTIONS: Array<'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | undefined> = [
+      undefined, 'ERROR', 'WARN', 'INFO', 'DEBUG',
+    ];
+    const current = this.state.settings.logLevel;
+    const idx = LOG_LEVEL_OPTIONS.indexOf(current);
+    const nextIdx = (idx + 1) % LOG_LEVEL_OPTIONS.length;
+    this.updateSettings({ logLevel: LOG_LEVEL_OPTIONS[nextIdx] });
+  }
+
+  private formatLogLevel(): string {
+    const agentLevel = this.state.settings.logLevel;
+    const globalLevel = this.state.globalSettings?.logLevel ?? 'INFO';
+    if (agentLevel === undefined) {
+      return `Inherit (${globalLevel})`;
+    }
+    return agentLevel;
   }
 
   private getRunSummary(): string {
     const { settings } = this.state;
     if (!settings.enabled) return 'Disabled — not running';
     const parts: string[] = [];
-    const cadence = CADENCE_OPTIONS.find(o => o.value === settings.cadence);
-    if (settings.scheduleEnabled && cadence) parts.push(`Runs ${cadence.label.toLowerCase()}`);
+    const summaryCron = effectiveCadenceExpression(settings, this.props.cronExpression);
+    if (settings.scheduleEnabled && summaryCron) parts.push(`Runs ${describeCron(summaryCron).toLowerCase()}`);
     const catalog = EVENT_CATALOG[this.props.agentId] || [];
     const subCount = catalog.filter(e => settings.subscribedEvents[e.id] !== false).length;
     if (settings.eventsEnabled && subCount > 0) parts.push(`responds to ${subCount} event${subCount !== 1 ? 's' : ''}`);
@@ -377,6 +513,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
   private renderConnectionsCard() {
     const { googleConnection, connectingGoogle } = this.state;
     const isConnected = !!googleConnection;
+    const decl = this.googleDecl();
+    const productName = googleScopeSummary(decl?.scopes ?? []);
     return this.renderCard(
       React.createElement('div', null,
         // Header
@@ -384,7 +522,9 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
           React.createElement('div', null,
             React.createElement('div', { style: { fontSize: 13.5, fontWeight: 600, color: 'var(--ag-text-primary)' } }, 'Connected Accounts'),
             React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', marginTop: 3 } },
-              'Connect Google Search Console to unlock demand analysis (T1)',
+              // The agent's own `reason` — it is what the user is being asked to consent to, so it
+              // has to be the agent's words, not a label picked here.
+              decl?.reason || `Connect ${productName} so this agent can read your data`,
             ),
           ),
         ),
@@ -397,7 +537,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
             style: { width: 28, height: 28, borderRadius: 6, background: isConnected ? 'rgba(66,133,244,0.12)' : 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 },
           }, 'G'),
           React.createElement('div', { style: { flex: 1 } },
-            React.createElement('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--ag-text-primary)' } }, 'Google Search Console'),
+            React.createElement('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--ag-text-primary)' } }, productName),
             React.createElement('div', { style: { fontSize: 12, color: isConnected ? 'var(--ag-green)' : 'var(--ag-text-muted)', marginTop: 2 } },
               isConnected ? `Connected · ${googleConnection!.accountLabel}` : 'Not connected',
             ),
@@ -410,8 +550,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
             : React.createElement('button', {
                 onClick: () => this.connectGoogle(),
                 disabled: connectingGoogle,
-                style: { padding: '6px 14px', background: 'var(--ag-teal)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, color: '#0d1117', cursor: connectingGoogle ? 'wait' : 'pointer', opacity: connectingGoogle ? 0.7 : 1 },
-              }, connectingGoogle ? 'Connecting…' : 'Connect Google'),
+                style: { padding: '6px 14px', background: 'var(--ag-teal)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--ag-on-teal)', cursor: connectingGoogle ? 'wait' : 'pointer', opacity: connectingGoogle ? 0.7 : 1 },
+              }, connectingGoogle ? 'Connecting…' : 'Connect Google account'),
         ),
       ),
     );
@@ -473,12 +613,28 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
                 borderRadius: 7, padding: '5px 12px', fontSize: 12.5, color: 'var(--ag-text-primary)',
                 cursor: 'pointer', fontWeight: 500,
               },
-            }, CADENCE_OPTIONS.find(o => o.value === settings.cadence)?.label || 'Every 15 minutes'),
+            }, (() => {
+              // The button shows what actually runs, so an untouched agent reads its manifest
+              // schedule rather than a cadence nobody picked. Clicking still cycles the picker.
+              const expr = effectiveCadenceExpression(settings, this.props.cronExpression);
+              return expr ? describeCron(expr) : 'Not scheduled';
+            })()),
           ),
 
           // Which sites the schedule may touch. Shown only when a schedule is on — it constrains
           // scheduled runs, not Run Now, and offering it otherwise implies it gates everything.
-          settings.scheduleEnabled && this.renderScanScope(),
+          //
+          // An agent with a Sites tab owns its scope there instead. Two lists answering "which
+          // sites run" is the specific failure handoff_log_sources_v3/DECISIONS.md §2 documents:
+          // every state that reconciles them is an apology for a state that should never have
+          // been representable. One line pointing at the real control, never a second copy of it.
+          settings.scheduleEnabled && (
+            !(this.props.siteScoped ?? true)
+              ? this.renderNotSiteScopedLine()
+              : this.props.scopeLivesInSitesTab
+                ? this.renderScopeElsewhereLine()
+                : this.renderScanScope()
+          ),
 
           // Respond to events
           React.createElement('div', { style: { marginBottom: 14 } },
@@ -527,8 +683,14 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         !settings.enabled,
       ),
 
-      // Card 3: Autonomy
-      this.renderCard(
+      // Card 3: Autonomy — AUTONOMY_OPTIONS' copy ("clones a sandbox", "pushing to production")
+      // is security-sentinel's own remediation model, not a generic concept every agent shares.
+      // ctx.autonomy is read only by security-sentinel/agent.js; log-processor and seo-insights
+      // never reference it at all, so showing this card for them was a dead control with
+      // actively misleading copy. Gated on producesApprovals — the same "does this agent have a
+      // gated action to pause on" capability, not a separate flag, since the two have coincided
+      // for every agent so far and a real decoupling need can introduce its own field later.
+      (this.props.producesApprovals ?? true) && this.renderCard(
         React.createElement('div', null,
           React.createElement('div', { style: { fontSize: 14.5, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 12 } }, 'Autonomy level'),
           ...AUTONOMY_OPTIONS.map(opt => {
@@ -565,7 +727,47 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         !settings.enabled,
       ),
       // Connections card — only for agents that declare Google credentials
-      AGENTS_WITH_GOOGLE_CREDENTIALS.has(agentId) && this.renderConnectionsCard(),
+      !!this.googleDecl() && this.renderConnectionsCard(),
+
+      // Observability card — transcripts toggle and log level override
+      this.renderCard(
+        React.createElement('div', null,
+          React.createElement('div', { style: { fontSize: 14.5, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 16 } }, 'Observability'),
+
+          // Transcripts toggle
+          React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 18 } },
+            React.createElement(ToggleSwitch, {
+              checked: settings.transcripts ?? false,
+              onChange: (v) => this.updateSettings({ transcripts: v }),
+            }),
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)', marginBottom: 3 } }, 'Write transcripts'),
+              React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)', lineHeight: 1.5 } },
+                'Records the full prompt and response of every model call this agent makes. Prompts carry site content, findings, and whatever the agent puts in them — this is off by default and per-agent rather than global for that reason. Transcripts are redacted with the same masking as the logs, kept 3 days, and capped per run, but redaction is a backstop, not a guarantee.',
+              ),
+            ),
+          ),
+
+          // Log level override
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)', marginBottom: 3 } }, 'Log level'),
+              React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)' } },
+                'Override the global log level for this agent. Useful for raising one agent to DEBUG while the rest stay at INFO, or lowering a noisy agent to ERROR.',
+              ),
+            ),
+            React.createElement('button', {
+              onClick: () => this.cycleLogLevel(),
+              style: {
+                background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
+                borderRadius: 7, padding: '5px 12px', fontSize: 12.5, color: 'var(--ag-text-primary)',
+                cursor: 'pointer', fontWeight: 500,
+              },
+            }, this.formatLogLevel()),
+          ),
+        ),
+        !settings.enabled,
+      ),
 
       // Danger zone — remove agent
       React.createElement('div', {
@@ -589,7 +791,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
                     this.setState({ confirmRemove: false });
                   },
                   style: {
-                    background: '#f2666e', color: '#fff', border: 'none', borderRadius: 8,
+                    background: 'var(--ag-picker-danger)', color: 'var(--ag-picker-on-teal)', border: 'none', borderRadius: 8,
                     padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   },
                 }, 'Yes, remove'),
@@ -605,7 +807,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
                 onClick: () => this.setState({ confirmRemove: true }),
                 style: {
                   background: 'none', border: '1px solid rgba(242,102,110,0.5)', borderRadius: 8,
-                  padding: '8px 16px', fontSize: 13, fontWeight: 600, color: '#f2666e', cursor: 'pointer',
+                  padding: '8px 16px', fontSize: 13, fontWeight: 600, color: 'var(--ag-picker-danger)', cursor: 'pointer',
                 },
               }, 'Remove…'),
         ),

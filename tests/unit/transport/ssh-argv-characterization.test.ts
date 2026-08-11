@@ -26,7 +26,7 @@ export const SHARED_SSH_OPTS = [
   '-o', 'StrictHostKeyChecking=accept-new',
   '-o', 'ControlMaster=auto',
   '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-  '-o', 'ControlPersist=30s',
+  '-o', 'ControlPersist=600s',
   '-i', EXPECTED_KEY,
 ];
 
@@ -62,7 +62,7 @@ describe('WPE SSH argv — golden characterization', () => {
         'local+ssh+acmeprod@acmeprod.ssh.wpengine.net',
         "wp --skip-plugins --skip-themes 'plugin' 'list' '--format=json'",
       ]);
-      expect(opts).toEqual({ stdio: ['ignore', 'pipe', 'pipe'], timeout: 35000 });
+      expect(opts).toEqual({ stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 });
     });
 
     it('omits both skip flags when both are explicitly false', async () => {
@@ -87,16 +87,20 @@ describe('WPE SSH argv — golden characterization', () => {
         .toBe("wp --skip-plugins --skip-themes 'option' 'update' 'blogname' 'Bob'\\''s Site'");
     });
 
-    it('on non-zero exit returns stderr in stdout (NOT stdout)', async () => {
+    it('on non-zero exit names the failure, with stderr as context', async () => {
+      // Was `stdout: 'boom'` — the raw stderr, reported as the cause of every failure.
+      // On a real WP Engine install OpenSSH writes a post-quantum key-exchange advisory to
+      // stderr on every connection, so a timeout surfaced as that advisory. The failure now
+      // leads with what actually happened and keeps the output as context.
       spawnMock.mockImplementation(() => fakeProc({ code: 1, stdout: 'partial', stderr: 'boom' }));
       const result = await bridge().remoteWpCliRun('acmeprod', ['core', 'version']);
-      expect(result).toEqual({ stdout: 'boom', success: false });
+      expect(result).toEqual({ stdout: 'Command exited with code 1 — output: boom', success: false });
     });
 
-    it('on non-zero exit with no stderr reports the exit code', async () => {
+    it('on non-zero exit with no stderr reports the exit code alone', async () => {
       spawnMock.mockImplementation(() => fakeProc({ code: 7 }));
       const result = await bridge().remoteWpCliRun('acmeprod', ['core', 'version']);
-      expect(result).toEqual({ stdout: 'SSH exited with code 7', success: false });
+      expect(result).toEqual({ stdout: 'Command exited with code 7', success: false });
     });
 
     it('resolves (never rejects) on spawn error', async () => {
@@ -141,7 +145,7 @@ describe('WPE SSH argv — golden characterization', () => {
         'local+ssh+acmeprod@acmeprod.ssh.wpengine.net',
         "rm -f '/nas/content/live/acmeprod/wp-content/mu-plugins/evil.php'",
       ]);
-      expect(opts).toEqual({ stdio: ['ignore', 'pipe', 'pipe'], timeout: 35000 });
+      expect(opts).toEqual({ stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 });
     });
 
     it('on failure prefers stdout over stderr — the OPPOSITE of remoteWpCliRun', async () => {

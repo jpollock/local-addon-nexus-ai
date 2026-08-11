@@ -31,6 +31,7 @@ export interface AuditEntry {
   outcome: 'success' | 'failure' | 'pending';
   error?: string;
   userId?: string;        // machine username from os.userInfo()
+  runId?: string;         // agent run identifier from EventLog, joins to diagnostic log
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +128,18 @@ export class OperationAuditLog {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
         userId: this.currentUser(),
-        ...entry,
+        // Every field is listed EXPLICITLY. This used to be `...entry`, which
+        // carried any future field straight to disk unredacted — fail-open, in
+        // the one class whose stated guarantee is that a new call site cannot
+        // leak by forgetting. The cost of the allowlist is the mirror risk: a
+        // field added to `AuditEntry` and not added here is silently ABSENT
+        // from the compliance record, which reads as "the operation carried no
+        // such data" rather than as a bug. Add the field in both places, and
+        // decide there whether it is redacted, withheld or passed through.
+        // `userId` is deliberately not read from `entry`: the machine user is
+        // this class's own observation, not a caller-supplied claim.
+        operation: entry.operation,
+        outcome: entry.outcome,
         // `target` was the one string field spread through unchanged. No
         // routine path puts a secret there today, but the guarantee this class
         // advertises is that a NEW call site cannot leak by forgetting — and
@@ -140,6 +152,9 @@ export class OperationAuditLog {
         parameters: redactParams(entry.parameters ?? {}),
         ...(entry.error !== undefined
           ? { error: maskSecretsInString(String(entry.error)) }
+          : {}),
+        ...(entry.runId !== undefined
+          ? { runId: maskSecretsInString(String(entry.runId)) }
           : {}),
       };
     } catch {

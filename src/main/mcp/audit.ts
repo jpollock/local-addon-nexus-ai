@@ -441,7 +441,14 @@ function normaliseFieldName(key: string): string {
  */
 const IDENTITY_FIELDS = new Set(['target', 'installname']);
 
-function isIdentityField(key: string): boolean {
+/**
+ * Exported so a second redactor never has to exist. `src/main/logging/eventLog.ts` masks the
+ * RENDERED form of a field value (a value whose `toString()` is a secret is never seen as a
+ * string by `redactParams`), and it needs the same key context this module uses to decide the
+ * `target` / `install_name` carve-out. A copy of `IDENTITY_FIELDS` over there would drift from
+ * this one, which is exactly what the single-owner rule for redaction exists to prevent.
+ */
+export function isIdentityField(key: string): boolean {
   return IDENTITY_FIELDS.has(normaliseFieldName(key));
 }
 

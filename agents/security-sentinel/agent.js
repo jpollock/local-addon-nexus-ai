@@ -545,6 +545,9 @@ module.exports = {
   // sandbox clone/pull/push tools above operate on a throwaway `sentinel-*` copy, not the site
   // itself). Drives the site-picker's production-warning verb: "will be scanned", not "modified".
   effect: 'readonly',
+  // Findings above the log threshold create review-status activity — the whole point of the
+  // 'ask'/'auto' autonomy split (see AUTONOMY_OPTIONS in AgentWorkspaceSettings.tsx).
+  producesApprovals: true,
   // NO CRON. Removing this earlier from nexus.agent.yaml's `triggers:` list did nothing —
   // AgentRegistry.loadAgent() reads triggers exclusively from THIS array (module.exports),
   // never from the YAML manifest (loadManifest() there only pulls contributes.tools). The cron

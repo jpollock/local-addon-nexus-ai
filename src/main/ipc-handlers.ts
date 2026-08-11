@@ -18,6 +18,7 @@ import type { InboxItem } from './inbox/types';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
+import { localDay } from './logging/eventLog';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -95,7 +96,9 @@ import {
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
+import * as fs from 'fs';
+import * as path from 'path';
 import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 import { vectorSiteId } from './vector-store/vectorSiteId';
 import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from './external/hostKeyTrust';
@@ -285,7 +288,11 @@ async function withSiteRunning<T>(
   }
 }
 
-import { canAutoRunWith, AutoRunKind } from './agent-runtime/auto-run-gate';
+import { canAutoRunWith, AutoRunKind, AutoRunDecision, SkipTrigger } from './agent-runtime/auto-run-gate';
+import type { CadenceSettings } from './agent-runtime/schedule';
+import { newRunId } from './logging/runId';
+import type { EventLog } from './logging/eventLog';
+import { asLevel } from './logging/resolveLogLevel';
 
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
@@ -295,11 +302,125 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
 }
 
 /**
+ * The cadence the user picked for this agent, if they picked one.
+ *
+ * Read by `AgentScheduler` through `resolveAgentCron`, which decides whether it outranks the
+ * agent's manifest schedule. Returns undefined before the settings cache is seeded, which
+ * correctly means "no user choice" — the manifest schedule then applies.
+ */
+export function getAgentCadence(agentId: string): CadenceSettings | undefined {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const s = cache?.get(agentId);
+  if (!s) return undefined;
+  return { cadence: s.cadence, cadenceSetAt: s.cadenceSetAt };
+}
+
+/**
+ * The log level override the user set for this agent, if they set one.
+ *
+ * Read by `EventLog.write()` through the `levelFor` callback. Returns undefined when no override
+ * is set (falls back to the global level) or before the settings cache is seeded.
+ *
+ * Routes through `asLevel` so an unrecognised value is ignored rather than honoured. A typo in
+ * agent-settings.json (hand-edited in practice) must not silently maximise verbosity — the same
+ * fail-safe the global level gets.
+ */
+export function getAgentLogLevel(agentId: string): 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | undefined {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const raw = cache?.get(agentId)?.logLevel;
+  return asLevel(raw);
+}
+
+/**
+ * Reach the process-wide EventLog via `deps.nexusServices` — a declared field on
+ * `IpcHandlerDeps` (unlike `__agentSettingsCache`, which is not, hence the `as any` on that one
+ * below), so no fresh cast is needed here. `nexusServices.eventLog` is itself a declared-but-
+ * optional field on `NexusServices` (src/main/mcp/types.ts), assigned in src/main/index.ts
+ * inside an `if (agentDb)` block — it can legitimately be undefined (agentDb missing, or called
+ * before that block runs), so every caller must optional-chain rather than assume it exists.
+ * A missing log must never break the gate itself.
+ */
+function getEventLog(): EventLog | undefined {
+  return _agentSettingsDepsRef?.nexusServices?.eventLog;
+}
+
+/**
+ * Write the `run.skip` event for a refused automatic trigger, or do nothing when the run was
+ * allowed.
+ *
+ * Extracted out of `canAutoRun` so this — the actual behaviour this task adds — can be
+ * exercised by a real test. `_agentSettingsDepsRef` is populated only inside
+ * `registerIpcHandlers()`, which needs Electron and does far more startup work than a unit test
+ * should have to run just to reach this one side effect; taking `log` as a parameter instead of
+ * reading it off module state lets a test hand in a fake and assert on it directly, with no
+ * Electron or IPC-registration machinery involved.
+ *
+ * `log` is optional and un-thrown-on: it is `undefined` by default in every environment until
+ * the `if (agentDb)` block in `src/main/index.ts` runs (see `getEventLog` above), and that must
+ * never be the thing that breaks the gate.
+ */
+
+/**
+ * The last skip reason emitted for each agent per day, so a steady state is stated once rather
+ * than every tick, while guaranteeing each day's log file contains at least one line.
+ * Keyed by `agentId:YYYY-MM-DD`. Cleared only on process restart (bounded by agent count × days).
+ */
+const lastSkipReason = new Map<string, string>();
+
+/**
+ * Clear the skip-reason cache. For tests only — production never calls this.
+ * @internal
+ */
+export function resetRunSkipCache(): void {
+  lastSkipReason.clear();
+}
+
+export function emitRunSkip(
+  agentId: string,
+  kind: SkipTrigger,
+  decision: AutoRunDecision,
+  log?: EventLog,
+): void {
+  if (decision.allowed) return;
+
+  // Emit on transition: the first refusal for an agent on a given day, or when the reason changes.
+  // Keyed by day so each log file (nexus-YYYY-MM-DD.log) contains exactly one line per agent per
+  // reason — a user on Thursday asking "why didn't my agent run today" finds the answer in
+  // today's file, not only in Monday's. Without day-keying, an agent disabled on Monday emits
+  // one line Monday and zero lines every day after, while it goes on refusing every fifteen minutes.
+  // The trigger kind is part of the key so manual/schedule/event refusals are independently tracked —
+  // without it, the scheduler's first tick consumes the day's slot and Run Now writes nothing.
+  const day = localDay(new Date());
+  const key = `${agentId}:${day}:${kind}`;
+  const lastReason = lastSkipReason.get(key);
+  if (lastReason === decision.reason) return;
+
+  // "The agent didn't run" is the first thing a user reports — before this, a refused
+  // scheduled or event-triggered run produced zero bytes anywhere. write() returns whether
+  // the line reached disk (false when dropped by the level gate or on append failure), so
+  // the slot is claimed only when the write actually happened. Otherwise raising the level
+  // later produces nothing — the slot was burned by a dropped write.
+  const written = log?.write({
+    level: 'INFO',
+    source: agentId,
+    sourceKind: 'agent',
+    runId: newRunId('agent'),
+    event: 'run.skip',
+    fields: { trigger: kind, reason: decision.reason },
+  });
+
+  if (written) {
+    lastSkipReason.set(key, decision.reason);
+  }
+}
+
+/**
  * May an automatic trigger start this agent right now?
  *
  * Thin wrapper: reads the settings cache and delegates to the pure predicate in
  * agent-runtime/auto-run-gate.ts, where the reasoning lives. Both the cron path
- * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart.
+ * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart —
+ * which is also why the refusal is logged here, once, instead of at each trigger site.
  */
 export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
@@ -310,10 +431,14 @@ export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   const agentStateStore = _agentSettingsDepsRef?.nexusServices?.agentStateStore;
   const autoPausedAt: number | undefined = (agentStateStore as any)?.get(agentId, AUTO_PAUSED_KEY);
 
-  return canAutoRunWith(
+  const decision = canAutoRunWith(
     autoPausedAt !== undefined ? { ...cachedSettings, autoPausedAt } : cachedSettings,
     kind,
   );
+  // An auto-paused agent is the case most worth logging: nobody switched it off, so without
+  // this line the only record of why it stopped running is a row in SQLite.
+  emitRunSkip(agentId, kind, decision, getEventLog());
+  return decision.allowed;
 }
 
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
@@ -711,6 +836,46 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     } catch (err) {
       localLogger.error('[NexusAI] log-processor connected-sites failed:', (err as Error).message);
       return [];
+    }
+  });
+
+  // web-analytics' Sites tab payload — which site is bound to which GA4 property. Read-only:
+  // binding and unbinding go through the agent's own tool so they stay on the audited chokepoint.
+  safeHandle(IPC_CHANNELS.AGENT_WEB_ANALYTICS_STATE, () => {
+    try {
+      const { getWebAnalyticsState } = require('./agent-runtime/web-analytics-sites') as typeof import('./agent-runtime/web-analytics-sites');
+      return getWebAnalyticsState(graphService?.getDb?.());
+    } catch (err) {
+      localLogger.error('[NexusAI] web-analytics state failed:', (err as Error).message);
+      return { bindings: {} };
+    }
+  });
+
+  // The Sites tab's whole payload: the one account-level bucket plus every install found in it.
+  safeHandle(IPC_CHANNELS.AGENT_LOG_PROCESSOR_STATE, () => {
+    try {
+      const { AGENTS_DIR } = require('./agent-runtime/AgentRegistry') as typeof import('./agent-runtime/AgentRegistry');
+      const { getLogProcessorState } = require('./agent-runtime/log-processor-sites') as typeof import('./agent-runtime/log-processor-sites');
+      return getLogProcessorState(AGENTS_DIR);
+    } catch (err) {
+      localLogger.error('[NexusAI] log-processor state failed:', (err as Error).message);
+      return { bucket: null, installs: [] };
+    }
+  });
+
+  // Generic contributed-tool invocation for renderer-driven flows that need a tool's actual
+  // return value (not just "fire and let Activity show the result") — e.g. the Connect the log
+  // bucket modal parsing set_log_bucket's structured JSON. Routes through the same
+  // AgentDispatcher.dispatch() chokepoint chat/MCP calls use, so this is audited and
+  // settings-aware identically to a chat-issued command; no new audit path needed.
+  safeHandle(IPC_CHANNELS.AGENT_TOOL_INVOKE, async (_event, { agentId, toolName, args }: { agentId: string; toolName: string; args?: Record<string, unknown> }) => {
+    const dispatcher = (deps as any).nexusServices?.dispatcher;
+    if (!dispatcher) return { content: [{ type: 'text', text: 'Agent runtime not ready.' }], isError: true };
+    try {
+      return await dispatcher.dispatch(agentId, toolName, args ?? {});
+    } catch (err) {
+      localLogger.error(`[NexusAI] agent tool invoke failed (${agentId}/${toolName}):`, (err as Error).message);
+      return { content: [{ type: 'text', text: `⚠ ${(err as Error).message}` }], isError: true };
     }
   });
 
@@ -1500,6 +1665,104 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.LOGGING_STATS, () => {
+    try {
+      const { scanLogDirectories } = require('./logging/scanLogDirectories');
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const logDays = settings?.logRetentionDays ?? 14;
+      const transcriptDays = settings?.transcriptRetentionDays ?? 3;
+      const budgetBytes = settings?.logBudgetBytes ?? 250 * 1024 * 1024;
+
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      const sizes = scanLogDirectories(app.getPath('userData'));
+
+      return {
+        root: logRoot,
+        totalBytes: sizes.total,
+        byCategory: { combined: sizes.combined, agent: sizes.agent, transcript: sizes.transcript, audit: sizes.audit },
+        policy: { logDays, transcriptDays, budgetBytes },
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-stats failed:', (err as Error).message);
+      return null;
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_REVEAL, async (_event: any, logPath: string) => {
+    try {
+      const { shell } = require('electron');
+      await shell.showItemInFolder(logPath);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-reveal failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_PLAN_CLEAR, async () => {
+    try {
+      const { planRetention } = require('./logging/retention');
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      // Clear means "delete everything except preserved files" — zero-day retention, zero budget.
+      const clearPolicy = { logDays: 0, transcriptDays: 0, budgetBytes: 0 };
+
+      // Scan the log directory to get files
+      const fs = require('fs');
+      const files: any[] = [];
+      const DAY_IN_NAME = /(\d{4}-\d{2}-\d{2})/;
+      const scan = (dir: string, category: 'combined' | 'agent' | 'transcript') => {
+        let entries: string[] = [];
+        try { entries = fs.readdirSync(dir); } catch { return; }
+        for (const name of entries) {
+          const full = path.join(dir, name);
+          let bytes = 0;
+          let mtime: Date | undefined;
+          try {
+            const st = fs.statSync(full);
+            if (!st.isFile()) continue;
+            bytes = st.size;
+            mtime = st.mtime;
+          } catch { continue; }
+          let day = DAY_IN_NAME.exec(name)?.[1];
+          if (!day && mtime) {
+            const { localDay } = require('./logging/eventLog');
+            day = localDay(mtime);
+          }
+          if (!day) continue;
+          files.push({ path: full, category, day, bytes, preserved: false });
+        }
+      };
+      scan(logRoot, 'combined');
+      scan(path.join(logRoot, 'agents'), 'agent');
+      scan(path.join(logRoot, 'transcripts'), 'transcript');
+
+      const plan = planRetention(files, clearPolicy);
+
+      return { success: true, freedBytes: plan.freedBytes, keptBytes: plan.keptBytes, filesDeleted: plan.deletePaths.length };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-plan-clear failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.LOGGING_CLEAR, async () => {
+    try {
+      const { applyRetention } = require('./logging/retention');
+      const logRoot = path.join(app.getPath('userData'), 'nexus-ai', 'logs');
+      // Clear means "delete everything except preserved files" — zero-day retention, zero budget.
+      // Preserved files (failed runs, Tier 3 operations) are exempt from both passes.
+      const clearPolicy = { logDays: 0, transcriptDays: 0, budgetBytes: 0 };
+
+      const plan = applyRetention(logRoot, clearPolicy);
+
+      localLogger.info(`[NexusAI] Cleared logs: deleted ${plan.deletePaths.length} files, freed ${plan.freedBytes} bytes`);
+      return { success: true, filesDeleted: plan.deletePaths.length, bytesFreed: plan.freedBytes };
+    } catch (err) {
+      localLogger.error('[NexusAI] logging-clear failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
       // Validate input
@@ -2123,8 +2386,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // vectorDbPath is passed as a dep
       const rawHealth = await graphService.getStorageHealth(vectorDbPath);
 
+      // Fetch logging stats for the logs section
+      let logsSize: number | undefined;
+      try {
+        const { scanLogDirectories } = require('./logging/scanLogDirectories');
+        const sizes = scanLogDirectories(app.getPath('userData'));
+        logsSize = sizes.total;
+      } catch {
+        // If logging stats fail, just leave logs undefined
+      }
+
       // Transform snake_case to camelCase for renderer
-      const health = {
+      const health: any = {
         graphDb: {
           sizeBytes: rawHealth.graph_db.size_bytes,
           path: rawHealth.graph_db.path,
@@ -2140,6 +2413,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         pendingEvents: rawHealth.pending_events,
         failedEvents: rawHealth.failed_events,
       };
+
+      // Only add logs if we successfully gathered the data
+      if (logsSize !== undefined) {
+        health.logs = { sizeBytes: logsSize };
+      }
 
       return { success: true, health };
     } catch (err) {
@@ -5479,6 +5757,9 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   safeHandle(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, (_event, settings: Record<string, any>) => {
+    // Note which agents had their schedule changed, before the cache is overwritten — a cadence
+    // the user picks must take effect now, not at the next restart.
+    const rescheduled: string[] = [];
     for (const [agentId, s] of Object.entries(settings ?? {})) {
       // `...s` first so any field beyond the four core toggles (scanScope, scope,
       // savedScopes, ...) survives — narrowing to a hand-picked key list here silently
@@ -5491,14 +5772,31 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       // payload is still usable from chat; only the two flags that make an agent start ITSELF
       // default to off, matching seedAgentDefaultsIfMissing.
       const prev = agentSettingsCache.get(agentId);
-      agentSettingsCache.set(agentId, {
+      const next = {
         ...prev,
         ...s,
         enabled:         s.enabled         ?? prev?.enabled         ?? true,
         scheduleEnabled: s.scheduleEnabled ?? prev?.scheduleEnabled ?? false,
         eventsEnabled:   s.eventsEnabled   ?? prev?.eventsEnabled   ?? false,
         autonomy:        s.autonomy        ?? prev?.autonomy        ?? 'ask',
-      });
+      };
+      // Deliberately NOT main's `withCoreDefaults`, which this replaced: it defaulted
+      // scheduleEnabled and eventsEnabled to `?? true` with no reference to the previous
+      // value, which is the regression described above. Merging it back would re-arm every
+      // agent the renderer has no entry for.
+      if (prev?.cadence !== next.cadence || prev?.cadenceSetAt !== next.cadenceSetAt) {
+        rescheduled.push(agentId);
+      }
+      agentSettingsCache.set(agentId, next);
+    }
+
+    // Re-register after the cache is updated, so the scheduler reads the new cadence.
+    // `register()` unregisters any existing tasks for that agent first, so this is not additive.
+    for (const agentId of rescheduled) {
+      try {
+        const agent = deps.nexusServices?.agentRegistry?.get(agentId);
+        if (agent) deps.nexusServices?.agentScheduler?.register(agent);
+      } catch { /* a scheduling fault must not fail the settings write the user just made */ }
     }
     // Persist to disk so next startup respects user's saved toggle state
     try {
@@ -5510,7 +5808,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames, fullRun }: { agentId: string; siteNames: string[]; fullRun?: boolean }) => {
-    const runId = `run-${Date.now()}`;
+    const correlationId = `run-${Date.now()}`;
     const logFileName = `run-${Date.now()}.log`;
     const logDir = require('path').join(
       require('os').homedir(),
@@ -5522,6 +5820,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
     // Guard: refuse to run a disabled agent
     if (getAgentSetting(agentId, 'enabled') === false) {
+      emitRunSkip(agentId, 'manual', { allowed: false, reason: 'agent-disabled' }, getEventLog());
       return { error: 'agent-disabled', message: `Agent ${agentId} is disabled` };
     }
 
@@ -5535,14 +5834,14 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       });
     };
 
-    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId, agentId, agentName, siteNames, logFile: logFilePath });
+    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId: correlationId, agentId, agentName, siteNames, logFile: logFilePath });
 
-    // Cancel support — register an AbortController keyed by runId
+    // Cancel support — register an AbortController keyed by correlationId
     const abortController = new AbortController();
     const { signal } = abortController;
     const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap ??
       ((deps as any).__runAbortMap = new Map());
-    runAbortMap.set(runId, abortController);
+    runAbortMap.set(correlationId, abortController);
 
     // Run agent directly via agentRunner — awaits actual completion, no log polling races.
     // Everything from here on is wraped in one try/catch whose catch ALWAYS broadcasts a
@@ -5555,7 +5854,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     (async () => {
       const runner = deps.nexusServices?.agentRunner;
       if (!runner || !agent) {
-        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 1, findingsSites: [] });
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], doneCount: 0, failedCount: 1, findingsSites: [] });
         return;
       }
 
@@ -5564,16 +5863,35 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const logPath = logFilePath;
       const lastSize = _fs.existsSync(logPath) ? _fs.statSync(logPath).size : 0;
 
+      const { collectRunIds } = require('./agent-runtime/runNowIds') as typeof import('./agent-runtime/runNowIds');
+      const runs: Array<{ site: string; result: any }> = [];
       let lastRunResult: unknown;
       try {
-        // Run one site at a time via scoped event — agentRunner.run() resolves when done
-        for (const siteName of siteNames) {
-          if (signal.aborted) break;
-          const scopedEvent = {
-            namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
-            siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
-          };
-          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName });
+        // AGENT_RUN_NOW is the only fan-out point in the system — cron, events, GraphQL and MCP
+        // all run once. An agent that declares siteScoped:false reads neither ctx.event's site
+        // nor settings.scope, so looping it per site produces N identical runs (measured: 166
+        // selected sites x ~8.5s for auth-probe) and N unrelated run ids for one user action.
+        if ((agent as any).siteScoped === false) {
+          lastRunResult = await runner.run(agent, undefined, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
+          runs.push({ site: '', result: lastRunResult || {} });
+        } else {
+          // Defense-in-depth: a scoped agent with no sites selected should report that nothing ran,
+          // not broadcast a completion indistinguishable from a successful run of zero sites.
+          // The UI already disables Run on empty selection, but the CLI and other callers reach this too.
+          if (siteNames.length === 0) {
+            runAbortMap.delete(correlationId);
+            broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], agentId, siteNames: [], doneCount: 0, failedCount: 0, findingsSites: [], emptySelection: true });
+            return;
+          }
+          for (const siteName of siteNames) {
+            if (signal.aborted) break;
+            const scopedEvent = {
+              namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
+              siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
+            };
+            lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName, trigger: 'manual' });
+            runs.push({ site: siteName, result: lastRunResult || {} });
+          }
         }
       } catch (err: any) {
         if (!signal.aborted) {
@@ -5581,12 +5899,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         }
       }
 
-      runAbortMap.delete(runId);
+      runAbortMap.delete(correlationId);
 
       if (signal.aborted) {
-        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
+        // Cancelled runs don't collect runIds — the drawer dismisses ~800ms after Cancel is clicked,
+        // so the ids would never be usable anyway. Broadcasting them reads as working when it doesn't.
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
         return;
       }
+
+      const runIds = collectRunIds(runs);
 
       // Parse outcomes from the new log content written since we started
       let logContent = '';
@@ -5604,7 +5926,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
       try {
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-          runId,
+          runId: correlationId,
+          runIds,
           agentId,
           siteNames,
           doneCount: outcomes.doneCount,
@@ -5619,7 +5942,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         // Send a minimal payload so the UI at least exits the 'running' state.
         console.error('[AGENT_RUN_NOW] broadcast failed, sending minimal completion:', broadcastErr?.message);
         broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-          runId, agentId, siteNames,
+          runId: correlationId, runIds, agentId, siteNames,
           doneCount: outcomes.doneCount,
           failedCount: outcomes.failedCount,
           findingsSites: outcomes.findingsSites,
@@ -5630,11 +5953,11 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       // parseRunOutcomes itself). The run may well have finished on the backend — the UI must
       // still be told, or it spins forever with no way to recover short of a full reload.
       console.error('[AGENT_RUN_NOW] unhandled error in run pipeline:', err?.message);
-      runAbortMap.delete(runId);
-      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
+      runAbortMap.delete(correlationId);
+      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId: correlationId, runIds: [], agentId, siteNames, doneCount: 0, failedCount: 1, findingsSites: [] });
     });
 
-    return { runId };
+    return { runId: correlationId };
   });
 
   // Remove an agent — deletes its directory and unloads from registry
@@ -5979,17 +6302,37 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
   // ── Credential Manager ────────────────────────────────────────────────────
 
-  safeHandle(IPC_CHANNELS.CREDENTIAL_STATUS, async () => {
+  // `connections` is account-wide; `agentStatus` answers the *per-agent* question, which is the
+  // one that actually gates a tool call. They differ routinely and the difference is not a bug:
+  // an OAuth connection is one Google account, but access is granted per agent, so an agent does
+  // not silently inherit what another agent authorised. A UI that gates on `connections` alone
+  // reports "connected" for an agent the runtime will refuse — which is exactly what
+  // web-analytics' Sites tab did before this argument existed.
+  safeHandle(IPC_CHANNELS.CREDENTIAL_STATUS, async (_event: any, args?: { provider?: string; agentId?: string }) => {
     const mgr = deps.nexusServices?.credentialManager;
-    if (!mgr) return { connections: [], grants: [] };
-    return { connections: mgr.listConnections() };
+    if (!mgr) return { connections: [], agentStatus: null };
+    const connections = mgr.listConnections();
+    let agentStatus: string | null = null;
+    if (args?.agentId && args?.provider) {
+      try {
+        agentStatus = await mgr.getStatusForAgent(args.provider, args.agentId, '');
+      } catch {
+        agentStatus = null;
+      }
+    }
+    return { connections, agentStatus };
   });
 
   safeHandle(IPC_CHANNELS.CREDENTIAL_CONNECT, async (_event: any, args: { provider: string; agentId: string; siteId: string; scopes: string[] }) => {
     const mgr = deps.nexusServices?.credentialManager;
     if (!mgr) throw new Error('Credential manager not available');
-    await mgr.connect(args.provider, args.agentId, args.siteId, args.scopes);
-    return { ok: true };
+    // Report what actually happened. This used to answer `{ok:true}` unconditionally, so a failed
+    // token exchange and a completed connection were the same value to every caller.
+    const result = await mgr.connect(args.provider, args.agentId, args.siteId, args.scopes);
+    if (!result.ok) {
+      localLogger.warn(`[NexusAI] credential connect (${args.provider}/${args.agentId}) did not complete: ${result.reason}${result.message ? ` — ${result.message}` : ''}`);
+    }
+    return result;
   });
 
   safeHandle(IPC_CHANNELS.CREDENTIAL_DISCONNECT, async (_event: any, args: { connectionId: string }) => {

@@ -142,11 +142,18 @@ export interface NexusServices {
   agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
   agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
   inboxStore?: import('../inbox/InboxStore').InboxStore;
+  /** Cron scheduler. Exposed so AGENT_SETTINGS_UPDATE can re-register an agent the moment its
+   *  cadence changes — a schedule that only takes effect after a restart is the same class of
+   *  dead setting as the cadence picker that nothing read. */
+  agentScheduler?: import('../agent-runtime/AgentScheduler').AgentScheduler;
   agentReload?: () => Promise<void>;
   /** Contributed tool registry — tracks tools registered by installed agents */
   contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
   /** Agent dispatcher — routes contributed tool calls to agent handlers */
   dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
+  /** Process-wide structured run log — shared by AgentRunner and (later) the IPC gate wrapper so
+   *  both write to the same file rather than each constructing their own EventLog instance. */
+  eventLog?: import('../logging/eventLog').EventLog;
   gatewayUrl?: string;
   gatewayAuthToken?: string;
   /** Credential manager for OAuth flows. Added in Task 9 — optional for backward compat. */

@@ -337,8 +337,10 @@ export class WPESyncService {
 
     // Helper: run a WP-CLI command with 1 retry.
     // The first call establishes the SSH ControlMaster (~13-30s cold start).
-    // If it times out, ControlPersist=30s may have kept the master daemon alive,
-    // so a retry completes in 1-3s via the existing socket.
+    // If it times out, the multiplexed socket (see SSH_CONTROL_PERSIST in remoteFailure.ts,
+    // currently 600s) will have kept the master daemon alive, so a retry completes in 1-3s
+    // via the existing socket. With the current persist window, socket survival is effectively
+    // certain for any retry on this path.
     const runWithRetry = async (args: string[]): Promise<{ stdout: string; success: boolean }> => {
       const norm = (r: any) => ({ stdout: r.stdout ?? '', success: !!r.success });
       const first = norm(await this.localServices.remoteWpCliRun(install.install_name, args).catch(() => ({ stdout: '', success: false })));

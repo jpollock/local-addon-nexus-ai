@@ -7,8 +7,26 @@ import { IPC_CHANNELS } from '../../../common/constants';
 import { rendererGql } from '../../utils/rendererGql';
 import { fetchScopeSites, ScopeSiteEnv } from './fetchScopeSites';
 import { pendingForAgent } from './pending';
+import { LogSitesTab } from './LogSitesTab';
+import {
+  LogSourcesState, EMPTY_LOG_SOURCES, loadLogSources, deriveLogSiteRows, runnableSiteIds,
+} from './logSourcesModel';
+import { AnalyticsSitesTab } from './AnalyticsSitesTab';
+import {
+  AnalyticsState, EMPTY_ANALYTICS, loadAnalyticsState, deriveAnalyticsRows, boundSiteNames,
+} from './analyticsSitesModel';
+import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
 
-type WorkspaceTab = 'settings' | 'approvals' | 'activity' | 'tools' | 'docs';
+type WorkspaceTab = 'settings' | 'sites' | 'approvals' | 'activity' | 'tools' | 'docs';
+
+/**
+ * Agents whose site coverage is decided on their own Sites tab rather than through the generic
+ * scope picker in Settings, because "which sites can this agent run on" is a question only that
+ * agent's own data can answer: installs with objects in the S3 bucket, sites with a GA4 property
+ * bound. The tab is called Sites on every one of them — it answers the same question, so it does
+ * not get a different name per agent (Google's "property" belongs in the column, not the nav).
+ */
+const AGENTS_WITH_SITES_TAB = new Set(['log-processor', 'web-analytics']);
 
 interface AgentToolEntry {
   toolName: string;
@@ -38,6 +56,12 @@ interface WorkspaceState {
   siteEnvByName: Record<string, ScopeSiteEnv>;
   /** Bulk-selection for Approvals — event IDs currently checked. */
   selectedApprovals: Set<string>;
+  /** log-processor only: the bucket + install cache behind the Sites tab. */
+  logSources: LogSourcesState;
+  logSourcesLoading: boolean;
+  /** web-analytics only: GA4 bindings + the Google account behind its Sites tab. */
+  analytics: AnalyticsState;
+  analyticsLoading: boolean;
 }
 
 type ApprovalSeverity = 'high' | 'medium' | 'low';
@@ -45,16 +69,16 @@ type ApprovalSeverity = 'high' | 'medium' | 'low';
 const SEVERITY_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
 
 const SEVERITY_DISPLAY: Record<ApprovalSeverity, { label: string; fg: string; bg: string }> = {
-  high:   { label: 'HIGH', fg: '#f2666e', bg: 'rgba(242,102,110,0.16)' },
-  medium: { label: 'MED',  fg: '#f0b52e', bg: 'rgba(240,181,46,0.16)' },
-  low:    { label: 'LOW',  fg: '#8b95a3', bg: 'rgba(139,149,163,0.16)' },
+  high:   { label: 'HIGH', fg: 'var(--ag-red)', bg: 'rgba(242,102,110,0.16)' },
+  medium: { label: 'MED',  fg: 'var(--ag-picker-warning)', bg: 'rgba(240,181,46,0.16)' },
+  low:    { label: 'LOW',  fg: 'var(--ag-picker-text-faint-alt)', bg: 'rgba(139,149,163,0.16)' },
 };
 
 const ENV_DISPLAY: Record<ScopeSiteEnv, { label: string; fg: string; bg: string }> = {
-  production:  { label: 'PROD',    fg: '#f2666e', bg: 'rgba(242,102,110,0.14)' },
-  staging:     { label: 'STAGING', fg: '#f0b52e', bg: 'rgba(240,181,46,0.14)' },
-  development: { label: 'DEV',     fg: '#7cb6ff', bg: 'rgba(124,182,255,0.14)' },
-  local:       { label: 'LOCAL',   fg: '#8b95a3', bg: 'rgba(139,149,163,0.14)' },
+  production:  { label: 'PROD',    fg: 'var(--ag-red)', bg: 'rgba(242,102,110,0.14)' },
+  staging:     { label: 'STAGING', fg: 'var(--ag-picker-warning)', bg: 'rgba(240,181,46,0.14)' },
+  development: { label: 'DEV',     fg: 'var(--ag-picker-info)', bg: 'rgba(124,182,255,0.14)' },
+  local:       { label: 'LOCAL',   fg: 'var(--ag-picker-text-faint-alt)', bg: 'rgba(139,149,163,0.14)' },
 };
 
 /** Highest severity among an event's structured findings, collapsed to the 3-tier display scale
@@ -183,16 +207,19 @@ function inlineMarkdown(text: string): React.ReactNode {
 }
 
 const ACCENTS: Record<string, string> = {
-  'security-sentinel': '#35d0c5',
-  'performance-optimizer': '#7b8cff',
-  'backup-verifier': '#3ecf8e',
-  'dependency-auditor': '#f5b544',
-  'cost-watch': '#e07acc',
+  'security-sentinel': 'var(--ag-teal)',
+  'performance-optimizer': 'var(--ag-purple)',
+  'backup-verifier': 'var(--ag-green)',
+  'dependency-auditor': 'var(--ag-amber)',
+  'cost-watch': 'var(--ag-pink)',
 };
 
 export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceState> {
   state: WorkspaceState = {
-    activeTab: 'settings',
+    // Both of these are decided here rather than in componentDidMount: setting them after the
+    // first paint flashes the Settings tab, and then the Sites tab's own "nothing connected"
+    // empty state, before the real data lands.
+    activeTab: AGENTS_WITH_SITES_TAB.has(this.props.agentId) ? 'sites' : 'settings',
     status: null,
     running: false,
     showRunModal: false,
@@ -202,8 +229,48 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     readmeLoading: false,
     siteEnvByName: {},
     selectedApprovals: new Set(),
+    logSources: EMPTY_LOG_SOURCES,
+    logSourcesLoading: this.props.agentId === 'log-processor',
+    analytics: EMPTY_ANALYTICS,
+    analyticsLoading: this.props.agentId === 'web-analytics',
   };
   private unsub!: () => void;
+
+  /**
+   * The single derived set for agents with a Sites tab: installs that have apache-style objects in
+   * the bucket AND are switched on. The tab badge, the header line, the Run now enabled state and
+   * the tab's own footnote all read this — never their own count. BEHAVIOR.md §4: gate the value,
+   * not each consumer.
+   */
+  private runnableLogSites(): string[] {
+    if (this.props.agentId === 'web-analytics') {
+      // Coverage here is the set of sites with a property bound — there is no separate scope to
+      // reconcile against, because a binding IS the opt-in.
+      return boundSiteNames(deriveAnalyticsRows(this.state.analytics));
+    }
+    const scope = (agentStore.getOrInitSettings(this.props.agentId) as any)?.scope?.siteIds;
+    const ids = Array.isArray(scope) ? scope.filter((s: unknown): s is string => typeof s === 'string') : [];
+    return runnableSiteIds(deriveLogSiteRows(this.state.logSources, ids));
+  }
+
+  private hasSitesTab(): boolean {
+    return AGENTS_WITH_SITES_TAB.has(this.props.agentId);
+  }
+
+  private reloadLogSources = (): void => {
+    if (this.props.agentId === 'web-analytics') {
+      this.setState({ analyticsLoading: true });
+      loadAnalyticsState(this.props.electron)
+        .then(analytics => this.setState({ analytics, analyticsLoading: false }))
+        .catch(() => this.setState({ analyticsLoading: false }));
+      return;
+    }
+    if (!this.hasSitesTab()) return;
+    this.setState({ logSourcesLoading: true });
+    loadLogSources(this.props.electron)
+      .then(logSources => this.setState({ logSources, logSourcesLoading: false }))
+      .catch(() => this.setState({ logSourcesLoading: false }));
+  };
 
   componentDidMount() {
     const update = () => {
@@ -221,10 +288,23 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       for (const s of sites) byName[s.name] = s.environment;
       this.setState({ siteEnvByName: byName });
     });
+
+    // Loaded up front, not on tab click: the header line and the tab badge both read this set,
+    // and they render before anyone opens the tab.
+    if (this.hasSitesTab()) {
+      this.reloadLogSources();
+      // Adding the AWS key happens in Preferences, on a surface this component does not own. The
+      // credential strip and the one live action both key off that status, so they have to
+      // re-render on return without the user hunting for a refresh (TEST-PLAN, credential gate).
+      this.props.electron?.ipcRenderer?.on(IPC_CHANNELS.CREDENTIAL_EVENT, this.reloadLogSources);
+    }
   }
 
   componentWillUnmount() {
     agentStore.unsubscribe(this.unsub);
+    if (this.hasSitesTab()) {
+      this.props.electron?.ipcRenderer?.removeListener(IPC_CHANNELS.CREDENTIAL_EVENT, this.reloadLogSources);
+    }
   }
 
   private async loadReadme() {
@@ -270,7 +350,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     }
 
     const tierLabel = (tier: number) => tier >= 3 ? 'T3 · Destructive' : tier === 2 ? 'T2 · Modifying' : 'T1 · Read-only';
-    const tierColor = (tier: number) => tier >= 3 ? '#f2666e' : tier === 2 ? '#f0b52e' : '#4ade9b';
+    const tierColor = (tier: number) => tier >= 3 ? 'var(--ag-red)' : tier === 2 ? 'var(--ag-picker-warning)' : 'var(--ag-green)';
 
     return React.createElement('div', null,
       React.createElement('div', { style: { color: 'var(--ag-text-muted)', fontSize: 13, marginBottom: 18 } },
@@ -347,28 +427,42 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
 
     // Derived trigger summary from actual config
     const triggerParts: string[] = [];
-    if (settings.scheduleEnabled && settings.cadence) {
-      const CADENCE_LABELS: Record<string, string> = {
-        '*/15 * * * *': 'Runs every 15 minutes',
-        '0 * * * *': 'Runs hourly',
-        '0 */6 * * *': 'Runs every 6 hours',
-        '0 0 * * *': 'Runs daily',
-        '0 0 * * 0': 'Runs weekly',
-      };
-      triggerParts.push(CADENCE_LABELS[settings.cadence] ?? 'Runs on schedule');
+    // The schedule that actually runs: the agent's own manifest cron unless the user picked a
+    // cadence. Labelling settings.cadence alone stated a schedule the scheduler never used.
+    const effectiveCron = effectiveCadenceExpression(settings, this.state.status?.cronExpression);
+    if (settings.scheduleEnabled && effectiveCron) {
+      triggerParts.push(`Runs ${describeCron(effectiveCron).toLowerCase()}`);
     }
     if (settings.eventsEnabled) triggerParts.push('responds to events');
     triggerParts.push('ad-hoc');
-    const triggerSummary = isDisabled
+    let triggerSummary = isDisabled
       ? 'Disabled — no triggers active'
       : (triggerParts.length === 1 ? 'Runs on demand only • ad-hoc' : triggerParts.join(' • '));
+
+    // For an agent with a Sites tab the headline fact is what the schedule actually covers, and
+    // it comes from the same derived set as the tab badge — never a separately-counted scope.
+    const runnable = this.hasSitesTab() ? this.runnableLogSites() : null;
+    if (runnable && !isDisabled) {
+      const cadence = effectiveCron ? describeCron(effectiveCron).toLowerCase() : 'on schedule';
+      const sourceMissing = this.props.agentId === 'web-analytics'
+        ? !this.state.analytics.google.connected
+        : !this.state.logSources.bucket;
+      triggerSummary = sourceMissing
+        ? (this.props.agentId === 'web-analytics' ? 'No Google account connected' : 'No log bucket connected')
+        : runnable.length === 0
+          ? (this.props.agentId === 'web-analytics'
+              ? 'No sites bound to a property — nothing is running'
+              : 'No sites switched on — nothing is running')
+          : `${settings.scheduleEnabled ? cadence[0].toUpperCase() + cadence.slice(1) : 'Ad-hoc only'} · ` +
+            `${runnable.length} site${runnable.length === 1 ? '' : 's'}`;
+    }
 
     const autonomyLine: Record<string, string> = {
       suggest: 'Investigates on its own • surfaces findings, takes no action',
       ask:     'Investigates on its own • you approve any change before it runs',
       auto:    'Fully autonomous • remediates in sandbox, then waits for production approval',
     };
-    const accent = ACCENTS[agentId] || '#9aa1ac';
+    const accent = ACCENTS[agentId] || 'var(--ag-text-secondary)';
     const displayName = status?.name ?? agentId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
     return React.createElement('div', null,
@@ -407,9 +501,12 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
               className: 'ag-pill ag-pill--review',
             }, `${pendingCount} need review`),
           ),
-          // Autonomy line
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6, color: 'var(--ag-text-secondary)', fontSize: 15 } },
-            React.createElement('span', { style: { color: '#f0b52e' } }, '⚑'),
+          // Autonomy line — this copy ("remediates in sandbox", "production approval") is
+          // security-sentinel's own remediation model, not generic; showing it for an agent with
+          // no gated action (log-processor, seo-insights) was actively misleading. Same
+          // producesApprovals gate as the Settings tab's Autonomy level card.
+          (status?.producesApprovals ?? true) && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6, color: 'var(--ag-text-secondary)', fontSize: 15 } },
+            React.createElement('span', { style: { color: 'var(--ag-picker-warning)' } }, '⚑'),
             autonomyLine[autonomy] ?? autonomyLine.suggest,
           ),
           // Trigger summary
@@ -419,18 +516,29 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
           ),
         ),
 
-        // Run now button
-        React.createElement('button', {
-          onClick: () => this.setState({ showRunModal: true }),
-          disabled: running || isDisabled,
-          style: {
-            display: 'inline-flex', alignItems: 'center', gap: 9,
-            background: running || isDisabled ? 'var(--ag-bg-elevated)' : 'var(--ag-teal)',
-            color: running || isDisabled ? 'var(--ag-text-muted)' : 'var(--ag-on-teal)',
-            fontWeight: 700, fontSize: 15, border: 'none', borderRadius: 10,
-            padding: '12px 22px', cursor: running || isDisabled ? 'not-allowed' : 'pointer', flexShrink: 0,
-          },
-        }, running ? '⟳ Running…' : '▶ Run now'),
+        // Run now button. For a Sites-tab agent the enabled state is the same derived set again —
+        // with nothing switched on there is no target, so the run modal must be unreachable
+        // rather than open onto an empty picker.
+        (() => {
+          const noTargets = !!runnable && runnable.length === 0;
+          const blocked = running || isDisabled || noTargets;
+          return React.createElement('button', {
+            onClick: () => { if (!blocked) this.setState({ showRunModal: true }); },
+            disabled: blocked,
+            title: noTargets && !isDisabled
+              ? (agentId === 'web-analytics'
+                  ? 'Bind a GA4 property on the Sites tab first'
+                  : 'Switch an install on in the Sites tab first')
+              : undefined,
+            style: {
+              display: 'inline-flex', alignItems: 'center', gap: 9,
+              background: blocked ? 'var(--ag-bg-elevated)' : 'var(--ag-teal)',
+              color: blocked ? 'var(--ag-text-muted)' : 'var(--ag-on-teal)',
+              fontWeight: 700, fontSize: 15, border: 'none', borderRadius: 10,
+              padding: '12px 22px', cursor: blocked ? 'not-allowed' : 'pointer', flexShrink: 0,
+            },
+          }, running ? '⟳ Running…' : '▶ Run now');
+        })(),
       ),
     );
   }
@@ -441,9 +549,19 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     const pendingCount = pendingForAgent(agentStore.getState().pendingBySource, agentId);
     const pendingLoaded = agentStore.getState().pendingLoaded;
 
-    const tabs: Array<{ id: WorkspaceTab; label: string; badge?: number }> = [
+    // Defaults true while status is still loading (AgentStatus arrives async over GraphQL) so
+    // the tab doesn't flash in and out on every mount — same fail-open-briefly tradeoff the rest
+    // of this component makes for allowsProduction/effect while status is undefined.
+    const producesApprovals = this.state.status?.producesApprovals ?? true;
+
+    const tabs: Array<{ id: WorkspaceTab; label: string; badge?: number; countBadge?: number }> = [
       { id: 'settings',  label: 'Settings' },
-      { id: 'approvals', label: 'Approvals', badge: pendingLoaded && pendingCount > 0 ? pendingCount : undefined },
+      // The count is the derived runnable set, so `Sites 2` and "Every 15 minutes · 2 sites" in
+      // the header can never disagree.
+      ...(this.hasSitesTab() ? [{ id: 'sites' as WorkspaceTab, label: 'Sites', countBadge: this.runnableLogSites().length }] : []),
+      // `pendingLoaded` guards the badge: before the first load the count is 0, and a 0 that
+      // means "not measured yet" must not render as "nothing waiting".
+      ...(producesApprovals ? [{ id: 'approvals' as WorkspaceTab, label: 'Approvals', badge: pendingLoaded && pendingCount > 0 ? pendingCount : undefined }] : []),
       { id: 'activity',  label: 'Activity' },
       { id: 'tools',     label: 'Tools' },
       { id: 'docs',      label: 'Docs' },
@@ -466,8 +584,14 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         },
           tab.label,
           tab.badge && React.createElement('span', {
-            style: { background: '#f0b52e', color: '#3a2a00', fontSize: 11, fontWeight: 800, padding: '1px 8px', borderRadius: 999 },
+            style: { background: 'var(--ag-picker-warning)', color: '#3a2a00', fontSize: 11, fontWeight: 800, padding: '1px 8px', borderRadius: 999 },
           }, tab.badge),
+          tab.countBadge !== undefined && React.createElement('span', {
+            style: {
+              background: 'rgba(53,208,197,0.14)', color: 'var(--ag-teal)',
+              fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 999,
+            },
+          }, tab.countBadge),
         ),
       ),
     );
@@ -562,7 +686,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
             return React.createElement('div', {
               key: e.id,
               style: {
-                background: '#151a23', border: '1px solid #1f2732', borderRadius: 14, padding: '16px 20px',
+                background: 'var(--ag-picker-bg-sunken)', border: '1px solid var(--ag-picker-border)', borderRadius: 14, padding: '16px 20px',
                 marginBottom: 10, display: 'flex', alignItems: 'center', gap: 14, position: 'relative',
               },
             },
@@ -587,7 +711,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
                     style: { fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', padding: '3px 7px', borderRadius: 5, color: sevDisplay.fg, background: sevDisplay.bg },
                   }, sevDisplay.label),
                 ),
-                React.createElement('div', { style: { fontSize: 14, color: '#aeb7c4' } }, e.sub),
+                React.createElement('div', { style: { fontSize: 14, color: 'var(--ag-picker-text-muted)' } }, e.sub),
               ),
               // Time + actions
               React.createElement('span', { style: { fontSize: 12, color: 'var(--ag-text-muted)', flexShrink: 0 } }, e.time),
@@ -597,13 +721,26 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
               }, 'Review'),
               React.createElement('button', {
                 onClick: () => this.dismissApproval(e.id),
-                style: { background: 'none', border: '1px solid #2a323e', borderRadius: 8, padding: '8px 14px', fontSize: 13, color: 'var(--ag-text-muted)', cursor: 'pointer', flexShrink: 0 },
+                style: { background: 'none', border: '1px solid var(--ag-border-control)', borderRadius: 8, padding: '8px 14px', fontSize: 13, color: 'var(--ag-text-muted)', cursor: 'pointer', flexShrink: 0 },
               }, 'Dismiss'),
             );
           }),
         ),
       ),
     );
+  }
+
+  /**
+   * The schedule this agent actually runs on, as a lowercase phrase for inline copy.
+   *
+   * Reads the agent's manifest cron unless the user picked a cadence — the two disagreed, and
+   * every label here used to state the picked-or-seeded value regardless of what the scheduler
+   * did with it.
+   */
+  private cadencePhrase(): string {
+    const settings = agentStore.getOrInitSettings(this.props.agentId);
+    const expr = effectiveCadenceExpression(settings, this.state.status?.cronExpression);
+    return expr ? describeCron(expr).toLowerCase() : 'on schedule';
   }
 
   render() {
@@ -625,7 +762,44 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         agentId,
         electron: this.props.electron,
         allowsProduction: this.state.status?.allowsProduction ?? true,
+        cronExpression: this.state.status?.cronExpression,
         effect: this.state.status?.effect ?? 'writes',
+        producesApprovals: this.state.status?.producesApprovals ?? true,
+        credentials: this.state.status?.credentials ?? [],
+        scopeLivesInSitesTab: this.hasSitesTab(),
+        onOpenSitesTab: () => this.setState({ activeTab: 'sites' }),
+        sitesTabCount: this.hasSitesTab() ? this.runnableLogSites().length : undefined,
+        sitesTabNoun: agentId === 'web-analytics' ? 'site' : 'install',
+        sitesTabVerb: agentId === 'web-analytics' ? 'bound to a property' : 'switched on',
+        siteScoped: this.state.status?.siteScoped ?? true,
+      }),
+      activeTab === 'sites' && agentId === 'web-analytics' && React.createElement(AnalyticsSitesTab, {
+        electron: this.props.electron,
+        state: this.state.analytics,
+        loading: this.state.analyticsLoading,
+        cadenceLabel: settings.scheduleEnabled
+          ? this.cadencePhrase()
+          : 'on ad-hoc runs',
+        googleScopes: (this.state.status?.credentials ?? []).find(c => c.provider === 'google')?.scopes ?? [],
+        onReload: this.reloadLogSources,
+      }),
+      activeTab === 'sites' && agentId === 'log-processor' && React.createElement(LogSitesTab, {
+        electron: this.props.electron,
+        state: this.state.logSources,
+        loading: this.state.logSourcesLoading,
+        scope: (settings as any)?.scope?.siteIds ?? [],
+        // With the schedule off, "runs every 15 minutes" on a row would be a small lie — an
+        // on install still runs, but only when someone asks.
+        cadenceLabel: settings.scheduleEnabled
+          ? this.cadencePhrase()
+          : 'on ad-hoc runs',
+        onScopeChange: (siteIds: string[]) => {
+          // Writes the same field the generic scope picker writes, so the schedule, Run Now and
+          // the agent runtime all keep reading one list.
+          // No local re-render needed: componentDidMount subscribed this component to the store.
+          agentStore.updateSettings(agentId, { scope: { siteIds }, scopeUpdatedAt: Date.now() } as any);
+        },
+        onReload: this.reloadLogSources,
       }),
       activeTab === 'tools'     && this.renderToolsTab(),
       activeTab === 'docs'      && this.renderDocsTab(),
@@ -638,7 +812,11 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         supportsFullRun: this.state.status?.supportsFullRun ?? false,
         allowsProduction: this.state.status?.allowsProduction ?? true,
         effect: this.state.status?.effect ?? 'writes',
-        scheduleScope: settings.scope,
+        siteScoped: this.state.status?.siteScoped ?? true,
+        // Run Now prefills from the SAME derived set the schedule uses, not the raw saved scope.
+        // A stale id — scoped before a rescan dropped that install out of the bucket — would
+        // otherwise arrive pre-selected and produce a run row that reads nothing.
+        scheduleScope: this.hasSitesTab() ? { siteIds: this.runnableLogSites() } : settings.scope,
         onCancel: () => this.setState({ showRunModal: false }),
         onRun: (_siteNames: string[]) => {
           // AgentRunModal.handleRun() already invoked AGENT_RUN_NOW via IPC.

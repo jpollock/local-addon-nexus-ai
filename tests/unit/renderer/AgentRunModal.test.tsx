@@ -31,6 +31,7 @@ function makeModal(overrides: Partial<any> = {}) {
     allowsProduction: overrides.allowsProduction ?? true,
     effect: overrides.effect ?? 'writes',
     scheduleScope: overrides.scheduleScope,
+    siteScoped: overrides.siteScoped ?? true,
     onCancel,
     onRun,
   });

@@ -1,7 +1,28 @@
-import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
+import type { ChatMessage, ProviderStreamEvent, TokenUsage } from '../../../common/chat-types';
 import { OLLAMA_BASE_URL } from '../../../common/constants';
 import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
+
+/**
+ * Token usage: Ollama reports prompt_eval_count / eval_count on the final stream object (streaming
+ * mode) or on the whole response object (non-streaming mode) — the same top-level shape either way.
+ * Unlike Anthropic, this is not split across separate events, so no cross-event merge is required —
+ * one call to this extractor per response/chunk is sufficient.
+ *
+ * Exported for test: this parsing is the only thing standing between a real cost figure and a
+ * fabricated one.
+ */
+const finiteNumber = (v: unknown): number | undefined =>
+  (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+export function extractOllamaUsage(chunk: any): TokenUsage | undefined {
+  const inputTokens = finiteNumber(chunk?.prompt_eval_count);
+  const outputTokens = finiteNumber(chunk?.eval_count);
+  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  // Only the keys actually found: returning `outputTokens: undefined` alongside a real
+  // inputTokens lets the caller's spread-merge (`{ ...usage, ...chunkUsage }` in streamingChat)
+  // overwrite a count it already had. Same fix as openai.ts / google.ts.
+  return { ...(inputTokens !== undefined && { inputTokens }), ...(outputTokens !== undefined && { outputTokens }) };
+}
 
 /**
  * Max tools to send to Ollama models. Local models have limited context.
@@ -91,6 +112,10 @@ export class OllamaProvider implements AIProvider {
       tools,
     });
 
+    // Declared outside the try, like anthropic.ts's `usage`, so every `done` yielded below —
+    // including the pre-parse abort branch, where nothing has been read yet — can reference it.
+    let usage: TokenUsage | undefined;
+
     try {
       const response = await apiRequest({
         url: `${baseUrl}/api/chat`,
@@ -100,11 +125,12 @@ export class OllamaProvider implements AIProvider {
       });
 
       if (signal.aborted) {
-        yield { type: 'done', stopReason: 'end_turn' };
+        yield { type: 'done', stopReason: 'end_turn', usage };
         return;
       }
 
       const data = JSON.parse(response);
+      usage = extractOllamaUsage(data);
       const msg = data.message;
 
       // Yield text content
@@ -121,13 +147,13 @@ export class OllamaProvider implements AIProvider {
           yield { type: 'tool_call_start', id: callId, name };
           yield { type: 'tool_call_end', id: callId, name, arguments: args };
         }
-        yield { type: 'done', stopReason: 'tool_use' };
+        yield { type: 'done', stopReason: 'tool_use', usage };
       } else {
-        yield { type: 'done', stopReason: 'end_turn' };
+        yield { type: 'done', stopReason: 'end_turn', usage };
       }
     } catch (err) {
       if (signal.aborted) {
-        yield { type: 'done', stopReason: 'end_turn' };
+        yield { type: 'done', stopReason: 'end_turn', usage };
         return;
       }
       yield { type: 'error', message: `Ollama error: ${(err as Error).message}` };
@@ -149,6 +175,12 @@ export class OllamaProvider implements AIProvider {
       stream: true,
     });
 
+    // Accumulated across the stream, mirroring anthropic.ts's `usage`. In practice Ollama only
+    // puts prompt_eval_count/eval_count on the final chunk (`done: true`), but merging on every
+    // chunk is harmless — earlier chunks carry neither field, so extractOllamaUsage returns
+    // undefined for them and the merge is a no-op.
+    let usage: TokenUsage | undefined;
+
     try {
       const stream = streamingRequest({
         url: `${baseUrl}/api/chat`,
@@ -166,20 +198,23 @@ export class OllamaProvider implements AIProvider {
           continue;
         }
 
+        const chunkUsage = extractOllamaUsage(data);
+        if (chunkUsage) usage = { ...usage, ...chunkUsage };
+
         if (data.message?.content) {
           yield { type: 'token', text: data.message.content };
         }
 
         if (data.done) {
-          yield { type: 'done', stopReason: 'end_turn' };
+          yield { type: 'done', stopReason: 'end_turn', usage };
           return;
         }
       }
 
-      yield { type: 'done', stopReason: 'end_turn' };
+      yield { type: 'done', stopReason: 'end_turn', usage };
     } catch (err) {
       if (signal.aborted) {
-        yield { type: 'done', stopReason: 'end_turn' };
+        yield { type: 'done', stopReason: 'end_turn', usage };
         return;
       }
       yield { type: 'error', message: `Ollama error: ${(err as Error).message}` };

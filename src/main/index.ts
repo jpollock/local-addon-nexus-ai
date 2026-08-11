@@ -36,7 +36,10 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
-import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing } from './ipc-handlers';
+import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing, getAgentLogLevel } from './ipc-handlers';
+import { EventLog } from './logging/eventLog';
+import { resolveLogLevel } from './logging/resolveLogLevel';
+import { applyRetention } from './logging/retention';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -488,6 +491,10 @@ export default function main(context: any): void {
   // WPE content index timer — inline interval-based scheduler for indexAllWpeContent.
   // Declared here so the onSettingsUpdated closure can restart/stop it reactively.
   let wpeContentIndexTimer: ReturnType<typeof setInterval> | null = null;
+
+  // EventLog — declared before the async IIFE so the onSettingsUpdated closure can restart
+  // it when the log level changes. Assigned inside the IIFE once AGENTS_DIR is available.
+  let eventLog: EventLog;
   const startWpeContentIndexScheduler = (hours: number) => {
     if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
     wpeContentIndexTimer = setInterval(async () => {
@@ -545,6 +552,22 @@ export default function main(context: any): void {
    * has constructed them.
    */
   const onSettingsUpdated = () => {
+    // Update event log level when settings change.
+    //
+    // The `if` is not a dropped update, and it should not be "fixed" into a deferred-apply
+    // queue. `eventLog` is constructed inside the async startup IIFE, and that construction
+    // resolves the level by reading `registryStorage` at that moment — not at process start.
+    // The settings IPC handler persists before it calls this, so a change made during startup
+    // is already on disk when construction reads it, and lands as the initial level. Skipping
+    // here loses nothing.
+    //
+    // Outside the pause branch below: the log level is not background work, and a paused
+    // user still wants their level change to take.
+    if (eventLog) {
+      const logSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+      eventLog.setMinLevel(resolveLogLevel(logSettings ?? undefined, process.env));
+    }
+
     const paused = isBackgroundWorkPaused();
 
     if (paused) {
@@ -692,6 +715,31 @@ export default function main(context: any): void {
         localLogger.warn('[NexusAI] GraphDB not available — SmartSearch disabled');
       }
 
+      // EventLog and retention setup — independent of graph DB, moved out from the conditional
+      // below so retention continues working even when the database fails to open.
+      const nexusLogRoot = path.join(
+        os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'logs',
+      );
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+      const minLevel = resolveLogLevel(settings ?? undefined, process.env);
+      eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
+
+      // Apply retention on startup and daily — bounds log growth.
+      // Policy reads from settings if present, falls back to hardcoded defaults.
+      // Pure filesystem work with no database dependency, so it runs even when agentDb is unavailable.
+      const getRetentionPolicy = () => {
+        const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+        return {
+          logDays: s?.logRetentionDays ?? 14,
+          transcriptDays: s?.transcriptRetentionDays ?? 3,
+          budgetBytes: s?.logBudgetBytes ?? 250 * 1024 * 1024,
+        };
+      };
+      applyRetention(nexusLogRoot, getRetentionPolicy());
+      setInterval(() => {
+        try { applyRetention(nexusLogRoot, getRetentionPolicy()); } catch { /* never throw */ }
+      }, 24 * 60 * 60 * 1000);
+
       // Agent Platform initialization — requires GraphDB (same connection as SmartSearch)
       // contributedRegistry and dispatcher are hoisted so McpServer can consume them
       // even when agentDb is unavailable (they'll simply be empty/unused).
@@ -732,12 +780,18 @@ export default function main(context: any): void {
           resolvedAgentProvider,
           agentStateStore,
           agentDbManager,
+          eventLog,
         );
         const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager);
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
-        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager);
+        const agentRunner = new AgentRunner(
+          agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager, eventLog,
+        );
         agentScheduler = new AgentScheduler(agentRunner);
+        // Exposed so AGENT_SETTINGS_UPDATE can re-register an agent as soon as its cadence
+        // changes, rather than the new schedule waiting for a restart.
+        (nexusServices as any).agentScheduler = agentScheduler;
         daemonManager = new DaemonManager(agentEventBus);
 
         // Wire the wp-events bridge (releases the forward reference set at construction time)
@@ -764,7 +818,7 @@ export default function main(context: any): void {
                 agentEventBus.subscribe(trigger.pattern, async (event) => {
                   // `enabled` too — see canAutoRun. A disabled agent must not run on an event.
                   if (!canAutoRun(agent.name, 'event')) return;
-                  await agentRunner.run(agent, event).catch((err: Error) => {
+                  await agentRunner.run(agent, event, { trigger: 'event' }).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" event trigger failed: ${err.message}`);
                   });
                 }),
@@ -772,7 +826,7 @@ export default function main(context: any): void {
             } else if (trigger.type === 'webhook') {
               unsubs.push(
                 agentEventBus.subscribe(`webhook:${trigger.path ?? '*'}`, async (event) => {
-                  await agentRunner.run(agent, event).catch((err: Error) => {
+                  await agentRunner.run(agent, event, { trigger: 'event' }).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" webhook trigger failed: ${err.message}`);
                   });
                 }),
@@ -867,6 +921,12 @@ export default function main(context: any): void {
       } else {
         localLogger.warn('[NexusAI] GraphDB not available — agent platform disabled');
       }
+
+      // Expose EventLog on services — assigned outside the agentDb conditional so it is always
+      // available. Declared field on NexusServices (src/main/mcp/types.ts) — reached the same way
+      // agentRunner/dispatcher are, so a future gate wrapper (e.g. the IPC AGENT_RUN_NOW handler)
+      // can write to the same EventLog instance without constructing a second one.
+      nexusServices.eventLog = eventLog;
 
       setStartupPhase('EventProcessor');
       await eventProcessor.initialize();

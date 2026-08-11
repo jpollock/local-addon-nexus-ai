@@ -46,6 +46,7 @@ export class AgentStateStore {
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN findings_count INTEGER DEFAULT 0`); } catch {}
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN log_file TEXT`); } catch {}
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN report_file TEXT`); } catch {}
+    try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN run_id TEXT`); } catch {}
   }
 
   get<T>(agentName: string, key: string): T | undefined {
@@ -99,8 +100,8 @@ export class AgentStateStore {
   recordRun(result: AgentResult): void {
     const findingsCount = result.findings?.length ?? 0;
     this.db
-      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error, summary, findings_count, log_file, report_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null, result.summary ?? null, findingsCount, result.logFile ?? null, result.reportFile ?? null);
+      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error, summary, findings_count, log_file, report_file, run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null, result.summary ?? null, findingsCount, result.logFile ?? null, result.reportFile ?? null, result.runId ?? null);
 
     this.db.prepare(`
       DELETE FROM agent_runs

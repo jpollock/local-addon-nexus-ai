@@ -90,6 +90,58 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ---
 
+## Agent schedules — the manifest is the default, an explicit pick overrides
+
+**There are two sources for an agent's cron and they disagreed silently.**
+`AgentScheduler` scheduled the expressions in the agent's own manifest; the
+Preferences cadence picker wrote `cadence` into `agent-settings.json`, where
+**nothing in the main process ever read it**. All 28 references were renderer
+labels. Measured live 2026-08-09: `auth-probe` displayed *Hourly* and fired
+every two minutes; `seo-insights` displayed *Every 15 minutes* and fired
+Mondays at 07:00. The schedule a user set was never the schedule that ran.
+
+- **`resolveAgentCron` (`src/main/agent-runtime/schedule.ts`) is the rule.**
+  Manifest by default; a cadence the user explicitly picked wins.
+- **`cadenceSetAt` is what makes a pick explicit, and it is load-bearing.**
+  `AgentStore.getDefaultSettings` seeds a fifteen-minute cadence into every
+  agent the renderer has never seen, so a stored `cadence` is **not** evidence
+  anyone chose it. Honouring stored values wholesale would have moved
+  `seo-insights` from weekly to every fifteen minutes — 672× more often — and
+  `web-analytics` 28× more often, on values the user never picked. Only the
+  timestamp, written by the picker's own handler, grants a cadence authority.
+- **The rule exists twice, and a test pins the copies together.**
+  `resolveAgentCron` (main) and `effectiveCadenceExpression`
+  (`src/renderer/components/agents/effectiveCadence.ts`) live in bundles that
+  cannot import each other; `tests/unit/renderer/effectiveCadence.test.ts`
+  runs both over a shared case table. Same pattern as `normalizeLogPrefix`.
+- **A picked cadence takes effect immediately.** `AGENT_SETTINGS_UPDATE`
+  re-registers the agent (`nexusServices.agentScheduler`, exposed for exactly
+  this) rather than waiting for a restart — a schedule that needs a restart is
+  the same class of dead setting as the picker that nothing read. It
+  re-registers only when `cadence`/`cadenceSetAt` actually changed:
+  `register()` stops and destroys the running task first, so a needless call
+  is a real interruption.
+- **An unparseable saved cadence falls back to the manifest and logs why.**
+  Never leave an agent unscheduled because a stored expression went bad —
+  silence is indistinguishable from a broken agent, and this is the schedule
+  for something that runs against production.
+- **An agent with no cron trigger is never given one.** No cron in the
+  manifest means it was not built to run on a timer; the seeded cadence must
+  not conjure a schedule for it.
+- The registration log line names the source
+  (`registered "x" with cron "…" (source=user|manifest)`) so a surprising
+  schedule is explainable without opening settings.
+
+**The settings cache, not the file, is what the gate and the scheduler read.**
+`agent-settings.json` is loaded into `__agentSettingsCache` once, inside
+`registerIpcHandlers`, and updated thereafter only by the
+`AGENT_SETTINGS_UPDATE` IPC channel. Editing the file on disk changes nothing
+until a restart — verified live: restoring a restored `enabled: true` to disk
+left the running process refusing the agent for another half hour. There is no
+GraphQL mutation for agent settings, so the CLI cannot change them either.
+
+---
+
 ## WP AI Plugin Compatibility (wp-plugins/ai-provider-for-local-gateway)
 
 **Connector approval bypass**: The MU plugin template (`src/main/ai-gateway/mu-plugin-template.ts`) injects an `option_wpai_connector_approvals` filter that pre-approves `ai/ai.php`, `nexus-ai-connector/nexus-ai-connector.php`, and `ai-provider-for-local-gateway/plugin.php` for the `local-gateway` connector. This is intentional for local development — the gateway token is the auth layer. Do not remove without understanding the connector-approval experiment.
@@ -505,6 +557,75 @@ the specific regression `ExternalContentIndexService`'s own test suite pins.
 
 ## Logging & Audit
 
+### The structured event log — diagnostic, not the compliance record
+
+Separate from the audit files below, and do not confuse them. Under
+`~/Library/Application Support/Local/nexus-ai/logs/`:
+`nexus-YYYY-MM-DD.log` (everything) plus `agents/<source>-YYYY-MM-DD.log`
+(one agent's slice, byte-identical lines). Written by `EventLog`
+(`src/main/logging/eventLog.ts`), mode 0600, rotated by size per day.
+
+Answers "did my agent run, what did it do, and why not" — the case that
+previously produced **zero bytes anywhere**. `grep run=<id>` reassembles a
+whole run across both streams.
+
+- **Line format:** `HH:MM:SS.mmm LEVEL source [run=<id>] [event] [k=v…]  [message]`
+  — message separated by **two spaces**, everything else by one. The level is
+  **not** padded: padding put two spaces after `INFO`/`WARN` and one after
+  `DEBUG`/`ERROR`, so `awk -F'  '` returned a different field per level. Do
+  not reintroduce the pad without changing the delimiter.
+- **Times and filenames are LOCAL, not UTC.** They were `toISOString()`, which
+  made `tail -f nexus-$(date +%F).log` follow a dead file for the seven hours
+  a day PDT is behind UTC — succeeding silently, showing nothing. Every test
+  injected a fixed UTC clock and derived expectations the same way the code
+  did, so the suite was internally consistent and externally wrong;
+  `tests/unit/logging/simulatedZone.ts` now simulates a zone at the `Date` so
+  the assertions fail against a UTC implementation on any machine.
+- **Closed vocabulary, one word one shape:** `run.start`, `run.end`,
+  `run.skip`, `phase`, `action`, `site`, `finding`, `mutation`, `llm.call`,
+  `llm.error`, `tool.call`, `credential`. `action` and `site` are separate from
+  `phase` deliberately — three field shapes under one word gives away the only
+  property a closed vocabulary has.
+- **`redactParams` owns value masking; `renderValue` adds key context.**
+  Masking a second time without the key defeated the `target`/`install_name`
+  carve-out and redacted the one field naming which production install was
+  changed. Field *keys* are masked and quoted too — nothing else inspects them.
+- **Logging must never throw**, and does not: `formatLine`, `pathsFor` and
+  `write` are each guarded, verified by execution against pathological
+  `toString`, invalid dates and a null event. A dropped event still emits a
+  line saying so — a swallowed event is a lost event.
+- **`mutation` events are emitted by the runtime, not by agents.**
+  `NexusToolProvider.ts:92` emits `event: 'mutation'` for Tier 2/3 tool calls
+  that complete. `ctx.log.mutation()` exists but has no agent callers — agents
+  forgot to call it, which is exactly why the runtime emits it instead.
+- **`agent_runs.run_id` is written but not read back.** The column is populated
+  (`AgentRunner.ts` writes it), but `getLastRun()` and `getRunHistory()` in
+  `AgentStateStore.ts` both return types (`AgentResult`, `AgentRunRow`) that
+  exclude it — the `SELECT *` fetches it, the mapping drops it. The UI's Run
+  Now broadcasts the runner's real `r_…` ids (`runIds`, collected via
+  `runNowIds.ts` and rendered in `RunDrawer.tsx`), so a user can copy one, but
+  the historical runs list has no id column.
+- **`localDay` exists twice** — `src/main/logging/eventLog.ts` and
+  `src/renderer/components/localDay.ts` — pinned by a shared case table in
+  `tests/unit/renderer/localDay.test.ts`. Main and renderer do not share a
+  bundle, so the function is duplicated. This mirrors the existing
+  `resolveAgentCron` / `effectiveCadenceExpression` pattern already
+  documented above.
+- **`run.skip` is emitted at most once per process, per agent, per reason,
+  per trigger kind, per local day.** Keyed by `agentId:YYYY-MM-DD:kind` in
+  `ipc-handlers.ts`'s `lastSkipReason` map (in-memory). A user grepping today's
+  log for a long-disabled agent finds exactly one line per trigger kind, not one
+  per tick. The day-keying means each log file (which is also named by local
+  day) contains at least one line explaining why the agent didn't run (when no
+  rotations have occurred), so a user on Thursday asking "why didn't this run
+  today" finds the answer in today's file, not only in Monday's. A process
+  restart re-arms every agent's slot.
+- **`run.end` gains a `failedCalls` field only when non-zero**, and `status`
+  is unchanged when tool calls failed. Reasoning: an agent that caught a
+  failure and carried on did succeed. The presence of `failedCalls` means
+  some tools failed, but the agent handled it — the run as a whole did not
+  fail.
+
 **Two audit files**, both under `~/Library/Application Support/Local/nexus-ai/`,
 both JSONL, mode 0600, both rotated:
 
@@ -588,6 +709,12 @@ WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates
 
 **Known gaps — do not assume completeness:**
 
+- **Run id reaches `operation-audit.log` from only ONE of three audit
+  writers.** `ToolRegistry.call()` passes `runId` through; `AgentDispatcher.
+  dispatch()` does not (and that is a real gap — agent-contributed tools are
+  agent runs); `auditDirectOperation()` does not either (mostly honest — those
+  are GraphQL/IPC paths that generally are not agent runs). The join between
+  the compliance record and the diagnostic log is therefore incomplete.
 - `nexusWpeDomainCheck` (`/domains/{id}/check_status`) is POST-shaped but a
   read-only DNS check, so it is deliberately not audited.
 - `nexus:sentinel:execute-sandbox` runs WP-CLI against a *local* sandbox site
@@ -790,6 +917,71 @@ drift". That was false — it missed the ~30 direct `services.localServices` cal
 sites, which is why the "Known gaps" list above is now mandatory. If you close a
 gap, delete it from the list; if you find a new one, add it. A false
 completeness claim here is worse than no claim at all.
+
+---
+
+## log-processor — one bucket, joined by install name
+
+**WP Engine writes every install of an account into ONE flat S3 prefix** —
+`s3://<bucket>/wpe_logs/nginx/` — and separates them by filename:
+
+```
+20260807-0016-jeremypollock2.apachestyle.log.gz
+202607210625-localwpe.apachestyle.log.gz          ← second live shape: date+hhmm concatenated
+```
+
+There is no per-site prefix. Asking a user for one asks them to invent a fact
+that does not exist, which is why `connect_log_source`, `disconnect_log_source`
+and `set_log_processing` are gone; `set_log_bucket` + `rescan_log_bucket`
+replace them, and the whole design rationale (including two models that were
+built and rejected) is in the designer's `handoff_log_sources_v3/DECISIONS.md`.
+
+- **`parseInstallIdFromKey` (`access-logs.ts`) is the join.** Both filename
+  shapes above are live in real buckets; a parser handling only one silently
+  drops every object of the other, which reads as "that install has no logs".
+  It returns `null` rather than guessing — a wrong guess folds one install's
+  traffic into another's aggregates.
+- **Only `*.apachestyle.log.gz` is ingested.** `*.access.log.gz` sit in the same
+  folder and are roughly half the objects, so every count shown to a user must
+  say **apache-style** or the number reads as data loss.
+- **The unit of ingestion work is a FILE-DATE, not a site.** `runBatchSync`
+  lists `prefix + YYYYMMDD` once and routes each object to a site by its parsed
+  filename. The per-site `runSync` it replaces listed that same shared prefix
+  and attributed **every** apache-style object to whichever single site the call
+  was made for — so aggregates were cross-contaminated across installs, and the
+  same objects were downloaded once per site in scope. `fetch_log_window` had
+  the identical defect and is fixed the same way.
+- **Aggregates and the ledger are written together or not at all.** A site whose
+  stream errored keeps its previous rows and stays un-ledgered. Saving a partial
+  fold while withholding the ledger entry — what this used to do — double-counts
+  every line of that date on the retry.
+- **The migration off the per-site `sources` table wipes `aggregates` and
+  `ledger`** (`migrateFromPerSiteSources`, guarded by a `meta` marker so it runs
+  once). Not housekeeping: every row was computed by the mis-attributing sync.
+  Re-pointing at a different bucket wipes them too, because the ledger records
+  which file-dates were processed *against a specific bucket*.
+- **`scope.siteIds` is the only "which installs run" list.** The switch on each
+  row of the agent's Sites tab writes it directly; there is no separate sources
+  table and no basket-style scope picker for this agent. An install with no
+  objects cannot be switched on, which is why no "in scope but nothing to read"
+  warning exists anywhere — the state is unreachable.
+- **The Sites list defaults to installs with logs — see BEHAVIOR §4. A
+  500-install account must never render 500 rows.** 500 installs with three in
+  the bucket is the normal shape, not the edge case. The fleet stays reachable
+  through the `All installs` filter and through search, which covers every
+  install regardless of the active filter so a missing site is explained rather
+  than absent. Rows page at 25; filter counts are derived per render, never
+  cached; bulk switching is offered only where "all" is unambiguous (the `With
+  logs` view, no active search, something still off).
+- **Every count is derived, never independently computed.** Tab badge, header
+  line, footnote, Run Now enabled state and Run Now's prefill all come from
+  `runnableSiteIds(deriveLogSiteRows(...))` (`logSourcesModel.ts`). Each
+  contradiction found in design review came from a consumer keeping its own copy.
+- **Open question, not yet answered:** whether WP Engine ever truncates the
+  install-name segment in a filename (install names cap at 14 chars, so
+  `theawfulproduc` may be the id itself rather than a shortened form). The join
+  assumes the segment **is** the id. If that proves false it needs a real
+  mapping table, not fuzzy matching.
 
 ---
 

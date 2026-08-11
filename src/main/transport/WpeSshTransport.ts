@@ -6,21 +6,37 @@ import type {
 import {
   buildWpCliCommand, buildWpeSshArgs, escapeShellArg, WPE_SSH_TIMEOUT_MS,
 } from './ssh-args';
+import { describeRemoteFailure } from '../mcp/utils/remoteFailure';
 
-type RawSshResult = { code: number | null; stdout: string; stderr: string; spawnError?: string };
+type RawSshResult = {
+  code: number | null;
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  elapsedMs: number;
+  spawnError?: string;
+};
 
 function runSsh(installName: string, remoteCommand: string): Promise<RawSshResult> {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
+    const startedAt = Date.now();
     const proc = spawn('ssh', buildWpeSshArgs(installName, remoteCommand), {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: WPE_SSH_TIMEOUT_MS,
     });
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-    proc.on('close', (code) => resolve({ code, stdout, stderr }));
-    proc.on('error', (err: Error) => resolve({ code: null, stdout: '', stderr: '', spawnError: err.message }));
+    // `signal` and elapsed time are captured because a timeout is a SIGTERM kill with no exit
+    // code — without them a call abandoned at the deadline is indistinguishable from WP-CLI
+    // returning an error, which is half of what describeRemoteFailure exists to fix.
+    proc.on('close', (code, signal) => resolve({
+      code, signal, stdout, stderr, elapsedMs: Date.now() - startedAt,
+    }));
+    proc.on('error', (err: Error) => resolve({
+      code: null, signal: null, stdout: '', stderr: '', elapsedMs: Date.now() - startedAt, spawnError: err.message,
+    }));
   });
 }
 
@@ -36,8 +52,20 @@ export class WpeSshTransport implements SiteTransport {
     const res = await runSsh(this.installName, buildWpCliCommand(args, opts));
     if (res.spawnError !== undefined) return { stdout: res.spawnError, success: false };
     if (res.code === 0) return { stdout: res.stdout, success: true };
-    // Legacy shape: prefer stderr, fall back to the exit code.
-    return { stdout: res.stderr || `SSH exited with code ${res.code}`, success: false };
+    // Was `res.stderr || \`SSH exited with code ${res.code}\``, which reported whatever
+    // happened to be on stderr as the cause — on a real WP Engine install that made a 35s
+    // timeout surface as OpenSSH's post-quantum key-exchange advisory. Lead with the actual
+    // failure, keep the output as context.
+    return {
+      stdout: describeRemoteFailure({
+        code: res.code,
+        signal: res.signal,
+        stderr: res.stderr,
+        elapsedMs: res.elapsedMs,
+        timeoutMs: WPE_SSH_TIMEOUT_MS,
+      }),
+      success: false,
+    };
   }
 
   async deleteRemoteFile(absolutePath: string): Promise<DeleteResult> {

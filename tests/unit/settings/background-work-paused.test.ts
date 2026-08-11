@@ -139,11 +139,17 @@ describe('backgroundWorkPaused', () => {
       expect(helperBody).toMatch(/STORAGE_KEYS\.SETTINGS/);
       expect(helperBody).toMatch(/backgroundWorkPaused/);
 
-      // onSettingsUpdated should also use the helper, not an inline read
-      const onSettingsUpdatedBody = indexSrc.substring(
-        indexSrc.indexOf('const onSettingsUpdated = () => {'),
-        indexSrc.indexOf('const onSettingsUpdated = () => {') + 500
-      );
+      // onSettingsUpdated should also use the helper, not an inline read.
+      //
+      // Bounded by the assignment that follows the function rather than by a fixed character
+      // count. It was `+ 500`, which made the test a proximity check: adding a comment near
+      // the top of the function pushed the pause check outside the window and failed a test
+      // whose subject had not changed.
+      const start = indexSrc.indexOf('const onSettingsUpdated = () => {');
+      const end = indexSrc.indexOf('nexusServices.onSettingsUpdated = onSettingsUpdated', start);
+      expect(start).toBeGreaterThan(-1);
+      expect(end).toBeGreaterThan(start);
+      const onSettingsUpdatedBody = indexSrc.substring(start, end);
       expect(onSettingsUpdatedBody).toMatch(/isBackgroundWorkPaused\(\)/);
     });
   });

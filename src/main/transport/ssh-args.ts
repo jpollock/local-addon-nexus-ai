@@ -12,8 +12,16 @@
 import * as path from 'path';
 import * as os from 'os';
 
-/** WPE SSH cold-start runs 13–30s; ControlMaster reuse brings later calls to 1–3s. */
-export const WPE_SSH_TIMEOUT_MS = 35000;
+/**
+ * WPE SSH cold-start runs 13–30s; ControlMaster reuse brings later calls to 1–3s.
+ *
+ * Re-exported from `mcp/utils/remoteFailure` rather than declared here. This file used to
+ * carry its own 35s copy, which is how the 60s fix landed on `local-services-bridge`'s
+ * inline implementation and never reached this transport — a third copy of a value that
+ * had already been fixed twice. One definition; see that module for why 60s.
+ */
+export { REMOTE_SSH_TIMEOUT_MS as WPE_SSH_TIMEOUT_MS } from '../mcp/utils/remoteFailure';
+import { SSH_CONTROL_PERSIST } from '../mcp/utils/remoteFailure';
 
 export function wpeSshKeyPath(): string {
   const userDataPath = (process as any).electronPaths?.userDataPath
@@ -128,7 +136,9 @@ export function buildWpeSshArgs(
     '-o', 'StrictHostKeyChecking=accept-new',
     '-o', 'ControlMaster=auto',
     '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-    '-o', 'ControlPersist=30s',
+    // 30s here was shorter than every agent cadence, so the socket was always cold and every
+    // scheduled call paid the 13–30s WP Engine cold start. See SSH_CONTROL_PERSIST.
+    '-o', `ControlPersist=${SSH_CONTROL_PERSIST}`,
     '-i', keyPath,
     `local+ssh+${installName}@${installName}.ssh.wpengine.net`,
     remoteCommand,
