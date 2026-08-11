@@ -79,6 +79,9 @@ export interface JobRow {
   /** null when never measured — the row then renders NO duration clause. */
   durationMin: number | null;
   amber: boolean;
+  /** Setting keys for toggle and interval stepper. */
+  enableKey: keyof NexusSettings | null;
+  intervalKey: keyof NexusSettings;
 }
 
 export interface Figure {
@@ -96,7 +99,12 @@ export interface Derived {
   summary: {
     wpe: Figure | null;
     ext: Figure | null;
-    time: { minsPerDay: number | null; nextInHours: number | null };
+    time: {
+      minsPerDay: number | null;
+      nextInHours: number | null;
+      minsLabel: string | null;
+      nextLabel: string | null;
+    };
   };
   navNote: string;
   switchableTotal: number;
@@ -188,6 +196,8 @@ export function computeDerived(input: DerivedInput): Derived {
       userEnabled, canRun, alwaysOn, hours,
       passesPerDay,
       costLabel, durationMin, amber,
+      enableKey: j.enableKey,
+      intervalKey: j.intervalKey,
     };
   });
 
@@ -229,6 +239,19 @@ export function computeDerived(input: DerivedInput): Derived {
 
   const nextInHours = nextTimes.length === 0 ? null : Math.min(...nextTimes);
 
+  // Build finished time strings for the TIME column.
+  // minsLabel is null when no runnable job has a measured duration (not "nothing scheduled").
+  // nextLabel is null when paused or when no enabled job has ever run.
+  const minsLabel = minsPerDay == null
+    ? null
+    : `${Math.round(minsPerDay)} min of work a day`;
+
+  const nextLabel = paused
+    ? 'next pass paused'
+    : (nextInHours == null
+      ? null
+      : `next pass in about ${Math.round(nextInHours)}h`);
+
   const switchable = rows.filter((r) => !r.alwaysOn);
   const switchableOn = switchable.filter((r) => r.userEnabled).length;
 
@@ -262,7 +285,7 @@ export function computeDerived(input: DerivedInput): Derived {
         jobsOn: extJobs.on,
         jobsTotal: extJobs.total,
       } : null,
-      time: { minsPerDay, nextInHours },
+      time: { minsPerDay, nextInHours, minsLabel, nextLabel },
     },
     navNote: `${switchableOn} of ${switchable.length} on`,
     switchableTotal: switchable.length,

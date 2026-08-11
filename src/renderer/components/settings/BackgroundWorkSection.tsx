@@ -14,17 +14,6 @@ interface Props {
   onSave: (patch: Partial<NexusSettings>) => void;
 }
 
-// Map job rows to their enable/interval keys
-const JOB_KEYS: Record<string, { enableKey: keyof NexusSettings | null; intervalKey: keyof NexusSettings }> = {
-  wpeRefresh:           { enableKey: 'wpeRefreshAutoEnabled',           intervalKey: 'wpeRefreshIntervalHours' },
-  wpeSync:              { enableKey: 'wpeSyncAutoEnabled',              intervalKey: 'wpeSyncIntervalHours' },
-  wpeContentIndex:      { enableKey: 'wpeContentIndexAutoEnabled',      intervalKey: 'wpeContentIndexIntervalHours' },
-  externalRefresh:      { enableKey: 'externalRefreshAutoEnabled',      intervalKey: 'externalRefreshIntervalHours' },
-  externalContentIndex: { enableKey: 'externalContentIndexAutoEnabled', intervalKey: 'externalContentIndexIntervalHours' },
-  localContentIndex:    { enableKey: 'localContentIndexAutoEnabled',    intervalKey: 'localContentIndexIntervalHours' },
-  haltedSiteRefresh:    { enableKey: null,                             intervalKey: 'haltedSiteRefreshIntervalHours' },
-};
-
 const JOB_DESCRIPTIONS: Record<string, string> = {
   wpeRefresh:           'Reads which plugins, themes and versions are on each install. This is the expensive one.',
   wpeSync:              'URLs, admin emails and post counts. Opens its own connection to each install.',
@@ -41,8 +30,10 @@ export class BackgroundWorkSection extends React.Component<Props> {
   };
 
   handleIntervalChange = (key: keyof NexusSettings, value: number): void => {
-    // Clamp to [1, 168] as enforced by UpdateSettingsSchema
-    const clamped = Math.max(1, Math.min(168, value));
+    // Clamp to [1, 168] as enforced by UpdateSettingsSchema, except localContentIndexIntervalHours allows 0 (off).
+    if (isNaN(value)) return; // Don't save NaN from non-numeric input
+    const min = key === 'localContentIndexIntervalHours' ? 0 : 1;
+    const clamped = Math.max(min, Math.min(168, value));
     this.props.onSave({ [key]: clamped });
   };
 
@@ -66,8 +57,8 @@ export class BackgroundWorkSection extends React.Component<Props> {
         borderRadius: 6,
       },
     },
-      React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', marginBottom: 8 },
+      React.createElement('label', {
+        style: { display: 'flex', alignItems: 'center', marginBottom: 8, cursor: 'pointer' },
       },
         React.createElement('input', {
           type: 'checkbox',
@@ -97,11 +88,11 @@ export class BackgroundWorkSection extends React.Component<Props> {
   renderSummary(): React.ReactElement {
     const { summary } = this.props.derived;
 
-    const renderColumn = (
+    const renderFigureColumn = (
       head: string,
-      figure: number | null,
+      figure: number,
       unit: string,
-      scope: string | null,
+      scope: string,
       note: string | null,
       amber: boolean,
     ) => {
@@ -119,7 +110,7 @@ export class BackgroundWorkSection extends React.Component<Props> {
             fontWeight: 800,
             textTransform: 'uppercase',
             letterSpacing: '0.07em',
-            color: '#6b7280',
+            color: 'var(--nxai-card-label)',
             marginBottom: 8,
           },
         }, head),
@@ -129,7 +120,7 @@ export class BackgroundWorkSection extends React.Component<Props> {
             fontWeight: 700,
             color: figureColor,
           },
-        }, figure != null ? figure.toLocaleString('en-US') : '—'),
+        }, figure.toLocaleString('en-US')),
         React.createElement('div', {
           style: {
             fontSize: 13,
@@ -137,13 +128,13 @@ export class BackgroundWorkSection extends React.Component<Props> {
             marginTop: 4,
           },
         }, unit),
-        scope ? React.createElement('div', {
+        React.createElement('div', {
           style: {
             fontSize: 12,
             color: 'var(--nxai-card-label)',
             marginTop: 4,
           },
-        }, scope) : null,
+        }, scope),
         note ? React.createElement('div', {
           style: {
             fontSize: 12,
@@ -155,29 +146,85 @@ export class BackgroundWorkSection extends React.Component<Props> {
       );
     };
 
+    const renderTimeColumn = (minsLabel: string | null, nextLabel: string | null) => {
+      const parts = [minsLabel, nextLabel].filter(Boolean);
+      const text = parts.length > 0 ? parts.join(' · ') : null;
+
+      return React.createElement('div', {
+        style: {
+          flex: 1,
+          padding: '12px 16px',
+        },
+      },
+        React.createElement('div', {
+          style: {
+            fontSize: 11,
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            color: 'var(--nxai-card-label)',
+            marginBottom: 8,
+          },
+        }, 'TIME'),
+        text ? React.createElement('div', {
+          style: {
+            fontSize: 13,
+            color: 'var(--nxai-card-sub)',
+            marginTop: 4,
+          },
+        }, text) : null,
+      );
+    };
+
     const wpe = summary.wpe;
     const ext = summary.ext;
     const time = summary.time;
 
-    const wpeNote = wpe
-      ? (wpe.amber ? 'very frequent' : (wpe.jobsTotal > 0 ? `${wpe.jobsOn} of ${wpe.jobsTotal} jobs on` : null))
-      : null;
+    // WPE note: amber replaces jobs-on per COPY.md:56, but WPE column never shows jobs-on per COPY.md:47
+    const wpeNote = wpe && wpe.amber ? 'very frequent' : null;
 
-    const extNote = ext
-      ? (ext.amber ? 'too frequent for shared hosting' : (ext.jobsTotal > 0 ? `${ext.jobsOn} of ${ext.jobsTotal} jobs on` : null))
-      : null;
+    // External note: amber AND jobs-on both shown per COPY.md:56
+    const extJobsNote = ext && ext.jobsTotal > 0 ? `${ext.jobsOn} of ${ext.jobsTotal} jobs on` : null;
+    const extAmberNote = ext && ext.amber ? 'too frequent for shared hosting' : null;
+    const extNote = [extJobsNote, extAmberNote].filter(Boolean).join(' · ') || null;
 
-    const timeMins = time.minsPerDay != null
-      ? `${Math.round(time.minsPerDay)} min of work a day`
-      : 'nothing scheduled';
+    const columns = [];
 
-    const timeNext = this.props.derived.paused
-      ? 'next pass paused'
-      : (time.nextInHours != null
-        ? `next pass in about ${Math.round(time.nextInHours)}h`
-        : null);
+    if (wpe) {
+      columns.push(
+        renderFigureColumn(
+          'YOUR WP ENGINE ACCOUNT',
+          wpe.figure,
+          wpe.unit,
+          wpe.scope,
+          wpeNote,
+          wpe.amber,
+        ),
+      );
+      columns.push(React.createElement('div', {
+        key: 'sep1',
+        style: { width: 1, background: 'var(--nxai-card-border)' },
+      }));
+    }
 
-    const timeScope = timeNext ? [timeMins, timeNext].join(' · ') : timeMins;
+    if (ext) {
+      columns.push(
+        renderFigureColumn(
+          "OTHER PEOPLE'S SERVERS",
+          ext.figure,
+          ext.unit,
+          ext.scope,
+          extNote,
+          ext.amber,
+        ),
+      );
+      columns.push(React.createElement('div', {
+        key: 'sep2',
+        style: { width: 1, background: 'var(--nxai-card-border)' },
+      }));
+    }
+
+    columns.push(renderTimeColumn(time.minsLabel, time.nextLabel));
 
     return React.createElement('div', {
       style: {
@@ -188,44 +235,7 @@ export class BackgroundWorkSection extends React.Component<Props> {
         marginBottom: 24,
         overflow: 'hidden',
       },
-    },
-      wpe ? [
-        renderColumn(
-          'YOUR WP ENGINE ACCOUNT',
-          wpe.figure,
-          wpe.unit,
-          wpe.scope,
-          wpeNote,
-          wpe.amber,
-        ),
-        React.createElement('div', {
-          key: 'sep1',
-          style: { width: 1, background: '#f3f4f6' },
-        }),
-      ] : null,
-      ext ? [
-        renderColumn(
-          "OTHER PEOPLE'S SERVERS",
-          ext.figure,
-          ext.unit,
-          ext.scope,
-          extNote,
-          ext.amber,
-        ),
-        React.createElement('div', {
-          key: 'sep2',
-          style: { width: 1, background: '#f3f4f6' },
-        }),
-      ] : null,
-      renderColumn(
-        'TIME',
-        null,
-        timeScope,
-        null,
-        null,
-        false,
-      ),
-    );
+    }, ...columns);
   }
 
   renderGroup(group: Destination, header: string, hint: string, rows: JobRow[]): React.ReactElement | null {
@@ -256,7 +266,6 @@ export class BackgroundWorkSection extends React.Component<Props> {
   }
 
   renderRow(row: JobRow): React.ReactElement {
-    const keys = JOB_KEYS[row.key];
     const description = JOB_DESCRIPTIONS[row.key];
 
     const intervalOptions = [1, 2, 4, 8, 12, 24, 48, 168];
@@ -307,7 +316,7 @@ export class BackgroundWorkSection extends React.Component<Props> {
         }, 'every'),
         React.createElement('select', {
           value: row.hours,
-          onChange: (e: any) => this.handleIntervalChange(keys.intervalKey, parseInt(e.target.value, 10)),
+          onChange: (e: any) => this.handleIntervalChange(row.intervalKey, parseInt(e.target.value, 10)),
           style: {
             padding: '4px 8px',
             fontSize: 13,
@@ -346,7 +355,7 @@ export class BackgroundWorkSection extends React.Component<Props> {
         : React.createElement('input', {
           type: 'checkbox',
           checked: row.userEnabled,
-          onChange: (e: any) => this.handleToggle(keys.enableKey!, e.target.checked),
+          onChange: (e: any) => this.handleToggle(row.enableKey!, e.target.checked),
         }),
     );
   }
