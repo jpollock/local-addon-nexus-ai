@@ -60,12 +60,12 @@ exports[`panel chrome — characterization renders collapsed rail 1`] = `
           "width": 38,
         },
         "tabIndex": 0,
-        "title": "Insights across all sites",
+        "title": "Open Nexus AI panel",
       },
       "type": "div",
     },
     {
-      "children": "INSIGHTS",
+      "children": "NEXUS AI",
       "key": null,
       "props": {
         "style": {
