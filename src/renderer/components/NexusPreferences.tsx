@@ -312,45 +312,17 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [settings, sites, providers, keyStatus, wpeCredsStatus, wpeAccounts, wpeInstalls, awsStatus, externalHosts, sshConfigHosts] = await Promise.all([
+      const [settings, externalHosts, sshConfigHosts] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
-        ipc.invoke(IPC_CHANNELS.GET_SITES),
-        ipc.invoke(IPC_CHANNELS.GET_PROVIDERS),
-        ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS),
-        ipc.invoke(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS),
-        ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
-        ipc.invoke(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE).catch(() => []),
-        ipc.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_STATUS, { provider: 'aws' }).catch(() => null),
         ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.LIST_SSH_CONFIG_HOSTS).catch(() => ({ success: false, hosts: [] })),
       ]);
       if (!this.mounted) return;
-      const awsStatusTyped = awsStatus as { connections: Array<{ id: string; label: string; status: string }> } | null;
-      const activeAws = awsStatusTyped?.connections?.find((c: any) => c.status === 'active');
-      const revokedAws = awsStatusTyped?.connections?.find((c: any) => c.status === 'revoked');
       this.setState({
         settings: settings ?? { autoIndex: true, excludedSiteIds: [] },
-        sites: sites ?? [],
-        wpeAccounts: Array.isArray(wpeAccounts) ? wpeAccounts : [],
-        wpeInstalls: Array.isArray(wpeInstalls) ? wpeInstalls : [],
-        providers: providers ?? [],
-        keyStatus: keyStatus ?? {},
-        wpeCredentialsConfigured: wpeCredsStatus?.configured ?? false,
-        wpeUsername: wpeCredsStatus?.username ?? '',
-        wpeUsernameInput: wpeCredsStatus?.username ?? '',
-        awsConnected: !!activeAws,
-        awsRevoked: !activeAws && !!revokedAws,
-        awsLabel: activeAws?.label ?? revokedAws?.label ?? '',
-        awsConnectionId: activeAws?.id ?? revokedAws?.id ?? '',
         externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
         sshConfigHosts: Array.isArray((sshConfigHosts as any)?.hosts) ? (sshConfigHosts as any).hosts : [],
         loading: false,
-      }, () => {
-        // Load models and stored key for the current provider
-        if (this.state.settings.aiProvider) {
-          this.fetchModels(this.state.settings.aiProvider);
-          this.loadStoredKey(this.state.settings.aiProvider);
-        }
       });
     } catch {
       if (!this.mounted) return;
@@ -829,10 +801,28 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     // remain here, because that approval must not be reachable from anything but
     // Local itself (it is deliberately IPC-only, never GraphQL).
 
+    const pointer = React.createElement('div', {
+      style: {
+        padding: '12px 16px',
+        marginBottom: 16,
+        background: 'rgba(59,130,246,0.06)',
+        border: '1px solid rgba(59,130,246,0.2)',
+        borderRadius: 6,
+        fontSize: 12,
+        lineHeight: 1.5,
+        color: '#9ca3af',
+      },
+    },
+      'Everything Nexus can be configured with is here, with one exception: approving a new host the first time you connect to it stays in ',
+      React.createElement('span', { style: { color: '#6b7280', fontWeight: 700 } }, 'Local → Preferences → Nexus AI'),
+      ', because that approval must not be reachable from anything but Local itself.',
+    );
+
     return React.createElement('div', { style: { padding: '24px', maxWidth: '600px', boxSizing: 'border-box' as const } },
       React.createElement('style', null, `
         .nexus-password-input { -webkit-text-fill-color: unset !important; }
       `),
+      pointer,
       section6,
     );
   }
