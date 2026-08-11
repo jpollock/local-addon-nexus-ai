@@ -173,3 +173,23 @@ Same extension.
 7. Manual smoke test in running addon
 
 **Estimated:** 2-3 hours remaining work.
+
+---
+
+## Critical Fix — content_indexed_at Column Did Not Exist
+
+**Commit:** `efb3921d` — fix(fleet): remove non-existent content_indexed_at column from SELECT
+
+**Problem:** Extended SELECT queried `content_indexed_at`, which does not exist in the sites table schema (GraphService.ts:49-60). Query failed, try/catch swallowed it, `graphRows` stayed `[]` → **collectFleetCounts reported zero for WPE and external sites**.
+
+Three test suites broke with "No sites found" / `expected: 1, received: 0`:
+- `tests/unit/fleet/fleet-visibility.test.ts`
+- `tests/unit/ipc/dashboard-stats-counts.test.ts`
+- `tests/unit/ipc/fleet-summary-external.test.ts`
+
+**This is the exact failure §1.1 exists to prevent:** fleet-counting module telling surfaces the fleet is empty. Per CLAUDE.md, "a zero in a fleet field reads as an all-clear" — the most misleading number available.
+
+**Fix:** Removed `content_indexed_at` from SELECT, removed `contentIndexedAt` from `FleetCountsInput.graphRows`, set to `null` in mapper (not in schema; would require content table join if needed). Column was never referenced in code — added speculatively but unused.
+
+**Test status after fix:** **20 failed (baseline restored)**, 4110 passed, TypeScript clean.
+
