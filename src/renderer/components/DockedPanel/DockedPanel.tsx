@@ -47,6 +47,16 @@ export const WIDE_WIDTH = 620;
  */
 const TAB_WIDTH = 52;
 
+/**
+ * Left-to-right order of the panel's segmented control. Chat leads: it is the panel's
+ * default tab and the reason most people open it, so it should be the first thing under
+ * the cursor rather than the second.
+ */
+const PANEL_TABS: Array<{ key: PanelTab; label: string }> = [
+  { key: 'chat', label: 'Chat' },
+  { key: 'insights', label: 'Insights' },
+];
+
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────
 
 /**
@@ -344,7 +354,9 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
     // Panel is open (docked, wide, or full)
     const isFull = panelState === 'full';
 
-    // Segmented control for Insights / Chat
+    // Segmented control. Order comes from PANEL_TABS — the two buttons were duplicated
+    // markup differing only by tab name, which is how a reorder turns into an edit in
+    // two places that can disagree.
     const segmentedControl = React.createElement(
       'div',
       {
@@ -356,43 +368,27 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           gap: 2,
         },
       },
-      React.createElement(
-        'button',
-        {
-          style: {
-            background: activeTab === 'insights' ? 'var(--nxai-card-bg)' : 'transparent',
-            border: 'none',
-            color: activeTab === 'insights' ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
-            cursor: 'pointer',
-            padding: '5px 11px',
-            fontSize: 13,
-            fontWeight: 600,
-            borderRadius: 5,
-            transition: 'all 0.15s ease',
+      PANEL_TABS.map((t) =>
+        React.createElement(
+          'button',
+          {
+            key: t.key,
+            style: {
+              background: activeTab === t.key ? 'var(--nxai-card-bg)' : 'transparent',
+              border: 'none',
+              color: activeTab === t.key ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+              cursor: 'pointer',
+              padding: '5px 11px',
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 5,
+              transition: 'all 0.15s ease',
+            },
+            onClick: () => onSetActiveTab?.(t.key),
+            'aria-label': t.label,
           },
-          onClick: () => onSetActiveTab?.('insights'),
-          'aria-label': 'Insights',
-        },
-        'Insights',
-      ),
-      React.createElement(
-        'button',
-        {
-          style: {
-            background: activeTab === 'chat' ? 'var(--nxai-card-bg)' : 'transparent',
-            border: 'none',
-            color: activeTab === 'chat' ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
-            cursor: 'pointer',
-            padding: '5px 11px',
-            fontSize: 13,
-            fontWeight: 600,
-            borderRadius: 5,
-            transition: 'all 0.15s ease',
-          },
-          onClick: () => onSetActiveTab?.('chat'),
-          'aria-label': 'Chat',
-        },
-        'Chat',
+          t.label,
+        ),
       ),
     );
 

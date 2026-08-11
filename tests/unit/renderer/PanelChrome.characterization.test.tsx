@@ -80,16 +80,20 @@ describe('panel chrome — control interactions', () => {
     const segmentedControl = header.props.children[2];
     const buttons = segmentedControl.props.children;
 
-    // First button is Insights
-    const insightsBtn = buttons[0];
+    // Chat leads — it is the default tab and the reason the panel gets opened.
+    const chatBtn = buttons[0];
+    expect(chatBtn.props['aria-label']).toBe('Chat');
+    chatBtn.props.onClick();
+    expect(onSetActiveTab).toHaveBeenCalledWith('chat');
+
+    // Insights second.
+    const insightsBtn = buttons[1];
     expect(insightsBtn.props['aria-label']).toBe('Insights');
     insightsBtn.props.onClick();
     expect(onSetActiveTab).toHaveBeenCalledWith('insights');
 
-    // Second button is Chat
-    const chatBtn = buttons[1];
-    expect(chatBtn.props['aria-label']).toBe('Chat');
-    chatBtn.props.onClick();
-    expect(onSetActiveTab).toHaveBeenCalledWith('chat');
+    // Each button dispatches its own tab — a map over PANEL_TABS makes a copy-paste
+    // mistake here (both buttons sending the same key) easy and invisible.
+    expect(onSetActiveTab.mock.calls).toEqual([['chat'], ['insights']]);
   });
 });

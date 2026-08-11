@@ -145,16 +145,16 @@ exports[`panel chrome — characterization renders docked 1`] = `
         {
           "children": [
             {
-              "children": "Insights",
-              "key": null,
+              "children": "Chat",
+              "key": "chat",
               "props": {
-                "aria-label": "Insights",
+                "aria-label": "Chat",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "transparent",
+                  "background": "var(--nxai-card-bg)",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-sub)",
+                  "color": "var(--nxai-card-text)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -165,16 +165,16 @@ exports[`panel chrome — characterization renders docked 1`] = `
               "type": "button",
             },
             {
-              "children": "Chat",
-              "key": null,
+              "children": "Insights",
+              "key": "insights",
               "props": {
-                "aria-label": "Chat",
+                "aria-label": "Insights",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "var(--nxai-card-bg)",
+                  "background": "transparent",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-text)",
+                  "color": "var(--nxai-card-sub)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -460,16 +460,16 @@ exports[`panel chrome — characterization renders full 1`] = `
         {
           "children": [
             {
-              "children": "Insights",
-              "key": null,
+              "children": "Chat",
+              "key": "chat",
               "props": {
-                "aria-label": "Insights",
+                "aria-label": "Chat",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "transparent",
+                  "background": "var(--nxai-card-bg)",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-sub)",
+                  "color": "var(--nxai-card-text)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -480,16 +480,16 @@ exports[`panel chrome — characterization renders full 1`] = `
               "type": "button",
             },
             {
-              "children": "Chat",
-              "key": null,
+              "children": "Insights",
+              "key": "insights",
               "props": {
-                "aria-label": "Chat",
+                "aria-label": "Insights",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "var(--nxai-card-bg)",
+                  "background": "transparent",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-text)",
+                  "color": "var(--nxai-card-sub)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -766,16 +766,16 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
         {
           "children": [
             {
-              "children": "Insights",
-              "key": null,
+              "children": "Chat",
+              "key": "chat",
               "props": {
-                "aria-label": "Insights",
+                "aria-label": "Chat",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "transparent",
+                  "background": "var(--nxai-card-bg)",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-sub)",
+                  "color": "var(--nxai-card-text)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -786,16 +786,16 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
               "type": "button",
             },
             {
-              "children": "Chat",
-              "key": null,
+              "children": "Insights",
+              "key": "insights",
               "props": {
-                "aria-label": "Chat",
+                "aria-label": "Insights",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "var(--nxai-card-bg)",
+                  "background": "transparent",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-text)",
+                  "color": "var(--nxai-card-sub)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -1129,16 +1129,16 @@ exports[`panel chrome — characterization renders streaming 1`] = `
         {
           "children": [
             {
-              "children": "Insights",
-              "key": null,
+              "children": "Chat",
+              "key": "chat",
               "props": {
-                "aria-label": "Insights",
+                "aria-label": "Chat",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "transparent",
+                  "background": "var(--nxai-card-bg)",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-sub)",
+                  "color": "var(--nxai-card-text)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -1149,16 +1149,16 @@ exports[`panel chrome — characterization renders streaming 1`] = `
               "type": "button",
             },
             {
-              "children": "Chat",
-              "key": null,
+              "children": "Insights",
+              "key": "insights",
               "props": {
-                "aria-label": "Chat",
+                "aria-label": "Insights",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "var(--nxai-card-bg)",
+                  "background": "transparent",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-text)",
+                  "color": "var(--nxai-card-sub)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -1444,16 +1444,16 @@ exports[`panel chrome — characterization renders wide 1`] = `
         {
           "children": [
             {
-              "children": "Insights",
-              "key": null,
+              "children": "Chat",
+              "key": "chat",
               "props": {
-                "aria-label": "Insights",
+                "aria-label": "Chat",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "transparent",
+                  "background": "var(--nxai-card-bg)",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-sub)",
+                  "color": "var(--nxai-card-text)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
@@ -1464,16 +1464,16 @@ exports[`panel chrome — characterization renders wide 1`] = `
               "type": "button",
             },
             {
-              "children": "Chat",
-              "key": null,
+              "children": "Insights",
+              "key": "insights",
               "props": {
-                "aria-label": "Chat",
+                "aria-label": "Insights",
                 "onClick": "[fn]",
                 "style": {
-                  "background": "var(--nxai-card-bg)",
+                  "background": "transparent",
                   "border": "none",
                   "borderRadius": 5,
-                  "color": "var(--nxai-card-text)",
+                  "color": "var(--nxai-card-sub)",
                   "cursor": "pointer",
                   "fontSize": 13,
                   "fontWeight": 600,
