@@ -124,12 +124,17 @@ export class AdvancedSection extends React.Component<Props, State> {
     this.setState({ diagRunning: true });
     const start = Date.now();
     try {
+      // WPE_DIAGNOSE takes ONE object parameter — `(_event, params: { installName, args })`
+      // — and returns `{ success, stdout, durationMs }` on the happy path,
+      // `{ success: false, error, durationMs }` only when the call threw.
+      // Passing two positional arguments left `installName` undefined and every
+      // run came back "installName and args required"; reading `result.output`
+      // then rendered an empty pane even when the command had worked.
       const result = await this.props.electron.ipcRenderer.invoke(
         IPC_CHANNELS.WPE_DIAGNOSE,
-        this.state.diagInstall.trim(),
-        args,
+        { installName: this.state.diagInstall.trim(), args },
       );
-      const duration = Date.now() - start;
+      const duration = result?.durationMs ?? Date.now() - start;
       const existing = this.state.diagResults ?? [];
       this.setState({
         diagRunning: false,
@@ -137,8 +142,10 @@ export class AdvancedSection extends React.Component<Props, State> {
           ...existing,
           {
             command: `wp ${args.join(' ')}`,
-            output: result.success ? result.output : '',
-            error: result.success ? undefined : result.error,
+            output: result.success ? (result.stdout ?? '') : '',
+            // A failed WP-CLI run carries its output on `stdout`, not `error`;
+            // `error` is only set when the handler itself threw.
+            error: result.success ? undefined : (result.error ?? result.stdout ?? 'Command failed'),
             duration,
           },
         ],

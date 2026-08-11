@@ -106,15 +106,26 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
     const wpeCredsStatus = await ipc.invoke(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS).catch(() => null);
     if (!this.mounted) return;
 
-    // Load AWS credentials status
+    // Load AWS credentials status.
+    // CREDENTIAL_API_KEY_STATUS returns `{ connections: ApiKeyConnection[] }`
+    // (ipc-handlers.ts, `return { connections: mgr.listApiKeyConnections(...) }`),
+    // NOT a flat status object. Reading `.status` / `.label` / `.connectionId`
+    // off the envelope yields undefined for all three, so the panel reads
+    // "Not connected" with live keys and Disconnect early-returns on an empty
+    // id. Unwrap `connections` — this is what NexusPreferences always did.
     const awsStatus = await ipc.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_STATUS, { provider: 'aws' }).catch(() => null);
+    if (!this.mounted) return;
+
+    const awsConnections = (awsStatus as { connections?: Array<{ id: string; label: string; status: string }> } | null)?.connections;
+    const activeAws = awsConnections?.find((c) => c.status === 'active');
+    const revokedAws = awsConnections?.find((c) => c.status === 'revoked');
 
     this.setState({
       wpeCredentialsConfigured: wpeCredsStatus?.configured ?? false,
-      awsConnected: awsStatus?.status === 'active',
-      awsRevoked: awsStatus?.status === 'revoked',
-      awsLabel: awsStatus?.label ?? '',
-      awsConnectionId: awsStatus?.connectionId ?? '',
+      awsConnected: !!activeAws,
+      awsRevoked: !activeAws && !!revokedAws,
+      awsLabel: activeAws?.label ?? revokedAws?.label ?? '',
+      awsConnectionId: activeAws?.id ?? revokedAws?.id ?? '',
     });
   }
 

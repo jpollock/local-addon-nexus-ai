@@ -177,3 +177,69 @@ describe('ConnectionsSection', () => {
     expect(t).toContain('Key is encrypted and stored securely');
   });
 });
+
+// ── AWS S3 status unwrapping ────────────────────────────────────────────────
+//
+// CREDENTIAL_API_KEY_STATUS returns `{ connections: ApiKeyConnection[] }`, and
+// ApiKeyConnection is `{ id, provider, label, status, createdAt }`. Reading
+// `.status` / `.label` / `.connectionId` straight off the envelope left the
+// panel permanently "Not connected" with live keys, and Disconnect dead.
+
+describe('ConnectionsSection — CREDENTIAL_API_KEY_STATUS is an envelope', () => {
+  const loadWith = async (statusResult: any) => {
+    const invoke = jest.fn(async (channel: string) => {
+      if (channel.endsWith(':credential:api-key:status')) return statusResult;
+      if (channel.endsWith(':wpe:get-api-credentials-status')) return { configured: false, username: null };
+      return [];
+    });
+    const component = inst({ settings: { aiProvider: undefined }, electron: { ipcRenderer: { invoke } } });
+    component.mounted = true;
+    // React's setState is a warn-and-no-op before mount; fold into state so the
+    // assertions below observe the real result.
+    component.setState = (patch: any) => Object.assign(component.state, patch);
+    await component.loadConnectionStates();
+    return component;
+  };
+
+  test('an active connection inside `connections` is read as connected', async () => {
+    const c = await loadWith({
+      connections: [
+        { id: 'conn-1', provider: 'aws', label: 'arn:aws:iam::1:user/deploy', status: 'active', createdAt: '' },
+      ],
+    });
+    expect(c.state.awsConnected).toBe(true);
+    expect(c.state.awsRevoked).toBe(false);
+    expect(c.state.awsLabel).toBe('arn:aws:iam::1:user/deploy');
+    // Disconnect early-returns on an empty id — this is what made it dead.
+    expect(c.state.awsConnectionId).toBe('conn-1');
+  });
+
+  test('a revoked-only connection is read as revoked, and still carries its id', async () => {
+    const c = await loadWith({
+      connections: [{ id: 'conn-2', provider: 'aws', label: 'old-key', status: 'revoked', createdAt: '' }],
+    });
+    expect(c.state.awsConnected).toBe(false);
+    expect(c.state.awsRevoked).toBe(true);
+    expect(c.state.awsConnectionId).toBe('conn-2');
+  });
+
+  test('an empty envelope is not connected', async () => {
+    const c = await loadWith({ connections: [] });
+    expect(c.state.awsConnected).toBe(false);
+    expect(c.state.awsRevoked).toBe(false);
+    expect(c.state.awsConnectionId).toBe('');
+  });
+
+  test('active wins over a stale revoked entry for the same provider', async () => {
+    const c = await loadWith({
+      connections: [
+        { id: 'old', provider: 'aws', label: 'old-key', status: 'revoked', createdAt: '' },
+        { id: 'new', provider: 'aws', label: 'new-key', status: 'active', createdAt: '' },
+      ],
+    });
+    expect(c.state.awsConnected).toBe(true);
+    expect(c.state.awsRevoked).toBe(false);
+    expect(c.state.awsConnectionId).toBe('new');
+    expect(c.state.awsLabel).toBe('new-key');
+  });
+});

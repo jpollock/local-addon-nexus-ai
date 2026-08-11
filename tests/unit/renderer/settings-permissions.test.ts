@@ -470,3 +470,74 @@ describe('PermissionsSection', () => {
     // wpeSiteExceptions should NOT be in the call — it's only cleared when the last one is removed
   });
 });
+
+// ── Legacy read-fallback ─────────────────────────────────────────────────────
+//
+// `operation-permissions.ts` falls back to `wpeOperationPermissions` whenever
+// `remoteOperationPermissions` is empty. The grid must read the same way, or it
+// shows the user a state the gate disagrees with — and the first click then
+// overwrites their whole stored configuration with OPERATION_DEFAULTS.
+
+describe('PermissionsSection — legacy wpeOperationPermissions fallback', () => {
+  const legacyOnly = {
+    wpeOperationPermissions: {
+      delete: { development: true, staging: true, production: true },
+      wpcli: { development: true, staging: false, production: false },
+    },
+  };
+
+  const cellFor = (rendered: any, op: string, env: string) => {
+    const hits = findAll(rendered, (n) => n.key === `${op}-${env}` && !!n.props?.onClick);
+    expect(hits).toHaveLength(1);
+    return hits[0];
+  };
+
+  test('the grid renders the legacy value, not OPERATION_DEFAULTS', () => {
+    // delete/production defaults to Blocked; this user has it stored as allowed
+    // and isOperationAllowed() honours that. The grid said "Blocked".
+    const rendered = tree({ permissions: legacyOnly });
+    expect(textOf(cellFor(rendered, 'delete', 'production'))).toBe('Allowed');
+    expect(textOf(cellFor(rendered, 'wpcli', 'staging'))).toBe('Blocked');
+  });
+
+  test('the first click carries every legacy operation forward, discarding nothing', () => {
+    const onSave = jest.fn();
+    const rendered = tree({ permissions: legacyOnly, onSave });
+    // Toggle an operation the legacy config does NOT mention.
+    cellFor(rendered, 'push', 'production').props.onClick();
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const written = onSave.mock.calls[0][0].remoteOperationPermissions;
+    // The clicked cell flipped …
+    expect(written.push.production).toBe(true);
+    // … and the untouched legacy operations survived verbatim.
+    expect(written.delete).toEqual({ development: true, staging: true, production: true });
+    expect(written.wpcli).toEqual({ development: true, staging: false, production: false });
+  });
+
+  test('a click on a legacy operation flips only that cell', () => {
+    const onSave = jest.fn();
+    const rendered = tree({ permissions: legacyOnly, onSave });
+    cellFor(rendered, 'delete', 'production').props.onClick();
+
+    const written = onSave.mock.calls[0][0].remoteOperationPermissions;
+    expect(written.delete).toEqual({ development: true, staging: true, production: false });
+    expect(written.wpcli).toEqual({ development: true, staging: false, production: false });
+  });
+
+  test('remoteOperationPermissions wins when both are present', () => {
+    const rendered = tree({
+      permissions: {
+        ...legacyOnly,
+        remoteOperationPermissions: { delete: { development: false, staging: false, production: false } },
+      },
+    });
+    expect(textOf(cellFor(rendered, 'delete', 'production'))).toBe('Blocked');
+  });
+
+  test('an EMPTY remoteOperationPermissions object does not shadow the legacy key', () => {
+    // The backend's own condition is `Object.keys(...).length`, not presence.
+    const rendered = tree({ permissions: { ...legacyOnly, remoteOperationPermissions: {} } });
+    expect(textOf(cellFor(rendered, 'delete', 'production'))).toBe('Allowed');
+  });
+});

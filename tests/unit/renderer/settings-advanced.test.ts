@@ -8,6 +8,25 @@ const tree = (over: any = {}) => JSON.stringify(serializeTree(
     onSave: jest.fn(), electron: { ipcRenderer: { invoke: jest.fn() } }, ...over,
   }).render()));
 
+/**
+ * A never-mounted instance whose setState folds into `state`, so a handler's
+ * effect on state is observable. React's real setState is a warn-and-no-op
+ * before mount, which silently swallows every assertion about the result.
+ */
+const unmounted = (over: any = {}) => {
+  const { invoke, ...propsOver } = over;
+  const inst: any = new (AdvancedSection as any)({
+    settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
+    onSave: jest.fn(),
+    electron: { ipcRenderer: { invoke: invoke ?? jest.fn() } },
+    ...propsOver,
+  });
+  inst.setState = (patch: any) => {
+    Object.assign(inst.state, typeof patch === 'function' ? patch(inst.state) : patch);
+  };
+  return inst;
+};
+
 describe('AdvancedSection', () => {
   test('carries all five capabilities stranded by spec 5', () => {
     const t = tree();
@@ -84,8 +103,11 @@ describe('AdvancedSection', () => {
       expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS);
     });
 
-    test('SSH diag calls WPE_DIAGNOSE with install and args', async () => {
-      const invoke = jest.fn().mockResolvedValue({ success: true, output: 'WP 6.7.1' });
+    test('SSH diag calls WPE_DIAGNOSE with the ONE object parameter its handler declares', async () => {
+      // ipc-handlers.ts: safeHandle(WPE_DIAGNOSE, async (_event, params: { installName, args }))
+      // — two positional arguments left installName undefined and the handler
+      // short-circuited with "installName and args required" on every run.
+      const invoke = jest.fn().mockResolvedValue({ success: true, stdout: 'WP 6.7.1', durationMs: 12 });
       const instance = new (AdvancedSection as any)({
         settings: {}, indexEntries: [], mcpInfo: { port: 10801 }, sites: [],
         onSave: jest.fn(), electron: { ipcRenderer: { invoke } },
@@ -94,7 +116,30 @@ describe('AdvancedSection', () => {
       // Set state directly, not via setState (not mounted)
       instance.state.diagInstall = 'testsite';
       await instance.handleDiag(['core', 'version']);
-      expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.WPE_DIAGNOSE, 'testsite', ['core', 'version']);
+      expect(invoke).toHaveBeenCalledWith(
+        IPC_CHANNELS.WPE_DIAGNOSE,
+        { installName: 'testsite', args: ['core', 'version'] },
+      );
+    });
+
+    test('SSH diag renders the handler\'s stdout, not a non-existent result.output', async () => {
+      const invoke = jest.fn().mockResolvedValue({ success: true, stdout: 'WP 6.7.1', durationMs: 12 });
+      const instance = unmounted({ invoke });
+      instance.state.diagInstall = 'testsite';
+      await instance.handleDiag(['core', 'version']);
+      expect(instance.state.diagResults[0].output).toBe('WP 6.7.1');
+      expect(instance.state.diagResults[0].error).toBeUndefined();
+    });
+
+    test('a failed WP-CLI run surfaces stdout as the error — the handler sets no `error` field', async () => {
+      // The handler returns { success: false, stdout, durationMs } when the
+      // command failed but nothing threw. Reading only `result.error` there
+      // rendered an empty red box.
+      const invoke = jest.fn().mockResolvedValue({ success: false, stdout: 'Error: no such install', durationMs: 9 });
+      const instance = unmounted({ invoke });
+      instance.state.diagInstall = 'testsite';
+      await instance.handleDiag(['core', 'version']);
+      expect(instance.state.diagResults[0].error).toBe('Error: no such install');
     });
 
     test('reset index button invokes RESET_CONTENT_INDEX', async () => {

@@ -94,19 +94,45 @@ export class PermissionsSection extends React.Component<PermissionsSectionProps,
     return [];
   }
 
-  private getPermissionValue(op: Operation, env: Environment): boolean {
+  /**
+   * remoteOperationPermissions if it holds anything, else the deprecated
+   * wpeOperationPermissions — the same fallback order the backend gate itself
+   * uses (`operation-permissions.ts`: `settings.remoteOperationPermissions &&
+   * Object.keys(...).length ? ... : settings.wpeOperationPermissions`).
+   *
+   * Reading only the new key made the grid disagree with the gate for anyone
+   * carrying legacy config — "Delete · Production · Blocked" on a fleet where
+   * the gate in fact allowed it — and, worse, the first cell click then wrote a
+   * fresh object seeded from OPERATION_DEFAULTS, which both stopped the backend
+   * fallback and silently discarded every stored override. The exception half
+   * of this migration pair is handled the same way in getEffectiveExceptions().
+   */
+  private getEffectivePermissions(): NonNullable<NexusSettings['remoteOperationPermissions']> {
     const { permissions } = this.props;
-    const perms = permissions.remoteOperationPermissions ?? {};
+    if (
+      permissions.remoteOperationPermissions &&
+      Object.keys(permissions.remoteOperationPermissions).length > 0
+    ) {
+      return permissions.remoteOperationPermissions;
+    }
+    return (permissions.wpeOperationPermissions ??
+      {}) as NonNullable<NexusSettings['remoteOperationPermissions']>;
+  }
+
+  private getPermissionValue(op: Operation, env: Environment): boolean {
+    const perms = this.getEffectivePermissions();
     const custom = perms[op]?.[env];
     return custom !== undefined ? custom : OPERATION_DEFAULTS[op][env];
   }
 
   private handleCellClick = (op: Operation, env: Environment): void => {
-    const { permissions, onSave } = this.props;
+    const { onSave } = this.props;
     const currentValue = this.getPermissionValue(op, env);
     const newValue = !currentValue;
 
-    const perms = { ...(permissions.remoteOperationPermissions ?? {}) };
+    // Seed from the EFFECTIVE set, so a legacy-only config is migrated forward
+    // rather than replaced by defaults on the first click.
+    const perms = { ...this.getEffectivePermissions() };
     perms[op] = {
       ...OPERATION_DEFAULTS[op],
       ...(perms[op] ?? {}),
