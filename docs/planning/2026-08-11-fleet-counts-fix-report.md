@@ -193,3 +193,27 @@ Three test suites broke with "No sites found" / `expected: 1, received: 0`:
 
 **Test status after fix:** **20 failed (baseline restored)**, 4110 passed, TypeScript clean.
 
+
+## Mechanism Fix — Catch Block Turned Query Failure Into Confident Zero
+
+**Commit:** `3dd9d2ff` — fix(fleet): distinguish DB-absent from query-threw in collectFleetCounts
+
+**The alibi:** `:68-71` comment said "Graph may not be ready. Local still counts; the remote populations report zero with their scope labels intact rather than the whole call failing."
+
+**The defect:** Catch block turned two conditions into same output:
+1. DB absent (graph not ready) — legitimately zero-ish
+2. Query threw (bad column/syntax/constraint) — **unknown, not zero**
+
+Both produced `graphRows = []` → wpe/external counts = 0. The second is the "misleading zero" this branch was built to prevent. Nothing logged; took test suite to notice.
+
+This is the inverse of the rule everywhere else: `averageMs` null not 0, outdated counts null (zero reads as all-clear), `phpVersion` undefined not `'8.0'`, health unscored when inputs absent. Here a **failed query produced a number** saying fleet was empty.
+
+**Fix:**
+- Hoist `db = deps.getDb()` out of try
+- If DB absent: graphRows stays `[]` (legitimate)
+- If DB present but query throws: **log error**, graphRows stays `[]` (wrong but detectable; throwing would break all consumers)
+- Comment notes real fix: extend PopulationCount to express "not measured"
+
+**Second fix — comment correction:**
+Line 65: `contentIndexedAt` comment said "Not in schema". **Wrong** — column IS real, added at runtime by ExternalContentIndexScheduler (ALTER TABLE) when external indexing runs. Conditionally present (exists where indexing has run, absent on fresh DBs), so never SELECT it. Hardcoded null; unused downstream.
+
