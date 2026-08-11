@@ -348,6 +348,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
         ? React.createElement(AgentsHub, {
             onSelectAgent: (id: string) => this.setState({ selectedAgentId: id }),
             onNavigateToInbox: this.props.onNavigateToInbox,
+            electron: this.props.electron,
           })
         : React.createElement(FleetActivityLedger, { onReviewEvent: (eventId: string) => this.openSentinelReview(eventId) }),
       ...this.renderSentinelModals(),
