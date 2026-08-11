@@ -293,7 +293,8 @@ export class AdvancedSection extends React.Component<Props, State> {
       );
     }
 
-    const command = `npx -y @modelcontextprotocol/inspector http://localhost:${mcpInfo.port}/sse`;
+    const claudeCodeCmd = `claude mcp add local-nexus-ai -- node "${mcpInfo.stdioPath}"`;
+    const inspectorCmd = `npx -y @modelcontextprotocol/inspector http://localhost:${mcpInfo.port}/sse`;
 
     return React.createElement('div', {
       style: {
@@ -310,6 +311,45 @@ export class AdvancedSection extends React.Component<Props, State> {
       React.createElement('div', {
         style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 12 },
       }, `MCP server running on port ${mcpInfo.port}`),
+      // Claude Code setup command
+      React.createElement('div', {
+        style: { fontSize: 12, fontWeight: 600, color: 'var(--nxai-card-text)', marginTop: 12, marginBottom: 4 },
+      }, 'Claude Code'),
+      React.createElement('div', {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: 10,
+          background: 'var(--nxai-code-bg)',
+          borderRadius: 4,
+          fontFamily: 'monospace',
+          fontSize: 11,
+          marginBottom: 12,
+        },
+      },
+        React.createElement('code', { style: { flex: 1, color: 'var(--nxai-card-text)' } }, claudeCodeCmd),
+        React.createElement('button', {
+          onClick: () => {
+            navigator.clipboard?.writeText(claudeCodeCmd);
+            (window as any).showToast?.('Copied to clipboard', 'success');
+          },
+          style: {
+            padding: '4px 10px',
+            fontSize: 11,
+            fontWeight: 600,
+            background: 'var(--nxai-card-bg)',
+            border: '1px solid var(--nxai-card-border)',
+            borderRadius: 4,
+            cursor: 'pointer',
+            color: 'var(--nxai-card-text)',
+          },
+        }, 'Copy'),
+      ),
+      // MCP Inspector (debug tool)
+      React.createElement('div', {
+        style: { fontSize: 12, fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: 4 },
+      }, 'MCP Inspector (debug)'),
       React.createElement('div', {
         style: {
           display: 'flex',
@@ -322,10 +362,10 @@ export class AdvancedSection extends React.Component<Props, State> {
           fontSize: 11,
         },
       },
-        React.createElement('code', { style: { flex: 1, color: 'var(--nxai-card-text)' } }, command),
+        React.createElement('code', { style: { flex: 1, color: 'var(--nxai-card-text)' } }, inspectorCmd),
         React.createElement('button', {
           onClick: () => {
-            navigator.clipboard?.writeText(command);
+            navigator.clipboard?.writeText(inspectorCmd);
             (window as any).showToast?.('Copied to clipboard', 'success');
           },
           style: {
