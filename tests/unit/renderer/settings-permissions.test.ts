@@ -146,7 +146,7 @@ describe('PermissionsSection', () => {
   test('account chips are clickable and invoke onSave with wpeAccountFilter', () => {
     const onSave = jest.fn();
     const instance: any = new (PermissionsSection as any)({
-      permissions: {},
+      permissions: { wpeAccountFilter: ['acc-1', 'acc-2'] }, // Both included initially
       exceptions: [],
       wpeInstalls: [],
       externalHosts: [],
@@ -158,21 +158,24 @@ describe('PermissionsSection', () => {
     });
     const rendered = instance.render();
 
-    // Find the first account chip
+    // Find the Acme chip (should be included/checked)
     const chips = findAll(rendered, (n) => {
       const t = textOf(n);
-      return (t.includes('Acme') || t.includes('Beta')) && n.props?.onClick;
+      return t.includes('Acme') && n.props?.onClick;
     });
 
     expect(chips.length).toBeGreaterThan(0);
 
-    // Click the first chip to exclude it
+    // Click it to exclude acc-1
     chips[0].props.onClick();
 
     expect(onSave).toHaveBeenCalledTimes(1);
     const update = onSave.mock.calls[0][0];
     expect(update).toHaveProperty('wpeAccountFilter');
     expect(Array.isArray(update.wpeAccountFilter)).toBe(true);
+    // acc-1 should be removed, acc-2 should remain
+    expect(update.wpeAccountFilter).toEqual(['acc-2']);
+    expect(update.wpeAccountFilter).not.toContain('acc-1');
   });
 
   // ── Exception Display & Editing ────────────────────────────────────────────
@@ -244,8 +247,39 @@ describe('PermissionsSection', () => {
     expect(t).toContain('ssh');
   });
 
-  test('exception picker Save button is wired and invokes onSave', () => {
-    const onSave = jest.fn();
+  test('exception picker has operation selector with all four grid operations', () => {
+    const instance: any = new (PermissionsSection as any)({
+      permissions: {},
+      exceptions: [],
+      wpeInstalls: [],
+      externalHosts: [],
+      wpeAccounts: [],
+      onSave: jest.fn(),
+    });
+
+    // Open picker
+    instance.state = {
+      ...instance.state,
+      addingException: {
+        operation: '',
+        targetRef: '',
+        environment: 'production',
+        allowing: false,
+      },
+    };
+
+    const rendered = instance.render();
+    const t = textOf(rendered);
+
+    // Operation selector should show all grid row labels
+    expect(t).toContain('Operation:');
+    expect(t).toContain('Copy a site down to this Mac');
+    expect(t).toContain('Install or update things');
+    expect(t).toContain('Push local changes up');
+    expect(t).toContain('Delete or promote an environment');
+  });
+
+  test('exception picker Save button is disabled until both target and operation are selected', () => {
     const instance: any = new (PermissionsSection as any)({
       permissions: {},
       exceptions: [],
@@ -254,14 +288,14 @@ describe('PermissionsSection', () => {
       ],
       externalHosts: [],
       wpeAccounts: [],
-      onSave,
+      onSave: jest.fn(),
     });
 
-    // Open picker and select a target (set state directly)
+    // Open picker with target but no operation
     instance.state = {
       ...instance.state,
       addingException: {
-        operation: 'wpcli',
+        operation: '' as any,
         targetRef: 'wpe:store1',
         environment: 'production',
         allowing: false,
@@ -273,6 +307,42 @@ describe('PermissionsSection', () => {
     // Find the Save button
     const saveButtons = findAll(rendered, (n) => textOf(n) === 'Save' && n.props?.onClick);
     expect(saveButtons.length).toBeGreaterThan(0);
+    // Should be disabled
+    expect(saveButtons[0].props.disabled).toBe(true);
+  });
+
+  test('can create an exception for delete operation', () => {
+    const onSave = jest.fn();
+    const instance: any = new (PermissionsSection as any)({
+      permissions: {},
+      exceptions: [],
+      wpeInstalls: [
+        { installName: 'prod-store', environment: 'production', primaryDomain: 'prodstore.com' },
+      ],
+      externalHosts: [],
+      wpeAccounts: [],
+      onSave,
+    });
+
+    // Open picker and select delete operation + target
+    instance.state = {
+      ...instance.state,
+      addingException: {
+        operation: 'delete',
+        targetRef: 'wpe:prod-store',
+        environment: 'production',
+        allowing: false,
+      },
+    };
+
+    const rendered = instance.render();
+
+    // Find the Save button
+    const saveButtons = findAll(rendered, (n) => textOf(n) === 'Save' && n.props?.onClick);
+    expect(saveButtons.length).toBeGreaterThan(0);
+
+    // Should be enabled
+    expect(saveButtons[0].props.disabled).toBe(false);
 
     // Click it
     saveButtons[0].props.onClick();
@@ -281,7 +351,10 @@ describe('PermissionsSection', () => {
     const update = onSave.mock.calls[0][0];
     expect(update).toHaveProperty('remoteSiteExceptions');
     expect(update.remoteSiteExceptions.length).toBe(1);
-    expect(update.remoteSiteExceptions[0].targetRef).toBe('wpe:store1');
+    expect(update.remoteSiteExceptions[0].targetRef).toBe('wpe:prod-store');
+    // CRITICAL: the override must be for delete, not wpcli
+    expect(update.remoteSiteExceptions[0].overrides).toHaveProperty('delete');
+    expect(update.remoteSiteExceptions[0].overrides.delete).toBe(false);
   });
 
   test('remove exception button exists and is wired', () => {

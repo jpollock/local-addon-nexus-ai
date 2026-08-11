@@ -149,7 +149,7 @@ export class PermissionsSection extends React.Component<PermissionsSectionProps,
 
   private handleSaveException = (): void => {
     const { addingException } = this.state;
-    if (!addingException || !addingException.targetRef) return;
+    if (!addingException || !addingException.targetRef || !addingException.operation) return;
 
     const { permissions, onSave } = this.props;
     const current = this.getEffectiveExceptions();
@@ -468,7 +468,7 @@ export class PermissionsSection extends React.Component<PermissionsSectionProps,
         !addingException ? React.createElement('button', {
           onClick: () => this.setState({
             addingException: {
-              operation: 'wpcli',
+              operation: '' as any, // User must select an operation
               targetRef: '',
               environment: 'production',
               allowing: false,
@@ -630,83 +630,133 @@ export class PermissionsSection extends React.Component<PermissionsSectionProps,
               borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
               paddingTop: 10,
               display: 'flex',
-              alignItems: 'center',
-              gap: 8,
+              flexDirection: 'column' as const,
+              gap: 10,
             },
           },
-            addingException.targetRef
-              ? React.createElement('span', {
-                  style: { fontSize: 11, flex: 1 },
-                },
-                  React.createElement('strong', {}, addingException.targetRef),
-                  ' · ',
-                  React.createElement('span', {
-                    style: { color: 'var(--nxai-card-sub, #6b7280)' },
-                  }, addingException.environment),
-                )
-              : React.createElement('span', {
-                  style: {
-                    fontSize: 11,
-                    color: 'var(--nxai-status-neutral, #9ca3af)',
-                    flex: 1,
-                    fontStyle: 'italic' as const,
-                  },
-                }, 'Select an install or host above'),
-            React.createElement('label', {
+            // First row: operation selector
+            React.createElement('div', {
               style: {
                 display: 'flex',
                 alignItems: 'center',
-                gap: 5,
-                fontSize: 11,
-                cursor: 'pointer',
+                gap: 8,
               },
             },
-              React.createElement('input', {
-                type: 'checkbox',
-                checked: addingException.allowing,
-                onChange: (e: any) => {
-                  const v = e.target.checked;
-                  this.setState((prev) => ({
-                    addingException: prev.addingException ? { ...prev.addingException, allowing: v } : null,
-                  }));
-                },
-              }),
-              React.createElement('span', {
+              React.createElement('label', {
                 style: {
-                  color: addingException.allowing ? '#51BB7B' : '#f87171',
+                  fontSize: 11,
+                  color: 'var(--nxai-card-sub, #6b7280)',
                   fontWeight: 600,
                 },
-              }, addingException.allowing ? 'Allow' : 'Block'),
+              }, 'Operation:'),
+              React.createElement('select', {
+                value: addingException.operation || '',
+                onChange: (e: any) => {
+                  const v = e.target.value;
+                  this.setState((prev) => ({
+                    addingException: prev.addingException ? { ...prev.addingException, operation: v as Operation } : null,
+                  }));
+                },
+                style: {
+                  flex: 1,
+                  fontSize: 11,
+                  padding: '4px 8px',
+                  background: 'var(--nxai-card-bg, #ffffff)',
+                  border: '1px solid var(--nxai-card-border, #e5e7eb)',
+                  borderRadius: 4,
+                  color: 'var(--nxai-card-text, #111827)',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                },
+              },
+                React.createElement('option', { value: '', disabled: true }, 'Select operation...'),
+                ...GRID_ROWS.map((row) =>
+                  React.createElement('option', { key: row.id, value: row.id }, row.label),
+                ),
+              ),
             ),
-            React.createElement('button', {
-              disabled: !addingException.targetRef,
-              onClick: () => this.handleSaveException(),
+            // Second row: target, allow/block, save/cancel
+            React.createElement('div', {
               style: {
-                fontSize: 11,
-                padding: '6px 12px',
-                background: addingException.targetRef ? '#3b82f6' : 'var(--nxai-status-neutral, #9ca3af)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 4,
-                cursor: addingException.targetRef ? 'pointer' : 'not-allowed',
-                opacity: addingException.targetRef ? 1 : 0.5,
-                fontFamily: 'inherit',
-                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
               },
-            }, 'Save'),
-            React.createElement('button', {
-              onClick: () => this.setState({ addingException: null, searchQuery: '' }),
-              style: {
-                fontSize: 11,
-                padding: '6px 12px',
-                background: 'none',
-                border: '1px solid var(--nxai-card-border, #e5e7eb)',
-                borderRadius: 4,
-                cursor: 'pointer',
-                color: 'var(--nxai-card-sub, #6b7280)',
-                fontFamily: 'inherit',
+            },
+              addingException.targetRef
+                ? React.createElement('span', {
+                    style: { fontSize: 11, flex: 1 },
+                  },
+                    React.createElement('strong', {}, addingException.targetRef),
+                    ' · ',
+                    React.createElement('span', {
+                      style: { color: 'var(--nxai-card-sub, #6b7280)' },
+                    }, addingException.environment),
+                  )
+                : React.createElement('span', {
+                    style: {
+                      fontSize: 11,
+                      color: 'var(--nxai-status-neutral, #9ca3af)',
+                      flex: 1,
+                      fontStyle: 'italic' as const,
+                    },
+                  }, 'Select an install or host above'),
+              React.createElement('label', {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11,
+                  cursor: 'pointer',
+                },
               },
-            }, 'Cancel'),
+                React.createElement('input', {
+                  type: 'checkbox',
+                  checked: addingException.allowing,
+                  onChange: (e: any) => {
+                    const v = e.target.checked;
+                    this.setState((prev) => ({
+                      addingException: prev.addingException ? { ...prev.addingException, allowing: v } : null,
+                    }));
+                  },
+                }),
+                React.createElement('span', {
+                  style: {
+                    color: addingException.allowing ? '#51BB7B' : '#f87171',
+                    fontWeight: 600,
+                  },
+                }, addingException.allowing ? 'Allow' : 'Block'),
+              ),
+              React.createElement('button', {
+                disabled: !addingException.targetRef || !addingException.operation,
+                onClick: () => this.handleSaveException(),
+                style: {
+                  fontSize: 11,
+                  padding: '6px 12px',
+                  background: (addingException.targetRef && addingException.operation) ? '#3b82f6' : 'var(--nxai-status-neutral, #9ca3af)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: (addingException.targetRef && addingException.operation) ? 'pointer' : 'not-allowed',
+                  opacity: (addingException.targetRef && addingException.operation) ? 1 : 0.5,
+                  fontFamily: 'inherit',
+                  fontWeight: 600,
+                },
+              }, 'Save'),
+              React.createElement('button', {
+                onClick: () => this.setState({ addingException: null, searchQuery: '' }),
+                style: {
+                  fontSize: 11,
+                  padding: '6px 12px',
+                  background: 'none',
+                  border: '1px solid var(--nxai-card-border, #e5e7eb)',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  color: 'var(--nxai-card-sub, #6b7280)',
+                  fontFamily: 'inherit',
+                },
+              }, 'Cancel'),
+            ),
           ),
         ) : null,
       ),
