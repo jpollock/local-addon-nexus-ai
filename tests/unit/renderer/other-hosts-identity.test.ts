@@ -45,5 +45,17 @@ describe('OtherHostsPanel — identity changed screen', () => {
     i.acceptIdentity('boxa');
     const trusted = invoke.mock.calls.find((c: any[]) => String(c[0]).includes('trust-external-host-key'));
     expect(trusted).toBeFalsy();
+    expect(i.state.showAcceptInstruction).toBe(true);
+  });
+
+  it('shows where to approve the key after accept is clicked', () => {
+    const i = inst({ externalHosts: [{ alias: 'boxa', site: 'one', environment: 'production', domain: 'one.com', wpPath: '/home/u/one' }] });
+    i.setState({
+      screen: { name: 'identityChanged', alias: 'boxa' },
+      identity: { boxa: { approved: 'a', current: 'b', approvedAt: 'x' } },
+      showAcceptInstruction: true,
+    });
+    const t = JSON.stringify(serializeTree(i.render()));
+    expect(t).toContain('Local → Preferences → Nexus AI');
   });
 });

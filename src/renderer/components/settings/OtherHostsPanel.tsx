@@ -44,6 +44,8 @@ interface OtherHostsPanelState {
   checking: string | null;
   /** Identity data for hosts whose fingerprint changed. */
   identity: Record<string, HostIdentity>;
+  /** Whether to show the routing instruction after accept was clicked. */
+  showAcceptInstruction: boolean;
 }
 
 export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, OtherHostsPanelState> {
@@ -56,6 +58,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     discovered: {},
     checking: null,
     identity: {},
+    showAcceptInstruction: false,
   };
 
   componentDidMount(): void {
@@ -160,8 +163,9 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
    */
   acceptIdentity = (alias: string): void => {
     // Only surfaces the instruction — no IPC call to trust the key.
-    // The user must approve it in Local → Settings → Nexus AI → External Hosts.
+    // The user must approve it in Local → Preferences → Nexus AI.
     void alias;
+    this.setState({ showAcceptInstruction: true });
   };
 
   /**
@@ -790,6 +794,30 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
               cursor: 'pointer',
             },
           }, 'I confirmed it with my host — accept'),
+        ),
+
+        // Instruction shown after accept is clicked
+        this.state.showAcceptInstruction && React.createElement('div', {
+          style: {
+            marginTop: 16,
+            padding: 12,
+            background: 'var(--nxai-amber-bg)',
+            border: '1px solid var(--nxai-amber-border)',
+            borderRadius: 4,
+            fontSize: 12,
+            color: 'var(--nxai-card-text)',
+            lineHeight: 1.5,
+          },
+        },
+          React.createElement('div', {
+            style: {
+              fontWeight: 600,
+              marginBottom: 4,
+            },
+          }, 'Where to approve the new key'),
+          React.createElement('div', {},
+            'Go to Local → Preferences → Nexus AI to approve the changed fingerprint. That approval stays in Local\'s Preferences, because it must not be reachable from anything but Local itself.',
+          ),
         ),
       ),
     );
