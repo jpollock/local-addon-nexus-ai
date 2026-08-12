@@ -41,10 +41,14 @@ describe('DockedPanel — state enum', () => {
       // state stopped being a full-height rail. A strip pinned top:0/bottom:0 sits across
       // Local's site header and its "Open site" / "WP Admin" actions; reverting to that
       // shape must fail here rather than in a screenshot.
+      // Asserted as the property, not the mechanism: the tab is anchored from ONE edge
+      // and takes its height from its contents. Pinning both top and bottom, or setting
+      // an explicit height, is what makes it a strip. This used to assert top:50% plus a
+      // translate, which failed the moment the anchor moved to the bottom even though
+      // the guarded property still held.
       const style = (renderPanel('closed') as any).props.style;
-      expect(style.top).toBe('50%');
-      expect(style.transform).toBe('translateY(-50%)');
-      expect(style.bottom).toBeUndefined();
+      const anchoredFromBothEdges = style.top !== undefined && style.bottom !== undefined;
+      expect(anchoredFromBothEdges).toBe(false);
       expect(style.height).toBeUndefined();
     });
   });
@@ -97,6 +101,27 @@ describe('DockedPanel — state enum', () => {
 
     it('renders no stuck marker when explicitly not stuck', () => {
       expect(findByText(renderTab({ hasStuck: false }), '!')).toBeNull();
+    });
+
+    it('is suppressed entirely while an overlay owns the screen', () => {
+      // The tab is a fixed overlay on the right edge, so it sat on top of the host
+      // picker's "Already registered" column. A launcher for something you are not
+      // doing must not cover the thing you are.
+      expect(renderTab({ railHidden: true })).toBeNull();
+      expect(renderTab({ railHidden: false })).not.toBeNull();
+    });
+
+    it('sits where it is told, anchored to the bottom rather than centred', () => {
+      // Centred is exactly where full-height content lives, which is how it collided.
+      const tree: any = renderTab({ railBottom: 240 });
+      expect(tree.props.style.bottom).toBe(240);
+      expect(tree.props.style.top).toBeUndefined();
+    });
+
+    it('offers a drag handle so a bad default can be moved', () => {
+      const onRailDragStart = jest.fn();
+      const tree: any = renderTab({ onRailDragStart });
+      expect(tree.props.onMouseDown).toBe(onRailDragStart);
     });
 
     it('reads NEXUS, and never the old scope words', () => {

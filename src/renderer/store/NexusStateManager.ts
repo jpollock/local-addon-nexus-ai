@@ -66,6 +66,19 @@ export interface NexusState {
   settings: NexusSettings | null;
   wpeSyncProgress: WpeSyncProgress | null;
   localSyncProgress: LocalSyncProgress | null;
+  /**
+   * True while a full-height overlay (the add-host wizard) owns the screen.
+   *
+   * The collapsed panel tab is a fixed overlay on the right edge, so it sits on top of
+   * anything that reaches that edge — it was covering the "Already registered" column of
+   * the host picker. A launcher for a thing you are not using should not obscure the
+   * thing you are.
+   *
+   * Carried on the store rather than a DOM event because the panel and the overlay are
+   * separate React roots: a CustomEvent fired before the panel mounts is simply lost,
+   * whereas store state can be read on mount.
+   */
+  overlayOpen?: boolean;
   credentialConnectRequest?: {
     provider: string;
     agentId: string;
@@ -89,6 +102,7 @@ const DEFAULT_STATE: NexusState = {
   settings: null,
   wpeSyncProgress: null,
   localSyncProgress: null,
+  overlayOpen: false,
 };
 
 class NexusStateManager {

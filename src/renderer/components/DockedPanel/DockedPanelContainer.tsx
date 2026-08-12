@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '../../../common/constants';
 import { injectThemeVars } from '../../utils/theme';
 import { DockedPanel, PanelTab } from './DockedPanel';
 import { PanelChat } from './PanelChat';
+import { nexusStore } from '../../store/NexusStateManager';
 import { SessionsSidebar } from './SessionsSidebar';
 import {
   type PanelState,
@@ -28,6 +29,10 @@ interface ContainerState {
   unreadChats: number | null;
   /** Fleet health rollup — null until it loads, never coerced to 'ok'. */
   fleetHealth: 'ok' | 'degraded' | 'failing' | 'unknown' | null;
+  /** A full-height overlay owns the screen; the collapsed tab stands down. */
+  overlayOpen: boolean;
+  /** Distance from the bottom of the viewport, in px. Dragged, then persisted. */
+  railBottom: number;
 }
 
 const STORAGE_KEY = 'nexus-panel-state';
@@ -37,10 +42,37 @@ const STORAGE_KEY = 'nexus-panel-state';
  * identical to the eye but mean opposite things, and this is the surface whose whole job
  * is to be trusted at a glance.
  */
+/**
+ * Where the collapsed tab sits by default, as a distance from the bottom.
+ *
+ * It used to be vertically centred, which is exactly where full-height content lives —
+ * the host picker's right-hand column ran straight underneath it. Corners are the part
+ * of a window least likely to carry content.
+ */
+const RAIL_BOTTOM_DEFAULT = 88;
+const RAIL_POS_KEY = 'nexus-panel-rail-bottom';
+
 const SIGNAL_DEFAULTS = {
   unreadChats: null as number | null,
   fleetHealth: null as 'ok' | 'degraded' | 'failing' | 'unknown' | null,
+  overlayOpen: false,
+  railBottom: readRailBottom(),
 };
+
+/** Persisted tab position. Clamped on read — a stale value from a taller window
+ *  must not park the tab off-screen where it cannot be dragged back. */
+function readRailBottom(): number {
+  try {
+    const raw = Number(localStorage.getItem(RAIL_POS_KEY));
+    if (Number.isFinite(raw) && raw > 0) return clampRailBottom(raw);
+  } catch { /* ignore */ }
+  return RAIL_BOTTOM_DEFAULT;
+}
+
+function clampRailBottom(v: number): number {
+  const max = Math.max(RAIL_BOTTOM_DEFAULT, window.innerHeight - 140);
+  return Math.min(Math.max(v, 8), max);
+}
 
 /** Fire-and-forget telemetry helper. Never throws. */
 function track(ipcRenderer: any, event: string, properties: Record<string, unknown> = {}) {
@@ -89,6 +121,8 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   private chatRef = React.createRef<PanelChat>();
   private localRoot: HTMLElement | null = null;
   private unreadListener: (() => void) | null = null;
+  private storeUnsub: (() => void) | null = null;
+  private railWasDragged = false;
   private resizeDebounceTimer: number | null = null;
 
   constructor(props: ContainerProps) {
@@ -146,6 +180,10 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
   componentWillUnmount() {
     this.teardownReflow();
+    if (this.storeUnsub) {
+      this.storeUnsub();
+      this.storeUnsub = null;
+    }
     if (this.unreadListener) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM, this.unreadListener);
       this.unreadListener = null;
@@ -224,7 +262,48 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         this.setState({ fleetHealth: stats?.systemHealth?.overall ?? 'unknown' });
       })
       .catch(() => { /* leaves fleetHealth null — stuck marker stays absent */ });
+
+    // Read once as well as subscribing: an overlay opened before this mounted would
+    // never fire a notification, and the tab would sit on top of it.
+    this.setState({ overlayOpen: nexusStore.get().overlayOpen === true });
+    this.storeUnsub = nexusStore.subscribe(() => {
+      const open = nexusStore.get().overlayOpen === true;
+      if (open !== this.state.overlayOpen) this.setState({ overlayOpen: open });
+    });
   }
+
+  /** Drag the collapsed tab up and down its edge. Vertical only — it is anchored right. */
+  private startRailDrag = (e: React.MouseEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startBottom = this.state.railBottom;
+    let moved = false;
+
+    const onMove = (ev: MouseEvent) => {
+      // A few pixels of slop, so a click that wobbles still opens the panel rather than
+      // being swallowed as a drag.
+      if (!moved && Math.abs(ev.clientY - startY) < 4) return;
+      moved = true;
+      this.setState({ railBottom: clampRailBottom(startBottom + (startY - ev.clientY)) });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (moved) {
+        this.railWasDragged = true;
+        try { localStorage.setItem(RAIL_POS_KEY, String(this.state.railBottom)); } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  /** Swallow the click that ends a drag, so releasing the tab does not also open it. */
+  private handleRailOpen = (): void => {
+    if (this.railWasDragged) { this.railWasDragged = false; return; }
+    this.openPanel();
+  };
 
   /** Stamp a session as seen. Best-effort: a failure leaves it counted, never wrongly cleared. */
   private markRead = (sessionId: string): Promise<void> =>
@@ -342,8 +421,11 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       {
         panelState,
         activeTab,
+        railBottom: this.state.railBottom,
+        railHidden: this.state.overlayOpen,
+        onRailDragStart: this.startRailDrag,
         onSetActiveTab: this.setActiveTab,
-        onOpen: this.openPanel,
+        onOpen: this.handleRailOpen,
         onClose: this.closePanel,
         onSetPanelState: this.setSize,
         onNewChat: this.newChat,

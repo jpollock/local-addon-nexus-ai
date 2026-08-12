@@ -15,6 +15,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { rendererGql } from '../../utils/rendererGql';
+import { nexusStore } from '../../store/NexusStateManager';
 
 // ---------------------------------------------------------------------------
 // Host-key / multi-issue probe timeout
@@ -366,11 +367,17 @@ export class ExternalHostAddWizard extends React.Component<ExternalHostAddWizard
 
   async componentDidMount(): Promise<void> {
     this.mounted = true;
+    // Tell the docked panel to stand down: this wizard reaches the right edge, where the
+    // collapsed tab floats, and the tab was covering the "Already registered" column.
+    nexusStore.update({ overlayOpen: true });
     await this.loadHosts();
   }
 
   componentWillUnmount(): void {
     this.mounted = false;
+    // Cleared on unmount rather than on each close path, so an early return, an error
+    // or a parent swapping the screen out cannot leave the tab permanently hidden.
+    nexusStore.update({ overlayOpen: false });
   }
 
   // ── Step 1a: alias picker ────────────────────────────────────────────────

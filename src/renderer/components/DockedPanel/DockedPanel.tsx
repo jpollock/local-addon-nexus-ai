@@ -23,6 +23,12 @@ export interface Props {
   badgeCount?: number | null;
   /** Whether anything is stuck. null = not knowable; renders nothing. */
   hasStuck?: boolean | null;
+  /** Collapsed tab's distance from the bottom of the viewport, in px. */
+  railBottom?: number;
+  /** Suppress the collapsed tab entirely while an overlay owns the screen. */
+  railHidden?: boolean;
+  /** Begin a vertical drag of the collapsed tab. */
+  onRailDragStart?: (e: React.MouseEvent) => void;
 }
 
 interface DockedPanelState {
@@ -159,14 +165,13 @@ function iconBtnStyle(hovered: boolean, active = false) {
 }
 
 const styles = {
-  // Vertically centred so it lands in the content band, clear of the header and footer
-  // bands at the top and bottom of Local's screens. `bottom` is deliberately absent —
-  // the tab's height comes from its contents.
+  // Anchored to the bottom-right, with `bottom` supplied by the caller so the tab can be
+  // dragged. It used to be vertically centred, which is precisely where full-height
+  // content sits — it covered the "Already registered" column of the host picker.
+  // Height still comes from the contents; only the offset is controlled.
   rail: {
     position: 'fixed' as const,
-    top: '50%',
     right: 0,
-    transform: 'translateY(-50%)',
     width: TAB_WIDTH,
     padding: '14px 0 16px',
     background: 'var(--nxai-card-bg)',
@@ -308,17 +313,24 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       // how many chats are waiting on a reply, and whether anything is stuck. A null is
       // "not knowable" and renders nothing — 0 is indistinguishable from not-yet-loaded,
       // and a badge that says 0 during startup is a claim we cannot make yet.
-      const { badgeCount = null, hasStuck = null } = this.props;
+      const { badgeCount = null, hasStuck = null, railBottom, railHidden, onRailDragStart } = this.props;
+
+      // An overlay owns the screen — a launcher for something the user is not doing has
+      // no business sitting on top of what they are.
+      if (railHidden) return null;
 
       // The whole tab is the control — there is no separate chevron. At this width a second
       // hit target would halve both.
       return React.createElement(
         'div',
         {
-          style: this.hov('rail')
-            ? { ...styles.rail, boxShadow: '-3px 0 14px rgba(17, 24, 39, 0.14)' }
-            : styles.rail,
+          style: {
+            ...styles.rail,
+            bottom: railBottom ?? 88,
+            ...(this.hov('rail') ? { boxShadow: '-3px 0 14px rgba(17, 24, 39, 0.14)' } : {}),
+          },
           onClick: onOpen,
+          onMouseDown: onRailDragStart,
           title: 'Open Nexus AI panel', // generic, no scope claim
           role: 'button',
           tabIndex: 0,
