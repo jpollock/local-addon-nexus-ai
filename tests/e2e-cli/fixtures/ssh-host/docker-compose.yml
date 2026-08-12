@@ -1,0 +1,9 @@
+services:
+  sshhost:
+    build: .
+    container_name: nexus-e2e-sshhost
+    ports:
+      - "2222:22"
+    # WordPress + MariaDB in one container: this fixture is an SSH target, not
+    # a production topology. Splitting them would need sshd to reach a second
+    # container, which tests nothing the product cares about.
