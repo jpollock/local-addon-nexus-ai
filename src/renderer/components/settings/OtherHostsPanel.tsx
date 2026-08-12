@@ -823,6 +823,114 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     );
   }
 
+  renderRemove(alias: string): React.ReactElement {
+    const siteCount = this.state.hosts.filter(h => h.alias === alias).length;
+
+    const handleRemove = async () => {
+      try {
+        await rendererGql(`
+          mutation RemoveHost($alias: String!) {
+            nexusHostRemove(alias: $alias) {
+              success
+              error
+            }
+          }
+        `, { alias });
+        this.setState({ screen: { name: 'list' } });
+        this.reload();
+      } catch {
+        // Silent failure for now — reload will show current state
+        this.setState({ screen: { name: 'list' } });
+        this.reload();
+      }
+    };
+
+    return React.createElement('div', {},
+      // Back button
+      React.createElement('div', {
+        onClick: () => this.setState({ screen: { name: 'detail', alias } }),
+        style: {
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--nxai-accent)',
+          marginBottom: 16,
+          cursor: 'pointer',
+        },
+      }, `← ${alias}`),
+
+      // Confirmation card
+      React.createElement('div', {
+        style: {
+          padding: 16,
+          background: 'var(--nxai-card-bg)',
+          border: '1px solid var(--nxai-error-border)',
+          borderRadius: 6,
+        },
+      },
+        // Title
+        React.createElement('div', {
+          style: {
+            fontSize: 16,
+            fontWeight: 600,
+            color: 'var(--nxai-card-text)',
+            marginBottom: 16,
+          },
+        }, `Remove ${alias}?`),
+
+        // Main message
+        React.createElement('div', {
+          style: {
+            fontSize: 12,
+            color: 'var(--nxai-card-text)',
+            lineHeight: 1.5,
+            marginBottom: 16,
+          },
+        },
+          `Its ${siteCount} followed sites disappear from your sites list, and everything Nexus worked out about them is deleted — what is installed, what is published, past findings.`,
+          ' ',
+          React.createElement('strong', {}, 'The server is not touched.'),
+          ` Nothing is deleted on ${alias}, and you can add it again later — it will read everything from scratch.`,
+        ),
+
+        // Buttons
+        React.createElement('div', {
+          style: {
+            display: 'flex',
+            gap: 8,
+          },
+        },
+          React.createElement('div', {
+            onClick: () => this.setState({ screen: { name: 'detail', alias } }),
+            autoFocus: true,
+            style: {
+              display: 'inline-block',
+              padding: '6px 12px',
+              background: 'var(--nxai-card-border)',
+              color: 'var(--nxai-card-text)',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            },
+          }, 'Cancel'),
+          React.createElement('div', {
+            onClick: handleRemove,
+            style: {
+              display: 'inline-block',
+              padding: '6px 12px',
+              background: 'var(--nxai-error-bg)',
+              color: 'var(--nxai-error-text)',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            },
+          }, 'Remove host'),
+        ),
+      ),
+    );
+  }
+
   render(): React.ReactElement {
     // Add screen
     if (this.state.screen.name === 'add') {
@@ -832,13 +940,6 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
         onCompleted: this.completeAdd,
         onProbeClean: () => undefined,
       });
-    }
-
-    const rows = this.hostRows();
-
-    // Empty state when no hosts
-    if (rows.length === 0) {
-      return this.renderEmpty();
     }
 
     // Detail screen
@@ -851,12 +952,19 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
       return this.renderIdentityChanged(this.state.screen.alias);
     }
 
-    // List state
-    if (this.state.screen.name === 'list') {
-      return this.renderList();
+    // Remove screen
+    if (this.state.screen.name === 'remove') {
+      return this.renderRemove(this.state.screen.alias);
     }
 
-    // Placeholder for other screens
-    return React.createElement('div', {}, `Screen: ${this.state.screen.name}`);
+    const rows = this.hostRows();
+
+    // Empty state when no hosts
+    if (rows.length === 0) {
+      return this.renderEmpty();
+    }
+
+    // List state
+    return this.renderList();
   }
 }

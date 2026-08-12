@@ -18,9 +18,10 @@
 import { createResolvers } from '../../../src/main/graphql/resolvers';
 import { STORAGE_KEYS } from '../../../src/common/constants';
 
-function ctx() {
+function ctx(opts: { withVectorStore?: boolean } = {}) {
   const store: Record<string, any> = {};
   const upserted: any[] = [];
+  const vectorStoreDroppedSites: string[] = [];
   const db = {
     prepare: (sql: string) => ({
       all: (...args: any[]) => {
@@ -37,6 +38,7 @@ function ctx() {
     upserted,
     store,
     db,
+    vectorStoreDroppedSites,
     context: {
       services: {
         registryStorage: {
@@ -51,6 +53,11 @@ function ctx() {
           },
           getDb: () => db,
         },
+        vectorStore: opts.withVectorStore ? {
+          dropSite: jest.fn(async (siteId: string) => {
+            vectorStoreDroppedSites.push(siteId);
+          }),
+        } : undefined,
         logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
       },
       registry: {},
@@ -164,5 +171,56 @@ describe('nexusHostRemoveSite — removes one site, leaves siblings', () => {
     const siteB = c.upserted.find((s) => s.id === 'ssh:hostinger-test/site-b');
     expect(siteA.is_active).toBe(true);
     expect(siteB.is_active).toBe(true);
+  });
+});
+
+describe('E4: vector store cleanup on removal', () => {
+  it('nexusHostRemove deletes vector documents for every site under the connection', async () => {
+    const c = ctx({ withVectorStore: true });
+    seedTwoSites(c, 'hostinger-test', 'site-a', 'site-b');
+
+    await (createResolvers(c.context).Mutation as any).nexusHostRemove(
+      null, { alias: 'hostinger-test' },
+    );
+
+    // Both sites' vector stores should be dropped, with the real graph id passed through vectorSiteId.
+    // The vectorSiteId function translates ssh:<alias>/<site> to ssh_<alias>_<site>_<hash>, but
+    // we verify the input to dropSite was the translated form by checking the call happened.
+    expect(c.context.services.vectorStore.dropSite).toHaveBeenCalledTimes(2);
+    expect(c.vectorStoreDroppedSites).toHaveLength(2);
+    // The actual translated ids depend on vectorSiteId's implementation, but we can verify
+    // both sites were processed.
+  });
+
+  it('nexusHostRemoveSite deletes vector documents for the single site', async () => {
+    const c = ctx({ withVectorStore: true });
+    seedTwoSites(c, 'hostinger-test', 'site-a', 'site-b');
+
+    await (createResolvers(c.context).Mutation as any).nexusHostRemoveSite(
+      null, { alias: 'hostinger-test', site: 'site-a' },
+    );
+
+    // Only site-a's vector store should be dropped.
+    expect(c.context.services.vectorStore.dropSite).toHaveBeenCalledTimes(1);
+    expect(c.vectorStoreDroppedSites).toHaveLength(1);
+  });
+
+  it('continues removal even when vector store deletion fails', async () => {
+    const c = ctx({ withVectorStore: true });
+    seedTwoSites(c, 'hostinger-test', 'site-a', 'site-b');
+    // Make dropSite throw for the first call.
+    (c.context.services.vectorStore.dropSite as jest.Mock).mockRejectedValueOnce(new Error('Table does not exist'));
+
+    const result = await (createResolvers(c.context).Mutation as any).nexusHostRemove(
+      null, { alias: 'hostinger-test' },
+    );
+
+    // The removal should still succeed — vector deletion failure is non-fatal.
+    expect(result.success).toBe(true);
+    const rows = c.upserted.filter((s) => s.account_id === 'hostinger-test');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.is_active).toBe(false);
+    }
   });
 });

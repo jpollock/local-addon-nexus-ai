@@ -5854,6 +5854,20 @@ export function createResolvers(context: ResolverContext) {
             const sites = findExternalSites(db, alias, undefined, 'id, name');
             const now = Date.now();
             for (const site of sites) {
+              // Delete vector documents for this site (E4: must not orphan indexed content).
+              // The site id stored in the graph is the real ssh:<alias>/<site> form;
+              // vectorSiteId translates it to the table-safe form that SqliteVecStore uses.
+              if (services.vectorStore) {
+                try {
+                  await services.vectorStore.dropSite(vectorSiteId(site.id));
+                } catch (e: any) {
+                  // Non-fatal: if the vector tables don't exist, that's fine (site was never indexed).
+                  // Log but continue with the soft-delete — orphaned vector tables are cleaned by
+                  // the retention sweep, but stranded active site rows are not.
+                  console.warn(`[nexusHostRemove] Failed to delete vector store for ${site.id}:`, e?.message ?? String(e));
+                }
+              }
+
               await (services as any).graphService?.upsertSite({
                 id: site.id,
                 name: site.name,
@@ -5883,8 +5897,20 @@ export function createResolvers(context: ResolverContext) {
               return { success: true, error: null, removed: false };
             }
             const now = Date.now();
+            const siteId = matches[0].id;
+
+            // Delete vector documents for this site (E4: must not orphan indexed content).
+            if (services.vectorStore) {
+              try {
+                await services.vectorStore.dropSite(vectorSiteId(siteId));
+              } catch (e: any) {
+                // Non-fatal: if the vector tables don't exist, that's fine (site was never indexed).
+                console.warn(`[nexusHostRemoveSite] Failed to delete vector store for ${siteId}:`, e?.message ?? String(e));
+              }
+            }
+
             await (services as any).graphService?.upsertSite({
-              id: matches[0].id,
+              id: siteId,
               name: matches[0].name,
               domain: matches[0].name,
               source: 'external',
