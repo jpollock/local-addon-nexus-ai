@@ -357,7 +357,13 @@ async function launchDevLocal(timeoutMs: number): Promise<ChildProcess | null> {
 
 /**
  * Start the Local Electron app and wait for the MCP server to become reachable.
- * Returns the child process, or null if Local was already running.
+ *
+ * Returns null when it adopted an already-running Local, or when it launched
+ * production Local via ./dev-reload.sh (open detaches, so no child handle).
+ * Returns a ChildProcess only for the dev-build path.
+ *
+ * process.env.NEXUS_E2E_STARTED_LOCAL, not the return value, is what tells
+ * teardown whether we started Local.
  */
 export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | null> {
   const plan = planLocalLaunch({
