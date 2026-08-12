@@ -3632,11 +3632,43 @@ export function createResolvers(context: ResolverContext) {
               };
             }
             siteId = site.id;
+          } else if (parsed.type === 'external') {
+            // External: look up by unique graph id (ssh:<alias>/<site>), not by name.
+            // Name-based lookup would fail for the three real hosts all named "files"
+            // (piedmontdermgroup, willowcreekderm, tablemesaderm) — resolveRemoteGraphSite
+            // would return ambiguous for all three.
+            const externalId = `ssh:${parsed.alias}/${parsed.site}`;
+            const db = services.graphService?.getDb?.();
+            if (!db) {
+              return {
+                success: false,
+                error: `Site "${target}" not found in the graph database.`,
+                results: [],
+              };
+            }
+            try {
+              const row = db.prepare(
+                "SELECT id FROM sites WHERE source='external' AND is_active=1 AND id=?"
+              ).get(externalId) as { id: string } | undefined;
+              if (!row) {
+                return {
+                  success: false,
+                  error: `Site "${target}" not found in the graph database.`,
+                  results: [],
+                };
+              }
+              siteId = row.id;
+            } catch {
+              return {
+                success: false,
+                error: `Site "${target}" not found in the graph database.`,
+                results: [],
+              };
+            }
           } else {
-            // WPE or external — resolve via the graph, same fallback and
-            // collision policy search_site_content uses.
-            const lookupName = parsed.type === 'external' ? parsed.alias : parsed.installName;
-            const resolved = resolveRemoteGraphSite(services.graphService?.getDb?.(), lookupName);
+            // WPE — resolve via the graph, same fallback and collision policy
+            // search_site_content uses.
+            const resolved = resolveRemoteGraphSite(services.graphService?.getDb?.(), parsed.installName);
             if (resolved.kind === 'none') {
               return {
                 success: false,
@@ -3647,7 +3679,7 @@ export function createResolvers(context: ResolverContext) {
             if (resolved.kind === 'ambiguous') {
               return {
                 success: false,
-                error: `"${lookupName}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`,
+                error: `"${parsed.installName}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`,
                 results: [],
               };
             }
