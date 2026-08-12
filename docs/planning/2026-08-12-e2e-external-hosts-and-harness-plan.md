@@ -973,8 +973,14 @@ d('external host target resolution', () => {
   it('a @development suffix cannot loosen a production host', async () => {
     // Registered production above. A write is refused on production by default
     // (`wpcli`), and the typed suffix must not override the registered label.
+    //
+    // search-replace is the write probe because there is no `wp option-update`
+    // subcommand (verified against src/cli/commands/wp.ts). It is also
+    // self-verifying: if the gate wrongly permits it, blogname changes and the
+    // follow-up assertion below fails loudly.
     const r = await runCli(
-      ['wp', 'option-update', `ssh:${FIXTURE_ALIAS}/alpha@development`, 'blogname', 'hijacked'],
+      ['wp', 'search-replace', `ssh:${FIXTURE_ALIAS}/alpha@development`,
+       'Nexus E2E alpha', 'hijacked'],
       { timeout: 120_000 });
     expect(r.exitCode).not.toBe(0);
     expect(r.output.toLowerCase()).toMatch(/not allowed|blocked|permission/);
@@ -1224,12 +1230,19 @@ git commit -m "test(e2e): external host indexing and vector table isolation"
  * nexus_list_sites, so an agent confidently reported it as not registered.
  */
 import { runCli } from './helpers/cli-test-utils';
+import { NexusMcpClient, loadConnectionInfo } from './helpers/mcp-client';
 import { FIXTURE_ALIAS, fixtureAvailable, trustFixtureHostKey } from './helpers/ssh-fixture';
 
 const d = fixtureAvailable() ? describe : describe.skip;
 
 d('external hosts in fleet-wide views', () => {
+  let mcpClient: NexusMcpClient;
+
   beforeAll(async () => {
+    const info = loadConnectionInfo();
+    if (!info) throw new Error('MCP connection info not available');
+    mcpClient = new NexusMcpClient(info);
+
     await trustFixtureHostKey();
     await runCli(['host', 'remove', FIXTURE_ALIAS, '-y']);
     await runCli(['host', 'add', FIXTURE_ALIAS, '--all', '--json'], { timeout: 180_000 });
@@ -1256,8 +1269,15 @@ d('external hosts in fleet-wide views', () => {
     // fleet_overview counted wp_version across WPE + external but divided by
     // the WPE-only count, printing "1 of 0" for a user with SSH hosts and no
     // WP Engine account.
-    const r = await runCli(['fleet', 'overview'], { timeout: 180_000 });
-    for (const [, num, den] of r.output.matchAll(/(\d+)\s+of\s+(\d+)/g)) {
+    //
+    // Called as an MCP tool, not a CLI subcommand: `nexus fleet overview` does
+    // not exist (fleet has health/site-health/summary/plugins/... — verified
+    // against src/cli/commands/fleet.ts). Calling MCP directly from this suite
+    // is the established pattern in 25-mcp-tools-direct.cli-e2e.test.ts.
+    const text = await mcpClient.callTool('fleet_overview', {});
+    const pairs = [...text.matchAll(/(\d+)\s+of\s+(\d+)/g)];
+    expect(pairs.length).toBeGreaterThan(0); // else the regex silently passes
+    for (const [, num, den] of pairs) {
       expect(Number(num)).toBeLessThanOrEqual(Number(den));
     }
   });
@@ -1468,13 +1488,18 @@ git commit -m "test(e2e): wp_site_health against an external SSH host"
 
 - [ ] **Step 1: Verify Docker-absent behaviour**
 
+Point the Docker client at a socket that does not exist. This makes
+`docker info` genuinely fail — exercising the real code path — **without
+touching the developer's Docker daemon or any of their other containers**.
+
 ```bash
-docker stop $(docker ps -q) 2>/dev/null; killall Docker 2>/dev/null || true
-# Wait for the daemon to go away, then:
-npx jest --config tests/e2e-cli/jest.cli-e2e.config.js --testPathPattern "2[789]-|3[012]-"
+DOCKER_HOST=unix:///nonexistent/nexus-e2e-no-docker.sock \
+  npx jest --config tests/e2e-cli/jest.cli-e2e.config.js --testPathPattern "2[789]-|3[012]-"
 ```
 
-Expected: every external-host suite reports **skipped**, exit code 0, and the log carries `Docker unavailable`. Restart Docker afterwards.
+Expected: every external-host suite reports **skipped**, exit code 0, and the log carries `Docker unavailable`.
+
+Do **not** stop the daemon or run `docker stop $(docker ps -q)` to simulate this. That would kill every container the developer has running, which is far outside this suite's stated blast radius.
 
 - [ ] **Step 2: Verify the developer's Local survives a full MCP-suite run**
 
