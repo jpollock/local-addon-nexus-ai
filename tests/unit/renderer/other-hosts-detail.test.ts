@@ -1,6 +1,15 @@
 import { OtherHostsPanel } from '../../../src/renderer/components/settings/OtherHostsPanel';
 import { serializeTree } from './helpers/serializeTree';
 
+// Mock rendererGql at the module level to capture GraphQL operations
+jest.mock('../../../src/renderer/utils/rendererGql', () => ({
+  rendererGql: jest.fn(),
+}));
+
+// Import the mocked function to control its behavior per test
+import { rendererGql } from '../../../src/renderer/utils/rendererGql';
+const mockedRendererGql = rendererGql as jest.MockedFunction<typeof rendererGql>;
+
 function findAll(node: any, pred: (n: any) => boolean, out: any[] = []): any[] {
   if (!node || typeof node !== 'object') return out;
   if (pred(node)) out.push(node);
@@ -29,7 +38,11 @@ const inst = (over: any = {}) => {
 };
 
 describe('host detail', () => {
-  const hosts = [{ alias: 'boxa', site: 'one', environment: 'production', domain: 'one.com', wpPath: '/home/u/one' }];
+  const hosts = [{ alias: 'boxa', site: 'one', environment: 'production', domain: 'one.com', wpPath: '/home/u/one', allowRoot: false }];
+
+  beforeEach(() => {
+    mockedRendererGql.mockClear();
+  });
 
   it('renders the three capability states, with wpcli gated rather than allowed', () => {
     const i = inst({ externalHosts: hosts });
@@ -48,23 +61,27 @@ describe('host detail', () => {
   });
 
   it('Check it now sends a mutation to nexusHostProbe', async () => {
-    // Verify that runProbe would send a mutation by checking the operation in a mocked call
+    // Gap 1: Mock at the transport boundary to verify the real runProbe executes
     const i = inst({ externalHosts: hosts });
 
-    // Mock rendererGql to capture what operation type is sent
-    let capturedOperation = '';
-    i.runProbe = jest.fn().mockImplementation(async (alias: string) => {
-      // Simulate what the real runProbe does - send a mutation
-      capturedOperation = 'mutation ProbeHost($alias: String!) { nexusHostProbe(alias: $alias) { ... } }';
-      return { installs: [] };
+    let capturedQuery = '';
+    mockedRendererGql.mockImplementation(async (query: string) => {
+      capturedQuery = query;
+      return {
+        nexusHostProbe: {
+          success: true,
+          error: null,
+          multiIssue: { installs: [], issues: [] },
+        },
+      };
     });
 
     await i.checkItNow('boxa');
 
-    // Verify a mutation would be sent (not a query)
-    expect(i.runProbe).toHaveBeenCalledWith('boxa');
-    expect(capturedOperation).toContain('mutation');
-    expect(capturedOperation).not.toContain('query');
+    // Verify the real production code sent a mutation (not a query)
+    expect(capturedQuery).toContain('mutation');
+    expect(capturedQuery).toContain('nexusHostProbe');
+    expect(capturedQuery).not.toContain('query ProbeHost');
   });
 
   it('Check it now surfaces a newly-discovered install without disturbing followed sites', async () => {
@@ -92,6 +109,87 @@ describe('host detail', () => {
     await i.checkItNow('boxa');
     expect(i.state.probeError).toBe('Connection failed');
     expect(i.state.checking).toBeNull();
+  });
+
+  it('Check it now routes to identityChanged screen when host key changed', async () => {
+    // Gap 2: Verify that a changedHostKey issue routes to the identity-changed screen
+    const i = inst({ externalHosts: hosts });
+
+    const currentFp = 'SHA256:abc123currentfingerprint';
+    const previousFp = 'SHA256:xyz789previousfingerprint';
+
+    mockedRendererGql.mockResolvedValue({
+      nexusHostProbe: {
+        success: true,
+        error: null,
+        multiIssue: {
+          installs: ['/home/u/one'],
+          issues: [
+            {
+              kind: 'changedHostKey',
+              fingerprint: currentFp,
+              previousFingerprint: previousFp,
+            },
+          ],
+        },
+      },
+    });
+
+    await i.checkItNow('boxa');
+
+    // Should route to identityChanged screen
+    expect(i.state.screen).toEqual({ name: 'identityChanged', alias: 'boxa' });
+
+    // Should populate identity state with both fingerprints
+    expect(i.state.identity['boxa']).toBeDefined();
+    expect(i.state.identity['boxa'].current).toBe(currentFp);
+    expect(i.state.identity['boxa'].approved).toBe(previousFp);
+  });
+
+  it('Following a discovered install calls nexusHostAddSites and reload without re-probing', async () => {
+    // Gap 3: Verify following an install does not trigger another probe
+    const i = inst({ externalHosts: hosts });
+    const discoveredPath = '/home/u/brand-new';
+
+    // Spy on runProbe to ensure it's NOT called during follow
+    const runProbeSpy = jest.spyOn(i, 'runProbe');
+
+    // Mock the nexusHostAddSites mutation
+    mockedRendererGql.mockResolvedValue({
+      nexusHostAddSites: {
+        success: true,
+        error: null,
+      },
+    });
+
+    // Set up state as if a probe had already discovered an install
+    i.setState({
+      discovered: { boxa: [discoveredPath] },
+    });
+
+    await i.followDiscoveredInstall('boxa', discoveredPath);
+
+    // Should call nexusHostAddSites mutation
+    expect(mockedRendererGql).toHaveBeenCalledWith(
+      expect.stringContaining('nexusHostAddSites'),
+      expect.objectContaining({
+        alias: 'boxa',
+        sites: expect.arrayContaining([
+          expect.objectContaining({
+            path: discoveredPath,
+          }),
+        ]),
+      }),
+    );
+
+    // Should call reload (via IPC invoke for GET_EXTERNAL_HOSTS)
+    const invoke = i.props.electron.ipcRenderer.invoke as jest.Mock;
+    expect(invoke).toHaveBeenCalledWith(expect.stringContaining('get-external-hosts'));
+
+    // MUST NOT re-probe - this is the constraint being tested
+    expect(runProbeSpy).not.toHaveBeenCalled();
+
+    runProbeSpy.mockRestore();
   });
 
   it('the root-mode control persists through SET_EXTERNAL_HOST_ROOT_MODE', async () => {
