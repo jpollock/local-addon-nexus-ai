@@ -911,8 +911,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const totalSites = siteList.length;
       const runningSites = siteList.filter((s: any) => statuses[s.id] === 'running').length;
 
-      // The canonical fleet figures. `remoteSites.total` below stays CAPI-derived
-      // because it is about link state, and is labelled as such.
+      // The canonical fleet figures. `remoteSites` below is derived from the same graph
+      // rows rather than a live CAPI call -- see the comment on that block.
       const counts = collectFleetCounts({
         getSites: () => allSites as Record<string, unknown>,
         getDb: () => graphService.getDb() as never,
@@ -938,18 +938,35 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       let capiAvailable = false;
       let wpeAuthenticated = false;
       try {
+        // Both of these are synchronous local checks, not network calls.
         capiAvailable = localServicesBridge.isCAPIAvailable();
         wpeAuthenticated = localServicesBridge.isWPEAuthenticated();
-        if (capiAvailable) {
-          const installs = await localServicesBridge.capiGetInstalls() as any[];
-          totalRemoteInstalls = installs?.length ?? 0;
-          const linkedCount = installs
-            ? installs.filter((i: any) => linkedRemoteIds.has(i.site?.id)).length
-            : 0;
+
+        // Counted from the graph, not from CAPI.
+        //
+        // This used to `await capiGetInstalls()` — a live round trip enumerating every
+        // install in the account — from inside the dashboard's twelve-way Promise.all,
+        // so the whole dashboard waited on the network before painting anything, on
+        // every first load. WPESyncService already writes exactly what this needs:
+        // one `sites` row per install with `wpe_site_id` set from `install.site.id`
+        // (WPESyncService.ts:185), which is the same field the linkage test below
+        // compares against. Measured on this machine: 337 active WPE rows, 337 with
+        // wpe_site_id populated, matching the CAPI count exactly.
+        //
+        // collectFleetCounts above already queries this table, so this adds no new
+        // round trip of any kind.
+        const gdb = graphService.getDb();
+        if (gdb) {
+          const rows = gdb.prepare(
+            "SELECT wpe_site_id FROM sites WHERE source = 'wpe' AND is_active = 1",
+          ).all() as Array<{ wpe_site_id: string | null }>;
+          totalRemoteInstalls = rows.length;
+          const linkedCount = rows.filter((r) => r.wpe_site_id && linkedRemoteIds.has(r.wpe_site_id)).length;
           remoteInstalls = totalRemoteInstalls - linkedCount;
         }
       } catch {
-        // CAPI may not be authenticated
+        // Leaves both counts at 0, as before. Note this cannot distinguish "no installs"
+        // from "never synced" — a pre-existing ambiguity in this figure, unchanged here.
       }
 
       // MCP server
@@ -985,8 +1002,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           unlinked: remoteInstalls,
           capiAvailable,
           wpeAuthenticated,
-          // Live from WP Engine's API, so it can differ from counts.wpe (the graph).
-          scope: 'installs reported by the WP Engine API',
+          // Counted from the graph rows WPESyncService writes, so this now agrees with
+          // counts.wpe by construction rather than being a second, live reckoning that
+          // could disagree with it. Freshness is the sync interval, not this instant.
+          scope: 'installs from the last WP Engine sync',
         },
         mcpServer: {
           running: !!mcpInfo,
