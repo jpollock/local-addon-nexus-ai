@@ -1,11 +1,14 @@
 /**
  * A registered external host must be visible to every fleet-wide reader.
  *
- * NON-VACUITY: change `source IN ('wpe','external')` to `source = 'wpe'` at
- * src/main/ipc-handlers.ts:780 and src/main/mcp/site-resolver.ts:63 and
- * "appears in nexus_list_sites" must go RED. That single-source filter is what
- * made a registered host invisible to nexus_list_sites, so an agent confidently
- * reported it as not registered.
+ * NON-VACUITY (each assertion proven independently):
+ * 1. "appears in sites list" → resolvers.ts:674 `WHERE source = 'external'`
+ * 2. "appears in nexus_list_sites" → nexus-list-sites.ts:101 `WHERE source = 'external'`
+ * 3. "appears in nexus://fleet/state" → resources/index.ts:260 `WHERE source = 'external'`
+ * 4. "its installs appear in fleet plugins" → resolvers.ts:1825 `WHERE source IN ('wpe','external')`
+ *
+ * The single-source `'wpe'` filter is what made external hosts invisible — a chat
+ * agent would confidently report a registered host as "not registered".
  */
 import { runCli } from './helpers/cli-test-utils';
 import { NexusMcpClient, loadConnectionInfo } from './helpers/mcp-client';
@@ -29,19 +32,26 @@ d('external hosts in fleet-wide views', () => {
 
   it('appears in sites list', async () => {
     const r = await runCli(['sites', 'list', '--json'], { timeout: 120_000 });
-    expect(r.stdout).toContain(FIXTURE_ALIAS);
+    const parsed = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
+    expect(parsed.external).toBeDefined();
+    const aliases = parsed.external.map((e: any) => e.alias);
+    expect(aliases).toContain(FIXTURE_ALIAS);
   });
 
   it('appears in nexus_list_sites — the tool agents call first', async () => {
     // This is the historical gap: a registered host was invisible here, so a
     // chat agent would confidently report it as "not registered".
     const text = await mcpClient.callTool('nexus_list_sites', {});
-    expect(text).toContain(FIXTURE_ALIAS);
+    // Structural assertion: must have the External SSH Hosts section with our alias
+    expect(text).toMatch(/### External SSH Hosts/);
+    expect(text).toMatch(new RegExp(`\\*\\*${FIXTURE_ALIAS}/alpha\\*\\*`));
   });
 
   it('appears in the nexus://fleet/state resource', async () => {
     const text = await mcpClient.readResource('nexus://fleet/state');
-    expect(text).toContain(FIXTURE_ALIAS);
+    // Structural assertion: must have the External SSH Hosts section with a table row
+    expect(text).toMatch(/## External SSH Hosts/);
+    expect(text).toMatch(new RegExp(`\\| ${FIXTURE_ALIAS} \\| alpha \\|`));
   });
 
   it('its installs appear in fleet plugins', async () => {
