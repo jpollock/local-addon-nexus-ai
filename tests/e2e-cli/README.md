@@ -116,3 +116,25 @@ cli-e2e-tests:
     - name: Run CLI E2E Tests
       run: npm run test:cli-e2e
 ```
+
+## External SSH host fixture
+
+Suites 27-32 run against a Docker container (`tests/e2e-cli/fixtures/ssh-host/`)
+that runs real sshd, MariaDB and WP-CLI with two WordPress installs —
+`/home/wp/alpha` and `/home/wp/beta` — under the single alias `nexus-e2e-host`.
+Two installs is deliberate: a single-site alias has no `/` in its site id and so
+cannot reproduce the `vectorSiteId` collision.
+
+The fixture registers its alias by writing `~/.ssh/config.d/nexus-e2e` and one
+idempotent `Include` line at the top of `~/.ssh/config`, mirroring what the
+shipped `sshConfigWriter.ts` does. It never touches `~/.ssh/config.d/nexus`.
+Both are removed at teardown, along with the container and the
+`[127.0.0.1]:2222` known_hosts entry.
+
+If the Docker daemon is not reachable, suites 27-32 skip.
+
+**These suites cannot test key approval.** `TRUST_EXTERNAL_HOST_KEY` is an
+Electron IPC channel, never a GraphQL mutation and never CLI-callable. The
+fixture writes the container's key into `known_hosts` directly, which is the
+state a user reaches after clicking approve in Settings. Approval itself is
+covered only once a renderer-driving harness exists.

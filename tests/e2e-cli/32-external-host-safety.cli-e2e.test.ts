@@ -3,9 +3,10 @@
  *
  * NON-VACUITY: at src/main/external/probeExternalHost.ts:173, return
  * 'host-key-unknown' instead of 'host-key-changed' and "a changed host key is
- * hard-refused" must go RED — the rotated host would then be offered an
- * approval path, which is precisely the MITM/reinstall case ssh never
- * re-prompts for.
+ * hard-refused" must go RED (failure.kind assertion) — the rotated host would
+ * then be offered an approval path, which is precisely the MITM/reinstall case
+ * ssh never re-prompts for. The "no Settings path offered" assertion is NOT
+ * independently proven by mutation; it is structurally tied to the kind.
  *
  * There is deliberately NO test that approving a key succeeds: approval is the
  * TRUST_EXTERNAL_HOST_KEY IPC channel, which the CLI cannot and must not reach.
@@ -24,16 +25,20 @@ d('external host safety', () => {
     await trustFixtureHostKey();
   });
 
-  it('classifies a never-seen host key as unknown and shows a fingerprint', async () => {
+  it('classifies a never-seen host key as unknown', async () => {
     await forgetFixtureHostKey();
     const r = await runCli(['host', 'test', FIXTURE_ALIAS, '--json'], { timeout: 120_000 });
     const report = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
     expect(report.failure?.kind).toBe('host-key-unknown');
-    // Fingerprint is populated "only when the key could be captured" per schema.
-    // The Docker fixture environment may not always allow key capture.
-    if (report.failure?.fingerprint) {
-      expect(report.failure.fingerprint).toMatch(/^SHA256:/);
-    }
+    // SKIPPED: fingerprint assertion. captureOfferedHostKey fails in this
+    // environment (5/5 runs returned null fingerprint). The key-capture path
+    // (buildHostKeyCaptureArgs → ssh -o StrictHostKeyChecking=accept-new into a
+    // temp known_hosts) silently fails to populate the temp file. Verified by
+    // running `nexus host test nexus-e2e-host --json` 5× after forgetting the
+    // key: failure.fingerprint was null every time. This is a PRODUCT DEFECT:
+    // the unknown-key screen must show a fingerprint so a user knows which key
+    // to approve. Fixing it requires diagnosing why accept-new does not write
+    // the temp file in this fixture environment.
   });
 
   it('does not register a host whose key is unknown, even with --yes', async () => {
@@ -57,10 +62,11 @@ d('external host safety', () => {
   it('rejects an alias that ssh would read as an option', async () => {
     // A leading '-' makes the alias an argv option: -oProxyCommand=... is local
     // command execution.
+    const fs = require('fs');
+    try { fs.unlinkSync('/tmp/nexus-e2e-pwned'); } catch { /* absent is fine */ }
     const r = await runCli(['host', 'test', '-oProxyCommand=touch /tmp/nexus-e2e-pwned'],
       { timeout: 30_000 });
     expect(r.exitCode).not.toBe(0);
-    const fs = require('fs');
     expect(fs.existsSync('/tmp/nexus-e2e-pwned')).toBe(false);
   });
 });
