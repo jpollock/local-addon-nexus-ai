@@ -51,16 +51,12 @@ module.exports = async function globalTeardown() {
     delete process.env.NEXUS_E2E_STARTED_LOCAL;
   }
 
-  // Rebuild better-sqlite3 back for system Node (for subsequent npm test runs)
-  console.log('\n[E2E Teardown] Rebuilding better-sqlite3 for system Node...');
-  try {
-    execSync('npm rebuild better-sqlite3 --silent', {
-      cwd: path.join(__dirname, '..', '..'),
-      stdio: 'inherit'
-    });
-    console.log('[E2E Teardown] Rebuild complete - ready for unit tests');
-  } catch (err) {
-    console.warn('[E2E Teardown] Failed to rebuild better-sqlite3:', err);
-    // Non-fatal - just means next test run will rebuild it
-  }
+  // Do NOT rebuild better-sqlite3 for system Node here.
+  //
+  // Under adopt we never touched it; under a launch, dev-reload.sh set it to
+  // Electron precisely because the Local now running needs it. Flipping it back
+  // to system Node would break that Local's next start. CLAUDE.md documents
+  // `npm rebuild better-sqlite3` (tests) and `npm run rebuild` (Local) as the
+  // deliberate manual context switch; a teardown that flips it silently is the
+  // footgun this task exists to remove.
 };

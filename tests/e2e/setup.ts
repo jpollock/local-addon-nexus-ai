@@ -9,46 +9,14 @@ module.exports = async function globalSetup() {
   const envPath = path.join(__dirname, '..', '..', '.env.e2e.local');
   dotenv.config({ path: envPath });
 
-  // Rebuild better-sqlite3 for Electron before starting Local
-  // Unit tests compile it for system Node, but Local needs Electron Node binary
-  console.log('[E2E Setup] Cleaning and rebuilding better-sqlite3 for Electron...');
-  try {
-    const addonRoot = path.join(__dirname, '..', '..');
-
-    // Clean any stale build artifacts
-    const sqlitePath = path.join(addonRoot, 'node_modules', 'better-sqlite3');
-    const buildPath = path.join(sqlitePath, 'build');
-    if (require('fs').existsSync(buildPath)) {
-      console.log('[E2E Setup] Removing stale better-sqlite3 build artifacts...');
-      execSync(`rm -rf "${buildPath}"`, { cwd: addonRoot, stdio: 'inherit' });
-    }
-
-    // Force rebuild for Electron
-    execSync('npm run rebuild', { cwd: addonRoot, stdio: 'inherit' });
-    console.log('[E2E Setup] Rebuild complete');
-  } catch (err) {
-    console.error('[E2E Setup] Failed to rebuild better-sqlite3:', err);
-    throw new Error('Cannot run E2E tests: better-sqlite3 rebuild failed');
-  }
-
-  // Also rebuild the addon itself to ensure lib/ has fresh code that imports the Electron binary
-  console.log('[E2E Setup] Rebuilding addon for Electron...');
-  try {
-    execSync('npm run build', { cwd: path.join(__dirname, '..', '..'), stdio: 'inherit' });
-    console.log('[E2E Setup] Addon rebuild complete');
-  } catch (err) {
-    console.error('[E2E Setup] Failed to rebuild addon:', err);
-    throw new Error('Cannot run E2E tests: addon rebuild failed');
-  }
-
-  // Start Local if it's not already running
+  // Start Local if it's not already running.
+  //
+  // No rebuild here — startLocal handles it per path:
+  // - adopt: the running Local already has a working binding, and the jest process never imports addon source
+  // - production launch: dev-reload.sh runs npm run build + npm run rebuild itself
+  // - dev launch: launchDevLocal owns its own build
   console.log('\n[E2E Setup] Ensuring Local is running...');
-  const localProcess = await startLocal();
-
-  if (localProcess) {
-    // We started Local — store flag so teardown knows to stop it
-    process.env.NEXUS_E2E_STARTED_LOCAL = 'true';
-  }
+  await startLocal();
 
   console.log('[E2E Setup] Discovering test environment...');
 

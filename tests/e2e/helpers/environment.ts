@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, spawn, execSync } from 'child_process';
 import { McpClient, McpToolResult } from './client';
+import { planLocalLaunch, planNeedsManualRebuild } from './localLaunchPlan';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -203,7 +204,6 @@ async function isGraphQLConnectionReady(): Promise<boolean> {
  */
 function killExistingLocal(): void {
   try {
-    const { execSync } = require('child_process');
     // Kill any Local.app processes (production or dev)
     execSync('pkill -f "Local.app" || true', { stdio: 'ignore' });
     execSync('pkill -f "local-lightning" || true', { stdio: 'ignore' });
@@ -214,7 +214,7 @@ function killExistingLocal(): void {
       try {
         execSync('pgrep -f "Local.app"', { stdio: 'ignore' });
         // Still running, wait a bit more
-        require('child_process').execSync('sleep 0.5');
+        execSync('sleep 0.5');
       } catch {
         // Process gone
         break;
@@ -226,18 +226,91 @@ function killExistingLocal(): void {
 }
 
 /**
- * Start the Local Electron app and wait for the MCP server to become reachable.
- * Returns the child process, or null if Local was already running.
+ * Wait for both MCP server and GraphQL connection info to become available.
  */
-export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | null> {
-  // Kill any existing Local instances to ensure clean startup
-  killExistingLocal();
+async function waitForMcpAndGraphql(timeoutMs: number): Promise<void> {
+  console.log('[E2E Local] Waiting for MCP server...');
+  const start = Date.now();
+  const pollInterval = 2000;
 
-  // Delete stale connection info files
-  const mcpInfoPath = getConnectionInfoPath();
-  const graphqlInfoPath = getGraphQLConnectionInfoPath();
-  try { fs.unlinkSync(mcpInfoPath); } catch { /* file may not exist */ }
-  try { fs.unlinkSync(graphqlInfoPath); } catch { /* file may not exist */ }
+  while (Date.now() - start < timeoutMs) {
+    if (await isMcpServerReachable()) {
+      console.log(`[E2E Local] MCP server ready (${Math.round((Date.now() - start) / 1000)}s)`);
+
+      // Wait for Local's GraphQL service to write connection info (for CLI tests)
+      console.log('[E2E Local] Waiting for GraphQL connection info...');
+      const graphqlStart = Date.now();
+      const graphqlTimeout = 30000; // 30 second timeout for GraphQL
+
+      while (Date.now() - graphqlStart < graphqlTimeout) {
+        if (await isGraphQLConnectionReady()) {
+          const graphqlInfo = loadGraphQLConnectionInfo();
+          console.log(`[E2E Local] GraphQL ready on port ${graphqlInfo.port} (${Math.round((Date.now() - graphqlStart) / 1000)}s)`);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      // GraphQL didn't start in time - warn but continue (MCP tests will still work)
+      console.warn('[E2E Local] WARNING: GraphQL connection info not available. CLI tests may fail.');
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  throw new Error(
+    `Local started but MCP server did not become reachable within ${timeoutMs / 1000}s.\n` +
+    'Make sure the Nexus AI addon is installed and enabled.',
+  );
+}
+
+/**
+ * Launch production Local by running the repo's own ./dev-reload.sh.
+ *
+ * Do NOT hand-roll pkill + npm run build + open here. dev-reload.sh already
+ * does all three, and it does one thing nothing else does: it injects
+ * nexus.env.local through `open --env`. Per its own comment (lines 9-13),
+ * `export FOO=…; open …` does not work — `open` hands the launch to launchd,
+ * which uses launchd's environment. `open --env` is the supported injection,
+ * and it applies ONLY while the app is actually starting, which is why the
+ * kill has to come first. A Local launched any other way silently runs without
+ * NEXUS_GOOGLE_CLIENT_SECRET, and the failure surfaces much later as a token
+ * refresh error.
+ *
+ * dev-reload.sh does its own `pkill -x Local`, so plan.killFirst is already
+ * satisfied on this path.
+ */
+async function launchProductionLocal(timeoutMs: number): Promise<ChildProcess | null> {
+  process.env.NEXUS_E2E_STARTED_LOCAL = 'true';
+  const addonRoot = path.resolve(__dirname, '..', '..', '..');
+  const script = path.join(addonRoot, 'dev-reload.sh');
+  if (!fs.existsSync(script)) {
+    throw new Error(
+      `dev-reload.sh not found at ${script}. Start Local yourself, or set ` +
+      'NEXUS_E2E_LOCAL_PATH to a flywheel-local checkout to launch the dev build.',
+    );
+  }
+  console.log('[E2E Local] Launching Local via ./dev-reload.sh...');
+  execSync(`"${script}"`, {
+    cwd: addonRoot,
+    stdio: 'inherit',
+    timeout: 600_000, // it runs npm run build + electron-rebuild
+  });
+  await waitForMcpAndGraphql(timeoutMs);
+  return null; // `open` detaches; teardown uses killExistingLocal, not a handle
+}
+
+/**
+ * Launch the dev build of Local from the flywheel-local checkout.
+ */
+async function launchDevLocal(timeoutMs: number): Promise<ChildProcess | null> {
+  process.env.NEXUS_E2E_STARTED_LOCAL = 'true';
+  const addonRoot = path.resolve(__dirname, '..', '..', '..');
+  if (planNeedsManualRebuild({ action: 'launch', target: 'dev', killFirst: true })) {
+    console.log('[E2E Local] Building addon for the dev Electron build...');
+    execSync('npm run build', { cwd: addonRoot, stdio: 'inherit' });
+    execSync('npm run rebuild', { cwd: addonRoot, stdio: 'inherit' });
+  }
 
   const localPath = resolveLocalRepoPath();
   if (!localPath) {
@@ -278,42 +351,35 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
     console.log(`[E2E Local] Started Local (PID: ${child.pid})`);
   }
 
-  // Wait for MCP server to become reachable
-  console.log('[E2E Local] Waiting for MCP server...');
-  const start = Date.now();
-  const pollInterval = 2000;
+  await waitForMcpAndGraphql(timeoutMs);
+  return child;
+}
 
-  while (Date.now() - start < timeoutMs) {
-    if (await isMcpServerReachable()) {
-      console.log(`[E2E Local] MCP server ready (${Math.round((Date.now() - start) / 1000)}s)`);
+/**
+ * Start the Local Electron app and wait for the MCP server to become reachable.
+ * Returns the child process, or null if Local was already running.
+ */
+export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | null> {
+  const plan = planLocalLaunch({
+    mcpReachable: await isMcpServerReachable(),
+    graphqlReady: await isGraphQLConnectionReady(),
+    manageLocal: process.env.NEXUS_E2E_MANAGE_LOCAL === '1',
+    devPath: process.env.NEXUS_E2E_LOCAL_PATH ?? null,
+  });
 
-      // Wait for Local's GraphQL service to write connection info (for CLI tests)
-      console.log('[E2E Local] Waiting for GraphQL connection info...');
-      const graphqlStart = Date.now();
-      const graphqlTimeout = 30000; // 30 second timeout for GraphQL
-
-      while (Date.now() - graphqlStart < graphqlTimeout) {
-        if (await isGraphQLConnectionReady()) {
-          const graphqlInfo = loadGraphQLConnectionInfo();
-          console.log(`[E2E Local] GraphQL ready on port ${graphqlInfo.port} (${Math.round((Date.now() - graphqlStart) / 1000)}s)`);
-          return child;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-
-      // GraphQL didn't start in time - warn but continue (MCP tests will still work)
-      console.warn('[E2E Local] WARNING: GraphQL connection info not available. CLI tests may fail.');
-      return child;
-    }
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  if (plan.action === 'adopt') {
+    console.log('[E2E Local] Adopting the running Local — not killing it.');
+    return null;
   }
 
-  // Timed out — kill the process and fail
-  stopLocal(child);
-  throw new Error(
-    `Local started but MCP server did not become reachable within ${timeoutMs / 1000}s.\n` +
-    'Make sure the Nexus AI addon is installed and enabled.',
-  );
+  // Only past this point may we touch the developer's processes or files.
+  // The production path does its killing inside dev-reload.sh (see Step 2).
+  if (plan.target === 'dev' && plan.killFirst) killExistingLocal();
+  try { fs.unlinkSync(getConnectionInfoPath()); } catch { /* may not exist */ }
+  try { fs.unlinkSync(getGraphQLConnectionInfoPath()); } catch { /* may not exist */ }
+
+  if (plan.target === 'production') return launchProductionLocal(timeoutMs);
+  return launchDevLocal(timeoutMs);
 }
 
 /**
