@@ -99,6 +99,17 @@ console.log(`Staging in ${stagingDir}`);
 // Copy lib/
 copyDirSync(path.join(projectRoot, 'lib'), path.join(stagingDir, 'lib'));
 
+// Guard (P0-4): ACF PRO is a paid WP Engine product and must never ship in a distributed
+// artifact. create-entry-points.js excludes it from lib/wp-plugins, but fail loudly here too so
+// a regression in that exclusion cannot silently publish it.
+const forbiddenInStaging = path.join(stagingDir, 'lib', 'wp-plugins', 'advanced-custom-fields-pro');
+if (fs.existsSync(forbiddenInStaging)) {
+  throw new Error(
+    'Refusing to package: ACF PRO (advanced-custom-fields-pro) is present in lib/wp-plugins. ' +
+    'It is a paid product and must not be redistributed. Check create-entry-points.js exclusions.',
+  );
+}
+
 // Copy package.json
 fs.copyFileSync(
   path.join(projectRoot, 'package.json'),

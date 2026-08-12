@@ -46,6 +46,14 @@ console.log('Markdown resources copied to lib/');
 const wpPluginsSource = path.join(__dirname, '..', 'wp-plugins');
 const wpPluginsDest = path.join(libDir, 'wp-plugins');
 
+// Directory names under wp-plugins that must NEVER be bundled into the distributed addon.
+// - node_modules: avoids copying 1.7GB+ of dev dependencies.
+// - advanced-custom-fields-pro: ACF PRO is a paid WP Engine product. It is gitignored from
+//   source precisely so it is not redistributed, but this copy would still pull it from disk
+//   into lib/wp-plugins — which both `npm pack` (files: [lib]) and package-addon.js ship. See
+//   P0-4. Excluding it at the one copy site keeps it out of every distributed artifact.
+const EXCLUDED_PLUGIN_DIRS = new Set(['node_modules', 'advanced-custom-fields-pro']);
+
 function copyWpPluginsExcludingNodeModules(src, dest) {
   if (!fs.existsSync(src)) return;
 
@@ -56,8 +64,8 @@ function copyWpPluginsExcludingNodeModules(src, dest) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
 
-    // Skip node_modules directories entirely
-    if (entry.isDirectory() && entry.name === 'node_modules') {
+    // Skip excluded top-level directories entirely (node_modules, paid plugins).
+    if (entry.isDirectory() && EXCLUDED_PLUGIN_DIRS.has(entry.name)) {
       continue;
     }
 
