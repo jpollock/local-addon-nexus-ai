@@ -367,6 +367,22 @@ describe('Safety Tier Configuration', () => {
     expect(safety.preChecks).toBeDefined();
     expect(safety.preChecks!.length).toBeGreaterThan(0);
   });
+
+  // P0-6: creating/altering account users and SSH keys grants persistent access to a
+  // production WP Engine account. That is at least as consequential as the deletes that
+  // already require confirmation, so these must be Tier 3 (human confirmation), not the
+  // silent Tier 2 they were. Combined with P0-1 (Tier 3 refused for agents), a prompt-
+  // injected model can neither grant access silently nor self-confirm it.
+  it.each([
+    'wpe_create_account_user',
+    'wpe_update_account_user',
+    'wpe_add_user_to_accounts',
+    'wpe_create_ssh_key',
+  ])('classifies privilege-granting op %s as Tier 3 with a confirmation message', (tool) => {
+    const safety = getToolSafety(tool);
+    expect(safety.tier).toBe(3);
+    expect(safety.confirmationMessage).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------

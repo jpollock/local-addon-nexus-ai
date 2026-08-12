@@ -112,9 +112,11 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wp_sync_ai_credentials: 2,
   wp_run_ability: 2,
 
-  // Tier 2 — New writes (account + users)
-  wpe_create_account_user: 2,
-  wpe_update_account_user: 2,
+  // Tier 3 — Privilege-granting (P0-6): creating/altering an account user grants persistent
+  // production portal access. Promoted from Tier 2 so it requires human confirmation, and (with
+  // P0-1) so an agent cannot perform it at all.
+  wpe_create_account_user: 3,
+  wpe_update_account_user: 3,
 
   // Tier 2 — New writes (sites + installs)
   wpe_create_site: 2,
@@ -132,13 +134,16 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   // Tier 2 — New writes (SSL + SSH)
   wpe_request_ssl_certificate: 2,
   wpe_import_ssl_certificate: 2,
-  wpe_create_ssh_key: 2,
+  // Tier 3 — Privilege-granting (P0-6): an SSH key grants persistent shell access to the
+  // account's installs. Confirmation required; refused for agents by P0-1.
+  wpe_create_ssh_key: 3,
 
   // Tier 2 — New writes (offload + composite actions)
   wpe_update_offload_settings: 2,
   wpe_backup_and_verify: 2,
   wpe_prepare_go_live: 2,
-  wpe_add_user_to_accounts: 2,
+  // Tier 3 — Privilege-granting (P0-6): adds a user to WP Engine accounts (persistent access).
+  wpe_add_user_to_accounts: 3,
 
   // Tier 3 — Destructive (existing)
   local_delete_site: 3,
@@ -231,6 +236,10 @@ export const CONFIRMATION_MESSAGES: Record<string, string> = {
   wpe_delete_domain: 'This will remove the domain from this install. Live traffic to this domain will break.',
   wpe_delete_ssh_key: 'This will remove the SSH key. Any automation using it will stop working.',
   wpe_promote_environment: 'This will overwrite the destination environment with content from the source. Destination content will be lost.',
+  wpe_create_account_user: 'This will grant a new user access to your production WP Engine account and email them an invitation.',
+  wpe_update_account_user: "This will change a user's roles/access on your production WP Engine account.",
+  wpe_add_user_to_accounts: 'This will grant an existing user access to additional production WP Engine accounts.',
+  wpe_create_ssh_key: 'This will authorize a new SSH key for shell access to this account\'s installs.',
 };
 
 export const PRE_CHECKS: Record<string, string[]> = {
