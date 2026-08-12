@@ -25,20 +25,17 @@ d('external host safety', () => {
     await trustFixtureHostKey();
   });
 
-  it('classifies a never-seen host key as unknown', async () => {
+  it('classifies a never-seen host key as unknown and returns its fingerprint', async () => {
     await forgetFixtureHostKey();
     const r = await runCli(['host', 'test', FIXTURE_ALIAS, '--json'], { timeout: 120_000 });
     const report = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
     expect(report.failure?.kind).toBe('host-key-unknown');
-    // SKIPPED: fingerprint assertion. captureOfferedHostKey fails in this
-    // environment (5/5 runs returned null fingerprint). The key-capture path
-    // (buildHostKeyCaptureArgs → ssh -o StrictHostKeyChecking=accept-new into a
-    // temp known_hosts) silently fails to populate the temp file. Verified by
-    // running `nexus host test nexus-e2e-host --json` 5× after forgetting the
-    // key: failure.fingerprint was null every time. This is a PRODUCT DEFECT:
-    // the unknown-key screen must show a fingerprint so a user knows which key
-    // to approve. Fixing it requires diagnosing why accept-new does not write
-    // the temp file in this fixture environment.
+    // Historical: this assertion was skipped with a claim that captureOfferedHostKey
+    // failed in the fixture environment. The real cause was that PROBE_FIELDS in
+    // src/cli/commands/host.ts did not select fingerprint or keyType from the GraphQL
+    // schema, so they were never returned. GraphQL returns only what is selected.
+    expect(report.failure?.fingerprint).toBeTruthy();
+    expect(typeof report.failure?.fingerprint).toBe('string');
   });
 
   it('does not register a host whose key is unknown, even with --yes', async () => {

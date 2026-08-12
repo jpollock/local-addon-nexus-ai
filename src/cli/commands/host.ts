@@ -39,7 +39,7 @@ const PROBE_FIELDS = `
   wpVersion
   siteUrl
   candidates
-  failure { kind detail remedy }
+  failure { kind detail remedy fingerprint keyType }
 `;
 
 function prompt(rl: readline.Interface, question: string): Promise<string> {
