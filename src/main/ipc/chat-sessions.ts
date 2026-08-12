@@ -13,7 +13,12 @@ export function createSessionTables(db: Database.Database): void {
       updated_at   INTEGER NOT NULL,
       pinned       INTEGER NOT NULL DEFAULT 0,
       action_count INTEGER NOT NULL DEFAULT 0,
-      expires_at   INTEGER
+      expires_at   INTEGER,
+      -- When the user last looked at this session. Unread is derived from this
+      -- and the newest message's role, never from updated_at: a user's own
+      -- message bumps updated_at too, which would mark a session you just typed
+      -- in as waiting on you.
+      last_read_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id          TEXT PRIMARY KEY,
@@ -38,6 +43,18 @@ export function createSessionTables(db: Database.Database): void {
   } catch (e) {
     // Table doesn't exist yet; creation above will include the column
   }
+  // Migration: add last_read_at to sessions that predate the unread badge.
+  // NULL means never read, which COALESCE turns into 0 — so an existing session
+  // whose last message is from the assistant reads as unread on first upgrade.
+  // That is the honest answer: nobody has looked at it since it arrived.
+  try {
+    const tableInfo = db.pragma('table_info(chat_sessions)') as Array<{ name: string }>;
+    if (!tableInfo.some((col) => col.name === 'last_read_at')) {
+      db.exec('ALTER TABLE chat_sessions ADD COLUMN last_read_at INTEGER');
+    }
+  } catch (e) {
+    // Table doesn't exist yet; creation above will include the column
+  }
 }
 
 function rowToSession(row: any): ChatSession {
@@ -51,6 +68,7 @@ function rowToSession(row: any): ChatSession {
     pinned: row.pinned === 1,
     actionCount: row.action_count,
     expiresAt: row.expires_at ?? null,
+    lastReadAt: row.last_read_at ?? null,
   };
 }
 
@@ -72,6 +90,37 @@ export function listSessions(db: Database.Database): ChatSession[] {
     SELECT * FROM chat_sessions ORDER BY pinned DESC, updated_at DESC
   `).all();
   return rows.map(rowToSession);
+}
+
+/**
+ * How many sessions are waiting on the user.
+ *
+ * A session counts when its NEWEST message is from the assistant and arrived
+ * after the user last looked. Both halves matter: without the role check a
+ * question you just asked would count as waiting on you, and without the
+ * timestamp check a session would stay badged forever until you replied to it.
+ *
+ * Deliberately not derived from `updated_at` — that moves when the user sends,
+ * too, so it cannot distinguish "they answered" from "I typed".
+ */
+export function countUnreadSessions(db: Database.Database): number {
+  const row = db.prepare(`
+    SELECT COUNT(*) AS n
+    FROM chat_sessions s
+    JOIN (
+      SELECT session_id, role, timestamp,
+             ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp DESC) AS rn
+      FROM chat_messages
+    ) m ON m.session_id = s.id AND m.rn = 1
+    WHERE m.role = 'assistant'
+      AND m.timestamp > COALESCE(s.last_read_at, 0)
+  `).get() as { n: number } | undefined;
+  return row?.n ?? 0;
+}
+
+/** Stamp a session as seen. Called when it is opened, and when its stream ends while open. */
+export function markSessionRead(db: Database.Database, sessionId: string, now: number = Date.now()): void {
+  db.prepare('UPDATE chat_sessions SET last_read_at = ? WHERE id = ?').run(now, sessionId);
 }
 
 export function getSession(

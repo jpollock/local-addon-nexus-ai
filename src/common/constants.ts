@@ -150,6 +150,10 @@ export const IPC_CHANNELS = {
   CHAT_SESSION_SAVE: `${ADDON_PREFIX}:sessions:save`,
   CHAT_SESSION_DELETE: `${ADDON_PREFIX}:sessions:delete`,
   CHAT_SESSION_ACTION_RECORDED: `${ADDON_PREFIX}:sessions:action-recorded`,
+  /** How many sessions are waiting on the user — drives the collapsed panel tab's badge. */
+  CHAT_UNREAD_COUNT: `${ADDON_PREFIX}:sessions:unread-count`,
+  /** Stamp a session as seen, clearing it from the unread count. */
+  CHAT_SESSION_MARK_READ: `${ADDON_PREFIX}:sessions:mark-read`,
   ACTIVITY_FILTER: `${ADDON_PREFIX}:activity:filter`,
   OPEN_CHAT_SESSION: `${ADDON_PREFIX}:open-session`,
 

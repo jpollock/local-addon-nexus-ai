@@ -20,6 +20,23 @@ function makePanel(overrides: Record<string, any> = {}): any {
   });
 }
 
+
+/**
+ * Find a header button by aria-label, walking the tree rather than indexing into it.
+ * These tests used to reach the control cluster as `header.props.children[3]`, which
+ * silently pointed at the wrong node the moment the segmented control was removed.
+ */
+function findByLabel(node: any, label: string): any {
+  if (!node || typeof node !== 'object') return null;
+  if (node.props?.['aria-label'] === label) return node;
+  const kids = Array.isArray(node.props?.children) ? node.props.children : [node.props?.children];
+  for (const k of kids) {
+    const hit = findByLabel(k, label);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 const VARIANTS: Array<[string, Record<string, any>]> = [
   ['collapsed rail', { panelState: 'closed' }],
   ['docked', {}],
@@ -41,16 +58,8 @@ describe('panel chrome — control interactions', () => {
     const panel = makePanel({ panelState: 'docked', onSetPanelState });
     const tree = panel.render();
 
-    // Find the expand button in the control cluster
-    // Header now has: [0] avatar, [1] title stack, [2] segmented control, [3] control cluster
-    const header = tree.props.children[0];
-    const controlCluster = header.props.children[3];
-    const expandBtn = controlCluster.props.children.find((child: any) =>
-      child?.props?.['aria-label'] === 'Expand to full screen' ||
-      child?.props?.['aria-label'] === 'Wide view'
-    );
-
-    expect(expandBtn).toBeDefined();
+    const expandBtn = findByLabel(tree, 'Expand to full screen') ?? findByLabel(tree, 'Wide view');
+    expect(expandBtn).toBeTruthy();
     expandBtn.props.onClick();
     expect(onSetPanelState).toHaveBeenCalledWith('wide');
   });
@@ -59,41 +68,19 @@ describe('panel chrome — control interactions', () => {
     const panel = makePanel({ panelState: 'wide' });
     const tree = panel.render();
 
-    // Header now has: [0] avatar, [1] title stack, [2] segmented control, [3] control cluster
-    const header = tree.props.children[0];
-    const controlCluster = header.props.children[3];
-    const sessionsBtn = controlCluster.props.children.find((child: any) =>
-      child?.props?.['aria-label'] === 'Sessions'
-    );
-
-    expect(sessionsBtn).toBeDefined();
+    const sessionsBtn = findByLabel(tree, 'Sessions');
+    expect(sessionsBtn).toBeTruthy();
     expect(sessionsBtn.type).toBe('button');
   });
 
-  it('segmented control switches tabs', () => {
-    const onSetActiveTab = jest.fn();
-    const panel = makePanel({ activeTab: 'chat', onSetActiveTab });
+  it('offers no tab control — Chat is the panel\'s only content', () => {
+    const panel = makePanel({ activeTab: 'chat' });
     const tree = panel.render();
 
-    // Header: [0] avatar, [1] title stack, [2] segmented control, [3] control cluster
-    const header = tree.props.children[0];
-    const segmentedControl = header.props.children[2];
-    const buttons = segmentedControl.props.children;
-
-    // Chat leads — it is the default tab and the reason the panel gets opened.
-    const chatBtn = buttons[0];
-    expect(chatBtn.props['aria-label']).toBe('Chat');
-    chatBtn.props.onClick();
-    expect(onSetActiveTab).toHaveBeenCalledWith('chat');
-
-    // Insights second.
-    const insightsBtn = buttons[1];
-    expect(insightsBtn.props['aria-label']).toBe('Insights');
-    insightsBtn.props.onClick();
-    expect(onSetActiveTab).toHaveBeenCalledWith('insights');
-
-    // Each button dispatches its own tab — a map over PANEL_TABS makes a copy-paste
-    // mistake here (both buttons sending the same key) easy and invisible.
-    expect(onSetActiveTab.mock.calls).toEqual([['chat'], ['insights']]);
+    // Insights was dropped, and a one-item segmented control is a control that cannot be
+    // operated: it advertises a choice and then denies it. Pinning the absence, because
+    // the natural "fix" when re-adding a second view is to restore the control silently.
+    expect(findByLabel(tree, 'Chat')).toBeNull();
+    expect(findByLabel(tree, 'Insights')).toBeNull();
   });
 });

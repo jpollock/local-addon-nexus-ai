@@ -19,12 +19,10 @@ export interface Props {
   showSessions?: boolean;
   streamingStatus?: string | null;
   isOverlay?: boolean;
-  /** Decisions waiting, scoped to what's on screen. null = not knowable; renders nothing. */
+  /** Chats waiting on a reply, fleet-wide. null = not knowable; renders nothing. */
   badgeCount?: number | null;
   /** Whether anything is stuck. null = not knowable; renders nothing. */
   hasStuck?: boolean | null;
-  /** What the collapsed tab is speaking for — 'THIS SITE' or 'INSIGHTS'. */
-  scopeLabel?: string;
 }
 
 interface DockedPanelState {
@@ -48,14 +46,12 @@ export const WIDE_WIDTH = 620;
 const TAB_WIDTH = 52;
 
 /**
- * Left-to-right order of the panel's segmented control. Chat leads: it is the panel's
- * default tab and the reason most people open it, so it should be the first thing under
- * the cursor rather than the second.
+ * The collapsed tab's word. It used to carry scope -- 'THIS SITE' on a site screen,
+ * 'INSIGHTS' otherwise -- but the scope half never actually rendered: readSiteId matched
+ * `/site-info/...` while Local pushes `/main/site-info/<id>`, so every screen fell through
+ * to the fleet branch. The badge is now a single fleet-wide figure, so there is one word.
  */
-const PANEL_TABS: Array<{ key: PanelTab; label: string }> = [
-  { key: 'chat', label: 'Chat' },
-  { key: 'insights', label: 'Insights' },
-];
+const RAIL_LABEL = 'NEXUS';
 
 // ── SVG icon components (24×24 viewBox, rendered at 17px in header) ───────────
 
@@ -309,12 +305,10 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
     // Render the floating tab when closed
     if (panelState === 'closed') {
       // The tab's whole reason to stay visible rather than hide is that it carries these two:
-      // how many decisions wait, and whether anything is stuck. Both arrive already scoped to
-      // what is on screen (see DockedPanelContainer.tabSignals). A null is "not knowable" and
-      // renders nothing — showing a fleet number on a site page is a false statement, and 0 is
-      // indistinguishable from not-yet-loaded.
-      const { badgeCount = null, hasStuck = null, scopeLabel = 'INSIGHTS' } = this.props;
-      const railLabel = scopeLabel;
+      // how many chats are waiting on a reply, and whether anything is stuck. A null is
+      // "not knowable" and renders nothing — 0 is indistinguishable from not-yet-loaded,
+      // and a badge that says 0 during startup is a claim we cannot make yet.
+      const { badgeCount = null, hasStuck = null } = this.props;
 
       // The whole tab is the control — there is no separate chevron. At this width a second
       // hit target would halve both.
@@ -339,11 +333,15 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           { style: styles.railMark },
           React.createElement(NexusGlyph, { size: 22 }),
           badgeCount !== null && badgeCount > 0
-            ? React.createElement('div', { style: styles.railBadge }, String(badgeCount))
+            ? React.createElement(
+                'div',
+                { style: styles.railBadge, title: `${badgeCount} chat${badgeCount === 1 ? '' : 's'} waiting on you` },
+                String(badgeCount),
+              )
             : null,
         ),
         // Vertical label
-        React.createElement('div', { style: styles.railLabel }, railLabel),
+        React.createElement('div', { style: styles.railLabel }, RAIL_LABEL),
         // Stuck marker (only when hasStuck is true, never when null/unknown)
         hasStuck === true
           ? React.createElement('div', { style: styles.railStuck, title: 'Agent stuck' }, '!')
@@ -354,43 +352,10 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
     // Panel is open (docked, wide, or full)
     const isFull = panelState === 'full';
 
-    // Segmented control. Order comes from PANEL_TABS — the two buttons were duplicated
-    // markup differing only by tab name, which is how a reorder turns into an edit in
-    // two places that can disagree.
-    const segmentedControl = React.createElement(
-      'div',
-      {
-        style: {
-          display: 'flex',
-          background: 'var(--nxai-table-hover)',
-          borderRadius: 6,
-          padding: 2,
-          gap: 2,
-        },
-      },
-      PANEL_TABS.map((t) =>
-        React.createElement(
-          'button',
-          {
-            key: t.key,
-            style: {
-              background: activeTab === t.key ? 'var(--nxai-card-bg)' : 'transparent',
-              border: 'none',
-              color: activeTab === t.key ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
-              cursor: 'pointer',
-              padding: '5px 11px',
-              fontSize: 13,
-              fontWeight: 600,
-              borderRadius: 5,
-              transition: 'all 0.15s ease',
-            },
-            onClick: () => onSetActiveTab?.(t.key),
-            'aria-label': t.label,
-          },
-          t.label,
-        ),
-      ),
-    );
+    // No segmented control. Insights was dropped and Chat is all that remains, and a
+    // one-item segmented control is a control that cannot be operated -- it only tells
+    // the user there is a choice, then denies it. The header's "Nexus" already names
+    // what the panel is.
 
     const header = React.createElement(
       'div',
@@ -417,8 +382,6 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
             )
           : null,
       ),
-      // Segmented control
-      segmentedControl,
       // Control cluster
       React.createElement(
         'div',

@@ -74,7 +74,7 @@ describe('DockedPanel — state enum', () => {
     }
 
     it('renders the count badge when there are pending decisions', () => {
-      const tree = renderTab({ badgeCount: 7, scopeLabel: 'INSIGHTS' });
+      const tree = renderTab({ badgeCount: 7 });
       expect(findByText(tree, '7')).not.toBeNull();
     });
 
@@ -99,9 +99,15 @@ describe('DockedPanel — state enum', () => {
       expect(findByText(renderTab({ hasStuck: false }), '!')).toBeNull();
     });
 
-    it('shows the scope it is speaking for', () => {
-      expect(findByText(renderTab({ scopeLabel: 'THIS SITE' }), 'THIS SITE')).not.toBeNull();
-      expect(findByText(renderTab({ scopeLabel: 'INSIGHTS' }), 'INSIGHTS')).not.toBeNull();
+    it('reads NEXUS, and never the old scope words', () => {
+      // The label used to carry scope — 'THIS SITE' on a site screen, 'INSIGHTS' otherwise
+      // — but the site branch never rendered: readSiteId matched `/site-info/...` while
+      // Local pushes `/main/site-info/<id>`, so every screen fell through to the fleet
+      // word. The badge is one fleet-wide figure now, so there is one word.
+      const tree = renderTab({});
+      expect(findByText(tree, 'NEXUS')).not.toBeNull();
+      expect(findByText(tree, 'INSIGHTS')).toBeNull();
+      expect(findByText(tree, 'THIS SITE')).toBeNull();
     });
   });
 

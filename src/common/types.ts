@@ -449,6 +449,12 @@ export interface ChatSession {
   pinned: boolean;
   actionCount: number;
   expiresAt: number | null;  // null = pinned or Forever
+  /**
+   * When the user last looked at this session; null = never. Written only by
+   * markSessionRead, never by saveSession — one writer, so an ordinary save
+   * cannot silently mark a session read.
+   */
+  lastReadAt?: number | null;
 }
 
 export interface ChatMessage {

@@ -3,15 +3,12 @@ import { IPC_CHANNELS } from '../../../common/constants';
 import { injectThemeVars } from '../../utils/theme';
 import { DockedPanel, PanelTab } from './DockedPanel';
 import { PanelChat } from './PanelChat';
-import { PanelInsights } from './PanelInsights';
 import { SessionsSidebar } from './SessionsSidebar';
-import { agentStore } from '../agents/AgentStore';
 import {
   type PanelState,
   computeReflowMode,
   computeReservedWidth,
   findLocalRoot,
-  readSiteId,
 } from '../../utils/panelReflow';
 
 interface ContainerProps {
@@ -27,12 +24,8 @@ interface ContainerState {
   selectedSiteIds: string[];
   streamingStatus: string | null;
   reflowMode: 'in-flow' | 'overlay';
-  /** Site id from Local's route, or null when not on a site screen. */
-  scopedSiteId: string | null;
-  /** Local site id → name, for matching activity events (which key on site name). */
-  siteNames: Record<string, string>;
-  /** Pending activity events, unscoped; scoping happens at render. */
-  pendingEvents: Array<{ siteName?: string }>;
+  /** Sessions whose newest message is from the assistant and arrived unseen. */
+  unreadChats: number | null;
   /** Fleet health rollup — null until it loads, never coerced to 'ok'. */
   fleetHealth: 'ok' | 'degraded' | 'failing' | 'unknown' | null;
 }
@@ -45,9 +38,7 @@ const STORAGE_KEY = 'nexus-panel-state';
  * is to be trusted at a glance.
  */
 const SIGNAL_DEFAULTS = {
-  scopedSiteId: null as string | null,
-  siteNames: {} as Record<string, string>,
-  pendingEvents: [] as Array<{ siteName?: string }>,
+  unreadChats: null as number | null,
   fleetHealth: null as 'ok' | 'degraded' | 'failing' | 'unknown' | null,
 };
 
@@ -72,9 +63,9 @@ function readState(): ContainerState {
         const validSizes: PanelState[] = ['docked', 'wide', 'full'];
         panelState = validSizes.includes(parsed.size) ? parsed.size : 'docked';
       }
-      // Accept both valid tabs, coerce anything unrecognised to 'chat'
-      const validTabs: PanelTab[] = ['insights', 'chat'];
-      const activeTab: PanelTab = validTabs.includes(parsed.activeTab) ? parsed.activeTab : 'chat';
+      // Chat is the only tab now that Insights is gone; a persisted 'insights' from an
+      // older build coerces to it rather than leaving the panel on a tab that no longer exists.
+      const activeTab: PanelTab = 'chat';
       return {
         panelState: 'closed', // always start collapsed — never block Local on load
         activeTab,
@@ -96,10 +87,9 @@ function readState(): ContainerState {
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
   private openSessionListener: ((_: any, payload: { sessionId: string }) => void) | null = null;
   private chatRef = React.createRef<PanelChat>();
-  private routeObserver: MutationObserver | null = null;
   private localRoot: HTMLElement | null = null;
+  private unreadListener: (() => void) | null = null;
   private resizeDebounceTimer: number | null = null;
-  private agentStoreUnsub: (() => void) | null = null;
 
   constructor(props: ContainerProps) {
     super(props);
@@ -112,7 +102,6 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.newChat = this.newChat.bind(this);
     this.openAgentsHub = this.openAgentsHub.bind(this);
     this.handleResize = this.handleResize.bind(this);
-    this.handleRouteChange = this.handleRouteChange.bind(this);
   }
 
   componentDidUpdate(_: {}, prevState: ContainerState) {
@@ -132,6 +121,15 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     if (prevState.panelState !== panelState) {
       this.applyReflow();
     }
+    // Looking at a session is what marks it read — opening the panel onto one, or
+    // switching to it. Closing the panel deliberately does not.
+    const openedSession =
+      panelState !== 'closed' &&
+      activeSessionId &&
+      (prevState.activeSessionId !== activeSessionId || prevState.panelState === 'closed');
+    if (openedSession) {
+      this.markRead(activeSessionId).then(this.refreshUnread);
+    }
   }
 
   componentDidMount() {
@@ -148,9 +146,9 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
   componentWillUnmount() {
     this.teardownReflow();
-    if (this.agentStoreUnsub) {
-      this.agentStoreUnsub();
-      this.agentStoreUnsub = null;
+    if (this.unreadListener) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM, this.unreadListener);
+      this.unreadListener = null;
     }
     if (this.openSessionListener) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.OPEN_CHAT_SESSION, this.openSessionListener);
@@ -168,26 +166,14 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     // now-narrower shell → below the threshold → flip to overlay → shell widens → fire
     // again. window.innerWidth is the one measurement the reservation cannot affect.
     window.addEventListener('resize', this.handleResize);
-    if (this.localRoot) {
-      // Local rewrites data-location on every route change, which is how the collapsed
-      // tab knows whether it is on a site screen. Attribute-filtered, so unrelated class
-      // churn on the shell does not wake this up.
-      this.routeObserver = new MutationObserver(this.handleRouteChange);
-      this.routeObserver.observe(this.localRoot, { attributes: true, attributeFilter: ['data-location'] });
-    }
     // Runs either way. With no shell there is nothing to observe and nothing to resize,
     // but the panel still has to know it must overlay — skipping this left reflowMode at
     // its initial value, so a docked panel drew with no shadow AND reserved no space.
     this.applyReflow();
-    this.handleRouteChange();
   }
 
   private teardownReflow() {
     window.removeEventListener('resize', this.handleResize);
-    if (this.routeObserver) {
-      this.routeObserver.disconnect();
-      this.routeObserver = null;
-    }
     if (this.localRoot) {
       // Clearing the inline value restores Window.scss's own `right: 0`.
       this.localRoot.style.right = '';
@@ -208,35 +194,29 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   /**
-   * Load the two things the collapsed tab exists to carry: how many decisions are waiting,
-   * and whether anything is stuck. Both are also what the open panel's Insights tab shows,
-   * so they come from the same sources rather than a second reckoning.
+   * Load the two things the collapsed tab exists to carry: how many chats are waiting on
+   * a reply, and whether anything is stuck.
+   *
+   * Unread is computed in the database rather than here — it needs each session's newest
+   * message role, which the session list does not carry, and deriving it from updatedAt
+   * would count a message the user just sent as waiting on them.
    */
   private setupSignals() {
-    const update = () => {
-      const events = agentStore.getState().activityEvents;
-      this.setState({
-        pendingEvents: events
-          .filter((e) => e.status === 'review')
-          .map((e) => ({ siteName: e.siteName })),
-      });
-    };
-    update();
-    agentStore.subscribe(update);
-    this.agentStoreUnsub = () => agentStore.unsubscribe(update);
+    this.refreshUnread();
 
-    // Activity events name their site by NAME; Local's route gives an ID. Without this map
-    // a site-scoped badge cannot be computed, and we show none rather than a fleet number.
-    this.props.electron.ipcRenderer
-      .invoke(IPC_CHANNELS.GET_SITES)
-      .then((result: any) => {
-        const siteNames: Record<string, string> = {};
-        (Array.isArray(result) ? result : []).forEach((s: any) => {
-          if (s?.id && s?.name) siteNames[String(s.id)] = String(s.name);
-        });
-        this.setState({ siteNames });
-      })
-      .catch(() => { /* leaves siteNames empty — badge stays absent, never wrong */ });
+    // A reply landing while the panel is closed is exactly the case the badge exists for,
+    // so the stream event refreshes it rather than waiting for the next mount. When the
+    // panel IS open on that session the user is watching the reply arrive, so it is marked
+    // read first — otherwise the badge would count the conversation on screen.
+    this.unreadListener = () => {
+      const { panelState, activeSessionId } = this.state;
+      if (panelState !== 'closed' && activeSessionId) {
+        this.markRead(activeSessionId).then(this.refreshUnread);
+      } else {
+        this.refreshUnread();
+      }
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM, this.unreadListener);
 
     this.props.electron.ipcRenderer
       .invoke(IPC_CHANNELS.GET_DASHBOARD_STATS)
@@ -246,41 +226,36 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       .catch(() => { /* leaves fleetHealth null — stuck marker stays absent */ });
   }
 
+  /** Stamp a session as seen. Best-effort: a failure leaves it counted, never wrongly cleared. */
+  private markRead = (sessionId: string): Promise<void> =>
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.CHAT_SESSION_MARK_READ, { sessionId })
+      .catch(() => undefined);
+
+  /** Ask the database how many sessions are waiting. null on any failure — never 0. */
+  private refreshUnread = (): void => {
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.CHAT_UNREAD_COUNT)
+      .then((n: unknown) => {
+        this.setState({ unreadChats: typeof n === 'number' ? n : null });
+      })
+      .catch(() => { this.setState({ unreadChats: null }); });
+  };
+
   /**
-   * The collapsed tab's two signals, scoped to what is on screen.
+   * The collapsed tab's two signals.
    *
-   * On a site screen the tab speaks only for that site: a fleet count there is a false
-   * statement about the thing the user is looking at, and a fleet problem elsewhere is not
-   * this site's problem and must not look like one. When scope cannot be resolved the
-   * signal is absent (null), never zero and never the fleet figure.
+   * Both are fleet-wide. An earlier version scoped them to the site on screen, but that
+   * branch never ran — readSiteId matched `/site-info/...` while Local pushes
+   * `/main/site-info/<id>` — so the tab had always shown the fleet figure regardless.
+   * Rather than repair scoping nobody had seen, the badge is now one honest global count.
    */
-  private tabSignals(): { badgeCount: number | null; hasStuck: boolean | null; scopeLabel: string } {
-    const { scopedSiteId, siteNames, pendingEvents, fleetHealth } = this.state;
-
-    if (scopedSiteId) {
-      const siteName = siteNames[scopedSiteId];
-      return {
-        // Unresolved name → no badge. Falling back to the fleet count here would print a
-        // number about 373 sites on a page showing one.
-        badgeCount: siteName ? pendingEvents.filter((e) => e.siteName === siteName).length : null,
-        // Stuck is a fleet-level statement; on a site screen it is not this site's problem.
-        hasStuck: false,
-        scopeLabel: 'THIS SITE',
-      };
-    }
-
+  private tabSignals(): { badgeCount: number | null; hasStuck: boolean | null } {
+    const { unreadChats, fleetHealth } = this.state;
     return {
-      badgeCount: pendingEvents.length,
+      badgeCount: unreadChats,
       hasStuck: fleetHealth === null ? null : fleetHealth === 'degraded' || fleetHealth === 'failing',
-      scopeLabel: 'INSIGHTS',
     };
-  }
-
-  private handleRouteChange() {
-    const scopedSiteId = readSiteId(this.localRoot);
-    if (scopedSiteId !== this.state.scopedSiteId) {
-      this.setState({ scopedSiteId });
-    }
   }
 
   private applyReflow() {
@@ -339,21 +314,17 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   render() {
     const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, selectedSiteIds, reflowMode } = this.state;
 
-    const panelContent = activeTab === 'insights'
-      ? React.createElement(PanelInsights, {
-          electron: this.props.electron,
-          onOpenAgents: this.openAgentsHub,
-        })
-      : React.createElement(PanelChat, {
-          ref: this.chatRef,
-          electron: this.props.electron,
-          sessionId: activeSessionId,
-          selectedSiteIds,
-          visible: panelState !== 'closed',
-          onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
-          onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
-          onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
-        });
+    // Chat is the panel's only content now that Insights is gone.
+    const panelContent = React.createElement(PanelChat, {
+      ref: this.chatRef,
+      electron: this.props.electron,
+      sessionId: activeSessionId,
+      selectedSiteIds,
+      visible: panelState !== 'closed',
+      onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
+      onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
+      onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
+    });
 
 
     const sessionsSidebar = panelState === 'full' || showSessions

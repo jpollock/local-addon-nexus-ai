@@ -36,6 +36,8 @@ import {
   getSession,
   saveSession,
   deleteSession,
+  countUnreadSessions,
+  markSessionRead,
   pruneSessions,
 } from './ipc/chat-sessions';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
@@ -6424,6 +6426,29 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   safeHandle(IPC_CHANNELS.CHAT_SESSION_DELETE, async (_event: any, { sessionId }: { sessionId: string }) => {
     const db = graphService.getDb();
     deleteSession(db!, sessionId);
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_UNREAD_COUNT, async () => {
+    const db = graphService.getDb();
+    // No db yet means no answer, not zero: a badge showing 0 during startup is a
+    // claim that nothing is waiting, which we cannot make yet.
+    if (!db) return null;
+    try {
+      return countUnreadSessions(db);
+    } catch {
+      return null;
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_MARK_READ, async (_event: any, { sessionId }: { sessionId: string }) => {
+    const db = graphService.getDb();
+    if (!db || !sessionId) return { success: false };
+    try {
+      markSessionRead(db, sessionId);
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
   });
 
   // Remove any listeners from a prior hot-reload before re-registering.
