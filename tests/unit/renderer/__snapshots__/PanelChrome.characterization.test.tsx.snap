@@ -924,6 +924,7 @@ exports[`panel chrome — characterization renders streaming 1`] = `
                   "children": null,
                   "key": null,
                   "props": {
+                    "className": "nexus-pulse",
                     "style": {
                       "background": "#0ECAD4",
                       "borderRadius": "50%",

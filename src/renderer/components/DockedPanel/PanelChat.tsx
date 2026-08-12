@@ -697,12 +697,18 @@ export class PanelChat extends React.Component<Props, State> {
 
     const toolCards = [...runningChips, ...approvalCards, ...doneChips].filter(Boolean);
 
-    // Typing indicator: only show when streaming with no content AND no tool activity yet
     const hasToolActivity = allCalls.length > 0;
 
     let bubbleElement: React.ReactNode;
     if (msg.role === 'assistant') {
-      if (msg.streaming && !msg.content && !hasToolActivity) {
+      if (msg.streaming && !msg.content && hasToolActivity) {
+        // Tools are running and nothing has been written yet. Rendering the bubble here
+        // produced an empty grey slab above the tool list — a container for text that did
+        // not exist. The tool rows are the progress; they do not need a frame around
+        // nothing. Three dots would be wrong too: it is not typing, it is working, and
+        // the header already says so.
+        bubbleElement = null;
+      } else if (msg.streaming && !msg.content) {
         bubbleElement = React.createElement(
           'div',
           { style: { ...styles.assistantBubble, whiteSpace: 'normal' as const } },
@@ -744,11 +750,14 @@ export class PanelChat extends React.Component<Props, State> {
       bubbleElement = React.createElement('div', { style: styles.userBubble }, msg.content);
     }
 
+    // Tool rows come BEFORE the bubble: they happened first, and the answer is the
+    // conclusion drawn from them. Rendering them after put the working-out below the
+    // result and, while streaming, pushed the live rows off the bottom of the transcript.
     return React.createElement(
       'div',
       { key: msg.id },
-      bubbleElement,
       ...toolCards,
+      bubbleElement,
     );
   }
 

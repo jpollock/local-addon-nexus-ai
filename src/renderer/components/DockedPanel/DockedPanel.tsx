@@ -389,7 +389,14 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           ? React.createElement(
               'span',
               { style: { fontSize: 12, color: UI_COLORS.WPE_BRAND, lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 5 } },
-              React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: UI_COLORS.WPE_BRAND, flexShrink: 0, display: 'inline-block' } }),
+              // Pulsing, not static. A still dot beside the word "Working…" is
+              // indistinguishable from a stalled panel — the text alone cannot tell you
+              // whether anything is still happening, which is the one thing it is there
+              // to say. Honours prefers-reduced-motion (see agent-console.css).
+              React.createElement('span', {
+                className: 'nexus-pulse',
+                style: { width: 6, height: 6, borderRadius: '50%', background: UI_COLORS.WPE_BRAND, flexShrink: 0, display: 'inline-block' },
+              }),
               streamingStatus,
             )
           : null,

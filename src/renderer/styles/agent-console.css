@@ -293,3 +293,18 @@
 [data-nexus-sessions]::-webkit-scrollbar-thumb { background: var(--ag-border); border-radius: 3px; }
 [data-nexus-chat]::-webkit-scrollbar-thumb:hover,
 [data-nexus-sessions]::-webkit-scrollbar-thumb:hover { background: var(--ag-border-control); }
+
+/* Liveness dot beside "Working…" in the docked panel header.
+   A static dot cannot distinguish "still going" from "stalled", which is the only
+   question the status line exists to answer. */
+@keyframes nexus-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.72); }
+}
+.nexus-pulse { animation: nexus-pulse 1.2s ease-in-out infinite; }
+
+/* Someone who has asked the OS to stop moving things gets a steady dot rather than
+   nothing — the indicator still reads as present, it just does not animate. */
+@media (prefers-reduced-motion: reduce) {
+  .nexus-pulse { animation: none; opacity: 0.85; }
+}
