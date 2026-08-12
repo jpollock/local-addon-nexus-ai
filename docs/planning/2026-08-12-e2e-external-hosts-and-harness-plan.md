@@ -73,7 +73,7 @@
 - Create: `tests/unit/e2e-harness/localLaunchPlan.test.ts`
 
 **Interfaces:**
-- Produces: `type LocalLaunchPlan`, `function planLocalLaunch(input: LocalLaunchInput): LocalLaunchPlan`, `function planNeedsNativeRebuild(plan: LocalLaunchPlan): boolean`. Tasks 2 and 3 consume both.
+- Produces: `type LocalLaunchPlan`, `function planLocalLaunch(input: LocalLaunchInput): LocalLaunchPlan`, `function planNeedsManualRebuild(plan: LocalLaunchPlan): boolean`. Task 2 consumes both.
 
 **Context:** `tests/e2e/helpers/environment.ts:232` `startLocal()` says it "Returns the child process, or null if Local was already running" but never checks — it calls `killExistingLocal()` at line 234 unconditionally. This task extracts the decision so it can be tested without spawning Electron.
 
@@ -88,7 +88,7 @@ Create `tests/unit/e2e-harness/localLaunchPlan.test.ts`:
  * This pins the decision only. The I/O that acts on it lives in
  * environment.ts; see localLaunchPlan.ts for why the decision is separate.
  */
-import { planLocalLaunch, planNeedsNativeRebuild } from '../../e2e/helpers/localLaunchPlan';
+import { planLocalLaunch, planNeedsManualRebuild } from '../../e2e/helpers/localLaunchPlan';
 
 const reachable = { mcpReachable: true, graphqlReady: true };
 const dead = { mcpReachable: false, graphqlReady: false };
@@ -128,13 +128,17 @@ describe('planLocalLaunch', () => {
   });
 });
 
-describe('planNeedsNativeRebuild', () => {
-  it('is false when adopting — the running Local already has a working binding', () => {
-    expect(planNeedsNativeRebuild({ action: 'adopt' })).toBe(false);
+describe('planNeedsManualRebuild', () => {
+  it('is false when adopting — we touch nothing the developer has', () => {
+    expect(planNeedsManualRebuild({ action: 'adopt' })).toBe(false);
   });
 
-  it('is true when launching, because we are about to start Electron ourselves', () => {
-    expect(planNeedsNativeRebuild({ action: 'launch', target: 'production', killFirst: true })).toBe(true);
+  it('is false for a production launch — dev-reload.sh already builds and rebuilds', () => {
+    expect(planNeedsManualRebuild({ action: 'launch', target: 'production', killFirst: true })).toBe(false);
+  });
+
+  it('is true only for the dev build, which we spawn ourselves', () => {
+    expect(planNeedsManualRebuild({ action: 'launch', target: 'dev', killFirst: true })).toBe(true);
   });
 });
 ```
@@ -196,13 +200,20 @@ export function planLocalLaunch(input: LocalLaunchInput): LocalLaunchPlan {
 }
 
 /**
- * The jest process never imports addon source (see jest.e2e.config.js — no
- * moduleNameMapper, "we talk to the addon over HTTP"), so the better-sqlite3
- * rebuild exists solely to serve a Local this harness is about to launch.
- * Adopting means there is nothing to build for.
+ * Does the harness have to build and rebuild the addon itself?
+ *
+ * Only for the dev build, which we spawn directly. The production path shells
+ * out to ./dev-reload.sh, which already runs `npm run build` and
+ * `npm run rebuild` — and, critically, injects nexus.env.local through
+ * `open --env`, which nothing else does.
+ *
+ * Adopting rebuilds nothing at all: the jest process never imports addon
+ * source (jest.e2e.config.js sets no moduleNameMapper — "we talk to the addon
+ * over HTTP"), so the only reason to touch the native binding is a Local we
+ * are about to start ourselves.
  */
-export function planNeedsNativeRebuild(plan: LocalLaunchPlan): boolean {
-  return plan.action === 'launch';
+export function planNeedsManualRebuild(plan: LocalLaunchPlan): boolean {
+  return plan.action === 'launch' && plan.target === 'dev';
 }
 ```
 
@@ -212,7 +223,7 @@ export function planNeedsNativeRebuild(plan: LocalLaunchPlan): boolean {
 npx jest tests/unit/e2e-harness/localLaunchPlan.test.ts
 ```
 
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Prove the tests are not vacuous**
 
@@ -259,7 +270,8 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
   }
 
   // Only past this point may we touch the developer's processes or files.
-  if (plan.killFirst) killExistingLocal();
+  // The production path does its killing inside dev-reload.sh (see Step 2).
+  if (plan.target === 'dev' && plan.killFirst) killExistingLocal();
   try { fs.unlinkSync(getConnectionInfoPath()); } catch { /* may not exist */ }
   try { fs.unlinkSync(getGraphQLConnectionInfoPath()); } catch { /* may not exist */ }
 
@@ -268,33 +280,53 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
 }
 ```
 
-- [ ] **Step 2: Add the production launcher**
+- [ ] **Step 2: Add the production launcher — it shells out to `./dev-reload.sh`**
 
 The existing spawn body becomes `launchDevLocal`. Add alongside it:
 
 ```ts
 /**
- * Launch /Applications/Local.app, matching what dev-reload.sh does. This is
- * the default because the dev build out of flywheel-local is a different app
- * with different branding, and substituting it silently is what made a test
- * run look like the developer's Local had been replaced.
+ * Launch production Local by running the repo's own ./dev-reload.sh.
+ *
+ * Do NOT hand-roll pkill + npm run build + open here. dev-reload.sh already
+ * does all three, and it does one thing nothing else does: it injects
+ * nexus.env.local through `open --env`. Per its own comment (lines 9-13),
+ * `export FOO=…; open …` does not work — `open` hands the launch to launchd,
+ * which uses launchd's environment. `open --env` is the supported injection,
+ * and it applies ONLY while the app is actually starting, which is why the
+ * kill has to come first. A Local launched any other way silently runs without
+ * NEXUS_GOOGLE_CLIENT_SECRET, and the failure surfaces much later as a token
+ * refresh error.
+ *
+ * dev-reload.sh does its own `pkill -x Local`, so plan.killFirst is already
+ * satisfied on this path.
  */
 async function launchProductionLocal(timeoutMs: number): Promise<ChildProcess | null> {
-  const appPath = '/Applications/Local.app';
-  if (!fs.existsSync(appPath)) {
+  const script = path.join(__dirname, '..', '..', '..', 'dev-reload.sh');
+  if (!fs.existsSync(script)) {
     throw new Error(
-      `Local not found at ${appPath}. Start Local yourself, or set ` +
+      `dev-reload.sh not found at ${script}. Start Local yourself, or set ` +
       'NEXUS_E2E_LOCAL_PATH to a flywheel-local checkout to launch the dev build.',
     );
   }
-  console.log(`[E2E Local] Launching ${appPath}...`);
-  execSync(`open "${appPath}"`, { stdio: 'ignore' });
+  console.log('[E2E Local] Launching Local via ./dev-reload.sh...');
+  execSync(`"${script}"`, {
+    cwd: path.join(__dirname, '..', '..', '..'),
+    stdio: 'inherit',
+    timeout: 600_000, // it runs npm run build + electron-rebuild
+  });
   await waitForMcpAndGraphql(timeoutMs);
   return null; // `open` detaches; teardown uses killExistingLocal, not a handle
 }
 ```
 
 Extract the existing "Wait for MCP server / Wait for GraphQL connection info" polling loop from `startLocal` into `waitForMcpAndGraphql(timeoutMs)` so both launchers use it rather than duplicating it.
+
+Because `dev-reload.sh` performs its own `pkill -x "Local"`, `startLocal` must **not** also call `killExistingLocal()` on the production path. Apply `plan.killFirst` only on the dev path:
+
+```ts
+if (plan.target === 'dev' && plan.killFirst) killExistingLocal();
+```
 
 - [ ] **Step 3: Set the started flag from the plan, not from a truthy child**
 
@@ -306,31 +338,33 @@ process.env.NEXUS_E2E_STARTED_LOCAL = 'true';
 
 as the first line of both `launchProductionLocal` and `launchDevLocal`, and delete the `if (localProcess)` block in `setup.ts` that sets it.
 
-- [ ] **Step 4: Gate the native rebuilds**
+- [ ] **Step 4: Delete the rebuild blocks from setup and teardown**
 
-In `tests/e2e/setup.ts`, wrap the whole "Cleaning and rebuilding better-sqlite3" + "Rebuilding addon" block so it runs only when a launch is planned. Because the plan is computed inside `startLocal`, compute it once in setup and pass it down — move the `startLocal()` call above the rebuild block and use the flag it sets:
+Gating them is not enough — they are now **redundant on every path**, so remove them outright.
+
+In `tests/e2e/setup.ts`, delete the entire "Cleaning and rebuilding better-sqlite3 for Electron" block and the "Rebuilding addon for Electron" block (currently lines 12-42), and move the `startLocal()` call up to where they were. Justification, which belongs in a comment there:
+
+- **adopt** — the running Local already has a working binding, and the jest process never imports addon source, so there is nothing to build for;
+- **production launch** — `dev-reload.sh` runs `npm run build` and `npm run rebuild` itself;
+- **dev launch** — `launchDevLocal` owns its own build, per `planNeedsManualRebuild`.
+
+Add the build to `launchDevLocal` so that path keeps working:
 
 ```ts
-const localProcess = await startLocal();
-const adopted = process.env.NEXUS_E2E_STARTED_LOCAL !== 'true';
-
-if (adopted) {
-  console.log('[E2E Setup] Adopted a running Local — skipping native rebuilds.');
-  process.env.NEXUS_E2E_SKIP_REBUILD = '1';
-} else {
-  // ...existing rm -rf build + npm run rebuild + npm run build block...
+async function launchDevLocal(timeoutMs: number): Promise<ChildProcess | null> {
+  process.env.NEXUS_E2E_STARTED_LOCAL = 'true';
+  if (planNeedsManualRebuild({ action: 'launch', target: 'dev', killFirst: true })) {
+    console.log('[E2E Local] Building addon for the dev Electron build...');
+    execSync('npm run build', { cwd: addonRoot, stdio: 'inherit' });
+    execSync('npm run rebuild', { cwd: addonRoot, stdio: 'inherit' });
+  }
+  // ...existing spawn + wait...
 }
 ```
 
-In `tests/e2e/teardown.ts`, guard the system-Node rebuild:
+In `tests/e2e/teardown.ts`, delete the "Rebuilding better-sqlite3 for system Node" block entirely.
 
-```ts
-if (process.env.NEXUS_E2E_SKIP_REBUILD === '1') {
-  console.log('[E2E Teardown] Adopted Local — leaving better-sqlite3 as found.');
-} else {
-  // ...existing npm rebuild better-sqlite3 block...
-}
-```
+Reasoning worth stating in the commit: the harness must leave the native ABI **exactly as it found it**. Under adopt it never touched it. Under a launch, `dev-reload.sh` set it to Electron precisely because the Local now running needs it — flipping it back to system Node at teardown would break that Local's next start, which is the failure this whole task exists to remove. CLAUDE.md already documents `npm rebuild better-sqlite3` (tests) and `npm run rebuild` (Local) as the deliberate manual context switch; a teardown that flips it silently is the footgun.
 
 - [ ] **Step 5: Verify by running against your own Local**
 
@@ -344,13 +378,18 @@ pgrep -f "/Applications/Local.app/Contents/MacOS/Local" | head -1   # must be th
 
 Expected: suite passes, the PID is unchanged, the log contains `Adopting the running Local`, and no `Killed existing Local processes` line appears.
 
-- [ ] **Step 6: Verify the ABI was left alone**
+- [ ] **Step 6: Verify the ABI was left exactly as found**
+
+Record the ABI before and after; they must match.
 
 ```bash
-node -e "new (require('better-sqlite3'))(':memory:'); console.log('system-Node ABI')" 2>&1 | tail -2
+probe() { node -e "new (require('better-sqlite3'))(':memory:'); console.log('system-Node(141)')" 2>&1 | grep -oE 'NODE_MODULE_VERSION 1[0-9]+|system-Node\(141\)' | head -1; }
+probe                      # before
+npx jest --config tests/e2e/jest.e2e.config.js --testPathPattern "01-"
+probe                      # after — must be identical
 ```
 
-Expected: a `NODE_MODULE_VERSION 146 ... requires 141` error, proving teardown did **not** rebuild for system Node — the Electron binding the running Local needs is intact.
+Expected: identical output both times. On an Electron-ABI tree that is `NODE_MODULE_VERSION 146` twice, proving teardown no longer rebuilds for system Node and the binding the running Local needs is intact.
 
 - [ ] **Step 7: Commit**
 
@@ -361,7 +400,14 @@ git commit -m "fix(e2e): adopt a running Local instead of killing it
 startLocal() documented 'returns null if Local was already running' and
 then pkilled it anyway, launched the flywheel-local dev build in its
 place, and rebuilt better-sqlite3 for Electron and back — leaving the
-developer with no Local and an unloadable addon."
+developer with no Local and an unloadable addon.
+
+When it does need to launch, it now runs ./dev-reload.sh rather than
+hand-rolling pkill + build + open. dev-reload.sh injects nexus.env.local
+via 'open --env', which only works while the app is starting; a
+hand-rolled launch silently drops NEXUS_GOOGLE_CLIENT_SECRET.
+
+The harness now leaves the native ABI exactly as it found it."
 ```
 
 ---

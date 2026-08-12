@@ -94,9 +94,18 @@ Locked during design review:
 GraphQL connection info is present, it returns `null` and adopts the running
 instance. It kills nothing, unlinks nothing, spawns nothing.
 
-Only when nothing answers does it launch, and it launches
-`/Applications/Local.app` via `open` — matching `dev-reload.sh` — rather than
-the `flywheel-local` dev build.
+Only when nothing answers does it launch, and it launches by running the repo's
+own **`./dev-reload.sh`** rather than the `flywheel-local` dev build.
+
+Shelling out to the existing script, rather than reimplementing it, is
+deliberate. `dev-reload.sh` already does `pkill -x Local`, `npm run build` and
+`npm run rebuild` — and it injects `nexus.env.local` through `open --env`,
+which nothing else does. Per its own comment, `export FOO=…; open …` does not
+work: `open` hands the launch to launchd, which uses launchd's environment, so
+`open --env` is the only supported injection and it applies only while the app
+is starting. A hand-rolled `pkill + build + open` would silently start Local
+without `NEXUS_GOOGLE_CLIENT_SECRET`, surfacing much later as a token-refresh
+failure.
 
 Two escape hatches, both explicit:
 
@@ -110,18 +119,30 @@ against a Local that exists but is unreachable.
 
 The docstring is corrected to describe what the function does.
 
-### B2. Drop the native-module rebuild in adopt mode
+### B2. Remove the native-module rebuilds from setup and teardown entirely
 
 `tests/e2e/jest.e2e.config.js` states "E2E tests don't import addon source
 directly" and sets no `moduleNameMapper`; the jest process talks to the addon
-over HTTP. The `better-sqlite3` rebuild in `globalSetup` therefore exists only
-to serve a Local that setup is about to launch.
+over HTTP. The `better-sqlite3` rebuild in `globalSetup` therefore only ever
+existed to serve a Local that setup was about to launch.
 
-In adopt mode there is nothing to build for: both the Electron rebuild in
-`globalSetup` and the system-Node rebuild in `globalTeardown` are skipped. They
-run only on the launch path and under `NEXUS_E2E_MANAGE_LOCAL=1`.
+Once B1 lands, that block is redundant on **every** path, so it is deleted
+rather than merely gated:
 
-This removes the failure mode that left the addon unloadable after a test run.
+- **adopt** — the running Local already has a working binding, and nothing in
+  the jest process needs one;
+- **production launch** — `dev-reload.sh` runs `npm run build` and
+  `npm run rebuild` itself;
+- **dev launch** — the dev launcher owns its own build.
+
+The system-Node rebuild in `globalTeardown` is deleted too. **The harness must
+leave the native ABI exactly as it found it.** Under adopt it never touched it;
+under a launch, `dev-reload.sh` set it to Electron precisely because the Local
+now running needs it, and flipping it back would break that Local's next start
+— the very failure this part exists to remove. CLAUDE.md already documents
+`npm rebuild better-sqlite3` (for tests) and `npm run rebuild` (for Local) as
+the deliberate manual context switch; a teardown that flips it silently is the
+footgun.
 
 ### B3. Truthful teardown
 
