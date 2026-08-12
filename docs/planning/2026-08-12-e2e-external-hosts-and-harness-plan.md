@@ -1214,6 +1214,12 @@ git commit -m "test(e2e): external host indexing and vector table isolation"
 **Files:**
 - Create: `tests/e2e-cli/31-external-host-fleet.cli-e2e.test.ts`
 
+**Helper addition required.** `NexusMcpClient` in `tests/e2e-cli/helpers/mcp-client.ts`
+exposes only `callTool`. This file also needs `readResource(uri: string): Promise<string>`.
+Add it, modelled on the `resources/read` JSON-RPC call already implemented in
+`tests/e2e/helpers/client.ts`: same endpoint and bearer auth, method `resources/read`,
+params `{ uri }`, returning the joined text contents.
+
 **Non-vacuity target:** `source IN ('wpe','external')` at `src/main/ipc-handlers.ts:780` and `src/main/mcp/site-resolver.ts:63`.
 
 **Context:** A registered host that is invisible to fleet-wide discovery makes a chat agent report it "not registered." `source='wpe'` alone was the bug; `source != 'local'` is forbidden because it silently absorbs any future source.
