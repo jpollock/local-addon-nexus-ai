@@ -30,6 +30,12 @@ module.exports = async function globalSetup() {
   console.log(`[E2E Setup] CAPI available: ${env.capiAvailable}`);
   console.log(`[E2E Setup] Ollama available: ${env.ollamaAvailable}`);
 
+  const { startSshFixture } = require('../e2e-cli/helpers/ssh-fixture');
+  const sshReady = await startSshFixture();
+  console.log(sshReady
+    ? '[E2E Setup] SSH fixture ready'
+    : '[E2E Setup] Docker unavailable — external-host MCP tests will skip');
+
   // Configure API keys for AI setup testing (if available in environment)
   const apiKeys: Record<string, string> = {};
 
