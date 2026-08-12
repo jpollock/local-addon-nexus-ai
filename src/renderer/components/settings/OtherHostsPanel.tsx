@@ -10,7 +10,7 @@ import { rendererGql } from '../../utils/rendererGql';
  */
 const HOST_PROBE_CLIENT_TIMEOUT_MS = 210000;
 
-export interface ExternalHostRow { alias: string; site: string; environment: string; domain: string; wpPath: string }
+export interface ExternalHostRow { alias: string; site: string; environment: string; domain: string; wpPath: string; allowRoot: boolean }
 interface SshConfigHost { alias: string; hostname: string; user: string; port: string; identityFile?: string; proxyJump?: string; alreadyRegistered: boolean }
 
 export type HostScreen =
@@ -46,6 +46,12 @@ interface OtherHostsPanelState {
   identity: Record<string, HostIdentity>;
   /** Whether to show the routing instruction after accept was clicked. */
   showAcceptInstruction: boolean;
+  /** Error message from the last probe, if any. */
+  probeError: string | null;
+  /** Error message from the last setRootMode call, if any. */
+  rootModeError: string | null;
+  /** Error message from the last removal, if any. */
+  removeError: string | null;
 }
 
 export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, OtherHostsPanelState> {
@@ -59,6 +65,9 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     checking: null,
     identity: {},
     showAcceptInstruction: false,
+    probeError: null,
+    rootModeError: null,
+    removeError: null,
   };
 
   componentDidMount(): void {
@@ -87,7 +96,16 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     });
   };
 
-  closeAdd = (): void => { this.setState({ screen: { name: 'list' } }); };
+  closeAdd = (): void => {
+    this.setState({
+      screen: { name: 'list' },
+      showAcceptInstruction: false,
+      discovered: {},
+      probeError: null,
+      rootModeError: null,
+      removeError: null,
+    });
+  };
 
   completeAdd = (_alias: string): void => {
     this.setState({ screen: { name: 'list' } });
@@ -95,30 +113,47 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
   };
 
   /**
-   * Re-probe one host. Returns an object with installs array from the probe, or empty on failure.
+   * Re-probe one host. Returns an object with installs array and error on success,
+   * or throws on failure.
    */
-  runProbe = async (alias: string): Promise<{ installs: string[] }> => {
-    try {
-      const data = await rendererGql<{ nexusHostProbe: { success: boolean; error: string | null; multiIssue: { installs: string[] } | null } }>(`
-        query ProbeHost($alias: String!) {
-          nexusHostProbe(alias: $alias) {
-            success
-            error
-            multiIssue {
-              installs
-            }
+  runProbe = async (alias: string): Promise<{ installs: string[]; changedHostKey?: { fingerprint: string; previousFingerprint: string } }> => {
+    const data = await rendererGql<{
+      nexusHostProbe: {
+        success: boolean;
+        error: string | null;
+        multiIssue: {
+          installs: string[];
+          issues: Array<{ kind: string; fingerprint?: string; previousFingerprint?: string }>;
+        } | null;
+      };
+    }>(`
+      mutation ProbeHost($alias: String!) {
+        nexusHostProbe(alias: $alias) {
+          success
+          error
+          multiIssue {
+            installs
+            issues { kind fingerprint previousFingerprint }
           }
         }
-      `, { alias }, HOST_PROBE_CLIENT_TIMEOUT_MS);
-
-      const result = data.nexusHostProbe;
-      if (!result.success || !result.multiIssue) {
-        return { installs: [] };
       }
-      return { installs: result.multiIssue.installs || [] };
-    } catch {
+    `, { alias }, HOST_PROBE_CLIENT_TIMEOUT_MS);
+
+    const result = data.nexusHostProbe;
+    if (!result.success) {
+      throw new Error(result.error || 'Probe failed');
+    }
+    if (!result.multiIssue) {
       return { installs: [] };
     }
+
+    const changedKey = result.multiIssue.issues?.find((i) => i.kind === 'changedHostKey');
+    return {
+      installs: result.multiIssue.installs || [],
+      changedHostKey: changedKey && changedKey.fingerprint && changedKey.previousFingerprint
+        ? { fingerprint: changedKey.fingerprint, previousFingerprint: changedKey.previousFingerprint }
+        : undefined,
+    };
   };
 
   /**
@@ -126,35 +161,72 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
    * Already-followed sites are never modified, unfollowed, or re-verified.
    */
   checkItNow = async (alias: string): Promise<void> => {
-    this.setState({ checking: alias });
-    const result = await this.runProbe(alias);
-    if (!this.mounted) return;
+    this.setState({ checking: alias, probeError: null });
+    try {
+      const result = await this.runProbe(alias);
+      if (!this.mounted) return;
 
-    // Filter out installs that are already followed by comparing the probe's
-    // discovered paths against the wp_path values stored for this alias.
-    // Normalize trailing slashes on both sides so /home/u/one and /home/u/one/ match.
-    const normalize = (p: string) => p.replace(/\/$/, '');
-    const followedPaths = new Set(
-      this.state.hosts
-        .filter(h => h.alias === alias)
-        .map(h => normalize(h.wpPath))
-    );
-    const newInstalls = result.installs.filter(path => !followedPaths.has(normalize(path)));
+      // If the host key changed, route to the identity-changed screen
+      if (result.changedHostKey) {
+        this.setState({
+          checking: null,
+          screen: { name: 'identityChanged', alias },
+          identity: {
+            ...this.state.identity,
+            [alias]: {
+              current: result.changedHostKey.fingerprint,
+              approved: result.changedHostKey.previousFingerprint,
+              approvedAt: 'previously', // We don't have the date from the probe
+            },
+          },
+        });
+        return;
+      }
 
-    this.setState({
-      checking: null,
-      discovered: {
-        ...this.state.discovered,
-        [alias]: newInstalls,
-      },
-    });
+      // Filter out installs that are already followed by comparing the probe's
+      // discovered paths against the wp_path values stored for this alias.
+      // Normalize trailing slashes on both sides so /home/u/one and /home/u/one/ match.
+      const normalize = (p: string) => p.replace(/\/$/, '');
+      const followedPaths = new Set(
+        this.state.hosts
+          .filter(h => h.alias === alias)
+          .map(h => normalize(h.wpPath))
+      );
+      const newInstalls = result.installs.filter(path => !followedPaths.has(normalize(path)));
+
+      this.setState({
+        checking: null,
+        discovered: {
+          ...this.state.discovered,
+          [alias]: newInstalls,
+        },
+      });
+    } catch (e: any) {
+      if (!this.mounted) return;
+      // Surface the error to the user
+      this.setState({
+        checking: null,
+        probeError: e?.message || 'Probe failed',
+      });
+    }
   };
 
   /**
    * Persist the root-mode setting for one host.
    */
   setRootMode = async (alias: string, allowRoot: boolean): Promise<void> => {
-    await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, alias, allowRoot);
+    this.setState({ rootModeError: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SET_EXTERNAL_HOST_ROOT_MODE, alias, allowRoot);
+      if (!result.success) {
+        this.setState({ rootModeError: result.error || 'Failed to update root mode' });
+      } else {
+        // Reload to pick up the new allowRoot value
+        this.reload();
+      }
+    } catch (e: any) {
+      this.setState({ rootModeError: e?.message || 'Failed to update root mode' });
+    }
   };
 
   /**
@@ -166,6 +238,32 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     // The user must approve it in Local → Preferences → Nexus AI.
     void alias;
     this.setState({ showAcceptInstruction: true });
+  };
+
+  /**
+   * Follow a discovered install by calling nexusHostAddSites, then refresh.
+   */
+  followDiscoveredInstall = async (alias: string, path: string): Promise<void> => {
+    try {
+      await rendererGql(`
+        mutation FollowSite($alias: String!, $sites: [NexusHostSiteEnvironmentInput!]!) {
+          nexusHostAddSites(alias: $alias, sites: $sites) {
+            success
+            error
+          }
+        }
+      `, {
+        alias,
+        sites: [{ path, environment: 'production', site: path.split('/').pop() || 'site' }],
+      });
+      // Remove from discovered and reload
+      const newDiscovered = { ...this.state.discovered };
+      newDiscovered[alias] = (newDiscovered[alias] || []).filter(p => p !== path);
+      this.setState({ discovered: newDiscovered });
+      this.reload();
+    } catch (e: any) {
+      console.error('Failed to follow install:', e);
+    }
   };
 
   /**
@@ -271,9 +369,11 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
       ),
 
       // Add button
-      React.createElement('div', {
+      React.createElement('button', {
         onClick: () => this.setState({ screen: { name: 'add' } }),
         style: {
+          border: 'none',
+          font: 'inherit',
           display: 'inline-block',
           padding: '6px 12px',
           background: 'var(--nxai-accent)',
@@ -301,13 +401,19 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
       }, 'Other hosts'),
 
       rows.map((row) =>
-        React.createElement('div', {
+        React.createElement('button', {
           key: row.alias,
           onClick: () => this.setState({ screen: { name: 'detail', alias: row.alias } }),
           style: {
+            border: 'none',
+            font: 'inherit',
+            width: '100%',
+            textAlign: 'left',
             padding: 16,
             background: 'var(--nxai-card-bg)',
-            border: '1px solid var(--nxai-card-border)',
+            borderWidth: 1,
+            borderStyle: 'solid',
+            borderColor: 'var(--nxai-card-border)',
             borderRadius: 6,
             marginBottom: 8,
             cursor: 'pointer',
@@ -368,6 +474,24 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
           ),
         ),
       ),
+
+      // Add a host button
+      React.createElement('button', {
+        onClick: () => this.setState({ screen: { name: 'add' } }),
+        style: {
+          border: 'none',
+          font: 'inherit',
+          display: 'inline-block',
+          padding: '6px 12px',
+          background: 'var(--nxai-accent)',
+          color: 'var(--nxai-accent-text)',
+          borderRadius: 4,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          marginTop: 8,
+        },
+      }, 'Add a host'),
     );
   }
 
@@ -376,12 +500,17 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     const hostSites = this.state.hosts.filter(h => h.alias === alias);
     const discovered = this.state.discovered[alias] || [];
     const cfg = this.state.sshConfigHosts.find(c => c.alias === alias);
+    const allowRoot = hostSites.length > 0 ? hostSites[0].allowRoot : false;
 
     return React.createElement('div', {},
       // Back button
-      React.createElement('div', {
-        onClick: () => this.setState({ screen: { name: 'list' } }),
+      React.createElement('button', {
+        onClick: () => this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
         style: {
+          border: 'none',
+          font: 'inherit',
+          background: 'transparent',
+          padding: 0,
           fontSize: 14,
           fontWeight: 600,
           color: 'var(--nxai-accent)',
@@ -481,24 +610,47 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
               color: 'var(--nxai-card-text)',
               padding: '8px 0',
               borderBottom: idx < discovered.length - 1 ? '1px solid var(--nxai-card-border)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             },
           },
-            React.createElement('div', {
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', {
+                style: {
+                  fontWeight: 600,
+                  marginBottom: 2,
+                },
+              }, path),
+              React.createElement('div', {
+                style: {
+                  color: 'var(--nxai-card-sub)',
+                },
+              }, 'Not yet followed'),
+            ),
+            React.createElement('button', {
+              onClick: () => this.followDiscoveredInstall(alias, path),
               style: {
+                border: 'none',
+                font: 'inherit',
+                display: 'inline-block',
+                padding: '4px 8px',
+                background: 'var(--nxai-accent)',
+                color: 'var(--nxai-accent-text)',
+                borderRadius: 4,
+                fontSize: 11,
                 fontWeight: 600,
-                marginBottom: 2,
+                cursor: 'pointer',
               },
-            }, path),
-            React.createElement('div', {
-              style: {
-                color: 'var(--nxai-card-sub)',
-              },
-            }, 'Not yet followed'),
+            }, 'Follow'),
           ),
         ),
-        React.createElement('div', {
+        React.createElement('button', {
           onClick: this.state.checking === alias ? undefined : () => this.checkItNow(alias),
+          disabled: this.state.checking === alias,
           style: {
+            border: 'none',
+            font: 'inherit',
             display: 'inline-block',
             padding: '6px 12px',
             background: this.state.checking === alias ? 'var(--nxai-status-neutral)' : 'var(--nxai-accent)',
@@ -510,6 +662,13 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             marginTop: 12,
           },
         }, this.state.checking === alias ? 'Checking...' : 'Check it now'),
+        this.state.probeError && React.createElement('div', {
+          style: {
+            marginTop: 8,
+            fontSize: 12,
+            color: 'var(--nxai-error-text)',
+          },
+        }, this.state.probeError),
       ),
 
       // Capabilities
@@ -608,6 +767,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
         },
           React.createElement('input', {
             type: 'checkbox',
+            checked: allowRoot,
             onChange: (e: any) => this.setRootMode(alias, e.target.checked),
           }),
           React.createElement('span', {
@@ -617,6 +777,13 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             },
           }, 'Allow root access'),
         ),
+        this.state.rootModeError && React.createElement('div', {
+          style: {
+            marginTop: 8,
+            fontSize: 12,
+            color: 'var(--nxai-error-text)',
+          },
+        }, this.state.rootModeError),
       ),
 
       // Removal
@@ -643,9 +810,11 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             marginBottom: 12,
           },
         }, 'Disconnect from this host and remove all its sites from Nexus'),
-        React.createElement('div', {
+        React.createElement('button', {
           onClick: () => this.setState({ screen: { name: 'remove', alias } }),
           style: {
+            border: 'none',
+            font: 'inherit',
             display: 'inline-block',
             padding: '6px 12px',
             background: 'var(--nxai-error-bg)',
@@ -668,9 +837,13 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
 
     return React.createElement('div', {},
       // Back button
-      React.createElement('div', {
-        onClick: () => this.setState({ screen: { name: 'list' } }),
+      React.createElement('button', {
+        onClick: () => this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
         style: {
+          border: 'none',
+          font: 'inherit',
+          background: 'transparent',
+          padding: 0,
           fontSize: 14,
           fontWeight: 600,
           color: 'var(--nxai-accent)',
@@ -768,9 +941,11 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             gap: 8,
           },
         },
-          React.createElement('div', {
-            onClick: () => this.setState({ screen: { name: 'list' } }),
+          React.createElement('button', {
+            onClick: () => this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
             style: {
+              border: 'none',
+              font: 'inherit',
               display: 'inline-block',
               padding: '6px 12px',
               background: 'var(--nxai-card-border)',
@@ -781,9 +956,11 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
               cursor: 'pointer',
             },
           }, 'Leave it disconnected'),
-          React.createElement('div', {
+          React.createElement('button', {
             onClick: () => this.acceptIdentity(alias),
             style: {
+              border: 'none',
+              font: 'inherit',
               display: 'inline-block',
               padding: '6px 12px',
               background: 'var(--nxai-accent)',
@@ -827,8 +1004,9 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     const siteCount = this.state.hosts.filter(h => h.alias === alias).length;
 
     const handleRemove = async () => {
+      this.setState({ removeError: null });
       try {
-        await rendererGql(`
+        const data = await rendererGql<{ nexusHostRemove: { success: boolean; error: string | null } }>(`
           mutation RemoveHost($alias: String!) {
             nexusHostRemove(alias: $alias) {
               success
@@ -836,20 +1014,26 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             }
           }
         `, { alias });
-        this.setState({ screen: { name: 'list' } });
+        if (!data.nexusHostRemove.success) {
+          this.setState({ removeError: data.nexusHostRemove.error || 'Failed to remove host' });
+          return;
+        }
+        this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null });
         this.reload();
-      } catch {
-        // Silent failure for now — reload will show current state
-        this.setState({ screen: { name: 'list' } });
-        this.reload();
+      } catch (e: any) {
+        this.setState({ removeError: e?.message || 'Failed to remove host' });
       }
     };
 
     return React.createElement('div', {},
       // Back button
-      React.createElement('div', {
+      React.createElement('button', {
         onClick: () => this.setState({ screen: { name: 'detail', alias } }),
         style: {
+          border: 'none',
+          font: 'inherit',
+          background: 'transparent',
+          padding: 0,
           fontSize: 14,
           fontWeight: 600,
           color: 'var(--nxai-accent)',
@@ -886,7 +1070,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             marginBottom: 16,
           },
         },
-          `Its ${siteCount} followed sites disappear from your sites list, and everything Nexus worked out about them is deleted — what is installed, what is published, past findings.`,
+          `Its ${siteCount} followed ${siteCount === 1 ? 'site' : 'sites'} disappear from your sites list, and everything Nexus worked out about them is deleted — what is installed, what is published, past findings.`,
           ' ',
           React.createElement('strong', {}, 'The server is not touched.'),
           ` Nothing is deleted on ${alias}, and you can add it again later — it will read everything from scratch.`,
@@ -931,6 +1115,13 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             },
           }, 'Remove host'),
         ),
+        this.state.removeError && React.createElement('div', {
+          style: {
+            marginTop: 12,
+            fontSize: 12,
+            color: 'var(--nxai-error-text)',
+          },
+        }, this.state.removeError),
       ),
     );
   }

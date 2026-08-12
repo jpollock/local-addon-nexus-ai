@@ -33,10 +33,13 @@ export function injectThemeVars(): void {
       --nxai-chat-assistant-bg: #fef3c7;
       --nxai-filter-bg: #f0fdf4;
       --nxai-error-bg: #fef2f2;
+      --nxai-error-border: #fecaca;
+      --nxai-error-text: #991b1b;
       /* Reset-row styling — amber and red levels from COPY.md.
          Amber follows the same light → dark darkening pattern as warn/error:
          --nxai-warn-text (#d97706 → #fbbf24) establishes the amber-text precedent,
          and the amber backgrounds follow --nxai-error-bg's (#fef2f2 → #450a0a) darkening ratio. */
+      --nxai-amber-bg: #fffbeb;
       --nxai-amber-border: #fde68a;
       --nxai-amber-row-bg: #fffdf7;
       --nxai-amber-button-bg: #fffbeb;
@@ -83,10 +86,13 @@ export function injectThemeVars(): void {
       --nxai-chat-assistant-bg: #78350f;
       --nxai-filter-bg: #052e16;
       --nxai-error-bg: #450a0a;
+      --nxai-error-border: #991b1b;
+      --nxai-error-text: #fca5a5;
       /* Reset-row styling — dark theme. Derived from the light → dark pattern:
          --nxai-error-bg goes #fef2f2 → #450a0a (very dark red).
          Amber follows the same darkening ratio, and amber-text follows
          --nxai-warn-text (#d97706 → #fbbf24). */
+      --nxai-amber-bg: #78350f;
       --nxai-amber-border: #92400e;
       --nxai-amber-row-bg: #451a03;
       --nxai-amber-button-bg: #78350f;

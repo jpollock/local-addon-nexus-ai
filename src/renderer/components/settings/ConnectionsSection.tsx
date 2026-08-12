@@ -12,7 +12,7 @@ import type { AIProvider, NexusSettings } from '../../../common/types';
 import { OtherHostsPanel } from './OtherHostsPanel';
 
 interface WpeAccount { id: string; name: string; nickname?: string; }
-interface ExternalHost { alias: string; site: string; environment: string; domain: string; wpPath: string; }
+interface ExternalHost { alias: string; site: string; environment: string; domain: string; wpPath: string; allowRoot: boolean; }
 
 interface ConnectionsProps {
   settings: NexusSettings;
@@ -347,7 +347,6 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
   renderWhereSitesAre(): React.ReactElement {
     const { wpeAccounts, externalHosts } = this.props;
     const wpeCount = wpeAccounts.length;
-    const extCount = externalHosts.length;
 
     return React.createElement('div', null,
       this.renderGroupHeading('Where your sites are'),

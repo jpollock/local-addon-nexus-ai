@@ -14,9 +14,12 @@ const mockIpc = new MockIpcMain();
 jest.mock('electron', () => ({ ipcMain: mockIpc, shell: { openPath: jest.fn() }, app: { getPath: () => '/tmp' } }));
 
 import { registerIpcHandlers } from '../../../src/main/ipc-handlers';
-import { IPC_CHANNELS } from '../../../src/common/constants';
+import { IPC_CHANNELS, STORAGE_KEYS } from '../../../src/common/constants';
 
-function register(rows: Array<{ id: string; name: string; account_id?: string; environment: string | null; domain: string | null; wp_path?: string | null; is_active: number }>) {
+function register(
+  rows: Array<{ id: string; name: string; account_id?: string; environment: string | null; domain: string | null; wp_path?: string | null; is_active: number }>,
+  profiles: Record<string, any> = {}
+) {
   const noop = () => {};
   const db = {
     prepare: (sql: string) => ({
@@ -30,7 +33,10 @@ function register(rows: Array<{ id: string; name: string; account_id?: string; e
     embeddingService: {},
     contentPipeline: {},
     vectorStore: {},
-    registryStorage: { get: () => null, set: noop },
+    registryStorage: {
+      get: (key: string) => key === STORAGE_KEYS.EXTERNAL_SITE_PROFILES ? profiles : null,
+      set: noop
+    },
     localLogger: { info: noop, warn: noop, error: noop, debug: noop },
     getMcpServer: () => null,
     getStartupStatus: () => ({ ready: true, phase: 'ready' }),
@@ -48,7 +54,7 @@ describe('GET_EXTERNAL_HOSTS', () => {
       { id: 'ssh:hostinger-test/site-a', name: 'site-a', account_id: 'hostinger-test', environment: 'production', domain: 'example.com', wp_path: '/home/u/site-a', is_active: 1 },
     ]);
     const result = mockIpc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS);
-    expect(result).toEqual([{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com', wpPath: '/home/u/site-a' }]);
+    expect(result).toEqual([{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com', wpPath: '/home/u/site-a', allowRoot: false }]);
   });
 
   it('excludes a removed (inactive) host', () => {
@@ -63,7 +69,7 @@ describe('GET_EXTERNAL_HOSTS', () => {
       { id: 'ssh:hostinger-test/bare', name: 'bare', account_id: 'hostinger-test', environment: null, domain: null, wp_path: null, is_active: 1 },
     ]);
     expect(mockIpc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS)).toEqual([
-      { alias: 'hostinger-test', site: 'bare', environment: 'production', domain: '', wpPath: '' },
+      { alias: 'hostinger-test', site: 'bare', environment: 'production', domain: '', wpPath: '', allowRoot: false },
     ]);
   });
 
@@ -72,8 +78,17 @@ describe('GET_EXTERNAL_HOSTS', () => {
       { id: 'ssh:hostinger-test', name: 'hostinger-test', account_id: undefined, environment: 'production', domain: 'example.hostingersite.com', wp_path: '/home/u/public_html', is_active: 1 },
     ]);
     expect(mockIpc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS)).toEqual([
-      { alias: 'hostinger-test', site: 'hostinger-test', environment: 'production', domain: 'example.hostingersite.com', wpPath: '/home/u/public_html' },
+      { alias: 'hostinger-test', site: 'hostinger-test', environment: 'production', domain: 'example.hostingersite.com', wpPath: '/home/u/public_html', allowRoot: false },
     ]);
+  });
+
+  it('includes allowRoot from the external profile when available', () => {
+    register(
+      [{ id: 'ssh:hostinger-test/site-a', name: 'site-a', account_id: 'hostinger-test', environment: 'production', domain: 'example.com', wp_path: '/home/u/site-a', is_active: 1 }],
+      { 'hostinger-test': { alias: 'hostinger-test', allowRoot: true, firstSeenAt: 1000, lastSeenAt: 2000 } }
+    );
+    const result = mockIpc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS);
+    expect(result).toEqual([{ alias: 'hostinger-test', site: 'site-a', environment: 'production', domain: 'example.com', wpPath: '/home/u/site-a', allowRoot: true }]);
   });
 
   it('returns an empty array when the graph is not ready', () => {

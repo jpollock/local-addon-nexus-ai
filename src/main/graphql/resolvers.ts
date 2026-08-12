@@ -5757,6 +5757,25 @@ export function createResolvers(context: ResolverContext) {
                   severity: 'high',
                 });
               }
+
+              // Record connection failures in Inbox. connRefused, connTimeout, and proxyJumpFailed
+              // are repeated probe failures that should aggregate via ON CONFLICT.
+              const connFailed = multi.issues.find((i) =>
+                i.kind === 'connRefused' || i.kind === 'connTimeout' || i.kind === 'proxyJumpFailed'
+              );
+              if (connFailed && services.inboxStore) {
+                const detail = `Nexus could not reach ${alias}. ${connFailed.detail || ''}`;
+                services.inboxStore.record({
+                  source: 'nexus',
+                  code: 'EXT-CONNECT-FAILED',
+                  scope: `name:ssh:${alias}`,
+                  scopeLabel: alias,
+                  kind: 'problem',
+                  title: 'Connection to this host failed',
+                  detail,
+                  severity: 'medium',
+                });
+              }
             } catch (e) {
               // Non-fatal -- see comment above.
             }

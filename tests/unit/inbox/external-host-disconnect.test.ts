@@ -62,4 +62,25 @@ describe('External host disconnect — Inbox aggregation', () => {
     expect(store.listOpen().items).toHaveLength(2);
     expect(store.listOpen().items.map(i => i.scope).sort()).toEqual(['name:ssh:boxa', 'name:ssh:boxb']);
   });
+
+  test('the resolver writes scope as a bare alias (name:ssh:<alias>), not the full site id', () => {
+    // Verify the shape that nexusHostProbe writes when it detects a changed host key
+    const input: InboxItemInput = {
+      source: 'nexus',
+      code: 'EXT-HOSTKEY-CHANGED',
+      scope: 'name:ssh:myhost',
+      scopeLabel: 'myhost',
+      kind: 'problem',
+      title: "This server's identity changed",
+      detail: 'Host key changed',
+      severity: 'high',
+    };
+
+    store.record(input, 1000);
+    const rows = store.listOpen();
+    expect(rows.items).toHaveLength(1);
+    // The scope should be the bare alias form, not ssh:myhost/site-a or similar
+    expect(rows.items[0].scope).toBe('name:ssh:myhost');
+    expect(rows.items[0].scopeLabel).toBe('myhost');
+  });
 });

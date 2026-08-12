@@ -33,7 +33,7 @@ interface SettingsShellState {
   sites: SiteItem[];
   wpeAccounts: WpeAccount[];
   wpeInstalls: WpeInstall[];
-  externalHosts: Array<{ alias: string; site: string; environment: string; domain: string; wpPath: string }>;
+  externalHosts: Array<{ alias: string; site: string; environment: string; domain: string; wpPath: string; allowRoot: boolean }>;
   loading: boolean;
   active: Section;
   fleetCounts: { wpe: number; external: number; local: number } | null;
@@ -309,9 +309,9 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
         color: 'var(--nxai-card-sub)',
       },
     },
-      'Everything Nexus can be configured with is here, with one exception: approving a new host the first time you connect to it stays in ',
-      React.createElement('span', { style: { color: 'var(--nxai-card-text)', fontWeight: 700 } }, 'Local → Preferences → Nexus AI'),
-      ', because that approval must not be reachable from anything but Local itself.',
+      'Everything Nexus can be configured with is here, with one exception: approving a host\'s fingerprint is reachable only through ',
+      React.createElement('span', { style: { color: 'var(--nxai-card-text)', fontWeight: 700 } }, 'Local itself'),
+      ', over a private channel — never over the API — because that approval must not be scriptable.',
     );
 
     return React.createElement('div', {

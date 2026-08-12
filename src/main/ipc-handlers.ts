@@ -105,7 +105,7 @@ import { captureOfferedHostKey, trustHostKey, checkHostKeyStatus } from './exter
 import { resolveSshConfig, defaultSshExec } from './external/sshExec';
 import { detectCollision, writeHostBlock, generateHostKey, previewHostBlock } from './external/sshConfigWriter';
 import { listSshConfigHosts } from './external/sshConfigParser';
-import { getExternalProfile, upsertExternalProfile } from './external/externalSiteStore';
+import { getExternalProfile, upsertExternalProfile, listExternalProfiles } from './external/externalSiteStore';
 import { collectFleetCounts } from './fleet/collectFleetCounts';
 import { buildSiteRows } from './fleet/siteRows';
 import { createExternalBulkOps } from './bulk/externalBulkOps';
@@ -1377,15 +1377,27 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const rows = db.prepare(
         "SELECT name, account_id, environment, domain, wp_path FROM sites WHERE source = 'external' AND is_active = 1"
       ).all() as Array<{ name: string; account_id: string | null; environment: string | null; domain: string | null; wp_path: string | null }>;
-      return rows.map((r) => ({
+
+      // Build a map of alias → allowRoot from the external profiles
+      const profilesByAlias = new Map<string, boolean>();
+      const profiles = listExternalProfiles(registryStorage);
+      for (const profile of profiles) {
+        profilesByAlias.set(profile.alias, profile.allowRoot ?? false);
+      }
+
+      return rows.map((r) => {
         // A legacy single-site registration has account_id = null -- the
         // site's own row IS the connection, so its own name is the alias.
-        alias: r.account_id ?? r.name,
-        site: r.name,
-        environment: r.environment ?? 'production',
-        domain: r.domain ?? '',
-        wpPath: r.wp_path ?? '',
-      }));
+        const alias = r.account_id ?? r.name;
+        return {
+          alias,
+          site: r.name,
+          environment: r.environment ?? 'production',
+          domain: r.domain ?? '',
+          wpPath: r.wp_path ?? '',
+          allowRoot: profilesByAlias.get(alias) ?? false,
+        };
+      });
     } catch {
       return [];
     }

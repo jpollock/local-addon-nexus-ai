@@ -17,10 +17,11 @@ describe('SettingsShell', () => {
 
   test('the footer names the one surviving native panel', () => {
     // Not "There is no second settings page" — host-key approval is IPC-only
-    // by design and must stay in Local's Preferences. Stating the exception is
+    // by design and must stay reachable only through Local itself. Stating the exception is
     // the acceptance test; overclaiming is not.
     const t = shell();
-    expect(t).toContain('Local → Preferences → Nexus AI');
+    expect(t).toContain('Local itself');
+    expect(t).toContain('private channel');
     expect(t).not.toContain('There is no second settings page');
   });
 

@@ -184,12 +184,15 @@ describe('E4: vector store cleanup on removal', () => {
     );
 
     // Both sites' vector stores should be dropped, with the real graph id passed through vectorSiteId.
-    // The vectorSiteId function translates ssh:<alias>/<site> to ssh_<alias>_<site>_<hash>, but
-    // we verify the input to dropSite was the translated form by checking the call happened.
+    // The vectorSiteId function translates ssh:<alias>/<site> to ssh_<alias>_<site>_<hash>.
     expect(c.context.services.vectorStore.dropSite).toHaveBeenCalledTimes(2);
     expect(c.vectorStoreDroppedSites).toHaveLength(2);
-    // The actual translated ids depend on vectorSiteId's implementation, but we can verify
-    // both sites were processed.
+
+    // Assert the arguments passed are the vectorSiteId()-translated ids, not the raw ids
+    const calls = (c.context.services.vectorStore.dropSite as jest.Mock).mock.calls;
+    // The translated id should start with 'ssh_' and contain hash, not raw 'ssh:'
+    expect(calls[0][0]).toMatch(/^ssh_hostinger-test_site-[ab]_[a-f0-9]{8}$/);
+    expect(calls[1][0]).toMatch(/^ssh_hostinger-test_site-[ab]_[a-f0-9]{8}$/);
   });
 
   it('nexusHostRemoveSite deletes vector documents for the single site', async () => {
