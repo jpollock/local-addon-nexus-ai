@@ -26,10 +26,15 @@ describe('vectorSiteId', () => {
     }
   });
 
-  it('does not collide two different ids that share the same character-class-replaced prefix', () => {
-    const a = vectorSiteId('ssh:a/b-c');
-    const b = vectorSiteId('ssh:a-b/c');
-    expect(a).not.toBe(b);
+  it('prevents collision on underscore pairs', () => {
+    // Real collision: ssh:a/b_c and ssh:a_b/c both sanitize to ssh_a_b_c.
+    // The hash suffix disambiguates them. Note: the ssh:a/b-c vs ssh:a-b/c
+    // example in CLAUDE.md is FALSE — hyphen is preserved, so those never collide.
+    const id1 = vectorSiteId('ssh:a/b_c');
+    const id2 = vectorSiteId('ssh:a_b/c');
+    expect(id1).not.toBe(id2);
+    expect(id1).toMatch(/^ssh_a_b_c_[0-9a-f]{8}$/);
+    expect(id2).toMatch(/^ssh_a_b_c_[0-9a-f]{8}$/);
   });
 
   it('is deterministic — the same id always translates to the same value', () => {

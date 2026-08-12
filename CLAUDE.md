@@ -528,17 +528,10 @@ that failed keeps its previous data — `writeExternalHostData` enforces both.
 Selection filters `is_active = 1`, because `nexusHostRemove` soft-deletes and a
 removed host must never be reconnected to.
 
-**L3 (content indexing) is now implemented for external hosts — but it did not
-actually work for every host until a later fix.** This section used to say
-indexing was entirely unimplemented (Spec 4b) and that Data Completeness
-always showed 0% Searchable — that was fixed by the scheduler and manual
-command below. But the fix itself had a bug: `vectorSiteId()` sanitized `ssh:
-`/`ssh_` but did nothing about `/`, so `ssh:a/b-c` and `ssh:a-b/c` (both real,
-multi-site-host ids) collided on the same sqlite-vec table name, silently
-losing one host's indexed content. A single-site external host — whose id has
-no `/` — was never affected. This is now fixed (see `vectorSiteId()` below);
-before that fix, content indexing was broken for any external connection with
-more than one registered site.
+**L3 (content indexing) is now implemented for external hosts.** This section
+used to say indexing was entirely unimplemented (Spec 4b) and that Data
+Completeness always showed 0% Searchable — that was fixed by the scheduler and
+manual command below.
 
 **External hosts now content-index too, on their own opt-in schedule.**
 `ExternalContentIndexScheduler` (`src/main/startup/ExternalContentIndexScheduler.ts`) is
@@ -548,17 +541,22 @@ does for WP Engine. Gated on `externalContentIndexAutoEnabled` (**default false*
 `externalContentIndexIntervalHours` (default 24). `nexus host index <alias>` runs one host on
 demand regardless of the setting.
 
-**Vector-store site ids strip disallowed characters, then append a hash.**
-`ssh:<alias>/<site>` fails `SqliteVecStore`'s `^[a-zA-Z0-9_-]+$` table-name
-validation (both `:` and `/` are illegal); `vectorSiteId()` sanitizes to
-`ssh_<alias>_<site>` only at that boundary, then appends an 8-char sha256 hash
-of the *original* id. A character-class replace alone is not enough — it
-creates real collisions (`ssh:a/b-c` and `ssh:a-b/c` both sanitize to
-`ssh_a_b_c`), which silently merged two hosts' indexed content into one
-sqlite-vec table until fixed. The hash suffix is applied uniformly, including
-to local/WPE ids that already satisfy the regex, rather than branching on
-whether an id needed sanitizing. The graph `content` table and `IndexRegistry`
-keep the real `ssh:<alias>/<site>` id; only the sqlite-vec table name is
+**Vector-store site ids strip disallowed characters, then conditionally append
+a hash.** `ssh:<alias>/<site>` fails `SqliteVecStore`'s `^[a-zA-Z0-9_-]+$`
+table-name validation (`:` and `/` are illegal); `vectorSiteId()` sanitizes to
+`ssh_<alias>_<site>` only at that boundary. The function BRANCHES: ids that
+already satisfy the regex (local/WPE) are returned unchanged — identity is
+load-bearing because writers never call `vectorSiteId()` and readers do, so
+they must agree on the table name. For ids that DO need sanitizing, an 8-char
+sha256 hash of the *original* id is appended to prevent collisions. A
+character-class replace alone creates real collisions when UNDERSCORES are
+present: `ssh:a/b_c` and `ssh:a_b/c` both sanitize to `ssh_a_b_c`. (Note:
+hyphens are PRESERVED — the `ssh:a/b-c` / `ssh:a-b/c` example previously in
+this doc was false; those never collide.) `assertSafeSshAlias`
+(`src/main/transport/ssh-args.ts`) forbids `_` in the alias segment, so the
+collision appears unreachable for validated external hosts in practice — the
+hash is defence in depth. The graph `content` table and `IndexRegistry` keep
+the real `ssh:<alias>/<site>` id; only the sqlite-vec table name is
 translated.
 
 **Vector document metadata says `source: 'external'`, never `'wpe'`.** Copying WP Engine's

@@ -1,11 +1,14 @@
 /**
- * Content indexing for external hosts, and the vector-table collision.
+ * Content indexing for external hosts: two WordPress installs under one SSH alias.
  *
- * NON-VACUITY: in src/main/vector-store/vectorSiteId.ts, drop the hash suffix
- * (return `sanitized` instead of `${sanitized}_${hash}`) and
- * "keeps each install's content in its own table" must go RED. Both installs
- * then sanitize to the same table name and one host's content silently
- * overwrites the other's.
+ * This fixture cannot demonstrate the vectorSiteId collision case (alpha and beta
+ * are different strings before hashing — a real collision needs underscore pairs
+ * like ssh:a/b_c vs ssh:a_b/c, both sanitizing to ssh_a_b_c). The collision
+ * contract is pinned by tests/unit/vector-store/vectorSiteId.test.ts instead.
+ *
+ * What THIS file proves: both installs index and retrieve independently via
+ * 'content search ssh:<alias>/<site>@<env>', which is real and is what caught
+ * the external content-search resolution bug fixed in 42059cef.
  */
 import { runCli } from './helpers/cli-test-utils';
 import { FIXTURE_ALIAS, fixtureAvailable, trustFixtureHostKey } from './helpers/ssh-fixture';
