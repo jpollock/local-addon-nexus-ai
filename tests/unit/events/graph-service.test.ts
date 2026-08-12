@@ -52,6 +52,42 @@ describe('GraphService', () => {
     });
   });
 
+  describe('cleanupOldData — event_queue prune (P0-7)', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+
+    function insertEvent(status: string, createdAt: number): void {
+      const db = graphService.getDb()!;
+      db.prepare(
+        "INSERT INTO event_queue (site_id, event_type, payload, status, created_at) VALUES (?, 'post.update', '{}', ?, ?)",
+      ).run('site-1', status, createdAt);
+    }
+
+    it('deletes old completed and failed events, keeps pending and recent ones', async () => {
+      const old = Date.now() - 40 * DAY;
+      const recent = Date.now();
+      insertEvent('completed', old); // terminal + old  -> delete
+      insertEvent('failed', old);    // terminal + old  -> delete
+      insertEvent('pending', old);   // not terminal    -> keep
+      insertEvent('completed', recent); // terminal but recent -> keep
+
+      const res = await graphService.cleanupOldData(30);
+
+      expect(res.events).toBe(2);
+      const remaining = graphService.getDb()!
+        .prepare('SELECT status FROM event_queue ORDER BY status')
+        .all() as Array<{ status: string }>;
+      expect(remaining.map(r => r.status)).toEqual(['completed', 'pending']);
+    });
+
+    it("does not delete the never-written 'processed' status as its sole target", async () => {
+      // Guards the original bug: the prune targeted status='processed', which the processor
+      // never writes, so a real completed event past the cutoff was never removed.
+      insertEvent('completed', Date.now() - 40 * DAY);
+      const res = await graphService.cleanupOldData(30);
+      expect(res.events).toBe(1);
+    });
+  });
+
   describe('site operations', () => {
     const testSite: Site = {
       id: 'site-123',

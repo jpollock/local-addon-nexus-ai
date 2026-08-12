@@ -1047,10 +1047,14 @@ export class GraphService {
 
     const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
 
-    // Delete old processed events from event_queue
+    // Delete old terminal events from event_queue. The processor writes 'completed'/'failed'
+    // (plus transient 'pending'/'processing'); it never writes 'processed', so the previous
+    // WHERE status='processed' matched nothing and this prune was a permanent no-op — event
+    // payloads (which carry post content and user emails) accumulated forever. Prune both
+    // terminal states; leave 'pending'/'processing' alone so in-flight work is never dropped.
     const deletedEventsResult = this.db
-      .prepare('DELETE FROM event_queue WHERE status = ? AND created_at < ?')
-      .run('processed', cutoffTime);
+      .prepare("DELETE FROM event_queue WHERE status IN ('completed', 'failed') AND created_at < ?")
+      .run(cutoffTime);
     const deletedEvents = deletedEventsResult.changes;
 
     // Only delete inactive sites

@@ -740,6 +740,24 @@ export default function main(context: any): void {
         try { applyRetention(nexusLogRoot, getRetentionPolicy()); } catch { /* never throw */ }
       }, 24 * 60 * 60 * 1000);
 
+      // Database retention sweep — startup and daily (P0-7). cleanupOldData prunes terminal
+      // event_queue rows (whose payloads carry post content and user emails) and hard-deletes
+      // long-inactive sites. It previously ran ONLY from the manual STORAGE_CLEANUP IPC handler,
+      // so on a machine where nobody clicked it the event_queue grew without bound. 30 days
+      // matches that handler's default. Never throws — a sweep fault must not fail startup.
+      const DB_RETENTION_DAYS = 30;
+      const sweepDatabaseRetention = () => {
+        graphService.cleanupOldData(DB_RETENTION_DAYS)
+          .then(r => {
+            if (r.events || r.sites) {
+              localLogger.info(`[NexusAI] DB retention: pruned ${r.events} events, ${r.sites} inactive sites`);
+            }
+          })
+          .catch(err => localLogger.warn(`[NexusAI] DB retention sweep failed: ${err?.message ?? err}`));
+      };
+      sweepDatabaseRetention();
+      setInterval(sweepDatabaseRetention, 24 * 60 * 60 * 1000);
+
       // Agent Platform initialization — requires GraphDB (same connection as SmartSearch)
       // contributedRegistry and dispatcher are hoisted so McpServer can consume them
       // even when agentDb is unavailable (they'll simply be empty/unused).
