@@ -128,8 +128,9 @@ cannot reproduce the `vectorSiteId` collision.
 The fixture registers its alias by writing `~/.ssh/config.d/nexus-e2e` and one
 idempotent `Include` line at the top of `~/.ssh/config`, mirroring what the
 shipped `sshConfigWriter.ts` does. It never touches `~/.ssh/config.d/nexus`.
-Both are removed at teardown, along with the container and the
-`[127.0.0.1]:2222` known_hosts entry.
+Both are removed at teardown by each suite (the MCP suite and the CLI suite run
+as separate jest invocations, so each cleans up), along with the container and
+the `[127.0.0.1]:2222` known_hosts entry.
 
 If the Docker daemon is not reachable, suites 27-32 skip.
 

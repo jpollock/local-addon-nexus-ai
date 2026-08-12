@@ -51,6 +51,16 @@ module.exports = async function globalTeardown() {
     delete process.env.NEXUS_E2E_STARTED_LOCAL;
   }
 
+  // Stop the SSH fixture. Both the MCP suite (this file) and the CLI suite
+  // (tests/e2e-cli/teardown.ts) must clean it up, even though only the CLI suite
+  // uses it: they are separate jest invocations that never run concurrently, so
+  // each is responsible for leaving the machine in the state it found it.
+  const { stopSshFixture } = require('../e2e-cli/helpers/ssh-fixture');
+  if (process.env.CLI_E2E_SSH_FIXTURE === 'ready') {
+    console.log('\n[E2E Teardown] Stopping SSH host fixture...');
+    await stopSshFixture();
+  }
+
   // Do NOT rebuild better-sqlite3 for system Node here.
   //
   // Under adopt we never touched it; under a launch, dev-reload.sh set it to
