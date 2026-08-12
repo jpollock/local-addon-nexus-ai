@@ -97,7 +97,17 @@ export async function trustFixtureHostKey(): Promise<void> {
   const pub = compose(['exec', '-T', 'sshhost', 'cat', '/etc/ssh/ssh_host_ed25519_key.pub']).trim();
   const [type, b64] = pub.split(/\s+/);
   await forgetFixtureHostKey();
-  fs.appendFileSync(path.join(SSH_DIR, 'known_hosts'), `${KNOWN_HOSTS_ENTRY} ${type} ${b64}\n`);
+  const knownHostsPath = path.join(SSH_DIR, 'known_hosts');
+  // Ensure the file ends with a newline before appending. ssh-keygen -R does not
+  // rewrite when nothing matches, so if known_hosts lacks a trailing newline,
+  // appendFileSync concatenates onto the last real host line, destroying it.
+  if (fs.existsSync(knownHostsPath)) {
+    const existing = fs.readFileSync(knownHostsPath);
+    if (existing.length > 0 && existing[existing.length - 1] !== 0x0a) {
+      fs.appendFileSync(knownHostsPath, '\n');
+    }
+  }
+  fs.appendFileSync(knownHostsPath, `${KNOWN_HOSTS_ENTRY} ${type} ${b64}\n`);
 }
 
 export async function forgetFixtureHostKey(): Promise<void> {
@@ -219,9 +229,28 @@ export async function stopSshFixture(): Promise<void> {
     console.warn(`[CLI E2E Teardown] Could not remove graph registration: ${e?.message ?? e}`);
   }
 
-  removeAliasBlock();
-  await forgetFixtureHostKey();
-  try { fs.unlinkSync(path.join(FIXTURE_DIR, '.probe_known_hosts')); } catch { /* fine */ }
-  try { compose(['down', '-v'], 120_000); } catch { /* already down */ }
+  // Each cleanup step is independently wrapped so one failure cannot skip the others.
+  try {
+    removeAliasBlock();
+  } catch (e: any) {
+    console.warn(`[CLI E2E Teardown] Could not remove alias block: ${e?.message ?? e}`);
+  }
+
+  try {
+    await forgetFixtureHostKey();
+  } catch (e: any) {
+    console.warn(`[CLI E2E Teardown] Could not forget host key: ${e?.message ?? e}`);
+  }
+
+  try {
+    fs.unlinkSync(path.join(FIXTURE_DIR, '.probe_known_hosts'));
+  } catch { /* fine */ }
+
+  try {
+    compose(['down', '-v'], 120_000);
+  } catch (e: any) {
+    console.warn(`[CLI E2E Teardown] Could not stop container: ${e?.message ?? e}`);
+  }
+
   delete process.env.CLI_E2E_SSH_FIXTURE;
 }
