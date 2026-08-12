@@ -246,8 +246,8 @@ git commit -m "test(e2e): extract Local launch decision as a pure function"
 - Modify: `tests/e2e/teardown.ts` (system-Node rebuild block)
 
 **Interfaces:**
-- Consumes: `planLocalLaunch`, `planNeedsNativeRebuild`, `LocalLaunchPlan` from Task 1.
-- Produces: `startLocal()` returns `null` when it adopted. `process.env.NEXUS_E2E_SKIP_REBUILD === '1'` is set by setup when it skipped the Electron rebuild; teardown reads it.
+- Consumes: `planLocalLaunch`, `planNeedsManualRebuild`, `LocalLaunchPlan` from Task 1.
+- Produces: `startLocal()` returns `null` on the adopt path **and** on the production-launch path (`open` detaches, so there is no child handle); only `launchDevLocal` returns a `ChildProcess`. Both launchers set `process.env.NEXUS_E2E_STARTED_LOCAL = 'true'` as their first statement, and that flag is the sole signal teardown uses to decide whether to stop Local. No rebuild-related env var exists — the rebuild blocks are deleted, not gated.
 
 **Context:** Verify line numbers before editing — they drift. `killExistingLocal()` runs `pkill -f "Local.app"` and `pkill -f "local-lightning"`. `startLocal()` also unlinks both connection-info files immediately after killing (currently lines 239-240); those unlinks must move inside the launch branch, because deleting them while adopting would break the very instance we adopted.
 
