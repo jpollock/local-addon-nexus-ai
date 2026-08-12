@@ -154,6 +154,25 @@ export async function startSshFixture(): Promise<boolean> {
 }
 
 export async function stopSshFixture(): Promise<void> {
+  // Remove the graph registration. Lives here rather than in each test file's
+  // afterAll because all six test files (27-32) register this host, so a
+  // per-file afterAll would be six identical blocks — and it would not run at
+  // all if a file failed to load. Centralizing here ensures "remove every trace"
+  // runs once from globalTeardown.
+  try {
+    const cliPath = path.resolve(__dirname, '../../../bin/nexus.js');
+    if (FIXTURE_ALIAS !== 'nexus-e2e-host') {
+      throw new Error(`FIXTURE_ALIAS guard: expected 'nexus-e2e-host', got '${FIXTURE_ALIAS}'`);
+    }
+    execFileSync('node', [cliPath, 'host', 'remove', FIXTURE_ALIAS, '-y'], {
+      stdio: 'ignore', timeout: 30_000,
+    });
+  } catch (e: any) {
+    // Best-effort: the CLI may be unreachable, or the host was never registered.
+    // Log and continue to the SSH/container cleanup — teardown must never throw.
+    console.warn(`[CLI E2E Teardown] Could not remove graph registration: ${e?.message ?? e}`);
+  }
+
   removeAliasBlock();
   await forgetFixtureHostKey();
   try { fs.unlinkSync(path.join(FIXTURE_DIR, '.probe_known_hosts')); } catch { /* fine */ }
