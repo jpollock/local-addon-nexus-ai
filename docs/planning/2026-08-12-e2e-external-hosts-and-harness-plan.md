@@ -1254,15 +1254,28 @@ d('external hosts in fleet-wide views', () => {
     expect(r.stdout).toContain(FIXTURE_ALIAS);
   });
 
-  it('appears in the fleet summary', async () => {
-    const r = await runCli(['fleet', 'summary', '--json'], { timeout: 180_000 });
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain(FIXTURE_ALIAS);
+  it('appears in nexus_list_sites — the tool agents call first', async () => {
+    // This is the historical gap: a registered host was invisible here, so a
+    // chat agent would confidently report it as "not registered".
+    const text = await mcpClient.callTool('nexus_list_sites', {});
+    expect(text).toContain(FIXTURE_ALIAS);
   });
 
-  it('appears in fleet plugins', async () => {
+  it('appears in the nexus://fleet/state resource', async () => {
+    const text = await mcpClient.readResource('nexus://fleet/state');
+    expect(text).toContain(FIXTURE_ALIAS);
+  });
+
+  it('its installs appear in fleet plugins', async () => {
+    // fleet plugins --json lists plugins, each with a `sites` array of SITE
+    // NAMES (e.g. "localwpe") — never aliases. So assert the install names.
+    // `fleet summary` is deliberately NOT asserted here: it takes no options
+    // at all and is a pure aggregate ("filesystem  9 sites"), so it never
+    // names an individual site and cannot evidence inclusion.
     const r = await runCli(['fleet', 'plugins', '--json'], { timeout: 180_000 });
-    expect(r.stdout).toContain(FIXTURE_ALIAS);
+    const parsed = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
+    const allSites = parsed.plugins.flatMap((p: any) => p.sites ?? []);
+    expect(allSites).toEqual(expect.arrayContaining(['alpha']));
   });
 
   it('never reports a coverage figure whose numerator exceeds its denominator', async () => {
