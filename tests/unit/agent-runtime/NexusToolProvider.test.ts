@@ -118,6 +118,54 @@ describe('NexusToolProvider — empty allowedTools denies everything', () => {
   });
 });
 
+describe('NexusToolProvider — Tier 3 destructive tools are refused for agents (P0-1 / C2)', () => {
+  it('refuses a declared Tier-3 tool and never reaches the registry', async () => {
+    // wpe_delete_install is Tier 3 in TIER_OVERRIDES. Even though the agent declares it,
+    // an agent loop has no human to satisfy the confirmation token, so it must be refused
+    // outright rather than handed a token the model can re-issue to itself.
+    const registry = makeRegistry({ wpe_delete_install: () => 'deleted' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['wpe_delete_install']);
+    await expect(provider.invoke('wpe_delete_install', { install_name: 'prod' })).rejects.toThrow(
+      /Tier 3/i,
+    );
+    expect(registry.call).not.toHaveBeenCalled();
+  });
+
+  it('refuses a Tier-3 tool even for an unrestricted (no tools list) agent', async () => {
+    const registry = makeRegistry({ local_wpe_push: () => 'pushed' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, undefined);
+    await expect(provider.invoke('local_wpe_push', { site: 'x' })).rejects.toThrow(/Tier 3/i);
+    expect(registry.call).not.toHaveBeenCalled();
+  });
+
+  it('still allows a declared Tier-2 tool (the refusal is Tier-3 specific)', async () => {
+    const registry = makeRegistry({ local_stop_site: () => 'stopped' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['local_stop_site']);
+    const result = await provider.invoke('local_stop_site', { site: 'x' });
+    expect(result).toBe('stopped');
+    expect(registry.call).toHaveBeenCalled();
+  });
+});
+
+describe('NexusToolProvider.getProviderToolDefinitions — Tier 3 excluded from the agent model', () => {
+  const registryWithT3 = {
+    list: () => [
+      { name: 'nexus_list_sites', description: 'read', inputSchema: { type: 'object', properties: {} } },
+      { name: 'wpe_delete_install', description: 'destroy', inputSchema: { type: 'object', properties: {} } },
+      { name: 'local_wpe_push', description: 'push', inputSchema: { type: 'object', properties: {} } },
+    ],
+    call: jest.fn(),
+  };
+
+  it('does not offer Tier-3 tools to the agent model, even when unrestricted', () => {
+    const p = new NexusToolProvider(registryWithT3 as any, {} as any, undefined);
+    const names = p.getProviderToolDefinitions().map(d => d.name);
+    expect(names).toContain('nexus_list_sites');
+    expect(names).not.toContain('wpe_delete_install');
+    expect(names).not.toContain('local_wpe_push');
+  });
+});
+
 describe('NexusToolProvider — wp_eval sandbox scoping', () => {
   it('refuses wp_eval against any site when allowedTools is set but registerSandbox was never called', async () => {
     const registry = makeRegistry({ wp_eval: () => 'ok' });

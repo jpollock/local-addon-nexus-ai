@@ -106,6 +106,10 @@ export class NexusToolProvider implements ToolProvider {
     const all = this.registry.list(this.services);
     return all
       .filter(tool => !this.allowedTools || this.allowedTools.has(tool.name))
+      // Tier 3 (destructive) tools are never offered to an agent's model. The hard gate is in
+      // invoke() below; not advertising them keeps a prompt-injected model from being steered
+      // toward a tool it cannot run anyway, and shrinks the attack surface of the tool list.
+      .filter(tool => getToolSafety(tool.name).tier !== 3)
       .map(tool => ({
         name: tool.name,
         description: tool.description,
@@ -146,6 +150,21 @@ export class NexusToolProvider implements ToolProvider {
       throw new Error(`Tool "${name}" is not declared in this agent's tools list`);
     }
 
+    // Refuse Tier 3 (destructive) tools outright for agent callers. The Tier-3 confirmation
+    // token is returned inside the tool result, and an agent loop hands that result back to the
+    // model, which can simply re-issue the call with the token itself -- no human ever sees it
+    // (see checkTierThreeConfirmation in mcp/safety.ts). Passing requireConfirmation=true to the
+    // registry only inserts a round-trip the model completes on its own; it is not a human gate.
+    // For an agent there is no human to confirm, so the only real gate is to refuse here. This
+    // closes the injection->production chain: destructive tools (wpe_delete_install,
+    // local_wpe_push, local_delete_site, ...) cannot be driven by a prompt-injected model.
+    if (getToolSafety(name).tier === 3) {
+      throw new Error(
+        `Tool "${name}" is destructive (Tier 3) and cannot be run by an agent. ` +
+        `Tier 3 operations require human confirmation, which an autonomous agent cannot provide.`,
+      );
+    }
+
     // Enforce wp_eval site scope: when running as an agent, restrict wp_eval to registered
     // sandbox sites to prevent prompt-injected code from targeting unrelated local sites.
     if (name === 'wp_eval' && this.allowedTools) {
@@ -169,8 +188,9 @@ export class NexusToolProvider implements ToolProvider {
     reached.tool = true;
 
     // Call the registry with 'agent' as the access method and the run ID for audit trail joining.
-    // requireConfirmation stays true: an agent loop has obtained no human confirmation of its
-    // own, so it must not be the caller that waives the Tier 3 gate.
+    // requireConfirmation stays true as belt-and-suspenders: Tier 3 is already refused above for
+    // agents, so no destructive call reaches here, but if a tool's tier ever changes this keeps
+    // the registry-level gate armed rather than silently waived.
     const result = await this.registry.call(name, args, this.services, 'agent', true, this.events?.runId);
 
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)

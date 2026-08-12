@@ -76,10 +76,15 @@ settingsCommand
     'Set a single setting by dotted path.',
     '',
     'Examples:',
-    '  nexus settings set wpeOperationPermissions.wpcli.production true',
-    '  nexus settings set wpeOperationPermissions.push.production false',
     '  nexus settings set autoIndex true',
     '  nexus settings set wpeSyncIntervalHours 4',
+    '  nexus settings set externalRefreshAutoEnabled true',
+    '',
+    'Note: the permission-gate settings (remoteOperationPermissions, wpeOperationPermissions,',
+    'remoteSiteExceptions, wpeSiteExceptions) are NOT settable from the CLI. Change them in the',
+    'Nexus AI Settings UI → Remote Access & Permissions. This is deliberate: the CLI shares its',
+    'GraphQL token with the renderer and is reachable by automation, so it is not a trust',
+    'boundary for what may be written to a production install.',
   ].join('\n'))
   .action(async (key: string, value: string) => {
     try {
@@ -121,8 +126,11 @@ settingsCommand
     'Merge a JSON object into current settings.',
     '',
     'Examples:',
-    '  nexus settings patch \'{"wpeOperationPermissions":{"wpcli":{"production":true}}}\'',
     '  nexus settings patch \'{"autoIndex":false,"wpeSyncIntervalHours":12}\'',
+    '',
+    'Note: permission-gate settings (remoteOperationPermissions, wpeOperationPermissions,',
+    'site exceptions) are NOT settable from the CLI — use the Settings UI (Remote Access &',
+    'Permissions). Unknown keys and wrong-typed values are also rejected.',
   ].join('\n'))
   .action(async (jsonStr: string) => {
     try {

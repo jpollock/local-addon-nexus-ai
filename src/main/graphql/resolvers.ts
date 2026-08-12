@@ -25,6 +25,7 @@ import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provid
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../../common/constants';
 import { toSiteSource } from '../../common/types';
+import { applySettingsUpdate } from '../../common/settings-update';
 import { getApiKey, KeyVault } from '../security/KeyVault';
 import { auditDirectOperation } from '../audit/auditDirectOperation';
 import type { NexusServices } from '../types/nexus-services';
@@ -391,49 +392,19 @@ export function createResolvers(context: ResolverContext) {
        */
       nexusUpdateSettings: (_: any, { key, value, patch }: { key?: string; value?: string; patch?: string }) => {
         try {
-          if (!key && !patch) {
-            return { success: false, error: 'Provide key+value to set a field, or patch with a JSON object.' };
+          const stored = (services.registryStorage!.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, unknown>;
+
+          // Route through the shared, validated chokepoint. allowPermissionKeys is false here:
+          // this resolver backs the `nexus settings set` CLI, which shares the GraphQL bearer
+          // token with the renderer and can be driven by any AI with shell access — so it is not
+          // a trust boundary for the remote write-gate. remoteOperationPermissions / site
+          // exceptions are settable only from the human Settings UI (IPC). See
+          // src/common/settings-update.ts.
+          const applied = applySettingsUpdate(stored, { key, value, patch }, { allowPermissionKeys: false });
+          if (!applied.ok) {
+            return { success: false, error: applied.error };
           }
-
-          let current = (services.registryStorage!.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
-
-          if (patch) {
-            let patchObj: Record<string, any>;
-            try { patchObj = JSON.parse(patch); } catch {
-              return { success: false, error: `patch is not valid JSON: ${patch}` };
-            }
-            for (const [k, v] of Object.entries(patchObj)) {
-              if (v !== null && typeof v === 'object' && !Array.isArray(v) &&
-                  current[k] !== null && typeof current[k] === 'object' && !Array.isArray(current[k])) {
-                current = { ...current, [k]: { ...current[k], ...v } };
-              } else {
-                current = { ...current, [k]: v };
-              }
-            }
-          } else if (key) {
-            if (value === undefined) {
-              return { success: false, error: 'Provide value= when using key=.' };
-            }
-            // Parse value
-            let parsed: unknown = value;
-            if (value === 'true') parsed = true;
-            else if (value === 'false') parsed = false;
-            else if (value === 'null') parsed = null;
-            else if (!isNaN(Number(value)) && value.trim() !== '') parsed = Number(value);
-            else { try { parsed = JSON.parse(value); } catch { /* string fallback */ } }
-
-            // Set by dotted path
-            const keys = key.split('.');
-            const result = { ...current };
-            let cur: Record<string, any> = result;
-            for (let i = 0; i < keys.length - 1; i++) {
-              cur[keys[i]] = cur[keys[i]] !== null && typeof cur[keys[i]] === 'object'
-                ? { ...cur[keys[i]] } : {};
-              cur = cur[keys[i]];
-            }
-            cur[keys[keys.length - 1]] = parsed;
-            current = result;
-          }
+          const current = applied.settings;
 
           services.registryStorage!.set(STORAGE_KEYS.SETTINGS, current);
 

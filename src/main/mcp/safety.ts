@@ -392,16 +392,18 @@ export interface ConfirmationGateResult {
  * see A4 in the 2026-08-08 external-host-onboarding-and-fixes review for why
  * duplication let three callers skip it entirely.
  *
- * Limitation: this closes the gap fully for `mcp`/`cli` callers, where a human
- * (a chat approval click, a CLI y/n prompt) is the only thing that can ever
- * produce a valid `_confirmationToken`. For `accessMethod: 'agent'`
- * (AiProxyServer, NexusToolProvider), the token is handed back to a model
- * inside a server-side tool loop, which can simply re-issue the call with that
- * token itself — no human ever sees it. This is a pre-existing gap this task
- * narrows (it adds a round-trip a model must complete) but does not close.
- * Full closure would mean refusing Tier 3 outright for agent-driven calls, or
- * filtering Tier-3 tools out of the agent tool list entirely; that is a
- * separate design decision, out of scope here.
+ * Limitation: this gate closes the gap fully for `mcp`/`cli` callers, where a
+ * human (a chat approval click, a CLI y/n prompt) is the only thing that can
+ * ever produce a valid `_confirmationToken`. For `accessMethod: 'agent'` the
+ * token is returned in the tool result and an agent loop could hand it back to
+ * the model, which would re-issue the call with the token itself — no human
+ * ever sees it. That path is now closed upstream: `NexusToolProvider` (the sole
+ * agent tool caller) refuses Tier 3 outright before ever reaching this gate, and
+ * filters Tier-3 tools out of the definitions offered to the model. So for the
+ * agent surface this function is belt-and-suspenders — it is never reached with
+ * a Tier-3 tool. Keep both gates: if the provider's refusal is ever weakened,
+ * this token check is the only thing standing between a model and a destructive
+ * op, and it must not silently become a self-serve token vendor.
  */
 export function checkTierThreeConfirmation(
   toolName: string,
