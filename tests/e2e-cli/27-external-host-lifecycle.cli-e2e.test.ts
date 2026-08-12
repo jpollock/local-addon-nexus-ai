@@ -2,10 +2,12 @@
  * External host registration lifecycle, against the Docker sshd fixture.
  *
  * NON-VACUITY: the soft-delete test below is the one that matters. To prove it
- * is real, delete `AND is_active = 1` from the external lookup in
- * src/main/ipc-handlers.ts:1402 and re-run — "stops listing a removed host"
- * must go RED. `nexus host remove` only sets is_active = 0 and resets domain to
- * the alias; every reader must filter, and three of them did not.
+ * is real, delete `AND is_active = 1` from:
+ * - src/main/mcp/site-resolver.ts:108 (reached by `nexus host list --json`, line 69)
+ * - src/main/graphql/resolvers.ts:674 (reached by `nexus sites list --json`, line 73)
+ * and re-run — "stops listing a removed host" must go RED. `nexus host remove`
+ * only sets is_active = 0 and resets domain to the alias; every reader must filter,
+ * and three of them did not.
  */
 import { runCli } from './helpers/cli-test-utils';
 import {
@@ -67,11 +69,16 @@ d('external host lifecycle', () => {
     await runCli(['host', 'remove', FIXTURE_ALIAS, '-y']);
 
     const list = await runCli(['host', 'list', '--json']);
-    expect(list.stdout).not.toContain(FIXTURE_ALIAS);
+    expect(list.exitCode).toBe(0);
+    const hosts = JSON.parse(list.stdout.slice(list.stdout.indexOf('[')));
+    expect(hosts.find((h: any) => h.alias === FIXTURE_ALIAS)).toBeUndefined();
 
     // `sites list` reads a different query and missed is_active = 1 too.
     const sites = await runCli(['sites', 'list', '--json']);
-    expect(sites.stdout).not.toContain(FIXTURE_ALIAS);
+    expect(sites.exitCode).toBe(0);
+    const parsed = JSON.parse(sites.stdout.slice(sites.stdout.indexOf('{')));
+    const externals = parsed.external || [];
+    expect(externals.find((s: any) => s.alias === FIXTURE_ALIAS)).toBeUndefined();
   });
 
   // Regression: commit 3ff8a15c — ExternalSite.alias is non-nullable in schema.ts:95,

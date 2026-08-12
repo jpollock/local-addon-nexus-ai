@@ -74,6 +74,8 @@ d('external host target resolution', () => {
       { timeout: 60_000 });
     expect(r.exitCode).not.toBe(0);
     const list = await runCli(['host', 'list', '--json']);
-    expect(list.stdout).not.toContain('nexus-e2e-never-registered');
+    expect(list.exitCode).toBe(0);
+    const hosts = JSON.parse(list.stdout.slice(list.stdout.indexOf('[')));
+    expect(hosts.find((h: any) => h.alias === 'nexus-e2e-never-registered')).toBeUndefined();
   });
 });
