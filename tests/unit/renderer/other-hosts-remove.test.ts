@@ -4,7 +4,8 @@ import { serializeTree } from './helpers/serializeTree';
 function findAll(node: any, pred: (n: any) => boolean, out: any[] = []): any[] {
   if (!node || typeof node !== 'object') return out;
   if (pred(node)) out.push(node);
-  const children = node.props?.children;
+  // Serialized trees have children as a direct property, not in props
+  const children = node.children ?? node.props?.children;
   const kids = Array.isArray(children) ? children : [children];
   for (const k of kids) findAll(k, pred, out);
   return out;
@@ -63,5 +64,17 @@ describe('remove host confirmation', () => {
     i.setState({ screen: { name: 'remove', alias: 'boxa' } });
     const inputs = findAll(serializeTree(i.render()), (n: any) => n.type === 'input');
     expect(inputs).toHaveLength(0);
+  });
+
+  it('Cancel is a real focusable element (button), not a div with autoFocus', () => {
+    const i = inst();
+    i.setState({ screen: { name: 'remove', alias: 'boxa' } });
+    const tree = serializeTree(i.render());
+
+    const cancelButtons = findAll(tree, (n: any) =>
+      n.type === 'button' && n.children === 'Cancel'
+    );
+    expect(cancelButtons).toHaveLength(1);
+    expect(cancelButtons[0].props.autoFocus).toBe(true);
   });
 });

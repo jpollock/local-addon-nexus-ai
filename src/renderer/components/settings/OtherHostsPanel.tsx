@@ -899,10 +899,12 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
             gap: 8,
           },
         },
-          React.createElement('div', {
+          React.createElement('button', {
             onClick: () => this.setState({ screen: { name: 'detail', alias } }),
             autoFocus: true,
             style: {
+              border: 'none',
+              font: 'inherit',
               display: 'inline-block',
               padding: '6px 12px',
               background: 'var(--nxai-card-border)',
@@ -913,9 +915,11 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
               cursor: 'pointer',
             },
           }, 'Cancel'),
-          React.createElement('div', {
+          React.createElement('button', {
             onClick: handleRemove,
             style: {
+              border: 'none',
+              font: 'inherit',
               display: 'inline-block',
               padding: '6px 12px',
               background: 'var(--nxai-error-bg)',
