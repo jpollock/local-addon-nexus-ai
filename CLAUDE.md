@@ -419,9 +419,7 @@ whenever fewer than five were used.
   data actually present*: `externalScoreable = hasPlugins && !!row.php_version`
   (`resolvers.ts`). A refreshed host is scored on `security` + `performance`
   like a WPE install; an unrefreshed one is still not scored. Do not widen it
-  unconditionally — the gate is data presence, not host class. Note that a host
-  whose PHP blocks `proc_open` never satisfies the `php_version` half (see
-  below), so it stays unscored no matter how many refreshes run.
+  unconditionally — the gate is data presence, not host class.
 
 **Never default an unknown input to a plausible value to keep a score
 computable.** `phpVersion: row.php_version || '8.0'` invented a version for 46
@@ -431,6 +429,19 @@ for 14% of production installs. The calculator already has the honest path
 (`scorePhpVersion(undefined)` → `PHP version unknown`). Pass `undefined`. (The
 identical default on the *local* path is pre-existing and left alone: Local's
 store supplies a real version there.)
+
+Note: for an **external** host, the `|| '8.0'` fallback at
+`get-site-health.ts:83` is structurally unreachable in scoring, because
+`externalScoreable` (line 91) gates on the raw `row.php_version` column. The
+fabrication risk applies to the **WPE** branch, which is scored unconditionally.
+
+**The external health-scoring gate is duplicated** between
+`src/main/graphql/resolvers.ts:2950` (GraphQL/CLI path) and
+`src/main/mcp/modules/fleet-intelligence/get-site-health.ts:91` (MCP path).
+The two are NOT pinned together by any test — a change to one must be mirrored
+to the other. This repo already has that duplicated-rule pattern documented for
+`resolveAgentCron`/`effectiveCadenceExpression` and `localDay`, where a shared
+case table pins the copies; this pair has no such test.
 
 **The HTTPS check reads `site_url`, not `domain`.** Domains are stored bare —
 zero of 365 active rows carry a scheme — so `domain.startsWith('https')` used
@@ -480,13 +491,14 @@ fallback), because WP Engine's CAPI has no external equivalent and `wp eval` is
 blocked by `REMOTE_POLICY`.
 
 **`wp --info` requires `proc_open`, and shared hosts commonly disable it** —
-`disable_functions=proc_open` makes it fail with `Cannot do 'Process::run': The
-PHP functions proc_open() and/or proc_close() are disabled.` (verified against a
-real registered host). On such a host `php_version` stays **permanently** NULL —
-it will not eventually populate on a later refresh cycle — and because
-`externalScoreable` requires it, the host is never scored. That is a known design
-gap, not a data defect: NULL is the honest answer and must never become a
-fabricated `'8.0'`. An alternative PHP-version source needs its own design.
+but the PHP version IS still collected. Measured 2026-08-12 against WP-CLI 2.12.0
+with `disable_functions=proc_open,proc_close`: `wp --info` prints `PHP version:  8.3.33`
+on line 4 and only THEN errors with `Cannot do 'Process::run'`. The version line comes
+first, so the parser captures it and `php_version` populates normally. Whatever caused
+a real external host's `php_version` to be NULL in the developer's database, it was not
+this, and it remains unexplained. NULL is still the honest answer when a version cannot
+be determined, and must never become a fabricated `'8.0'` (which would earn real
+security and performance credit for something never observed).
 
 **Settings written through the GraphQL mutation are reactive.**
 `nexusUpdateSettings` calls `services.onSettingsUpdated?.()` after a successful

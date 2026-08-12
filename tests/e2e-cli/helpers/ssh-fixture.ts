@@ -153,6 +153,52 @@ export async function startSshFixture(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Hard-delete fixture-owned rows from graph.db so "unrefreshed" is real.
+ *
+ * DANGER: The developer has four REAL external hosts in this same table:
+ * hostinger-test, piedmontdermgroup, willowcreekderm, tablemesaderm. A widened
+ * predicate would destroy their data. The alias guard below makes it structurally
+ * impossible to widen: the prefix is derived from FIXTURE_ALIAS, we assert it
+ * equals the literal 'nexus-e2e-host', and refuse to run otherwise.
+ */
+export async function resetFixtureGraphState(): Promise<void> {
+  if (FIXTURE_ALIAS !== 'nexus-e2e-host') {
+    throw new Error(`resetFixtureGraphState guard: FIXTURE_ALIAS must be 'nexus-e2e-host', got '${FIXTURE_ALIAS}'`);
+  }
+
+  const dbPath = path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'graph.db');
+  const prefix = `ssh:${FIXTURE_ALIAS}`;
+
+  // Use /usr/bin/sqlite3 (NOT better-sqlite3 from the test process — it's compiled
+  // for Electron's ABI and will throw NODE_MODULE_VERSION in jest). DB is in WAL
+  // mode, so writing while Local holds it open is safe.
+  const sql = `
+    DELETE FROM content WHERE site_id LIKE '${prefix}%';
+    DELETE FROM themes WHERE site_id IN (SELECT id FROM sites WHERE id LIKE '${prefix}%');
+    DELETE FROM plugins WHERE site_id IN (SELECT id FROM sites WHERE id LIKE '${prefix}%');
+    DELETE FROM sites WHERE id LIKE '${prefix}%';
+  `;
+
+  execFileSync('/usr/bin/sqlite3', [dbPath, sql], { encoding: 'utf8', timeout: 30_000 });
+}
+
+/**
+ * Clear php_version for fixture sites, modeling the batch-loss scenario where
+ * plugins populate but the version does not. Same guard as resetFixtureGraphState.
+ */
+export async function clearFixturePhpVersion(): Promise<void> {
+  if (FIXTURE_ALIAS !== 'nexus-e2e-host') {
+    throw new Error(`clearFixturePhpVersion guard: FIXTURE_ALIAS must be 'nexus-e2e-host', got '${FIXTURE_ALIAS}'`);
+  }
+
+  const dbPath = path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'graph.db');
+  const prefix = `ssh:${FIXTURE_ALIAS}`;
+  const sql = `UPDATE sites SET php_version = NULL WHERE id LIKE '${prefix}%';`;
+
+  execFileSync('/usr/bin/sqlite3', [dbPath, sql], { encoding: 'utf8', timeout: 30_000 });
+}
+
 export async function stopSshFixture(): Promise<void> {
   // Remove the graph registration. Lives here rather than in each test file's
   // afterAll because all six test files (27-32) register this host, so a
