@@ -72,9 +72,14 @@ Locked during design review:
 - **D4 — One container, two WordPress installs, one alias.** This is the shape
   CLAUDE.md confirms live (a single Hostinger login hosting two installs) and
   the only shape that reproduces the `vectorSiteId` `/` collision.
-- **D5 — Orphaned sites are left alone.** `nexus-e2e-mcp-clone-tmp`
-  (`NGPsxnOHC`) and `nexus-e2e-cli-test-site` (`8zxKpo0Vj`) predate this work.
-  Tracked-id cleanup applies going forward only; nothing sweeps existing rows.
+- **D5 — Existing `nexus-e2e-*` sites are left alone.** Corrected during
+  planning: `nexus-e2e-cli-test-site` (`8zxKpo0Vj`) and `nexus-e2e-test`
+  (`Q0RF2KQlF`) are **required fixtures**, declared in `tests/e2e-cli/setup.ts`,
+  not leftovers — `setup.ts` starts them if halted and deliberately never
+  creates or deletes them. Only `nexus-e2e-mcp-clone-tmp` (`NGPsxnOHC`) is a
+  genuine orphan from an old run. Nothing in this slice sweeps any of the
+  three; tracked-id cleanup applies to sites this slice creates, and this slice
+  creates none (the SSH fixture is a container, not a Local site).
 - **D6 — `wp health` is asserted in `tests/e2e/`, not the CLI suite.** It is
   MCP-only with no GraphQL fallback (`src/cli/commands/wp.ts`), so the CLI suite
   cannot guarantee its precondition.
