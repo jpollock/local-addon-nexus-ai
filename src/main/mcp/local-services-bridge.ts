@@ -526,8 +526,35 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
-      if (!res.ok) throw new Error(`CAPI ${method} ${path} failed: HTTP ${res.status}`);
+
       const text = await res.text();
+
+      if (!res.ok) {
+        // Try to parse as JSON, fall back to raw text
+        let parsedBody: any;
+        let bodyText = text;
+
+        try {
+          parsedBody = text ? JSON.parse(text) : undefined;
+        } catch {
+          // Not JSON, leave parsedBody undefined
+        }
+
+        // Build error message with detail from response, truncated for user/audit display
+        const detail = parsedBody?.message ?? text;
+        const truncatedDetail = detail.length > 500 ? detail.slice(0, 500) + '…' : detail;
+        const errorMessage = `CAPI ${method} ${path} failed: HTTP ${res.status}${truncatedDetail ? ` — ${truncatedDetail}` : ''}`;
+
+        const err: any = new Error(errorMessage);
+        err.status = res.status;
+        err.responseText = text;
+        if (parsedBody) {
+          err.responseJson = parsedBody;
+        }
+
+        throw err;
+      }
+
       return text ? JSON.parse(text) : null;
     },
 
