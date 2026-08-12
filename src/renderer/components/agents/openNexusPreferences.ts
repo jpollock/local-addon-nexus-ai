@@ -1,5 +1,5 @@
 /**
- * Navigate Local to Preferences → Nexus AI, where the AWS access key lives.
+ * Navigate Local to the Nexus AI dashboard, where credentials are configured.
  *
  * Local's renderer has no direct router handle for addons; the supported move is its own
  * `sendIPCEvent('goToRoute', …)`, which round-trips through the window's webContents back to the
@@ -7,9 +7,11 @@
  * peer (not installed in this repo's node_modules), so it is required lazily — a static import
  * would break the build and every test that renders this tree.
  *
- * The double slash in the route is not a typo. Local builds addon preference routes as
- * `/settings/${menuItem.path}` and this addon registers `path: '/nexus-ai'`, so `/settings//nexus-ai`
- * is the literal string Local's own sidebar NavLink and RoutePlus both use.
+ * This used to open `/settings//nexus-ai`, the addon's page in Local's own preferences.
+ * That page was already the wrong destination before it was deleted: the settings home
+ * moved into the dashboard, taking the AWS credentials with it, and the button kept
+ * sending people to a page that no longer had what they came for. It now opens the
+ * dashboard route the sidebar uses.
  *
  * Returns false when the host API is unavailable, so a caller can render the path as text rather
  * than a button that does nothing.
@@ -19,7 +21,7 @@ export function openNexusPreferences(): boolean {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { sendIPCEvent } = require('@getflywheel/local/renderer');
     if (typeof sendIPCEvent !== 'function') return false;
-    sendIPCEvent('goToRoute', '/settings//nexus-ai');
+    sendIPCEvent('goToRoute', '/main/nexus');
     return true;
   } catch {
     return false;
@@ -27,7 +29,7 @@ export function openNexusPreferences(): boolean {
 }
 
 /** Where the credential actually lives, for copy that has to name it. */
-export const AWS_CREDENTIAL_LOCATION = 'Preferences → Nexus AI → AWS S3 Credentials';
+export const AWS_CREDENTIAL_LOCATION = 'Nexus AI → Settings → Connections';
 
 /**
  * Open a URL in the user's browser.

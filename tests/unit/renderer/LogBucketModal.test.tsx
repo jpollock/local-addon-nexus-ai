@@ -3,7 +3,7 @@ import { IPC_CHANNELS } from '../../../src/common/constants';
 
 jest.mock('../../../src/renderer/components/agents/openNexusPreferences', () => ({
   openNexusPreferences: jest.fn(() => true),
-  AWS_CREDENTIAL_LOCATION: 'Preferences → Nexus AI → AWS S3 Credentials',
+  AWS_CREDENTIAL_LOCATION: 'Nexus AI → Settings → Connections',
 }));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { openNexusPreferences } = require('../../../src/renderer/components/agents/openNexusPreferences');

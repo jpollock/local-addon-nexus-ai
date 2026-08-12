@@ -1,6 +1,5 @@
 import { NavItemInjector } from './NavItemInjector';
 import { NexusOverview } from './components/NexusOverview';
-import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
 import { NexusSiteTab } from './components/NexusSiteTab';
 import { NexusSiteTabSummary } from './components/NexusSiteTabSummary';
@@ -105,44 +104,20 @@ export default function renderer(context: any): void {
 
   // Feature 2: Addon preferences page
   // pendingSettings accumulates changes until the user clicks Apply
-  let pendingSettings: any = null;
-
-  hooks.addFilter('preferencesMenuItems', (items: any[]) => {
-    return [...items, {
-      path: '/nexus-ai',
-      displayName: 'Nexus AI',
-      sections: (props: any) => React.createElement(NexusPreferences, {
-        ...props,
-        electron,
-        onSettingsChange: (settings: any) => {
-          pendingSettings = settings;
-          props?.setApplyButtonDisabled?.(false);
-        },
-      }),
-      onApply: async () => {
-        if (pendingSettings) {
-          // Strip computed fields injected by GET_SETTINGS (e.g. llmAvailable) before
-          // sending to UPDATE_SETTINGS — they are not in UpdateSettingsSchema.strict()
-          // and would cause silent validation failure if included.
-          const { llmAvailable: _derived, ...toSave } = pendingSettings;
-          const result = await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, toSave);
-          // UPDATE_SETTINGS's own handler catches every internal failure and still resolves
-          // (ipcMain.handle has no reject path here) — so a validation error never throws on
-          // this side, it comes back as `result._error`. Checking only the happy path meant a
-          // rejected save (e.g. a stale field from a different branch/worktree's addon sharing
-          // this settings file) looked identical to success: no toast, no console line, and
-          // the edit was discarded by clearing pendingSettings regardless.
-          if ((result as any)?._error) {
-            console.error('[NexusAI] Failed to save settings:', (result as any)._error);
-            return;
-          }
-          pendingSettings = null;
-          // Notify all site panels and the docked panel gate to refresh
-          window.dispatchEvent(new CustomEvent('nexus-ai:settings-applied', { detail: result }));
-        }
-      },
-    }];
-  });
+  // No Preferences → Nexus AI page.
+  //
+  // It once held every setting, then the settings home moved into the Nexus AI
+  // dashboard and the page was reduced to a single thing: approving a host key. That
+  // approval now happens where the user meets it -- the add-host wizard for an unknown
+  // key, the identity-changed screen for one that changed -- so the page had nothing
+  // left to carry and a menu item pointing at it was a promise of settings that were
+  // somewhere else.
+  //
+  // The security property is unchanged and does not depend on this page existing:
+  // TRUST_EXTERNAL_HOST_KEY is a real ipcMain/ipcRenderer channel with no GraphQL
+  // mutation and no caller in src/cli. That is what makes it unreachable over the API,
+  // not which window it is rendered in -- the renderer and the CLI hit the same
+  // endpoint with the same bearer token.
 
   // Feature 3a: Nexus AI tab in site info panel nav
   // Priority 1 ensures it appears directly after the built-in tabs (default priority is 10)

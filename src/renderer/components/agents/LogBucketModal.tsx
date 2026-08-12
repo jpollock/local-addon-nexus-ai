@@ -188,7 +188,7 @@ export class LogBucketModal extends React.Component<Props, State> {
           flex: 'none', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
           fontSize: 12, fontWeight: 500, color: 'var(--ag-picker-teal)',
         },
-      }, connected ? 'Manage' : 'Connect in Preferences →'),
+      }, connected ? 'Manage' : 'Connect in Settings →'),
     );
   }
 

@@ -351,8 +351,8 @@ export class AnalyticsSitesTab extends React.Component<Props, State> {
       ),
       React.createElement('div', { style: { fontSize: 11.5, color: 'var(--ag-picker-text-muted)', marginTop: 14 } },
         google.accountExists
-          ? 'Manage the account itself in Preferences → Nexus AI → Connected accounts.'
-          : 'The connection lives in Preferences → Nexus AI and is shared with every agent.'),
+          ? 'Manage the account itself in Nexus AI → Settings → Connections.'
+          : 'The connection lives in Nexus AI → Settings → Connections and is shared with every agent.'),
     );
   }
 

@@ -112,11 +112,22 @@ test('WPE sync progress survived — the scheduler drives it, not a button', () 
   expect(tree).toContain('wpe-sync-progress');
 });
 
-test('the native panel keeps only the host-key boundary', () => {
-  const prefs = read('NexusPreferences.tsx');
-  expect(prefs).toContain('renderExternalHostsSection');
-  // These moved to the one settings home.
-  expect(prefs).not.toContain('renderChatSection');
-  expect(prefs).not.toContain('renderWpeAccessControlSection');
-  expect(prefs).not.toContain('renderAwsCredsSection');
+test('there is no Preferences page, and approving a key does not need one', () => {
+  // The page once held every setting, then only host-key approval, then nothing worth
+  // a menu item. What made approval safe was never the window it lived in -- it is that
+  // TRUST_EXTERNAL_HOST_KEY is a real IPC channel with no GraphQL mutation and no CLI
+  // caller. So the page is gone and the boundary is not.
+  expect(fs.existsSync(path.join(__dirname, '../../../src/renderer/components/NexusPreferences.tsx'))).toBe(false);
+
+  const index = fs.readFileSync(path.join(__dirname, '../../../src/renderer/index.tsx'), 'utf8');
+  expect(index).not.toContain('preferencesMenuItems');
+
+  // Both approval routes live where the user meets the problem.
+  const panel = read('settings/OtherHostsPanel.tsx');
+  const wizard = read('settings/ExternalHostAddWizard.tsx');
+  expect(panel).toContain('TRUST_EXTERNAL_HOST_KEY');   // a key that CHANGED
+  expect(wizard).toContain('TRUST_EXTERNAL_HOST_KEY');  // a key seen for the first time
+
+  // And nothing sends the user to a page that no longer exists.
+  expect(panel).not.toContain('Preferences → Nexus AI');
 });

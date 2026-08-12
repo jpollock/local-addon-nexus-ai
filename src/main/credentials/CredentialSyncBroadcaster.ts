@@ -1,7 +1,7 @@
 /**
  * CredentialSyncBroadcaster
  *
- * When a user saves or changes an API key in NexusPreferences, this service
+ * When a user saves or changes an API key in Settings → Connections, this service
  * immediately syncs the key to all running WordPress 7.0+ sites. Without this,
  * keys only sync on next site start (via the lifecycle hook).
  */

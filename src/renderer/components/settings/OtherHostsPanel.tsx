@@ -45,7 +45,10 @@ interface OtherHostsPanelState {
   /** Identity data for hosts whose fingerprint changed. */
   identity: Record<string, HostIdentity>;
   /** Whether to show the routing instruction after accept was clicked. */
-  showAcceptInstruction: boolean;
+  /** True while TRUST_EXTERNAL_HOST_KEY is in flight for a changed key. */
+  approvingIdentity: boolean;
+  /** Why an approval failed. Null when there is nothing to report. */
+  identityError: string | null;
   /** Error message from the last probe, if any. */
   probeError: string | null;
   /** Error message from the last setRootMode call, if any. */
@@ -64,7 +67,8 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     discovered: {},
     checking: null,
     identity: {},
-    showAcceptInstruction: false,
+    approvingIdentity: false,
+    identityError: null,
     probeError: null,
     rootModeError: null,
     removeError: null,
@@ -99,7 +103,8 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
   closeAdd = (): void => {
     this.setState({
       screen: { name: 'list' },
-      showAcceptInstruction: false,
+      approvingIdentity: false,
+    identityError: null,
       discovered: {},
       probeError: null,
       rootModeError: null,
@@ -230,14 +235,44 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
   };
 
   /**
-   * Surface the instruction to accept a changed host key in Local's Preferences.
-   * Does NOT call TRUST_EXTERNAL_HOST_KEY — that is renderer-only by design.
+   * Approve a changed host key, after the human has confirmed it with their host.
+   *
+   * This used to only print directions to the addon's page in Local's own preferences,
+   * because approval lived there. That page is gone, so the action lives where the user
+   * meets the problem — the same move already made for unknown keys in the add-host
+   * wizard.
+   *
+   * What is load-bearing is the TRANSPORT, not the window: TRUST_EXTERNAL_HOST_KEY is a
+   * real ipcMain/ipcRenderer channel with no GraphQL mutation and no CLI caller, because
+   * the renderer and the CLI share one endpoint and one bearer token. A human clicking
+   * this is not auto-accept — nothing here approves a key without that click, and there
+   * is still no path that accepts a changed key on the user's behalf.
    */
-  acceptIdentity = (alias: string): void => {
-    // Only surfaces the instruction — no IPC call to trust the key.
-    // The user must approve it in Local → Preferences → Nexus AI.
-    void alias;
-    this.setState({ showAcceptInstruction: true });
+  acceptIdentity = async (alias: string): Promise<void> => {
+    const fingerprint = this.state.identity[alias]?.current;
+    if (!fingerprint) {
+      this.setState({ identityError: 'No fingerprint to approve — re-check the host first.' });
+      return;
+    }
+    this.setState({ approvingIdentity: true, identityError: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.TRUST_EXTERNAL_HOST_KEY, alias, fingerprint,
+      );
+      if (!this.mounted) return;
+      if (result?.success) {
+        this.setState({ approvingIdentity: false, screen: { name: 'detail', alias } });
+        this.reload();
+      } else {
+        this.setState({
+          approvingIdentity: false,
+          identityError: result?.error || 'Could not approve that key.',
+        });
+      }
+    } catch (e: any) {
+      if (!this.mounted) return;
+      this.setState({ approvingIdentity: false, identityError: e?.message || 'Could not approve that key.' });
+    }
   };
 
   /**
@@ -505,7 +540,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     return React.createElement('div', {},
       // Back button
       React.createElement('button', {
-        onClick: () => this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
+        onClick: () => this.setState({ screen: { name: 'list' }, approvingIdentity: false, identityError: null, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
         style: {
           border: 'none',
           font: 'inherit',
@@ -838,7 +873,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
     return React.createElement('div', {},
       // Back button
       React.createElement('button', {
-        onClick: () => this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
+        onClick: () => this.setState({ screen: { name: 'list' }, approvingIdentity: false, identityError: null, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
         style: {
           border: 'none',
           font: 'inherit',
@@ -942,7 +977,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
           },
         },
           React.createElement('button', {
-            onClick: () => this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
+            onClick: () => this.setState({ screen: { name: 'list' }, approvingIdentity: false, identityError: null, discovered: {}, probeError: null, rootModeError: null, removeError: null }),
             style: {
               border: 'none',
               font: 'inherit',
@@ -970,11 +1005,12 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
               fontWeight: 600,
               cursor: 'pointer',
             },
-          }, 'I confirmed it with my host — accept'),
+          }, this.state.approvingIdentity ? 'Approving…' : 'I confirmed it with my host — accept'),
         ),
 
-        // Instruction shown after accept is clicked
-        this.state.showAcceptInstruction && React.createElement('div', {
+        // Only rendered on failure. Approval succeeding navigates away, so there is no
+        // success state to show here.
+        this.state.identityError ? React.createElement('div', {
           style: {
             marginTop: 16,
             padding: 12,
@@ -991,11 +1027,9 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
               fontWeight: 600,
               marginBottom: 4,
             },
-          }, 'Where to approve the new key'),
-          React.createElement('div', {},
-            'Go to Local → Preferences → Nexus AI to approve the changed fingerprint. That approval stays in Local\'s Preferences, because it must not be reachable from anything but Local itself.',
-          ),
-        ),
+          }, 'Could not approve that key'),
+          React.createElement('div', {}, this.state.identityError),
+        ) : null,
       ),
     );
   }
@@ -1018,7 +1052,7 @@ export class OtherHostsPanel extends React.Component<OtherHostsPanelProps, Other
           this.setState({ removeError: data.nexusHostRemove.error || 'Failed to remove host' });
           return;
         }
-        this.setState({ screen: { name: 'list' }, showAcceptInstruction: false, discovered: {}, probeError: null, rootModeError: null, removeError: null });
+        this.setState({ screen: { name: 'list' }, approvingIdentity: false, identityError: null, discovered: {}, probeError: null, rootModeError: null, removeError: null });
         this.reload();
       } catch (e: any) {
         this.setState({ removeError: e?.message || 'Failed to remove host' });

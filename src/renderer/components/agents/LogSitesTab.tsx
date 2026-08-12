@@ -396,7 +396,7 @@ export class LogSitesTab extends React.Component<Props, State> {
       React.createElement('div', { style: { fontSize: 11.5, color: 'var(--ag-picker-text-muted)', marginTop: 14 } },
         connected
           ? 'For WP Engine this is usually one bucket per account, with a wpe_logs/ prefix.'
-          : 'The AWS credential lives in Preferences → Nexus AI and is shared with every agent.',
+          : 'The AWS credential lives in Nexus AI → Settings → Connections and is shared with every agent.',
       ),
     );
   }

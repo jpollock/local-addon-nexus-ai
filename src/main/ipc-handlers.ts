@@ -1366,7 +1366,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.NAVIGATE_TO_PREFERENCES, () => {
-    deps.serviceContainer?.sendIPCEvent?.('goToRoute', '/settings//nexus-ai');
+    // Goes to the dashboard, not Local's preferences. The addon's page there was
+    // deleted once the settings home moved into the dashboard; this channel kept its
+    // name so callers did not have to change, but the destination had to.
+    deps.serviceContainer?.sendIPCEvent?.('goToRoute', '/main/nexus');
   });
 
   safeHandle(IPC_CHANNELS.GET_WPE_ACCOUNTS, () => {
