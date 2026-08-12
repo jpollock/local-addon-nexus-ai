@@ -148,10 +148,45 @@ export function detectCollision(alias: string, homeDir: string = os.homedir()): 
  * and identityFile (genuinely optional) is omitted entirely rather than
  * emitted blank.
  */
+const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/; // newline, CR, tab, and other control chars
+const HOSTNAME_RE = /^[A-Za-z0-9._:-]+$/;        // hostnames, IPv4, IPv6 (colons)
+const USER_RE = /^[A-Za-z0-9._@-]+$/;            // SSH usernames
+const IDENTITY_FILE_RE = /^[A-Za-z0-9._~/-]+$/;  // key paths, no whitespace/metachars
+
 function assertRequiredHostFields(input: WriteHostBlockInput): void {
+  // Presence: a bare directive (`User` with no value) makes ssh terminate parsing entirely.
   if (!input.hostname) throw new Error('hostname is required');
   if (!input.user) throw new Error('user is required');
   if (!input.port) throw new Error('port is required');
+
+  // Content: these values are interpolated raw into ~/.ssh/config.d/nexus (previewHostBlock),
+  // which Nexus Includes at the TOP of ~/.ssh/config. A newline in any field injects arbitrary
+  // ssh directives -- e.g. `ProxyCommand /bin/sh -c evil` -- that fire on the user's very next
+  // `ssh` to anything, i.e. local command execution. Reject control characters outright, then
+  // constrain each field to its legal shape. Enforced here (the main-process writer, the trust
+  // boundary), not only in the renderer.
+  for (const [name, value] of [['hostname', input.hostname], ['user', input.user], ['port', input.port]] as const) {
+    if (CONTROL_CHAR_RE.test(value)) {
+      throw new Error(`${name} contains a control character (newline/tab) and cannot be written to ssh config`);
+    }
+  }
+  if (input.identityFile && CONTROL_CHAR_RE.test(input.identityFile)) {
+    throw new Error('identityFile contains a control character (newline/tab) and cannot be written to ssh config');
+  }
+
+  if (!HOSTNAME_RE.test(input.hostname)) {
+    throw new Error(`hostname "${input.hostname}" is not a valid host or IP address`);
+  }
+  if (!USER_RE.test(input.user)) {
+    throw new Error(`user "${input.user}" is not a valid SSH username`);
+  }
+  const portNum = Number(input.port);
+  if (!/^[0-9]{1,5}$/.test(input.port) || !Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+    throw new Error(`port "${input.port}" is not a valid port number (1-65535)`);
+  }
+  if (input.identityFile && !IDENTITY_FILE_RE.test(input.identityFile)) {
+    throw new Error(`identityFile "${input.identityFile}" is not a valid key path`);
+  }
 }
 
 export function previewHostBlock(input: WriteHostBlockInput): string {
