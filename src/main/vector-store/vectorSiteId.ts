@@ -21,7 +21,7 @@ import * as crypto from 'crypto';
  * writes disagreed on the table name for a plain id like `mmWgjXGRS`.
  *
  * A character-class replace ALONE (no hash) creates a real collision for ids
- * that DO need sanitizing: `ssh:a/b-c` and `ssh:a-b/c` both sanitize to
+ * that DO need sanitizing: `ssh:a/b_c` and `ssh:a_b/c` both sanitize to
  * `ssh_a_b_c`. So a short stable hash of the ORIGINAL id is appended, but
  * ONLY when sanitization actually changed something -- this is what lets
  * local/WPE ids stay identity while still disambiguating external multi-site

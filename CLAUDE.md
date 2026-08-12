@@ -544,11 +544,12 @@ demand regardless of the setting.
 **Vector-store site ids strip disallowed characters, then conditionally append
 a hash.** `ssh:<alias>/<site>` fails `SqliteVecStore`'s `^[a-zA-Z0-9_-]+$`
 table-name validation (`:` and `/` are illegal); `vectorSiteId()` sanitizes to
-`ssh_<alias>_<site>` only at that boundary. The function BRANCHES: ids that
-already satisfy the regex (local/WPE) are returned unchanged — identity is
-load-bearing because writers never call `vectorSiteId()` and readers do, so
-they must agree on the table name. For ids that DO need sanitizing, an 8-char
-sha256 hash of the *original* id is appended to prevent collisions. A
+`ssh_<alias>_<site>` only at that boundary. The hash is appended only when
+sanitisation actually changed the id: ids that already satisfy the regex
+(local/WPE) are returned unchanged — identity is load-bearing because writers
+never call `vectorSiteId()` and readers do, so they must agree on the table
+name. For ids that DO need sanitizing, an 8-char sha256 hash of the *original*
+id is appended to prevent collisions. A
 character-class replace alone creates real collisions when UNDERSCORES are
 present: `ssh:a/b_c` and `ssh:a_b/c` both sanitize to `ssh_a_b_c`. (Note:
 hyphens are PRESERVED — the `ssh:a/b-c` / `ssh:a-b/c` example previously in
