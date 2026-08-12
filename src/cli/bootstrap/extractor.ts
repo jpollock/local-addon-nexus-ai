@@ -14,6 +14,29 @@ export interface ExtractOptions {
 }
 
 /**
+ * Refuse tar entries that enable the link-poisoning / path-escape attacks covered by node-tar's
+ * advisories. The addon tarball is files and directories only — a symlink or hardlink entry, or
+ * a path that escapes the destination, has no legitimate reason to be there and is the shape of
+ * an attack. Thrown from the extraction onentry so a malicious archive aborts before the unsafe
+ * entry is materialized. (This defends even on the currently-pinned tar 6.2.x; a tar>=7.5.22
+ * upgrade is still recommended as defense in depth, but requires an install/build cycle.)
+ */
+export function assertSafeTarEntry(entry: { path: string; type?: string }): void {
+  const type = entry.type ?? '';
+  if (type === 'SymbolicLink' || type === 'Link') {
+    const err: any = new Error(`Refusing tarball with a ${type} entry ("${entry.path}") — possible link-poisoning attack.`);
+    err.__unsafeTarEntry = true;
+    throw err;
+  }
+  const p = entry.path.replace(/\\/g, '/');
+  if (p.startsWith('/') || p.split('/').includes('..')) {
+    const err: any = new Error(`Refusing tarball entry with an unsafe path ("${entry.path}").`);
+    err.__unsafeTarEntry = true;
+    throw err;
+  }
+}
+
+/**
  * Extract tarball to destination directory
  */
 export async function extractTarball(options: ExtractOptions): Promise<void> {
@@ -40,24 +63,45 @@ export async function extractTarball(options: ExtractOptions): Promise<void> {
     }
   }
 
-  // Extract tarball
+  // Extract tarball. An unsafe entry is skipped (entry.ignore) so it is never materialized on
+  // disk, and the reason is recorded so the whole extraction is rejected afterward — throwing
+  // inside node-tar's onentry does not abort a file extraction (it hangs), so we skip-then-throw.
+  let unsafeEntry: Error | null = null;
   try {
     await tar.extract({
       file: tarPath,
       cwd: destDir,
       strip: stripComponents,
-      onentry: (entry: tar.ReadEntry) => {
-        // Skip .DS_Store and other hidden files
-        if (entry.path.includes('.DS_Store') || entry.path.startsWith('._')) {
-          entry.ignore = true;
+      // Never restore absolute or `..` paths (node-tar's default, made explicit).
+      preservePaths: false,
+      // `filter` is evaluated BEFORE an entry is written, so returning false definitively
+      // prevents a symlink/hardlink/escape entry from ever touching the filesystem — unlike
+      // onentry's entry.ignore, which fires too late for link entries.
+      filter: (p: string, stat: tar.FileStat) => {
+        // node-tar types the second arg as FileStat, but at runtime it is the ReadEntry, which
+        // carries the entry `type` (File / Directory / SymbolicLink / Link) we need.
+        const entryPath = (stat as any)?.path ?? p;
+        const entryType = (stat as any)?.type as string | undefined;
+        if (entryPath.includes('.DS_Store') || entryPath.startsWith('._')) return false;
+        try {
+          assertSafeTarEntry({ path: entryPath, type: entryType });
+          return true;
+        } catch (e) {
+          unsafeEntry = unsafeEntry ?? (e as Error);
+          return false;
         }
-      }
+      },
     });
   } catch (error: any) {
     throw new Error(
       `Failed to extract tarball: ${error.message}\n` +
       `The download may be corrupted. Please try again.`
     );
+  }
+
+  // A security refusal surfaces as-is (not masked as a corrupt download).
+  if (unsafeEntry) {
+    throw unsafeEntry;
   }
 
   // Set permissions (Unix only)

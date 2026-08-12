@@ -6,7 +6,28 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as tar from 'tar';
-import { extractTarball, verifyExtractedAddon } from '../../../src/cli/bootstrap/extractor';
+import { extractTarball, verifyExtractedAddon, assertSafeTarEntry } from '../../../src/cli/bootstrap/extractor';
+
+describe('assertSafeTarEntry (P0-3)', () => {
+  it('rejects a symlink entry (link-poisoning)', () => {
+    expect(() => assertSafeTarEntry({ path: 'content/evil', type: 'SymbolicLink' })).toThrow(/symlink|link|unsafe/i);
+  });
+  it('rejects a hardlink entry', () => {
+    expect(() => assertSafeTarEntry({ path: 'content/evil', type: 'Link' })).toThrow(/link|unsafe/i);
+  });
+  it('rejects a parent-directory traversal path', () => {
+    expect(() => assertSafeTarEntry({ path: '../../etc/cron.d/x', type: 'File' })).toThrow(/unsafe path/i);
+  });
+  it('rejects an absolute path', () => {
+    expect(() => assertSafeTarEntry({ path: '/etc/passwd', type: 'File' })).toThrow(/unsafe path/i);
+  });
+  it('allows a normal file entry', () => {
+    expect(() => assertSafeTarEntry({ path: 'content/lib/main.js', type: 'File' })).not.toThrow();
+  });
+  it('allows a directory entry', () => {
+    expect(() => assertSafeTarEntry({ path: 'content/lib/', type: 'Directory' })).not.toThrow();
+  });
+});
 
 describe('Tarball Extractor', () => {
   let tmpDir: string;
@@ -105,6 +126,22 @@ describe('Tarball Extractor', () => {
       JSON.stringify({ name: '@local-labs-jpollock/local-addon-nexus-ai' })
     );
     expect(verifyExtractedAddon(addonDir)).toBe(true);
+  });
+
+  it('rejects a tarball containing a symlink entry, without creating the link (P0-3)', async () => {
+    const destDir = path.join(tmpDir, 'dest');
+    const tarPath = path.join(tmpDir, 'evil.tgz');
+    const contentDir = path.join(tmpDir, 'content');
+    fs.mkdirSync(contentDir);
+    fs.writeFileSync(path.join(contentDir, 'package.json'), JSON.stringify({ name: 'x' }));
+    fs.symlinkSync('/etc/passwd', path.join(contentDir, 'evil-link'));
+
+    await tar.create({ gzip: true, file: tarPath, cwd: tmpDir }, ['content']);
+
+    await expect(extractTarball({ tarPath, destDir, stripComponents: 1 }))
+      .rejects.toThrow(/symlink|link|unsafe/i);
+    // The symlink must never be materialized on disk.
+    expect(fs.existsSync(path.join(destDir, 'evil-link'))).toBe(false);
   });
 
   it('extracts all files including .DS_Store', async () => {
