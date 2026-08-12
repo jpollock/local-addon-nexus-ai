@@ -187,5 +187,12 @@ export default async function globalSetup() {
   await ensureFixtureSiteRunning('nexus-e2e-cli-test-site', 'CLI_E2E_TEST_SITE');
   await ensureFixtureSiteRunning('nexus-e2e-test');
 
+  const { startSshFixture } = require('./helpers/ssh-fixture');
+  console.log('[CLI E2E Setup] Starting SSH host fixture...');
+  const sshReady = await startSshFixture();
+  console.log(sshReady
+    ? '[CLI E2E Setup] ✅ SSH fixture ready'
+    : '[CLI E2E Setup] ⚠ Docker unavailable — external-host tests will skip');
+
   console.log('[CLI E2E Setup] ✅ Ready to run CLI tests\n');
 }
