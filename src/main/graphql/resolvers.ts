@@ -675,7 +675,10 @@ export function createResolvers(context: ResolverContext) {
               `).all() as any[];
 
               external = externalRows.map((row: any) => ({
-                alias: row.account_id,
+                // Legacy external-site rows predate the account_id/site split and may have
+                // NULL account_id. The schema requires a non-nullable alias; fall back to
+                // the site name. This mirrors ipc-handlers.ts:1415.
+                alias: row.account_id ?? row.name,
                 site: row.name,
                 id: row.id,
                 environment: row.environment || 'unknown',
