@@ -110,6 +110,14 @@ export class NexusMcpClient {
     const result = await this.jsonRpc('tools/call', { name, arguments: args }) as McpToolResult;
     return result.content.map((c) => c.text).join('\n');
   }
+
+  /** Read a resource by URI. Returns the joined text contents. */
+  async readResource(uri: string): Promise<string> {
+    const result = await this.jsonRpc('resources/read', { uri }) as {
+      contents: Array<{ uri: string; mimeType?: string; text?: string }>;
+    };
+    return result.contents.map((c) => c.text ?? '').join('\n');
+  }
 }
 
 // ---------------------------------------------------------------------------

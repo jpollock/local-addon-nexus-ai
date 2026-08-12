@@ -26,6 +26,8 @@ for site in alpha beta; do
   su wp -c "php -d memory_limit=512M /usr/local/bin/wp post create --path=/home/wp/${site} --post_status=publish \
               --post_title='Marker ${site}' \
               --post_content='unique-marker-for-${site}-install' --quiet"
+  # Activate akismet so fleet plugins tests have at least one active plugin.
+  su wp -c "php -d memory_limit=512M /usr/local/bin/wp plugin activate akismet --path=/home/wp/${site} --quiet"
 done
 
 service mariadb stop

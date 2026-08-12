@@ -1,0 +1,75 @@
+/**
+ * A registered external host must be visible to every fleet-wide reader.
+ *
+ * NON-VACUITY: change `source IN ('wpe','external')` to `source = 'wpe'` at
+ * src/main/ipc-handlers.ts:780 and src/main/mcp/site-resolver.ts:63 and
+ * "appears in nexus_list_sites" must go RED. That single-source filter is what
+ * made a registered host invisible to nexus_list_sites, so an agent confidently
+ * reported it as not registered.
+ */
+import { runCli } from './helpers/cli-test-utils';
+import { NexusMcpClient, loadConnectionInfo } from './helpers/mcp-client';
+import { FIXTURE_ALIAS, fixtureAvailable, trustFixtureHostKey } from './helpers/ssh-fixture';
+
+const d = fixtureAvailable() ? describe : describe.skip;
+
+d('external hosts in fleet-wide views', () => {
+  let mcpClient: NexusMcpClient;
+
+  beforeAll(async () => {
+    const info = loadConnectionInfo();
+    if (!info) throw new Error('MCP connection info not available');
+    mcpClient = new NexusMcpClient(info);
+
+    await trustFixtureHostKey();
+    await runCli(['host', 'remove', FIXTURE_ALIAS, '-y']);
+    await runCli(['host', 'add', FIXTURE_ALIAS, '--all', '--json'], { timeout: 180_000 });
+    await runCli(['host', 'refresh', FIXTURE_ALIAS], { timeout: 300_000 });
+  });
+
+  it('appears in sites list', async () => {
+    const r = await runCli(['sites', 'list', '--json'], { timeout: 120_000 });
+    expect(r.stdout).toContain(FIXTURE_ALIAS);
+  });
+
+  it('appears in nexus_list_sites — the tool agents call first', async () => {
+    // This is the historical gap: a registered host was invisible here, so a
+    // chat agent would confidently report it as "not registered".
+    const text = await mcpClient.callTool('nexus_list_sites', {});
+    expect(text).toContain(FIXTURE_ALIAS);
+  });
+
+  it('appears in the nexus://fleet/state resource', async () => {
+    const text = await mcpClient.readResource('nexus://fleet/state');
+    expect(text).toContain(FIXTURE_ALIAS);
+  });
+
+  it('its installs appear in fleet plugins', async () => {
+    // fleet plugins --json lists plugins, each with a `sites` array of SITE
+    // NAMES (e.g. "localwpe") — never aliases. So assert the install names.
+    // `fleet summary` is deliberately NOT asserted here: it takes no options
+    // at all and is a pure aggregate ("filesystem  9 sites"), so it never
+    // names an individual site and cannot evidence inclusion.
+    const r = await runCli(['fleet', 'plugins', '--json'], { timeout: 180_000 });
+    const parsed = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
+    const allSites = parsed.plugins.flatMap((p: any) => p.sites ?? []);
+    expect(allSites).toEqual(expect.arrayContaining(['alpha']));
+  });
+
+  it('never reports a coverage figure whose numerator exceeds its denominator', async () => {
+    // fleet_overview counted wp_version across WPE + external but divided by
+    // the WPE-only count, printing "1 of 0" for a user with SSH hosts and no
+    // WP Engine account.
+    //
+    // Called as an MCP tool, not a CLI subcommand: `nexus fleet overview` does
+    // not exist (fleet has health/site-health/summary/plugins/... — verified
+    // against src/cli/commands/fleet.ts). Calling MCP directly from this suite
+    // is the established pattern in 25-mcp-tools-direct.cli-e2e.test.ts.
+    const text = await mcpClient.callTool('fleet_overview', {});
+    const pairs = [...text.matchAll(/(\d+)\s+of\s+(\d+)/g)];
+    expect(pairs.length).toBeGreaterThan(0); // else the regex silently passes
+    for (const [, num, den] of pairs) {
+      expect(Number(num)).toBeLessThanOrEqual(Number(den));
+    }
+  });
+});
