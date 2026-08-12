@@ -974,12 +974,12 @@ d('external host target resolution', () => {
     // Registered production above. A write is refused on production by default
     // (`wpcli`), and the typed suffix must not override the registered label.
     //
-    // search-replace is the write probe because there is no `wp option-update`
+    // `wp db search-replace` is the write probe because there is no `wp option-update`
     // subcommand (verified against src/cli/commands/wp.ts). It is also
     // self-verifying: if the gate wrongly permits it, blogname changes and the
     // follow-up assertion below fails loudly.
     const r = await runCli(
-      ['wp', 'search-replace', `ssh:${FIXTURE_ALIAS}/alpha@development`,
+      ['wp', 'db', 'search-replace', `ssh:${FIXTURE_ALIAS}/alpha@development`,
        'Nexus E2E alpha', 'hijacked'],
       { timeout: 120_000 });
     expect(r.exitCode).not.toBe(0);
