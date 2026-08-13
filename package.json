@@ -67,7 +67,7 @@
     "package:mac-x64": "node scripts/package-addon.js --platform darwin --arch x64",
     "package:linux-x64": "node scripts/package-addon.js --platform linux --arch x64",
     "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64",
-    "rebuild": "electron-rebuild -v 42.2.0 -f -w better-sqlite3",
+    "rebuild": "node scripts/patch-node-abi.js && electron-rebuild -v 42.2.0 -f -w better-sqlite3",
     "copy-styles": "mkdir -p lib/renderer/styles && cp src/renderer/styles/*.css lib/renderer/styles/",
     "sync-agents": "node scripts/sync-agents.js",
     "scan-secrets": "node scripts/scan-secrets.js",
