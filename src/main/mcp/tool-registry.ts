@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolDefinition, McpToolResult, NexusServices } from './types';
 import { createLogger } from '../logging/Logger';
 import { getMetrics } from '../telemetry/MetricsCollector';
+import { CloudflareTransmitter, ErrorCategory } from '../telemetry/CloudflareTransmitter';
 import { getToolSafety, ConfirmationManager, checkTierThreeConfirmation } from './safety';
 import { parseTarget } from '../../common/target';
 import { findExternalSites } from './site-resolver';
@@ -8,6 +9,27 @@ import { upsertExternalProfile } from '../external/externalSiteStore';
 
 const logger = createLogger('ToolRegistry');
 const metrics = getMetrics();
+
+/**
+ * Map a tool failure to a coarse telemetry category (P1-7). Category-only, never the message —
+ * so no PII/secret reaches telemetry — turning previously-invisible tool failures into a signal
+ * a maintainer can see. `CloudflareTransmitter.recordError` no-ops when telemetry is disabled.
+ */
+export function categorizeToolError(message: string): ErrorCategory {
+  const m = message.toLowerCase();
+  if (m.includes('not found')) return 'site_not_found';
+  if (m.includes('not running')) return 'site_not_running';
+  if (m.includes('timed out') || m.includes('timeout')) return 'timeout';
+  if (m.includes('econn') || m.includes('enotfound') || m.includes('network')) return 'network_error';
+  if (m.includes('invalid') || m.includes('required') || m.includes('validation')) return 'validation_error';
+  return 'unknown';
+}
+
+function recordToolError(name: string, message: string): void {
+  try {
+    CloudflareTransmitter.recordError(categorizeToolError(message), name);
+  } catch { /* telemetry must never affect the tool path */ }
+}
 
 /**
  * Refresh an external site's freshness after a successful command against it.
@@ -211,6 +233,9 @@ export class ToolRegistry {
 
       // Record metrics with access method
       metrics.recordToolCall(name, duration, result.isError || false, accessMethod);
+      if (result.isError) {
+        recordToolError(name, result.content?.[0]?.text || 'Unknown error');
+      }
 
       // Durable trail — Tier 2 (modifying) and Tier 3 (destructive) only. Tier
       // 1 is read-only and would swamp the file with no compliance value.
@@ -251,6 +276,7 @@ export class ToolRegistry {
 
       // Record error metrics
       metrics.recordToolCall(name, duration, true, accessMethod);
+      recordToolError(name, message);
 
       // Durable trail for unhandled exceptions. A Tier 2/3 operation that
       // throws mid-execution (an unhandled exception in a WPE API client, a
