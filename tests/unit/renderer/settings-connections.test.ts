@@ -120,24 +120,6 @@ describe('ConnectionsSection', () => {
     expect(checkButton).toBeDefined();
   });
 
-  test('WPE credentials form has username, password, Apply and Clear buttons', () => {
-    const t = tree();
-    expect(t).toContain('API username');
-    expect(t).toContain('API password');
-    expect(t).toContain('Apply');
-    expect(t).toContain('Clear');
-  });
-
-  test('WPE credentials saved feedback appears on success', () => {
-    const component = inst();
-    component.state.wpeCredsSaved = true;
-    component.state.wpePendingClear = false;
-    const rendered = component.render();
-
-    const t = JSON.stringify(serializeTree(rendered));
-    expect(t).toContain('✓ Credentials saved');
-  });
-
   test('AWS credentials form has key ID, secret, Show/Hide, and Save buttons', () => {
     const component = inst();
     component.state.awsConnected = false;
@@ -154,17 +136,6 @@ describe('ConnectionsSection', () => {
     expect(t).toContain('encrypted in your OS keychain');
     expect(t).toContain('never stored in plaintext');
     expect(t).toContain('never stored locally');
-  });
-
-  test('WPE description explains credential storage', () => {
-    const t = tree();
-    expect(t).toContain('stored encrypted using OS-level encryption');
-  });
-
-  test('WPE help text links to my.wpengine.com', () => {
-    const t = tree();
-    expect(t).toContain('my.wpengine.com');
-    expect(t).toContain('different from your WP Engine login');
   });
 
   test('stored key security indicator is present when key is set', () => {
@@ -189,7 +160,6 @@ describe('ConnectionsSection — CREDENTIAL_API_KEY_STATUS is an envelope', () =
   const loadWith = async (statusResult: any) => {
     const invoke = jest.fn(async (channel: string) => {
       if (channel.endsWith(':credential:api-key:status')) return statusResult;
-      if (channel.endsWith(':wpe:get-api-credentials-status')) return { configured: false, username: null };
       return [];
     });
     const component = inst({ settings: { aiProvider: undefined }, electron: { ipcRenderer: { invoke } } });

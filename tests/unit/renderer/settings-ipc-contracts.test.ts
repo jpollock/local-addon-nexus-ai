@@ -71,11 +71,6 @@ const RESPONSES: Record<string, any> = {
   [C.VALIDATE_API_KEY]: { valid: true },
   [C.CHAT_CLEAR_ALL]: { success: true },
 
-  // ipc/handlers/credentials.ts
-  [C.WPE_GET_API_CREDENTIALS_STATUS]: { configured: true, username: 'me@example.com' },
-  [C.WPE_SET_API_CREDENTIALS]: { success: true },
-  [C.WPE_CLEAR_API_CREDENTIALS]: { success: true },
-
   // ipc-handlers.ts — `{ connections: mgr.listApiKeyConnections(args?.provider) }`
   [C.CREDENTIAL_API_KEY_STATUS]: {
     connections: [{ id: 'c1', provider: 'aws', label: 'arn:…', status: 'active', createdAt: '' }],
@@ -235,13 +230,6 @@ const CONTRACTS: Contract[] = [
   },
   {
     from: 'ConnectionsSection.loadConnectionStates',
-    channel: C.WPE_GET_API_CREDENTIALS_STATUS,
-    signature: /^async \(\)/,
-    expected: [],
-    drive: () => capture((invoke) => connections(invoke).loadConnectionStates(), C.WPE_GET_API_CREDENTIALS_STATUS),
-  },
-  {
-    from: 'ConnectionsSection.loadConnectionStates',
     channel: C.CREDENTIAL_API_KEY_STATUS,
     // `async (_event: any, args?: { provider?: string })`
     signature: /^async \(_event[^,]*,\s*args\?:\s*\{\s*provider\?/,
@@ -283,29 +271,6 @@ const CONTRACTS: Contract[] = [
     drive: () => capture(
       (invoke) => connections(invoke, { state: { keyInput: 'sk-secret', keyIsSet: false } }).handleValidateKey(),
       C.VALIDATE_API_KEY,
-    ),
-  },
-  {
-    from: 'ConnectionsSection.handleWpeApplyCredentials (set)',
-    channel: C.WPE_SET_API_CREDENTIALS,
-    // `async (_event: any, username: string, password: string)` — two positional
-    signature: /^async \(_event[^,]*,\s*username: string,\s*password: string\s*\)/,
-    expected: ['user@example.com', 'hunter2'],
-    drive: () => capture(
-      (invoke) => connections(invoke, {
-        state: { wpeUsernameInput: ' user@example.com ', wpePasswordInput: ' hunter2 ', wpePendingClear: false },
-      }).handleWpeApplyCredentials(),
-      C.WPE_SET_API_CREDENTIALS,
-    ),
-  },
-  {
-    from: 'ConnectionsSection.handleWpeApplyCredentials (clear)',
-    channel: C.WPE_CLEAR_API_CREDENTIALS,
-    signature: /^async \(\)/,
-    expected: [],
-    drive: () => capture(
-      (invoke) => connections(invoke, { state: { wpePendingClear: true } }).handleWpeApplyCredentials(),
-      C.WPE_CLEAR_API_CREDENTIALS,
     ),
   },
   {
