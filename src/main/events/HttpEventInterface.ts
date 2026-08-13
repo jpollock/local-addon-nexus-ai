@@ -29,6 +29,31 @@ const EVENT_TYPES: EventType[] = [
   'site_initialized',
 ];
 
+/**
+ * True only if the HTTP Host header names a loopback address (P1-5). The server binds 127.0.0.1,
+ * so a legitimate local caller sends a loopback Host; a DNS-rebinding request from a visited web
+ * page carries the attacker's own hostname. Port is ignored.
+ */
+export function isLocalHostHeader(host: string | undefined): boolean {
+  if (!host) return false;
+  // Strip the port. For bracketed IPv6 ("[::1]:13000") the port follows the closing bracket.
+  const hostname = host.replace(/:\d+$/, '').toLowerCase();
+  return hostname === '127.0.0.1'
+    || hostname === 'localhost'
+    || hostname === '[::1]'
+    || hostname === '::1';
+}
+
+/**
+ * Returns the Origin to echo in Access-Control-Allow-Origin, or null to send no CORS header
+ * (P1-5). Only loopback origins are allowed — never the wildcard `*`. A non-loopback web origin
+ * gets no header, so its JavaScript cannot read gateway responses.
+ */
+export function allowedCorsOrigin(origin: string | undefined): string | null {
+  if (!origin) return null;
+  return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(origin) ? origin : null;
+}
+
 export interface HttpEventInterfaceOptions {
   eventProcessor: EventProcessor;
   logger: {
@@ -173,8 +198,23 @@ export class HttpEventInterface {
   }
 
   private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
-    // CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Anti-DNS-rebinding (P1-5): the server binds 127.0.0.1, but a web page the user visits can
+    // still drive requests to it via DNS rebinding — those requests carry the attacker's own
+    // hostname in the Host header. Require a loopback Host so a rebound request is refused before
+    // any handler (including the unauthenticated /health and /models) runs.
+    if (!isLocalHostHeader(req.headers.host)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Forbidden: non-local Host header' }));
+      return;
+    }
+
+    // CORS (P1-5): no wildcard. Reflect only a loopback Origin so browser JS on an external site
+    // can never read a response; server-side callers (the MU-plugin) don't use CORS at all.
+    const corsOrigin = allowedCorsOrigin(req.headers.origin);
+    if (corsOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+      res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token, X-WP-Site-ID, X-Nexus-Site-Id');
 

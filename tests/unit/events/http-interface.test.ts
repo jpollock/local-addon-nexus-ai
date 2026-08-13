@@ -437,11 +437,17 @@ describe('HttpEventInterface', () => {
   });
 
   describe('CORS', () => {
-    it('should include CORS headers', async () => {
-      const response = await fetch(`${baseUrl}/health`);
+    it('reflects a localhost Origin and never uses the wildcard (P1-5)', async () => {
+      const response = await fetch(`${baseUrl}/health`, { headers: { Origin: baseUrl } });
 
-      expect(response.headers.get('access-control-allow-origin')).toBe('*');
+      expect(response.headers.get('access-control-allow-origin')).toBe(baseUrl);
+      expect(response.headers.get('access-control-allow-origin')).not.toBe('*');
       expect(response.headers.get('access-control-allow-methods')).toContain('POST');
+    });
+
+    it('sends no Access-Control-Allow-Origin for a request with no Origin (P1-5)', async () => {
+      const response = await fetch(`${baseUrl}/health`);
+      expect(response.headers.get('access-control-allow-origin')).toBeNull();
     });
 
     it('should handle OPTIONS preflight', async () => {

@@ -397,7 +397,12 @@ export class AIGatewayRoutes {
    * WordPress plugins surface the right model list and don't accidentally pick
    * a model from a different provider than what the user configured.
    */
-  handleModels(_req: http.IncomingMessage, res: http.ServerResponse): void {
+  handleModels(req: http.IncomingMessage, res: http.ServerResponse): void {
+    // P1-5: require auth like the chat/images routes. This endpoint reveals the configured
+    // provider and which API keys are present, so an unauthenticated caller must not read it.
+    const siteId = this.authenticateRequest(req, res);
+    if (!siteId) return;
+
     const settings = (this.storage.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
     const globalProvider: string = settings.aiProvider || 'anthropic';
 

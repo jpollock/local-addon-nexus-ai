@@ -330,13 +330,16 @@ describe('AIGatewayRoutes — provider routing', () => {
   });
 
   describe('handleModels', () => {
+    // P1-5: /models now requires auth (it reveals the configured provider + which keys exist).
+    const AUTH = { 'x-auth-token': 'test-webhook-token' };
+
     it('returns Anthropic models when global provider is anthropic', () => {
       routes = new AIGatewayRoutes({
         storage: createMockStorage({ ...BASE_STORAGE, [STORAGE_KEYS.SETTINGS]: { aiProvider: 'anthropic' } }),
         logger: createMockLogger(),
       });
 
-      const req = { headers: {} } as http.IncomingMessage;
+      const req = { headers: { ...AUTH } } as unknown as http.IncomingMessage;
       const res = buildResponse();
 
       routes.handleModels(req, res);
@@ -352,7 +355,7 @@ describe('AIGatewayRoutes — provider routing', () => {
         logger: createMockLogger(),
       });
 
-      const req = { headers: {} } as http.IncomingMessage;
+      const req = { headers: { ...AUTH } } as unknown as http.IncomingMessage;
       const res = buildResponse();
 
       routes.handleModels(req, res);
@@ -360,6 +363,20 @@ describe('AIGatewayRoutes — provider routing', () => {
       const body = JSON.parse(res.body);
       expect(body.data.some((m: any) => m.id.startsWith('gpt'))).toBe(true);
       expect(body.data.every((m: any) => m.owned_by === 'openai')).toBe(true);
+    });
+
+    it('returns 401 without an auth token (P1-5)', () => {
+      routes = new AIGatewayRoutes({
+        storage: createMockStorage({ ...BASE_STORAGE, [STORAGE_KEYS.SETTINGS]: { aiProvider: 'anthropic' } }),
+        logger: createMockLogger(),
+      });
+
+      const req = { headers: {} } as http.IncomingMessage;
+      const res = buildResponse();
+
+      routes.handleModels(req, res);
+
+      expect(res.statusCode).toBe(401);
     });
   });
 });
