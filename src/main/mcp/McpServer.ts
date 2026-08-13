@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 import * as path from 'path';
 import { McpAuth } from './McpAuth';
+import { isLocalHostHeader, allowedCorsOrigin } from '../http/loopbackGuard';
 import { ToolRegistry } from './tool-registry';
 import { McpSafetyWrapper } from './mcp-safety-wrapper';
 import { InstructionRegistry } from './instructions';
@@ -168,8 +169,23 @@ export class McpServer {
   }
 
   private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
-    // CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Anti-DNS-rebinding (P1-8): the server binds 127.0.0.1, but a web page the user visits can
+    // rebind a hostname it controls to 127.0.0.1 and reach this server with the attacker's own
+    // hostname in the Host header. Require a loopback Host, refused before auth and routing — a
+    // rebound request never even reaches the health check. Mirrors HttpEventInterface.
+    if (!isLocalHostHeader(req.headers.host)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Forbidden: non-local Host header' }));
+      return;
+    }
+
+    // CORS (P1-8): no wildcard. Reflect only a loopback Origin so browser JS on an external site
+    // can never read a response; the auth token is still the primary gate.
+    const corsOrigin = allowedCorsOrigin(req.headers.origin);
+    if (corsOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+      res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 

@@ -27,7 +27,7 @@ function createServer() {
 function makeRequest(
   port: number,
   options: { method?: string; path: string; headers?: Record<string, string>; body?: string; noAuth?: boolean },
-): Promise<{ status: number; body: any; raw: string }> {
+): Promise<{ status: number; body: any; raw: string; resHeaders: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -56,7 +56,7 @@ function makeRequest(
           } catch {
             parsed = data;
           }
-          resolve({ status: res.statusCode!, body: parsed, raw: data });
+          resolve({ status: res.statusCode!, body: parsed, raw: data, resHeaders: res.headers });
         });
       },
     );
@@ -100,6 +100,38 @@ describe('AiProxyServer', () => {
 
   afterEach(async () => {
     await server.stop();
+  });
+
+  // P1-8: this server bound 127.0.0.1 but never checked the Host header and echoed a wildcard
+  // CORS origin — the exact hardening HttpEventInterface already had, missing here.
+  it('rejects a non-loopback Host header (anti-DNS-rebinding, P1-8)', async () => {
+    const res = await makeRequest(port, {
+      path: '/health',
+      noAuth: true,
+      headers: { Host: 'evil.example.com' },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('never emits a wildcard CORS origin (P1-8)', async () => {
+    const res = await makeRequest(port, { path: '/health', noAuth: true });
+    expect(res.resHeaders['access-control-allow-origin']).not.toBe('*');
+  });
+
+  it('reflects only a loopback Origin for CORS (P1-8)', async () => {
+    const ok = await makeRequest(port, {
+      path: '/health',
+      noAuth: true,
+      headers: { Origin: 'http://localhost:3000' },
+    });
+    expect(ok.resHeaders['access-control-allow-origin']).toBe('http://localhost:3000');
+
+    const evil = await makeRequest(port, {
+      path: '/health',
+      noAuth: true,
+      headers: { Origin: 'https://evil.example.com' },
+    });
+    expect(evil.resHeaders['access-control-allow-origin']).toBeUndefined();
   });
 
   // 1. Auth rejects requests without Bearer token (401)

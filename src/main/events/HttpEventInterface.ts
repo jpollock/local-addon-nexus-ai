@@ -9,6 +9,7 @@ import { AIGatewayRoutes } from '../ai-gateway/AIGatewayRoutes';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import { IPC_CHANNELS } from '../../common/constants';
 import type { SmartSearchHandler } from '../smart-search/SmartSearchHandler';
+import { isLocalHostHeader, allowedCorsOrigin } from '../http/loopbackGuard';
 
 const EVENT_TYPES: EventType[] = [
   'post_created',
@@ -29,30 +30,11 @@ const EVENT_TYPES: EventType[] = [
   'site_initialized',
 ];
 
-/**
- * True only if the HTTP Host header names a loopback address (P1-5). The server binds 127.0.0.1,
- * so a legitimate local caller sends a loopback Host; a DNS-rebinding request from a visited web
- * page carries the attacker's own hostname. Port is ignored.
- */
-export function isLocalHostHeader(host: string | undefined): boolean {
-  if (!host) return false;
-  // Strip the port. For bracketed IPv6 ("[::1]:13000") the port follows the closing bracket.
-  const hostname = host.replace(/:\d+$/, '').toLowerCase();
-  return hostname === '127.0.0.1'
-    || hostname === 'localhost'
-    || hostname === '[::1]'
-    || hostname === '::1';
-}
-
-/**
- * Returns the Origin to echo in Access-Control-Allow-Origin, or null to send no CORS header
- * (P1-5). Only loopback origins are allowed — never the wildcard `*`. A non-loopback web origin
- * gets no header, so its JavaScript cannot read gateway responses.
- */
-export function allowedCorsOrigin(origin: string | undefined): string | null {
-  if (!origin) return null;
-  return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(origin) ? origin : null;
-}
+// The two loopback guards moved to src/main/http/loopbackGuard.ts so McpServer and AiProxyServer
+// share the exact same implementation (P1-8). Imported for this file's own request handler and
+// re-exported to keep existing importers/tests (tests/unit/events/gateway-host-guard.test.ts)
+// unchanged.
+export { isLocalHostHeader, allowedCorsOrigin };
 
 export interface HttpEventInterfaceOptions {
   eventProcessor: EventProcessor;

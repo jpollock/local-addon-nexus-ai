@@ -21,11 +21,13 @@ function httpRequest(
   path: string,
   body?: object,
   token?: string,
-): Promise<{ status: number; body: any }> {
+  extraHeaders?: Record<string, string>,
+): Promise<{ status: number; body: any; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const headers: Record<string, string> = {};
     if (body) headers['Content-Type'] = 'application/json';
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (extraHeaders) Object.assign(headers, extraHeaders);
 
     const req = http.request(
       { hostname: '127.0.0.1', port, path, method, headers },
@@ -34,13 +36,13 @@ function httpRequest(
         res.on('data', (chunk: Buffer) => (data += chunk.toString()));
         res.on('end', () => {
           if (!data.trim()) {
-            resolve({ status: res.statusCode!, body: '' });
+            resolve({ status: res.statusCode!, body: '', headers: res.headers });
             return;
           }
           try {
-            resolve({ status: res.statusCode!, body: JSON.parse(data) });
+            resolve({ status: res.statusCode!, body: JSON.parse(data), headers: res.headers });
           } catch {
-            resolve({ status: res.statusCode!, body: data });
+            resolve({ status: res.statusCode!, body: data, headers: res.headers });
           }
         });
       },
@@ -86,6 +88,32 @@ describe('McpServer', () => {
     const res = await httpRequest(port, 'GET', '/health');
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
+  });
+
+  // P1-8: this server bound 127.0.0.1 but never checked the Host header and echoed a wildcard
+  // CORS origin — the exact hardening HttpEventInterface already had, missing here.
+  test('rejects a non-loopback Host header (anti-DNS-rebinding, P1-8)', async () => {
+    const res = await httpRequest(port, 'GET', '/health', undefined, undefined, {
+      Host: 'evil.example.com',
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test('never emits a wildcard CORS origin (P1-8)', async () => {
+    const res = await httpRequest(port, 'GET', '/health');
+    expect(res.headers['access-control-allow-origin']).not.toBe('*');
+  });
+
+  test('reflects only a loopback Origin for CORS (P1-8)', async () => {
+    const ok = await httpRequest(port, 'GET', '/health', undefined, undefined, {
+      Origin: 'http://localhost:3000',
+    });
+    expect(ok.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+
+    const evil = await httpRequest(port, 'GET', '/health', undefined, undefined, {
+      Origin: 'https://evil.example.com',
+    });
+    expect(evil.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   test('rejects requests without auth', async () => {
