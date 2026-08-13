@@ -34,9 +34,12 @@ describe('NexusToolProvider', () => {
   });
 
   it('allows any tool when tools list is undefined', async () => {
-    const registry = makeRegistry({ wp_eval: () => 'ok' });
+    // Use a tool with no extra per-tool gate. wp_eval carries an additional sandbox site gate
+    // (see the "wp_eval sandbox scoping" block) that applies to unrestricted agents too, so it
+    // is the wrong tool to demonstrate the plain tool-scope fallthrough with.
+    const registry = makeRegistry({ nexus_list_sites: () => 'ok' });
     const provider = new NexusToolProvider(registry as any, fakeServices, undefined);
-    const result = await provider.invoke('wp_eval', {});
+    const result = await provider.invoke('nexus_list_sites', {});
     expect(result).toBe('ok');
   });
 
@@ -192,5 +195,28 @@ describe('NexusToolProvider — wp_eval sandbox scoping', () => {
     await expect(provider.invoke('wp_eval', { site: 'other-site' })).rejects.toThrow(
       'wp_eval: site "other-site" is not in this agent\'s registered sandbox scope'
     );
+  });
+
+  // Regression: the site gate must NOT depend on allowedTools. An agent that declares no
+  // tools list (allowedTools === undefined) is the MORE privileged caller (every tool allowed),
+  // so it is exactly the one that must still be scoped for wp_eval. Guarding the gate with
+  // `&& this.allowedTools` let an unrestricted agent run arbitrary PHP fleet-wide.
+  it('applies the site gate to an unrestricted (no tools list) agent — refuses when no sandbox registered', async () => {
+    const registry = makeRegistry({ wp_eval: () => 'ok' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, undefined);
+    await expect(provider.invoke('wp_eval', { site: 'any-site' })).rejects.toThrow(
+      'wp_eval refused: no sandbox site registered for this agent'
+    );
+    expect(registry.call).not.toHaveBeenCalled();
+  });
+
+  it('an unrestricted agent may run wp_eval only against a registered sandbox site', async () => {
+    const registry = makeRegistry({ wp_eval: () => 'ok' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, undefined);
+    provider.registerSandbox('my-site');
+    await expect(provider.invoke('wp_eval', { site: 'other' })).rejects.toThrow(
+      'wp_eval: site "other" is not in this agent\'s registered sandbox scope'
+    );
+    expect(await provider.invoke('wp_eval', { site: 'my-site' })).toBe('ok');
   });
 });

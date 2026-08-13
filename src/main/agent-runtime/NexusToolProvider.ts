@@ -165,9 +165,15 @@ export class NexusToolProvider implements ToolProvider {
       );
     }
 
-    // Enforce wp_eval site scope: when running as an agent, restrict wp_eval to registered
-    // sandbox sites to prevent prompt-injected code from targeting unrelated local sites.
-    if (name === 'wp_eval' && this.allowedTools) {
+    // Enforce wp_eval site scope: restrict wp_eval to registered sandbox sites to prevent
+    // prompt-injected code from targeting unrelated local sites. This gate must NOT be
+    // conditioned on `allowedTools`: NexusToolProvider is only ever the agent path (constructed
+    // solely in buildAgentContext), and an agent that declares no tools list is the MORE
+    // privileged caller (every tool allowed), so it is exactly the one that must still be scoped.
+    // Guarding this with `&& this.allowedTools` let an unrestricted agent run arbitrary PHP
+    // fleet-wide. Shipped agents that use wp_eval (security-sentinel, seo-insights) declare a
+    // tools list AND registerSandbox(), so they are unaffected.
+    if (name === 'wp_eval') {
       // No sandbox registered means no site is authorized for wp_eval at all -- this must
       // refuse, not fall through to "any site is fine" the way an empty sandboxSiteIds set
       // used to.
