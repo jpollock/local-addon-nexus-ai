@@ -21,6 +21,11 @@ import { safeStorage } from 'electron';
 
 const ENCRYPTED_PREFIX = 'encrypted_';
 
+// Per-provider credential version, bumped whenever a key's VALUE changes (a rotation). Sites
+// record the version they last synced; a site whose recorded version is behind is "stale" and
+// still holds the old key. See docs/planning/2026-08-12-creds-rotate-design.md.
+const CRED_VERSIONS_KEY = 'nexus-ai_cred_versions';
+
 export class KeyVault {
   private storage: RegistryStorage;
   private legacyStorageKey: string;
@@ -126,11 +131,23 @@ export class KeyVault {
       );
     }
 
-    const stored = this.encrypt(value);
     const key = this.storageKey(keyName);
     const blob = { ...(this.storage.get(key) ?? {}) } as Record<string, string>;
-    blob[keyName] = stored;
+
+    // Detect a real value change (a rotation) vs. a re-sync of the same value, reading the stored
+    // ciphertext directly (no migration side-effects). Only a change bumps the version, so
+    // re-syncing the same key does not spuriously mark every site stale.
+    const currentValue = blob[keyName] ? this.decrypt(blob[keyName]) : null;
+    const changed = currentValue !== value;
+
+    blob[keyName] = this.encrypt(value);
     this.storage.set(key, blob as any);
+
+    if (changed) {
+      const versions = { ...(this.storage.get(CRED_VERSIONS_KEY) ?? {}) } as Record<string, number>;
+      versions[keyName] = (versions[keyName] ?? 0) + 1;
+      this.storage.set(CRED_VERSIONS_KEY, versions as any);
+    }
   }
 
   /**
@@ -255,4 +272,13 @@ export function hasApiKey(storage: RegistryStorage, providerId: string): boolean
  */
 export function isKeyStorageEncrypted(storage: RegistryStorage): boolean {
   return new KeyVault(storage, STORAGE_KEYS.API_KEYS).isEncryptionAvailable();
+}
+
+/**
+ * The current credential version for a provider — bumped each time the key's value changes.
+ * A site whose recorded synced-version is below this still holds an older key.
+ */
+export function credentialVersion(storage: RegistryStorage, providerId: string): number {
+  const versions = (storage.get(CRED_VERSIONS_KEY) ?? {}) as Record<string, number>;
+  return versions[providerId] ?? 0;
 }

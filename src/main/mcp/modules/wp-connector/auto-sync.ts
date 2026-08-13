@@ -7,7 +7,7 @@ import {
   CredentialEntry,
 } from './credential-helpers';
 import { redactCredentials } from '../../security/credential-redaction';
-import { getApiKey } from '../../../security/KeyVault';
+import { getApiKey, credentialVersion } from '../../../security/KeyVault';
 
 interface AutoSyncLogger {
   info(...args: unknown[]): void;
@@ -77,6 +77,15 @@ export async function autoSyncCredentials(
   try {
     const result = await localServices.wpCliRun(siteId, ['eval', phpCode]);
     if (result.success) {
+      // Record the credential version this site is now synced to (P1-7), so a rotation can
+      // report which sites still hold an older key. Best-effort — never fail the sync over it.
+      try {
+        const configs = { ...(storage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) } as Record<string, any>;
+        if (configs[siteId]) {
+          configs[siteId] = { ...configs[siteId], syncedCredVersion: credentialVersion(storage, provider) };
+          storage.set(STORAGE_KEYS.SITE_AI_CONFIG, configs);
+        }
+      } catch { /* best effort */ }
       try {
         const parsed = JSON.parse((result.stdout ?? '').trim());
         logger.info(`[NexusAI] Credential sync to "${siteName}": connectors=${parsed.connectors}, ai_client=${parsed.ai_client ? 'ok' : 'failed'}`);
