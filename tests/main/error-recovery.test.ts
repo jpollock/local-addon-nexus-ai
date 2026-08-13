@@ -108,14 +108,14 @@ describe('Error Recovery', () => {
 
   describe('EmbeddingService', () => {
     test('throws when not initialized', async () => {
-      const service = new EmbeddingService('/nonexistent/path');
+      const service = new EmbeddingService('/nonexistent/path', 384, 256);
       await expect(service.embedBatch(['test'])).rejects.toThrow(
         'EmbeddingService not initialized',
       );
     });
 
     test('rejects for missing model path', async () => {
-      const service = new EmbeddingService('/nonexistent/model/dir');
+      const service = new EmbeddingService('/nonexistent/model/dir', 384, 256);
       await expect(service.initialize()).rejects.toThrow();
     });
   });

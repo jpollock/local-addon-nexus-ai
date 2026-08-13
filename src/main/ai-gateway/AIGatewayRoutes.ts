@@ -470,11 +470,18 @@ export class AIGatewayRoutes {
           const indexRegistry = this.storage.get(STORAGE_KEYS.INDEX_REGISTRY) as Record<string, unknown> | null;
           if (indexRegistry && Object.prototype.hasOwnProperty.call(indexRegistry, headerSiteId)) {
             siteId = headerSiteId;
+          } else {
+            // A provided-but-unknown X-WP-Site-ID must NOT be silently upgraded to the fleet-wide
+            // 'nexus-agent' identity (security review H3) — a caller claiming a bogus site is
+            // rejected, not promoted.
+            this.sendError(res, 401, 'Unknown X-WP-Site-ID');
+            return null;
           }
+        } else {
+          // No X-WP-Site-ID with the webhook token → a fleet-wide agent call. Agents are
+          // fleet-wide and have no per-site context.
+          siteId = 'nexus-agent';
         }
-        // Allow agent calls (no X-WP-Site-ID) using the webhook token.
-        // Agents are fleet-wide and have no per-site context.
-        if (!siteId) siteId = 'nexus-agent';
       }
     }
     if (!siteId) { this.sendError(res, 401, 'Invalid authentication token'); return null; }

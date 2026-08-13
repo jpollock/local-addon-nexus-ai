@@ -73,7 +73,8 @@ function makeServices(overrides: {
 }
 
 // Build a remoteWpCliRun mock that handles all SSH calls via args-based routing.
-// The implementation now makes: 1 warm-up + 11 settings option gets + 13 parallel = 25 calls.
+// The implementation now makes: 1 warm-up + 17 settings option gets + 2 per-type
+// post counts + 13 parallel = 33 calls.
 function makeFullRemoteWpCliRun() {
   return jest.fn().mockImplementation((_install: string, args: string[]) => {
     if (args[0] === 'plugin') return Promise.resolve({ success: true, stdout: PLUGIN_JSON });
@@ -114,7 +115,7 @@ describe('wpe_site_deep_refresh', () => {
     expect(result.content[0].text).toMatch(/SSH key not found/i);
   });
 
-  // 3. Calls SSH WP-CLI commands (1 warm-up + 11 settings + 13 parallel)
+  // 3. Calls SSH WP-CLI commands (1 warm-up + 17 settings + 2 per-type post counts + 13 parallel)
   it('calls all SSH WP-CLI commands', async () => {
     const remoteWpCliRun = makeFullRemoteWpCliRun();
     const services = makeServices({
@@ -123,7 +124,7 @@ describe('wpe_site_deep_refresh', () => {
 
     await deepRefreshHandler.execute({ install_name: 'mysite' }, services as any);
 
-    expect(remoteWpCliRun).toHaveBeenCalledTimes(25);
+    expect(remoteWpCliRun).toHaveBeenCalledTimes(33);
 
     // Verify each expected command was issued
     expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['plugin', 'list', '--format=json', '--fields=name,title,version,status']);
@@ -131,7 +132,7 @@ describe('wpe_site_deep_refresh', () => {
     expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['core', 'version']);
     expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['option', 'get', 'siteurl']);
     expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['option', 'get', 'admin_email']);
-    expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['post', 'list', '--post_status=publish', '--format=count']);
+    expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['post', 'list', '--post_type=any', '--post_status=publish', '--format=count']);
     expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['option', 'get', 'stylesheet']);
   });
 

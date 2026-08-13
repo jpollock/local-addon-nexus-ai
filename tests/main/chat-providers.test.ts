@@ -135,16 +135,17 @@ describe('LocalGatewayProvider', () => {
     expect(provider.requiresApiKey).toBe(false);
   });
 
-  test('streamChat yields an error about coming soon', async () => {
+  test('streamChat yields a not-configured error when gateway URL/token are absent', async () => {
     const events: any[] = [];
     const signal = new AbortController().signal;
 
+    // No baseUrl or apiKey in config → provider must refuse before making any request.
     for await (const event of provider.streamChat([], [], { model: '' }, signal)) {
       events.push(event);
     }
 
     expect(events.some((e) => e.type === 'error')).toBe(true);
-    expect(events.find((e: any) => e.type === 'error')?.message).toMatch(/coming soon/i);
+    expect(events.find((e: any) => e.type === 'error')?.message).toMatch(/not configured/i);
   });
 
   test('listModels returns empty', async () => {

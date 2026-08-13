@@ -19,7 +19,10 @@ const describeWithModel = MODEL_EXISTS ? describe : describe.skip;
 
 describe('EmbeddingService runtime compatibility', () => {
   test('disables ONNX on Windows ia32 runtimes without loading native bindings', async () => {
-    const service = new EmbeddingService(MODEL_DIR, { platform: 'win32', arch: 'ia32' });
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256, {
+      platform: 'win32',
+      arch: 'ia32',
+    });
     await service.initialize();
 
     expect(isOnnxRuntimeSupported({ platform: 'win32', arch: 'ia32' })).toBe(false);
@@ -38,7 +41,7 @@ describeWithModel('EmbeddingService (requires model)', () => {
   });
 
   test('initializes and produces 384-dim embeddings', async () => {
-    const service = new EmbeddingService(MODEL_DIR);
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256);
     await service.initialize();
 
     expect(service.isReady()).toBe(true);
@@ -51,7 +54,7 @@ describeWithModel('EmbeddingService (requires model)', () => {
   });
 
   test('same text produces same embedding (deterministic)', async () => {
-    const service = new EmbeddingService(MODEL_DIR);
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256);
     await service.initialize();
 
     const a = await service.embed('WordPress is a content management system');
@@ -65,7 +68,7 @@ describeWithModel('EmbeddingService (requires model)', () => {
   });
 
   test('similar texts have higher cosine similarity than unrelated texts', async () => {
-    const service = new EmbeddingService(MODEL_DIR);
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256);
     await service.initialize();
 
     const wp = await service.embed('WordPress is a popular CMS for building websites');
@@ -81,7 +84,7 @@ describeWithModel('EmbeddingService (requires model)', () => {
   });
 
   test('batch embedding matches individual embeddings', async () => {
-    const service = new EmbeddingService(MODEL_DIR);
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256);
     await service.initialize();
 
     const texts = ['Hello world', 'WordPress plugins', 'Database migration'];
@@ -98,7 +101,7 @@ describeWithModel('EmbeddingService (requires model)', () => {
   });
 
   test('handles empty string', async () => {
-    const service = new EmbeddingService(MODEL_DIR);
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256);
     await service.initialize();
 
     const embedding = await service.embed('');
@@ -108,7 +111,7 @@ describeWithModel('EmbeddingService (requires model)', () => {
   });
 
   test('handles very long text (truncation)', async () => {
-    const service = new EmbeddingService(MODEL_DIR);
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256);
     await service.initialize();
 
     const longText = 'word '.repeat(1000);
@@ -119,7 +122,7 @@ describeWithModel('EmbeddingService (requires model)', () => {
   });
 
   test('embeddings are L2-normalized (unit length)', async () => {
-    const service = new EmbeddingService(MODEL_DIR);
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256);
     await service.initialize();
 
     const embedding = await service.embed('Test normalization');

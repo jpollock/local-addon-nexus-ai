@@ -39,7 +39,6 @@ const EVENTS_DIR = path.join(CONFIG_DIR, 'telemetry');
 const EVENTS_PATH = path.join(EVENTS_DIR, 'events.jsonl');
 
 // Environment variable overrides
-const ENV_TELEMETRY = process.env.NEXUS_TELEMETRY; // '0' or '1'
 const ENV_ENDPOINT = process.env.NEXUS_ANALYTICS_ENDPOINT;
 
 // CI environments where telemetry is auto-disabled
@@ -189,9 +188,11 @@ export function isRegistered(): boolean {
 // ============================================================================
 
 export function isTelemetryEnabled(): boolean {
-  // Environment variable override
-  if (ENV_TELEMETRY === '0') return false;
-  if (ENV_TELEMETRY === '1') return true;
+  // Environment variable override — read live (not the import-time capture), consistent with the
+  // CI check below, so a runtime change to NEXUS_TELEMETRY takes effect and tests can control it.
+  const envTelemetry = process.env.NEXUS_TELEMETRY;
+  if (envTelemetry === '0') return false;
+  if (envTelemetry === '1') return true;
 
   // Auto-disable in CI environments
   if (CI_ENV_VARS.some((v) => process.env[v])) return false;

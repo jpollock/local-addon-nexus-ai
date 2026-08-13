@@ -3627,38 +3627,34 @@ export function createResolvers(context: ResolverContext) {
             }
             siteId = site.id;
           } else if (parsed.type === 'external') {
-            // External: look up by unique graph id (ssh:<alias>/<site>), not by name.
-            // Name-based lookup would fail for the three real hosts all named "files"
-            // (piedmontdermgroup, willowcreekderm, tablemesaderm) — resolveRemoteGraphSite
-            // would return ambiguous for all three.
-            const externalId = `ssh:${parsed.alias}/${parsed.site}`;
+            // External: resolve the connection alias to a site row via the same
+            // findExternalSites helper resolveTransport uses. `account_id` links a
+            // row to its connection; the graph `name` column is the SITE name, which
+            // collides across connections (three real hosts each have a site named
+            // "files"), so a name lookup is wrong. A bare `ssh:<alias>@env` resolves
+            // only when the connection has exactly one site; `ssh:<alias>/<site>@env`
+            // pins it. is_active=1 is enforced inside findExternalSites (nexus host
+            // remove soft-deletes).
             const db = services.graphService?.getDb?.();
-            if (!db) {
+            const rows = findExternalSites(db, parsed.alias!, parsed.site, 'id, name, environment');
+            if (rows.length === 0) {
               return {
                 success: false,
                 error: `Site "${target}" not found in the graph database.`,
                 results: [],
               };
             }
-            try {
-              const row = db.prepare(
-                "SELECT id FROM sites WHERE source='external' AND is_active=1 AND id=?"
-              ).get(externalId) as { id: string } | undefined;
-              if (!row) {
-                return {
-                  success: false,
-                  error: `Site "${target}" not found in the graph database.`,
-                  results: [],
-                };
-              }
-              siteId = row.id;
-            } catch {
+            if (rows.length > 1) {
+              const names = rows.map(
+                (r: any) => `ssh:${parsed.alias}/${r.name}@${r.environment ?? 'production'}`,
+              );
               return {
                 success: false,
-                error: `Site "${target}" not found in the graph database.`,
+                error: `"${parsed.alias}" has ${rows.length} registered sites — specify which one: ${names.join(', ')}`,
                 results: [],
               };
             }
+            siteId = rows[0].id;
           } else {
             // WPE — resolve via the graph, same fallback and collision policy
             // search_site_content uses.

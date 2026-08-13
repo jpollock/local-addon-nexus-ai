@@ -22,6 +22,7 @@ describe('IW types compile', () => {
       clientId: null,
       projectId: null,
       accountId: null,
+      wpEngineConnectorApproved: false,
     };
     expect(status.hubInstalled).toBe(true);
   });

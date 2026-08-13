@@ -149,8 +149,7 @@ describe('handleAgentRun', () => {
         },
       }) as any;
 
-    // @ts-ignore
-    const lines = await captureLog(() => handleAgentRun('site-monitor', gql));
+    const lines = await captureLog(() => handleAgentRun('site-monitor', {}, gql));
     expect(lines.some((l) => l.includes('site-monitor'))).toBe(true);
     expect(lines.some((l) => l.includes('450'))).toBe(true);
   });
@@ -173,8 +172,7 @@ describe('handleAgentRun', () => {
     });
 
     try {
-      // @ts-ignore
-      await expect(handleAgentRun('site-monitor', gql)).rejects.toThrow('Agent run failed: error');
+      await expect(handleAgentRun('site-monitor', {}, gql)).rejects.toThrow('Agent run failed: error');
       expect(errorLines.some((l) => l.includes('site-monitor'))).toBe(true);
       expect(errorLines.some((l) => l.includes('Something went wrong'))).toBe(true);
     } finally {
@@ -200,8 +198,7 @@ describe('handleAgentRun', () => {
     });
 
     try {
-      // @ts-ignore
-      await expect(handleAgentRun('slow-agent', gql)).rejects.toThrow('Agent run failed: timeout');
+      await expect(handleAgentRun('slow-agent', {}, gql)).rejects.toThrow('Agent run failed: timeout');
       expect(errorLines.some((l) => l.includes('slow-agent'))).toBe(true);
       expect(errorLines.some((l) => /timeout/i.test(l))).toBe(true);
     } finally {
@@ -214,8 +211,7 @@ describe('handleAgentRun', () => {
       throw new Error('Agent "missing" not found');
     };
 
-    // @ts-ignore
-    await expect(handleAgentRun('missing', gql)).rejects.toThrow('Agent "missing" not found');
+    await expect(handleAgentRun('missing', {}, gql)).rejects.toThrow('Agent "missing" not found');
   });
 
   it('throws on agent error status', async () => {
@@ -229,8 +225,7 @@ describe('handleAgentRun', () => {
         },
       }) as any;
 
-    // @ts-ignore
-    await expect(handleAgentRun('my-agent', gql)).rejects.toThrow('Agent run failed: error');
+    await expect(handleAgentRun('my-agent', {}, gql)).rejects.toThrow('Agent run failed: error');
   });
 
   it('throws on agent timeout status', async () => {
@@ -244,8 +239,7 @@ describe('handleAgentRun', () => {
         },
       }) as any;
 
-    // @ts-ignore
-    await expect(handleAgentRun('slow-agent', gql)).rejects.toThrow('Agent run failed: timeout');
+    await expect(handleAgentRun('slow-agent', {}, gql)).rejects.toThrow('Agent run failed: timeout');
   });
 });
 
@@ -266,7 +260,7 @@ describe('handleAgentLogs', () => {
 
   it('prints each log line read from the log file', async () => {
     fs.writeFileSync(
-      path.join(logDir, 'site-monitor.log'),
+      path.join(logDir, 'agent.log'),
       '[2026-07-12T10:00:00Z] INFO agent started\n[2026-07-12T10:00:01Z] INFO agent finished\n',
     );
 
@@ -287,7 +281,7 @@ describe('handleAgentLogs', () => {
 
   it('respects the --lines option (tail behavior)', async () => {
     const content = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
-    fs.writeFileSync(path.join(logDir, 'site-monitor.log'), content);
+    fs.writeFileSync(path.join(logDir, 'agent.log'), content);
 
     const lines = await captureLog(() =>
       handleAgentLogs('site-monitor', { lines: '3', follow: false }, logDir),
@@ -302,7 +296,7 @@ describe('handleAgentLogs', () => {
   });
 
   it('reads the correct log file for the given agent name', async () => {
-    fs.writeFileSync(path.join(logDir, 'my-agent.log'), 'hello from my-agent\n');
+    fs.writeFileSync(path.join(logDir, 'agent.log'), 'hello from my-agent\n');
 
     const lines = await captureLog(() =>
       handleAgentLogs('my-agent', { lines: '50', follow: false }, logDir),

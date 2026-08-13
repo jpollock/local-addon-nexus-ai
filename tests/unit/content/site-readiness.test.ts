@@ -9,6 +9,7 @@ describe('isSiteReady', () => {
   beforeEach(() => {
     mockLocalServices = {
       getSite: jest.fn(),
+      getSiteStatus: jest.fn(),
     } as any;
 
     mockMySQLExtractor = {
@@ -35,6 +36,7 @@ describe('isSiteReady', () => {
       status: 'provisioning',
       path: '/path/to/site',
     });
+    mockLocalServices.getSiteStatus.mockReturnValue('provisioning');
 
     const result = await isSiteReady('test-site', mockLocalServices);
 
@@ -51,6 +53,7 @@ describe('isSiteReady', () => {
       status: 'halted',
       path: '/path/to/site',
     });
+    mockLocalServices.getSiteStatus.mockReturnValue('halted');
 
     const result = await isSiteReady('test-site', mockLocalServices);
 
@@ -67,6 +70,7 @@ describe('isSiteReady', () => {
       status: 'running',
       path: '/nonexistent/path',
     });
+    mockLocalServices.getSiteStatus.mockReturnValue('running');
 
     const result = await isSiteReady('test-site', mockLocalServices);
 
@@ -83,6 +87,7 @@ describe('isSiteReady', () => {
       status: 'running',
       path: __dirname, // Use test directory as existing path
     });
+    mockLocalServices.getSiteStatus.mockReturnValue('running');
     mockMySQLExtractor.isAvailable.mockReturnValue(false);
 
     const result = await isSiteReady('test-site', mockLocalServices, mockMySQLExtractor);
@@ -100,6 +105,7 @@ describe('isSiteReady', () => {
       status: 'running',
       path: __dirname,
     });
+    mockLocalServices.getSiteStatus.mockReturnValue('running');
     mockMySQLExtractor.isAvailable.mockReturnValue(true);
     mockMySQLExtractor.testConnection.mockResolvedValue(false);
 
@@ -118,6 +124,7 @@ describe('isSiteReady', () => {
       status: 'running',
       path: __dirname,
     });
+    mockLocalServices.getSiteStatus.mockReturnValue('running');
     mockMySQLExtractor.isAvailable.mockReturnValue(true);
     mockMySQLExtractor.testConnection.mockResolvedValue(true);
 

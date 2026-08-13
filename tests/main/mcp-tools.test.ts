@@ -85,9 +85,11 @@ describe('MCP Tool Handlers', () => {
     registerSiteContextTools(registry);
   });
 
-  test('registers all 11 content + site-context tools', () => {
+  test('registers all 13 content + site-context tools', () => {
     const names = registry.allToolNames().sort();
     expect(names).toEqual([
+      'describe_site_fields',
+      'get_all_site_documents',
       'get_index_status',
       'get_site_structure',
       'list_indexed_sites',
