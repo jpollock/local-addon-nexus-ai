@@ -4,6 +4,7 @@
 import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
+import { secureDbFile } from '../db/secureDbFile';
 import {
   Site,
   Content,
@@ -165,6 +166,10 @@ export class GraphService {
 
     // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
+
+    // Restrict the db + WAL/SHM to 0600 — they hold emails, indexed content and transcripts,
+    // and were created world-readable (0644) while every log is 0600 (P1-4).
+    secureDbFile(this.dbPath);
 
     // Run migrations
     await this.runMigrations();

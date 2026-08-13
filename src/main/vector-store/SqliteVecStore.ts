@@ -6,6 +6,7 @@ import { VECTOR_DIMENSIONS } from '../../common/constants';
 import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
 import type { IVectorStore } from './IVectorStore';
 import { applyMetadataFilters } from './metadata-filters';
+import { secureDbFile } from '../db/secureDbFile';
 
 export class SqliteVecStore implements IVectorStore {
   private db: Database.Database | null = null;
@@ -17,6 +18,9 @@ export class SqliteVecStore implements IVectorStore {
     sqliteVec.load(this.db);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
+    // Restrict the db + WAL/SHM to 0600 — they hold indexed site content and embeddings, and
+    // were created world-readable (0644) while every log is 0600 (P1-4).
+    secureDbFile(this.dbPath);
   }
 
   private get conn(): Database.Database {
