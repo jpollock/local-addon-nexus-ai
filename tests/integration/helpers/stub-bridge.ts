@@ -98,9 +98,6 @@ export function createStubBridge(
     async wpeLogout() { /* stub */ },
     async wpeGetUserInfo() { return null; },
     getWpeUserId() { return null; },
-    async wpeSetApiCredentials(_username: string, _password: string) { /* stub */ },
-    async wpeClearApiCredentials() { /* stub */ },
-    async wpeGetApiCredentialsStatus() { return { configured: false }; },
 
     async trustCert() { /* stub */ },
     async getAvailablePhpVersions() { return ['8.1', '8.2', '8.3']; },

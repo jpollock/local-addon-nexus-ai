@@ -201,7 +201,6 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   list_indexed_sites: 1,
   search_across_sites: 1,
   search_site_content: 1,
-  wpe_credentials_status: 1,
   local_get_site_logs: 1,
   local_get_sync_history: 1,
   local_list_blueprints: 1,

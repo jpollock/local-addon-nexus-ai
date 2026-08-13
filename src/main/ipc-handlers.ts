@@ -5,7 +5,6 @@
  * to keep the main entry point focused on initialization.
  *
  * Domain handler modules (extracted in Phase 1.9):
- *   - src/main/ipc/handlers/credentials.ts  — WPE API credential handlers
  *   - src/main/ipc/handlers/bulk.ts          — bulk / fleet operation handlers
  *   - src/main/ipc/handlers/wpe-sync.ts      — WPE site sync handlers
  */

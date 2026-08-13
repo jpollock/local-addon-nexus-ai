@@ -61,9 +61,6 @@ function makeLocalServices(capiAvailable = true): jest.Mocked<LocalServicesBridg
     isCAPIAvailable: jest.fn(() => capiAvailable),
     isWPEAuthenticated: jest.fn(() => capiAvailable),
     getWpeUserId: jest.fn(() => null),
-    wpeSetApiCredentials: jest.fn(() => Promise.resolve()),
-    wpeClearApiCredentials: jest.fn(() => Promise.resolve()),
-    wpeGetApiCredentialsStatus: jest.fn(() => Promise.resolve({ configured: false })),
     trustCert: jest.fn(),
     getAvailablePhpVersions: jest.fn(),
     resolveSiteObject: jest.fn(() => ({
@@ -132,8 +129,10 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 77 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(77);
+  test('registers 74 tools', () => {
+    // 77 → 74: the WPE basic-auth credentials tools (wpe_set/clear/credentials_status)
+    // were removed with that feature (51fb5ea1).
+    expect(registry.allToolNames()).toHaveLength(74);
   });
 
   describe('CAPI tool gating', () => {
@@ -221,58 +220,8 @@ describe('WPE Integration Tools', () => {
     });
   });
 
-  // --- wpe_set_api_credentials ---
-
-  describe('wpe_set_api_credentials', () => {
-    test('stores credentials', async () => {
-      const result = await registry.call(
-        'wpe_set_api_credentials',
-        { username: 'myuser', password: 'mypass' },
-        services,
-      );
-      expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('stored securely');
-      expect(localServices.wpeSetApiCredentials).toHaveBeenCalledWith('myuser', 'mypass');
-    });
-
-    test('errors if username missing', async () => {
-      const result = await registry.call(
-        'wpe_set_api_credentials',
-        { username: '', password: 'mypass' },
-        services,
-      );
-      expect(result.isError).toBe(true);
-    });
-  });
-
-  // --- wpe_clear_api_credentials ---
-
-  describe('wpe_clear_api_credentials', () => {
-    test('clears credentials', async () => {
-      const result = await registry.call('wpe_clear_api_credentials', {}, services);
-      expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('cleared');
-      expect(localServices.wpeClearApiCredentials).toHaveBeenCalled();
-    });
-  });
-
-  // --- wpe_credentials_status ---
-
-  describe('wpe_credentials_status', () => {
-    test('reports not configured', async () => {
-      const result = await registry.call('wpe_credentials_status', {}, services);
-      expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('NOT configured');
-    });
-
-    test('reports configured with username', async () => {
-      localServices.wpeGetApiCredentialsStatus.mockResolvedValue({ configured: true, username: 'myuser' });
-      const result = await registry.call('wpe_credentials_status', {}, services);
-      expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('configured');
-      expect(result.content[0].text).toContain('myuser');
-    });
-  });
+  // wpe_set_api_credentials / wpe_clear_api_credentials / wpe_credentials_status removed with the
+  // WPE basic-auth credentials feature (51fb5ea1) — their tests are gone with them.
 
   // --- wpe_purge_cache ---
 

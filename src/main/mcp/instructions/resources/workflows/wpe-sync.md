@@ -67,18 +67,7 @@ Push and pull between local development sites and WP Engine cloud environments.
 
 ## Backups
 
-Creating a WP Engine backup requires API credentials (basic auth), not OAuth.
-
-Check if credentials are configured:
-```
-wpe_credentials_status()
-```
-
-If not configured, set them once:
-```
-```
-
-Then create the backup:
+Create a WP Engine backup with `wpe_create_backup` (uses your configured WP Engine authentication):
 ```
 wpe_create_backup({ install_id: "{install_id}", description: "Pre-deploy backup" })
 ```
