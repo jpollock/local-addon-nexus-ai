@@ -142,3 +142,20 @@ describe('Both automatic trigger paths go through the shared gate', () => {
     expect(body).not.toMatch(/eventsEnabled/);
   });
 });
+
+describe('canAutoRunWith — remote kill switch (T-KILLSWITCH)', () => {
+  it('refuses even a fully-enabled agent when agentsRemotelyDisabled, with reason "remotely-disabled"', () => {
+    const d = canAutoRunWith({ enabled: true, scheduleEnabled: true }, 'schedule', true);
+    expect(d).toEqual({ allowed: false, reason: 'remotely-disabled' });
+  });
+
+  it('ranks the remote kill switch above a local disable (it is the reported reason)', () => {
+    const d = canAutoRunWith({ enabled: false }, 'schedule', true);
+    expect(d).toEqual({ allowed: false, reason: 'remotely-disabled' });
+  });
+
+  it('is fail-safe: the flag defaults false, so an enabled agent still runs', () => {
+    expect(canAutoRunWith({ enabled: true, scheduleEnabled: true }, 'schedule')).toEqual({ allowed: true });
+    expect(canAutoRunWith({ enabled: true, eventsEnabled: true }, 'event', false)).toEqual({ allowed: true });
+  });
+});

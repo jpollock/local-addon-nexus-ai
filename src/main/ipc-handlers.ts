@@ -432,9 +432,15 @@ export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
   const agentStateStore = _agentSettingsDepsRef?.nexusServices?.agentStateStore;
   const autoPausedAt: number | undefined = (agentStateStore as any)?.get(agentId, AUTO_PAUSED_KEY);
 
+  // T-KILLSWITCH: the remote release policy can disable all autonomous runs (disableAgents, or a
+  // blocked/unsupported version). Read the cached verdict — fail-safe: no gate / no policy → false.
+  const gate = (_agentSettingsDepsRef?.nexusServices as any)?.releasePolicyGate;
+  const agentsRemotelyDisabled: boolean = gate ? !!gate.verdict()?.agentsDisabled : false;
+
   const decision = canAutoRunWith(
     autoPausedAt !== undefined ? { ...cachedSettings, autoPausedAt } : cachedSettings,
     kind,
+    agentsRemotelyDisabled,
   );
   // An auto-paused agent is the case most worth logging: nobody switched it off, so without
   // this line the only record of why it stopped running is a row in SQLite.

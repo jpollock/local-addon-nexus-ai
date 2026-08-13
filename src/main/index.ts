@@ -56,6 +56,7 @@ import { typeDefs } from './graphql/schema';
 import { createResolvers } from './graphql/resolvers';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { StartupSiteScanner } from './startup/StartupSiteScanner';
+import { ReleasePolicyGate } from './startup/releasePolicyGate';
 import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
 import { WpeRefreshScheduler } from './startup/WpeRefreshScheduler';
 import { ExternalRefreshScheduler } from './startup/ExternalRefreshScheduler';
@@ -810,6 +811,17 @@ export default function main(context: any): void {
         // Exposed so AGENT_SETTINGS_UPDATE can re-register an agent as soon as its cadence
         // changes, rather than the new schedule waiting for a restart.
         (nexusServices as any).agentScheduler = agentScheduler;
+
+        // T-KILLSWITCH: remote release-policy gate. canAutoRun() reads its verdict to refuse ALL
+        // automatic agent runs when the policy sets disableAgents or the running version is blocked.
+        // Primed here; verdict() refreshes hourly in the background and never blocks a run on the
+        // network. Fail-safe: no policy / unreachable server → agents run.
+        const addonVersion = (() => {
+          try { return require('../../package.json').version || '0.0.0'; } catch { return '0.0.0'; }
+        })();
+        (nexusServices as any).releasePolicyGate = new ReleasePolicyGate(addonVersion);
+        void (nexusServices as any).releasePolicyGate.refresh();
+
         daemonManager = new DaemonManager(agentEventBus);
 
         // Wire the wp-events bridge (releases the forward reference set at construction time)
@@ -1312,7 +1324,8 @@ export default function main(context: any): void {
   console.log('[NexusAI] 🟢 About to call registerIpcHandlers()');
 
   // One-time cleanup: purge obsolete WP Engine basic-auth credentials
-  // (orphaned after the backup endpoint gained OAuth support in Feb 2026).
+  // (orphaned once the backup endpoint began accepting our OAuth token —
+  // date unknown; the basic-auth requirement was simply no longer true).
   // Best-effort only — failure must never block startup. Can be deleted
   // after the next release, as the credential would have been cleared by then.
   (async () => {

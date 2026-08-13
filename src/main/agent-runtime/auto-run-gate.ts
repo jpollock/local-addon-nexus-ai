@@ -52,7 +52,7 @@ export type SkipTrigger = AutoRunKind | 'manual';
  */
 export type AutoRunDecision =
   | { allowed: true }
-  | { allowed: false; reason: 'agent-disabled' | 'auto-paused' | 'trigger-disabled' };
+  | { allowed: false; reason: 'remotely-disabled' | 'agent-disabled' | 'auto-paused' | 'trigger-disabled' };
 
 /**
  * @param settings the agent's persisted settings, or undefined when nothing is known.
@@ -65,7 +65,13 @@ export type AutoRunDecision =
 export function canAutoRunWith(
   settings: AgentTriggerSettings | undefined,
   kind: AutoRunKind,
+  agentsRemotelyDisabled = false,
 ): AutoRunDecision {
+  // The remote kill switch (T-KILLSWITCH) overrides every local switch — it exists precisely to
+  // stop autonomous production activity when the running version is blocked or the release policy
+  // sets disableAgents. Ranked first so it is the reported reason when it fires. Default false, so
+  // a caller that cannot reach the release policy (or an old caller) is fail-safe: agents run.
+  if (agentsRemotelyDisabled) return { allowed: false, reason: 'remotely-disabled' };
   // Order matters: with several gates closed, the master switch is the fact worth reporting —
   // it is the one the user set most recently and the one that explains every trigger at once.
   if (settings?.enabled === false) return { allowed: false, reason: 'agent-disabled' };
