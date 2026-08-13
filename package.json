@@ -20,7 +20,6 @@
     ".claude/skills",
     "lib",
     "models",
-    "wp-plugins",
     "package.json",
     "README.md"
   ],
@@ -29,6 +28,7 @@
     "compile": "tsc -p .",
     "create-entry-points": "node scripts/create-entry-points.js",
     "sync-wp-plugins": "node scripts/create-entry-points.js",
+    "prepublishOnly": "node scripts/prepublish-guard.js",
     "clean": "rm -rf lib",
     "watch": "tsc -p . --watch",
     "pretest": "node -e \"try{require('better-sqlite3');}catch(e){process.exit(1)}\" || npm rebuild better-sqlite3 --silent",
