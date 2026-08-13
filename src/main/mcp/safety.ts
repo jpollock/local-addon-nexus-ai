@@ -118,28 +118,36 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wpe_create_account_user: 3,
   wpe_update_account_user: 3,
 
-  // Tier 2 — New writes (sites + installs)
-  wpe_create_site: 2,
+  // Tier 3 — Provisioning billed production infrastructure (P1-1): creating an install or site
+  // stands up a new billable environment. Their delete siblings are already Tier 3; promoted so
+  // an agent cannot provision unattended (refused by NexusToolProvider) and interactive/MCP
+  // callers must confirm. Creates have no existing environment for the isOperationAllowed env-gate
+  // to key on, which is why Tier 3 rather than the gate. Updates to EXISTING resources stay Tier 2
+  // (update-install already routes through isOperationAllowed).
+  wpe_create_site: 3,
+  wpe_create_install: 3,
   wpe_update_site: 2,
-  wpe_create_install: 2,
   wpe_update_install: 2,
   wpe_refresh_install_disk_usage: 2,
   wpe_refresh_account_disk_usage: 2,
 
-  // Tier 2 — New writes (domains)
-  wpe_create_domain: 2,
-  wpe_create_domains_bulk: 2,
+  // Tier 3 — Adding/altering a domain reroutes production traffic (P1-1). Bulk is strictly more
+  // powerful than single, so both are gated — gating one but not the other is a trivial bypass.
+  wpe_create_domain: 3,
+  wpe_create_domains_bulk: 3,
   wpe_update_domain: 2,
 
-  // Tier 2 — New writes (SSL + SSH)
-  wpe_request_ssl_certificate: 2,
-  wpe_import_ssl_certificate: 2,
+  // Tier 3 — SSL provisioning/import alters the certificate a production domain serves (P1-1).
+  wpe_request_ssl_certificate: 3,
+  wpe_import_ssl_certificate: 3,
   // Tier 3 — Privilege-granting (P0-6): an SSH key grants persistent shell access to the
   // account's installs. Confirmation required; refused for agents by P0-1.
   wpe_create_ssh_key: 3,
 
-  // Tier 2 — New writes (offload + composite actions)
-  wpe_update_offload_settings: 2,
+  // Tier 3 — Changing media offload flips where a production site serves its assets (P1-1).
+  wpe_update_offload_settings: 3,
+  // Tier 2 — Backups are additive and safe; an agent may need to snapshot before risky work, so
+  // they are NOT promoted (deliberate carve-out, P1-1). prepare_go_live stays a Tier-2 composite.
   wpe_backup_and_verify: 2,
   wpe_prepare_go_live: 2,
   // Tier 3 — Privilege-granting (P0-6): adds a user to WP Engine accounts (persistent access).
@@ -240,6 +248,14 @@ export const CONFIRMATION_MESSAGES: Record<string, string> = {
   wpe_update_account_user: "This will change a user's roles/access on your production WP Engine account.",
   wpe_add_user_to_accounts: 'This will grant an existing user access to additional production WP Engine accounts.',
   wpe_create_ssh_key: 'This will authorize a new SSH key for shell access to this account\'s installs.',
+  // P1-1 — provisioning billed production infrastructure.
+  wpe_create_install: 'This will create a new, billable WP Engine install on your production account.',
+  wpe_create_site: 'This will create a new, billable WP Engine site (with its installs) on your production account.',
+  wpe_create_domain: 'This will add a domain to this production install and can reroute live traffic to it.',
+  wpe_create_domains_bulk: 'This will add multiple domains to production installs and can reroute live traffic.',
+  wpe_request_ssl_certificate: 'This will request/provision an SSL certificate for a production domain.',
+  wpe_import_ssl_certificate: 'This will import an SSL certificate that a production domain will then serve.',
+  wpe_update_offload_settings: 'This will change where this production site serves its media assets from.',
 };
 
 export const PRE_CHECKS: Record<string, string[]> = {

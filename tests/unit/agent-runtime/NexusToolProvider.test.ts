@@ -148,6 +148,19 @@ describe('NexusToolProvider — Tier 3 destructive tools are refused for agents 
     expect(result).toBe('stopped');
     expect(registry.call).toHaveBeenCalled();
   });
+
+  // P1-1: the WPE create/provision family was Tier 2, so a prompt-injected agent could stand up
+  // billed production infrastructure unattended. Now Tier 3, it is refused here like any other
+  // destructive tool. Non-vacuous: this passed straight through to registry.call when the tool
+  // was Tier 2.
+  it('refuses a newly-promoted WPE create tool for an agent (P1-1)', async () => {
+    const registry = makeRegistry({ wpe_create_install: () => 'created' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['wpe_create_install']);
+    await expect(provider.invoke('wpe_create_install', { name: 'prod', accountId: 'x' })).rejects.toThrow(
+      /Tier 3/i,
+    );
+    expect(registry.call).not.toHaveBeenCalled();
+  });
 });
 
 describe('NexusToolProvider.getProviderToolDefinitions — Tier 3 excluded from the agent model', () => {

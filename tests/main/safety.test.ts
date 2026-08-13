@@ -110,6 +110,41 @@ describe('Safety Tiers', () => {
       expect(PRE_CHECKS['local_wpe_push'].length).toBeGreaterThan(0);
     });
   });
+
+  // P1-1: the WPE CAPI create/provision family created billed production infrastructure at
+  // Tier 2 — offered to an agent's model with no confirmation and no refusal, only an
+  // after-the-fact audit line. Their delete siblings were already Tier 3. Promote the creates
+  // (and the offload-settings update) to Tier 3 so agents are refused (NexusToolProvider) and
+  // interactive/MCP callers must confirm (checkTierThreeConfirmation). Creates have no existing
+  // environment for the isOperationAllowed env-gate to key on, which is why Tier 3, not the gate.
+  describe('WPE create/provision family is Tier 3 (P1-1)', () => {
+    const promoted = [
+      'wpe_create_install',
+      'wpe_create_site',
+      'wpe_create_domain',
+      'wpe_create_domains_bulk',
+      'wpe_request_ssl_certificate',
+      'wpe_import_ssl_certificate',
+      'wpe_update_offload_settings',
+    ];
+
+    test.each(promoted)('%s is Tier 3', (tool) => {
+      expect(TIER_OVERRIDES[tool]).toBe(3);
+      expect(getToolSafety(tool).tier).toBe(3);
+    });
+
+    test.each(promoted)('%s has a specific confirmation message', (tool) => {
+      expect(CONFIRMATION_MESSAGES[tool]).toBeDefined();
+      expect(typeof CONFIRMATION_MESSAGES[tool]).toBe('string');
+    });
+
+    // Deliberate carve-out: a backup is additive and safe, and an agent may need to snapshot
+    // before risky work, so backups stay Tier 2 even though they are CAPI mutations.
+    test('backups remain Tier 2 (deliberate carve-out)', () => {
+      expect(TIER_OVERRIDES['wpe_create_backup']).toBe(2);
+      expect(TIER_OVERRIDES['wpe_backup_and_verify']).toBe(2);
+    });
+  });
 });
 
 describe('Tier-1 backfill for read-only tools (F4)', () => {
