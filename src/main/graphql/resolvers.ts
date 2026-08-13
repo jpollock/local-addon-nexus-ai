@@ -27,6 +27,7 @@ import { STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../../common/constants';
 import { toSiteSource } from '../../common/types';
 import { applySettingsUpdate } from '../../common/settings-update';
 import { isKeyStorageEncrypted } from '../security/KeyVault';
+import { rotateCredentials } from '../credentials/rotateCredentials';
 import { getApiKey, KeyVault } from '../security/KeyVault';
 import { auditDirectOperation } from '../audit/auditDirectOperation';
 import type { NexusServices } from '../types/nexus-services';
@@ -400,6 +401,14 @@ export function createResolvers(context: ResolverContext) {
           return { success: false, error: err.message, keyStorageEncrypted: false };
         }
       },
+
+      /**
+       * Rotate credentials for a provider (P1-7): propagate the current key to running local sites
+       * and report which are stale. Optional key sets a new value first. See
+       * docs/planning/2026-08-12-creds-rotate-design.md.
+       */
+      nexusRotateCredentials: (_: any, { provider, key }: { provider: string; key?: string }) =>
+        rotateCredentials(services as any, provider, key ?? undefined),
 
       /**
        * Update Nexus AI settings via key+value or a JSON patch object

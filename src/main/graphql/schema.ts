@@ -830,6 +830,9 @@ export const typeDefs = gql`
     "Security posture status for diagnostics (nexus doctor)."
     nexusSecurityStatus: NexusSecurityStatusResult!
 
+    "Rotate credentials for a provider: propagate the current key to running local sites and report which sites are stale. Pass key to also set a new value first."
+    nexusRotateCredentials(provider: String!, key: String): NexusRotateCredentialsResult!
+
     "Get current AI provider configuration"
     nexusAiGetConfig: NexusAiGetConfigResult!
 
@@ -1601,6 +1604,19 @@ export const typeDefs = gql`
     error: String
     "True if API keys are encrypted at rest (OS safeStorage). False = plain-text fallback."
     keyStorageEncrypted: Boolean!
+  }
+
+  type NexusRotateCredentialsResult {
+    success: Boolean!
+    error: String
+    "The credential version sites should now be synced to."
+    targetVersion: Int!
+    "Site names synced to the current key now."
+    synced: [String!]!
+    "Site names still holding an older key — stopped sites that sync on next start."
+    stale: [String!]!
+    "Gateway site names — auto-rotated (the gateway reads the vault live)."
+    gateway: [String!]!
   }
 
   type NexusAiGetConfigResult {
