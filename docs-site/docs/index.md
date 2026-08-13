@@ -32,7 +32,7 @@ One MCP connection for your entire WordPress fleet:
 
 ## Built for AI-First WordPress Development
 
-Nexus AI brings enterprise-grade AI capabilities to local WordPress development, with production-ready tooling for both Local and WP Engine environments.
+Nexus AI brings AI-assisted management to local WordPress development, spanning both Local and WP Engine environments.
 
 ### Ship-Ready AI Stack
 

@@ -45,6 +45,49 @@ A summary of the controls currently in place (not an exhaustive design document)
   in CI, and the CLI refuses to install any addon whose signature is missing or invalid — see
   [`docs/release-signing.md`](docs/release-signing.md).
 
+## Local attack surface
+
+Everything runs on the developer's machine and binds loopback only. Ports are picked from a range
+at startup.
+
+| Process | Bind | Port range | Auth | If reached by a hostile local caller |
+|---|---|---|---|---|
+| MCP server | `127.0.0.1` | 10800–10899 | Bearer token (`nexus-ai-mcp-connection-info.json`, 0600) | Full MCP tool surface — but Tier 3 requires confirmation and is refused for agents |
+| AI gateway / event server | `127.0.0.1` | 13000–13100 | Random token; loopback `Host` required; localhost-only CORS; `/models` authed | Spend on the user's LLM keys with a valid token; config disclosure blocked |
+| AI proxy (Ollama) | `127.0.0.1` | 13100–13199 | — | Local Ollama proxy only |
+| GraphQL endpoint (Local platform) | `127.0.0.1` | 4000 | Bearer token (`graphql-connection-info.json`) | Full GraphQL surface incl. mutating WPE ops; permission-gate keys are UI-only |
+| OAuth callback | `127.0.0.1` | 49054–49058 | PKCE + `state` | One-shot auth-code redirect only |
+
+Notes: the bearer/connection tokens are the real boundary — anything on the machine that can read
+those files can call the corresponding server. A visited web page cannot: loopback `Host`
+validation defeats DNS rebinding, and CORS is never wildcard.
+
+## Trust boundaries
+
+```mermaid
+flowchart LR
+  web["Visited web page<br/>(untrusted)"]
+  renderer["Renderer<br/>(Electron, React)"]
+  cli["nexus CLI /<br/>MCP clients"]
+  main["Main process<br/>(the trust anchor)"]
+  ssh["SSH → external /<br/>WPE hosts"]
+  capi["WP Engine CAPI"]
+  llm["LLM providers"]
+
+  web -. "loopback HTTP<br/>(Host-guarded, token-gated)" .-> main
+  renderer -- "IPC (host-key trust,<br/>permission-gate writes)" --> main
+  cli -- "GraphQL / MCP<br/>(bearer token)" --> main
+  main -- "argv spawn, no shell<br/>(alias/arg validated)" --> ssh
+  main -- "HTTPS + account creds" --> capi
+  main -- "HTTPS + user keys<br/>(PII masked outbound)" --> llm
+```
+
+The main process is the single trust anchor: it holds the credentials, enforces the permission
+gate, and is the only component that reaches production hosts. The renderer, CLI, and MCP clients
+all authenticate to it; a prompt-injected LLM is confined by the Tier gate (destructive ops need
+human confirmation and are refused for agents), and permission-gate settings are changeable only
+through the renderer's IPC channel, never the token-shared GraphQL/CLI path.
+
 ## Release integrity
 
 Every published release tarball carries a detached Ed25519 signature (`<asset>.tgz.sig`). The CLI

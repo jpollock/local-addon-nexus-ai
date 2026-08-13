@@ -28,9 +28,9 @@ Install the addon once. Get unified access to every site (local + WPE) through A
 
 ## Built for AI-First WordPress Development
 
-Nexus AI brings enterprise-grade AI capabilities to local WordPress development, with production-ready tooling for both Local and WP Engine environments.
+Nexus AI brings AI-assisted management to local WordPress development, spanning both Local and WP Engine environments.
 
-### Ship-Ready AI Stack
+### AI Stack
 
 - **MCP Server** — ~160 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
 - **CLI** — Terminal commands for local and WPE site management (hosting + WordPress)
@@ -69,7 +69,7 @@ Leverages Local's secure channels to WP Engine:
 - **AI Chat (Discover tab)** — Built-in chat interface in Local UI. Ask questions about your fleet, get answers backed by real site data. Works with Anthropic, OpenAI, Google Gemini, Ollama, or the Local AI Gateway.
 - **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
 - **Database Health** — Scans WordPress databases for bloat (revisions, orphaned postmeta with plugin attribution, expired transients, autoload bloat, ghost plugin tables, auto-drafts, trash). Shows a 0–100 health score with advisor-voice recommendations and prevention tips. Safe cleanup via `nexus wp db clean` (dry-run default). Available via site card UI, CLI, and MCP tools. Local-only.
-- **Production-Ready Security** — Input validation, audit logging, credential redaction
+- **Security** — localhost-only servers, input validation, layered credential redaction, a fail-closed permission gate for production writes, and signature-verified auto-updates. Tier 2/3 mutating operations are audited (Tier 1 reads are not). See [SECURITY.md](SECURITY.md).
 - **High-Performance UI** — Virtual scrolling for 500+ sites without lag, 7 active panels
 - **AI Gateway** — Credential proxy, usage tracking, cost monitoring
 - **Event Tracking** — WordPress action/filter tracking with graph database
