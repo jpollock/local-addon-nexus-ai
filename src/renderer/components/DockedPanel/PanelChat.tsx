@@ -830,7 +830,12 @@ export class PanelChat extends React.Component<Props, State> {
       React.createElement(
         'div',
         { style: { padding: '3px 14px 6px', color: 'var(--nxai-card-sub)', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },
-        React.createElement('span', null, `${providerName} · ${modelName}`),
+        // P0-5 disclosure: name the data flow, not just the model. Tooltip carries the detail.
+        React.createElement(
+          'span',
+          { title: `Chat sends your site content and data to this AI provider (${modelName}). Change the provider in Settings.` },
+          `${providerName} · ${modelName} · sends site data`,
+        ),
         React.createElement('span', null, '· Confirm required for destructive actions'),
       ),
     );

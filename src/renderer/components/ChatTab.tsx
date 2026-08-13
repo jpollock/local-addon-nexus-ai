@@ -824,7 +824,9 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
       ),
       React.createElement('div', {
         style: { fontSize: '13px', color: 'var(--nxai-card-sub)', marginTop: '4px' },
-      }, `Provider: ${this.state.providerId} \u2022 Model: ${this.state.model || 'auto'}`),
+        // P0-5 disclosure: chat sends site data to a third-party provider; tooltip carries detail.
+        title: `Chat sends your site content and data to this AI provider (${this.state.model || 'auto'}). Change the provider in Settings.`,
+      }, `Provider: ${this.state.providerId} \u2022 Model: ${this.state.model || 'auto'} \u2022 sends your site data to this provider`),
     );
   }
 

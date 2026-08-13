@@ -5,6 +5,11 @@ import type { NexusSettings } from '../../../common/types';
 import { fetchSitesForAgent, ScopeSite } from './fetchScopeSites';
 import { SitePicker, selectedProductionCount, productionWarningVerb } from './SitePicker';
 import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
+import {
+  hasAcknowledgedAgentDataDisclosure,
+  acknowledgeAgentDataDisclosure,
+  shouldShowAgentDataDisclosure,
+} from './agentDataDisclosure';
 
 interface SettingsProps {
   agentId: string;
@@ -57,6 +62,8 @@ interface SettingsState {
   driftDismissed: boolean;
   /** Global settings, loaded once on mount to read logLevel for the override control. */
   globalSettings: NexusSettings | null;
+  /** Non-null while the one-time "agents send data to your provider" disclosure is open (P0-5). */
+  showDataDisclosure: boolean;
 }
 
 const CADENCE_OPTIONS = [
@@ -142,6 +149,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     scopeDraftSelection: null,
     driftDismissed: false,
     globalSettings: null,
+    showDataDisclosure: false,
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -456,6 +464,28 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     });
   }
 
+  // P0-5 (b): the first time a user enables ANY agent, disclose once that agents send site data to
+  // the configured AI provider on their schedule — agents have no persistent surface like chat's
+  // footer. Enabling is deferred until they acknowledge; disabling and every later enable are
+  // silent.
+  private handleToggleEnabled = (v: boolean): void => {
+    if (shouldShowAgentDataDisclosure(v, hasAcknowledgedAgentDataDisclosure())) {
+      this.setState({ showDataDisclosure: true });
+      return;
+    }
+    this.updateSettings({ enabled: v });
+  };
+
+  private confirmEnableAfterDisclosure = (): void => {
+    acknowledgeAgentDataDisclosure();
+    this.setState({ showDataDisclosure: false });
+    this.updateSettings({ enabled: true });
+  };
+
+  private cancelEnableDisclosure = (): void => {
+    this.setState({ showDataDisclosure: false });
+  };
+
   private cycleCadence() {
     const { cadence } = this.state.settings;
     const idx = CADENCE_OPTIONS.findIndex(o => o.value === cadence);
@@ -557,6 +587,59 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     );
   }
 
+  private renderDataDisclosure() {
+    return React.createElement(
+      'div',
+      {
+        style: {
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.45)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: 20,
+        },
+        onClick: this.cancelEnableDisclosure,
+      },
+      React.createElement(
+        'div',
+        {
+          onClick: (e: React.MouseEvent) => e.stopPropagation(),
+          style: {
+            maxWidth: 460, background: 'var(--ag-surface, #1c222b)',
+            border: '1px solid var(--ag-border, #28303a)', borderRadius: 12,
+            padding: '22px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+          },
+        },
+        React.createElement('div', {
+          style: { fontSize: 16, fontWeight: 700, color: 'var(--ag-text-primary)', marginBottom: 10 },
+        }, 'Agents send data to your AI provider'),
+        React.createElement('div', {
+          style: { fontSize: 13.5, color: 'var(--ag-text-secondary)', lineHeight: 1.55, marginBottom: 6 },
+        }, 'When enabled, this agent runs on its schedule and sends your site data to your configured AI provider. Personal data (emails, IP addresses) is masked before anything is sent.'),
+        React.createElement('div', {
+          style: { fontSize: 11.5, color: 'var(--ag-text-secondary)', opacity: 0.75, marginBottom: 18 },
+        }, "You'll only see this once."),
+        React.createElement(
+          'div',
+          { style: { display: 'flex', justifyContent: 'flex-end', gap: 10 } },
+          React.createElement('button', {
+            onClick: this.cancelEnableDisclosure,
+            style: {
+              padding: '8px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
+              background: 'transparent', color: 'var(--ag-text-secondary)',
+              border: '1px solid var(--ag-border, #28303a)',
+            },
+          }, 'Cancel'),
+          React.createElement('button', {
+            onClick: this.confirmEnableAfterDisclosure,
+            style: {
+              padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              background: 'var(--ag-accent, #2dbdd1)', color: '#08222a', border: 'none',
+            },
+          }, 'Enable agent'),
+        ),
+      ),
+    );
+  }
+
   render() {
     const { settings } = this.state;
     const { agentId } = this.props;
@@ -565,12 +648,15 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
 
     return React.createElement('div', { style: { maxWidth: 680 } },
 
+      // P0-5 (b): one-time disclosure shown when first enabling an agent.
+      this.state.showDataDisclosure ? this.renderDataDisclosure() : null,
+
       // Card 1: Enable + Run now
       this.renderCard(
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 16 } },
           React.createElement(ToggleSwitch, {
             checked: settings.enabled,
-            onChange: (v) => this.updateSettings({ enabled: v }),
+            onChange: (v) => this.handleToggleEnabled(v),
           }),
           React.createElement('div', { style: { flex: 1 } },
             React.createElement('div', { style: { fontSize: 15, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 2 } },
