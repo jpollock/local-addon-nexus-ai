@@ -1,4 +1,5 @@
 import type { McpToolHandler, McpToolResult } from '../../types';
+import { maskPii } from '../../pii';
 
 const BLOCKED = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|REPLACE|TRUNCATE|ATTACH|DETACH|PRAGMA|MERGE)\b/i;
 
@@ -103,7 +104,9 @@ export const fleetSqlHandler: McpToolHandler = {
       const sep    = `| ${cols.map(() => '---').join(' | ')} |`;
       const body   = rows.map((r) => `| ${cols.map((c) => String(r[c] ?? '')).join(' | ')} |`).join('\n');
 
-      return ok(`${header}\n${sep}\n${body}\n\n_${rows.length} row${rows.length === 1 ? '' : 's'}_`);
+      // P1-6: this tool can SELECT admin_email / users.email fleet-wide. Mask PII in the result
+      // so a bulk email list is never handed to the LLM (and can't be exfiltrated via injection).
+      return ok(maskPii(`${header}\n${sep}\n${body}\n\n_${rows.length} row${rows.length === 1 ? '' : 's'}_`));
     } catch (err) {
       return error(`SQL error: ${(err as Error).message}`);
     }

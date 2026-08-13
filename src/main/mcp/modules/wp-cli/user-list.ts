@@ -55,7 +55,10 @@ export const userListHandler: McpToolHandler = {
         }
         return ok(lines.join('\n'));
       } catch {
-        return ok(result.stdout || 'No users found.');
+        // Do NOT fall back to raw stdout (P1-6): `wp user list --format=json` includes
+        // user_email, so dumping it would hand every user's email to the model. The formatted
+        // path above already omits email deliberately; on a parse failure, fail generically.
+        return error('Failed to parse the user list output.');
       }
     };
 

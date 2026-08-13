@@ -1,5 +1,6 @@
 import { McpToolHandler } from '../../types';
 import { ok, capiError, requireCAPI } from './helpers';
+import { maskPii } from '../../pii';
 
 export const getAccountUsersHandler: McpToolHandler = {
   definition: {
@@ -53,7 +54,9 @@ export const getAccountUsersHandler: McpToolHandler = {
         for (const name of names) lines.push(`- ${name}`);
       }
 
-      return ok(lines.join('\n'));
+      // P1-6: mask emails before the result reaches the model. Names + roles + counts remain
+      // for access audits; the literal address is PII and is not needed by default.
+      return ok(maskPii(lines.join('\n')));
     } catch (err: any) {
       return capiError(err);
     }
