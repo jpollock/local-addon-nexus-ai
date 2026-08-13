@@ -22,6 +22,7 @@
 import type { GraphService } from '../events/GraphService';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { AgentEventBus } from '../agent-event-bus/AgentEventBus';
+import { makeSingleFlight } from './singleFlight';
 
 export interface WpeRefreshSchedulerOptions {
   graphService: GraphService;
@@ -72,6 +73,8 @@ export class WpeRefreshScheduler {
   private readonly jobRunStore?: import('../background/JobRunStore').JobRunStore;
 
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** Coalesces overlapping cycles so the timer and a manual run never double SSH load (P1-7). */
+  private readonly runGuard = makeSingleFlight<WpeRefreshResult>();
   private columnsEnsured = false;
 
   constructor(options: WpeRefreshSchedulerOptions) {
@@ -180,7 +183,13 @@ export class WpeRefreshScheduler {
    *
    * Returns counts of scanned / skipped / failed installs.
    */
-  async runNow(): Promise<WpeRefreshResult> {
+  runNow(): Promise<WpeRefreshResult> {
+    // P1-7: coalesce — an overlapping call (timer re-entry, or a manual run during a scheduled
+    // cycle) awaits the running cycle instead of starting a second one against the same installs.
+    return this.runGuard(() => this._runNow());
+  }
+
+  private async _runNow(): Promise<WpeRefreshResult> {
     const startedAt = Date.now();
     try {
       const result: WpeRefreshResult = { scanned: 0, skipped: 0, failed: 0 };

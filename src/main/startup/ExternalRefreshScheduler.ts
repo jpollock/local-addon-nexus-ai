@@ -3,6 +3,7 @@ import pLimit from 'p-limit';
 import { resolveTransport } from '../transport';
 import { collectExternalHostData, type BatchRunner } from './collectExternalHostData';
 import { writeExternalHostData, type GraphWriter } from './writeExternalHostData';
+import { makeSingleFlight } from './singleFlight';
 
 export interface ExternalRefreshSchedulerOptions {
   graphService: GraphWriter & { getDb?: () => any };
@@ -46,6 +47,8 @@ export class ExternalRefreshScheduler {
   private currentIntervalMs: number;
   private currentStalenessThresholdMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** Coalesces overlapping cycles so the timer and a manual run never double SSH load (P1-7). */
+  private readonly runGuard = makeSingleFlight<ExternalRefreshResult>();
 
   constructor(options: ExternalRefreshSchedulerOptions) {
     this.graphService = options.graphService;
@@ -89,7 +92,13 @@ export class ExternalRefreshScheduler {
    * Run one cycle across all stale external hosts. Never throws: a host that
    * fails is counted and logged, and the rest of the cycle continues.
    */
-  async runCycleNow(): Promise<ExternalRefreshResult> {
+  runCycleNow(): Promise<ExternalRefreshResult> {
+    // P1-7: coalesce — an overlapping call (timer re-entry, or a manual run during a scheduled
+    // cycle) awaits the running cycle instead of starting a second one against the same hosts.
+    return this.runGuard(() => this._runCycleNow());
+  }
+
+  private async _runCycleNow(): Promise<ExternalRefreshResult> {
     const startedAt = Date.now();
     try {
       const result: ExternalRefreshResult = { scanned: 0, skipped: 0, failed: 0 };

@@ -3,6 +3,7 @@ import pLimit from 'p-limit';
 import { resolveTransport } from '../transport';
 import type { SiteTransport } from '../transport/types';
 import type { ExternalContentIndexService } from '../events/ExternalContentIndexService';
+import { makeSingleFlight } from './singleFlight';
 
 export interface ExternalContentIndexSchedulerOptions {
   graphService: { getDb?: () => any };
@@ -70,6 +71,8 @@ export class ExternalContentIndexScheduler {
   private currentIntervalMs: number;
   private currentStalenessThresholdMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** Coalesces overlapping cycles so the timer and a manual run never double SSH load (P1-7). */
+  private readonly runGuard = makeSingleFlight<ExternalContentIndexResult>();
   private columnEnsured = false;
 
   constructor(options: ExternalContentIndexSchedulerOptions) {
@@ -116,7 +119,13 @@ export class ExternalContentIndexScheduler {
     this.columnEnsured = true;
   }
 
-  async runCycleNow(): Promise<ExternalContentIndexResult> {
+  runCycleNow(): Promise<ExternalContentIndexResult> {
+    // P1-7: coalesce — an overlapping call (timer re-entry, or a manual run during a scheduled
+    // cycle) awaits the running cycle instead of starting a second one against the same hosts.
+    return this.runGuard(() => this._runCycleNow());
+  }
+
+  private async _runCycleNow(): Promise<ExternalContentIndexResult> {
     const startedAt = Date.now();
     try {
       const result: ExternalContentIndexResult = { scanned: 0, skipped: 0, failed: 0 };

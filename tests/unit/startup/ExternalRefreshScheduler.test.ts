@@ -47,6 +47,23 @@ describe('ExternalRefreshScheduler', () => {
     expect(resolveTransport).not.toHaveBeenCalled();
   });
 
+  it('coalesces overlapping cycles — a second runCycleNow joins the first (P1-7)', async () => {
+    const g = graph([{ id: 'ssh:acct/h', name: 'h', account_id: 'acct', environment: 'production', ssh_last_sync_at: null }]);
+    let openGate!: () => void;
+    const gate = new Promise<void>((r) => { openGate = r; });
+    (resolveTransport as jest.Mock).mockImplementation(async () => { await gate; return okTransport(); });
+
+    const s = new ExternalRefreshScheduler({ graphService: g as any, services: {} as any, logger });
+    const a = s.runCycleNow();
+    const b = s.runCycleNow(); // issued while `a` is mid-flight — must join it, not start a 2nd cycle
+    openGate();
+    const [ra, rb] = await Promise.all([a, b]);
+
+    // Without the guard both cycles read the same row and each SSHes to the host → 2 calls.
+    expect((resolveTransport as jest.Mock)).toHaveBeenCalledTimes(1);
+    expect(ra).toBe(rb); // both callers share the one cycle's result
+  });
+
   it('includes a host that has never been synced', async () => {
     const g = graph([{ id: 'ssh:hostinger-test/new', name: 'new', account_id: 'hostinger-test', environment: 'production', ssh_last_sync_at: null }]);
     (resolveTransport as jest.Mock).mockResolvedValue(okTransport());
