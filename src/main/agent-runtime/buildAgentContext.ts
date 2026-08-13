@@ -6,6 +6,9 @@ import { EventLog, LogEvent, LogLevelName } from '../logging/eventLog';
 import { getAgentAutonomy, getAgentSettings } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
+import { SpendTracker, DailyBudgetGuard } from '../budget/spendTracker';
+import { STORAGE_KEYS } from '../../common/constants';
+import type { NexusSettings } from '../../common/types';
 import { TranscriptWriter } from '../logging/transcript';
 import { AgentDbManager } from './AgentDbManager';
 import { getProvider } from '../chat/providers/index';
@@ -107,8 +110,17 @@ export function buildAgentContext(deps: AgentContextDeps): {
   // AgentAIClient's constructor signature doesn't change in this fix.
   const directProvider = getProvider(resolvedProvider.provider);
   const directConfig = { apiKey: resolvedProvider.apiKey, model: agentModel };
+  // T-BUDGETS: enforce the optional daily USD ceiling on this agent's model calls. Reads the
+  // setting live so a change takes effect without a restart; default off (undefined) → no limit.
+  const registryStorage = (services as any).registryStorage;
+  const budgetGuard = registryStorage
+    ? new DailyBudgetGuard(
+        new SpendTracker(registryStorage),
+        () => (registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null)?.dailyUsdBudget,
+      )
+    : undefined;
   const aiClient = aiProvider
-    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig, aiEvents, transcript)
+    ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig, aiEvents, transcript, budgetGuard)
     : {
         run: async (_prompt: string) => {
           createLogger(`agent:${agentName}`).warn(`Agent "${agentName}": AI provider "${resolvedProvider.provider}" unavailable — skipping AI call`);

@@ -78,6 +78,28 @@ describe('AgentAIClient', () => {
     expect(toolMsg.content).not.toContain('admin@customer.com');
   });
 
+  it('refuses to call the provider when the daily budget is exceeded (T-BUDGETS)', async () => {
+    let called = false;
+    const provider = {
+      streamChat: async function* () {
+        called = true;
+        yield { type: 'done', stopReason: 'end_turn' };
+      },
+    };
+    const overBudgetGuard = {
+      assertWithinBudget() {
+        throw new Error('Daily LLM spend budget reached: $5.00 of $5.00.');
+      },
+      record() {},
+    };
+    const client = new AgentAIClient(
+      provider as any, { model: 'm' }, fakeToolProvider as any,
+      undefined, undefined, undefined, undefined, overBudgetGuard as any,
+    );
+    await expect(client.run('go')).rejects.toThrow(/budget/i);
+    expect(called).toBe(false); // the model was never called — no spend past the ceiling
+  });
+
   it('throws AgentAILoopError when maxTurns exceeded', async () => {
     const loopProvider = {
       streamChat: async function* () {

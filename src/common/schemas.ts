@@ -71,6 +71,7 @@ export const UpdateSettingsSchema = z.object({
   externalRefreshAutoEnabled: z.boolean().optional(),
   externalContentIndexIntervalHours: z.number().int().min(1).max(168).optional(),
   externalContentIndexAutoEnabled: z.boolean().optional(),
+  dailyUsdBudget: z.number().nonnegative().optional(),
   localContentIndexIntervalHours: z.number().int().min(0).max(168).optional(),
   localContentIndexAutoEnabled: z.boolean().optional(),
   wpeAccountFilter: z.array(z.string()).nullable().optional(),

@@ -5,6 +5,7 @@ import { AgentAILoopError } from '../agent-sdk/types';
 import type { NexusToolProvider, ToolEventContext } from './NexusToolProvider';
 import { estimateCostUsd } from '../logging/modelPricing';
 import { maskToolResultsForProvider } from '../mcp/pii';
+import type { BudgetGuard } from '../budget/spendTracker';
 import type { TranscriptWriter } from '../logging/transcript';
 import { randomUUID } from 'crypto';
 
@@ -68,10 +69,13 @@ export class AgentAIClient implements AIClient {
   /** Off unless the agent opted in — see buildAgentContext.ts. Never throws on append. */
   private transcript?: TranscriptWriter;
 
+  /** T-BUDGETS: refuses model calls once the day's dailyUsdBudget is reached; records each cost. */
+  private budgetGuard?: BudgetGuard;
+
   constructor(
     provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider,
     directProvider?: AIProvider, directConfig?: ChatProviderConfig, events?: ToolEventContext,
-    transcript?: TranscriptWriter,
+    transcript?: TranscriptWriter, budgetGuard?: BudgetGuard,
   ) {
     this.provider = provider;
     this.directProvider = directProvider;
@@ -80,6 +84,7 @@ export class AgentAIClient implements AIClient {
     this.toolProvider = toolProvider;
     this.events = events;
     this.transcript = transcript;
+    this.budgetGuard = budgetGuard;
   }
 
   /**
@@ -139,6 +144,10 @@ export class AgentAIClient implements AIClient {
         content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
         callId,
       });
+      // T-BUDGETS: refuse before spending if today's ceiling is already reached. Throws
+      // BudgetExceededError, which fails the run with a clear "budget reached" message.
+      this.budgetGuard?.assertWithinBudget();
+
       // FIX 4: Move startedAt to immediately before the provider call so dur= excludes the transcript write
       const startedAt = Date.now();
       let response;
@@ -152,6 +161,7 @@ export class AgentAIClient implements AIClient {
         throw err;
       }
       this.emitLlmCall(config.model, turn + 1, startedAt, response.usage);
+      this.budgetGuard?.record(estimateCostUsd(config.model, response.usage));
       this.transcript?.append({
         turn: turn + 1, role: 'response', model: config.model, content: response.content,
         callId,
@@ -216,6 +226,7 @@ export class AgentAIClient implements AIClient {
         content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
         callId,
       });
+      this.budgetGuard?.assertWithinBudget(); // T-BUDGETS
       // FIX 4: Move startedAt to immediately before the provider call
       const startedAt = Date.now();
       let response;
@@ -226,6 +237,7 @@ export class AgentAIClient implements AIClient {
         throw err;
       }
       this.emitLlmCall(forcedConfig.model, 1, startedAt, response.usage);
+      this.budgetGuard?.record(estimateCostUsd(forcedConfig.model, response.usage)); // T-BUDGETS
       this.transcript?.append({
         turn: 1, role: 'response', model: forcedConfig.model, content: response.content,
         callId,
@@ -262,6 +274,7 @@ export class AgentAIClient implements AIClient {
         content: messages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n'),
         callId,
       });
+      this.budgetGuard?.assertWithinBudget(); // T-BUDGETS
       // FIX 4: Move startedAt to immediately before the provider call
       const startedAt = Date.now();
       let response;
@@ -272,6 +285,7 @@ export class AgentAIClient implements AIClient {
         throw err;
       }
       this.emitLlmCall(this.config.model, turn + 1, startedAt, response.usage);
+      this.budgetGuard?.record(estimateCostUsd(this.config.model, response.usage)); // T-BUDGETS
       this.transcript?.append({
         turn: turn + 1, role: 'response', model: this.config.model, content: response.content,
         callId,
