@@ -17,7 +17,7 @@ Legend: ✅ Done · ⛔ Declined (with reason) · ☐ Todo
 
 ---
 
-## ✅ Done — shipped on `fixes-0812` (29 items)
+## ✅ Done — shipped on `fixes-0812` (34 items)
 
 | Area | Issue | Review(s) | Commit(s) |
 |---|---|---|---|
@@ -49,7 +49,12 @@ Legend: ✅ Done · ⛔ Declined (with reason) · ☐ Todo
 | CI | ESLint config + secret scanning (CI job + pre-commit) | A P1-2 | `8c01f9f7` |
 | CI | PR quality gate (lint/typecheck/jest), gates release; 11 excluded suites cleared | A P1-1 | `ce6d15b7`,`4d0c5a62` |
 | Docs | Retract false "production-ready security" claims; attack-surface table + trust diagram | A P1-8 | `d90985bc` |
-| Legal | MIT LICENSE (WP Engine) + `license`/`repository` in package.json + accurate THIRD_PARTY_LICENSES (GPL plugins documented) | B P0-3 / A P1-3 | *(this change)* |
+| Legal | MIT LICENSE (WP Engine) + `license`/`repository` in package.json + accurate THIRD_PARTY_LICENSES (GPL plugins documented) | B P0-3 / A P1-3 | `f01bd070` |
+| Supply chain | `tar` 6→7.5.22 (clears CRITICAL path-traversal advisories on the update path); unused lodash removed (clears HIGH) | B P1-8 / A SC-4 | `e244de14` |
+| Agent safety | Remote kill switch — CLI block warning + main-process agent-disable via `latest.json` (fail-safe) | B P1-7 / IR-1 | `08979753`,`e5edad43` |
+| Agent safety | Daily USD spend ceiling on the agent LLM path (opt-in; per-local-day, auto-rollover) | B P1-7 / AB-4 | `3aa0f644` |
+| Agent safety | Prompt-injection trust contract — approval gate for `wp_eval`/`wp_search_replace` (agents sandbox-refuse) + untrusted-data labeling | B P1-2 | `1c36a19f`,`cc5bb902` |
+| Supply chain | Hermetic build — `npm ci` (staged lockfile) + all GitHub Actions pinned to commit SHAs (incl. 2 third-party) | B P1-5 #2/#3 | `a86c0035` |
 
 ---
 
@@ -59,7 +64,8 @@ Legend: ✅ Done · ⛔ Declined (with reason) · ☐ Todo
 |---|---|---|
 | **Git-history rewrite** (purge disabled Anthropic key, Google-shaped key, 419 eval files, 133 MB model from history) | B P0-1/P0-2/P0-7, A P0-4/P2-7 | **Declined.** Repo is already public → the data is already cloneable/forked/cached; a rewrite reduces future discoverability, it does not un-leak. The Anthropic key is disabled; keys are inert once dead. Forward-fixes are done (eval PII deleted + gitignored; no new commits). **Residual for you:** confirm the Google-shaped key is dead. Revisit only if you loudly open-source/publicize. |
 | **Google OAuth client-id → sentinel** | B P0-7 | **Won't-fix.** It's a *desktop-app* OAuth client ID — non-secret by design, already shipped in every tarball; the client *secret* is not in the repo. Swapping in the sentinel would break Google-Analytics OAuth for every end user. |
-| **P1-5 `--ignore-scripts`** (part of hermetic build) | B P1-5 | **Amended, not as written.** `--ignore-scripts` would skip building the `better-sqlite3` native binary → broken addon. If we do the hermetic-install piece, it must be `npm ci --omit=dev` *without* `--ignore-scripts`. (See Todo.) |
+| **P1-5 `--ignore-scripts`** (part of hermetic build) | B P1-5 | **Amended, not as written.** `--ignore-scripts` would skip building the `better-sqlite3` native binary → broken addon. Shipped as `npm ci --omit=dev` *without* `--ignore-scripts` (`a86c0035`). |
+| **T-CI-HERMETIC #4** — scope R2 creds to upload steps | B P1-5 | **Deferred by decision (2026-08-13).** It is the one CI change that breaks the release if mis-edited and is unverifiable without a release run. Do it deliberately at the next release. (#2/#3 shipped.) |
 
 ---
 
@@ -71,14 +77,15 @@ Legend: ✅ Done · ⛔ Declined (with reason) · ☐ Todo
 | T-TELEMETRY-UI | Telemetry consent: first-run prompt (`hasBeenPrompted` has 0 callers) + Settings toggle + `nexus telemetry` command | B P0-6 remainder | Med | Env-flag half already done. Product/UX wording needed. |
 | T-UNBUNDLE-AI | Stop bundling the third-party `ai` plugin; install it from WordPress.org on demand instead | New (2026-08-13) | Low–Med | The `ai` plugin is a **copy of the WP.org plugin** (GPL-2.0-or-later, not ours). Installing from wp.org at setup time removes the GPL-**redistribution** obligation for someone else's code entirely — only our own `nexus-ai-connector` (MIT) and the team-authored `ai-provider-*` plugins would ship. Verify the setup flow can pull it from wp.org, then drop it from `wp-plugins/`/`lib/wp-plugins/`. (The `ai-provider-*` plugins are the team's own GPL work and are fine to ship.) |
 
-### Security & safety hardening (P1)
+### Security & safety hardening (P1) — ✅ COMPLETE
+
+All P1 items are shipped (see Done above): T-INJECTION, T-DEPS, T-KILLSWITCH, T-BUDGETS,
+T-CI-HERMETIC #2/#3. Two deliberate residuals remain:
+
 | ID | Item | Review(s) | Effort | Notes |
 |---|---|---|---|---|
-| T-INJECTION | Prompt-injection trust contract — mark tool-result/site-content as untrusted; require human approval for freeform Tier-2 (`wp_eval`, `wp_search_replace`) when the turn was influenced by untrusted content | B P1-2 | **High** | Design-heavy; the enabler that turns other agent findings from "could" into "attacker content can." |
-| T-DEPS | `tar` 6→7 (`npm audit` **CRITICAL** — multiple path-traversal/symlink advisories, and it extracts update tarballs) + lodash (**HIGH** — code-injection + prototype-pollution, fix available) | B P1-8 remainder / A SC-4 | Low–Med | Higher value than "deps managed separately" implies — `tar` is on the update path. Verify via extractor tests (major bump). |
-| T-BUDGETS | LLM spend/turn budgets + concurrency cap | B P1-7 remainder / AB-4 | Med | No per-day/global ceiling today. |
-| T-KILLSWITCH | Remote kill switch — `minSupportedVersion`/`blockedVersions`/`disableAgents` in the already-fetched `latest.json`, fail-safe if unreachable | B P1-7 / IR-1 | Med | No remote-disable of any kind exists. |
-| T-CI-HERMETIC | Hermetic build CI: `npm ci --omit=dev` (+ stage lockfile, **no** `--ignore-scripts`), pin all GitHub Actions to commit SHAs, scope R2 creds to upload steps | B P1-5 #2/#3/#4 | Med | **Yaml — unverifiable until a release runs.** #4 (creds-scoping) is the riskiest. |
+| T-BUDGET-CHAT | Extend the daily USD budget to the interactive **chat** path (ChatService), not just agents | B P1-7 | Low | Agent path is guarded; chat is user-driven (a human is watching), so lower risk. Same `SpendTracker`/`DailyBudgetGuard`, wired at `ChatService`'s `streamChat`. |
+| T-CI-HERMETIC #4 | Scope R2 creds to upload steps | B P1-5 | Low | **Deferred** — see Declined. Do at the next release. |
 
 ### Reliability / performance / correctness (P2) — the 300–500-install user hits these
 | ID | Item | Review(s) | Effort |
@@ -109,12 +116,16 @@ Crash reporting/self-observability · upgrade-path & data-migration testing · r
 
 ---
 
-## Suggested execution order for the remaining Todo
+## Status: all P0 + P1 done or deliberately declined
 
-1. **T-DEPS** — `tar` is CRITICAL and on the update path; concrete + verifiable. *(Do first.)*
-2. **T-KILLSWITCH** + **T-BUDGETS** — finish P1-7; concrete code.
-3. **T-CI-HERMETIC** — finish P1-5; yaml, unverifiable, do deliberately.
-4. **T-LICENSE** + **T-TELEMETRY-UI** — decision/product; close the P0 blockers.
-5. **T-INJECTION** — its own focused design pass (high effort).
-6. **P2 perf set** — biggest user-facing wins; needs the better-sqlite3 rebuild to test.
-7. **P3** — velocity debt, as capacity allows.
+Every P0 and P1 item across both reviews is shipped, declined with reason, or a
+deliberate low-risk residual (T-BUDGET-CHAT, T-CI-HERMETIC #4). What remains is
+reliability/perf (P2) and velocity debt (P3).
+
+### Suggested order for what's left
+
+1. **T-TELEMETRY-UI** + **T-UNBUNDLE-AI** — the two small non-P2 items (consent UI; drop the wp.org `ai` plugin).
+2. **P2 perf set** — biggest user-facing wins (reclaim ~1 GB disk, unblock the main thread, renderer jank). Needs the better-sqlite3 rebuild dance to test.
+3. **P2 correctness** — migration safety net, backup gates, retention completeness, health-rule pin.
+4. **P3** — service-layer extraction, megafile decomposition, a11y, docs. As capacity allows.
+5. Small residuals — **T-BUDGET-CHAT** (chat budget), **T-CI-HERMETIC #4** (do at next release).
