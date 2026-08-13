@@ -116,6 +116,14 @@ fs.copyFileSync(
   path.join(stagingDir, 'package.json'),
 );
 
+// Copy package-lock.json (T-CI-HERMETIC: npm ci below installs EXACTLY the locked versions, so the
+// distributed dependency tree matches the one that was tested — an unlocked `npm install` could
+// resolve a different, possibly-compromised transitive version at package time).
+fs.copyFileSync(
+  path.join(projectRoot, 'package-lock.json'),
+  path.join(stagingDir, 'package-lock.json'),
+);
+
 // Copy README.md if exists
 const readmePath = path.join(projectRoot, 'README.md');
 if (fs.existsSync(readmePath)) {
@@ -150,8 +158,11 @@ console.log('✓ Secret scan clean');
 // Step 4: Install production dependencies
 // ---------------------------------------------------------------------------
 
-console.log('Installing production dependencies...');
-execSync('npm install --omit=dev', { cwd: stagingDir, stdio: 'inherit' });
+console.log('Installing production dependencies (npm ci — locked versions)...');
+// T-CI-HERMETIC: `npm ci --omit=dev` installs exactly what package-lock.json pins (and fails if the
+// lock is out of sync), so the shipped tree is deterministic. Native install scripts still run
+// (NO --ignore-scripts) — better-sqlite3 must build its binary or the addon is broken.
+execSync('npm ci --omit=dev', { cwd: stagingDir, stdio: 'inherit' });
 
 // ---------------------------------------------------------------------------
 // Step 4.5: Rebuild native modules for Electron

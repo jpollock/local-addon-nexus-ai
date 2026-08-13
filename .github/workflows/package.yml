@@ -11,10 +11,10 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (T-CI-HERMETIC: pinned to SHA)
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (T-CI-HERMETIC: pinned to SHA)
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -50,10 +50,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (T-CI-HERMETIC: pinned to SHA)
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (T-CI-HERMETIC: pinned to SHA)
         with:
           node-version: '22'
           cache: npm
@@ -83,7 +83,7 @@ jobs:
 
       - name: Setup MSVC (Windows only)
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1 (T-CI-HERMETIC: pinned third-party action to SHA)
 
       - name: Build
         run: npm run build
@@ -207,10 +207,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (T-CI-HERMETIC: pinned to SHA)
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (T-CI-HERMETIC: pinned to SHA)
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'

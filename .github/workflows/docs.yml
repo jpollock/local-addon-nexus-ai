@@ -21,17 +21,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (T-CI-HERMETIC: pinned to SHA)
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (T-CI-HERMETIC: pinned to SHA)
         with:
           python-version: '3.x'
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (T-CI-HERMETIC: pinned to SHA)
         with:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           path: ~/.cache/pip
