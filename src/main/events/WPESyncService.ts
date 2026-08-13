@@ -366,7 +366,10 @@ export class WPESyncService {
       try { const p = JSON.parse(pluginResult.stdout); pluginRows = Array.isArray(p) ? p : []; } catch { /* skip */ }
     }
 
-    const userResult = await this.localServices.remoteWpCliRun(install.install_name, ['user', 'list', '--format=json']).catch(() => ({ stdout: '', success: false }));
+    // P1-6: restrict fields so user_email never leaves the production server. The sync needs only
+    // the count and roles (health/audit); it must not become a covert export of a site's full
+    // customer list into graph.db (a 0644 file). Emails are never requested and never stored.
+    const userResult = await this.localServices.remoteWpCliRun(install.install_name, ['user', 'list', '--fields=ID,user_login,roles', '--format=json']).catch(() => ({ stdout: '', success: false }));
     const t3 = Date.now();
     this.logger.debug(`[WPESyncService] ${install.install_name} user list: success=${userResult.success} ms=${t3 - t2}`);
     let userRows: any[] = [];
@@ -422,7 +425,9 @@ export class WPESyncService {
         site_id: siteId,
         user_id: user.ID,
         username: user.user_login,
-        email: user.user_email || null,
+        // P1-6: never store user emails from a WPE sync. Not requested over the wire (see the
+        // --fields above); null here is defense in depth in case a caller ever passes one.
+        email: null,
         roles: JSON.stringify(user.roles ? user.roles.split(',') : []),
         created_at: now,
         updated_at: now,
