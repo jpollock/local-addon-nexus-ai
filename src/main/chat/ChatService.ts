@@ -3,7 +3,7 @@ import { CHAT_DEFAULTS, IPC_CHANNELS } from '../../common/constants';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import { getToolSafety, requiresHumanApproval } from '../mcp/safety';
-import { maskToolResultsForProvider } from '../mcp/pii';
+import { maskToolResultsForProvider, UNTRUSTED_DATA_DIRECTIVE } from '../mcp/pii';
 import { resolveSite } from '../mcp/site-resolver';
 import type { SiteStructure } from '../../common/types';
 import { getProvider } from './providers/index';
@@ -570,6 +570,8 @@ export class ChatService {
       'You are Nexus AI, a WordPress site management assistant built into the Local development environment.',
       'You have access to tools for managing WordPress sites, checking plugin status, running WP-CLI commands, and more.',
       'Be concise and helpful. When using tools, explain what you are doing.',
+      '',
+      UNTRUSTED_DATA_DIRECTIVE,
       '',
       'IMPORTANT: Always use your tools to get real data. Never fabricate or guess site names, plugin lists, version numbers, or other information.',
       'If asked about sites, call local_list_sites or nexus_list_sites first. If asked about plugins, call wp_plugin_list with the site name.',
