@@ -71,7 +71,8 @@
     "copy-styles": "mkdir -p lib/renderer/styles && cp src/renderer/styles/*.css lib/renderer/styles/",
     "sync-agents": "node scripts/sync-agents.js",
     "scan-secrets": "node scripts/scan-secrets.js",
-    "setup-hooks": "git config core.hooksPath .githooks"
+    "setup-hooks": "git config core.hooksPath .githooks",
+    "test:ci": "jest --config jest.ci.config.js tests/unit tests/main --ci"
   },
   "dependencies": {
     "apache-arrow": ">=13.0.0 <=17.0.0",

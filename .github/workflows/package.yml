@@ -6,7 +6,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Quality gate (P1-1): a tag must pass lint + typecheck + tests + secret scan before anything
+  # is built, signed, or published. Before this, a tag shipped untested.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:ci
+      - run: node scripts/scan-secrets.js
+
   package:
+    needs: verify
     strategy:
       matrix:
         include:
