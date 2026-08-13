@@ -38,3 +38,8 @@ tests/e2e-cli/fixtures/ssh-host/.probe_known_hosts
 # Release signing keys (P0-3) — the PRIVATE key must NEVER be committed
 nexus-release-signing.key
 nexus-release-signing.pub
+
+# Eval run outputs — transcripts of past agent/CLI eval runs. They are generated artifacts, not
+# fixtures (nothing reads them), and carried real WPE install subdomains + a few individuals'
+# emails. Never commit them (P0-2).
+tests/evals/results/
