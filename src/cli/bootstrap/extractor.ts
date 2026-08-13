@@ -77,9 +77,11 @@ export async function extractTarball(options: ExtractOptions): Promise<void> {
       // `filter` is evaluated BEFORE an entry is written, so returning false definitively
       // prevents a symlink/hardlink/escape entry from ever touching the filesystem — unlike
       // onentry's entry.ignore, which fires too late for link entries.
-      filter: (p: string, stat: tar.FileStat) => {
-        // node-tar types the second arg as FileStat, but at runtime it is the ReadEntry, which
-        // carries the entry `type` (File / Directory / SymbolicLink / Link) we need.
+      filter: (p: string, stat: unknown) => {
+        // The second arg is node-tar's ReadEntry at runtime (its exported type name changed
+        // across major versions), which carries the entry `path` and `type` (File / Directory /
+        // SymbolicLink / Link) we need. Typed `unknown` and narrowed below so this survives the
+        // tar 6→7 type rename (P1-8 / T-DEPS).
         const entryPath = (stat as any)?.path ?? p;
         const entryType = (stat as any)?.type as string | undefined;
         if (entryPath.includes('.DS_Store') || entryPath.startsWith('._')) return false;
