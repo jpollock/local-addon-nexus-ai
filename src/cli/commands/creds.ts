@@ -26,18 +26,22 @@ credsCommand
     '  3. Run this to push it to running sites. Stopped sites sync automatically on next start;',
     '     gateway sites are rotated for free (the gateway reads the vault live).',
     '',
+    'Use --force-now to also start stopped stale sites, sync them, and stop them again (slower;',
+    'boots MySQL/PHP per site).',
+    '',
     'See docs/incident-response.md for the full runbook.',
   ].join('\n'))
-  .action(async (provider: string) => {
+  .option('--force-now', 'Start stopped stale sites, sync them immediately, then restore their stopped state')
+  .action(async (provider: string, options: { forceNow?: boolean }) => {
     try {
       const client = getClient();
       const result = await client.mutate<{ nexusRotateCredentials: RotateResult }>(`
-        mutation($provider: String!) {
-          nexusRotateCredentials(provider: $provider) {
+        mutation($provider: String!, $force: Boolean) {
+          nexusRotateCredentials(provider: $provider, force: $force) {
             success error targetVersion synced stale gateway
           }
         }
-      `, { provider });
+      `, { provider, force: Boolean(options.forceNow) });
 
       const r = result.nexusRotateCredentials;
       if (!r.success) {

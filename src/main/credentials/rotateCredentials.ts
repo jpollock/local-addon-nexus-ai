@@ -28,10 +28,23 @@ export interface RotateReport {
   gateway: string[];
 }
 
+export interface RotateOptions {
+  /** New key value to set first (bumps the version). Omit to re-propagate the current key. */
+  key?: string;
+  /** Also start stopped stale sites, sync them, then restore their stopped state. Side-effectful. */
+  force?: boolean;
+}
+
+// Bounded retry after starting a site, to ride out the MySQL-startup race (siteStarted fires
+// before the DB is ready). autoSyncCredentials skips gracefully when the DB isn't up, so we
+// re-attempt until the site's version advances or we give up.
+const FORCE_MAX_ATTEMPTS = 8;
+const FORCE_RETRY_MS = 2000;
+
 export async function rotateCredentials(
   services: NexusServices,
   provider: string,
-  key?: string,
+  opts: RotateOptions = {},
 ): Promise<RotateReport> {
   const storage = (services as any).registryStorage;
   const localServices = (services as any).localServices;
@@ -40,23 +53,39 @@ export async function rotateCredentials(
 
   try {
     // 1. Set the new key if provided — bumps the credential version.
-    if (key) {
-      new KeyVault(storage, STORAGE_KEYS.API_KEYS).setKey(provider, key);
+    if (opts.key) {
+      new KeyVault(storage, STORAGE_KEYS.API_KEYS).setKey(provider, opts.key);
     }
 
-    // 2. Re-sync running, non-gateway sites configured for this provider.
     const sites = (siteData?.getSites?.() ?? {}) as Record<string, { name?: string }>;
     const statuses = (localServices?.getAllSiteStatuses?.() ?? {}) as Record<string, string>;
     const configs = (storage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
 
+    // 2. Re-sync running, non-gateway sites configured for this provider.
     for (const [siteId, cfg] of Object.entries(configs)) {
       if (!cfg || cfg.provider !== provider || cfg.useLocalGateway) continue;
       if (statuses[siteId] !== 'running') continue;
-      const name = sites[siteId]?.name ?? siteId;
-      await autoSyncCredentials(siteId, name, localServices, storage, logger);
+      await autoSyncCredentials(siteId, sites[siteId]?.name ?? siteId, localServices, storage, logger);
     }
 
-    // 3. Honest report from the post-sync state.
+    // 3. Force: start the still-stale STOPPED sites, sync them, restore their stopped state.
+    if (opts.force) {
+      const stopped = computeRotationStatus(storage, provider).stale.filter((id) => statuses[id] !== 'running');
+      if (stopped.length > 0) {
+        await localServices?.startSites?.(stopped);
+        for (const id of stopped) {
+          for (let attempt = 0; attempt < FORCE_MAX_ATTEMPTS; attempt++) {
+            await autoSyncCredentials(id, sites[id]?.name ?? id, localServices, storage, logger);
+            if (computeRotationStatus(storage, provider).current.includes(id)) break;
+            if (attempt < FORCE_MAX_ATTEMPTS - 1) await new Promise((r) => setTimeout(r, FORCE_RETRY_MS));
+          }
+        }
+        // Restore: these sites were stopped before we touched them.
+        await localServices?.stopSites?.(stopped);
+      }
+    }
+
+    // 4. Honest report from the final state.
     const status = computeRotationStatus(storage, provider);
     const nameFor = (id: string) => sites[id]?.name ?? id;
     return {

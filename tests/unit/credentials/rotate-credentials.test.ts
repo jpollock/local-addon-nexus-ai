@@ -72,8 +72,29 @@ describe('rotateCredentials (P1-7)', () => {
     });
 
     // Rotate with a new key value → version bumps to 2 → the stopped site (synced at 1) is now stale.
-    const report = await rotateCredentials(services, 'anthropic', 'sk-ant-new-rotated-key');
+    const report = await rotateCredentials(services, 'anthropic', { key: 'sk-ant-new-rotated-key' });
     expect(report.targetVersion).toBe(2);
     expect(report.stale).toEqual(['Stopped One']);
+  });
+
+  it('--force-now starts a stopped stale site, syncs it, and restores its stopped state', async () => {
+    const services = makeServices({
+      credVersions: { anthropic: 2 },
+      siteConfigs: { stopped1: { provider: 'anthropic', useLocalGateway: false, syncedCredVersion: 1 } },
+      sites: { stopped1: { name: 'Stopped One' } },
+      statuses: { stopped1: 'stopped' },
+      seedKey: { provider: 'anthropic', value: 'sk-ant-current' },
+    });
+    const startSites = jest.fn(async () => {});
+    const stopSites = jest.fn(async () => {});
+    services.localServices.startSites = startSites;
+    services.localServices.stopSites = stopSites;
+
+    const report = await rotateCredentials(services, 'anthropic', { force: true });
+
+    expect(startSites).toHaveBeenCalledWith(['stopped1']);
+    expect(stopSites).toHaveBeenCalledWith(['stopped1']); // state restored
+    expect(report.synced).toEqual(['Stopped One']);       // force-synced → current
+    expect(report.stale).toEqual([]);
   });
 });

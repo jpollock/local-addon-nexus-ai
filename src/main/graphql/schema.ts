@@ -830,8 +830,8 @@ export const typeDefs = gql`
     "Security posture status for diagnostics (nexus doctor)."
     nexusSecurityStatus: NexusSecurityStatusResult!
 
-    "Rotate credentials for a provider: propagate the current key to running local sites and report which sites are stale. Pass key to also set a new value first."
-    nexusRotateCredentials(provider: String!, key: String): NexusRotateCredentialsResult!
+    "Rotate credentials for a provider: propagate the current key to running local sites and report which sites are stale. Pass key to also set a new value first, force to also start stopped stale sites and sync them now."
+    nexusRotateCredentials(provider: String!, key: String, force: Boolean): NexusRotateCredentialsResult!
 
     "Get current AI provider configuration"
     nexusAiGetConfig: NexusAiGetConfigResult!

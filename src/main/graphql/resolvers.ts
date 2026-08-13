@@ -407,8 +407,8 @@ export function createResolvers(context: ResolverContext) {
        * and report which are stale. Optional key sets a new value first. See
        * docs/planning/2026-08-12-creds-rotate-design.md.
        */
-      nexusRotateCredentials: (_: any, { provider, key }: { provider: string; key?: string }) =>
-        rotateCredentials(services as any, provider, key ?? undefined),
+      nexusRotateCredentials: (_: any, { provider, key, force }: { provider: string; key?: string; force?: boolean }) =>
+        rotateCredentials(services as any, provider, { key: key ?? undefined, force: force ?? false }),
 
       /**
        * Update Nexus AI settings via key+value or a JSON patch object
