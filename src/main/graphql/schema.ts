@@ -827,6 +827,9 @@ export const typeDefs = gql`
     "Update Nexus AI settings. Use key+value for a single field or patch (JSON) to merge multiple fields."
     nexusUpdateSettings(key: String, value: String, patch: String): NexusUpdateSettingsResult!
 
+    "Security posture status for diagnostics (nexus doctor)."
+    nexusSecurityStatus: NexusSecurityStatusResult!
+
     "Get current AI provider configuration"
     nexusAiGetConfig: NexusAiGetConfigResult!
 
@@ -1591,6 +1594,13 @@ export const typeDefs = gql`
     error: String
     "JSON-encoded updated NexusSettings after the change"
     settings: String
+  }
+
+  type NexusSecurityStatusResult {
+    success: Boolean!
+    error: String
+    "True if API keys are encrypted at rest (OS safeStorage). False = plain-text fallback."
+    keyStorageEncrypted: Boolean!
   }
 
   type NexusAiGetConfigResult {

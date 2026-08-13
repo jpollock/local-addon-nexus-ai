@@ -107,6 +107,15 @@ export class KeyVault {
   // ---------------------------------------------------------------------------
 
   /**
+   * True if OS-backed encryption (Electron safeStorage) is available, so stored keys are
+   * encrypted at rest. False means the vault fell back to PLAIN TEXT storage — a degraded posture
+   * worth surfacing (see nexus doctor). Main-process only; the CLI reads this via GraphQL.
+   */
+  isEncryptionAvailable(): boolean {
+    return this.encryptionAvailable;
+  }
+
+  /**
    * Encrypt and store an API key.
    */
   setKey(keyName: string, value: string): void {
@@ -237,4 +246,13 @@ export function getApiKey(storage: RegistryStorage, providerId: string): string 
 export function hasApiKey(storage: RegistryStorage, providerId: string): boolean {
   const vault = new KeyVault(storage, STORAGE_KEYS.API_KEYS);
   return vault.hasKey(providerId);
+}
+
+/**
+ * Convenience: true if API keys are encrypted at rest (safeStorage available), false if the
+ * vault fell back to plain-text storage. Used by the security-status resolver that `nexus doctor`
+ * reads.
+ */
+export function isKeyStorageEncrypted(storage: RegistryStorage): boolean {
+  return new KeyVault(storage, STORAGE_KEYS.API_KEYS).isEncryptionAvailable();
 }

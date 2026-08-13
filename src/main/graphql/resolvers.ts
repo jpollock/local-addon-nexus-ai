@@ -26,6 +26,7 @@ import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../../common/constants';
 import { toSiteSource } from '../../common/types';
 import { applySettingsUpdate } from '../../common/settings-update';
+import { isKeyStorageEncrypted } from '../security/KeyVault';
 import { getApiKey, KeyVault } from '../security/KeyVault';
 import { auditDirectOperation } from '../audit/auditDirectOperation';
 import type { NexusServices } from '../types/nexus-services';
@@ -384,6 +385,19 @@ export function createResolvers(context: ResolverContext) {
           return { success: true, settings: JSON.stringify(settings) };
         } catch (err: any) {
           return { success: false, error: err.message };
+        }
+      },
+
+      /**
+       * Security posture for diagnostics (P1-7). Runs in the main process, where Electron
+       * safeStorage lives — the CLI (`nexus doctor`) reads this because it cannot call
+       * safeStorage directly.
+       */
+      nexusSecurityStatus: () => {
+        try {
+          return { success: true, keyStorageEncrypted: isKeyStorageEncrypted(services.registryStorage!) };
+        } catch (err: any) {
+          return { success: false, error: err.message, keyStorageEncrypted: false };
         }
       },
 

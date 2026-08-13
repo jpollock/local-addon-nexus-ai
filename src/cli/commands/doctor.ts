@@ -330,6 +330,30 @@ async function checkGateway(graphqlAvailable: boolean): Promise<CheckResult> {
   }
 }
 
+async function checkKeyStorage(graphqlAvailable: boolean): Promise<CheckResult> {
+  if (!graphqlAvailable) {
+    return { label: 'Key storage', status: 'skip', detail: 'Local not running' };
+  }
+  try {
+    const { getClient } = await import('../utils/graphql');
+    const client = getClient({ timeout: 5000 });
+    const result = await client.mutate<{ nexusSecurityStatus: { success: boolean; keyStorageEncrypted: boolean } }>(`
+      mutation { nexusSecurityStatus { success keyStorageEncrypted } }
+    `, {});
+    const encrypted = result.nexusSecurityStatus?.keyStorageEncrypted;
+    return encrypted
+      ? { label: 'Key storage', status: 'ok', detail: 'Encrypted at rest (safeStorage)' }
+      : {
+          label: 'Key storage',
+          status: 'warn',
+          detail: 'Plain-text fallback — OS keychain/safeStorage unavailable',
+          action: 'API keys are stored unencrypted. Ensure the OS keychain/keyring is available, then re-enter your keys.',
+        };
+  } catch {
+    return { label: 'Key storage', status: 'skip', detail: 'Could not reach addon' };
+  }
+}
+
 function readSiteAiConfigs(): Record<string, unknown> {
   try {
     const p = path.join(getLocalPaths().dataDir, 'nexus-ai_site_ai_config.json');
@@ -649,6 +673,7 @@ export const doctorCommand = new Command('doctor')
     const graphqlAvailable = checks.find((c) => c.label === 'GraphQL server')?.status === 'ok';
     checks.push(await checkAiProvider(graphqlAvailable));
     checks.push(await checkGateway(graphqlAvailable));
+    checks.push(await checkKeyStorage(graphqlAvailable));
     checks.push(await checkSitesWithAI(graphqlAvailable));
 
     // ── Phase 3: additional system checks ────────────────────────────────
