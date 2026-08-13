@@ -10,7 +10,7 @@ import { getLocalPaths, ADDON_PACKAGE_NAME, ADDON_DIR_NAME } from './paths';
 import { isLocalRunning, stopLocal, restartLocal } from './process';
 import { detectPlatform, getPlatformDisplayName } from './platform';
 import { downloadAddon, downloadSignature, formatBytes } from './downloader';
-import { extractTarball, verifyExtractedAddon } from './extractor';
+import { extractTarball, verifyExtractedAddon, assertInstalledVersion } from './extractor';
 import { assertSignedTarball } from './signing';
 import { getCurrentVersion } from '../utils/version';
 
@@ -290,6 +290,15 @@ async function autoDownloadAddon(
     if (!verifyExtractedAddon(addonPath)) {
       fs.rmSync(addonPath, { recursive: true, force: true });
       throw new Error('Extracted addon is invalid. Installation failed.');
+    }
+
+    // P1-5 rollback guard: the signature verifies the bytes, not the version. Refuse a
+    // validly-signed but version-mismatched (e.g. downgraded) tarball.
+    try {
+      assertInstalledVersion(addonPath, version);
+    } catch (err) {
+      fs.rmSync(addonPath, { recursive: true, force: true });
+      throw err;
     }
 
     // Clean up temp file

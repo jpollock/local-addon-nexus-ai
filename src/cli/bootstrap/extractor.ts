@@ -165,3 +165,29 @@ export function verifyExtractedAddon(destDir: string): boolean {
     return false;
   }
 }
+
+/**
+ * Rollback / downgrade guard (P1-5).
+ *
+ * The release signature is verified BEFORE extraction, but it binds the tarball's BYTES, not its
+ * version — a validly-signed OLDER tarball (served by a compromised R2 bucket / CDN / MITM) passes
+ * both the signature and the name check. Require the extracted addon's version to equal the version
+ * we actually requested, so a downgrade to a genuinely-signed-but-old (e.g. known-vulnerable)
+ * release is refused. Throws (with a specific message) on any mismatch, including a missing version.
+ */
+export function assertInstalledVersion(destDir: string, expectedVersion: string): void {
+  let found: string | null = null;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(destDir, 'package.json'), 'utf-8'));
+    if (typeof pkg.version === 'string') found = pkg.version;
+  } catch {
+    // Unreadable/absent package.json — treated as a mismatch below.
+  }
+  if (found !== expectedVersion) {
+    throw new Error(
+      `Refusing to install: expected version ${expectedVersion} but the extracted addon reports ` +
+      `${found ?? 'no version'}. This can indicate a rollback/downgrade attack (the signature ` +
+      `verifies the bytes, not the version).`,
+    );
+  }
+}

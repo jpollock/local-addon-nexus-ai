@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as tar from 'tar';
-import { extractTarball, verifyExtractedAddon, assertSafeTarEntry } from '../../../src/cli/bootstrap/extractor';
+import { extractTarball, verifyExtractedAddon, assertSafeTarEntry, assertInstalledVersion } from '../../../src/cli/bootstrap/extractor';
 
 describe('assertSafeTarEntry (P0-3)', () => {
   it('rejects a symlink entry (link-poisoning)', () => {
@@ -126,6 +126,30 @@ describe('Tarball Extractor', () => {
       JSON.stringify({ name: '@local-labs-jpollock/local-addon-nexus-ai' })
     );
     expect(verifyExtractedAddon(addonDir)).toBe(true);
+  });
+
+  describe('assertInstalledVersion — rollback guard (P1-5)', () => {
+    function writeAddon(name: string, pkg: object): string {
+      const dir = path.join(tmpDir, name);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
+      return dir;
+    }
+
+    it('passes when the extracted version matches the requested version', () => {
+      const dir = writeAddon('match', { name: '@local-labs-jpollock/local-addon-nexus-ai', version: '0.5.2' });
+      expect(() => assertInstalledVersion(dir, '0.5.2')).not.toThrow();
+    });
+
+    it('throws on a version mismatch — a validly-signed older tarball is a rollback', () => {
+      const dir = writeAddon('old', { name: '@local-labs-jpollock/local-addon-nexus-ai', version: '0.4.0' });
+      expect(() => assertInstalledVersion(dir, '0.5.2')).toThrow(/rollback|expected version 0\.5\.2/i);
+    });
+
+    it('throws when the extracted package has no version', () => {
+      const dir = writeAddon('noversion', { name: '@local-labs-jpollock/local-addon-nexus-ai' });
+      expect(() => assertInstalledVersion(dir, '0.5.2')).toThrow(/no version|rollback/i);
+    });
   });
 
   it('rejects a tarball containing a symlink entry, without creating the link (P0-3)', async () => {
