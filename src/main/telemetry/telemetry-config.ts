@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import { parseTelemetryEnvFlag } from '../../common/telemetryEnv';
 
 // ============================================================================
 // Types
@@ -190,9 +191,10 @@ export function isRegistered(): boolean {
 export function isTelemetryEnabled(): boolean {
   // Environment variable override — read live (not the import-time capture), consistent with the
   // CI check below, so a runtime change to NEXUS_TELEMETRY takes effect and tests can control it.
-  const envTelemetry = process.env.NEXUS_TELEMETRY;
-  if (envTelemetry === '0') return false;
-  if (envTelemetry === '1') return true;
+  // parseTelemetryEnvFlag accepts the common spellings (false/no/off/…), not just '0'/'1' — a
+  // user who exports NEXUS_TELEMETRY=false expects to be opted out, not silently tracked.
+  const envOverride = parseTelemetryEnvFlag(process.env.NEXUS_TELEMETRY);
+  if (envOverride !== undefined) return envOverride;
 
   // Auto-disable in CI environments
   if (CI_ENV_VARS.some((v) => process.env[v])) return false;

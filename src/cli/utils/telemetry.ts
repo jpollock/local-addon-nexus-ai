@@ -16,6 +16,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { parseTelemetryEnvFlag } from '../../common/telemetryEnv';
 
 // ============================================================================
 // Shared config location (same as addon main process)
@@ -67,8 +68,9 @@ function readConfig(): TelemetryConfig {
 }
 
 function isEnabled(): boolean {
-  if (process.env.NEXUS_TELEMETRY === '0') return false;
-  if (process.env.NEXUS_TELEMETRY === '1') return true;
+  // Accept the common spellings (false/no/off/…), not just '0'/'1' — see parseTelemetryEnvFlag.
+  const envOverride = parseTelemetryEnvFlag(process.env.NEXUS_TELEMETRY);
+  if (envOverride !== undefined) return envOverride;
   if (CI_ENV_VARS.some((v) => process.env[v])) return false;
   return readConfig().telemetry?.enabled !== false; // default: enabled
 }
