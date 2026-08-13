@@ -30,12 +30,6 @@ interface ConnectionsState {
   keyIsSet: boolean;
   keySaved: boolean;
   keyStatus: Record<string, 'valid' | 'invalid' | 'unchecked' | 'checking'>;
-  // WPE API credentials
-  wpeCredentialsConfigured: boolean;
-  wpeUsernameInput: string;
-  wpePasswordInput: string;
-  wpePendingClear: boolean;
-  wpeCredsSaved: boolean;
   // AWS S3 credentials
   awsConnected: boolean;
   awsRevoked: boolean;
@@ -61,11 +55,6 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
     keyIsSet: false,
     keySaved: false,
     keyStatus: {},
-    wpeCredentialsConfigured: false,
-    wpeUsernameInput: '',
-    wpePasswordInput: '',
-    wpePendingClear: false,
-    wpeCredsSaved: false,
     awsConnected: false,
     awsRevoked: false,
     awsLabel: '',
@@ -103,10 +92,6 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
       this.loadStoredKey(providerId);
     }
 
-    // Load WPE API credentials status
-    const wpeCredsStatus = await ipc.invoke(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS).catch(() => null);
-    if (!this.mounted) return;
-
     // Load AWS credentials status.
     // CREDENTIAL_API_KEY_STATUS returns `{ connections: ApiKeyConnection[] }`
     // (ipc-handlers.ts, `return { connections: mgr.listApiKeyConnections(...) }`),
@@ -122,7 +107,6 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
     const revokedAws = awsConnections?.find((c) => c.status === 'revoked');
 
     this.setState({
-      wpeCredentialsConfigured: wpeCredsStatus?.configured ?? false,
       awsConnected: !!activeAws,
       awsRevoked: !activeAws && !!revokedAws,
       awsLabel: activeAws?.label ?? revokedAws?.label ?? '',
@@ -222,55 +206,6 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
 
   handleChangeKey = (): void => {
     this.setState({ keyInput: '', keySaved: false, keyIsSet: false });
-  };
-
-  // WPE API credentials handlers
-  handleWpeUsernameChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    this.setState({ wpeUsernameInput: e.target.value, wpeCredsSaved: false, wpePendingClear: false });
-  };
-
-  handleWpePasswordChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    this.setState({ wpePasswordInput: e.target.value, wpeCredsSaved: false, wpePendingClear: false });
-  };
-
-  handleWpeClearCredentials = (): void => {
-    this.setState({
-      wpeUsernameInput: '',
-      wpePasswordInput: '',
-      wpePendingClear: true,
-      wpeCredsSaved: false,
-    });
-  };
-
-  handleWpeApplyCredentials = async (): Promise<void> => {
-    const { wpeUsernameInput, wpePasswordInput, wpePendingClear } = this.state;
-
-    try {
-      if (wpePendingClear) {
-        await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_CLEAR_API_CREDENTIALS);
-        if (!this.mounted) return;
-        this.setState({
-          wpeCredentialsConfigured: false,
-          wpeUsernameInput: '',
-          wpePasswordInput: '',
-          wpePendingClear: false,
-          wpeCredsSaved: true,
-        });
-      } else if (wpeUsernameInput.trim() && wpePasswordInput.trim()) {
-        await this.props.electron.ipcRenderer.invoke(
-          IPC_CHANNELS.WPE_SET_API_CREDENTIALS,
-          wpeUsernameInput.trim(),
-          wpePasswordInput.trim(),
-        );
-        if (!this.mounted) return;
-        this.setState({
-          wpeCredentialsConfigured: true,
-          wpeCredsSaved: true,
-        });
-      }
-    } catch {
-      if (this.mounted) this.setState({ wpeCredsSaved: false });
-    }
   };
 
   // AWS S3 credentials handlers
@@ -622,16 +557,9 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
 
   renderWhatElse(): React.ReactElement {
     const {
-      wpeCredentialsConfigured, wpeUsernameInput, wpePasswordInput, wpePendingClear, wpeCredsSaved,
       awsConnected, awsRevoked, awsLabel, awsKeyIdInput, awsSecretInput, awsSecretVisible,
       awsSaving, awsError, awsSaved, awsShowReenter,
     } = this.state;
-
-    const hasWpeChanges = wpePendingClear ||
-      (wpeUsernameInput.trim() !== '' && wpePasswordInput.trim() !== '');
-
-    const wpeStatusColor = wpeCredentialsConfigured ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-status-neutral)';
-    const wpeStatusLabel = wpeCredentialsConfigured ? 'Configured' : 'Not configured';
 
     const awsStatusColor = awsConnected
       ? UI_COLORS.STATUS_RUNNING
@@ -642,136 +570,6 @@ export class ConnectionsSection extends React.Component<ConnectionsProps, Connec
 
     return React.createElement('div', null,
       this.renderGroupHeading('What else Nexus can do'),
-
-      // Backups (WPE API credentials)
-      React.createElement('div', {
-        style: {
-          padding: 16,
-          background: 'var(--nxai-card-bg)',
-          border: '1px solid var(--nxai-card-border)',
-          borderRadius: 6,
-          marginBottom: 12,
-        },
-      },
-        React.createElement('div', {
-          style: {
-            fontSize: 14,
-            fontWeight: 600,
-            color: 'var(--nxai-card-text)',
-            marginBottom: 4,
-          },
-        }, 'Backups'),
-        React.createElement('div', {
-          style: {
-            fontSize: 12,
-            color: 'var(--nxai-card-sub)',
-            marginBottom: 12,
-            lineHeight: 1.4,
-          },
-        }, 'Store WP Engine API credentials for backup creation. WP Engine\'s backup endpoint requires basic authentication (not OAuth). Credentials are stored encrypted using OS-level encryption.'),
-
-        // Status
-        React.createElement('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 },
-        },
-          React.createElement('span', {
-            style: {
-              display: 'inline-block',
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: wpeStatusColor,
-            },
-          }),
-          React.createElement('span', {
-            style: { fontSize: 13, color: wpeStatusColor, fontWeight: 500 },
-          }, wpeStatusLabel),
-        ),
-
-        // Form
-        React.createElement('div', { style: { marginBottom: 8 } },
-          React.createElement('input', {
-            type: 'text',
-            value: wpeUsernameInput,
-            onChange: this.handleWpeUsernameChange,
-            placeholder: 'API username',
-            style: {
-              padding: '6px 10px',
-              fontSize: 13,
-              background: 'var(--nxai-input-bg)',
-              border: '1px solid var(--nxai-input-border)',
-              borderRadius: 4,
-              color: 'var(--nxai-card-text)',
-              width: '100%',
-              maxWidth: 300,
-              marginBottom: 8,
-            },
-          }),
-        ),
-        React.createElement('div', { style: { marginBottom: 12 } },
-          React.createElement('input', {
-            type: 'password',
-            value: wpePasswordInput,
-            onChange: this.handleWpePasswordChange,
-            placeholder: 'API password',
-            style: {
-              padding: '6px 10px',
-              fontSize: 13,
-              background: 'var(--nxai-input-bg)',
-              border: '1px solid var(--nxai-input-border)',
-              borderRadius: 4,
-              color: 'var(--nxai-card-text)',
-              width: '100%',
-              maxWidth: 300,
-            },
-          }),
-        ),
-
-        // Buttons
-        React.createElement('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 } },
-          React.createElement('button', {
-            onClick: this.handleWpeApplyCredentials,
-            disabled: !hasWpeChanges || wpeCredsSaved,
-            style: {
-              padding: '6px 12px',
-              fontSize: 13,
-              borderRadius: 4,
-              background: (hasWpeChanges && !wpeCredsSaved) ? 'var(--nxai-accent)' : 'var(--nxai-card-bg)',
-              border: '1px solid var(--nxai-input-border)',
-              color: (hasWpeChanges && !wpeCredsSaved) ? 'var(--nxai-accent-text)' : 'var(--nxai-card-text)',
-              cursor: (hasWpeChanges && !wpeCredsSaved) ? 'pointer' : 'default',
-            },
-          }, wpeCredsSaved ? 'Saved' : 'Apply'),
-          React.createElement('button', {
-            onClick: this.handleWpeClearCredentials,
-            disabled: !wpeCredentialsConfigured && wpeUsernameInput === '' && wpePasswordInput === '',
-            style: {
-              padding: '6px 12px',
-              fontSize: 13,
-              borderRadius: 4,
-              background: 'var(--nxai-card-bg)',
-              border: '1px solid var(--nxai-input-border)',
-              color: 'var(--nxai-card-text)',
-            },
-          }, 'Clear'),
-          wpeCredsSaved ? React.createElement('span', {
-            style: { fontSize: 12, color: UI_COLORS.STATUS_RUNNING, marginLeft: 4 },
-          }, wpePendingClear ? '✓ Credentials cleared' : '✓ Credentials saved') : null,
-        ),
-
-        // Help text
-        React.createElement('div', {
-          style: { fontSize: 12, color: 'var(--nxai-card-sub)', opacity: 0.7, lineHeight: 1.4 },
-        },
-          'Get your API credentials from ',
-          React.createElement('a', {
-            href: 'https://my.wpengine.com',
-            target: '_blank',
-            style: { color: 'var(--nxai-accent)', textDecoration: 'underline' },
-          }, 'my.wpengine.com'),
-          '. These are different from your WP Engine login — you must generate API credentials specifically for programmatic access.',
-        ),
-      ),
 
       // Reading access logs (AWS S3)
       React.createElement('div', {

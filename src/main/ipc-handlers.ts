@@ -15,7 +15,6 @@ import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
 import { AUTO_PAUSED_KEY, resumeAgent, isAutoPaused } from './inbox/autoPause';
 import type { InboxItem } from './inbox/types';
-import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
 import { localDay } from './logging/eventLog';
@@ -4576,9 +4575,8 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
 
   // =========================================================================
   // WPE API Credentials + WPE Site Sync Handlers
-  // (extracted to src/main/ipc/handlers/credentials.ts and wpe-sync.ts)
+  // (extracted to src/main/ipc/handlers/wpe-sync.ts)
   // =========================================================================
-  registerCredentialHandlers(deps);
   registerWpeSyncHandlers(deps, { auditLogger, emitNexusState: deps.emitNexusState });
 
   // WPE_SYNC_ALL, WPE_SYNC_STATUS, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_CAPI_SYNC,

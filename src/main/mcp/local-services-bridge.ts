@@ -120,7 +120,7 @@ export interface LocalServicesBridge {
   capiGetSites(): Promise<unknown>;
   capiGetInstalls(): Promise<unknown>;
   capiGetInstall(installId: string): Promise<unknown>;
-  capiCreateBackup(installId: string, description: string, notificationEmails?: string[]): Promise<unknown>;
+  capiCreateBackup(installId: string, description: string): Promise<unknown>;
   capiDirect(path: string, method?: string, body?: unknown): Promise<unknown>;
   capiPurgeCache(installId: string): Promise<unknown>;
   isCAPIAvailable(): boolean;
@@ -129,9 +129,6 @@ export interface LocalServicesBridge {
   wpeLogout(): Promise<void>;
   wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null>;
   getWpeUserId(): string | null;
-  wpeSetApiCredentials(username: string, password: string): Promise<void>;
-  wpeClearApiCredentials(): Promise<void>;
-  wpeGetApiCredentialsStatus(): Promise<{ configured: boolean; username?: string }>;
 
   // SSL
   trustCert(siteId: string): Promise<void>;
@@ -582,52 +579,9 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       return capi.getInstall(installId);
     },
 
-    capiCreateBackup: async (installId: string, description: string, notificationEmails?: string[]) => {
+    capiCreateBackup: async (installId: string, description: string) => {
       const capi = svc('capi');
       if (!capi) throw new Error('CAPI not available');
-
-      // Check if basic auth credentials are configured
-      const userData = svc('userData');
-      let credentials: { username?: string; password?: string } | null = null;
-
-      if (userData) {
-        try {
-          credentials = await userData.get('wpeApiCredentials');
-        } catch {
-          // Ignore errors reading credentials
-        }
-      }
-
-      // If credentials exist, use basic auth instead of OAuth
-      if (credentials?.username && credentials?.password) {
-        const url = `https://api.wpengineapi.com/v1/installs/${installId}/backups`;
-        const auth = Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64');
-
-        const emails = notificationEmails && notificationEmails.length > 0
-          ? notificationEmails
-          : ['no-reply@wpengine.com'];
-
-        const requestBody = {
-          description,
-          notification_emails: emails,  // WP Engine REST API expects snake_case, not camelCase
-        };
-
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`Backup creation failed: HTTP ${res.status} - ${errorText}`);
-        }
-
-        return res.json();
-      }
 
       // Use OAuth via the CAPI client
       try {
@@ -636,8 +590,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         if (err.message?.includes('401') || err.message?.includes('Unauthorized')) {
           throw new Error(
             'Backup creation failed: WP Engine returned 401 Unauthorized. ' +
-            'Your OAuth session may have expired — run: nexus wpe login\n' +
-            'Or store API credentials as a fallback: wpe_set_api_credentials'
+            'Your OAuth session may have expired — run: nexus wpe login'
           );
         }
         throw err;
@@ -714,42 +667,6 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         return (capi as any)._wpeUserInfo?.userId ?? null;
       } catch {
         return null;
-      }
-    },
-
-    // --- WPE API Credentials (for basic auth fallback) ---
-
-    async wpeSetApiCredentials(username: string, password: string): Promise<void> {
-      const userData = svc('userData');
-      if (!userData) throw new Error('User data service not available');
-
-      await userData.set({
-        name: 'wpeApiCredentials',
-        data: { username, password },
-        encrypted: true,
-      });
-    },
-
-    async wpeClearApiCredentials(): Promise<void> {
-      const userData = svc('userData');
-      if (!userData) throw new Error('User data service not available');
-
-      // Local's userData has no delete — overwrite with null to clear
-      await userData.set({ name: 'wpeApiCredentials', data: null, encrypted: false });
-    },
-
-    async wpeGetApiCredentialsStatus(): Promise<{ configured: boolean; username?: string }> {
-      const userData = svc('userData');
-      if (!userData) return { configured: false };
-
-      try {
-        const creds = await userData.get('wpeApiCredentials');
-        if (creds?.username && creds?.password) {
-          return { configured: true, username: creds.username };
-        }
-        return { configured: false };
-      } catch {
-        return { configured: false };
       }
     },
 

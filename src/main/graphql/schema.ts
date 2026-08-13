@@ -1799,15 +1799,6 @@ export const typeDefs = gql`
     "Log out of WP Engine"
     nexusWpeLogout: NexusWpeAuthResult!
 
-    "Store WP Engine API credentials for basic authentication (required for backup creation)"
-    nexusWpeSetApiCredentials(username: String!, password: String!): NexusWpeAuthResult!
-
-    "Remove stored WP Engine API credentials"
-    nexusWpeClearApiCredentials: NexusWpeAuthResult!
-
-    "Check if WP Engine API credentials are configured"
-    nexusWpeApiCredentialsStatus: NexusWpeCredentialsStatusResult!
-
     "Get bandwidth, storage, and visitor usage for a WP Engine install"
     nexusWpeInstallUsage(installId: String!, monthOffset: Int): NexusWpeUsageResult!
 
@@ -2011,13 +2002,6 @@ export const typeDefs = gql`
     success: Boolean!
     error: String
     email: String
-  }
-
-  type NexusWpeCredentialsStatusResult {
-    success: Boolean!
-    error: String
-    configured: Boolean!
-    username: String
   }
 
   type NexusWpeUsageResult {

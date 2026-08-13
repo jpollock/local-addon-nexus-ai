@@ -1311,6 +1311,21 @@ export default function main(context: any): void {
 
   console.log('[NexusAI] 🟢 About to call registerIpcHandlers()');
 
+  // One-time cleanup: purge obsolete WP Engine basic-auth credentials
+  // (orphaned after the backup endpoint gained OAuth support in Feb 2026).
+  // Best-effort only — failure must never block startup. Can be deleted
+  // after the next release, as the credential would have been cleared by then.
+  (async () => {
+    try {
+      if (userData) {
+        await userData.set({ name: 'wpeApiCredentials', data: null, encrypted: false });
+      }
+    } catch {
+      // Swallow — the credential no longer gates anything, so a stuck file
+      // is harmless; a throw here would be worse than leaving it orphaned.
+    }
+  })();
+
   // Phase 4: IPC handlers
   registerIpcHandlers({
     siteData,

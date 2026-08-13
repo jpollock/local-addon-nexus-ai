@@ -2392,8 +2392,7 @@ export function createResolvers(context: ResolverContext) {
 
           const backupResult = await services.localServices.capiCreateBackup(
             install.id,
-            input.description || 'Backup created via Nexus CLI',
-            input.notificationEmails || undefined
+            input.description || 'Backup created via Nexus CLI'
           ) as any;
 
           auditDirectOperation(services, {
@@ -4786,39 +4785,6 @@ export function createResolvers(context: ResolverContext) {
           return { success: true };
         } catch (err: any) {
           return { success: false, error: err.message };
-        }
-      },
-
-      nexusWpeSetApiCredentials: async (
-        _parent: any,
-        { username, password }: { username: string; password: string },
-      ) => {
-        try {
-          if (!services.localServices) return { success: false, error: 'Local services not available' };
-          await services.localServices.wpeSetApiCredentials(username, password);
-          return { success: true };
-        } catch (err: any) {
-          return { success: false, error: err.message };
-        }
-      },
-
-      nexusWpeClearApiCredentials: async () => {
-        try {
-          if (!services.localServices) return { success: false, error: 'Local services not available' };
-          await services.localServices.wpeClearApiCredentials();
-          return { success: true };
-        } catch (err: any) {
-          return { success: false, error: err.message };
-        }
-      },
-
-      nexusWpeApiCredentialsStatus: async () => {
-        try {
-          if (!services.localServices) return { success: false, error: 'Local services not available', configured: false };
-          const status = await services.localServices.wpeGetApiCredentialsStatus();
-          return { success: true, configured: status.configured, username: status.username ?? null };
-        } catch (err: any) {
-          return { success: false, error: err.message, configured: false };
         }
       },
 

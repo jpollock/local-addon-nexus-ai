@@ -144,7 +144,6 @@ Route user requests to the correct tool namespace:
 | WP Engine account overview | \`wpe_account_overview\`, \`wpe_installs_by_account\`, \`wpe_environment_diff\` | "account summary", "compare staging vs production", "show all installs grouped by account", "what's different between staging and prod?" |
 | WP Engine disk usage | \`wpe_refresh_install_disk_usage\`, \`wpe_refresh_account_disk_usage\` | "refresh disk usage", "update storage numbers after a large upload" |
 | Current WPE user | \`wpe_get_current_user\` | "who am I logged in as on WPE?", "confirm my WPE identity" |
-| WPE API credentials | \`wpe_set_api_credentials\`, \`wpe_clear_api_credentials\`, \`wpe_credentials_status\` | "store WPE API credentials for backups", "backup creation failing with auth error", "check if backup credentials are configured" |
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\`, \`local_wpe_link\` | "pull from staging", "push to dev", "link this site to WPE", "pull production with database", "sync my local copy from WPE", "pull only the database from WPE" (use \`database_only: true\`) |
 | Pull/push/export progress | \`local_operation_status\` | "is the pull done?", "check push progress", "how far along is the export?" — use this, NOT \`local_get_site\` which only shows running/halted |
 | Sync history | \`local_get_site_changes\`, \`local_get_sync_history\` | "what changed since last pull?", "show sync history", "what files are different between my local and WPE?", "when did I last push?" |
@@ -460,16 +459,6 @@ Use \`site\` for local development sites. Use \`install_name\` for production/st
 Some commands are blocked remotely for safety: \`eval\`, \`eval-file\`, \`shell\`, \`db query\`, \`db cli\`.
 
 Three tools are local-only and do not support \`install_name\`: \`wp_db_export\`, \`wp_search_replace\`, \`wp_site_health\`.
-
-## WP Engine API Credentials (Backup Creation)
-
-\`wpe_create_backup\` requires **WP Engine API credentials** (basic auth) — the backup endpoint does not support OAuth. If backup fails with an auth error, credentials are not configured.
-
-- \`wpe_credentials_status\` — check if credentials are configured
-- \`wpe_set_api_credentials({ username, password })\` — store credentials (encrypted, one-time setup)
-- \`wpe_clear_api_credentials\` — remove stored credentials
-
-Credentials are stored with OS-level encryption. Once set, all backup operations use them automatically.
 
 ## Presentation
 

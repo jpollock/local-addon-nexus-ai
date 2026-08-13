@@ -76,7 +76,6 @@ wpe_credentials_status()
 
 If not configured, set them once:
 ```
-wpe_set_api_credentials({ username: "...", password: "..." })
 ```
 
 Then create the backup:

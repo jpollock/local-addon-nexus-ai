@@ -125,7 +125,7 @@ export const diagnoseSiteHandler: McpToolHandler = {
     const backupFailed = backupsResult.status === 'rejected';
 
     if (backupFailed) {
-      lines.push('⚠️ **Backup** — Could not check backup status. API credentials may be required (wpe_set_api_credentials).');
+      lines.push('⚠️ **Backup** — Could not check backup status.');
     } else if (backups.length === 0) {
       lines.push('❌ **Backup** — No backups found.');
       lines.push('   _Recommended action: Create a backup immediately with wpe_backup_and_verify._');

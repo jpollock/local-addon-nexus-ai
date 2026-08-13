@@ -63,39 +63,6 @@ export function createWpeResolvers(services: NexusServices) {
       }
     },
 
-    nexusWpeSetApiCredentials: async (
-      _parent: ResolverParent,
-      { username, password }: { username: string; password: string }
-    ) => {
-      try {
-        if (!services.localServices) return { success: false, error: 'Local services not available' };
-        await services.localServices.wpeSetApiCredentials(username, password);
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err.message };
-      }
-    },
-
-    nexusWpeClearApiCredentials: async () => {
-      try {
-        if (!services.localServices) return { success: false, error: 'Local services not available' };
-        await services.localServices.wpeClearApiCredentials();
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err.message };
-      }
-    },
-
-    nexusWpeApiCredentialsStatus: async () => {
-      try {
-        if (!services.localServices) return { success: true, hasCredentials: false };
-        const hasCredentials = await services.localServices.wpeGetApiCredentialsStatus().then(s => s.configured);
-        return { success: true, hasCredentials };
-      } catch (err: any) {
-        return { success: false, error: err.message, hasCredentials: false };
-      }
-    },
-
     nexusWpeInstallUsage: async (
       _parent: ResolverParent,
       { installId, monthOffset = 0 }: { installId: string; monthOffset?: number }
@@ -255,8 +222,7 @@ export function createWpeResolvers(services: NexusServices) {
 
         const backupResult = await services.localServices.capiCreateBackup(
           install.id,
-          input.description || 'Backup created via Nexus CLI',
-          input.notificationEmails || undefined
+          input.description || 'Backup created via Nexus CLI'
         ) as any;
 
         auditDirectOperation(services, {

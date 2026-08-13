@@ -25,11 +25,6 @@ import { portfolioUsageHandler } from './portfolio-usage';
 import { fleetVersionsHandler } from './fleet-versions';
 import { detectDriftHandler } from './detect-drift';
 import { waitForSshHandler } from './wait-for-ssh';
-import {
-  setApiCredentialsHandler,
-  clearApiCredentialsHandler,
-  credentialsStatusHandler,
-} from './api-credentials';
 import { getSitesHandler } from './get-sites';
 import { getSiteHandler } from './get-site';
 import { createSiteHandler } from './create-site';
@@ -113,9 +108,6 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(fleetVersionsHandler);
   registry.register(detectDriftHandler);
   registry.register(waitForSshHandler);
-  registry.register(setApiCredentialsHandler);
-  registry.register(clearApiCredentialsHandler);
-  registry.register(credentialsStatusHandler);
   registry.register(getSitesHandler);
   registry.register(getSiteHandler);
   registry.register(createSiteHandler);
