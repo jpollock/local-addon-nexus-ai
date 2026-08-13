@@ -105,6 +105,16 @@ async function downloadFile(
 }
 
 /**
+ * Download the detached signature (.sig) for a release asset (P0-3). A missing signature (404)
+ * rejects here, which the installer treats as a hard refusal — an unsigned release is never
+ * installed.
+ */
+export async function downloadSignature(assetName: string, version: string, destPath: string): Promise<void> {
+  const url = `${RELEASES_BASE_URL}/v${version}/${assetName}.sig`;
+  await downloadFile(url, destPath, 0);
+}
+
+/**
  * Format bytes for display
  */
 export function formatBytes(bytes: number): string {

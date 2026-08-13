@@ -75,6 +75,25 @@ jobs:
           npm_config_msvs_version: '2022'
         run: node scripts/package-addon.js --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
 
+      # P0-3: sign every release tarball with the Ed25519 release key. The CLI verifies this
+      # signature before extracting the addon; a missing/invalid .sig is a hard refusal. Fails
+      # the release if the signing key is absent — an unsigned release must never ship.
+      - name: Sign tarballs
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          NEXUS_SIGNING_KEY: ${{ secrets.NEXUS_SIGNING_KEY }}
+        run: |
+          if [ -z "$NEXUS_SIGNING_KEY" ]; then
+            echo "::error::NEXUS_SIGNING_KEY secret is not set — releases must be signed (P0-3)."
+            exit 1
+          fi
+          for tarball in dist/*.tgz; do
+            [ -f "$tarball" ] || continue
+            node scripts/sign-release.js "$tarball"
+          done
+          echo "✅ Tarballs signed"
+
       - name: Upload tarball to R2
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -89,8 +108,18 @@ jobs:
               "s3://nexus-ai-releases/nexus-ai/v${VERSION}/${FILENAME}" \
               --endpoint-url "$ENDPOINT" \
               --region auto
+            # Upload the detached signature alongside it. Required — the CLI refuses an
+            # unsigned release, so a missing .sig here would break auto-update.
+            if [ ! -f "${tarball}.sig" ]; then
+              echo "::error::Missing signature ${FILENAME}.sig — refusing to publish an unsigned release."
+              exit 1
+            fi
+            aws s3 cp "${tarball}.sig" \
+              "s3://nexus-ai-releases/nexus-ai/v${VERSION}/${FILENAME}.sig" \
+              --endpoint-url "$ENDPOINT" \
+              --region auto
           done
-          echo "✅ Tarballs uploaded to R2"
+          echo "✅ Tarballs + signatures uploaded to R2"
 
   release:
     needs: package
@@ -127,13 +156,15 @@ jobs:
             --repo ${{ github.repository }} \
             --yes 2>/dev/null || true
 
+          # Attach the tarballs AND their .sig signatures (the aws s3 sync above pulled both),
+          # so manual downloads from the GitHub Release can also be verified (P0-3).
           gh release create $GITHUB_REF_NAME \
             --repo ${{ github.repository }} \
             --title "Nexus AI v${VERSION}" \
             --generate-notes \
-            dist/*.tgz
+            dist/*.tgz dist/*.tgz.sig
 
-          echo "✅ GitHub Release created with all tarballs"
+          echo "✅ GitHub Release created with all tarballs + signatures"
 
           # Update latest.json
           echo "{\"version\":\"${VERSION}\"}" > /tmp/latest.json

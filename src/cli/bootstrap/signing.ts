@@ -15,6 +15,7 @@
  */
 
 import { verify } from 'node:crypto';
+import * as fs from 'node:fs';
 
 /**
  * Public halves of the release signing keys. Safe to publish — they can only verify, never sign.
@@ -41,4 +42,23 @@ export function verifyWithKeys(data: Buffer, signature: Buffer, publicKeys: stri
 /** Verify a downloaded release tarball against the embedded release public key(s). */
 export function verifyTarballSignature(tarballBytes: Buffer, signatureBytes: Buffer): boolean {
   return verifyWithKeys(tarballBytes, signatureBytes, RELEASE_PUBLIC_KEYS);
+}
+
+/**
+ * Fail-closed gate: throw unless `tarPath` carries a valid detached signature at `sigPath`.
+ * A missing signature file is a hard refusal (otherwise an attacker just omits the .sig), and so
+ * is an invalid signature. Call this after downloading the tarball and BEFORE extracting it.
+ * `publicKeys` is injectable for testing; production callers use the embedded release keys.
+ */
+export function assertSignedTarball(
+  tarPath: string,
+  sigPath: string,
+  publicKeys: string[] = RELEASE_PUBLIC_KEYS,
+): void {
+  if (!fs.existsSync(sigPath)) {
+    throw new Error('Release signature file is missing — refusing to install an unverified addon.');
+  }
+  if (!verifyWithKeys(fs.readFileSync(tarPath), fs.readFileSync(sigPath), publicKeys)) {
+    throw new Error('Release signature is invalid — refusing to install a tampered addon.');
+  }
 }

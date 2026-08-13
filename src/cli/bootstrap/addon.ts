@@ -9,8 +9,9 @@ import * as readline from 'readline';
 import { getLocalPaths, ADDON_PACKAGE_NAME, ADDON_DIR_NAME } from './paths';
 import { isLocalRunning, stopLocal, restartLocal } from './process';
 import { detectPlatform, getPlatformDisplayName } from './platform';
-import { downloadAddon, formatBytes } from './downloader';
+import { downloadAddon, downloadSignature, formatBytes } from './downloader';
 import { extractTarball, verifyExtractedAddon } from './extractor';
+import { assertSignedTarball } from './signing';
 import { getCurrentVersion } from '../utils/version';
 
 /**
@@ -259,7 +260,23 @@ async function autoDownloadAddon(
       },
     });
 
-    log('Download complete. Installing...');
+    log('Download complete. Verifying signature...');
+
+    // Verify the release signature BEFORE extracting (P0-3). A missing or invalid .sig is a hard
+    // refusal — an unsigned or tampered addon must never be extracted or loaded. This is what
+    // makes a compromised R2 bucket / CDN / MITM unable to ship arbitrary code to the user.
+    const sigPath = `${tmpPath}.sig`;
+    try {
+      await downloadSignature(platform.assetName, version, sigPath);
+      assertSignedTarball(tmpPath, sigPath);
+    } catch (err) {
+      fs.rmSync(tmpPath, { force: true });
+      fs.rmSync(sigPath, { force: true });
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Refusing to install: ${detail}`);
+    }
+    fs.rmSync(sigPath, { force: true });
+    log('Signature verified. Installing...');
 
     // Extract to addon directory
     const addonPath = getAddonPath();
