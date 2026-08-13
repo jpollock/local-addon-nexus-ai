@@ -312,6 +312,31 @@ export class GraphService {
       })();
       this.logger.info('[GraphService] ✓ site_usage table created');
     }
+
+    // Migration: create site_links table if missing.
+    // Replaces the implicit hostConnections UUID -> CAPI lookup, which silently
+    // resolves to nothing when an install is renamed, restored, or cloned.
+    const hasSiteLinks = this.db
+      .prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='site_links'")
+      .get() as { c: number };
+    if (!hasSiteLinks.c) {
+      this.logger.info('[GraphService] Creating site_links table...');
+      this.db.transaction(() => {
+        this.db!.exec(`
+          CREATE TABLE site_links (
+            local_site_id    TEXT PRIMARY KEY,
+            wpe_install_id   TEXT NOT NULL,
+            wpe_install_name TEXT NOT NULL,
+            link_source      TEXT NOT NULL,
+            verified_at      INTEGER
+          );
+        `);
+        this.db!.exec(
+          'CREATE INDEX IF NOT EXISTS idx_site_links_install ON site_links(wpe_install_id)',
+        );
+      })();
+      this.logger.info('[GraphService] ✓ site_links table created');
+    }
   }
 
   /**
