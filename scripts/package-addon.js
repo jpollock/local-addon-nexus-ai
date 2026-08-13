@@ -134,6 +134,18 @@ if (fs.existsSync(modelsDir)) {
   copyDirSync(modelsDir, path.join(stagingDir, 'models'));
 }
 
+// Guard (P1-2): fail the package if any secret-shaped string is present in the assembled addon.
+// Scanned here, before dependencies are installed, so the addon content is checked without
+// wading through node_modules. This is the control that would have caught the P0 key leak.
+const { scanPaths } = require('./scan-secrets');
+const secretFindings = scanPaths([stagingDir]);
+if (secretFindings.length > 0) {
+  console.error('🚨 Refusing to package — potential secrets in the build:');
+  for (const f of secretFindings) console.error(`  ${f.file}: ${f.name}`);
+  process.exit(1);
+}
+console.log('✓ Secret scan clean');
+
 // ---------------------------------------------------------------------------
 // Step 4: Install production dependencies
 // ---------------------------------------------------------------------------

@@ -1,0 +1,30 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module" },
+  "plugins": ["@typescript-eslint"],
+  "extends": ["eslint:recommended"],
+  "env": { "node": true, "browser": true, "es2022": true },
+  "ignorePatterns": ["lib/", "node_modules/", "coverage/", "*.js", "*.d.ts"],
+  "rules": {
+    "no-unused-vars": "off",
+    "no-undef": "off",
+    "no-redeclare": "off",
+    "no-empty": "off",
+    "no-constant-condition": ["error", { "checkLoops": false }],
+    "no-control-regex": "off",
+    "no-useless-escape": "off",
+    "no-prototype-builtins": "off",
+    "no-async-promise-executor": "off",
+    "no-case-declarations": "off",
+    "no-fallthrough": "off",
+    "no-cond-assign": ["error", "except-parens"],
+    "no-debugger": "error",
+    "no-dupe-keys": "error",
+    "no-dupe-args": "error",
+    "no-unreachable": "warn",
+    "no-inner-declarations": "warn",
+    "no-irregular-whitespace": "warn",
+    "no-unsafe-finally": "warn"
+  }
+}

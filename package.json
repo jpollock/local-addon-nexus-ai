@@ -69,7 +69,9 @@
     "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64",
     "rebuild": "electron-rebuild -v 42.2.0 -f -w better-sqlite3",
     "copy-styles": "mkdir -p lib/renderer/styles && cp src/renderer/styles/*.css lib/renderer/styles/",
-    "sync-agents": "node scripts/sync-agents.js"
+    "sync-agents": "node scripts/sync-agents.js",
+    "scan-secrets": "node scripts/scan-secrets.js",
+    "setup-hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "apache-arrow": ">=13.0.0 <=17.0.0",

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Pre-commit hook (P1-2): block secret-shaped strings from being committed.
+# Enable once per clone with:  npm run setup-hooks   (sets git core.hooksPath to .githooks)
+#
+# This is a zero-dependency local net; CI additionally runs gitleaks. To allow a known-fake
+# fixture, add a `scan-secrets:allow` comment on the same line.
+node scripts/scan-secrets.js --staged || {
+  echo ""
+  echo "Commit blocked: potential secret detected in staged changes."
+  exit 1
+}
