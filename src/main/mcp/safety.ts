@@ -238,6 +238,10 @@ export const CONFIRMATION_MESSAGES: Record<string, string> = {
   // wp_eval is Tier 2 — logged but no confirmation required on local sites
   clean_database_items: 'This will permanently delete database rows. Always run with dry_run=true first.',
   wp_import_database: "This will completely overwrite the site's existing database. This cannot be undone.",
+  // T-INJECTION: freeform/overwrite Tier-2 tools require approval because a prompt-injected model
+  // (fed untrusted WordPress content) could be steered into calling them.
+  wp_eval: 'This runs arbitrary PHP on the site. Approve only if you asked for this — untrusted site content can try to trigger it.',
+  wp_search_replace: 'This rewrites values across the database in bulk and can be hard to undo. Approve only if you asked for this.',
   wpe_delete_account_user: 'This will revoke WP Engine portal access for this user.',
   wpe_delete_site: 'This will delete the WP Engine site and ALL its installs (production, staging, development).',
   wpe_delete_install: 'This will permanently delete this WP Engine environment and all its content. This cannot be undone.',
@@ -303,6 +307,15 @@ export const PRE_CHECKS: Record<string, string[]> = {
 };
 
 /**
+ * Freeform/overwrite Tier-2 tools that must get explicit human approval before running from the
+ * chat assistant (T-INJECTION). These execute caller-composed syntax (arbitrary PHP) or overwrite
+ * data in bulk, so a prompt-injected model — fed untrusted WordPress content — could be steered
+ * into calling them. They stay Tier 2 (no confirmation TOKEN gate), but the chat surface routes
+ * them through the same approval UI as Tier 3; agents refuse them unless sandbox-scoped.
+ */
+export const APPROVAL_REQUIRED_TOOLS = new Set<string>(['wp_eval', 'wp_search_replace']);
+
+/**
  * Returns the safety configuration for a tool.
  * Tools not in TIER_OVERRIDES default to Tier 2 (modify).
  */
@@ -310,6 +323,14 @@ export function getToolSafety(toolName: string): SafetyConfig {
   const tier = TIER_OVERRIDES[toolName] ?? 2;
 
   if (tier < 3) {
+    // Freeform/overwrite Tier-2 tools carry a confirmation message so the chat approval card can
+    // explain the risk, even though they are not Tier 3 (T-INJECTION).
+    if (APPROVAL_REQUIRED_TOOLS.has(toolName)) {
+      return {
+        tier,
+        confirmationMessage: CONFIRMATION_MESSAGES[toolName] ?? 'This action may have significant consequences.',
+      };
+    }
     return { tier };
   }
 
@@ -318,6 +339,14 @@ export function getToolSafety(toolName: string): SafetyConfig {
     confirmationMessage: CONFIRMATION_MESSAGES[toolName] ?? 'This action may have significant consequences.',
     preChecks: PRE_CHECKS[toolName],
   };
+}
+
+/**
+ * True if a tool must get explicit human approval before running from the chat assistant: every
+ * Tier-3 tool, plus the freeform/overwrite Tier-2 tools in APPROVAL_REQUIRED_TOOLS.
+ */
+export function requiresHumanApproval(toolName: string): boolean {
+  return getToolSafety(toolName).tier === 3 || APPROVAL_REQUIRED_TOOLS.has(toolName);
 }
 
 // ---------------------------------------------------------------------------

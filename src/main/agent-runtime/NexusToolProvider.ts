@@ -3,7 +3,7 @@ import type { NexusServices } from '../mcp/types';
 import type { ToolProvider } from '../agent-sdk/types';
 import type { ProviderToolDefinition } from '../chat/providers/types';
 import type { EventLog } from '../logging/eventLog';
-import { getToolSafety } from '../mcp/safety';
+import { getToolSafety, APPROVAL_REQUIRED_TOOLS } from '../mcp/safety';
 import { isMutatingTool, mutationTarget } from './toolEvents';
 
 /** What an agent run needs in order for its tool calls to appear in the structured log. */
@@ -165,24 +165,23 @@ export class NexusToolProvider implements ToolProvider {
       );
     }
 
-    // Enforce wp_eval site scope: restrict wp_eval to registered sandbox sites to prevent
-    // prompt-injected code from targeting unrelated local sites. This gate must NOT be
-    // conditioned on `allowedTools`: NexusToolProvider is only ever the agent path (constructed
-    // solely in buildAgentContext), and an agent that declares no tools list is the MORE
-    // privileged caller (every tool allowed), so it is exactly the one that must still be scoped.
-    // Guarding this with `&& this.allowedTools` let an unrestricted agent run arbitrary PHP
-    // fleet-wide. Shipped agents that use wp_eval (security-sentinel, seo-insights) declare a
+    // Enforce sandbox site scope for the freeform/overwrite tools (wp_eval, wp_search_replace):
+    // restrict them to registered sandbox sites so prompt-injected code cannot target unrelated
+    // sites (T-INJECTION — chat gates these behind human approval; agents have no human, so the
+    // gate is a hard sandbox scope). This must NOT be conditioned on `allowedTools`:
+    // NexusToolProvider is only ever the agent path (constructed solely in buildAgentContext), and
+    // an agent that declares no tools list is the MORE privileged caller (every tool allowed), so
+    // it is exactly the one that must still be scoped. Shipped agents that use these declare a
     // tools list AND registerSandbox(), so they are unaffected.
-    if (name === 'wp_eval') {
-      // No sandbox registered means no site is authorized for wp_eval at all -- this must
-      // refuse, not fall through to "any site is fine" the way an empty sandboxSiteIds set
-      // used to.
+    if (APPROVAL_REQUIRED_TOOLS.has(name)) {
+      // No sandbox registered means no site is authorized at all -- this must refuse, not fall
+      // through to "any site is fine" the way an empty sandboxSiteIds set used to.
       if (this.sandboxSiteIds.size === 0) {
-        throw new Error('wp_eval refused: no sandbox site registered for this agent');
+        throw new Error(`${name} refused: no sandbox site registered for this agent`);
       }
       const targetSite = args.site as string | undefined;
       if (targetSite && !this.sandboxSiteIds.has(targetSite)) {
-        throw new Error(`wp_eval: site "${targetSite}" is not in this agent's registered sandbox scope`);
+        throw new Error(`${name}: site "${targetSite}" is not in this agent's registered sandbox scope`);
       }
     }
 

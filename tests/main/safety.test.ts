@@ -1,4 +1,30 @@
-import { getToolSafety, TIER_OVERRIDES, CONFIRMATION_MESSAGES, PRE_CHECKS, ConfirmationManager, SafetyTier } from '../../src/main/mcp/safety';
+import { getToolSafety, TIER_OVERRIDES, CONFIRMATION_MESSAGES, PRE_CHECKS, ConfirmationManager, SafetyTier, requiresHumanApproval, APPROVAL_REQUIRED_TOOLS } from '../../src/main/mcp/safety';
+
+describe('requiresHumanApproval — prompt-injection gate for freeform Tier-2 tools (T-INJECTION)', () => {
+  it('requires approval for the freeform/overwrite Tier-2 tools', () => {
+    expect(requiresHumanApproval('wp_eval')).toBe(true);
+    expect(requiresHumanApproval('wp_search_replace')).toBe(true);
+    expect(APPROVAL_REQUIRED_TOOLS.has('wp_eval')).toBe(true);
+    expect(APPROVAL_REQUIRED_TOOLS.has('wp_search_replace')).toBe(true);
+  });
+
+  it('still requires approval for every Tier-3 tool', () => {
+    expect(requiresHumanApproval('wpe_delete_install')).toBe(true);
+    expect(requiresHumanApproval('local_wpe_push')).toBe(true);
+  });
+
+  it('does not gate ordinary Tier-1/Tier-2 tools', () => {
+    expect(requiresHumanApproval('wp_plugin_list')).toBe(false); // Tier 1
+    expect(requiresHumanApproval('local_start_site')).toBe(false); // Tier 2, not freeform
+    expect(requiresHumanApproval('wp_option_get')).toBe(false);
+  });
+
+  it('every approval-required tool has a confirmation message explaining the risk', () => {
+    for (const tool of APPROVAL_REQUIRED_TOOLS) {
+      expect(getToolSafety(tool).confirmationMessage).toBeDefined();
+    }
+  });
+});
 
 describe('Safety Tiers', () => {
   describe('TIER_OVERRIDES', () => {

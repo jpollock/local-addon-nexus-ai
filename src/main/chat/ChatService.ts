@@ -2,7 +2,7 @@ import type { ChatMessage, ChatStreamEvent, ToolCallRequest } from '../../common
 import { CHAT_DEFAULTS, IPC_CHANNELS } from '../../common/constants';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
-import { getToolSafety } from '../mcp/safety';
+import { getToolSafety, requiresHumanApproval } from '../mcp/safety';
 import { maskToolResultsForProvider } from '../mcp/pii';
 import { resolveSite } from '../mcp/site-resolver';
 import type { SiteStructure } from '../../common/types';
@@ -326,8 +326,10 @@ export class ChatService {
 
     const safety = getToolSafety(toolCall.name);
 
-    // Tier 3: requires UI approval
-    if (safety.tier === 3) {
+    // Requires human approval: every Tier-3 tool, plus the freeform/overwrite Tier-2 tools
+    // (wp_eval, wp_search_replace) that a prompt-injected model — fed untrusted site content — could
+    // be steered into calling (T-INJECTION). Both route through the same approval card below.
+    if (requiresHumanApproval(toolCall.name)) {
       this.emit(sessionId(session), {
         type: 'tool_call_approval_needed',
         id: toolCall.id,

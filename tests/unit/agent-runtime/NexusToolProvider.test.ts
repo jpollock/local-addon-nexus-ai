@@ -232,4 +232,25 @@ describe('NexusToolProvider — wp_eval sandbox scoping', () => {
     );
     expect(await provider.invoke('wp_eval', { site: 'my-site' })).toBe('ok');
   });
+
+  // T-INJECTION: the same sandbox gate covers wp_search_replace (a bulk-overwrite freeform tool),
+  // not just wp_eval — an agent must not be steerable into rewriting an arbitrary site's DB.
+  it('refuses wp_search_replace for an agent with no registered sandbox', async () => {
+    const registry = makeRegistry({ wp_search_replace: () => 'replaced' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['wp_search_replace']);
+    await expect(provider.invoke('wp_search_replace', { site: 'any', search: 'a', replace: 'b' })).rejects.toThrow(
+      'wp_search_replace refused: no sandbox site registered for this agent'
+    );
+    expect(registry.call).not.toHaveBeenCalled();
+  });
+
+  it('allows wp_search_replace only against a registered sandbox site', async () => {
+    const registry = makeRegistry({ wp_search_replace: () => 'replaced' });
+    const provider = new NexusToolProvider(registry as any, fakeServices, ['wp_search_replace']);
+    provider.registerSandbox('my-site');
+    await expect(provider.invoke('wp_search_replace', { site: 'other', search: 'a', replace: 'b' })).rejects.toThrow(
+      /not in this agent's registered sandbox scope/
+    );
+    expect(await provider.invoke('wp_search_replace', { site: 'my-site', search: 'a', replace: 'b' })).toBe('replaced');
+  });
 });
