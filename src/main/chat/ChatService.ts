@@ -3,6 +3,7 @@ import { CHAT_DEFAULTS, IPC_CHANNELS } from '../../common/constants';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import { getToolSafety } from '../mcp/safety';
+import { maskToolResultsForProvider } from '../mcp/pii';
 import { resolveSite } from '../mcp/site-resolver';
 import type { SiteStructure } from '../../common/types';
 import { getProvider } from './providers/index';
@@ -189,7 +190,10 @@ export class ChatService {
 
       try {
         const stream = provider.streamChat(
-          session.messages,
+          // P0-5: mask emails/IPs in tool results on the way OUT to the provider. A copy — the
+          // stored session (and the rendered transcript) keep real values; only the provider-bound
+          // messages are scrubbed.
+          maskToolResultsForProvider(session.messages),
           tools,
           config,
           session.abortController.signal,

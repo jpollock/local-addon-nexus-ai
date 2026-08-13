@@ -1,4 +1,4 @@
-import { maskPii } from '../../../src/main/mcp/pii';
+import { maskPii, maskToolResultsForProvider } from '../../../src/main/mcp/pii';
 
 describe('maskPii — outbound-to-LLM PII scrubber (P1-6)', () => {
   it('masks an email address', () => {
@@ -27,5 +27,34 @@ describe('maskPii — outbound-to-LLM PII scrubber (P1-6)', () => {
     const blob = '| admin_email | site |\n| owner@acme.com | acme |';
     expect(maskPii(blob)).not.toContain('owner@acme.com');
     expect(maskPii(blob)).toContain('acme'); // non-email cell survives
+  });
+});
+
+describe('maskToolResultsForProvider — global backstop on the tool-result path (P0-5)', () => {
+  it('masks tool messages but leaves user and assistant messages untouched', () => {
+    const messages = [
+      { role: 'user', content: 'email admin@x.com about it' },
+      { role: 'assistant', content: 'sure' },
+      { role: 'tool', content: JSON.stringify({ users: [{ email: 'a@customer.com' }] }) },
+    ];
+    const out = maskToolResultsForProvider(messages);
+    expect(out[0].content).toBe('email admin@x.com about it'); // user input is the user's own choice
+    expect(out[1].content).toBe('sure');
+    expect(out[2].content).toContain('[email redacted]');
+    expect(out[2].content).not.toContain('a@customer.com');
+  });
+
+  it('does not mutate the input — the stored session/transcript keeps real values', () => {
+    const toolMsg = { role: 'tool', content: 'a@customer.com' };
+    const messages = [toolMsg];
+    const out = maskToolResultsForProvider(messages);
+    expect(messages[0].content).toBe('a@customer.com'); // original preserved
+    expect(out[0]).not.toBe(toolMsg); // masked copy is a new object
+    expect(out[0].content).toContain('[email redacted]');
+  });
+
+  it('tolerates tool messages with missing content', () => {
+    const messages = [{ role: 'tool' } as any, { role: 'assistant', content: undefined } as any];
+    expect(() => maskToolResultsForProvider(messages)).not.toThrow();
   });
 });

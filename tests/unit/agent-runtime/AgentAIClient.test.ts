@@ -48,6 +48,36 @@ describe('AgentAIClient', () => {
     expect(result).toBe('done');
   });
 
+  it('masks PII in tool results before they reach the provider (P0-5 backstop)', async () => {
+    const seen: any[][] = [];
+    let call = 0;
+    const provider = {
+      streamChat: async function* (messages: any[]) {
+        seen.push(messages);
+        if (call++ === 0) {
+          yield { type: 'tool_call_start', id: 't1', name: 'wp_user_list' };
+          yield { type: 'tool_call_end', id: 't1', name: 'wp_user_list', arguments: {} };
+          yield { type: 'done', stopReason: 'tool_use' };
+        } else {
+          yield { type: 'token', text: 'ok' };
+          yield { type: 'done', stopReason: 'end_turn' };
+        }
+      },
+    };
+    const toolProvider = {
+      getProviderToolDefinitions: () => [],
+      invoke: jest.fn().mockResolvedValue({ users: [{ email: 'admin@customer.com' }] }),
+    };
+    const client = new AgentAIClient(provider as any, { model: 'm' }, toolProvider as any);
+    await client.run('list users');
+
+    // The second-turn outbound messages carry the tool result — its email must be masked.
+    const toolMsg = seen[1].find((m: any) => m.role === 'tool');
+    expect(toolMsg).toBeDefined();
+    expect(toolMsg.content).toContain('[email redacted]');
+    expect(toolMsg.content).not.toContain('admin@customer.com');
+  });
+
   it('throws AgentAILoopError when maxTurns exceeded', async () => {
     const loopProvider = {
       streamChat: async function* () {

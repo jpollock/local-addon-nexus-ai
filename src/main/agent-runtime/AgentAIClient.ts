@@ -4,6 +4,7 @@ import type { AIClient } from '../agent-sdk/types';
 import { AgentAILoopError } from '../agent-sdk/types';
 import type { NexusToolProvider, ToolEventContext } from './NexusToolProvider';
 import { estimateCostUsd } from '../logging/modelPricing';
+import { maskToolResultsForProvider } from '../mcp/pii';
 import type { TranscriptWriter } from '../logging/transcript';
 import { randomUUID } from 'crypto';
 
@@ -142,7 +143,10 @@ export class AgentAIClient implements AIClient {
       const startedAt = Date.now();
       let response;
       try {
-        response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
+        // P0-5: mask emails/IPs in tool results on the way OUT to the provider. A copy — the agent
+        // transcript and the local message log keep real values; only the provider-bound copy is
+        // scrubbed.
+        response = await collectStream(this.provider.streamChat(maskToolResultsForProvider(messages), tools, config, signal));
       } catch (err: unknown) {
         this.emitLlmError(config.model, turn + 1, startedAt, err instanceof Error ? err.message : String(err));
         throw err;

@@ -27,3 +27,25 @@ export function maskPii(text: string): string {
     .replace(EMAIL_RE, '[email redacted]')
     .replace(IPV4_RE, '[ip redacted]');
 }
+
+/**
+ * Global backstop for the tool-result → LLM path (P0-5). Per-handler masking (fleet_sql,
+ * get_account_users, …) is whack-a-mole: any tool NOT hand-instrumented sends its output verbatim
+ * to the provider. Instead, apply maskPii to the content of every `tool` message in one place — at
+ * the single provider-send site of ChatService and AgentAIClient — so no tool can hand emails/IPs
+ * to Anthropic/OpenAI/Google regardless of which handler produced it.
+ *
+ * Returns a COPY: only the provider-bound messages are masked, so the stored chat session and the
+ * agent transcript keep real values (the user still sees an email they explicitly asked for; the
+ * provider never receives it). User/assistant/system messages are left untouched — user-typed
+ * content is the user's own choice, not harvested site data.
+ */
+export function maskToolResultsForProvider<M extends { role: string; content?: string | null }>(
+  messages: M[],
+): M[] {
+  return messages.map((m) =>
+    m.role === 'tool' && typeof m.content === 'string'
+      ? { ...m, content: maskPii(m.content) }
+      : m,
+  );
+}
