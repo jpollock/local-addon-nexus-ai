@@ -15,3 +15,14 @@ export interface SiteLink {
   /** Epoch ms when this link was last confirmed against CAPI, or null if never. */
   verifiedAt: number | null;
 }
+
+export interface UnresolvedSite {
+  localSiteId: string;
+  localSiteName: string;
+}
+
+export interface ReconcileReport {
+  linked: SiteLink[];
+  /** Sites we could not attach to an install — these need a human to link them. */
+  unresolved: UnresolvedSite[];
+}
