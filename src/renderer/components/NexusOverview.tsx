@@ -34,10 +34,12 @@ import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
 import { InboxTab } from './tabs/InboxTab';
 import { SitesTab, BULK_CONFIRM_THRESHOLD, type BulkJobView } from './tabs/SitesTab';
+import { FleetTab } from './tabs/FleetTab';
 // Types only — a value import would pull main-process code into the renderer
 // bundle. Precedent: credentials/ConnectionsPanel.tsx:3.
 import type { SiteRow } from '../../main/fleet/siteRows';
 import type { PopulationCount } from '../../main/fleet/FleetCounts';
+import type { FleetSiteGroup, UnresolvedSite } from '../../main/fleet/types';
 import type { DashboardStats, McpInfo, StartupStatus, AiProxyInfo, FleetVersionEntry, FleetSummaryData } from './tabs/shared/types';
 import type { InboxItem } from '../../main/inbox/types';
 // Local's native notification components
@@ -110,6 +112,7 @@ interface SetupAIResult {
  */
 const TABS = [
   { key: 'sites',      label: 'Sites' },
+  { key: 'fleet',      label: 'Fleet' },
   { key: 'inbox',      label: 'Inbox' },
   { key: 'activity',   label: 'Activity' },
   { key: 'agents',     label: 'Agents' },
@@ -197,6 +200,11 @@ interface NexusOverviewState {
   inboxCounts: { decide: number; problem: number; know: number };
   inboxPausedSources: string[];
   inboxRecentlyDecided: InboxItem[];
+  // Fleet
+  fleetLoaded: boolean;
+  fleetFailed: boolean;
+  fleetGroups: FleetSiteGroup[];
+  fleetUnresolved: UnresolvedSite[];
 }
 
 // -- Shared styles --
@@ -325,6 +333,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     inboxCounts: { decide: 0, problem: 0, know: 0 },
     inboxPausedSources: [],
     inboxRecentlyDecided: [],
+    fleetLoaded: false,
+    fleetFailed: false,
+    fleetGroups: [],
+    fleetUnresolved: [],
   };
 
   componentDidMount(): void {
@@ -495,7 +507,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       // Specs 4 and 5 both appended here and conflicted on the same slot. The
       // resolution keeps both, and the two trailing entries below are in the
       // SAME order as the two trailing names here. Do not reorder one alone.
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus, inboxResult, siteRowsResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, fleetSummaryResult, wpeAccounts, startupStatus, inboxResult, siteRowsResult, fleetListResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -506,13 +518,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
         ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.GET_STARTUP_STATUS),
-        // These two are positionally bound to `inboxResult` and `siteRowsResult`
-        // above, in this order. A rejected invoke would reject the whole
-        // Promise.all and blank every other panel, so each resolves to the same
-        // failure shape its handler returns. `success: false` is NOT an empty
-        // result — SitesTab renders "couldn't read your sites" for it.
+        // These three are positionally bound to `inboxResult`, `siteRowsResult`,
+        // and `fleetListResult` above, in this order. A rejected invoke would
+        // reject the whole Promise.all and blank every other panel, so each
+        // resolves to the same failure shape its handler returns.
         ipc.invoke(IPC_CHANNELS.GET_INBOX).catch(() => ({ success: false })),
         ipc.invoke(IPC_CHANNELS.GET_SITE_ROWS).catch(() => ({ success: false, rows: [], total: { count: 0, scope: '' } })),
+        ipc.invoke(IPC_CHANNELS.GET_FLEET_LIST).catch(() => ({ success: false, groups: [], unresolved: [] })),
       ]);
       if (!this.mounted) return;
 
@@ -592,6 +604,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         inboxCounts: inboxResult?.counts ?? { decide: 0, problem: 0, know: 0 },
         inboxPausedSources: inboxResult?.pausedSources ?? [],
         inboxRecentlyDecided: inboxResult?.recentlyDecided ?? [],
+        fleetLoaded: true,
+        fleetFailed: !fleetListResult?.success,
+        fleetGroups: fleetListResult?.groups ?? [],
+        fleetUnresolved: fleetListResult?.unresolved ?? [],
       });
 
       // Push pending counts to agentStore only when successfully read.
@@ -1019,6 +1035,13 @@ renderTabBar(): React.ReactNode {
           await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RESUME, { agentId });
           void this.fetchAll();
         },
+        onRetry: () => { void this.fetchAll(); },
+      });
+      case 'fleet': return React.createElement(FleetTab, {
+        loaded: this.state.fleetLoaded,
+        failed: this.state.fleetFailed,
+        groups: this.state.fleetGroups,
+        unresolved: this.state.fleetUnresolved,
         onRetry: () => { void this.fetchAll(); },
       });
       // Progress readouts sit BELOW the table rather than inside SitesTab, so

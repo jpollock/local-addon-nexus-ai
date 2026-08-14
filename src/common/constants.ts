@@ -187,6 +187,7 @@ export const IPC_CHANNELS = {
   // Fleet Intelligence (Dashboard panels)
   GET_FLEET_SUMMARY: `${ADDON_PREFIX}:get-fleet-summary`,
   GET_FLEET_PLUGINS: `${ADDON_PREFIX}:get-fleet-plugins`,
+  GET_FLEET_LIST: `${ADDON_PREFIX}:get-fleet-list`,
 
   // WPE Backup
   WPE_CREATE_BACKUP: `${ADDON_PREFIX}:wpe:create-backup`,

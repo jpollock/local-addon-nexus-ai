@@ -1,0 +1,161 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`FleetTab snapshot 1`] = `
+{
+  "children": [
+    {
+      "children": "1 site · everything else is quiet",
+      "key": null,
+      "props": {
+        "style": {
+          "color": "var(--nxai-card-sub)",
+          "fontSize": "13px",
+          "lineHeight": "1.4",
+          "marginBottom": "16px",
+        },
+      },
+      "type": "div",
+    },
+    [
+      {
+        "children": [
+          {
+            "children": "Example Site",
+            "key": null,
+            "props": {
+              "style": {
+                "color": "var(--nxai-card-text)",
+                "fontSize": "14px",
+                "fontWeight": 600,
+                "marginBottom": "8px",
+              },
+            },
+            "type": "div",
+          },
+          {
+            "children": [
+              {
+                "children": null,
+                "key": null,
+                "props": {
+                  "style": {
+                    "backgroundColor": "var(--nxai-status-ok)",
+                    "borderRadius": "50%",
+                    "flexShrink": 0,
+                    "height": "6px",
+                    "width": "6px",
+                  },
+                },
+                "type": "span",
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": "examplesite",
+                        "key": null,
+                        "props": {
+                          "style": {
+                            "fontWeight": 500,
+                          },
+                        },
+                        "type": "span",
+                      },
+                      {
+                        "children": "Prod",
+                        "key": null,
+                        "props": {
+                          "style": {
+                            "backgroundColor": "var(--nxai-section-bg)",
+                            "border": "1px solid var(--nxai-card-border)",
+                            "borderRadius": "4px",
+                            "color": "var(--nxai-card-sub)",
+                            "fontSize": "11px",
+                            "fontWeight": 500,
+                            "marginRight": "6px",
+                            "padding": "2px 8px",
+                          },
+                        },
+                        "type": "span",
+                      },
+                      null,
+                    ],
+                    "key": null,
+                    "props": {
+                      "style": {
+                        "alignItems": "center",
+                        "display": "flex",
+                        "gap": "6px",
+                        "marginBottom": "2px",
+                      },
+                    },
+                    "type": "div",
+                  },
+                  {
+                    "children": "example.com",
+                    "key": null,
+                    "props": {
+                      "style": {
+                        "color": "var(--nxai-card-sub)",
+                        "fontSize": "12px",
+                      },
+                    },
+                    "type": "div",
+                  },
+                ],
+                "key": null,
+                "props": {
+                  "style": {
+                    "flex": 1,
+                  },
+                },
+                "type": "div",
+              },
+              {
+                "children": "checked just now",
+                "key": null,
+                "props": {
+                  "style": {
+                    "color": "var(--nxai-card-sub)",
+                    "fontFamily": "monospace",
+                    "fontSize": "11px",
+                  },
+                },
+                "type": "span",
+              },
+            ],
+            "key": "i1",
+            "props": {
+              "style": {
+                "alignItems": "center",
+                "color": "var(--nxai-card-text)",
+                "display": "flex",
+                "fontSize": "13px",
+                "gap": "10px",
+                "padding": "8px 12px",
+              },
+            },
+            "type": "div",
+          },
+        ],
+        "key": "s1",
+        "props": {
+          "style": {
+            "marginBottom": "20px",
+          },
+        },
+        "type": "div",
+      },
+    ],
+    null,
+  ],
+  "key": null,
+  "props": {
+    "style": {
+      "padding": "4px 0",
+    },
+  },
+  "type": "div",
+}
+`;

@@ -828,6 +828,38 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.GET_FLEET_LIST, async () => {
+    try {
+      const fleetAssembler = deps.nexusServices?.fleetAssembler;
+      const siteLinkResolver = deps.nexusServices?.siteLinkResolver;
+
+      if (!fleetAssembler || !siteLinkResolver) {
+        return {
+          success: false,
+          groups: [],
+          unresolved: [],
+        };
+      }
+
+      const groups = await fleetAssembler.listFleet();
+      const report = siteLinkResolver.getLastReport();
+      const unresolved = report?.unresolved ?? [];
+
+      return {
+        success: true,
+        groups,
+        unresolved,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-fleet-list failed:', (err as Error).message);
+      return {
+        success: false,
+        groups: [],
+        unresolved: [],
+      };
+    }
+  });
+
   // Sites log-processor already has a bound S3 source for (agents/log-processor/db.ts's
   // `sources` table). The site scope picker for this agent only offers these — a site in scope
   // with no bound source would silently do nothing on the nightly cron (see run()'s
