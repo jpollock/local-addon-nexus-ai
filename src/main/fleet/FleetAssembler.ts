@@ -14,6 +14,7 @@ interface GraphSiteRow {
   wpe_site_id: string | null;
   domain: string | null;
   last_sync_at: number | null;
+  updated_at: number | null;
 }
 
 interface GraphLike {
@@ -23,27 +24,54 @@ interface GraphLike {
 /**
  * Nothing stale is ever presented as current — every install carries the level
  * and age of the data behind it. See the design doc's provenance rule.
+ *
+ * Four rungs, because there are four genuinely different states:
+ *
+ * - `live`         — reached the install itself within the live window.
+ * - `configured`   — reached it, but a while ago.
+ * - `external-api` — never reached the install; everything shown came from
+ *                    CAPI. This is the normal state for a WPE customer with
+ *                    auto-sync off or no SSH key, and it is the only rung that
+ *                    `syncFromCAPI` (the Tier-1 sync that always runs) can
+ *                    produce, since it writes no `last_sync_at`.
+ * - `scanned`      — nothing at all: no sync, not even a CAPI row timestamp.
+ *
+ * Collapsing `external-api` into `scanned` was the bug: a row displaying a
+ * name, environment and domain CAPI returned seconds ago cannot honestly say
+ * we have never reached it.
  */
-export function deriveProvenance(lastSyncAt: number | null, now: number): DataProvenance {
-  if (lastSyncAt === null) {
+export function deriveProvenance(
+  lastSyncAt: number | null,
+  updatedAt: number | null,
+  now: number,
+): DataProvenance {
+  if (lastSyncAt !== null) {
+    const ageSeconds = Math.max(0, Math.round((now - lastSyncAt) / 1000));
+    if (now - lastSyncAt <= LIVE_WINDOW_MS) {
+      return { level: 'live', source: 'WPE sync', ageSeconds, caveat: null };
+    }
     return {
-      level: 'scanned',
-      source: 'none',
-      ageSeconds: null,
-      caveat: "We've never successfully reached this site.",
+      level: 'configured',
+      source: 'last WPE sync',
+      ageSeconds,
+      caveat: 'Values are from the last sync, not observed just now.',
     };
   }
 
-  const ageSeconds = Math.max(0, Math.round((now - lastSyncAt) / 1000));
-  if (now - lastSyncAt <= LIVE_WINDOW_MS) {
-    return { level: 'live', source: 'WPE sync', ageSeconds, caveat: null };
+  if (updatedAt !== null) {
+    return {
+      level: 'external-api',
+      source: 'WP Engine API',
+      ageSeconds: Math.max(0, Math.round((now - updatedAt) / 1000)),
+      caveat: "From the WP Engine API — we've not reached the install itself.",
+    };
   }
 
   return {
-    level: 'configured',
-    source: 'last WPE sync',
-    ageSeconds,
-    caveat: 'Values are from the last sync, not observed just now.',
+    level: 'scanned',
+    source: 'none',
+    ageSeconds: null,
+    caveat: "We've never successfully reached this site.",
   };
 }
 
@@ -59,6 +87,10 @@ export class FleetAssembler {
     const rows = (await this.graph.listSites({ source: 'wpe', active_only: true })) as GraphSiteRow[];
     const now = Date.now();
     const groups = new Map<string, FleetSiteGroup>();
+    // Group keys whose label already came from a production install. listSites
+    // orders by install name, so first-seen alone would label a site after
+    // whichever environment sorts first — 'devjeremy' before 'wwwjeremy'.
+    const namedFromProduction = new Set<string>();
 
     for (const row of rows) {
       const installId = row.remote_install_id ?? row.id;
@@ -79,13 +111,17 @@ export class FleetAssembler {
               linkSource: attached.linkSource,
             }
           : null,
-        provenance: deriveProvenance(row.last_sync_at, now),
+        provenance: deriveProvenance(row.last_sync_at, row.updated_at ?? null, now),
       };
 
       const key = row.wpe_site_id ?? installId;
+      const isProduction = row.environment === 'production';
       const existing = groups.get(key);
       if (existing) {
         existing.installs.push(install);
+        if (isProduction && !namedFromProduction.has(key)) {
+          existing.name = row.domain ?? row.name;
+        }
       } else {
         groups.set(key, {
           wpeSiteId: row.wpe_site_id,
@@ -93,6 +129,7 @@ export class FleetAssembler {
           installs: [install],
         });
       }
+      if (isProduction) namedFromProduction.add(key);
     }
 
     return Array.from(groups.values());

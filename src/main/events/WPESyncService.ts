@@ -756,6 +756,11 @@ export class WPESyncService {
       const capiWpVersion  = i.wp_version  ?? i.wpVersion  ?? null;
       const capiPhpVersion = i.php_version ?? i.phpVersion ?? null;
       const capiDomain     = (i.primary_domain ?? i.primaryDomain) || `${i.name}.wpengine.com`;
+      // The WPE site container UUID — the grain the fleet list groups installs
+      // on (prod/staging/dev under one site). Only syncAllWPESites used to write
+      // it, so a machine that had only ever run this Tier-1 sync saw every
+      // install as a group of one.
+      const capiSiteId     = i.site?.id ?? null;
 
       if (isNew) {
         newInstalls.push(i.name);
@@ -774,11 +779,15 @@ export class WPESyncService {
           environment: (i.environment as 'production' | 'staging' | 'development') ?? 'production',
           remote_install_id: i.id,
           remote_domain: capiDomain,
+          wpe_site_id: capiSiteId ?? undefined,
         });
         updatedFields++;
       } else {
         // Update CAPI fields on existing record.
         // wp_version and php_version use COALESCE so SSH-synced values are not overwritten.
+        // wpe_site_id takes the CAPI value when there is one (CAPI is its only
+        // source) and keeps the stored one otherwise — the same precedence
+        // upsertSite applies.
         if (db) {
           const result = db.prepare(`
             UPDATE sites SET
@@ -786,9 +795,10 @@ export class WPESyncService {
               php_version = COALESCE(php_version, ?),
               account_id  = COALESCE(account_id, ?),
               domain = CASE WHEN domain = '' OR domain IS NULL THEN ? ELSE domain END,
+              wpe_site_id = COALESCE(?, wpe_site_id),
               updated_at = ?
             WHERE id = ?
-          `).run(capiWpVersion, capiPhpVersion, i.account?.id ?? null, capiDomain, now, siteId);
+          `).run(capiWpVersion, capiPhpVersion, i.account?.id ?? null, capiDomain, capiSiteId, now, siteId);
           if (result.changes > 0) updatedFields++;
         }
       }

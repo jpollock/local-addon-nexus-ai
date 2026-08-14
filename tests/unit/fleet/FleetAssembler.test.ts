@@ -58,6 +58,32 @@ describe('FleetAssembler', () => {
     expect(groups[1].installs.map((i) => i.installName)).toEqual(['other']);
   });
 
+  it('labels a group with the production domain, not whichever install sorts first', async () => {
+    // listSites orders by install name, so 'devjeremy' arrives before
+    // 'wwwjeremy'. First-seen naming would label the site 'dev.jeremy.com'.
+    const graph = graphWith([
+      { id: 'i1', name: 'devjeremy', remote_install_id: 'inst-1', environment: 'development', wpe_site_id: 'site-A', domain: 'dev.jeremy.com', last_sync_at: NOW },
+      { id: 'i2', name: 'stgjeremy', remote_install_id: 'inst-2', environment: 'staging', wpe_site_id: 'site-A', domain: 'stg.jeremy.com', last_sync_at: NOW },
+      { id: 'i3', name: 'wwwjeremy', remote_install_id: 'inst-3', environment: 'production', wpe_site_id: 'site-A', domain: 'jeremy.com', last_sync_at: NOW },
+    ]);
+
+    const [group] = await new FleetAssembler(graph, store, SITE_DATA).listFleet();
+
+    expect(group.name).toBe('jeremy.com');
+    expect(group.installs).toHaveLength(3);
+  });
+
+  it('falls back to the first install seen when a group has no production', async () => {
+    const graph = graphWith([
+      { id: 'i1', name: 'devjeremy', remote_install_id: 'inst-1', environment: 'development', wpe_site_id: 'site-A', domain: 'dev.jeremy.com', last_sync_at: NOW },
+      { id: 'i2', name: 'stgjeremy', remote_install_id: 'inst-2', environment: 'staging', wpe_site_id: 'site-A', domain: 'stg.jeremy.com', last_sync_at: NOW },
+    ]);
+
+    const [group] = await new FleetAssembler(graph, store, SITE_DATA).listFleet();
+
+    expect(group.name).toBe('dev.jeremy.com');
+  });
+
   it('attaches a linked sandbox to its install', async () => {
     store.put({
       localSiteId: 'local-1',
@@ -87,11 +113,14 @@ describe('FleetAssembler', () => {
     expect(group.installs[0].sandbox).toBeNull();
   });
 
-  it('derives provenance from last_sync_at', async () => {
+  it('derives provenance from last_sync_at, falling back to the CAPI row age', async () => {
     const graph = graphWith([
-      { id: 'i1', name: 'fresh', remote_install_id: 'inst-1', environment: 'production', wpe_site_id: 'site-A', domain: 'a.com', last_sync_at: NOW - 60_000 },
-      { id: 'i2', name: 'stale', remote_install_id: 'inst-2', environment: 'production', wpe_site_id: 'site-B', domain: 'b.com', last_sync_at: NOW - 4 * 86_400_000 },
-      { id: 'i3', name: 'never', remote_install_id: 'inst-3', environment: 'production', wpe_site_id: 'site-C', domain: 'c.com', last_sync_at: null },
+      { id: 'i1', name: 'fresh', remote_install_id: 'inst-1', environment: 'production', wpe_site_id: 'site-A', domain: 'a.com', last_sync_at: NOW - 60_000, updated_at: NOW },
+      { id: 'i2', name: 'stale', remote_install_id: 'inst-2', environment: 'production', wpe_site_id: 'site-B', domain: 'b.com', last_sync_at: NOW - 4 * 86_400_000, updated_at: NOW },
+      // The state the Tier-1 CAPI sync always produces: a row with fields CAPI
+      // returned, and no SSH sync behind it.
+      { id: 'i3', name: 'capionly', remote_install_id: 'inst-3', environment: 'production', wpe_site_id: 'site-C', domain: 'c.com', last_sync_at: null, updated_at: NOW - 120_000 },
+      { id: 'i4', name: 'never', remote_install_id: 'inst-4', environment: 'production', wpe_site_id: 'site-D', domain: 'd.com', last_sync_at: null, updated_at: null },
     ]);
 
     const groups = await new FleetAssembler(graph, store, SITE_DATA).listFleet();
@@ -102,6 +131,9 @@ describe('FleetAssembler', () => {
     expect(byName.fresh.level).toBe('live');
     expect(byName.fresh.ageSeconds).toBe(60);
     expect(byName.stale.level).toBe('configured');
+    expect(byName.capionly.level).toBe('external-api');
+    expect(byName.capionly.ageSeconds).toBe(120);
+    expect(byName.capionly.caveat).toMatch(/WP Engine API/i);
     expect(byName.never.level).toBe('scanned');
     expect(byName.never.ageSeconds).toBeNull();
     expect(byName.never.caveat).toBeTruthy();
