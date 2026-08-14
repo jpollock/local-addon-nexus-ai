@@ -49,11 +49,27 @@ export const wpePullHandler: McpToolHandler = {
       return error(`Site "${site.name}" is ${status}. Start it first with local_start_site.`);
     }
 
+    // Check if wpePull service is available
+    if (!services.localServices?.wpePull) {
+      return error('WPE Pull service not available in Local.');
+    }
+
+    // Get WPE connection from site
+    const rawSite = services.localServices!.resolveSiteObject(site.id) as any;
+    const wpeConnection = rawSite?.hostConnections
+      ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
+      : null;
+
+    // I5: Check connection BEFORE running backup — an unlinked site should fail fast
+    if (!wpeConnection && !args.remote_install_id) {
+      return error(`Site "${site.name}" is not linked to a WP Engine environment. Link it first or provide remote_install_id.`);
+    }
+
     // BACKUP GATE: Create a verified local backup before overwriting.
     // This adds 1–5 minutes to the pull operation, unconditionally.
     // Deliberate — wrong-but-safe beats fast-but-lossy. The optimization
     // (export only on divergence) needs a manifest that does not exist yet (Track 3 Stage 2).
-    const gate = new BackupGate(services as any);
+    const gate = new BackupGate(services);
     const backupResult = await gate.requireBackup({
       type: 'local',
       siteId: site.id,
@@ -66,21 +82,6 @@ export const wpePullHandler: McpToolHandler = {
 
     services.logger.info(`[local_wpe_pull] Backup verified: ${backupResult.backup.type === 'local' ? backupResult.backup.path : backupResult.backup.backupId}`);
 
-
-    // Check if wpePull service is available
-    if (!services.localServices?.wpePull) {
-      return error('WPE Pull service not available in Local.');
-    }
-
-    // Get WPE connection from site
-    const rawSite = services.localServices!.resolveSiteObject(site.id) as any;
-    const wpeConnection = rawSite?.hostConnections
-      ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
-      : null;
-
-    if (!wpeConnection && !args.remote_install_id) {
-      return error(`Site "${site.name}" is not linked to a WP Engine environment. Link it first or provide remote_install_id.`);
-    }
 
     // If remote_install_id provided, we need to get install details from CAPI
     let installName: string;

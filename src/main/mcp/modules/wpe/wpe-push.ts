@@ -124,7 +124,7 @@ export const wpePushHandler: McpToolHandler = {
     // This adds 2–10 minutes to the push operation, unconditionally.
     // Deliberate — a token proves intent, not recoverability. The gate ensures
     // the overwrite can be undone even if the push fails mid-flight.
-    const gate = new BackupGate(services as any);
+    const gate = new BackupGate(services);
     const backupResult = await gate.requireBackup({
       type: 'remote',
       installId,
@@ -136,7 +136,6 @@ export const wpePushHandler: McpToolHandler = {
     }
 
     services.logger.info(`[local_wpe_push] Remote backup verified: ${backupResult.backup.type === 'remote' ? backupResult.backup.backupId : 'unknown'}`);
-
 
     try {
       // Register with tracker before firing (tracker also picks up Local's IPC events)

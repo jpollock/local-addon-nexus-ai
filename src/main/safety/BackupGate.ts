@@ -67,15 +67,9 @@ interface BackupGateServices {
     error(...args: unknown[]): void;
   };
   localServices?: {
-    exportSite(siteId: string, outputPath: string): Promise<void>;
+    exportSite(siteId: string, outputPath: string): Promise<string>;
     capiCreateBackup(installId: string, description: string): Promise<any>;
     capiDirect(path: string): Promise<any>;
-  };
-  operationTracker?: {
-    register(siteId: string, siteName: string, type: 'pull' | 'push' | 'export'): string;
-    getOperation(siteId: string): any;
-    complete(siteId: string, message?: string): void;
-    fail(siteId: string, message?: string): void;
   };
 }
 
@@ -101,66 +95,36 @@ export class BackupGate {
       return { success: false, error: 'Local services not available.' };
     }
 
-    if (!this.services.operationTracker) {
-      return { success: false, error: 'Operation tracker not available.' };
-    }
-
-    // Determine output path
+    // C1: Generate unique filename with timestamp to prevent overwriting previous backups
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const outputDir = outputPath || path.join(os.homedir(), 'Downloads');
-    const outputFile = path.join(outputDir, `${siteName}.zip`);
+    const outputFile = path.join(outputDir, `${siteName}-${timestamp}.zip`);
 
     this.services.logger.info(`[BackupGate] Creating local backup for site ${siteId} at ${outputFile}`);
 
-    // Trigger export
+    // I2: exportSite() is synchronous — it awaits the worker and returns the verified path.
+    // No poll loop needed. The bridge method verifies the zip exists before returning.
+    let zipPath: string;
     try {
-      await this.services.localServices.exportSite(siteId, outputFile);
-    } catch (err: any) {
-      const message = `Local backup failed to start: ${err.message}. The backup did not complete.`;
+      zipPath = await this.services.localServices.exportSite(siteId, outputFile);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const timeoutMinutes = Math.round(this.timeoutMs / 60000);
+      const message = `Local backup failed: ${errMsg}. The backup did not complete.`;
       this.services.logger.error(`[BackupGate] ${message}`);
       return { success: false, error: message };
     }
 
-    // Poll for completion
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < this.timeoutMs) {
-      await this.sleep(this.pollIntervalMs);
-
-      const op = this.services.operationTracker.getOperation(siteId);
-
-      if (!op) {
-        // No operation record yet — keep polling
-        continue;
-      }
-
-      if (op.status === 'completed') {
-        // Extract export path from lastMessage if available
-        const exportPath = this.extractExportPath(op.lastMessage) || outputFile;
-        const createdAt = op.completedAt || Date.now();
-
-        this.services.logger.info(`[BackupGate] Local backup completed: ${exportPath}`);
-        return {
-          success: true,
-          backup: {
-            type: 'local',
-            path: exportPath,
-            createdAt,
-          },
-        };
-      }
-
-      if (op.status === 'error') {
-        const message = `Local backup failed: ${op.lastMessage || 'unknown error'}. The backup did not complete.`;
-        this.services.logger.error(`[BackupGate] ${message}`);
-        return { success: false, error: message };
-      }
-
-      // Still running — continue polling
-    }
-
-    // Timed out
-    const message = `Local backup timed out after 10 minutes. The backup did not complete.`;
-    this.services.logger.error(`[BackupGate] ${message}`);
-    return { success: false, error: message };
+    const createdAt = Date.now();
+    this.services.logger.info(`[BackupGate] Local backup completed: ${zipPath}`);
+    return {
+      success: true,
+      backup: {
+        type: 'local',
+        path: zipPath,
+        createdAt,
+      },
+    };
   }
 
   private async requireRemoteBackup(target: RemoteBackupTarget): Promise<BackupGateResult> {
@@ -178,8 +142,9 @@ export class BackupGate {
     let createResponse: any;
     try {
       createResponse = await this.services.localServices.capiCreateBackup(installId, backupDescription);
-    } catch (err: any) {
-      const message = `Remote backup failed to start: ${err.message}. The backup did not complete.`;
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const message = `Remote backup failed to start: ${errMsg}. The backup did not complete.`;
       this.services.logger.error(`[BackupGate] ${message}`);
       return { success: false, error: message };
     }
@@ -191,11 +156,10 @@ export class BackupGate {
       return { success: false, error: message };
     }
 
-    // Poll for completion (up to 10 minutes)
+    // I3: Poll for completion using wall-clock time, not iteration count
     const startedAt = Date.now();
-    const maxAttempts = Math.floor(this.timeoutMs / this.pollIntervalMs);
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    while (Date.now() - startedAt < this.timeoutMs) {
       await this.sleep(this.pollIntervalMs);
 
       let backupData: any;
@@ -234,15 +198,10 @@ export class BackupGate {
     }
 
     // Timed out
-    const message = `Remote backup timed out after 10 minutes. The backup did not complete.`;
+    const timeoutMinutes = Math.round(this.timeoutMs / 60000);
+    const message = `Remote backup timed out after ${timeoutMinutes} minutes. The backup did not complete.`;
     this.services.logger.error(`[BackupGate] ${message}`);
     return { success: false, error: message };
-  }
-
-  private extractExportPath(message: string | null): string | null {
-    if (!message) return null;
-    const match = message.match(/Exported to (.+)/);
-    return match ? match[1] : null;
   }
 
   private sleep(ms: number): Promise<void> {
