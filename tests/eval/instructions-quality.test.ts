@@ -63,6 +63,19 @@ describe('Instructions Quality', () => {
     expect(instructions).toContain('nexus_plugin_audit');
   });
 
+  it('routes the fleet identity tools', () => {
+    expect(instructions).toContain('nexus_fleet_list');
+    expect(instructions).toContain('nexus_link_site');
+    expect(instructions).toContain('nexus_unlink_site');
+  });
+
+  it('disambiguates nexus_fleet_list from fleet_overview', () => {
+    // Two tools both plausibly answer "my fleet"; the instructions have to say
+    // which is which or the model will pick by name similarity.
+    expect(instructions).toMatch(/nexus_fleet_list[^\n]*install-grain/i);
+    expect(instructions).toMatch(/fleet_overview[^\n]*auto-detect/i);
+  });
+
   // -------------------------------------------------------------------------
   // Ollama
   // -------------------------------------------------------------------------
