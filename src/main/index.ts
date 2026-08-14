@@ -24,6 +24,7 @@ import { registerDbScannerTools } from './mcp/modules/db-scanner/index';
 import { registerSentinelScanTools } from './mcp/modules/sentinel-scan/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
+import { registerFleetLinkTools } from './mcp/modules/fleet-links/index';
 import { registerIwTools } from './mcp/modules/iw/index';
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
 import { getGatewayUsageHandler } from './mcp/modules/ai-gateway/get-gateway-usage';
@@ -46,6 +47,10 @@ import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
 import { createSessionTables, pruneSessions } from './ipc/chat-sessions';
 import { GraphService } from './events/GraphService';
 import { runOrphanSweep } from './fleet/collectFleetCounts';
+import { SiteLinkStore } from './fleet/SiteLinkStore';
+import { SiteLinkResolver } from './fleet/SiteLinkResolver';
+import { FleetAssembler } from './fleet/FleetAssembler';
+import { runStartupReconciliation } from './fleet/startupReconciliation';
 import { EventProcessor } from './events/EventProcessor';
 import { HttpEventInterface } from './events/HttpEventInterface';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
@@ -411,6 +416,7 @@ export default function main(context: any): void {
   registerSentinelScanTools(registry);
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
+  registerFleetLinkTools(registry);
   registerIwTools(registry);
   registerTelemetryTools(registry);
   registry.register(getGatewayUsageHandler);
@@ -688,6 +694,14 @@ export default function main(context: any): void {
         getDb: () => graphService.getDb() as never,
         logger: localLogger,
       });
+
+      // Wire fleet identity and link resolution into nexusServices
+      const siteLinkStore = new SiteLinkStore(graphService.getDb()!);
+      const siteLinkResolver = new SiteLinkResolver(siteLinkStore, localServicesBridge);
+      const fleetAssembler = new FleetAssembler(graphService, siteLinkStore, siteDataAccessor);
+      nexusServices.siteLinkResolver = siteLinkResolver;
+      nexusServices.fleetAssembler = fleetAssembler;
+      await runStartupReconciliation(siteLinkResolver, siteDataAccessor, localLogger);
 
       // Wire SmartSearch stores + handler into the HTTP interface
       const graphDb = graphService.getDb();
