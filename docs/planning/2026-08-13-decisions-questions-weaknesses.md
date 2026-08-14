@@ -90,13 +90,34 @@ The design-team mockups look nothing like Local's current UI, which points at re
 
 Waiting on it: Track 2 Stage 3.4 (re-pointing ~135 renderer IPC channels) is wasted work under replacement. Track 3 Stage 4 and Track 4 Stage 4.4 are both gated on it. Answer this before Track 2 Stage 3.4, not after.
 
-### Q2. Who owns Nexus?
+### Q2. Who owns Nexus? — PARTIALLY ANSWERED 2026-08-13
+
+**Answer given:** "me, but I work for WP Engine."
+
+That is not yet a clean answer, and it should be made one before anything ships rather than after. The practical position today: the repository is on a personal GitHub remote, publishes to a personal npm scope, is MIT-licensed, and is built on WP Engine's APIs against WP Engine's strategy documents, with WP Engine's design team producing assets for it. Work produced by an employee within the scope of their employment generally belongs to the employer, which means the current arrangement is probably a paperwork gap rather than a genuine ambiguity — but it is not for an engineer or an assistant to decide.
+
+**Not blocking:** continuing to build.
+**Blocking:** bundling with Local, publishing, or anything that puts WP Engine's name on the distribution. Concretely that means a repo transfer, an npm scope move, a decision on the MIT choice, and `T-UNBUNDLE-AI` — redistributing a third party's GPL plugin is a materially different question when WP Engine is the distributor rather than an individual.
+
+### Q2-original. Who owns Nexus?
 
 The repository is under a personal GitHub account, publishes to `@local-labs-jpollock`, and `main` is 1,276 commits ahead of an origin it has never been pushed to in bulk. Shipping this as WP Engine software needs a transfer, a licensing pass, and a decision on `T-UNBUNDLE-AI` — redistributing a third party's GPL plugin is a materially different question when WP Engine is the distributor.
 
 Waiting on it: all of Track 2 Stage 4 (bundling and default-on).
 
-### Q3. Who is the ICP?
+### Q3. Who is the ICP? — ANSWERED 2026-08-13
+
+**Answer given:** an agency developer managing tens to hundreds of sites, and building new ones.
+
+**What this confirms.** Desktop-first is right — this is exactly who Local already serves, and the strongest North Star responses (the two 5/5 ratings) were solo agency owners. The safety-boundary finding, which I had flagged as well-evidenced for developers and unevidenced for marketers, is now squarely on-ICP; that tension dissolves. The 200-site calm problem is real rather than hypothetical, and the performance work moves from speculative to critical-path.
+
+**What this challenges — two things, both worth deciding.**
+
+**C-1. "And building new ones" is half the stated job, and the design does not address it at all.** Everything designed so far is fleet *management* — see, understand, act, verify on installs that already exist. Site creation is a different job with a different shape: blueprints, scaffolding, standing up a new client site from a template. Local already does this and the design mockups gestured at it ("Landing page", "Save as Blueprint"), but no track covers it. If building is genuinely half of what this user does, the fleet-workspace framing is half a product.
+
+**C-2. An agency developer's hundred client sites are almost certainly not all on WP Engine.** External SSH hosts were scoped out on the basis that "WPE is primary" — a decision taken *before* the ICP was named. For an in-house team, WPE-primary is obviously right. For an agency managing a hundred inherited client sites, a fleet that only shows the WP Engine subset may show a minority of their actual fleet, and the "connective tissue" claim weakens sharply. Nexus already supports arbitrary SSH hosts, so this is a scoping decision rather than a build. **Recommend re-opening it.**
+
+### Q3-original. Who is the ICP?
 
 Ten North Star sessions are in, and not one is with a marketer — while the Q326 strategy is premised on the expanding marketer. The strongest adopters so far (5/5) are solo agency owners, a segment the strategy does not centre.
 
