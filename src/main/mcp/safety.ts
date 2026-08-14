@@ -48,6 +48,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wpe_get_install: 1,
   local_wpe_link: 1,
   nexus_list_sites: 1,
+  nexus_fleet_list: 1,
   wp_list_abilities: 1,
 
   // Tier 1 — New atomic reads (account)
@@ -111,6 +112,8 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wp_setup_ai: 2,
   wp_sync_ai_credentials: 2,
   wp_run_ability: 2,
+  nexus_link_site: 2,
+  nexus_unlink_site: 2,
 
   // Tier 3 — Privilege-granting (P0-6): creating/altering an account user grants persistent
   // production portal access. Promoted from Tier 2 so it requires human confirmation, and (with

@@ -120,6 +120,10 @@ export interface NexusServices {
   graphService?: any;
   /** Event processor. Optional for backward compat. */
   eventProcessor?: any;
+  /** Fleet assembler. Optional for backward compat. */
+  fleetAssembler?: import('../fleet/FleetAssembler').FleetAssembler;
+  /** Site link resolver. Optional for backward compat. */
+  siteLinkResolver?: import('../fleet/SiteLinkResolver').SiteLinkResolver;
   /** HTTP event interface. Optional for backward compat. */
   httpEventInterface?: any;
   /** Sprint 2+3 services (optional for backward compat) */
