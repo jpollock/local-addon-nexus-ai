@@ -701,7 +701,15 @@ export default function main(context: any): void {
       const fleetAssembler = new FleetAssembler(graphService, siteLinkStore, siteDataAccessor);
       nexusServices.siteLinkResolver = siteLinkResolver;
       nexusServices.fleetAssembler = fleetAssembler;
-      await runStartupReconciliation(siteLinkResolver, siteDataAccessor, localLogger);
+
+      // Fire-and-forget, like runOrphanSweep above. The sweep walks every local
+      // site and each connected one hits CAPI — uncached, paginated, with a
+      // token fetch per page. Awaiting it would put the MCP server and its
+      // connection-info file (which every MCP client and the CLI wait on)
+      // behind an unbounded network call. runStartupReconciliation never throws
+      // and stores its report on the resolver for nexus_fleet_list to read.
+      setStartupPhase('FleetLinks');
+      void runStartupReconciliation(siteLinkResolver, siteDataAccessor, localLogger);
 
       // Wire SmartSearch stores + handler into the HTTP interface
       const graphDb = graphService.getDb();

@@ -19,12 +19,17 @@ export async function runStartupReconciliation(
 ): Promise<ReconcileReport> {
   try {
     const report = await resolver.reconcileAll(siteData.getSites());
+    // Kept on the resolver so nexus_fleet_list can name the sites a human still
+    // has to link. A count in a log file is not a surface anyone can act on.
+    resolver.setLastReport(report);
     logger.info(
       `[NexusAI] Site link reconciliation: ${report.linked.length} linked, ${report.unresolved.length} unresolved`,
     );
     return report;
   } catch (err) {
     logger.error('[NexusAI] Site link reconciliation failed', err);
-    return { linked: [], unresolved: [] };
+    const empty: ReconcileReport = { linked: [], unresolved: [] };
+    resolver.setLastReport(empty);
+    return empty;
   }
 }

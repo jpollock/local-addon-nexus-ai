@@ -1,12 +1,13 @@
 import { runStartupReconciliation } from '../../../src/main/fleet/startupReconciliation';
 
 describe('runStartupReconciliation', () => {
-  it('sweeps all sites and logs the unresolved count', async () => {
+  it('sweeps all sites, logs the unresolved count, and keeps the report', async () => {
     const resolver = {
       reconcileAll: jest.fn().mockResolvedValue({
         linked: [{ localSiteId: 'local-1' }],
         unresolved: [{ localSiteId: 'local-2', localSiteName: 'orphan' }],
       }),
+      setLastReport: jest.fn(),
     } as any;
     const siteData = {
       getSites: () => ({
@@ -21,10 +22,14 @@ describe('runStartupReconciliation', () => {
     expect(resolver.reconcileAll).toHaveBeenCalled();
     expect(report.unresolved).toHaveLength(1);
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('1 linked, 1 unresolved'));
+    expect(resolver.setLastReport).toHaveBeenCalledWith(report);
   });
 
   it('never throws — a reconciliation failure must not break startup', async () => {
-    const resolver = { reconcileAll: jest.fn().mockRejectedValue(new Error('boom')) } as any;
+    const resolver = {
+      reconcileAll: jest.fn().mockRejectedValue(new Error('boom')),
+      setLastReport: jest.fn(),
+    } as any;
     const siteData = { getSites: () => ({}) } as any;
     const logger = { info: jest.fn(), error: jest.fn() };
 
@@ -32,5 +37,6 @@ describe('runStartupReconciliation', () => {
 
     expect(report).toEqual({ linked: [], unresolved: [] });
     expect(logger.error).toHaveBeenCalled();
+    expect(resolver.setLastReport).toHaveBeenCalledWith({ linked: [], unresolved: [] });
   });
 });

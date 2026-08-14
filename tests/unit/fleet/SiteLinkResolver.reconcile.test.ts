@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { SiteLinkStore } from '../../../src/main/fleet/SiteLinkStore';
-import { SiteLinkResolver } from '../../../src/main/fleet/SiteLinkResolver';
+import { RESOLVE_TIMEOUT_MS, SiteLinkResolver } from '../../../src/main/fleet/SiteLinkResolver';
 
 function memoryDb(): Database.Database {
   const db = new Database(':memory:');
@@ -75,5 +75,47 @@ describe('SiteLinkResolver.reconcileAll', () => {
     expect(report.unresolved).toEqual([
       { localSiteId: 'local-1', localSiteName: 'good-aesthetic' },
     ]);
+  });
+
+  it('a CAPI call that never returns does not stall the sweep', async () => {
+    jest.useFakeTimers();
+    try {
+      const bridge = {
+        resolveWpeInstall: jest.fn((id: string) =>
+          id === 'local-1'
+            ? new Promise(() => {
+                /* never settles — captive portal, hung VPN */
+              })
+            : Promise.resolve({
+                installName: 'orphanname',
+                installId: 'inst-two',
+                remoteSiteId: 'site-two',
+                primaryDomain: 'b.com',
+              }),
+        ),
+      } as any;
+
+      const resolver = new SiteLinkResolver(store, bridge);
+      const pending = resolver.reconcileAll(SITES);
+      await jest.advanceTimersByTimeAsync(RESOLVE_TIMEOUT_MS + 1);
+      const report = await pending;
+
+      expect(report.unresolved).toEqual([
+        { localSiteId: 'local-1', localSiteName: 'good-aesthetic' },
+      ]);
+      expect(report.linked.map((l) => l.localSiteId)).toEqual(['local-2']);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('remembers the last report so callers can surface the unresolved', async () => {
+    const bridge = { resolveWpeInstall: jest.fn().mockResolvedValue(null) } as any;
+    const resolver = new SiteLinkResolver(store, bridge);
+
+    expect(resolver.getLastReport()).toBeNull();
+    const report = await resolver.reconcileAll(SITES);
+    resolver.setLastReport(report);
+    expect(resolver.getLastReport()?.unresolved).toHaveLength(2);
   });
 });
