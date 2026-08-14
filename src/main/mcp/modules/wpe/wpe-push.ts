@@ -2,6 +2,7 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { ok, error, requireLocalServices } from './helpers';
 import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
+import { BackupGate } from '../../../safety/BackupGate';
 
 export const wpePushHandler: McpToolHandler = {
   definition: {
@@ -118,6 +119,24 @@ export const wpePushHandler: McpToolHandler = {
         isError: true,
       };
     }
+
+    // BACKUP GATE: Create a verified remote backup before overwriting.
+    // This adds 2–10 minutes to the push operation, unconditionally.
+    // Deliberate — a token proves intent, not recoverability. The gate ensures
+    // the overwrite can be undone even if the push fails mid-flight.
+    const gate = new BackupGate(services as any);
+    const backupResult = await gate.requireBackup({
+      type: 'remote',
+      installId,
+      description: `Pre-push backup for ${installName} (${environment})`,
+    });
+
+    if (!backupResult.success) {
+      return error(`Push blocked: ${backupResult.error}`);
+    }
+
+    services.logger.info(`[local_wpe_push] Remote backup verified: ${backupResult.backup.type === 'remote' ? backupResult.backup.backupId : 'unknown'}`);
+
 
     try {
       // Register with tracker before firing (tracker also picks up Local's IPC events)

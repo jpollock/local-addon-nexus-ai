@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { ok, error, requireLocalServices } from './helpers';
+import { BackupGate } from '../../../safety/BackupGate';
 
 export const wpePullHandler: McpToolHandler = {
   definition: {
@@ -47,6 +48,24 @@ export const wpePullHandler: McpToolHandler = {
     if (status !== 'running') {
       return error(`Site "${site.name}" is ${status}. Start it first with local_start_site.`);
     }
+
+    // BACKUP GATE: Create a verified local backup before overwriting.
+    // This adds 1–5 minutes to the pull operation, unconditionally.
+    // Deliberate — wrong-but-safe beats fast-but-lossy. The optimization
+    // (export only on divergence) needs a manifest that does not exist yet (Track 3 Stage 2).
+    const gate = new BackupGate(services as any);
+    const backupResult = await gate.requireBackup({
+      type: 'local',
+      siteId: site.id,
+      siteName: site.name,
+    });
+
+    if (!backupResult.success) {
+      return error(`Pull blocked: ${backupResult.error}`);
+    }
+
+    services.logger.info(`[local_wpe_pull] Backup verified: ${backupResult.backup.type === 'local' ? backupResult.backup.path : backupResult.backup.backupId}`);
+
 
     // Check if wpePull service is available
     if (!services.localServices?.wpePull) {
