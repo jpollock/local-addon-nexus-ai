@@ -54,11 +54,13 @@ describe('SiteLinkStore', () => {
     expect(store.get('local-1')?.linkSource).toBe('user');
   });
 
-  it('getByInstall returns every local site pointing at one install', () => {
-    store.put(link);
+  it('getByInstall returns every local site pointing at one install, in a stable order', () => {
+    // Inserted out of order — callers take [0] as "the" sandbox, so the order
+    // must come from the query, not from however SQLite laid the pages out.
     store.put({ ...link, localSiteId: 'local-2' });
+    store.put(link);
 
-    const found = store.getByInstall('inst-abc').map((l) => l.localSiteId).sort();
+    const found = store.getByInstall('inst-abc').map((l) => l.localSiteId);
     expect(found).toEqual(['local-1', 'local-2']);
   });
 

@@ -30,9 +30,15 @@ export class SiteLinkStore {
     return row ? toLink(row) : null;
   }
 
+  /**
+   * All local sites linked to one install. Ordered so the caller's choice of
+   * `[0]` is stable: without an ORDER BY, SQLite's row order is an artefact of
+   * page layout and can change after a vacuum, silently reattaching a
+   * different sandbox to the install.
+   */
   getByInstall(wpeInstallId: string): SiteLink[] {
     const rows = this.db
-      .prepare('SELECT * FROM site_links WHERE wpe_install_id = ?')
+      .prepare('SELECT * FROM site_links WHERE wpe_install_id = ? ORDER BY local_site_id')
       .all(wpeInstallId) as Row[];
     return rows.map(toLink);
   }
@@ -42,6 +48,17 @@ export class SiteLinkStore {
     return rows.map(toLink);
   }
 
+  /**
+   * Insert or replace a link.
+   *
+   * Unguarded by design — this is the storage layer. The precedence invariant
+   * lives one level up in SiteLinkResolver: a link with `linkSource: 'user'` is
+   * authoritative and inference must never overwrite it (`resolveOne`
+   * short-circuits on it). A caller reaching past the resolver into `put` can
+   * clobber a human's correction with an inferred one, which is precisely the
+   * silently-wrong join `site_links` exists to prevent. Go through the resolver
+   * unless you are deliberately recording a user decision.
+   */
   put(link: SiteLink): void {
     this.db
       .prepare(
