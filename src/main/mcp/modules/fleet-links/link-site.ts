@@ -18,7 +18,7 @@ export const linkSiteHandler: McpToolHandler = {
     },
   },
   async execute(args, services) {
-    const resolver = (services as any).siteLinkResolver;
+    const resolver = services.siteLinkResolver;
     const site = args.site as string | undefined;
     const installId = args.install_id as string | undefined;
     const installName = args.install_name as string | undefined;

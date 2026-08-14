@@ -1433,12 +1433,18 @@ export async function runStartupReconciliation(
 }
 ```
 
-In `src/main/index.ts`, after `graphService.initialize()` succeeds inside the
-async init IIFE, construct the services and sweep:
+In `src/main/index.ts` there are **two** `graphService.initialize()` call
+sites: one at ~line 233 in the early-init IIFE, and one at ~line 678 in the
+main async init IIFE. Wire at the **line 678 site** — `localServicesBridge`
+(line 301), `nexusServices` (line 375) and `registry` (line 401) are all
+defined after the early-init IIFE, so wiring at line 233 would not compile.
+
+After that `await graphService.initialize()` succeeds, construct the services
+and sweep:
 
 ```typescript
     const siteLinkStore = new SiteLinkStore(graphService.getDb()!);
-    const siteLinkResolver = new SiteLinkResolver(siteLinkStore, localServices);
+    const siteLinkResolver = new SiteLinkResolver(siteLinkStore, localServicesBridge);
     const fleetAssembler = new FleetAssembler(graphService, siteLinkStore, siteDataAccessor);
     nexusServices.siteLinkResolver = siteLinkResolver;
     nexusServices.fleetAssembler = fleetAssembler;
@@ -1455,7 +1461,9 @@ import { runStartupReconciliation } from './fleet/startupReconciliation';
 ```
 
 And register the tool module alongside the other `register*Tools(registry)`
-calls:
+calls (they begin at ~line 402, in the synchronous body — registering there is
+correct even though the assembler is assigned later, because handlers read
+`services.fleetAssembler` at call time):
 
 ```typescript
   registerFleetLinkTools(registry);

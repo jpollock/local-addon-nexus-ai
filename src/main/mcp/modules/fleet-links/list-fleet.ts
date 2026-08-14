@@ -11,7 +11,7 @@ export const listFleetHandler: McpToolHandler = {
     annotations: { readOnlyHint: true },
   },
   async execute(_args, services) {
-    const assembler = (services as any).fleetAssembler;
+    const assembler = services.fleetAssembler;
     if (!assembler) {
       return {
         content: [{ type: 'text', text: 'Fleet assembler is not available — the graph database may still be initializing.' }],

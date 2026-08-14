@@ -13,7 +13,7 @@ export const unlinkSiteHandler: McpToolHandler = {
     },
   },
   async execute(args, services) {
-    const resolver = (services as any).siteLinkResolver;
+    const resolver = services.siteLinkResolver;
     const site = args.site as string | undefined;
 
     if (!resolver) {
