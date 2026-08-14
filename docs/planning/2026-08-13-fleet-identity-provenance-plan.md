@@ -1499,6 +1499,23 @@ Deliberately excluded, each covered by a later plan in the spec's sequencing:
   empty for non-WPE users; that composition belongs with the fleet UI, and
   `FleetAssembler` is where it will be added.
 
+### Known gap: two callers still use the old inference
+
+`site_links` replaced the `hostConnections` → CAPI inference for the fleet
+list, but two existing callers were not migrated and still call
+`localServicesBridge.resolveWpeInstall` directly:
+
+- `src/main/mcp/modules/wp-cli/remote-exec.ts`
+- `src/main/mcp/modules/wpe/get-site-changes.ts`
+
+They therefore keep the old failure mode: a user's manual correction via
+`nexus_link_site` is invisible to them, and a renamed or restored install
+resolves silently wrong or not at all. This is real, not theoretical — it is
+the same class of bug `site_links` exists to fix — but migrating an execution
+path that runs remote WP-CLI belongs with Track 3, where the sandbox loop and
+the SSH target are already being reworked. Recorded here so it is not
+rediscovered as a new finding.
+
 ## Self-review notes
 
 - **Spec coverage:** this plan implements the spec's "Fleet and site identity"
