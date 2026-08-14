@@ -1,3 +1,5 @@
+import type { DataProvenance } from '../../common/types';
+
 /**
  * How a local-site-to-WPE-install link came to exist.
  *
@@ -25,4 +27,26 @@ export interface ReconcileReport {
   linked: SiteLink[];
   /** Sites we could not attach to an install — these need a human to link them. */
   unresolved: UnresolvedSite[];
+}
+
+export interface FleetSandbox {
+  localSiteId: string;
+  localSiteName: string;
+  linkSource: SiteLinkSource;
+}
+
+export interface FleetInstall {
+  installId: string;
+  installName: string;
+  environment: string | null;
+  domain: string | null;
+  /** The local working copy attached to this install, if any. */
+  sandbox: FleetSandbox | null;
+  provenance: DataProvenance;
+}
+
+export interface FleetSiteGroup {
+  wpeSiteId: string | null;
+  name: string;
+  installs: FleetInstall[];
 }
