@@ -31,7 +31,13 @@
 
 **Files:** create `src/main/safety/BackupGate.ts`, `tests/unit/safety/BackupGate.test.ts`
 
-`BackupGate.requireBackup(target)` resolves to either a verified backup reference or a refusal carrying the reason. Verification means the backup exists **and** its recorded completion is after the last mutation to the target — a backup taken before the change you are about to overwrite is not a backup of what you are destroying.
+`BackupGate.requireBackup(target)` resolves to either a verified backup reference or a refusal carrying the reason.
+
+**Corrected 2026-08-13 after implementation found the original framing unbuildable.** The plan originally said verification means the backup exists *and* its recorded completion is after the last mutation to the target. There is no last-mutation signal on either side: local sites have per-file mtimes and no database change timestamp, and CAPI install objects carry no `updated_at`. Fabricating one from max file mtime would be expensive, unreliable, and would look like protection while providing none.
+
+The gate therefore **creates a fresh backup as part of itself** rather than looking for an existing one. "The backup is newer than the last mutation" then holds by construction, with no timestamp comparison. Pull triggers `local_export_site` and blocks on completion; push triggers `wpe_backup_and_verify`, which already blocks.
+
+This is simpler and strictly safer than the original design. It is also more expensive — 1–5 minutes per destructive operation — and that cost lands on the sandbox loop, which pulls on the user's behalf. See the note under Stage 2.3.
 
 ### Task 1.2 — Wire it into the overwriting tools
 
@@ -41,7 +47,11 @@ Test the refusal path first and assert **no write occurred**. A gate whose failu
 
 ### Task 1.3 — Local-side backups
 
-`wpe_backup_and_verify` covers the remote. The local side is `local_export_site`. Decide and record: an automatic pre-pull export costs disk and time on every sandbox refresh. **Recommendation: export only when the local site has uncommitted divergence from its last pull**, which requires Task 2.2's manifest. Until then, export unconditionally and accept the cost — wrong-but-safe beats fast-but-lossy.
+`wpe_backup_and_verify` covers the remote; `local_export_site` covers the local side and is tracked by `OperationTracker` with a `completedAt`, so completion is observable.
+
+Export unconditionally. The optimisation — export only when the local site has diverged since its last pull — needs Task 2.2's manifest and is deferred.
+
+**Consequence for Stage 2.3, worth deciding early:** if every pull carries a full export, sandbox *refresh* becomes expensive, which makes reuse materially more attractive than re-pulling and weakens the case for ephemeral sandboxes (decision D8 in the decisions record). Revisit D8 once the real cost is measured.
 
 ---
 
