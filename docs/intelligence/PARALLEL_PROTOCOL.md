@@ -60,10 +60,11 @@ undisclosed.
 ## Definition of done, per packet
 
 1. `npx tsc -p . --noEmit` clean (`npm run typecheck`).
-2. The full intelligence set green. **Until WP-05 lands, jest's configured
-   roots only cover `tests/` — the explicit roots flag is required:**
-   `npx jest --roots src`
-   (runs every intelligence suite; they all live under `src/**/__tests__/`).
+2. The full intelligence set green. **WP-05 landed: `jest.config.js` roots now
+   cover `src` as well as `tests`, so no flag is needed —** `npm test` runs
+   every intelligence suite (they all live under `src/**/__tests__/`) alongside
+   the legacy ones, and `npm run test:ci` gates them too. To run only the
+   intelligence set while iterating: `npx jest src/`.
 3. Any LEGACY suites covering files you touched also green — find them with
    `grep -rl <your-file's-basename> tests/` and run those via plain `npx jest <path>`.
 4. New behavior has a test that pins it (no untested acceptance criteria) —

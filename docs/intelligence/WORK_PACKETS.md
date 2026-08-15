@@ -131,7 +131,11 @@ Accept: plugin-presence and plugin-version filters answer from
 expectations unchanged; result payload gains observed_at per row where the UI
 can carry it. Escalate before changing any SF eval expectation.
 
-### [ ] WP-05 · Jest roots + CI wiring  **(PREREQUISITE — elevated by calibration finding WP-02.1)**
+### [x] WP-05 · Jest roots + CI wiring  **(PREREQUISITE — elevated by calibration finding WP-02.1)**
+Outcome: `roots: ['<rootDir>/tests', '<rootDir>/src']` — one list, so `npm test`
+includes the intelligence suites by default; `test:ci` names the third tree
+positionally so both CI workflows pick them up unchanged. +10 suites / +15
+tests, nothing else added or dropped.
 No pattern needed. Files: `jest.config.js`, `jest.ci.config.js` and/or
 `package.json` scripts. Parallel-safe, but land BEFORE trusting any other
 packet's "green": `jest.config.js` has `roots: ['<rootDir>/tests']`, so the
@@ -143,6 +147,11 @@ Accept: `npm test` and `npm run test:ci` both execute the intelligence suites
 without extra flags; green run demonstrated; no other suites disturbed; the
 `--roots src` workaround notes in PARALLEL_PROTOCOL.md, CLAUDE.md, and the
 reader-migration pattern updated to the final command.
+**Done 2026-08-15 (Opus, branch `wp-05` — pending merge).** Decision recorded:
+`npm test` DOES run the intelligence suites (one `roots` list) rather than a
+separate opt-in script — a second script is a second thing to forget, which is
+the failure mode this packet exists to remove. 8 calibration findings recorded
+below, one of them fixed in-packet (the vacuous `pretest` ABI guard).
 
 ### [ ] WP-06 · Review sweep
 No pattern. Read-mostly. Parallel-safe (but run last, after WP-01..05 merge).
@@ -438,3 +447,90 @@ B-03/E-01/E-02 against the real ledger (harness rules H-01/H-02).
   trap). WP-07 rewritten accordingly. The convergence of the two designs on
   "user links outrank inference, provenance on every join" is treated as
   validation, not accident.
+
+- 2026-08-15 · **WP-05 calibration findings** (branch `wp-05`, Opus). Same
+  spirit as WP-02's: proposals, not complaints. One was fixed in-packet because
+  `package.json` scripts are inside this packet's scope and the defect made the
+  packet's own acceptance criterion unreachable; the rest are reported only.
+
+  **(a) Fixed in-packet**
+
+  1. **The `pretest` ABI guard was vacuous — it could never fire.** It ran
+     `node -e "try{require('better-sqlite3')}catch(e){process.exit(1)}"`, but
+     `require()` only resolves the JS wrapper; better-sqlite3 calls `bindings()`
+     lazily inside the `Database` constructor, so the native `.node` file is
+     never opened and the guard passes against an Electron-ABI build. Measured:
+     the guard exited 0 while the binary was ABI 146, `npm test` then ran, and
+     51 suites died on `NODE_MODULE_VERSION`. This is precisely WP-02 finding
+     (a)(4) — and the reason CLAUDE.md's "the `pretest` hook handles it" was
+     false. Now `new (require('better-sqlite3'))(':memory:').close()`.
+     *(CLAUDE.md's intelligence bullet still says the hook handles it; that
+     sentence was outside this packet's three authorized doc lines, so it is
+     left for the integration-lock holder — it is now TRUE, but only because of
+     this fix.)*
+
+  **(b) Repo/protocol drift a worktree agent hits immediately**
+
+  2. **A fresh worktree has no `node_modules` and no `lib/`, and the protocol
+     mentions neither.** `node_modules` was symlinked to the primary checkout
+     (`ln -s ../../node_modules node_modules`) — needed because
+     `moduleNameMapper` resolves `<rootDir>/node_modules/marked/...`, which
+     plain Node ancestor-resolution does not cover. Note the symlink shows as
+     untracked in `git status` (`.gitignore` has `node_modules/`, and the
+     trailing slash does not match a symlink), so never `git add -A` in a
+     worktree.
+  3. **Missing `lib/` makes a legacy suite fail in a way that reads as a branch
+     regression.** `tests/unit/agent-runtime/AgentRegistry.test.ts` writes a
+     temp agent that requires the *compiled* `<rootDir>/lib/main/agent-sdk`; in
+     a fresh worktree that path does not exist and 4 tests fail. Running the
+     same suite in the primary checkout (which carries a stale `lib/` from an
+     old build) passes. `npm run compile` in the worktree fixes it. Proposed
+     PARALLEL_PROTOCOL §Isolation addition: after `git worktree add`, run
+     `ln -s ../../node_modules node_modules && npm run compile` before trusting
+     any baseline.
+  4. **Consequence of 3 for the real CI gate, not fixed here.** CI runs
+     `npm ci` then `npm run test:ci` with **no build step** and there is no
+     `prepare` script, so `lib/` does not exist in CI either — those 4
+     AgentRegistry tests should be failing on CI today, and pass locally only
+     by accident of a stale `lib/`. Fix belongs to the test/build owner, not to
+     jest roots: either compile before `test:ci`, or stop a unit test depending
+     on build output (map the absolute `lib/main/agent-sdk` require the way
+     `@nexus-ai/agent-sdk` is already mapped to `src`).
+
+  **(c) Observed, out of scope, reported**
+
+  5. **`tests/main/wpe-tools.test.ts` › `local_wpe_push` › "queues push for
+     linked running site (direct handler)" fails on the base commit** — in the
+     worktree, in the primary checkout, and under Node 22.16.0 (the `.nvmrc`/CI
+     version) as well as the machine's Node 25.9.0. `result.isError` is `true`
+     where the test expects `undefined`. So the `test:ci` gate is red on
+     `poc/nexintelligence` independently of this packet; it is the one failure
+     present in every measurement above.
+  6. **`src/**/__tests__` compiles into `lib/`** — `npm run compile` emits 10
+     `.js` test files under `lib/intelligence/__tests__` and
+     `lib/main/**/__tests__`. Tests-beside-code means test code ships in the
+     published package. Proposed: add `**/__tests__/**` to `tsconfig.json`'s
+     `exclude`. (`tsconfig.json` was outside this packet's scope.)
+  7. **A rare suite-level abort exists in the full run, and it is not caused by
+     this change.** Across 8 full runs on the new config and 7 on the baseline,
+     one suite once ran 0 of its tests and reported as failed:
+     `tests/unit/cli/commands/host.test.ts` (1 of 8, new config) and
+     `tests/unit/cli/commands/sync.test.ts` (1 of 7, **baseline** config). Both
+     pass in isolation. Config-independent, worth a look by whoever owns the
+     worker/open-handle configuration; recorded here so the next agent does not
+     mistake it for their own regression.
+  8. **`.github/workflows/ci.yml:46`'s comment still says "unit + main
+     suites".** It now also runs `src/`. One-word doc fix, workflow file was
+     out of scope.
+
+  **CLAUDE.md fact that has drifted (not amended — outside the authorized
+  lines):** "System Node: 22.16.0 ... MODULE_VERSION 127" matches `.nvmrc` and
+  CI but not this machine, which is on Node 25.9.0 → ABI 141. The two-context
+  rule is unchanged; only the literal numbers are machine-specific. Suggest
+  phrasing it as "whatever `node -p process.versions.modules` reports" rather
+  than a constant.
+
+  **ABI state left behind:** `npm rebuild better-sqlite3` was run, so the
+  binary is on the **system-Node ABI (141)**. Local needs `npm run rebuild`
+  before it will load the addon again. Note this rebuild affects the shared
+  `node_modules` that the `wp-01` and `wp-03` worktrees also resolve through.

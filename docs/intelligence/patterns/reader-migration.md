@@ -148,5 +148,6 @@ will silently destroy uncommitted work — and verify each mutation actually
 changed the file (checksum before/after), so a non-applying substitution
 reports itself instead of masquerading as a caught mutation.
 
-Run `npx jest --roots src` green, plus any legacy suites covering your tool
-(`grep -rl <tool-basename> tests/`).
+Run `npm test` green (jest's roots cover `src` since WP-05 — no flag needed;
+`npx jest src/` narrows to this subsystem), plus any legacy suites covering
+your tool (`grep -rl <tool-basename> tests/`).
