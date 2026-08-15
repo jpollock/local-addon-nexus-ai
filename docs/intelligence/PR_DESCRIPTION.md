@@ -89,9 +89,14 @@ reconciliation table.
 
 ## Known issues / explicitly out of scope
 
-- `tests/main/wpe-tools.test.ts › local_wpe_push` is red on the base commit
-  (pre-existing; suspected stale fixture vs. access-control v2 defaults —
-  under investigation, not caused by this branch).
+- ~~`tests/main/wpe-tools.test.ts › local_wpe_push` red on the base commit~~
+  **RESOLVED**: pre-existing, not caused by this branch. Root cause was the
+  BackupGate (push now requires a verified remote backup; the fixture's
+  `capiCreateBackup` mock resolved `undefined`, tripping the gate's
+  backup-ID check) — not access-control defaults, which the fixture
+  explicitly permits. Fixed in the test (backup create + status-poll mocks;
+  also added the missing assertion to the vacuous "rejects halted site"
+  test).
 - `src/**/__tests__` currently compiles into `lib/` (packaging concern;
   fix trades off `tsc --noEmit` coverage of tests — decision pending).
 - Entity service is a reviewed draft, deliberately unwired (WP-07).

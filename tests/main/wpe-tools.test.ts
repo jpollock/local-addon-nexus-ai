@@ -277,18 +277,29 @@ describe('WPE Integration Tools', () => {
   describe('local_wpe_push', () => {
     test('queues push for linked running site (direct handler)', async () => {
       // Tier 3 confirmation is tested in tool-registry-safety.test.ts
-      // Here we test the handler directly
+      // Here we test the handler directly.
+      // BackupGate: push now requires a verified remote backup before firing —
+      // mock the create + status-poll pair so the gate passes. (The poll's
+      // 2s sleep makes this test take ~2s; that's the gate's real interval.)
+      localServices.capiCreateBackup.mockResolvedValue({ id: 'backup-1' });
+      localServices.capiDirect.mockResolvedValue({
+        status: 'complete',
+        created_at: new Date().toISOString(),
+      });
       const handler = (registry as any).handlers.get('local_wpe_push');
       const result = await handler.execute({ site: 'My Site' }, services);
       expect(result.isError).toBeUndefined();
       const payload = JSON.parse(result.content[0].text);
       expect(payload.status).toBe('in_progress');
-    });
+    }, 15000);
 
     test('rejects halted site', async () => {
       localServices.getSiteStatus.mockReturnValue('halted');
       const handler = (registry as any).handlers.get('local_wpe_push');
       const result = await handler.execute({ site: 'My Site' }, services);
+      // (Was a vacuous test — no assertion. The halted check runs before the
+      // BackupGate, so no backup mocks are needed here.)
+      expect(result.content[0].text).toContain('halted');
     });
   });
 
