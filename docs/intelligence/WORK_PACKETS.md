@@ -12,13 +12,84 @@ see `INTELLIGENCE_ROADMAP.md`).*
 
 ## Milestone 1 — honest reads everywhere
 
-### [ ] WP-01 · Migrate `fleet_summary` to twin enrichment
-Pattern: `patterns/reader-migration.md` (report-shaped — follow the
-find-outdated-sites variant). Files: `src/main/mcp/modules/fleet/fleet-summary.ts`
-(+ new test). Parallel-safe.
-Accept: summary carries an observations/freshness header; per-population counts
-unchanged; drift between ledger fleet-size and cache fleet-size surfaced as a
-hint, not silently reconciled (mind CLAUDE.md "Fleet counts — what is real").
+### [x] WP-01 · Migrate `fleet_summary` to twin enrichment
+Outcome: additive `> Observations:` header (coverage + freshness over the
+tool's own site population) + `> Drift hint:` line naming ledger-observed
+environments the population never counted at all (fleet-size disagreement,
+not per-fact); per-population counts (WP/PHP distributions, plugin
+inventory, integrations) untouched; legacy output byte-identical with the
+core absent, pinned by a strip-and-compare parity test (see finding 2 below
+for why a plain `startsWith`/`toContain` doesn't work for this shape).
+Pattern: reader-migration (report variant, find-outdated-sites). Files:
+`fleet/fleet-summary.ts` (+ test). Parallel-safe.
+**Done 2026-08-15 (branch `wp-01`, worktree `.worktrees/wp-01`). ABI left on
+system-Node (jest ran; `npm run rebuild` needed before next loading Local).**
+
+**WP-01 calibration findings** (proposals only — no pattern amended by this packet):
+
+1. **cp.output's "consider a live re-check" phrase is not in the report
+   exemplar it's describing.** cp.output says every stale-carrying tool must
+   include that exact phrase, but `find-outdated-sites.ts`'s own `>
+   Observations:` line says "treat their version data as provisional"
+   instead — no live-recheck phrase anywhere in the file. Followed the
+   exemplar verbatim per this packet's explicit instruction to match the
+   report variant; the pattern's stated rule and its own named exemplar
+   disagree, and someone should reconcile them (amend the rule to exempt
+   fleet-wide aggregates — a live re-check isn't a single-target action at
+   that scope — or amend the exemplar).
+2. **The additive-parity pin (`enriched.startsWith(baseline)`) only works
+   for footer-style enrichment, and the pattern doesn't say so.**
+   `compare_sites`' `### Observation Ages` section is appended at the very
+   end, so `startsWith` fits. `find-outdated-sites`' (and now
+   `fleet_summary`'s) `> Observations:` header is inserted near the TOP,
+   between existing legacy lines — a mid-document splice that breaks not
+   just `startsWith` but whole-string `toContain` too, since neither survives
+   content inserted in the *middle* of the compared string. Resolved by
+   filtering the enrichment's own added lines (identified by their `> `
+   prefix) back out of the enriched text and asserting the remainder equals
+   the baseline exactly. Worth a line in cp.test: "for header-shaped
+   (mid-document) enrichment, strip the added lines back out and compare,
+   rather than startsWith/toContain."
+3. **A `let` accumulator (`stalest`) reassigned inside a nested closure
+   type-checks to `never` at its later read site**, under this repo's
+   tsconfig, even with an explicit union type annotation on the `let`.
+   `find-outdated-sites.ts` avoids this because its assignment happens
+   directly in a top-level `for` loop, not inside a separate helper function
+   — the first draft of this packet mirrored that shape into a helper
+   closure (`observeSite(...)`) for the two source loops (indexed local +
+   wpe) and tsc failed with `TS2339: Property 'name' does not exist on type
+   'never'`. Fixed by building a flat list of `{entityId, name}` first, then
+   observing in a single inline loop in the same scope as the declaration.
+   Worth a note on cp.enrich: don't wrap the observation loop in a helper
+   closure if it also updates a stalest-style accumulator declared outside it.
+4. **cp.drift-hint's two named shapes (single-fact-missing and
+   observation-age skew) don't cover this packet's shape: a POPULATION-level
+   disagreement.** `find_sites_with_plugin`'s drift hint is per-matched-fact
+   ("this plugin fact exists in the ledger but not in today's match set");
+   `compare_sites`' skew warning is per-dimension. `fleet_summary`'s is
+   coarser than either: once per run, `core.twins.byFact('site.core')` minus
+   the tool's own known-entity-id set, naming environments the *aggregate's
+   site population itself* never counted — this packet's literal accept
+   criterion ("drift between the ledger's fleet-size and the cache's
+   fleet-size"). Worth naming as a third drift-hint variant in cp.drift-hint
+   so a future report-shaped migration doesn't have to re-derive it from
+   CLAUDE.md's "Fleet counts" section.
+5. **Which population "fleet size" means was a judgment call the packet
+   left implicit.** `fleet_summary` already tracks two local-site counts:
+   `localSiteCount` (Local's own store, used only for the printed "Total
+   sites" line) and `indexed.length` (indexRegistry entries with
+   `structure`, the population the WP/PHP/plugin distributions actually
+   aggregate over). The drift hint and `> Observations:` header compare
+   against the latter (`indexed.length + wpeSites.length`, named
+   `summaryPopulation` in the diff) — the population the report body itself
+   counts — not the former. A stricter reading of "fleet-size" could have
+   meant the printed Total-sites figure instead. Flagging for review rather
+   than silently picking one; if the answer should be the Total-sites
+   figure, this is a one-line change (`summaryPopulation` → `totalSites`) but
+   changes which sites can trigger the drift hint (an un-indexed local site
+   with a ledger fact would then also count as drift, which today it does
+   not — it's simply outside the report's own population, not a
+   disagreement with it).
 
 ### [x] WP-02 · Migrate `compare_sites` to twin enrichment
 Outcome: additive `### Observation Ages` section (per-side age/trust/stale per
