@@ -23,6 +23,14 @@ const HOUR = 3600_000;
 const NOW = Date.now();
 const A_OBSERVED = NOW - 1 * HOUR;       // fresh against every SLO in play
 const B_OBSERVED = NOW - 72 * HOUR;      // stale against every SLO in play
+/**
+ * A second plugin on alpha, observed later than alpha's other facts but still
+ * well inside beta's age. Load-bearing: with one plugin per side, "stalest"
+ * and "freshest" pick the same row and the reducer's direction is untested —
+ * a mutation flipping it to freshest passes. This is the row that makes the
+ * Plugins dimension report 20h rather than 1h.
+ */
+const A_PLUGIN_STALE = NOW - 20 * HOUR;  // > the 8h plugin SLO, < 24h so it renders in hours
 
 function makeGraph(): InstanceType<typeof Database> {
   const db = new Database(':memory:');
@@ -35,6 +43,7 @@ function makeGraph(): InstanceType<typeof Database> {
   db.prepare(`INSERT INTO sites VALUES ('alpha','alpha','a.com','6.5','8.3','wpe',?,1,NULL)`).run(A_OBSERVED);
   db.prepare(`INSERT INTO sites VALUES ('beta','beta','b.com','6.4','8.3','wpe',?,1,NULL)`).run(B_OBSERVED);
   db.prepare(`INSERT INTO plugins VALUES ('alpha','woocommerce','9.9.1',1,?)`).run(A_OBSERVED);
+  db.prepare(`INSERT INTO plugins VALUES ('alpha','akismet','5.3',1,?)`).run(A_PLUGIN_STALE);
   db.prepare(`INSERT INTO plugins VALUES ('beta','woocommerce','9.5.0',1,?)`).run(B_OBSERVED);
   db.prepare(`INSERT INTO themes VALUES ('alpha','twentytwentyfour','1.2',1,?)`).run(A_OBSERVED);
   db.prepare(`INSERT INTO themes VALUES ('beta','twentytwentyfour','1.2',1,?)`).run(B_OBSERVED);
@@ -48,10 +57,13 @@ function makeGraph(): InstanceType<typeof Database> {
  * assertion below can be an exact `startsWith`.
  */
 function makeServices(graphDb: unknown) {
-  const structure = (wpVersion: string, pluginVersion: string) => ({
+  const structure = (wpVersion: string, pluginVersion: string, extra: unknown[] = []) => ({
     wpVersion,
     phpVersion: '8.3',
-    plugins: [{ slug: 'woocommerce', name: 'WooCommerce', version: pluginVersion, isActive: true }],
+    plugins: [
+      { slug: 'woocommerce', name: 'WooCommerce', version: pluginVersion, isActive: true },
+      ...extra,
+    ],
     themes: [{ slug: 'twentytwentyfour', name: 'Twenty Twenty-Four', version: '1.2', isActive: true }],
     users: { totalUsers: 3 },
     hasWooCommerce: true,
@@ -60,7 +72,10 @@ function makeServices(graphDb: unknown) {
   const entries: Record<string, unknown> = {
     alpha: {
       siteId: 'alpha', siteName: 'alpha', lastIndexed: NOW, state: 'indexed',
-      documentCount: 10, chunkCount: 20, structure: structure('6.5', '9.9.1'),
+      documentCount: 10, chunkCount: 20,
+      structure: structure('6.5', '9.9.1', [
+        { slug: 'akismet', name: 'Akismet', version: '5.3', isActive: true },
+      ]),
     },
     beta: {
       siteId: 'beta', siteName: 'beta', lastIndexed: NOW, state: 'indexed',
@@ -111,14 +126,19 @@ test('compare_sites: per-side observation ages, SLO-skew warning, legacy output 
   expect(text).toContain('### Observation Ages');
   expect(text).toMatch(/\| WordPress \| 1h ago \(observed\) \| 3d ago \(observed\) ⚠ stale \|/);
   expect(text).toMatch(/\| PHP \| 1h ago \(observed\) \| 3d ago \(observed\) ⚠ stale \|/);
-  expect(text).toMatch(/\| Plugins \(stalest\) \| 1h ago \(observed\) \| 3d ago \(observed\) ⚠ stale \|/);
+  // alpha holds woocommerce@1h AND akismet@20h. The dimension must report the
+  // STALEST (20h, past the 8h plugin SLO), never the freshest — reporting 1h
+  // here would tell a user the plugin data is trustworthy when half of it is
+  // not. Flipping the reducer's comparison must fail this line.
+  expect(text).toMatch(/\| Plugins \(stalest\) \| 20h ago \(observed\) ⚠ stale \| 3d ago \(observed\) ⚠ stale \|/);
+  expect(text).not.toMatch(/\| Plugins \(stalest\) \| 1h ago/);
   expect(text).toMatch(/\| Themes \(stalest\) \| 1h ago \(observed\) \| 3d ago \(observed\) ⚠ stale \|/);
 
   // The packet's headline criterion: ages more than one SLO apart are called
   // out, naming the older side as the one to re-check.
   expect(text).toContain('⚠️ Observation skew');
   expect(text).toMatch(/a gap of 3d, more than the 4h freshness SLO/);   // site.core / theme: → 4h fallback
-  expect(text).toMatch(/a gap of 3d, more than the 8h freshness SLO/);   // plugin:           → 8h
+  expect(text).toMatch(/a gap of 2d, more than the 8h freshness SLO/);   // plugin: 20h vs 72h → 8h SLO
   expect(text).toContain('consider a live re-check of beta');
 
   // Dimensions sharing an age pair AND an SLO collapse into one warning —
@@ -128,8 +148,10 @@ test('compare_sites: per-side observation ages, SLO-skew warning, legacy output 
   expect(text).toContain('Observation skew — WordPress, PHP, Themes (stalest):');
   expect(text.match(/Observation skew/g)).toHaveLength(2);
 
-  // Freshness summary: 6 observations (2 sides × core/plugin/theme), 3 stale.
-  expect(text).toMatch(/Freshness: 3 of 6 ledger-observed fact\(s\) within SLO — 3 stale; consider a live re-check/);
+  // Freshness summary: 6 observations (2 sides × core/plugin/theme). Fresh:
+  // alpha's core + theme. Stale: alpha's plugins (20h > 8h) and all three of
+  // beta's.
+  expect(text).toMatch(/Freshness: 2 of 6 ledger-observed fact\(s\) within SLO — 4 stale; consider a live re-check/);
 
   core.close();
   graphDb.close();
@@ -138,10 +160,14 @@ test('compare_sites: per-side observation ages, SLO-skew warning, legacy output 
 test('compare_sites: no skew warning when both sides were observed together', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'intel-compare-even-'));
   const graphDb = makeGraph();
-  // Re-stamp beta to alpha's observation time: same data, no skew.
-  graphDb.prepare(`UPDATE sites SET updated_at = ? WHERE id = 'beta'`).run(A_OBSERVED);
-  graphDb.prepare(`UPDATE plugins SET updated_at = ? WHERE site_id = 'beta'`).run(A_OBSERVED);
-  graphDb.prepare(`UPDATE themes SET updated_at = ? WHERE site_id = 'beta'`).run(A_OBSERVED);
+  // Level EVERY observation to one moment: same data, same age, no skew.
+  // Note this also re-stamps alpha's deliberately-older akismet row — leaving
+  // it at 20h would make alpha's plugin dimension skew against beta's 1h all
+  // by itself, and this test would be asserting the absence of a warning it
+  // had itself made unreachable.
+  graphDb.prepare(`UPDATE sites SET updated_at = ?`).run(A_OBSERVED);
+  graphDb.prepare(`UPDATE plugins SET updated_at = ?`).run(A_OBSERVED);
+  graphDb.prepare(`UPDATE themes SET updated_at = ?`).run(A_OBSERVED);
 
   const kv = new Map<string, unknown>();
   const core = initIntelligenceCore({
