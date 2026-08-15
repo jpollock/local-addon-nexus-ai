@@ -34,7 +34,7 @@ recorded; two justified deviations (no per-row column in a two-sided report;
 drift hint unreachable for explicit-target tools) — both folded back into the
 pattern.
 
-### [ ] WP-03 · Reconcile `detect_drift` with ledger drift events
+### [~] WP-03 · Reconcile `detect_drift` with ledger drift events  *(wp-03 worktree)*
 Pattern: reader-migration + read `stateTwinFold.ts` drift hook first.
 Files: `fleet/detect-drift.ts` (+ test). Parallel-safe.
 Accept: tool reports BOTH its legacy computed drift and `state.drift.detected`

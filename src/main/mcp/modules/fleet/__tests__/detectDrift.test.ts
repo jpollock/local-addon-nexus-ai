@@ -57,6 +57,13 @@ function makeGraph() {
   // Only alpha's theme is ever observed — beta's active theme is the ledger's
   // coverage gap, and it must stay unobserved for that class to be reachable.
   db.prepare(`INSERT INTO themes VALUES ('alpha','twentytwentyfour','1.2',1,?)`).run(ALPHA_T);
+  // gamma is in the graph (so the backfill seeds it and it will drift) but NOT
+  // in the IndexRegistry, so it is never a comparison target. A real state —
+  // graph.db and the content index are different populations — and the only
+  // way to prove the report is scoped: without the scope filter, gamma's drift
+  // would leak into a report about alpha and beta.
+  db.prepare(`INSERT INTO sites VALUES ('gamma','gamma','g.com','6.5','8.3','wpe',?,1,NULL)`).run(ALPHA_T);
+  db.prepare(`INSERT INTO plugins VALUES ('gamma','offsite-plugin','3.0',1,?)`).run(ALPHA_T);
   return db;
 }
 
@@ -112,6 +119,7 @@ async function seedLedgerWithDrift(core: ReturnType<typeof initIntelligenceCore>
   await new Promise((r) => setTimeout(r, 700));
   db.prepare(`UPDATE plugins SET version='9.9.1', updated_at=? WHERE site_id='alpha' AND slug='woocommerce'`).run(ALPHA_CHANGED_T);
   db.prepare(`UPDATE plugins SET version='1.1', updated_at=? WHERE site_id='beta' AND slug='custom-thing'`).run(BETA_CHANGED_T);
+  db.prepare(`UPDATE plugins SET version='3.1', updated_at=? WHERE site_id='gamma' AND slug='offsite-plugin'`).run(ALPHA_CHANGED_T);
   runGraphBackfill(core!, db, SILENT);
   await new Promise((r) => setTimeout(r, 700));
 }
@@ -177,6 +185,12 @@ test('detect_drift: both detectors reported, labeled by origin, and reconciled',
   // The explained fact must NOT also appear as ledger-only — that would double
   // count the one change both detectors agreed on.
   expect(text).not.toMatch(/plugin:woocommerce` — changed .* but the cross-site comparison/);
+
+  // (4) Scoping: gamma drifted in the same ledger, but it is not one of the
+  // compared sites. A report about alpha vs beta must not mention it — an
+  // unscoped query would quietly turn this into a fleet-wide change feed.
+  expect(text).not.toContain('gamma');
+  expect(text).not.toContain('offsite-plugin');
 
   core.close();
   graphDb.close();
