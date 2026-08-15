@@ -646,7 +646,7 @@ describe('detect_drift', () => {
 // ---------------------------------------------------------------------------
 
 describe('fleet tool registration', () => {
-  test('all 6 fleet tools are registered', () => {
+  test('all 7 fleet tools are registered', () => {
     const registry = new ToolRegistry();
     registerFleetTools(registry);
     const names = registry.allToolNames();
@@ -655,9 +655,10 @@ describe('fleet tool registration', () => {
     expect(names).toContain('find_sites_with_plugin');
     expect(names).toContain('find_sites_with_theme');
     expect(names).toContain('find_outdated_sites');
+    expect(names).toContain('verify_site_live'); // intelligence layer: the live re-check path
     expect(names).toContain('compare_sites');
     expect(names).toContain('detect_drift');
-    expect(names.length).toBe(6);
+    expect(names.length).toBe(7);
   });
 
   test('all fleet tools are always available (no isAvailable gate)', () => {

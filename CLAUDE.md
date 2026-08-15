@@ -1028,3 +1028,52 @@ built and rejected) is in the designer's `handoff_log_sources_v3/DECISIONS.md`.
   itself names the exact permission and environment to grant, so this should
   surface as an actionable message, not a silent no-op — if you touch
   `SentinelExecutor`'s error strings, keep them that specific.
+
+## Intelligence Layer (`src/intelligence/` + `src/main/intelligence-host/`) — branch `poc/nexintelligence`
+
+An event-sourced intelligence spine runs alongside the legacy caches: every
+observation about the fleet (webhook events, graph writes, live re-checks)
+becomes a provenance-stamped envelope in an append-only SQLite ledger
+(`~/Library/Application Support/Local/nexus-ai/ledger.db`), and `twin_facts`
+is a **materialized view folded from that ledger** — rebuildable, never
+authoritative. Design record: `docs/intelligence/architecture.md` (ADRs 1–19).
+Roadmap: `INTELLIGENCE_ROADMAP.md`. Task-shaped how-tos:
+`docs/intelligence/patterns/`. Assignable work: `docs/intelligence/WORK_PACKETS.md`.
+Multi-agent rules: `docs/intelligence/PARALLEL_PROTOCOL.md`. Read the packet
+and its pattern BEFORE touching anything here.
+
+Invariants — violating any of these is a defect even if tests pass:
+
+- **Never write to `events` or `twin_facts` directly.** Events enter through
+  `Emitter.emit` (validation, id, `actor.via` happen there); twin facts enter
+  through fold workers only. A direct write breaks rebuildability and audit.
+- **Never conflate `observed_at` with `recorded_at`.** `observed_at` is when
+  the fact was true at its source; freshness computes from it. Backfills and
+  producers must pass real source timestamps — stamping "now" on old data is
+  data laundering (see `graphBackfill.ts` for the correct handling).
+- **The extraction seam is law (ADR-16).** Nothing under `src/intelligence/`
+  imports electron, `@getflywheel/*`, react, or anything from `src/main` /
+  `src/renderer`. The nested `.eslintrc.json` makes this a lint error; host
+  access goes through `src/intelligence/host/ports.ts`. Do not weaken the
+  lint rule to "fix" a build.
+- **Enrich, don't replace; disagreement is a signal.** Twin-backed readers
+  keep their legacy paths and surface ledger-vs-cache differences as drift
+  hints (see `find-sites-with-plugin.ts`). Never silently merge the two, and
+  never delete a legacy path without a packet that says so.
+- **Producers dedup through the change gate** (`changeGate.ts`) — the ledger
+  records change, not repetition. New producers that skip the gate will
+  flood the ledger on every sync cycle.
+- **Do not touch storage marker keys** (`intelligence_backfill_*`,
+  `intelligence_satellite_id`) except through the modules that own them.
+- **Everything on this seam is non-fatal by construction.** Intelligence-layer
+  failures must never break the legacy event pipeline or any existing tool —
+  wrap, log, degrade. If your change can throw into a caller that predates
+  the layer, it is wrong.
+- Tests for this subsystem live beside the code (`src/**/__tests__/`).
+  jest.config.js roots only cover `tests/`, so until WP-05 fixes that, run
+  them with the explicit flag: `npx jest --roots src`. Running jest requires
+  better-sqlite3 built for system Node (the `pretest` hook handles it);
+  loading Local afterwards requires `npm run rebuild` back to Electron —
+  disclose which state you left it in. Partial service mocks in tests cast
+  with `as never` against `NexusServices` — that is the established pattern,
+  not a hack to remove.

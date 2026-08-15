@@ -53,6 +53,10 @@ import { FleetAssembler } from './fleet/FleetAssembler';
 import { runStartupReconciliation } from './fleet/startupReconciliation';
 import { EventProcessor } from './events/EventProcessor';
 import { HttpEventInterface } from './events/HttpEventInterface';
+import { initIntelligenceCore } from './intelligence-host/bootstrap';
+import { tapGraphService } from './intelligence-host/graphServiceTap';
+import { scheduleGraphBackfill } from './intelligence-host/graphBackfill';
+import { setIntelligenceCore } from './intelligence-host/coreRegistry';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
 import { WPESyncService } from './events/WPESyncService';
 import { RemoteContentExtractor } from './content/RemoteContentExtractor';
@@ -265,6 +269,10 @@ export default function main(context: any): void {
     daemonManager?.stopAll().catch(() => {});
     graphService.close().catch(() => {});
     auditLogger?.flush().catch(() => {});   // was never called — entries were lost on every exit
+    // Intelligence ledger: final fold drain + close. try/catch because
+    // intelligenceCore is declared after this handler — a quit during startup
+    // would otherwise hit the TDZ (same reason auditLogger moved up here).
+    try { intelligenceCore?.close(); } catch { /* not constructed yet */ }
   });
 
   // Periodic flush so a hard kill (SIGKILL, crash) loses at most 5 minutes.
@@ -326,6 +334,37 @@ export default function main(context: any): void {
     logger: localLogger,
   });
 
+  // Intelligence core (step 1): local ledger + emission tap on WP events.
+  // Taps the same flow the event_queue consumes — the data stops being dropped.
+  // Non-fatal by construction: init failure leaves the tap undefined and the
+  // existing pipeline untouched. See src/intelligence/README.md.
+  const intelligenceStorage = {
+    get: (key: string) => registryStorage.get(key),
+    set: (key: string, value: unknown) => registryStorage.set(key, value as never),
+  };
+  const intelligenceCore = initIntelligenceCore({
+    storage: intelligenceStorage,
+    logger: localLogger,
+    dataDir: path.join(localDataDir, 'nexus-ai'),
+  });
+
+  // Cache-inversion phase A: every graph write (CAPI sync, WP-CLI refresh,
+  // external-host refresh) also emits a state observation — change-deduped so
+  // an 8-hourly no-change sync doesn't flood the ledger.
+  // Phase B seeding: one-shot backfill of the graph's current active rows so
+  // twins cover the whole fleet, not just post-install changes (marker-guarded,
+  // polls until graph.db's async init completes).
+  if (intelligenceCore) {
+    setIntelligenceCore(intelligenceCore); // late-wired consumers (MCP tools) read this registry
+    tapGraphService(graphService as never, intelligenceCore, localLogger);
+    scheduleGraphBackfill({
+      core: intelligenceCore,
+      storage: intelligenceStorage,
+      getDb: () => graphService.getDb() as never,
+      logger: localLogger,
+    });
+  }
+
   // Initialize HTTP event interface.
   // Reuse the same auth token across restarts so MU plugin credentials stay valid.
   const savedWebhookToken = registryStorage.get('http_webhook_auth_token') as string | null;
@@ -335,7 +374,10 @@ export default function main(context: any): void {
     storage: registryStorage,
     authToken: savedWebhookToken ?? undefined,
     // Forward-ref: _wpEventsBridgeCallback is set once AgentEventBus is ready
-    onEvent: (siteId, eventType, payload) => { _wpEventsBridgeCallback?.(siteId, eventType, payload); },
+    onEvent: (siteId, eventType, payload) => {
+      _wpEventsBridgeCallback?.(siteId, eventType, payload);
+      intelligenceCore?.tap(siteId, eventType, payload);
+    },
   });
 
   // Initialize WPE sync service (Phase 1-2)

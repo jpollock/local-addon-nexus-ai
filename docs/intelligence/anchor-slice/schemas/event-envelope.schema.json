@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexus.local/schemas/event-envelope/1",
+  "title": "Intelligence Layer — Event Envelope v1",
+  "type": "object",
+  "required": ["id", "recorded_at", "observed_at", "topic", "schema", "entity", "actor", "source", "access", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^evt_[0-9A-HJKMNP-TV-Z]{16,26}$",
+      "description": "ULID with evt_ prefix; assigned at first write, satellite-side for satellite events; idempotency key"
+    },
+    "recorded_at": { "type": "string", "format": "date-time", "description": "When the layer recorded the event" },
+    "observed_at": {
+      "type": "string", "format": "date-time",
+      "description": "When the fact was true at its source. NEVER conflate with recorded_at — freshness computes from this field"
+    },
+    "topic": {
+      "type": "string",
+      "pattern": "^(state|semantic|procedure|policy|episodic|task|control)\\.[a-z0-9_]+\\.[a-z0-9_]+$",
+      "description": "Type-prefixed taxonomy: <type>.<subject>.<verb>"
+    },
+    "schema": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]+/[0-9]+$",
+      "description": "Payload schema name and version, e.g. plugin.observed/2"
+    },
+    "entity": {
+      "type": "object",
+      "description": "Entity references only — never raw names. Keys are entity roles.",
+      "properties": {
+        "site":        { "$ref": "#/$defs/entityId" },
+        "environment": { "$ref": "#/$defs/entityId" },
+        "client":      { "$ref": "#/$defs/entityId" },
+        "domain":      { "$ref": "#/$defs/entityId" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/entityId" }
+    },
+    "actor": {
+      "type": "object",
+      "required": ["id", "kind", "via"],
+      "additionalProperties": false,
+      "properties": {
+        "id":   { "type": "string", "pattern": "^act_[a-z0-9_-]+$" },
+        "kind": { "enum": ["human", "agent", "ability", "system"] },
+        "via":  { "type": "string", "description": "Gateway/satellite identity the action flowed through (ADR-14: actor X via satellite Y)" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["class", "system", "trust"],
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": ["platform", "work_product", "work", "expertise", "intent",
+                   "audience_instrument", "market_instrument", "regulation", "commons"],
+          "description": "One of the nine source classes"
+        },
+        "system": { "type": "string", "description": "Concrete system observed through: wp-cli, capi, ga4, gsc, patchstack, human, ..." },
+        "trust": {
+          "enum": ["observed", "derived", "emitted", "authored", "elicited",
+                   "measured", "estimated", "imposed", "imported"],
+          "description": "1:1 with source class; consumers rank by it; must survive to user-facing output"
+        }
+      }
+    },
+    "access": {
+      "type": "object",
+      "required": ["tenant"],
+      "additionalProperties": false,
+      "description": "Reserved from day one (ADR-11) so events are migratable into whichever hub tenancy model is adopted",
+      "properties": {
+        "tenant":      { "type": "string" },
+        "client":      { "$ref": "#/$defs/entityId" },
+        "sensitivity": { "enum": ["ops", "content", "client_confidential", "security"], "default": "ops" }
+      }
+    },
+    "correlation": { "type": "string", "pattern": "^task_[0-9A-HJKMNP-TV-Z]{16,26}$", "description": "The task moment this event belongs to; audit is WHERE correlation =" },
+    "causation":   { "type": "string", "pattern": "^evt_[0-9A-HJKMNP-TV-Z]{16,26}$", "description": "The event that caused this one; supersession chains resolve along it" },
+    "payload":     { "type": "object", "description": "Validated separately against the schema named in `schema`" }
+  },
+  "$defs": {
+    "entityId": { "type": "string", "pattern": "^ent_[a-z]+_[0-9A-HJKMNP-TV-Z]{16,26}$" }
+  }
+}

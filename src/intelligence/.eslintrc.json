@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          { "name": "electron", "message": "Extraction seam (ADR-16): the intelligence core must not touch Electron. Add a port in host/ports.ts instead." },
+          { "name": "@getflywheel/local", "message": "Extraction seam (ADR-16): host access goes through host/ports.ts." },
+          { "name": "@getflywheel/local-components", "message": "Extraction seam (ADR-16): no UI imports in the core." },
+          { "name": "react", "message": "Extraction seam (ADR-16): no UI imports in the core." },
+          { "name": "react-dom", "message": "Extraction seam (ADR-16): no UI imports in the core." }
+        ],
+        "patterns": [
+          { "group": ["**/main/**", "../main/*"], "message": "Extraction seam (ADR-16): the core cannot import from src/main. Define a port." },
+          { "group": ["**/renderer/**", "../renderer/*"], "message": "Extraction seam (ADR-16): the core cannot import from src/renderer. Define a port." }
+        ]
+      }
+    ]
+  }
+}

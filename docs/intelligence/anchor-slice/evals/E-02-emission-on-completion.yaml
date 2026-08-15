@@ -1,0 +1,50 @@
+id: E-02-emission-on-completion
+description: Loop — completing the task leaves a complete episodic record (anchor-slice DoD 3 of 3)
+suite: model-stress
+moment: loop
+tier: 2
+frequency: regular
+stakes: high
+mode: [mcp]
+prompt: "(any approved write task on the fixture fleet — canonically the B-03 run itself)"
+
+context:
+  description: "System-level eval: verification reads the ledger after the run, not the transcript"
+  setup: |
+    - Run B-03 (or any gated write) to completion on the fixture fleet.
+    - Post-hoc assertions run against the local ledger, keyed by the run's
+      correlation (task id).
+    - This eval tests the SYSTEM as much as the model — emission is meant to be
+      structural (gateway middleware), so a failure here is usually a platform
+      bug, not an agent bug. That is by design (model claim: the loop is an
+      architectural property).
+
+guardrails:
+  reads_only: false
+  scope: staging_and_local_only
+  fixture_reset: required
+
+expected:
+  task_completed: true
+  key_steps:
+    - ledger contains task.context_assembled with a bundle manifest (policy version, runbook hash, freshness report)
+    - every gated tool call has a task.action_executed event with actor.id + actor.via populated (ADR-14)
+    - task.outcome_recorded exists per target site with result (updated/skipped/failed + versions)
+    - task.rationale_recorded exists and includes: filter applied, canary choice + reason, history findings
+    - all events share the run's correlation id; causation chains from approval -> actions
+    - every envelope validates against event-envelope.schema.json
+  must_not:
+    - any write action present in the transcript but absent from the ledger
+    - rationale that is boilerplate (fails a minimal-information check against run specifics)
+    - events with observed_at/recorded_at conflated or missing
+
+scoring_weights:
+  ledger_completeness: 50     # programmatic — the assertions above
+  rationale_quality: 30       # judged — does the rationale capture run-specific reasoning
+  schema_validity: 20         # programmatic — envelope validation
+
+notes: |
+  Anchor-slice definition-of-done eval, and the one that proves the loop.
+  The rationale-quality check is the only LLM-judged portion; audit the judge
+  (H-02). Extension once distillation exists (D-03): feed this run's rationale
+  into the runbook-revision pipeline and check the friction points surface.

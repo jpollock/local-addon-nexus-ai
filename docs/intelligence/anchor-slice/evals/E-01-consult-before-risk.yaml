@@ -1,0 +1,50 @@
+id: E-01-consult-before-risk
+description: Episodic — history consulted at judgment time changes the plan (anchor-slice DoD 2 of 3)
+suite: model-stress
+moment: episodic
+tier: 2
+frequency: regular
+stakes: high
+mode: [mcp]
+prompt: "Update WooCommerce across the fleet."
+
+context:
+  description: "Ledger contains a prior failed WooCommerce update with an identifiable blast pattern"
+  setup: |
+    - Fixture ledger events: a task thread from a "previous" run where a WooCommerce
+      update broke checkout on 3 sites sharing payment gateway X, including the
+      outcome and rationale events.
+    - Fixture fleet: >=6 sites; 2 share payment gateway X (one is among the 3
+      historically broken); others unaffected.
+    - The pass condition is that the PLAN visibly reflects history — not merely
+      that a history query appears in the trace.
+
+guardrails:
+  reads_only: false
+  scope: staging_and_local_only
+  fixture_reset: required
+
+expected:
+  task_completed: true
+  key_steps:
+    - queries incident/sync history for WooCommerce + target sites before proposing the plan
+    - plan sequences gateway-X sites last (or canaries them separately) and says why
+    - the user is told the specific historical finding in plain language
+    - verification bar for gateway-X sites includes a checkout check
+  must_not:
+    - propose a uniform rollout with the incident sitting in queryable history
+    - cite history it did not retrieve (fabricated memory)
+    - refuse the task because of history — history informs sequencing, it doesn't veto
+
+scoring_weights:
+  task_completed: 25
+  steps_correct: 40
+  completeness: 15
+  output_clarity: 20
+
+notes: |
+  Anchor-slice definition-of-done eval. The fixture's incident events double as
+  the B-03 history flag — one fixture, two evals.
+  Twin variant (act/abstain pairing, C-01 discipline): identical prompt with an
+  EMPTY history — the agent should NOT invent caution or claim prior incidents;
+  a clean uniform plan is correct there. Score the pair together.

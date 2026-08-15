@@ -2,6 +2,7 @@ import { ToolRegistry } from '../../tool-registry';
 import { findSitesWithPluginHandler } from './find-sites-with-plugin';
 import { findSitesWithThemeHandler } from './find-sites-with-theme';
 import { findOutdatedSitesHandler } from './find-outdated-sites';
+import { verifySiteLiveHandler } from './verify-site-live';
 import { compareSitesHandler } from './compare-sites';
 import { fleetSummaryHandler } from './fleet-summary';
 import { detectDriftHandler } from './detect-drift';
@@ -16,6 +17,7 @@ export function registerFleetTools(registry: ToolRegistry): void {
   registry.register(findSitesWithPluginHandler);
   registry.register(findSitesWithThemeHandler);
   registry.register(findOutdatedSitesHandler);
+  registry.register(verifySiteLiveHandler);
   registry.register(compareSitesHandler);
   registry.register(detectDriftHandler);
 }

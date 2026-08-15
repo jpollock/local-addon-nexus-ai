@@ -1,0 +1,391 @@
+# The Intelligence Layer — Architecture Design Document
+### Engineering companion to "The Intelligence Supply Chain"
+
+*Draft 0.3 · 2026-08-14 · Portable core, concrete choices grounded in the Local (desktop) + WP Engine (cloud) reality · 0.2: the five §11 open questions resolved → ADRs 11–15 · 0.3: implementation decisions → ADRs 16–19*
+
+---
+
+## 1. Purpose, goals, non-goals
+
+This document turns the conceptual model (five types · nine sources · governance control plane + enforcement fabric · four distribution patterns · closed loop) into a buildable system design. It goes deep on the three components chosen as first priorities — **event backbone & schemas**, **entity graph & identity**, and the **context assembler** — treats the gateway/policy engine and hub↔satellite sync at contract level, and captures the load-bearing decisions as ADRs.
+
+**Goals**
+
+- G1. Topology (all-local / hybrid / hub-heavy) is a deployment profile, not an architecture. Same components, three configurations.
+- G2. Each intelligence type gets its native store, consistency model, and distribution pattern. No flattening.
+- G3. Governance is enforced outside the model: one gateway choke point, provenance on every fact, audit reconstructable from records alone.
+- G4. Agents are stateless visitors. All accumulated intelligence survives model swaps.
+- G5. The closed loop is structural: acting through the system emits history by construction, not by agent discipline.
+
+**Non-goals (v1)**
+
+- Multi-hub federation between organizations.
+- Real-time collaborative editing of runbooks/policy (git-style async review is the v1 model).
+- A general workflow engine — runbooks guide agents; they are not BPMN.
+- Replacing the platform's own APIs (WP Engine CAPI, WP-CLI, WordPress Abilities/MCP) — we orchestrate them, never re-implement them.
+
+---
+
+## 2. System context (C4 level 1)
+
+```mermaid
+graph TB
+  subgraph Actors
+    H[Human operator / owner]
+    A1[Interactive agent]
+    A2[Autonomous scheduled agent]
+    A3[In-platform ability]
+  end
+
+  subgraph IL[The Intelligence Layer]
+    HUB[Hub — memory & law]
+    SAT[Satellite — eyes & hands]
+  end
+
+  subgraph Estate
+    LOCAL[Local dev sites]
+    WPE[WP Engine installs<br/>CAPI · SSH/WP-CLI · Abilities/MCP]
+  end
+
+  subgraph External sources
+    INST[Audience & market instruments<br/>GA4 · GSC · Ahrefs-class]
+    FEEDS[Commons & regulation feeds<br/>Patchstack/WPScan · release/EOL · WCAG]
+  end
+
+  H -->|authors policy & runbooks,<br/>approves, audits| HUB
+  A1 & A2 -->|MCP| HUB
+  A1 -->|MCP| SAT
+  A3 --- WPE
+  SAT --- LOCAL
+  HUB --- WPE
+  HUB --- INST
+  HUB --- FEEDS
+  SAT <-->|sync protocol §8| HUB
+```
+
+Boundary rule: **actors never touch the estate or external sources directly** — every read is stamped and every write is gated by passing through the layer. The single exception is in-platform abilities (they *are* estate code); they participate by emitting events to the layer and being invoked through it.
+
+---
+
+## 3. Container view (C4 level 2)
+
+**Hub** (cloud; always-on; multi-tenant):
+
+| Container | Responsibility | v1 technology |
+|---|---|---|
+| **Ledger** | Append-only event log; the spine; episodic store is its durable retention | Postgres (`events` table, partitioned by month) — a log-first system (Kafka/NATS) is deliberately deferred, see ADR-2 |
+| **Entity service** | Identity spine: entities, aliases, pairings, resolution API | Postgres + small resolver service |
+| **Twin views** | Materialized state views folded from events; freshness & drift computed here | Postgres tables + fold workers |
+| **Semantic index** | Production content embeddings + graph, source-linked | pgvector (or LanceDB-in-cloud); graph edges in Postgres |
+| **Policy & runbook repo** | The authored, binding intelligence — policy constraints + runbooks; versioned, reviewed, signed | Git repository + thin index service (ADR-5) |
+| **Assembler** | Compiles per-task context bundles; emits manifests | Stateless service |
+| **Gateway** | MCP server; policy evaluation, thresholds, stamping, emission | MCP + policy engine (ADR-8) |
+| **Conductors** | Schedulers, monitors, feed & instrument sync, drift detection | Workers on the ledger |
+| **Control UI** | Grants, thresholds, audit views, review queue | Web app |
+
+**Satellite** (desktop daemon beside Local; single-tenant; offline-capable):
+
+| Container | Responsibility | v1 technology |
+|---|---|---|
+| **Local ledger** | Same envelope, local retention, replication cursor | SQLite |
+| **Local observers** | Site scan, WP-CLI introspection, filesystem/webhook events | Existing Local addon surface |
+| **Local twins + index** | Views over local events; local content index | SQLite + LanceDB (existing) |
+| **Policy & runbook cache** | Pinned policy/runbook versions + staleness clock | Git clone / content-addressed cache |
+| **Local gateway** | Same MCP surface, same gates, enforced offline | Shared gateway library |
+| **Local assembler** | Same assembler library, local stores | Shared library |
+
+The satellite is a **miniature of the runtime planes**, not a thin client: gates hold with the laptop offline; only canonical memory (the ledger) and the canonical policy & runbook repo live at the hub.
+
+---
+
+## 4. Deep dive A — Event backbone & schemas
+
+### 4.1 The envelope
+
+Every fact that enters the layer is an event with one envelope. This is the enforcement fabric made concrete: provenance, freshness, and access ride the envelope, not tribal knowledge.
+
+```jsonc
+{
+  "id": "evt_01J5X8K3V9Q2M7",          // ULID — sortable, globally unique (ADR-6)
+  "recorded_at": "2026-08-14T17:03:22Z", // when the layer recorded it
+  "observed_at": "2026-08-14T17:03:19Z", // when the fact was true at its source
+  "topic": "state.plugin.observed",      // taxonomy §4.2
+  "schema": "plugin.observed/2",         // payload schema + version
+  "entity": {                            // entity refs, never names (§5)
+    "site": "ent_site_01J3...",
+    "environment": "ent_env_01J3..._wpe_prod"
+  },
+  "actor": { "id": "act_agent_claude", "kind": "agent", "via": "gw_hub" },
+  "source": {
+    "class": "platform",                 // one of the nine source classes
+    "system": "wp-cli",                  // concrete system observed through
+    "trust": "observed"                  // observed | derived | emitted | authored |
+  },                                     // elicited | measured | estimated | imposed | imported
+  "access": { "tenant": "tn_agency", "client": "ent_client_01J9...", "sensitivity": "ops" },
+  "correlation": "task_01J5X7...",       // the task moment this belongs to
+  "causation": "evt_01J5X8K2...",        // the event that caused this one
+  "payload": { "slug": "woocommerce", "version": "11.0.1", "active": true }
+}
+```
+
+Rules:
+
+- **`observed_at` ≠ `recorded_at` is load-bearing.** Freshness is computed from `observed_at`; M6-03's "synced-at is not changed-at" bug becomes structurally impossible to make.
+- **`source.trust` is an enum matched 1:1 to the nine source classes.** Downstream consumers rank by it; the assembler surfaces it; report generators must carry it to the user.
+- **Envelope is immutable.** Corrections are new events with `causation` pointing at what they correct (supersession, §4.4).
+- **`correlation` = task id** groups a task moment: assembly manifest, tool calls, outcome, rationale — one thread. Audit is a `WHERE correlation =` query.
+
+### 4.2 Topic taxonomy
+
+`<type>.<subject>.<verb>` — the first segment is *always* one of the five types plus `task` and `control`:
+
+```
+state.site.observed        state.plugin.observed      state.drift.detected
+state.instrument.summarized  // conductor rollups & anomaly events from GA4/GSC-class
+                             // instruments (trust: measured) — raw data stays external (ADR-13)
+semantic.content.indexed   semantic.content.changed
+procedure.runbook.published  procedure.runbook.deprecated
+policy.constraint.published  policy.constraint.retired
+episodic.*                 // reserved: episodic IS the ledger; this namespace
+                           // exists only for imported histories
+task.assigned  task.context_assembled  task.action_executed
+task.completed task.outcome_recorded   task.rationale_recorded
+control.grant.issued  control.grant.revoked  control.threshold.changed
+control.audit.finding
+```
+
+The type-prefixed taxonomy means "which supply chain does this belong to" is answerable by string prefix — cheap routing, cheap retention policy, cheap audit scoping.
+
+### 4.3 Twins as materialized views
+
+Fold workers consume `state.*` events into per-entity view tables:
+
+```sql
+CREATE TABLE twin_facts (
+  entity_id     TEXT NOT NULL,
+  fact          TEXT NOT NULL,       -- 'wp.version', 'php.version', 'plugin:woocommerce'
+  value         JSONB NOT NULL,
+  observed_at   TIMESTAMPTZ NOT NULL,
+  source_trust  TEXT NOT NULL,
+  event_id      TEXT NOT NULL,       -- provenance pointer back into the ledger
+  PRIMARY KEY (entity_id, fact)
+);
+```
+
+- The twin is **rebuildable from the ledger at any time** — it is a cache by construction, which settles every "is the twin authoritative?" argument in code.
+- **Freshness SLOs per fact class** (config, not code): `wp.version: 24h`, `plugin.*: 8h`, `ssl.expiry: 24h`, `health: 1h`. The assembler and gateway read these SLOs to decide pull-live vs. serve-cached (§6.3).
+- **Drift detection is a fold worker** that diffs an incoming observation against the current fact and emits `state.drift.detected` — drift handling becomes ordinary event consumption.
+
+### 4.4 Retention, compaction, supersession
+
+- `task.*` and `control.*`: **never deleted**. This is the audit substrate.
+- `state.*`: full granularity for 90 days, then compacted to daily last-known-good per fact (the twin keeps current regardless).
+- `semantic.*`: pointers only (the index holds content); prune with reindex epochs.
+- **Compaction produces summary events** (`episodic.summary.compacted`) — the ledger summarizes itself into itself; nothing exits the provenance chain.
+- Supersession: correction events carry `causation`; readers resolve "latest wins along the causation chain." The E-03 eval (use the corrected fact, cite the chain) tests exactly this path.
+
+### 4.5 Delivery semantics
+
+At-least-once everywhere; **idempotency by event `id`** (ULID assigned at first write, satellite-side for satellite events). Fold workers are idempotent by `(entity_id, fact, observed_at)` — replays are harmless. Ordering is per-entity best-effort; correctness derives from `observed_at`, not arrival order.
+
+### 4.6 Migration from today
+
+`event_queue` (WP Connector real-time events, currently unsurfaced) becomes the first producer onto the local ledger — it already captures the right things and drops them. CAPI sync and WP-CLI scans wrap their writes in envelopes instead of writing caches directly; `SiteMetadataCache` and the graph.db `sites/plugins` tables become fold-worker *outputs* rather than sources of truth. That inversion — caches become views — is the single most important migration step.
+
+---
+
+## 5. Deep dive B — Entity graph & identity
+
+### 5.1 The model
+
+```
+Tenant ──< Client ──< Site (logical) ──< Environment >── Host
+                          │                   │
+                          │                   ├── observations (twin facts, events)
+                          │                   └── kind: local | wpe_prod | wpe_stg | wpe_dev
+                          ├──< Domain
+                          └──< ContentCorpus (per environment, versioned by index epoch)
+Actor (human | agent | ability | system)
+Capability (grant: actor × operation × scope, with runbook ref)
+```
+
+The pivotal choice: **Site is logical; Environment is physical.** A Local dev copy and its WPE production install are *two environments of one site*. Every eval-suite pain point around pairing ("do I have a local copy of jppblank?", M3-03/M5-03) is a symptom of environments being modeled as unrelated sites today.
+
+### 5.2 IDs and aliases
+
+- IDs: `ent_<type>_<ULID>` — stable, meaningless, never derived from names or domains (names change; IDs don't).
+- Every external handle is an **alias**, not an identity:
+
+```sql
+CREATE TABLE aliases (
+  entity_id  TEXT NOT NULL,
+  namespace  TEXT NOT NULL,   -- 'local.site_id' | 'wpe.install_name' | 'domain' | 'user.label'
+  value      TEXT NOT NULL,
+  confidence REAL NOT NULL,   -- 1.0 explicit; <1.0 heuristic
+  established_by TEXT NOT NULL, -- 'user_link' | 'domain_match' | 'name_heuristic' | 'pull_lineage'
+  UNIQUE (namespace, value)
+);
+```
+
+- The resolver API (`resolve("jppblank") → candidates ranked by confidence`) is what agents call; ambiguous resolution returns candidates *with their evidence*, which is exactly the honest-disambiguation behavior the M5-N1 eval demands.
+
+### 5.3 Pairing
+
+Pairing local↔production is **an assertion with provenance**, never an inference silently treated as fact:
+
+- `established_by: pull_lineage` — created automatically when a pull/push flows through the gateway (strongest signal; the sync operation *is* the proof).
+- `user_link` — explicit, confidence 1.0.
+- `domain_match` / `name_heuristic` — created by a matcher worker at confidence <1.0; surfaced to the user for one-click confirmation, which upgrades them.
+
+Environments of one site inherit each other's client, policy scope, and red-lines — which is how "this local copy is production-adjacent" (the inherited-site walk-through) becomes derivable rather than remembered.
+
+### 5.4 Migration from today
+
+graph.db's `sites` table splits: rows become Environments; a linking pass proposes Site groupings from existing `local_wpe_link` data (highest confidence), then domains, then name heuristics — each proposal carrying its `established_by`. Nothing is silently merged; the confirmation queue is a control-UI view. LanceDB corpora re-key from site-name to `ContentCorpus` id.
+
+---
+
+## 6. Deep dive C — The context assembler
+
+### 6.1 Contract
+
+```ts
+assemble(req: AssembleRequest): ContextBundle
+
+interface AssembleRequest {
+  actor: ActorRef;               // resolved actor with autonomy class
+  capability: CapabilityRef;     // the granted operation this task runs under
+  task: { id: TaskId; intent: string; };
+  targets: EntityRef[];          // resolved entities (never raw names)
+  budget?: { tokens?: number; toolCalls?: number };
+}
+
+interface ContextBundle {
+  manifest: BundleManifest;      // §6.4 — the audit artifact
+  ambient: PolicySet;            // pinned version, whole set, always present
+  procedure: Runbook | null;     // content-addressed, attached to the capability;
+                                 // carries strictness: 'strict' | 'guided' (ADR-12)
+  tools: ToolGrant[];            // scoped live-pull handles — capabilities, not data
+  retrieved: RetrievedItem[];    // semantic + episodic slices, provenance per item
+}
+```
+
+### 6.2 Assembly algorithm
+
+1. **Resolve & scope.** Targets → entities; derive client/tenant scope; load the actor's autonomy class (interactive | autonomous).
+2. **Ambient.** Load the policy set for scope at its **current pinned version**. If the local copy's version age exceeds the policy-staleness threshold *and* the actor is autonomous → **fail closed**: emit a refusal bundle whose only tool grants are read-only diagnostics. (Interactive actors get the stale set plus a mandatory staleness warning — a human is present to judge.)
+3. **Procedure.** Fetch the runbook bound to the capability grant, by content hash. No hash on the grant = no procedure = the capability itself decides whether bare execution is allowed (most write capabilities: no).
+4. **State plan.** Do *not* copy state into the bundle. Attach tool grants for live pull, plus the relevant twin SLOs so the agent (and gateway) know which cached facts are servable and which demand a live check. State enters context at execution time, stamped.
+5. **Retrieve.** Scoped semantic + episodic queries derived from task intent and targets — including the mandatory **"prior incidents touching these entities/components"** episodic query when the capability class is risky (E-01's consult-before-risk, made structural). Each item carries source, trust, and freshness.
+6. **Budget & rank.** Trim retrieval to budget by relevance × trust × freshness. Ambient policy and procedure are never trimmed — by construction, not by ranking (they are small; §types).
+7. **Manifest & emit.** Write the manifest, emit `task.context_assembled`, return the bundle.
+
+### 6.3 The cache/live boundary (mechanized)
+
+The assembler doesn't decide freshness ad hoc — it evaluates per-fact SLOs from config: browsing/targeting intents may be served from twins with staleness disclosed; **acting intents require a live pre-check for every fact listed in the runbook's preconditions.** The B-01 eval pair (twin-for-browsing, live-for-acting) tests this boundary; the A-01 stale-twin trap tests the disclosure half.
+
+### 6.4 The manifest is the audit artifact
+
+```jsonc
+{
+  "bundle_id": "bun_01J5...", "task": "task_01J5...", "assembled_at": "...",
+  "actor": "act_...", "capability": "cap_bulk_plugin_update",
+  "policy": { "set": "ops-default+client-acme", "version": "psv_0142", "age_s": 610 },
+  "procedure": { "runbook": "rb_bulk_update", "hash": "sha256:9f2c..." },
+  "tools": ["wp.plugin.list@live", "wpe.backup.create", "..."],
+  "retrieval": [
+    { "query": "incidents: woocommerce checkout", "store": "ledger",
+      "returned": 3, "ids": ["evt_...", "evt_...", "evt_..."] }
+  ],
+  "freshness_report": [ { "fact": "plugin:woocommerce", "age_s": 4210, "slo_s": 28800, "served": "twin" } ],
+  "budget": { "tokens_used": 6400, "of": 12000 }
+}
+```
+
+"What did the agent know when it acted?" is now a stored answer. Incident review diffs the manifest against the ledger; the A-04 groundedness eval greps it; the "context stuffing" failure mode becomes a measurable number (`budget`, retrieval counts) instead of a vibe.
+
+### 6.5 Statelessness & caching
+
+The assembler holds no session state (G4). Bundles are cacheable on `(actor-class, capability, targets, policy-version, runbook-hash)` for the ambient+procedure portion; retrieval and state-plan portions are per-task. Hub and satellite run the **same assembler library** over different store bindings — that one library being shared is what makes "profile is configuration" true in practice.
+
+---
+
+## 7. Gateway & policy engine (contract level)
+
+- **Grant model:** `grant = (actor, capability, scope, conditions, runbook_hash, expiry)`. Issued in the control UI, stored as `control.grant.issued` events — the grant table is itself a fold view, so grant history is audit-native. Today's `wpeOperationPermissions` + site exceptions map directly: operation → capability, environment defaults → scope conditions, exceptions → per-entity condition overrides (the M4-09/10 semantics carry over unchanged).
+- **Evaluation:** every tool call passes `(actor, capability, target, operation, args)` through the policy engine. v1 is a small custom evaluator over the registry (the semantics are simple: default-deny for writes, scoped allows, exceptions, thresholds); OPA/Rego or Cedar is the swap-in when policy outgrows it (ADR-8). Confirmation tiers (the existing Tier-3 token pattern) are conditions, not code paths.
+- **Stamping middleware:** every tool *response* is wrapped: `{ data, provenance: { source, trust, observed_at, entity } }` before it reaches the agent. Agents never see naked facts — which is what makes "the answer names its source" (A-01's communication assertion) enforceable rather than aspirational.
+- **Emission:** the gateway emits `task.action_executed` (+ outcome) for every call. The loop's write side costs agents nothing.
+
+---
+
+## 8. Hub ↔ satellite sync protocol
+
+Four flows, one transport (mutual-TLS HTTPS; satellite initiates; long-poll or push for policy/runbook updates):
+
+| Flow | Direction | Mechanics | Consistency |
+|---|---|---|---|
+| **Episodic** | up | Batched event replication from SQLite by replication cursor; at-least-once; idempotent by event id | Append-only, eventually complete |
+| **Policy + procedure** | down | Satellite pulls signed policy & runbook repo refs; pins version + hash; staleness clock starts at pin | Strong-ish: version-pinned, **fail-closed** past threshold (autonomous actors) |
+| **State** | federated | Satellite state events replicate up like all events; hub folds them into fleet-summary twins with `origin: satellite` and their own SLOs; fleet queries read summaries + pointers, detail queries route to the origin | Eventual + read-through-live at action time |
+| **Semantic** | lazy | Optional corpus sync on schedule/on-demand; hub search federates or degrades with an explicit coverage note | Cheapest; staleness degrades quality, not safety |
+
+Offline behavior: satellite keeps observing, gating, and executing local-scope work; episodic buffers; the pinned policy/runbook copy ages toward its threshold; on reconnect, replication drains and pins refresh. The M3-05-style *honest coverage note* ("hub content search excludes satellite X, last synced Y") is generated from replication cursors — the disclosure is computed, not remembered.
+
+---
+
+## 9. Architecture Decision Records (condensed)
+
+- **ADR-1 · Event log as spine.** All acquisition writes envelopes to a ledger; stores are views. *Trade-off:* fold-worker complexity vs. rebuildability, native audit, and emission-by-construction. **Accepted.**
+- **ADR-2 · Postgres-as-log before a broker.** Partitioned `events` table + cursor consumers; NATS/Kafka deferred until fan-out demands it. *Trade-off:* lower throughput ceiling vs. one fewer moving part and SQL over the ledger for free (fleet_sql heritage preserved). **Accepted.**
+- **ADR-3 · One store per type.** Twin tables, vector+graph index, git law repo, ledger. *Rejected alternative:* unified vector store — fails all four consistency profiles at once. **Accepted.**
+- **ADR-4 · Site-logical / environment-physical entity model.** Pairing is an assertion with provenance and confidence. **Accepted.**
+- **ADR-5 · Git-backed policy & runbook repo.** Policy and runbooks version together in one git repository: diff, review (= the loop's promotion workflow), signing, content-addressing free. Thin index service for query. *Trade-off:* git ergonomics for non-developers → control UI mediates. **Accepted.** *(Naming settled 2026-08-15: "policy & runbook repo" — earlier drafts called this the "law repo.")*
+- **ADR-6 · ULIDs everywhere.** Sortable ids double as coarse ordering; satellite-assignable without coordination. **Accepted.**
+- **ADR-7 · Fail-closed law staleness for autonomous actors; warn-and-proceed for interactive.** The autonomy class, not the operation, selects the semantics. **Accepted.**
+- **ADR-8 · Custom policy evaluator v1, Cedar/OPA later.** Current semantics are small and testable (the M4 suite is its regression harness); adopt an engine when policy language outgrows it. **Accepted.**
+- **ADR-9 · MCP as the delivery protocol** for agent↔gateway, aligning with WordPress core's Abilities/MCP direction — the estate is becoming natively MCP-addressable; the layer's value is the law and memory around that, not the plumbing. **Accepted.**
+- **ADR-10 · Stateless assembler, manifest as audit artifact.** *Rejected alternative:* agent-side context management — unauditable, model-coupled. **Accepted.**
+- **ADR-11 · Satellite-first; hub tenancy deferred, `access` reserved.** Steps 1–5 ship hub-free. The envelope carries the `access` block (tenant/client/sensitivity) from day one, so every event is migratable into whichever tenancy model the hub adopts. Tenancy is re-decided when the hub becomes concrete, with real compliance requirements in hand. **Accepted 2026-08-14.**
+- **ADR-12 · Per-runbook strictness.** Runbook schema carries `strictness: strict | guided`. Strict: the gateway enforces step ordering and requires per-step attestation on gated calls (promotion, incident response, deletes). Guided: the agent may adapt; deviations are logged as `task.*` events with rationale (diagnosis, investigation). Authoring decides per procedure; the B-03/D-01 evals arbitrate where each mode belongs. Corollary: D-01 (outdated-runbook detection) is elevated — a wrong strict runbook *blocks* correct behavior, so strict runbooks need the tightest review triggers. **Accepted 2026-08-14.**
+- **ADR-13 · Instrument residency: summaries in, raw query-through.** Conductors fold compact rollups and anomaly events into the ledger as `state.instrument.summarized` (trust: measured); raw analytics stays in the client's external systems, queried live for depth. Episodic correlation and client reports compound from summaries; the compliance surface stays light. **Accepted 2026-08-14.**
+- **ADR-14 · Satellite = machine identity + human/agent session.** The satellite holds machine credentials (replication, law cache); every task carries the authenticated session actor. Events attribute as *actor X via satellite Y* (`actor.id` + `actor.via`). Survives laptop handoffs and shared machines; step 1's emission middleware implements it immediately. **Accepted 2026-08-14.**
+- **ADR-15 · Semantic unification deferred; embedding contract pinned now.** No unified search yet. Every corpus records embedding model, version, and chunking scheme in its metadata, making future federation or re-embedding a mechanical migration. Keeps both futures (one space vs. rank fusion) open at zero present cost. **Accepted 2026-08-14.**
+- **ADR-16 · Satellite lives in the Local addon, behind an extraction seam.** Ledger, gateway, and assembler are a clean internal package inside the addon: no Electron imports in the core package, boundaries enforced by lint/build rules, all host access through interfaces. Extraction to a standalone daemon later is packaging, not rewrite. *Rejected for now:* daemon-first (installer/lifecycle cost before value), library-only (SQLite multi-host locking tax). **Accepted 2026-08-14.**
+- **ADR-17 · Runbooks are Markdown + YAML frontmatter.** Frontmatter carries the contract (id, version, capability, strictness, preconditions, abort paths); prose body carries the instructions humans review and agents follow. Refinement from ADR-12: **strict runbooks must enumerate checkpoints as an ordered frontmatter list with stable step ids** (gateway attestation needs step identity); guided runbooks may keep frontmatter minimal. One format, two ceremony levels; PR-native; compatible with the emerging skills convention. **Accepted 2026-08-14.**
+- **ADR-18 · Anchor slice: bulk plugin update, full loop.** Steps 1–5 build toward one end-to-end scenario — ambient policy → pushed strict runbook → live state vs. twins → episodic consult (prior breakage) → gated execution → outcome + rationale emitted. It is the only candidate that forces every plane including the loop, and it maps directly to evals B-03, E-01, E-02. Definition of done includes those evals passing against the slice. **Accepted 2026-08-14.**
+- **ADR-19 · Slice actor: the product's own agent surface.** The in-product Ask/Tell-style agent drives the anchor slice; confirmation gates render in the product UI; the demo is self-contained in Local. External MCP clients (visitors we don't control) become the *second* consumer — proving the contract — once the slice works. **Accepted 2026-08-14.**
+
+---
+
+## 10. Migration map (today's Nexus → target)
+
+| Today | Becomes | Motion |
+|---|---|---|
+| `event_queue` (WP Connector) | First producer onto the local ledger | Surface, don't rebuild |
+| `SiteMetadataCache`, graph.db `sites/plugins` | Fold-worker outputs (twin views) | Invert: caches become views |
+| graph.db site rows | Environments; linking pass proposes Sites | §5.4, confirmation queue |
+| LanceDB | Satellite semantic index (stays) | Re-key to corpus ids |
+| `wpeOperationPermissions` + exceptions | Policy registry v0 (first citizens of the policy & runbook repo) | Translate, keep M4 evals green as the harness |
+| Skills / implicit procedures | Runbook repo entries (schema'd: preconditions, checkpoints, aborts) | Author top 5 first: bulk update, promotion, pull, diagnosis, incident |
+| Confirmation tiers | Grant conditions | Carry over |
+| MCP server | Gateway (add stamping + emission middleware) | Wrap, don't rewrite |
+| Eval suite | CI for the layer: M4 → policy engine regression; new families (A/B/C/E) land as the components they test land | Part 4 of the eval doc |
+
+Sequence (each step ships value alone): **(1)** local ledger + envelopes + emission middleware → **(2)** twins as folds + freshness SLOs → **(3)** entity service + pairing queue → **(4)** policy & runbook repo v0 (translate permissions; author 5 runbooks) → **(5)** assembler + manifests → **(6)** hub + sync flows → **(7)** instruments & feeds as hub conductors.
+
+Step 1 is deliberately first: it's the cheapest (the data already exists and is being dropped) and everything else folds from it.
+
+**Anchor slice (ADR-18/19):** steps 1–5 are built and sequenced against one scenario — *bulk plugin update, full loop*, driven by the product's own agent surface, with evals B-03 / E-01 / E-02 as the definition of done. Each step ships standalone value, but the slice is what proves the planes compose.
+
+## 11. Resolved questions & remaining watch items
+
+The five open questions from draft 0.1 were resolved 2026-08-14 and promoted to ADRs 11–15 (tenancy deferred with envelope reserved; per-runbook strictness; instrument summaries-in/raw-through; machine+session satellite identity; embedding contract pinned, unification deferred).
+
+Watch items these decisions create:
+
+1. **Hub tenancy (reopens with hub work)** — re-decide with real compliance requirements; candidate models unchanged (scoped rows + RLS, per-tenant ledgers, per-client payload encryption).
+2. **Strict-runbook authoring UX** — strict mode is only as good as its review triggers; define who may author/promote strict runbooks and what platform changes force re-review (interacts with the policy & runbook repo's PR workflow).
+3. **Summary schema governance** — instrument rollup schemas (`state.instrument.summarized` payloads) will be tempted to grow; keep them boring and versioned, or the "light compliance surface" claim erodes.
+4. **Session auth on the satellite** — machine+session attribution requires an actual session concept in the desktop context; v1 can be lightweight (OS user + explicit actor config) but must be real before multi-user machines appear.
+5. **Fusion quality benchmark** — when hub search arrives, decide unification vs. rank fusion empirically: build a small retrieval eval over paired corpora first (the eval doc's Family B retrieval-discipline cases extend naturally).

@@ -13,6 +13,8 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { groupByVersion, compareVersions } from './version-utils';
 import type { SiteSource } from '../../../../common/types';
 import { toSiteSource } from '../../../../common/types';
+import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
+import { provisionalEnvironmentId } from '../../../intelligence-host/provisionalEntity';
 
 interface SiteRecord {
   id: string;
@@ -20,6 +22,9 @@ interface SiteRecord {
   source: SiteSource;
   wp_version: string | null;
   php_version: string | null;
+  /** Phase B: when the ledger last observed this site's core facts. */
+  observedAt?: string;
+  fresh?: boolean;
 }
 
 interface PluginRecord {
@@ -80,7 +85,7 @@ export const findOutdatedSitesHandler: McpToolHandler = {
 
     // --- Supplement with index registry for local sites not in graph ---
     if (sourceFilter !== 'wpe') {
-      const entries = services.indexRegistry.listAll().filter((e) => e.structure);
+      const entries = services.indexRegistry.listAll().filter((e: any) => e.structure);
       for (const e of entries) {
         if (!graphSites.has(e.siteId)) {
           graphSites.set(e.siteId, {
@@ -96,6 +101,37 @@ export const findOutdatedSitesHandler: McpToolHandler = {
 
     const sites = Array.from(graphSites.values());
 
+    // ── Intelligence twins (phase B): freshness overlay + gap fill ────────
+    // Each site's core facts carry observed_at + trust in the ledger-backed
+    // twin store. Two uses here: (1) fill wp/php versions the caches are
+    // missing (ledger may have seen a webhook the sync path didn't), and
+    // (2) an honest freshness summary — version comparisons over stale
+    // observations deserve a caveat, not silent confidence.
+    let twinCovered = 0;
+    let twinFreshCount = 0;
+    let twinFilled = 0;
+    let stalest: { name: string; ageMs: number } | null = null;
+    try {
+      const core = getIntelligenceCore();
+      if (core) {
+        const now = Date.now();
+        for (const s of sites) {
+          const fact = core.twins.get(provisionalEnvironmentId(s.id), 'site.core');
+          if (!fact) continue;
+          twinCovered++;
+          const value = fact.value as { wp_version?: string; php_version?: string };
+          if (!s.wp_version && value.wp_version) { s.wp_version = value.wp_version; twinFilled++; }
+          if (!s.php_version && value.php_version) { s.php_version = value.php_version; twinFilled++; }
+          const freshness = core.twins.freshness(fact);
+          s.observedAt = fact.observedAt;
+          s.fresh = freshness.fresh;
+          if (freshness.fresh) twinFreshCount++;
+          const ageMs = now - Date.parse(fact.observedAt);
+          if (!stalest || ageMs > stalest.ageMs) stalest = { name: s.name, ageMs };
+        }
+      }
+    } catch { /* enrichment is optional — legacy behavior stands */ }
+
     if (sites.length === 0) {
       const hint = sourceFilter === 'wpe'
         ? 'Run "Sync WP Engine Sites" first.'
@@ -106,6 +142,20 @@ export const findOutdatedSitesHandler: McpToolHandler = {
     const sourceLabel = sourceFilter === 'wpe' ? ' (WP Engine installs only)'
       : sourceFilter === 'local' ? ' (local sites only)' : '';
     const lines: string[] = [`## Outdated Sites Report${sourceLabel}`, `${sites.length} sites in scope`, ''];
+
+    if (twinCovered > 0) {
+      const staleN = twinCovered - twinFreshCount;
+      const stalestNote = stalest && staleN > 0
+        ? ` (stalest: ${stalest.name}, ${Math.round(stalest.ageMs / 3600_000)}h old)`
+        : '';
+      const filledNote = twinFilled > 0 ? ` ${twinFilled} missing version value(s) filled from the ledger.` : '';
+      lines.push(
+        staleN === 0
+          ? `> Observations: ${twinCovered} of ${sites.length} sites ledger-observed, all within SLO.${filledNote}`
+          : `> Observations: ${twinCovered} of ${sites.length} sites ledger-observed — ${staleN} stale beyond SLO${stalestNote}; treat their version data as provisional.${filledNote}`
+      );
+      lines.push('');
+    }
 
     if (checkAll || component === 'wordpress') {
       lines.push(...formatVersionSection('WordPress', sites, (s) => s.wp_version ?? ''));
