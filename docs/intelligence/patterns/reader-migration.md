@@ -41,7 +41,13 @@ change looks structurally different from the exemplar, justify why in a comment.
 Capture a provisional entity id on every match/record the tool builds:
 `provisionalEnvironmentId(siteId)` for local entries (IndexRegistry `siteId`),
 and add `s.id as site_id` to graph queries so remote rows get
-`provisionalEnvironmentId(row.site_id)`. Never derive from display names.
+`provisionalEnvironmentId(row.site_id)`. Tools that resolve targets through
+`resolveAnySite` get the correct id for free (`resolved.id` is the local store
+id for local sites and graph `sites.id` for remote) — use it directly. Never
+derive from display names. **Beware: a wrong id source fails silently** — the
+twin join returns nothing and enrichment vanishes with no error — so your test
+must assert enrichment actually renders (cp.test item 1 exists for this
+reason).
 
 ## cp.enrich
 
@@ -56,10 +62,14 @@ in a tool.
 
 ## cp.drift-hint
 
-*Applies to discovery tools only* — tools that compute their own match set
-(find-sites-with-*). Tools handed explicit targets (compare_sites and kin)
-have no "twin-only" population, so this checkpoint is legitimately skipped;
-say so in a code comment rather than forcing an unreachable branch.
+*The universal rule is: name the tool's real ledger-vs-cache disagreement.*
+For discovery tools (find-sites-with-*), that disagreement is the twin-only
+population, handled below. Tools handed explicit targets (compare_sites and
+kin) have no twin-only population — do NOT force an unreachable branch, but
+do not skip the checkpoint either: identify what the meaningful disagreement
+IS for that tool (for a two-sided comparison it's observation-age skew between
+the sides — see compare-sites.ts) and surface that, with a code comment
+explaining the substitution.
 
 For discovery tools: twin facts with no corresponding cache result are NOT
 silently merged into the results — they are reported as a drift hint line
