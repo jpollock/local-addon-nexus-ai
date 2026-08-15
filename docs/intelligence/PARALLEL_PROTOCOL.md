@@ -91,3 +91,9 @@ Each packet's work happens on its worktree; questions/decisions land as notes
 in the packet's section of `WORK_PACKETS.md` (append-only — it doubles as the
 episodic record of this project's engineering, which is fitting). Do not leave
 decisions only in chat transcripts.
+
+**Integration reports carry receipts:** any report of a merge into
+`poc/nexintelligence` must include `git diff --stat <merge>^1 <merge>` (the
+merge against its first parent), so the owner sees exactly which files
+changed without having to ask. An integration report without its stat block
+is incomplete.

@@ -120,6 +120,17 @@ by origin; discrepancies between the two detection paths are themselves listed.
 This packet has extra value: it tests our own drift pipeline against the
 existing detector.
 
+### [ ] WP-03b · detect_drift consumes drift.detected/2 + desc-order query
+Pattern: reader-migration (amendment-aware). Files: `fleet/detect-drift.ts`
+(+ its existing test). Parallel-safe. Natural fit: the session that built
+WP-03. Two changes its own findings asked for, now unblocked by the core
+fixes: (1) render `previous_observed_at` — "diverged for Xh before the change
+was observed" per drift row; (2) switch the ledger query to `order: 'desc'`
+so the 2000-event cap drops oldest events, not newest — which also makes the
+disclosed truncation warning honest-and-boring instead of load-bearing.
+Accept: both rendered/behaving with tests; additive parity holds; no schema
+or core changes (already landed).
+
 ### [ ] WP-04 · Site Finder plugin/version filters read twins
 Pattern: reader-migration, adapted — this is the NL→filter surface, so the
 change is in the filter ENGINE, not a chat tool. Scout `filterEngine` service
@@ -534,3 +545,17 @@ B-03/E-01/E-02 against the real ledger (harness rules H-01/H-02).
   binary is on the **system-Node ABI (141)**. Local needs `npm run rebuild`
   before it will load the addon again. Note this rebuild affects the shared
   `node_modules` that the `wp-01` and `wp-03` worktrees also resolve through.
+
+- 2026-08-15 · Supersession: the "OWNER ACTIONS OUTSTANDING" items in the
+  WP-02 note above are ALL COMPLETE (layer committed on poc/nexintelligence,
+  `npm run rebuild` cycle observed, wp-02 reviewed and merged). Kept per the
+  append-only rule; superseded by this entry.
+- 2026-08-15 · Adjudications (architect): WP-01's `summaryPopulation` choice
+  (drift hint compares against the population the report body aggregates,
+  not the printed Total-sites figure) — CONFIRMED correct. WP-03's untested
+  `DRIFT_QUERY_LIMIT` branch — accepted as disclosed; WP-03b retires the
+  concern. WP-05's "test:ci green" criterion — amended to "no NEW red;
+  intelligence suites green" given the pre-existing `wpe-tools` failure
+  (tracked separately; suspected stale fixture vs access-control v2
+  defaults). WP-05 merge audited by diff against first parent: exactly in
+  scope, all seven files accounted for.
