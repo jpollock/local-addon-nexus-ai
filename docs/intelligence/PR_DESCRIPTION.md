@@ -1,0 +1,109 @@
+# Intelligence layer: event spine, honest twin-backed readers, live re-check
+
+*DRAFT for WP-06 to verify and finalize. Branch: `poc/nexintelligence`.*
+
+## What this is
+
+An event-sourced intelligence spine running alongside the existing caches —
+not replacing them — so that every fact the system presents can answer three
+questions the caches couldn't: **when was this last true, how do we know, and
+how much should you trust it?**
+
+The design argument lives in `docs/intelligence/architecture.md` (19 ADRs);
+the one-paragraph version: fleet facts are observations with provenance, so
+they're stored as immutable events in an append-only ledger, materialized
+into rebuildable "twin" views, and surfaced to users with observation age,
+trust class, and staleness flags — plus a live re-check tool that closes the
+gap whenever a flag fires.
+
+## What's in the branch
+
+**The spine** (`src/intelligence/` — new, dependency-free, seam-locked):
+event envelopes (nine source classes, nine trust classes, `observed_at` ≠
+`recorded_at`), append-only SQLite ledger (WAL, idempotent monotonic-ULID
+appends), emission middleware, fold workers producing `twin_facts`, freshness
+SLOs, and an unwired entity-service draft (see `reconciliation-entity-identity.md`
+for how it composes with Track-1's `site_links` — deliberately a consumer,
+never a competitor).
+
+**Producers** (`src/main/intelligence-host/` — new): WP webhook tap, a
+change-deduped wrap of `GraphService.upsertSite/Plugin/Theme` (CAPI sync and
+WP-CLI refresh now emit observations as a side effect), and a one-shot
+marker-guarded backfill of graph.db (~5k facts seeded with their *real* ages,
+not laundered as fresh). Everything on this seam is non-fatal by
+construction: init failure leaves the legacy pipeline untouched.
+
+**Readers** (5 fleet tools migrated, one new): `find_sites_with_plugin`,
+`find_sites_with_theme`, `find_outdated_sites`, `compare_sites` (per-side
+observation ages + SLO-skew warning), `fleet_summary` (population-level drift
+hint), `detect_drift` (classifies legacy findings against ledger drift events
+three ways). All enrichment is **additive** — with the core absent, every
+tool renders byte-identically to before, pinned by parity assertions. New
+tool `verify_site_live`: re-observes a site through the real transport (same
+permission gates), diffs against the twins, records fresh provenance-stamped
+observations, reports the reconciliation.
+
+**User-visible effect:** "which of my sites have WooCommerce?" now answers
+with observation ages and, when data is stale, says so and offers the live
+check — e.g. *"the WPE data here is ~9h old (cached); I can run a live check
+before you act."*
+
+**Two integration-point diffs** to existing files, kept minimal:
+`src/main/index.ts` (init + tap + backfill + shutdown drain) and
+`fleet/index.ts` (tool registration). Plus: jest roots now include `src/`
+(intelligence suites run in `npm test`/`test:ci`), a fixed vacuous pretest
+ABI guard, and `tests/main/fleet-tools.test.ts` count 6→7.
+
+**Docs** (`docs/intelligence/` + `INTELLIGENCE_ROADMAP.md` + a CLAUDE.md
+section): architecture, eval design, anchor-slice specs, pattern runbooks,
+work packets, and the multi-agent protocol this branch was built under.
+
+## How it was built (relevant to reviewing it)
+
+Six AI-agent work packets executed under a written protocol
+(`docs/intelligence/PARALLEL_PROTOCOL.md`) with per-packet worktrees,
+calibration findings fed back into the docs after every run, and escalation
+rules that were exercised for real (core API changes and payload schema bumps
+were escalated, decided, and recorded rather than improvised). The packet
+notes in `WORK_PACKETS.md` are the audit trail — including every judgment
+call, disclosed limitation, and the findings that amended the patterns.
+
+## Verification
+
+```bash
+npm run typecheck
+npm test                 # includes the 10 intelligence suites (~15 tests)
+npx jest src/            # the intelligence suites alone
+```
+
+Live smoke: start Local, change a plugin on a running site, then
+
+```bash
+sqlite3 -header -column "$HOME/Library/Application Support/Local/nexus-ai/ledger.db" \
+  "SELECT topic, json_extract(source,'\$.system') AS system, COUNT(*) FROM events GROUP BY 1,2;"
+```
+
+then ask the assistant "which of my sites have WooCommerce?" and check the
+answer cites observation ages; say "verify <site> live" and watch the
+reconciliation table.
+
+## Known issues / explicitly out of scope
+
+- `tests/main/wpe-tools.test.ts › local_wpe_push` is red on the base commit
+  (pre-existing; suspected stale fixture vs. access-control v2 defaults —
+  under investigation, not caused by this branch).
+- `src/**/__tests__` currently compiles into `lib/` (packaging concern;
+  fix trades off `tsc --noEmit` coverage of tests — decision pending).
+- Entity service is a reviewed draft, deliberately unwired (WP-07).
+- The assembler, policy registry, and hub (M2/M3 of the roadmap) are not in
+  this branch.
+
+## Where to start reviewing
+
+1. `src/intelligence/envelope/types.ts` — the whole model in one file.
+2. `src/main/mcp/modules/fleet/find-sites-with-plugin.ts` — the reader
+   template all migrations follow (enrich-don't-replace, drift-as-signal).
+3. `src/main/intelligence-host/graphServiceTap.ts` — the chokepoint wrap +
+   change gate.
+4. `docs/intelligence/architecture.md` ADRs 1–10 — why each of the above is
+   shaped the way it is.
