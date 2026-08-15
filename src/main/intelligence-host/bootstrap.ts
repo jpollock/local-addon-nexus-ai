@@ -84,15 +84,18 @@ export function initIntelligenceCore(options: {
       emitter.emit({
         observed_at: drift.observedAt,
         topic: 'state.drift.detected',
-        schema: 'drift.detected/1',
+        // v2 (WP-03 finding): carries previous_observed_at, so drift readers
+        // can report how long the sides diverged, not just what changed.
+        schema: 'drift.detected/2',
         entity: { environment: drift.entityId },
-        actor: { id: 'act_fold_plugin_twin', kind: 'system' },
+        actor: { id: 'act_fold_state_twin', kind: 'system' },
         source: { class: 'platform', system: 'fold:state-twin', trust: 'derived' },
         causation: drift.causeEventId,
         payload: {
           fact: drift.fact,
           previous: drift.previous as Record<string, unknown> | null,
           observed: drift.observed as Record<string, unknown> | null,
+          previous_observed_at: drift.previousObservedAt,
         },
       });
     });

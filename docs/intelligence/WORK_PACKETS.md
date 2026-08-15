@@ -156,18 +156,29 @@ every new file has its header comment; a draft PR description exists at
 
 ## Milestone 2 — designed and speccable now
 
-### [ ] WP-07 · Wire entity service v0
-Patterns: none exact — read `src/intelligence/entity/entityService.ts` (draft,
-reviewed design in architecture.md §5) + `add-a-producer.md` for the wiring
-discipline. **Serialized (core lock).**
-Steps: (1) host bootstrap constructs `EntityService`, exposes on
-`IntelligenceCore`; (2) producers call `ensure()` instead of raw
-`provisionalEnvironmentId` (ids are identical by construction — assert that in
-a test); (3) `local_wpe_link` data (see graph) imported as `pull_lineage`
-aliases/links; (4) a `propose_site_pairings` MCP tool (read-only) surfaces
-`proposePairings()` output with evidence.
-Accept: all existing tests still green (ids unchanged proves adoption);
-pairing proposals visible via the tool; no automatic pairing anywhere.
+### [ ] WP-07 · Wire entity service v0  **(REWRITTEN per reconciliation — read `reconciliation-entity-identity.md` first)**
+Patterns: `add-a-producer.md` for wiring discipline; the governing decision is
+`docs/intelligence/reconciliation-entity-identity.md` (Track 1 keeps runtime
+ownership; the entity service is a consumer of `site_links`, never a
+competitor). **Serialized (core lock).**
+Steps: (1) add `'host_connection'` to `EstablishedBy`; (2) host bootstrap
+constructs `EntityService`, exposes on `IntelligenceCore`; (3) mirror
+`site_links` one-way into entity aliases/links per the mapping table in the
+reconciliation note (user→user_link 1.0, hostConnection→host_connection 0.95,
+inferred→name_heuristic ≤0.5; `verified_at` = freshness), idempotent, re-run
+per sweep; (4) alias env entities under BOTH `graph.site_row` and
+`wpe.install_id` (the id-mismatch trap in the note's "subtle trap" section),
+and Site entities under `wpe.site_id`; (5) producers call `ensure()` instead
+of raw `provisionalEnvironmentId` — ids identical by construction, assert it
+in a test; (6) `proposePairings()` gains `unresolvedOnly` and runs ONLY over
+the resolver's unresolved report; proposals surface beside `nexus_link_site`,
+not as a new parallel queue.
+Accept: all existing tests green (unchanged ids prove adoption); site_links
+rows visible as entity aliases with correct established_by; a user link in
+site_links always outranks any heuristic in entity resolution; proposals
+appear only for unresolved sites; NO automatic pairing anywhere; Track-1
+files (`src/main/fleet/*`) untouched except any agreed hook, which requires
+owner sign-off first.
 
 ### [ ] WP-08 · Policy & runbook repo v0 — translate permissions
 Pattern: none — spec IS `docs/intelligence/anchor-slice/policy/ops-default.md`
@@ -416,3 +427,14 @@ B-03/E-01/E-02 against the real ledger (harness rules H-01/H-02).
 
   ABI STATE: this session ran jest — better-sqlite3 is on the **system-Node**
   build. `npm run rebuild` before loading Local.
+- 2026-08-15 · **WP-07 reconciliation complete** (owner-requested, architect
+  session). The Track-1 fleet-identity system (`site_links`, SiteLinkResolver,
+  FleetAssembler) and entity service v0 were independent solutions to the same
+  problem. Decision recorded in `reconciliation-entity-identity.md`: Track 1
+  keeps runtime ownership; the entity service consumes `site_links` one-way,
+  adopts `wpe_site_id` as the logical-Site alias, demotes `proposePairings()`
+  to gap-filler over the resolver's unresolved report, and aliases env
+  entities under both `graph.site_row` and `wpe.install_id` (id-mismatch
+  trap). WP-07 rewritten accordingly. The convergence of the two designs on
+  "user links outrank inference, provenance on every join" is treated as
+  validation, not accident.

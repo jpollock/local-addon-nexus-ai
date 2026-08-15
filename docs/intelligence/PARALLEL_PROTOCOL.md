@@ -11,7 +11,13 @@ out in the primary worktree, so `-b` is required):
     git worktree add -b <packet-id> .worktrees/<packet-id> poc/nexintelligence
 
 Never two agents in one checkout. Merge back per-packet, smallest possible
-diffs. **Before creating the worktree, confirm the intelligence layer is
+diffs. A fresh worktree has neither `node_modules` nor `lib/` — set both up
+before diagnosing anything as a branch regression (WP-05 finding):
+
+    ln -s ../../node_modules node_modules
+    npm run compile
+
+**Before creating the worktree, confirm the intelligence layer is
 actually tracked**: `git status` in the primary checkout must not show
 `src/intelligence/` or `docs/intelligence/` as untracked — if it does, stop
 and escalate; a worktree cut from that state won't contain the layer or your

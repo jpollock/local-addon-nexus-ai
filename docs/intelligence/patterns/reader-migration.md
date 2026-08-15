@@ -60,6 +60,16 @@ returns `{ ageSeconds, sloSeconds, fresh }` — use `sloSeconds` for any
 age-comparison logic (skew warnings, thresholds); never hardcode SLO values
 in a tool.
 
+Two sharp edges from calibration: **(1)** `ledger.query()` returns
+OLDEST-first by default and truncates at `limit` — for any "recent events"
+reader pass `order: 'desc'`, and disclose the cap in output rather than
+presenting a truncated result as complete (an asc query at its limit silently
+drops the newest events). **(2)** Under this repo's tsconfig, a `let`
+accumulator (e.g. a running `stalest`) reassigned inside a nested helper
+closure narrows to `never` at later read sites — keep the observation loop
+inline in the same scope as the accumulator's declaration (build a flat list
+first if you have multiple source loops).
+
 ## cp.drift-hint
 
 *The universal rule is: name the tool's real ledger-vs-cache disagreement.*
@@ -71,11 +81,20 @@ IS for that tool (for a two-sided comparison it's observation-age skew between
 the sides — see compare-sites.ts) and surface that, with a code comment
 explaining the substitution.
 
-For discovery tools: twin facts with no corresponding cache result are NOT
-silently merged into the results — they are reported as a drift hint line
-("the intelligence ledger also shows X on N environment(s) missing from cache
-results: ..."). Cache and ledger disagreeing is a signal the user must see.
-Skip facts whose value has `active: false` / `removed: true` when hinting.
+Three known variants of that disagreement (add yours here if you find a
+fourth): **per-fact** — twin facts with no corresponding cache result, for
+discovery tools (find-sites-with-*); **per-dimension skew** — observation-age
+gaps between compared sides (compare-sites); **population-level** — once per
+run, environments the ledger has observed that the tool's own population
+never counted (fleet-summary; the "Fleet counts" CLAUDE.md section explains
+why the populations legitimately differ).
+
+For all variants: never silently merge; report the disagreement. Skip facts
+whose value has `active: false` / `removed: true` when hinting. And keep two
+different absences distinct: "the ledger never observed this fact" is a
+*pipeline coverage gap*; "observed but unchanged while the cache moved" is
+*stable divergence* — merging them hides the coverage gap (see
+detect-drift's three-way classification).
 
 ## cp.output
 
@@ -93,9 +112,13 @@ Three output shapes, by tool kind:
   dimensions report their stalest observation: a comparison is only as
   trustworthy as its oldest input.
 
-Always add the freshness summary, and when stale > 0 include the exact phrase
-"consider a live re-check" — `verify_site_live` is the remedy every such flag
-points to.
+Always add the freshness summary. When stale > 0: table and two-sided tools
+include the exact phrase "consider a live re-check" — `verify_site_live` is
+the remedy, and those tools name checkable targets. Fleet-wide aggregates may
+instead mark stale data "provisional" (a live re-check is a per-target
+action; an aggregate has no single target to name) — find-outdated-sites and
+fleet-summary are the exemplars of that variant. *(Rule reconciled with the
+exemplars per WP-01 finding 1.)*
 
 ## cp.test
 
@@ -111,8 +134,19 @@ Assert: (1) the enrichment renders (regex on age/trust), (2) the freshness
 summary, (3) a drift-hint scenario where applicable (delete a cache row the
 ledger knows), (4) **the additive-parity pin** — run the tool once BEFORE
 registering the core to capture the baseline output, register the core, run
-again, and assert the enriched output contains/extends the baseline
-(`enriched.startsWith(baseline)` for append-only enrichment). This turns the
-pattern's own abort condition into a failing test instead of a judgment call.
+again, and assert the legacy content is intact. Two techniques by enrichment
+shape: appended enrichment (footer sections) → `enriched.startsWith(baseline)`;
+header/mid-document enrichment (`> Observations:` lines spliced between legacy
+lines) → strip the enrichment's own added lines back out (they carry the `> `
+prefix) and assert the remainder EQUALS the baseline — `startsWith`/`toContain`
+both fail on mid-document splices. This turns the pattern's own abort
+condition into a failing test instead of a judgment call.
+
+If you mutation-test your assertions: **commit before mutating** — a
+`git checkout <file>` restore reverts to HEAD, not your working state, and
+will silently destroy uncommitted work — and verify each mutation actually
+changed the file (checksum before/after), so a non-applying substitution
+reports itself instead of masquerading as a caught mutation.
+
 Run `npx jest --roots src` green, plus any legacy suites covering your tool
 (`grep -rl <tool-basename> tests/`).

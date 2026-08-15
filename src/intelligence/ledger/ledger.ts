@@ -16,6 +16,14 @@ export interface QueryOptions {
   entityId?: string; // matches any role in the entity block
   afterId?: string; // exclusive cursor (ULID-ordered)
   limit?: number;
+  /**
+   * 'asc' (default) = oldest-first, the fold/cursor order. 'desc' =
+   * NEWEST-first — use it for any "recent events" reader, because an
+   * asc query that hits its limit silently drops the newest events
+   * (WP-03 calibration finding: a truncated result reads as "nothing
+   * changed recently", which is backwards).
+   */
+  order?: 'asc' | 'desc';
 }
 
 export class Ledger {
@@ -100,9 +108,10 @@ export class Ledger {
       where.push(`id > ?`);
       params.push(opts.afterId);
     }
+    const direction = opts.order === 'desc' ? 'DESC' : 'ASC';
     const sql = `SELECT * FROM events
                  ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-                 ORDER BY id ASC LIMIT ?`;
+                 ORDER BY id ${direction} LIMIT ?`;
     params.push(opts.limit ?? 500);
     const rows = this.db.prepare(sql).all(...params) as Record<string, string>[];
     return rows.map(rowToEnvelope);
