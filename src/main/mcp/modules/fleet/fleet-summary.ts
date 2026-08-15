@@ -1,6 +1,8 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { PluginInfo } from '../../../../common/types';
 import { groupByVersion } from './version-utils';
+import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
+import { provisionalEnvironmentId } from '../../../intelligence-host/provisionalEntity';
 
 export const fleetSummaryHandler: McpToolHandler = {
   definition: {
@@ -23,7 +25,7 @@ export const fleetSummaryHandler: McpToolHandler = {
 
     // ── WPE data from graph.db ─────────────────────────────────────────────
     const graphService = (services as any).graphService;
-    interface WpeSite { name: string; wp_version: string | null; php_version: string | null; }
+    interface WpeSite { id: string; name: string; wp_version: string | null; php_version: string | null; }
     interface WpePlugin { slug: string; name: string | null; is_active: number; }
     let wpeSites: WpeSite[] = [];
     let wpePluginRows: (WpePlugin & { site_name: string })[] = [];
@@ -35,7 +37,7 @@ export const fleetSummaryHandler: McpToolHandler = {
           // Remote sites of every kind: WPE installs and external SSH hosts.
           // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
           wpeSites = db.prepare(
-            "SELECT name, wp_version, php_version FROM sites WHERE source IN ('wpe', 'external') AND is_active = 1"
+            "SELECT id, name, wp_version, php_version FROM sites WHERE source IN ('wpe', 'external') AND is_active = 1"
           ).all() as WpeSite[];
           wpePluginRows = db.prepare(`
             SELECT p.slug, p.name, p.is_active, s.name as site_name
@@ -46,9 +48,81 @@ export const fleetSummaryHandler: McpToolHandler = {
       } catch { /* graph unavailable */ }
     }
 
+    // ── Intelligence twins (phase B): freshness overlay + fleet-size drift ──
+    // Report-shaped, following the find-outdated-sites variant: an aggregated
+    // `> Observations:` header rather than a per-row column. Legacy counts
+    // above (localSiteCount, wpeSites, indexed) are never mutated by this
+    // block — the packet's accept criterion is "per-population counts
+    // unchanged" — so unlike find-outdated-sites this migration does not
+    // gap-fill missing version values into the distributions; it only reports
+    // coverage and freshness, plus one signal the caches cannot produce on
+    // their own: environments the ledger has observed core facts for that
+    // this aggregate's own site population (indexed local ∪ wpe/external)
+    // never counted at all. That is a fleet-SIZE disagreement between the
+    // ledger and the caches, and per CLAUDE.md "Fleet counts — what is real
+    // and what is not" the two populations legitimately differ — this is
+    // surfaced as a hint, never silently folded into totalSites.
+    let twinCovered = 0;
+    let twinFreshCount = 0;
+    let stalest: { name: string; ageMs: number } | null = null;
+    const driftOnlyNames: string[] = [];
+    try {
+      const core = getIntelligenceCore();
+      if (core) {
+        const now = Date.now();
+        const knownEntityIds = new Set<string>();
+        const sitesToObserve: Array<{ entityId: string; name: string }> = [];
+
+        for (const entry of indexed) {
+          const entityId = provisionalEnvironmentId(entry.siteId);
+          knownEntityIds.add(entityId);
+          sitesToObserve.push({ entityId, name: entry.siteName || entry.siteId });
+        }
+        for (const site of wpeSites) {
+          const entityId = provisionalEnvironmentId(site.id);
+          knownEntityIds.add(entityId);
+          sitesToObserve.push({ entityId, name: site.name });
+        }
+
+        for (const { entityId, name } of sitesToObserve) {
+          const fact = core.twins.get(entityId, 'site.core');
+          if (!fact) continue;
+          twinCovered++;
+          const freshness = core.twins.freshness(fact);
+          if (freshness.fresh) twinFreshCount++;
+          const ageMs = now - Date.parse(fact.observedAt);
+          if (!stalest || ageMs > stalest.ageMs) stalest = { name, ageMs };
+        }
+
+        for (const fact of core.twins.byFact('site.core')) {
+          if (knownEntityIds.has(fact.entityId)) continue;
+          const value = fact.value as { name?: string };
+          driftOnlyNames.push(value?.name ?? fact.entityId);
+        }
+      }
+    } catch { /* enrichment is optional — legacy behavior stands */ }
+
     const lines: string[] = ['## Fleet Summary', ''];
     const totalSites = localSiteCount + wpeSites.length;
     lines.push(`**Total sites: ${totalSites}** — ${localSiteCount} local, ${wpeSites.length} WP Engine`);
+
+    const summaryPopulation = indexed.length + wpeSites.length;
+    if (twinCovered > 0) {
+      const staleN = twinCovered - twinFreshCount;
+      const stalestNote = stalest && staleN > 0
+        ? ` (stalest: ${stalest.name}, ${Math.round(stalest.ageMs / 3600_000)}h old)`
+        : '';
+      lines.push(
+        staleN === 0
+          ? `> Observations: ${twinCovered} of ${summaryPopulation} sites ledger-observed, all within SLO.`
+          : `> Observations: ${twinCovered} of ${summaryPopulation} sites ledger-observed — ${staleN} stale beyond SLO${stalestNote}; treat their version data as provisional.`
+      );
+    }
+    if (driftOnlyNames.length > 0) {
+      const shown = driftOnlyNames.slice(0, 5).join(', ');
+      const more = driftOnlyNames.length > 5 ? ` (+${driftOnlyNames.length - 5} more)` : '';
+      lines.push(`> Drift hint: the intelligence ledger has observed ${driftOnlyNames.length} environment(s) this summary's fleet size does not count (never indexed locally, never synced to the graph): ${shown}${more}.`);
+    }
 
     // ── WordPress version distribution ────────────────────────────────────
     lines.push('', '### WordPress Versions');
