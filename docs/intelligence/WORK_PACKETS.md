@@ -34,7 +34,13 @@ recorded; two justified deviations (no per-row column in a two-sided report;
 drift hint unreachable for explicit-target tools) — both folded back into the
 pattern.
 
-### [~] WP-03 · Reconcile `detect_drift` with ledger drift events  *(wp-03 worktree)*
+### [x] WP-03 · Reconcile `detect_drift` with ledger drift events
+Outcome: appends the ledger's `state.drift.detected` records `[origin: ledger]`
+plus a four-class reconciliation (explained / stable / coverage-gap /
+ledger-only). The two detectors measure different axes — spatial vs temporal —
+so the reconciliation classifies by FACT rather than diffing the two sets;
+"coverage gap" and "ledger-only" are the classes that actually test our
+pipeline against the existing detector.
 Pattern: reader-migration + read `stateTwinFold.ts` drift hook first.
 Files: `fleet/detect-drift.ts` (+ test). Parallel-safe.
 Accept: tool reports BOTH its legacy computed drift and `state.drift.detected`
@@ -249,3 +255,93 @@ B-03/E-01/E-02 against the real ledger (harness rules H-01/H-02).
   wp-02 branch carries a verbatim base commit if useful); (2) `npm run rebuild`
   before next loading Local (tests left better-sqlite3 on system-Node ABI);
   (3) review + merge `wp-02`.
+
+- 2026-08-15 · **WP-03 calibration findings** (second packet; docs had already
+  absorbed the WP-02 round). Proposals only — nothing amended by this packet.
+
+  **Docs held up well.** The WP-02 amendments all paid off in practice: the
+  `-b` worktree command worked first try, the layer was tracked so the worktree
+  contained its own exemplars, `--roots src` ran, and cp.entity-join's
+  `resolveAnySite` note answered the id question without a detour. cp.test's
+  additive-parity pin was directly reusable. Nothing in the three documents was
+  wrong. Findings below are gaps rather than errors.
+
+  **(a) The packet's framing hides a semantic mismatch**
+
+  1. **The two detectors measure different axes, and the packet's wording
+     ("discrepancies between the two detection paths") reads as though they
+     measure the same one.** Legacy `detect_drift` finds SPATIAL drift
+     (baseline vs another site, one moment). `state.drift.detected` records
+     TEMPORAL drift (one environment's fact changing over time). Neither is a
+     subset of the other, so a set-difference between them is meaningless —
+     it would report every temporal change as a "missed" spatial drift and
+     vice versa. Resolved by classifying each legacy finding against what the
+     ledger knows about the same FACT (four classes; see the outcome note).
+     Worth stating in the packet so the next reader doesn't implement the
+     naive diff, which looks right and produces noise.
+  2. **The genuinely valuable classes were not the ones the packet named.**
+     "Discrepancies" turned out to mean two distinct things worth separating:
+     a fact the ledger has NEVER observed (a real pipeline coverage gap) vs. a
+     fact it has observed but never seen change (stable divergence). Merging
+     them — the obvious implementation — hides exactly the signal this packet
+     was commissioned to surface.
+
+  **(b) Ledger/API sharp edges a reader-migration author will hit**
+
+  3. **`ledger.query()` is `ORDER BY id ASC LIMIT n`, so hitting the limit
+     drops the NEWEST events.** For any "what changed recently" reader that is
+     backwards, and the failure mode is silent: a truncated result reads as
+     "nothing changed." There is no `order` or `beforeId` option. This tool
+     discloses the cap in its output; a general fix belongs in the core (owner
+     call — `src/intelligence/` is under the serialized lock, and it is an
+     escalation trigger, so this packet did not touch it).
+  4. **`DriftNotice` carries `previousObservedAt`; the emitted
+     `drift.detected/1` payload drops it.** So a reader can say "changed to X,
+     observed 1h ago" but cannot say "diverged for 20h before that" — the most
+     useful number for a drift report. Adding it is a payload schema change
+     (escalation trigger), so it is recorded here rather than done.
+  5. **`state.drift.detected` is emitted by the fold but skipped by it.**
+     `stateTwinFold`'s EXTRACTORS have no entry for it, so drift events never
+     become twin facts — correct, and the file says so, but it means drift is
+     readable ONLY via `ledger.query`, never via `twins.*`. Worth one line in
+     the pattern: the twin store is not a complete view of the ledger.
+
+  **(c) Process finding — mine, not the docs'**
+
+  6. **Mutation-testing an UNCOMMITTED file destroyed the work.** The battery's
+     `git checkout <file>` restore step reverts to HEAD, not to the pre-mutation
+     working state, so the first restore silently wiped the migration and the
+     next five mutations ran against the original file — all reporting
+     "failures" that were really the absence of the feature. Cost: a full
+     reconstruction. Two cheap guards, now used here and worth adding to the
+     pattern if mutation testing becomes standard practice: **commit before
+     mutating**, and **assert the substitution actually changed the file**
+     (checksum before/after) so a non-applying regex reports itself instead of
+     masquerading as a caught mutation.
+
+  **(d) Suggested one-line amendments**
+
+  - WP-03 packet text: "NB: the detectors measure different axes (spatial vs
+    temporal) — classify legacy findings against ledger facts; do not diff the
+    two event sets."
+  - reader-migration cp.drift-hint: "Separate 'ledger never observed this fact'
+    (pipeline coverage gap) from 'observed but never changed' (stable
+    divergence) — merging them hides the coverage gap."
+  - reader-migration cp.enrich: "`ledger.query()` returns OLDEST-first and
+    truncates at `limit`; disclose the cap in output rather than presenting a
+    truncated result as complete."
+  - reader-migration cp.test: "If you mutation-test your assertions, commit
+    first — `git checkout` restores from HEAD, not from your working tree — and
+    verify each mutation actually applied."
+
+  **Known-untested branch, disclosed rather than faked:** the
+  `DRIFT_QUERY_LIMIT` truncation warning. Reaching it needs 2000 drift events;
+  a fixture that large would dominate suite runtime. Mutating
+  `truncated = false` does NOT fail the suite. Every other branch added by this
+  packet is pinned (mutation battery: classification inversion, baseline-side
+  match, matched-fact bookkeeping, append-vs-prepend, staleness detection,
+  change direction, scope filter, and the twins.get baseline fallback all fail
+  the suite when broken).
+
+  ABI STATE: this session ran jest — better-sqlite3 is on the **system-Node**
+  build. `npm run rebuild` before loading Local.
