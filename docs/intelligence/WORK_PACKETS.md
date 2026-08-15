@@ -142,6 +142,87 @@ Accept: plugin-presence and plugin-version filters answer from
 expectations unchanged; result payload gains observed_at per row where the UI
 can carry it. Escalate before changing any SF eval expectation.
 
+**Scout note — 2026-08-15 (Opus, branch `wp-04`). Verdict:
+SERIALIZED-WITH-OWNER. Awaiting ack before phase 2.**
+
+*S1 — `services.filterEngine` is NOT the Site Finder filter engine.* The
+registry entry (`src/main/mcp/types.ts:132`) resolves to
+`src/main/search/FilterEngine.ts`, which is the eight smart-filter *chips*
+engine (security / maintenance / activity / health) behind `fleet_filter` and
+the fleet-discovery UI. It has **no plugin-presence and no plugin-version
+filter** — its nearest neighbour is `filterSecurityUpdates` ("sites with >10
+plugins"), and three of its eight filters (`large-db`, `low-disk`,
+`low-health`) are hardcoded `return []` placeholders. Nothing in this packet's
+accept criteria can be satisfied there. The packet's "scout `filterEngine`
+first" instruction points at the wrong object; the name collides.
+
+*S2 — the real engine is the `SITE_FINDER_APPLY` IPC handler, inlined in
+`src/main/ipc-handlers.ts` (~L3567–4215).* That is where `plugins: [...]` and
+`pluginVersion: {slug, olderThan}` — the two filters SF-01/05/06 assert — are
+actually evaluated. It is one ~650-line handler with **three near-duplicate
+copies** of the whole filter chain (local sites L3661+, WPE L3855+, external
+L4010+); `pluginVersion` alone appears three times (L3766, L3940, L4096), each
+with its own inline `norm()` zero-padded semver comparator. The result payload
+built at L4162–4210 is three arrays (`local` / `wpe` / `external`) of flat row
+objects — that is the surface that would gain `observedAt`.
+
+*S3 — ownership test result: near core services, so serialized.*
+`ipc-handlers.ts` is ~4,700 lines and holds essentially every IPC channel,
+`__agentSettingsCache`, the `FilterEngine` construction (L2566), and the
+`nexusServices` assignment block (L3168). It is not the packet-per-file shape
+the ownership map calls parallel-safe (`fleet/<one-tool>.ts`), and any other
+packet that needs an IPC edit lands in the same file. Two packets needing the
+same file is itself an escalation trigger in PARALLEL_PROTOCOL.md, so this one
+takes the owner lock rather than racing for it.
+
+*S4 — the SF filter suite does not execute the production filter code.*
+`tests/unit/site-finder/filter-apply.test.ts` (523 lines, the largest SF
+artifact) declares its own `applyFilter(db, filter)` at L91 and asserts against
+**that** re-implementation; it imports `better-sqlite3` and nothing from
+`src/`. So the filter semantics SF-01/05/06 encode are pinned to a copy, not to
+`ipc-handlers.ts`. A regression in the real handler is invisible to it. This is
+a vacuous-guard shape and it is pre-existing — flagging, not fixing, in this
+packet. The one suite that *does* drive the real handler is
+`tests/unit/ipc/site-finder-soft-delete.test.ts` (MockIpcMain +
+`registerIpcHandlers` with a partial deps object); that is the harness a WP-04
+test should extend.
+
+*S5 — the twin side is ready; no core change needed.* `graphBackfill.ts:130-150`
+emits `plugin:<slug>` with value `{version?: string, active: boolean}` — both
+the presence and the version predicate are answerable from
+`twins.byFact('plugin:<slug>')`. `sloFor` already carries `/^plugin:/ → 8h`, so
+`freshness().sloSeconds` is available and nothing needs a hardcoded SLO.
+Entity join is clean: local rows key on the Local store site id and remote rows
+on graph `sites.id`, which is exactly what `provisionalEnvironmentId` takes in
+the exemplar (`find-sites-with-plugin.ts:67,103`) — no display names anywhere
+in the join.
+
+*S6 — eval-expectation risk is low but not nil.* SF-01/05/06 assert
+`expected_filter_json` (the NL→filter mapping, produced by
+`site-finder-prompt.ts` / `SITE_FINDER_AI_PARSE`) plus result-set membership.
+Enrichment touches neither: the plan is twin-answered predicates with the graph
+as fallback, additive `observedAt` on rows, membership unchanged. The live
+question for the owner is S7.
+
+*S7 — one genuine design question for the owner (blocks phase 2).*
+"Answer from twins with the graph as fallback" can mean two different things
+for a *filter*, and they differ in observable behaviour:
+  (a) **enrich-only** — the graph continues to decide membership; twins add
+      `observedAt`/trust/staleness per row. Strictly additive, zero eval risk.
+  (b) **twins-decide-with-graph-fallback** — a twin fact, where present, is the
+      authority for the predicate, and the graph answers only where the ledger
+      has not observed. This is what the accept text reads like literally, but
+      it *can* change result-set membership (a twin observed more recently than
+      the graph row, or a `plugin:` fact the graph has since lost), which is the
+      `ab.no-legacy-parity` abort condition and touches SF-01/05/06's
+      `expected_sites`.
+Recommendation: **(a) plus a drift hint** naming the twin-only population — the
+same shape as the exemplar, which enriches rows and reports ledger-vs-cache
+disagreement rather than merging it ("enrich, don't replace; disagreement is a
+signal", CLAUDE.md). That satisfies "answer from twins" in the pattern's sense
+while keeping membership — and therefore every SF eval expectation — untouched.
+Requesting ack on the lock and a ruling on (a) vs (b) before any edit.
+
 ### [x] WP-05 · Jest roots + CI wiring  **(PREREQUISITE — elevated by calibration finding WP-02.1)**
 Outcome: `roots: ['<rootDir>/tests', '<rootDir>/src']` — one list, so `npm test`
 includes the intelligence suites by default; `test:ci` names the third tree
