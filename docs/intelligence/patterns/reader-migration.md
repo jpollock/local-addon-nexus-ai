@@ -114,5 +114,6 @@ registering the core to capture the baseline output, register the core, run
 again, and assert the enriched output contains/extends the baseline
 (`enriched.startsWith(baseline)` for append-only enrichment). This turns the
 pattern's own abort condition into a failing test instead of a judgment call.
-Run `npx jest --roots src` green, plus any legacy suites covering your tool
+Run `npm test` green (jest's roots cover `src` since WP-05 — no flag needed;
+`npx jest src/` narrows to this subsystem), plus any legacy suites covering your tool
 (`grep -rl <tool-basename> tests/`).

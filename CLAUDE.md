@@ -1070,8 +1070,9 @@ Invariants — violating any of these is a defect even if tests pass:
   wrap, log, degrade. If your change can throw into a caller that predates
   the layer, it is wrong.
 - Tests for this subsystem live beside the code (`src/**/__tests__/`).
-  jest.config.js roots only cover `tests/`, so until WP-05 fixes that, run
-  them with the explicit flag: `npx jest --roots src`. Running jest requires
+  jest.config.js roots cover `src` as well as `tests` (WP-05), so `npm test`
+  and `npm run test:ci` both run them with no extra flags; `npx jest src/`
+  runs only this subsystem's suites. Running jest requires
   better-sqlite3 built for system Node (the `pretest` hook handles it);
   loading Local afterwards requires `npm run rebuild` back to Electron —
   disclose which state you left it in. Partial service mocks in tests cast

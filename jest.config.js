@@ -1,7 +1,11 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/tests'],
+  // Two roots, deliberately. Most suites live under tests/, but the intelligence
+  // layer keeps its tests beside the code (src/**/__tests__/) — see CLAUDE.md
+  // "Intelligence Layer". With tests/ alone, those suites silently never ran and
+  // every packet's "green" claim was measured against a set that excluded them.
+  roots: ['<rootDir>/tests', '<rootDir>/src'],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.test.json' }],
   },
