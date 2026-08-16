@@ -504,7 +504,10 @@ Accept: registry loads and mirrors live settings; M4-04..12 behaviors
 unchanged; unit tests for the loader; divergence between registry and settings
 logs a warning (it should be impossible in v0).
 
-### [ ] WP-09 · Author the remaining v0 runbooks (4)
+### [review] WP-09 · Author the remaining v0 runbooks (4)
+*Authored on branch `wp-09`, docs-only, NOT merged — strict runbooks bind future
+agents, so the human owner reviews and merges. Outcome + judgment calls in the
+packet note dated 2026-08-15 below.*
 Pattern: the format spec is ADR-17 + the exemplar
 `docs/intelligence/anchor-slice/runbooks/bulk-plugin-update.md`. Parallel-safe
 (one runbook per agent if desired). Human review required before merge (strict
