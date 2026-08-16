@@ -1857,3 +1857,36 @@ architect session; supersedes nothing, closes both packets).**
   build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
   ABI 127). `npm run rebuild` is required before loading Local again.** The
   shared `node_modules` every worktree symlinks through is affected.
+
+  **WP-04c INTEGRATION REPORT — merged 2026-08-15 as `388e996b`.**
+
+  Receipts (`git diff --stat <merge>^1 <merge>`):
+
+  ```
+   docs/intelligence/WORK_PACKETS.md          | 337 ++++++++++++++++++++++++++++-
+   src/main/ai/site-finder-prompt.ts          |  14 ++
+   src/main/ipc-handlers.ts                   |  75 +++++++
+   tests/unit/ipc/site-finder-filters.test.ts | 243 ++++++++++++++++++---
+   4 files changed, 633 insertions(+), 36 deletions(-)
+  ```
+
+  Two notes on the integration itself:
+
+  - **The base had advanced under me** — WP-08 merged (`c9be9b52`) after this
+    worktree was cut, and the primary checkout additionally held *uncommitted*
+    architect work (the WP-08 adjudication and an ADR-17 authoring-vocabulary
+    amendment). Both were committed **verbatim** as `699a8121` before merging,
+    following the precedent set by `4dc50b21`. The only merge conflict was
+    `WORK_PACKETS.md`, where both sides had appended to an append-only file;
+    resolved by keeping both, WP-08's first. No `src/` conflict.
+  - **Post-merge full suite on the integrated tree: 499 suites, 6,227 passed,
+    2 skipped, 6,229 total, exit 0.** Note the skipped count reads **2** here
+    against **12** in the worktree, and that is NOT something this change did:
+    the primary checkout has an untracked `models/all-MiniLM-L6-v2-quantized`
+    that the fresh worktree lacks, so ten artifact-gated tests `describe.skip`
+    there and run here. This is precisely the WP-04 finding the protocol warns
+    about, observed again — **a skipped-count delta across two checkouts is an
+    environment difference, and comparing test totals across them is invalid.**
+    The load-bearing comparison is the same-environment one recorded above:
+    in-worktree 6,170 → 6,183 passed with skipped unchanged at 12, a delta of
+    exactly the 13 new pins.
