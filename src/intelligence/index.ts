@@ -32,3 +32,23 @@ export {
   PairingProposal,
 } from './entity/entityService';
 export { HostPorts, ClockPort, IdentityPort, StoragePort, systemClock } from './host/ports';
+export {
+  Constraint,
+  ConstraintOrigin,
+  Enforcement,
+  LawDocument,
+  LawLoadError,
+  LawLoadResult,
+} from './law/types';
+export { loadLawDirectory, parseLawDocument } from './law/loader';
+export { ConstraintRegistry, ConstraintFilter, LawDocumentMeta } from './law/registry';
+export {
+  derivePermissionConstraints,
+  comparePermissionMirror,
+  PermissionsSnapshot,
+  PermissionsSnapshotException,
+  MirrorDivergence,
+  RemoteOperation,
+  RemoteEnv,
+  PERMISSIONS_SETTINGS_SOURCE,
+} from './law/permissionsTranslation';

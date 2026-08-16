@@ -23,6 +23,7 @@
   "files": [
     "bin",
     ".claude/skills",
+    "law",
     "lib",
     "models",
     "package.json",

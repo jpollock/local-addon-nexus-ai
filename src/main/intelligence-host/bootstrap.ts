@@ -21,6 +21,7 @@ import {
   ulid,
 } from '../../intelligence';
 import { draftFromWpEvent } from './wpEventProducer';
+import { initLawRegistry, LawRegistryHandle } from './permissionsMirror';
 
 export type WpEventTap = (
   siteId: string,
@@ -38,6 +39,13 @@ export interface IntelligenceCore {
    * provisional-id derivation (which mints the identical ids) when absent.
    */
   entities?: EntityService;
+  /**
+   * Policy registry v0 (WP-08). OPTIONAL by construction like the entity
+   * service: it OBSERVES the live wpeOperationPermissions (translation, not
+   * enforcement — no allow/deny reads it in v0), so its absence costs only
+   * the mirror, never the gate.
+   */
+  law?: LawRegistryHandle;
   tap: WpEventTap;
   /** Debounced fold catch-up — producers call this after emitting. */
   scheduleFolds: () => void;
@@ -51,6 +59,8 @@ interface MinimalStorage {
 
 interface MinimalLogger {
   info: (msg: string) => void;
+  /** Optional: the mirror-divergence tripwire prefers warn, falls back to error. */
+  warn?: (msg: string) => void;
   error: (msg: string, ...args: unknown[]) => void;
 }
 
@@ -134,6 +144,11 @@ export function initIntelligenceCore(options: {
       logger.error(`[Intelligence] entity service init failed (non-fatal): ${(err as Error).message}`);
     }
 
+    // WP-08: policy registry v0 — mirrors wpeOperationPermissions, enforces
+    // nothing. initLawRegistry carries its own try/catch and returns
+    // undefined on failure, so no extra wrapping is needed here.
+    const law = initLawRegistry({ storage, logger });
+
     const tap: WpEventTap = (siteId, eventType, payload) => {
       try {
         const draft = draftFromWpEvent(siteId, eventType, payload ?? {}, new Date(), entities);
@@ -152,6 +167,7 @@ export function initIntelligenceCore(options: {
       emitter,
       twins: new TwinStore(ledger),
       entities,
+      law,
       tap,
       scheduleFolds,
       close: () => {
