@@ -27,6 +27,7 @@ import * as path from 'path';
 import { initIntelligenceCore } from '../../../../intelligence-host/bootstrap';
 import { setIntelligenceCore } from '../../../../intelligence-host/coreRegistry';
 import { runGraphBackfill } from '../../../../intelligence-host/graphBackfill';
+import { provisionalEnvironmentId } from '../../../../intelligence-host/provisionalEntity';
 import { detectDriftHandler } from '../detect-drift';
 
 const H = 3600_000;
@@ -158,10 +159,16 @@ test('detect_drift: both detectors reported, labeled by origin, and reconciled',
   // Additive parity — the legacy report survives character for character.
   expect(text.startsWith(legacyText)).toBe(true);
 
-  // (1) Ledger drift is reported, labeled by origin.
+  // (1) Ledger drift is reported, labeled by origin, and each row carries how
+  //     long the previous value stood before the change was observed (WP-03b —
+  //     `previous_observed_at`, from schema drift.detected/2). alpha's previous
+  //     value was observed 2h ago and the change 1h ago → 1h; beta's 30h/25h → 5h.
   expect(text).toContain('### Changes Recorded by the Ledger  [origin: ledger]');
-  expect(text).toMatch(/\| alpha \(baseline\) \| plugin:woocommerce \| 9\.5\.0 → 9\.9\.1 \| 1h ago \|/);
-  expect(text).toMatch(/\| beta \| plugin:custom-thing \| 1\.0 → 1\.1 \| 1d ago \|/);
+  expect(text).toMatch(/\| alpha \(baseline\) \| plugin:woocommerce \| 9\.5\.0 → 9\.9\.1 \| 1h \| 1h ago \|/);
+  expect(text).toMatch(/\| beta \| plugin:custom-thing \| 1\.0 → 1\.1 \| 5h \| 1d ago \|/);
+  expect(text).toContain('"Diverged for" is the gap between the previous and current observations');
+  // Every row here has the timestamp, so the v1 caveat must NOT be printed.
+  expect(text).not.toContain('drift.detected/2');
 
   // (2) Observations header — beta is stale, so the remedy phrase is required.
   expect(text).toMatch(/> Observations: 2 of 2 environment\(s\) ledger-observed — 1 carry at least one fact past its SLO/);
@@ -192,6 +199,141 @@ test('detect_drift: both detectors reported, labeled by origin, and reconciled',
   expect(text).not.toContain('gamma');
   expect(text).not.toContain('offsite-plugin');
 
+  core.close();
+  graphDb.close();
+});
+
+/**
+ * WP-03b fixtures — a drift event straight through the emitter.
+ *
+ * No backfill and no fold, so these tests cost nothing in debounce waits and
+ * the emission ORDER is exactly what the test says it is (ULIDs are monotonic
+ * within a process, so ledger id order == the order below). `beta` is a
+ * comparison target in `makeServices`, so its entity is in the report's scope.
+ */
+function emitDrift(
+  core: ReturnType<typeof newCore>,
+  o: { schema: string; fact: string; previous: unknown; observed: unknown; observedAt: number; previousObservedAt?: number },
+): void {
+  core.emitter.emit({
+    observed_at: new Date(o.observedAt).toISOString(),
+    topic: 'state.drift.detected',
+    schema: o.schema,
+    entity: { environment: provisionalEnvironmentId('beta') },
+    actor: { id: 'act_fold_state_twin', kind: 'system' },
+    source: { class: 'platform', system: 'fold:state-twin', trust: 'derived' },
+    payload: {
+      fact: o.fact,
+      previous: o.previous,
+      observed: o.observed,
+      // v1 of the payload simply had no such key.
+      ...(o.previousObservedAt === undefined
+        ? {}
+        : { previous_observed_at: new Date(o.previousObservedAt).toISOString() }),
+    },
+  });
+}
+
+test('detect_drift: a v1 drift event renders no duration rather than a fabricated one', async () => {
+  // drift.detected/1 predates `previous_observed_at`. Those events are already
+  // in real ledgers; the report must degrade to "unknown", never to a number
+  // computed from a missing timestamp (which would render as "56y" or "1m").
+  const graphDb = makeGraph();
+  const services = makeServices(graphDb);
+  const core = newCore('intel-drift-v1-');
+  setIntelligenceCore(core);
+
+  emitDrift(core, {
+    schema: 'drift.detected/1',
+    fact: 'plugin:legacy-thing',
+    previous: { version: '1.0' },
+    observed: { version: '2.0' },
+    observedAt: NOW - 2 * H,
+  });
+
+  // An out-of-order pair degrades the same way. `stateTwinFold`'s own guard
+  // means the current producer cannot emit one, but this reader consumes
+  // whatever is in the ledger — including events from producers not yet
+  // written — and a negative interval must not render as a duration.
+  emitDrift(core, {
+    schema: 'drift.detected/2',
+    fact: 'plugin:backwards-thing',
+    previous: { version: '3.0' },
+    observed: { version: '4.0' },
+    observedAt: NOW - 4 * H,
+    previousObservedAt: NOW - 1 * H,
+  });
+
+  emitDrift(core, {
+    schema: 'drift.detected/2',
+    fact: 'plugin:instant-thing',
+    previous: { version: '5.0' },
+    observed: { version: '6.0' },
+    observedAt: NOW - 6 * H,
+    previousObservedAt: NOW - 6 * H,
+  });
+
+  const text = (await detectDriftHandler.execute({ baseline_site: 'alpha' }, services)).content[0].text;
+
+  expect(text).toMatch(/\| beta \| plugin:legacy-thing \| 1\.0 → 2\.0 \| — \| 2h ago \|/);
+  expect(text).toMatch(/\| beta \| plugin:backwards-thing \| 3\.0 → 4\.0 \| — \| 4h ago \|/);
+
+  // A REACHABLE zero: stateTwinFold's guard is a strict `>`, so two values
+  // observed in the same timestamp granule both fold and drift fires with an
+  // interval of 0. `fmtDuration` floors at "1m", which would claim a minute
+  // that was never observed — the shared age vocabulary is right for ages and
+  // wrong for this. "<1m" is the honest rendering of a known-but-tiny gap, and
+  // it is not "—", which means unknown.
+  expect(text).toMatch(/\| beta \| plugin:instant-thing \| 5\.0 → 6\.0 \| <1m \| 6h ago \|/);
+  // The absence is explained where it appears, not left as a bare em dash.
+  expect(text).toContain('predate schema drift.detected/2');
+  // No duration invented from the missing timestamp.
+  expect(text).not.toMatch(/plugin:legacy-thing \| 1\.0 → 2\.0 \| \d/);
+
+  core.close();
+  graphDb.close();
+});
+
+test('detect_drift: the ledger query is newest-first, so the cap drops the OLDEST events', async () => {
+  // The WP-03 disclosure this retires: `query` defaulted to ORDER BY id ASC, so
+  // hitting the 2000-event cap dropped the NEWEST changes and the report read as
+  // "nothing changed recently". Reaching 2000 events for real would dominate the
+  // suite (that is why WP-03 left the branch untested), so the cap is simulated
+  // by clamping the limit the tool asks for — the ordering under test is still
+  // decided by the real Ledger SQL.
+  const graphDb = makeGraph();
+  const services = makeServices(graphDb);
+  const core = newCore('intel-drift-order-');
+  setIntelligenceCore(core);
+
+  emitDrift(core, {
+    schema: 'drift.detected/2', fact: 'plugin:oldest-change',
+    previous: { version: '1.0' }, observed: { version: '1.1' },
+    observedAt: NOW - 20 * H, previousObservedAt: NOW - 26 * H,
+  });
+  emitDrift(core, {
+    schema: 'drift.detected/2', fact: 'plugin:newest-change',
+    previous: { version: '2.0' }, observed: { version: '2.1' },
+    observedAt: NOW - 3 * H, previousObservedAt: NOW - 9 * H,
+  });
+
+  const realQuery = core.ledger.query.bind(core.ledger);
+  let asked: { order?: string } | undefined;
+  core.ledger.query = (opts = {}) => {
+    asked = opts;
+    return realQuery({ ...opts, limit: 1 });
+  };
+
+  const text = (await detectDriftHandler.execute({ baseline_site: 'alpha' }, services)).content[0].text;
+
+  expect(asked?.order).toBe('desc');
+  expect(text).toContain('plugin:newest-change');
+  expect(text).not.toContain('plugin:oldest-change');
+  // The truncation-disclosure branch is retired: dropping the oldest events is
+  // the boring, correct behaviour and no longer warrants a warning.
+  expect(text).not.toContain('event cap');
+
+  core.ledger.query = realQuery;
   core.close();
   graphDb.close();
 });
