@@ -2326,3 +2326,100 @@ instructions), executed against a ledger seeded by the real producers.
 Parallel-safe (new tree + read-only on everything else). Any spec found
 unimplementable as written is a WP-11-style escalation — the spec gets
 fixed in the record, not worked around.
+
+---
+
+**ARCHITECT NOTE — three-layer implementation audit (2026-08-16).** Full
+findings in `docs/intelligence/implementation-audit-three-layer.md` (A1–A9).
+Headline: the model adopts additively; ONE forbidden path (re-deriving entity
+ids — the id-freeze ruling is now in ADR-21's candidate text); the
+reconciliation doc's "lineage already written" claim was corrected (it needs
+one new producer); one live defect confirmed (verify_site_live identity).
+Method note: audits ran on a staged snapshot — one finding (mirror unwired)
+was a stale-snapshot false positive, excluded after live verification.
+Packets registered below.
+
+### [ ] WP-14 · Sync-event producer + lineage edges  *(M3 opener; makes the lineage record real — audit A4/A6)*
+No pull/push/promotion emits any ledger event today; `OperationTracker`
+observes exactly these ops and is not connected to the core; `pull_lineage`
+(EstablishedBy) ships dormant. Build: (1) a producer tapping OperationTracker
+(or the pull/push tool handlers — scout which seam is cleaner) emitting
+`episodic.sync.pulled` / `episodic.sync.pushed` (+`.promoted` when reachable)
+with `entity: { site, environment: <upstream env>, working_copy: <local> }`
+and payload `{ flow: 'content'|'code'|'full', direction, includes_db,
+code_ref? }`; (2) on each sync, upsert lineage links: `content_pulled_from`
+(copy→env, `at`=pull time, EstablishedBy `pull_lineage`) — the PK upserts so
+the pointer MOVES; (3) mirror additions: `has_working_copy` (Site→copy)
+alongside the kept `has_environment`; (4) `workingCopiesOf()` beside
+`environmentsOf()` in entityService (core lock). Escalations: the new topics
+are pre-ruled (this entry IS the ruling — three-segment, validator-clean);
+anything else schema-shaped escalates. ADR-21's id-freeze ruling governs:
+NEVER re-derive ids.
+
+### [ ] WP-15 · Divergence comparator + lineage-aware drift unification  *(M3; depends WP-14 — audit A5)*
+Cross-entity divergence (copy twins vs upstream twins) is a new READ-side
+comparator, not a fold change: `divergence(copyEntityId)` resolves
+upstream(s) via WP-14's links, diffs `forEntity(A)` vs `forEntity(B)` by
+fact key (compare-sites proves the pair-diff), reports per-flow with per-side
+freshness, anchored on "since the last sync event at T" (WP-14's zero
+point). Optionally emits `state.divergence.detected`. Then enrich the
+legacy `wpe_detect_drift` (right measurement, wrong substrate — it joins
+graph caches by hostConnections install-name) with the comparator's output
+as APPENDED enrichment per the reader-migration pattern; do not change its
+legacy output. DriftNotice stays single-entity; shipped folds untouched.
+
+### [ ] WP-16 · verify_site_live identity fix  *(confirmed live defect — audit A7; small, immediate, parallel-safe)*
+For WPE targets the tool derives `ensure('env','local.site_id',
+<install NAME>)` — a WRITE registering a divergent entity whenever graph row
+id ≠ install name; the emit path then stamps a name-derived `site` entity,
+splitting history. Violates the entity-identity namespace table. Fix:
+resolve through `core.entities.resolve(installName, 'wpe.install_name')`
+(and `wpe.install_id` where the id is at hand) BEFORE any derivation; keep
+the twin name-match as the last fallback; same shape for external aliases.
+Pin with a test where graph row id ≠ install name proving no new entity is
+registered and observations land on the mirror's entity. ALSO in scope (one
+line, audit A3): `chatAssembly.resolveTargets` additionally returns the
+`{role:'site'}` target so episodic retrieval is Site-scoped — additive,
+assembler unchanged.
+
+### [ ] WP-17 · Intelligence health surface + degradation tests  **(robustness track — would have caught the M1 silent-init incident)**
+The layer is non-fatal by construction, which converts real failure into
+SILENT absence: the M1 ABI incident ran for hours with green tests, a working
+app, and a dark ledger. Fix: the layer monitors itself with its own
+machinery. Read `docs/intelligence/TESTING_STRATEGY.md` first.
+Build: (1) `nexus_intelligence_health` MCP tool (Tier 1, read-only) + a
+startup log line, reporting: core init state (incl. the LAST init failure
+reason if any — persist it in storage so a failed boot is visible from a
+succeeded one); per-producer last-emission age vs a producer-liveness SLO
+(wp-webhook, graph-sync, graph-sync:wpe, fold, task.* — one ledger GROUP BY);
+fold lag (ledger head id vs fold cursor); `law.verifyMirror()` divergence
+count; entity service present; assembler last-manifest age. Each line:
+value, SLO, OK/STALE/DARK verdict. (2) Degradation tests (the chaos half):
+corrupt ledger file → addon unaffected AND health reports DARK with reason;
+entity service throw → core up, health degraded; simulated ABI failure path.
+The non-fatality claims move from comments into pinned tests.
+Serialized (core lock) for the health internals; the tool file itself is
+parallel-safe. Liveness SLO values are owner-tunable constants beside
+DEFAULT_FRESHNESS_SLOS — propose defaults, escalate none.
+
+### [ ] WP-18 · MCP-driven e2e harness + real-ledger replay  **(robustness track; codifies the live smokes)**
+Every real incident this project caught was found by hand-driving the MCP
+surface of a RUNNING Local instance. Codify it. Read
+`docs/intelligence/TESTING_STRATEGY.md` first.
+Build: (1) `tests/e2e-intelligence/` — a runner that connects to the local
+MCP endpoint (scout how tests/e2e-cli connects; reuse its transport) and
+executes journeys against the live addon: `find_sites_with_plugin` renders
+enrichment with real ages; `verify_site_live` on a running site reconciles
+and emits; `nexus_intelligence_health` (WP-17) reports all-OK; one chat turn
+via the docked-panel path writes a `task.context.assembled` event (drive via
+the health tool's manifest-age check if driving chat directly is
+impractical — scout and say). NOT in `npm test`; its own script
+(`npm run test:e2e:intelligence`), documented as requiring Local running,
+skipping with a LOUD banner otherwise (never a silent green). (2)
+Real-ledger replay: a script that copies the live ledger.db (read-only),
+rebuilds all folds from event 0 into a temp twin store, and asserts
+invariants — no throw, monotonic ids, twin counts within sanity bounds,
+every drift event well-formed. Run manually / pre-release; document the
+one-liner. Parallel-safe; no production code changes (WP-17's tool is a
+dependency for one journey — sequence after it or mark that journey
+pending).
