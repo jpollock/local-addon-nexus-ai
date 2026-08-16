@@ -114,3 +114,11 @@ decisions only in chat transcripts.
 merge against its first parent), so the owner sees exactly which files
 changed without having to ask. An integration report without its stat block
 is incomplete.
+
+**Uncommitted architect work in the primary checkout** (now standard, after
+three exercises of the WP-02 precedent — 4dc50b21, 699a8121): an agent that
+finds uncommitted `docs/intelligence/` changes blocking its merge commits
+them VERBATIM in a separate, clearly-attributed commit ("commit architect
+session's … (found uncommitted in primary checkout)") before merging. Never
+fold them into your own commits, never edit them, and flag the commit in
+your report so the architect can verify fidelity.

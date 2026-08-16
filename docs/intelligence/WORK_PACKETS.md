@@ -1890,3 +1890,36 @@ architect session; supersedes nothing, closes both packets).**
     The load-bearing comparison is the same-environment one recorded above:
     in-worktree 6,170 → 6,183 passed with skipped unchanged at 12, a delta of
     exactly the 13 new pins.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-04c (appended by the architect session).**
+
+- **WP-04c ACCEPTED.** Merge 388e996b audited from the owner's checkout:
+  four files, exactly the three ruled fixes + prompt wiring + pins + notes.
+  All 40 WP-04b tests unmodified and green; the per-chain mutation kills and
+  the `.get(...)`-argument anchor (sharper than occurrence-indexing) are
+  noted as the new best practice for duplicated chains.
+- **SF-eval residual risk adjudicated:** the human-in-the-loop SF parse run
+  is CONSOLIDATED with WP-08's M4 belt-and-braces run into ONE owner eval
+  session before the M2 PR opens. Until then, the four added prompt lines
+  are the only unverified surface; `tests/evals/` untouched is accepted as
+  the merge bar.
+- **699a8121 (agent committing architect work) endorsed** — the practice is
+  now written into PARALLEL_PROTOCOL's Communication section as standard.
+- **WP-04d registered** (below): phpVersions granularity unification —
+  follow-up, changes local behaviour, needs its own packet. The
+  land-together rule from the process finding (a filter key ships with its
+  chain, prompt line, and pins in one commit, or not at all) is adopted as
+  Site Finder convention.
+
+### [ ] WP-04d · phpVersions granularity — unify on the prefix predicate
+Registered from WP-04c finding. WPE rows store PHP as major.minor ("8.2");
+local/external store patch-level ("8.2.29"); the current exact-membership
+predicate therefore under-matches across sources depending on which
+granularity the user queried. Recommended fix: the prefix predicate
+`wpVersions` already uses, applied uniformly. **Changes local-chain
+behaviour**, so it is its own packet with its own parity analysis — the
+WP-04b/04c suite (53 tests) is the harness; expect to UPDATE some pins
+deliberately and say which. Integration-lock class (edits the chains).
+Low urgency; do not run concurrently with other ipc-handlers work.
