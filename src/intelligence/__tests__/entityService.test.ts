@@ -1,3 +1,13 @@
+/**
+ * Entity service v0 (unwired draft — see WP-07 and
+ * `docs/intelligence/reconciliation-entity-identity.md`).
+ *
+ * Pins the four properties the eventual wiring depends on: `ensure()` is
+ * idempotent AND mints the same id the producers already derive
+ * (`provisionalEntity.ts`) so adoption changes no ids; resolution carries its
+ * evidence rather than a bare answer; a user link outranks any heuristic; and
+ * pairing proposals stay proposals — nothing here pairs automatically.
+ */
 import { Ledger } from '../ledger/ledger';
 import { EntityService } from '../entity/entityService';
 

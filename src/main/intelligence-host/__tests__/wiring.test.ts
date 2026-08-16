@@ -1,3 +1,12 @@
+/**
+ * End-to-end wiring smoke: WP webhook event -> emitter -> ledger -> fold ->
+ * twin, through the real `initIntelligenceCore` bootstrap rather than
+ * hand-assembled parts.
+ *
+ * This is the suite that fails when a stage is wired but not started (a fold
+ * registered and never caught up, a producer constructed and never tapped) —
+ * the class of defect each stage's own unit test cannot see.
+ */
 import { initIntelligenceCore } from '../bootstrap';
 import * as os from 'os';
 import * as fs from 'fs';

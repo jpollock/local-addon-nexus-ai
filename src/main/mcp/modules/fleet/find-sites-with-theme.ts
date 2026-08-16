@@ -52,7 +52,7 @@ export const findSitesWithThemeHandler: McpToolHandler = {
 
     // ── Local sites: IndexRegistry structure ──────────────────────────────
     const entries = services.indexRegistry.listAll();
-    const indexed = entries.filter((e: any) => e.structure);
+    const indexed = entries.filter((e) => e.structure);
     let staleCount = 0;
 
     for (const entry of indexed) {

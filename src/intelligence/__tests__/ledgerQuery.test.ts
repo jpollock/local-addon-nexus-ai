@@ -1,3 +1,11 @@
+/**
+ * Ledger query ordering.
+ *
+ * `order: 'desc'` is not a cosmetic default — every "recent events" reader
+ * applies a row limit, and an ascending scan spends that limit on the OLDEST
+ * events and silently drops the newest. This suite pins the direction so a
+ * reader that asks for "the last N" gets the last N.
+ */
 import { Ledger } from '../ledger/ledger';
 import { createEmitter } from '../emit/emitter';
 

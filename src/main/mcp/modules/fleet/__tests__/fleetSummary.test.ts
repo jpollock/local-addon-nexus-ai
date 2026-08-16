@@ -1,3 +1,12 @@
+/**
+ * WP-01 — `fleet_summary` twin enrichment.
+ *
+ * The drift signal here is population-level rather than per-row: the ledger's
+ * environment count versus the cache's fleet size. The load-bearing assertion
+ * is the additive-parity pin — the legacy body must survive byte-for-byte
+ * underneath the new Observations header, because `fleet_summary` is a
+ * narrative surface and a reworded line reads to a user as a changed fact.
+ */
 import Database from 'better-sqlite3';
 import * as os from 'os';
 import * as fs from 'fs';

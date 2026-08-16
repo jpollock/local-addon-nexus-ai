@@ -1,3 +1,15 @@
+/**
+ * The two smaller reader migrations that shipped together:
+ * `find_sites_with_theme` (observed column) and `find_outdated_sites`
+ * (freshness overlay + ledger gap-fill).
+ *
+ * `find_outdated_sites` is the one with teeth: its fixture puts `siteB`'s
+ * `wp_version` in the LEDGER and nowhere in the graph, so the gap-fill is
+ * exercised rather than asserted about. The test pins that the filled value
+ * is both reported (`6.9`) and participates in the outdated comparison — a
+ * gap-fill that displayed a version without comparing it would look correct
+ * and still under-report the fleet.
+ */
 import Database from 'better-sqlite3';
 import * as os from 'os';
 import * as fs from 'fs';

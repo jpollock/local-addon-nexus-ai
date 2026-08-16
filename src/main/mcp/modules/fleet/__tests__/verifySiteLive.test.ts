@@ -1,3 +1,13 @@
+/**
+ * `verify_site_live` — the tool that closes the gap a staleness flag opens.
+ *
+ * Two cases, both about honesty rather than plumbing (the transport is mocked
+ * deliberately — SSH is not what's under test): a live check must record what
+ * it saw as FRESH observations including removals (a plugin that vanished is
+ * an observation, not an absence of one), and a site it cannot actually reach
+ * must refuse with a message that names the reason rather than reporting a
+ * successful check over no data.
+ */
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';

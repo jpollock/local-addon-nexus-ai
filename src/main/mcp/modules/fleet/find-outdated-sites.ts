@@ -85,7 +85,7 @@ export const findOutdatedSitesHandler: McpToolHandler = {
 
     // --- Supplement with index registry for local sites not in graph ---
     if (sourceFilter !== 'wpe') {
-      const entries = services.indexRegistry.listAll().filter((e: any) => e.structure);
+      const entries = services.indexRegistry.listAll().filter((e) => e.structure);
       for (const e of entries) {
         if (!graphSites.has(e.siteId)) {
           graphSites.set(e.siteId, {
