@@ -251,9 +251,23 @@ test('detect_drift: a v1 drift event renders no duration rather than a fabricate
     observedAt: NOW - 2 * H,
   });
 
+  // An out-of-order pair degrades the same way. `stateTwinFold`'s own guard
+  // means the current producer cannot emit one, but this reader consumes
+  // whatever is in the ledger — including events from producers not yet
+  // written — and a negative interval must not render as a duration.
+  emitDrift(core, {
+    schema: 'drift.detected/2',
+    fact: 'plugin:backwards-thing',
+    previous: { version: '3.0' },
+    observed: { version: '4.0' },
+    observedAt: NOW - 4 * H,
+    previousObservedAt: NOW - 1 * H,
+  });
+
   const text = (await detectDriftHandler.execute({ baseline_site: 'alpha' }, services)).content[0].text;
 
   expect(text).toMatch(/\| beta \| plugin:legacy-thing \| 1\.0 → 2\.0 \| — \| 2h ago \|/);
+  expect(text).toMatch(/\| beta \| plugin:backwards-thing \| 3\.0 → 4\.0 \| — \| 4h ago \|/);
   // The absence is explained where it appears, not left as a bare em dash.
   expect(text).toContain('predate schema drift.detected/2');
   // No duration invented from the missing timestamp.
