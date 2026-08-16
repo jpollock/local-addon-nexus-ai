@@ -397,6 +397,21 @@ every new file has its header comment; a draft PR description exists at
 `docs/intelligence/PR_DESCRIPTION.md` telling the story (model → ADRs → spine
 → readers → live re-check) with verification steps for a reviewer.
 
+### [ ] WP-04b · Port SF filter-apply assertions onto the real handler  *(registered from WP-04 finding; not intelligence-layer work)*
+`tests/unit/site-finder/filter-apply.test.ts` (523 lines, the largest SF test
+artifact) declares its OWN `applyFilter()` and imports nothing from `src/` —
+the Site Finder filter semantics are pinned to a copy, so a regression in the
+real `SITE_FINDER_APPLY` handler is invisible to it. WP-04's
+`siteFinderTwins.test.ts` drives `registerIpcHandlers` directly and is the
+template. Port the ~500 lines of assertions onto the real handler (or prove a
+given assertion is unreachable through it and say so). Parallel-safe;
+`ipc-handlers.ts` is READ here, not edited — no lock needed. Legacy-test
+debt, not intelligence scope: can run any time, does not block M1 close.
+Accept: every semantic currently pinned by the copy is pinned against the
+real handler (or explicitly waived with a reason); the copy is deleted or
+reduced to pure input-fixture helpers; SF-01/05/06 eval expectations
+unchanged.
+
 ---
 
 ## Milestone 2 — designed and speccable now
@@ -847,3 +862,44 @@ B-03/E-01/E-02 against the real ledger (harness rules H-01/H-02).
 
   **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
   build. `npm run rebuild` before loading Local.**
+
+---
+
+**ARCHITECT ADJUDICATIONS — post WP-03b + WP-04 merges (appended by the
+architect session; supersedes nothing, closes both packets).**
+
+- **WP-03b ACCEPTED.** Merge 303474c3 audited against its receipt: three
+  files, all in scope. The unknown/`<1m`/duration three-way split and the
+  zero-interval discovery (strict-`>` fold guard ⇒ interval 0 is reachable)
+  are accepted as-designed. The mutation-battery comment-collision finding is
+  folded into `patterns/reader-migration.md` (cp.test) — the checksum guard
+  is now documented as necessary but not sufficient; witness assertions
+  required.
+- **WP-04 ACCEPTED.** Merge 474cd7d1 audited: `ipc-handlers.ts` diff is
+  exactly the granted lock scope (import + call + provenance spreads + type
+  widenings + payload block, logic in `siteFinderTwins.ts`);
+  `SidebarSearchPanel.tsx` is type-only widening, ruled in scope under
+  "payload gains observed_at per row where the UI can carry it".
+- **cp.drift-hint amended** per WP-04: fourth variant
+  (value-mismatch-on-a-matched-row) added; composite-predicate caveat added
+  (twin-only must be computed against the single predicate's own cache rows,
+  never the composed result set).
+- **Protocol amended** per WP-04 findings: `ipc-handlers.ts` added to the
+  ownership map as integration-lock class; worktree setup now warns that
+  artifact-gated suites (`embedding-service.test.ts`) skip silently in fresh
+  worktrees — diff SKIPPED counts, not just failures; `.gitignore`
+  `node_modules/` → `node_modules` so the protocol's own symlink is ignored
+  (the WP-04 `git add -A` trap, reverted in 1db0d2a9, can't recur).
+- **WP-04b registered** (Milestone 1 section): port the 523-line
+  `filter-apply.test.ts` copy-pinned assertions onto the real handler.
+  Legacy-test debt; does not block M1 close.
+- **WP-06 is now unblocked** — every other M1 packet is merged. Its
+  inheritance pile, consolidated: (1) the `lib/` test-shipping tsconfig
+  decision; (2) CLAUDE.md Node/ABI number drift; (3) `(e: any)` scaffold
+  casts; (4) the intermittent host/sync TS-redeclaration abort (WP-05 finding
+  7, seen again in WP-03b — characterize or ticket, don't chase); (5) WP-03b's
+  proposed cp.test fixture note (emit via `core.emitter` for render-only
+  tests: ~4ms and deterministic id order vs ~1.4s backfill+fold) — adopt into
+  the pattern if the sweep agrees; (6) PR_DESCRIPTION.md drift: packet count
+  and reader list predate WP-03b/WP-04 (Site Finder surface + `versionDrift`
+  are absent), wpe-tools known-issue is now RESOLVED (BackupGate root cause).

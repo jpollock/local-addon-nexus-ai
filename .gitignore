@@ -1,4 +1,7 @@
-node_modules/
+# No trailing slash: `node_modules/` matches only real directories, so the
+# node_modules SYMLINK that PARALLEL_PROTOCOL's worktree setup creates was
+# trackable by `git add -A` (bit WP-04; caught and reverted in 1db0d2a9).
+node_modules
 lib/
 coverage/
 dist/

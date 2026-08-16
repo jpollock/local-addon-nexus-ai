@@ -17,6 +17,18 @@ before diagnosing anything as a branch regression (WP-05 finding):
     ln -s ../../node_modules node_modules
     npm run compile
 
+(`.gitignore` now uses `node_modules` without a trailing slash so this
+symlink is ignored — it wasn't, and `git add -A` tracked it in WP-04.
+If you see the symlink in `git status`, do not commit it.)
+
+**Baseline your test counts in the worktree, not from memory** (WP-04
+finding): some suites gate on untracked artifacts — e.g.
+`tests/main/embedding-service.test.ts` `describe.skip`s without the local
+model files — so a fresh worktree runs FEWER tests and still reports green.
+When comparing runs, diff the **skipped** count as well as failures; a
+skipped-count change explains a test-count delta that would otherwise read
+as a regression or a phantom gain.
+
 **Before creating the worktree, confirm the intelligence layer is
 actually tracked**: `git status` in the primary checkout must not show
 `src/intelligence/` or `docs/intelligence/` as untracked — if it does, stop
@@ -42,6 +54,7 @@ undisclosed.
 | `src/main/intelligence-host/` | Serialized with the core (same owner-lock) |
 | `src/main/index.ts` | **The integration lock.** Wiring edits only, done as a packet's final step by whoever holds the lock, kept to the minimal import + call. Never refactor index.ts opportunistically |
 | `src/main/mcp/modules/fleet/index.ts` | Same lock as index.ts (registration edits) |
+| `src/main/ipc-handlers.ts` | Same lock as index.ts (WP-04 ruling: it hosts the inlined SITE_FINDER_APPLY filter engine). Wiring/enrichment call sites only — logic lives in a separate module; never refactor the handler chains opportunistically |
 | `CLAUDE.md`, `INTELLIGENCE_ROADMAP.md`, `docs/intelligence/` | Human-owner approval before edits |
 
 ## House rules (inherited, non-negotiable)

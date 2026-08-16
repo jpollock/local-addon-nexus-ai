@@ -81,13 +81,24 @@ IS for that tool (for a two-sided comparison it's observation-age skew between
 the sides — see compare-sites.ts) and surface that, with a code comment
 explaining the substitution.
 
-Three known variants of that disagreement (add yours here if you find a
-fourth): **per-fact** — twin facts with no corresponding cache result, for
+Four known variants of that disagreement (add yours here if you find a
+fifth): **per-fact** — twin facts with no corresponding cache result, for
 discovery tools (find-sites-with-*); **per-dimension skew** — observation-age
 gaps between compared sides (compare-sites); **population-level** — once per
 run, environments the ledger has observed that the tool's own population
 never counted (fleet-summary; the "Fleet counts" CLAUDE.md section explains
-why the populations legitimately differ).
+why the populations legitimately differ); **value-mismatch-on-a-matched-row**
+— a row sits in both populations but the twin's fact value disagrees with the
+cache's (e.g. a version-carrying plugin fact), reported as drift on the row,
+never acted on (siteFinderTwins.ts `versionDrift`; from WP-04).
+
+**Composite-predicate caveat (WP-04):** the per-fact variant computes
+twin-only as "ledger entities with the fact, minus the result set" — sound
+ONLY when the result set is that fact's population. A tool that composes many
+predicates (Site Finder chains plugin, version, PHP-EOL, ...) must compute
+twin-only against the cache's own rows *for the same single predicate*, never
+against the composed result — otherwise a site excluded by an unrelated
+predicate gets blamed on a ledger-vs-cache disagreement it never had.
 
 For all variants: never silently merge; report the disagreement. Skip facts
 whose value has `active: false` / `removed: true` when hinting. And keep two
