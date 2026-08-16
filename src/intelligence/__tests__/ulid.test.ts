@@ -1,3 +1,12 @@
+/**
+ * ULID monotonicity — load-bearing, not a property-test flourish.
+ *
+ * The folds break same-`observed_at` ties by event id, so two events minted in
+ * the same millisecond must sort in EMISSION order or the twin can settle on
+ * the earlier of two simultaneous observations. The 5000-iteration loop is the
+ * coin-flip case (plain random ULIDs pass it ~half the time); the rewound-clock
+ * test covers the other way an id can go backwards.
+ */
 import { ulid, eventId } from '../envelope/ulid';
 
 test('ulids minted in the same millisecond sort in emission order (monotonic)', () => {

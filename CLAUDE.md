@@ -23,9 +23,24 @@
 **TL;DR:** Manual rebuild required when switching contexts.
 
 **The addon uses better-sqlite3** (native module):
-- Tests use system Node.js (MODULE_VERSION 127)
-- Local uses Electron Node.js (MODULE_VERSION 146)
+- Tests use **whatever Node your shell runs** — its ABI is
+  `node -p process.versions.modules`, not a constant
+- Local uses Electron Node.js (MODULE_VERSION **146**)
 - **Different binaries required** — one context breaks the other
+
+**There are TWO system-Node versions in play and they disagree.** `.nvmrc`
+pins **22.16.0 → ABI 127** and every CI job reads it, so that is the number CI
+sees. A developer shell that ignores `.nvmrc` sees its own: measured on this
+machine 2026-08-15, **Node 25.9.0 → ABI 141**. This file used to state 127
+flatly, which is right for CI and wrong at the terminal — and a stale ABI
+number makes a real `NODE_MODULE_VERSION` mismatch harder to read, because the
+error names a number the doc says shouldn't exist. Measure before quoting:
+
+```bash
+node -v; node -p process.versions.modules          # YOUR system Node + its ABI
+cat .nvmrc                                          # what CI will use
+plutil -p "/Applications/Local.app/Contents/Frameworks/Electron Framework.framework/Resources/Info.plist" | grep -i version
+```
 
 **Workflow:**
 ```bash
@@ -44,10 +59,13 @@ npm run rebuild    # For Local (recompiles for Electron)
 
 **See:** `docs/NATIVE_MODULES.md` for details.
 
-**Key versions:**
+**Key versions** (measured 2026-08-15; re-measure with the commands above
+before quoting):
 - better-sqlite3: 12.11.1 (don't change this)
-- Electron (Local): 42.2.0
-- System Node: 22.16.0
+- Electron (Local): 42.2.0 → ABI 146 — verified against Local.app's own
+  `Electron Framework.framework` plist, not assumed
+- System Node: `.nvmrc`/CI **22.16.0 → ABI 127**; this machine's shell
+  **25.9.0 → ABI 141**. Machine-specific — see above.
 
 **node-abi registry patch required**: `@electron/rebuild`'s bundled `node-abi` doesn't know about Electron 42.2.0 yet. Both registry files need a manual patch with `"future": true` (NOT `false` — the boundary check requires it to be the last future entry):
 ```bash

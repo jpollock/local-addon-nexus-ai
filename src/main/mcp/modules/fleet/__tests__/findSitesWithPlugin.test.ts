@@ -1,3 +1,13 @@
+/**
+ * WP-00 — `find_sites_with_plugin`, the reader-migration template every later
+ * packet copies (`docs/intelligence/patterns/reader-migration.md`).
+ *
+ * The fixture is built so the ledger and the legacy graph query DISAGREE:
+ * `ghost` is backfilled into the twins and then deleted from the `plugins`
+ * table, so the legacy path misses a site the ledger still knows about. The
+ * assertion is that the tool says so as a drift HINT rather than quietly
+ * folding the twin row into its results — enrich, don't replace.
+ */
 import Database from 'better-sqlite3';
 import * as os from 'os';
 import * as fs from 'fs';

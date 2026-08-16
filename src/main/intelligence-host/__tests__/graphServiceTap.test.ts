@@ -1,3 +1,13 @@
+/**
+ * The `GraphService` chokepoint wrap — the producer that turns existing CAPI
+ * sync and WP-CLI refresh writes into observations without either caller
+ * knowing.
+ *
+ * The assertion that earns its keep is the change gate: a re-sync that writes
+ * the same values must emit NOTHING. The ledger records change, not
+ * repetition, and a producer that skips the gate floods it on every sync
+ * cycle (CLAUDE.md, intelligence-layer invariants).
+ */
 import { initIntelligenceCore } from '../bootstrap';
 import { tapGraphService } from '../graphServiceTap';
 import * as os from 'os';

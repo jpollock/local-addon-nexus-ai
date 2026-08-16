@@ -1,3 +1,13 @@
+/**
+ * One-shot graph.db backfill.
+ *
+ * Two properties matter here and both are invariants, not preferences: rows
+ * are seeded with their REAL `updated_at` as `observed_at` (stamping "now" on
+ * old graph rows is the data laundering CLAUDE.md forbids), and soft-deleted
+ * rows (`is_active = 0`) never enter the ledger — `nexus host remove` and the
+ * WPE sweep both soft-delete, so a backfill that ignored the flag would
+ * resurrect removed sites into every twin-backed reader.
+ */
 import Database from 'better-sqlite3';
 import * as os from 'os';
 import * as fs from 'fs';
