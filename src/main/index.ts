@@ -57,6 +57,7 @@ import { initIntelligenceCore } from './intelligence-host/bootstrap';
 import { tapGraphService } from './intelligence-host/graphServiceTap';
 import { scheduleGraphBackfill } from './intelligence-host/graphBackfill';
 import { setIntelligenceCore } from './intelligence-host/coreRegistry';
+import { runSiteLinkMirror } from './intelligence-host/siteLinkMirror';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
 import { WPESyncService } from './events/WPESyncService';
 import { RemoteContentExtractor } from './content/RemoteContentExtractor';
@@ -751,7 +752,16 @@ export default function main(context: any): void {
       // behind an unbounded network call. runStartupReconciliation never throws
       // and stores its report on the resolver for nexus_fleet_list to read.
       setStartupPhase('FleetLinks');
-      void runStartupReconciliation(siteLinkResolver, siteDataAccessor, localLogger);
+      void runStartupReconciliation(siteLinkResolver, siteDataAccessor, localLogger).then(() =>
+        // WP-07: mirror site_links one-way into the entity service after the
+        // sweep (reconciliation-entity-identity.md). No-op when the core or
+        // entity service is absent; never throws.
+        runSiteLinkMirror(intelligenceCore, {
+          getLinks: () => siteLinkStore.list(),
+          getDb: () => graphService.getDb() as never,
+          logger: localLogger,
+        }),
+      );
 
       // Wire SmartSearch stores + handler into the HTTP interface
       const graphDb = graphService.getDb();

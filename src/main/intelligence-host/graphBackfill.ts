@@ -16,7 +16,7 @@
  * Non-fatal by construction, like everything else on this seam.
  */
 import { IntelligenceCore } from './bootstrap';
-import { provisionalEnvironmentId, provisionalSiteId } from './provisionalEntity';
+import { environmentEntityId, siteEntityId } from './provisionalEntity';
 import { createChangeGate, rowTimeToIso } from './changeGate';
 
 // v2: adds themes. Bumping the marker re-runs the whole pass; the change gate
@@ -94,7 +94,7 @@ export function runGraphBackfill(
   for (const site of sites) {
     const siteId = String(site.id ?? '');
     if (!siteId) continue;
-    const entityId = provisionalEnvironmentId(siteId);
+    const entityId = environmentEntityId(core.entities, siteId);
     const value = {
       name: site.name == null ? undefined : String(site.name),
       domain: site.domain == null ? undefined : String(site.domain),
@@ -106,7 +106,7 @@ export function runGraphBackfill(
         observed_at: rowTimeToIso(site.updated_at),
         topic: 'state.site.observed',
         schema: 'site.observed/1',
-        entity: { site: provisionalSiteId(siteId), environment: entityId },
+        entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
         actor: { id: 'act_graph_backfill', kind: 'system' },
         source: {
           class: 'platform',
@@ -131,7 +131,7 @@ export function runGraphBackfill(
     const siteId = String(plugin.site_id ?? '');
     const slug = String(plugin.slug ?? '');
     if (!siteId || !slug) continue;
-    const entityId = provisionalEnvironmentId(siteId);
+    const entityId = environmentEntityId(core.entities, siteId);
     const value = {
       version: plugin.version == null ? undefined : String(plugin.version),
       active: Boolean(plugin.is_active),
@@ -141,7 +141,7 @@ export function runGraphBackfill(
         observed_at: rowTimeToIso(plugin.updated_at),
         topic: 'state.plugin.observed',
         schema: 'plugin.observed/1',
-        entity: { site: provisionalSiteId(siteId), environment: entityId },
+        entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
         actor: { id: 'act_graph_backfill', kind: 'system' },
         source: { class: 'platform', system: 'graph-backfill', trust: 'observed' },
         payload: { slug, version: value.version ?? '', active: value.active },
@@ -165,7 +165,7 @@ export function runGraphBackfill(
       const siteId = String(theme.site_id ?? '');
       const slug = String(theme.slug ?? '');
       if (!siteId || !slug) continue;
-      const entityId = provisionalEnvironmentId(siteId);
+      const entityId = environmentEntityId(core.entities, siteId);
       const value = {
         version: theme.version == null ? undefined : String(theme.version),
         active: Boolean(theme.is_active),
@@ -175,7 +175,7 @@ export function runGraphBackfill(
           observed_at: rowTimeToIso(theme.updated_at),
           topic: 'state.theme.observed',
           schema: 'theme.observed/1',
-          entity: { site: provisionalSiteId(siteId), environment: entityId },
+          entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
           actor: { id: 'act_graph_backfill', kind: 'system' },
           source: { class: 'platform', system: 'graph-backfill', trust: 'observed' },
           payload: { slug, version: value.version ?? '', active: value.active },

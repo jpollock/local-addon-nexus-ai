@@ -13,6 +13,7 @@ import {
   Ledger,
   createEmitter,
   Emitter,
+  EntityService,
   TwinStore,
   catchUp,
   createStateTwinFold,
@@ -31,6 +32,12 @@ export interface IntelligenceCore {
   ledger: Ledger;
   emitter: Emitter;
   twins: TwinStore;
+  /**
+   * Identity spine (WP-07). OPTIONAL by construction: an entity-service
+   * failure must never take the core down, so consumers fall back to the
+   * provisional-id derivation (which mints the identical ids) when absent.
+   */
+  entities?: EntityService;
   tap: WpEventTap;
   /** Debounced fold catch-up — producers call this after emitting. */
   scheduleFolds: () => void;
@@ -116,9 +123,20 @@ export function initIntelligenceCore(options: {
       }, FOLD_DEBOUNCE_MS);
     };
 
+    // WP-07: the identity spine rides the same ledger (migrations v2 created
+    // its tables). Wrapped separately from the core's own try/catch so a
+    // faulty entity service degrades to provisional-id derivation instead of
+    // disabling the whole ledger.
+    let entities: EntityService | undefined;
+    try {
+      entities = new EntityService(ledger);
+    } catch (err) {
+      logger.error(`[Intelligence] entity service init failed (non-fatal): ${(err as Error).message}`);
+    }
+
     const tap: WpEventTap = (siteId, eventType, payload) => {
       try {
-        const draft = draftFromWpEvent(siteId, eventType, payload ?? {}, new Date());
+        const draft = draftFromWpEvent(siteId, eventType, payload ?? {}, new Date(), entities);
         if (!draft) return;
         emitter.emit(draft);
         scheduleFolds();
@@ -133,6 +151,7 @@ export function initIntelligenceCore(options: {
       ledger,
       emitter,
       twins: new TwinStore(ledger),
+      entities,
       tap,
       scheduleFolds,
       close: () => {

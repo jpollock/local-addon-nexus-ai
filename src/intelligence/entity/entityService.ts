@@ -37,6 +37,7 @@ function derive26(namespace: string, value: string): string {
 
 export type EstablishedBy =
   | 'user_link'
+  | 'host_connection'
   | 'pull_lineage'
   | 'domain_match'
   | 'name_heuristic'
@@ -101,12 +102,18 @@ export class EntityService {
     return id;
   }
 
+  /**
+   * `at` is the freshness carrier (the mirror passes site_links.verified_at);
+   * omitted means "asserted now". A user_link is authoritative: a non-user
+   * write never overwrites one — same invariant as Track-1's SiteLinkResolver.
+   */
   addAlias(
     entityId: string,
     namespace: string,
     value: string,
     confidence: number,
-    establishedBy: EstablishedBy
+    establishedBy: EstablishedBy,
+    at?: string
   ): void {
     this.ledger
       .raw()
@@ -116,9 +123,11 @@ export class EntityService {
          ON CONFLICT(namespace, value) DO UPDATE SET
            entity_id = excluded.entity_id,
            confidence = excluded.confidence,
-           established_by = excluded.established_by`
+           established_by = excluded.established_by,
+           created_at = excluded.created_at
+         WHERE entity_aliases.established_by != 'user_link' OR excluded.established_by = 'user_link'`
       )
-      .run(entityId, namespace, value, confidence, establishedBy, new Date().toISOString());
+      .run(entityId, namespace, value, confidence, establishedBy, at ?? new Date().toISOString());
   }
 
   /**
@@ -156,12 +165,14 @@ export class EntityService {
     }));
   }
 
+  /** Same freshness + user_link precedence contract as `addAlias`. */
   link(
     fromEntity: string,
     toEntity: string,
     kind: string,
     confidence: number,
-    establishedBy: EstablishedBy
+    establishedBy: EstablishedBy,
+    at?: string
   ): void {
     this.ledger
       .raw()
@@ -170,9 +181,11 @@ export class EntityService {
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(from_entity, to_entity, kind) DO UPDATE SET
            confidence = excluded.confidence,
-           established_by = excluded.established_by`
+           established_by = excluded.established_by,
+           created_at = excluded.created_at
+         WHERE entity_links.established_by != 'user_link' OR excluded.established_by = 'user_link'`
       )
-      .run(fromEntity, toEntity, kind, confidence, establishedBy, new Date().toISOString());
+      .run(fromEntity, toEntity, kind, confidence, establishedBy, at ?? new Date().toISOString());
   }
 
   environmentsOf(siteEntity: string): Array<{ entityId: string; confidence: number; establishedBy: string }> {
@@ -194,8 +207,16 @@ export class EntityService {
    * Pairing proposals from twin site.core facts: environments sharing a
    * domain (strong) or highly similar names (weak). Returns evidence-carrying
    * candidates for a confirmation queue — NEVER links automatically.
+   *
+   * `unresolvedOnly` (WP-07, reconciliation note §4): scope proposals to
+   * pairs involving the given entity ids — the caller passes the env entities
+   * of Track-1's unresolved-sites report, so the service fills gaps rather
+   * than competing with `site_links` on already-resolved sites. An empty
+   * array means "nothing is unresolved", so nothing is proposed.
    */
-  proposePairings(): PairingProposal[] {
+  proposePairings(unresolvedOnly?: readonly string[]): PairingProposal[] {
+    if (unresolvedOnly && unresolvedOnly.length === 0) return [];
+    const scope = unresolvedOnly ? new Set(unresolvedOnly) : null;
     const db = this.ledger.raw();
     const rows = db
       .prepare(`SELECT entity_id, value FROM twin_facts WHERE fact = 'site.core'`)
@@ -210,6 +231,7 @@ export class EntityService {
       for (let j = i + 1; j < sites.length; j++) {
         const a = sites[i];
         const b = sites[j];
+        if (scope && !scope.has(a.entityId) && !scope.has(b.entityId)) continue;
         if (a.domain && b.domain && normalizeDomain(a.domain) === normalizeDomain(b.domain)) {
           proposals.push({
             siteAName: a.name ?? a.entityId,
