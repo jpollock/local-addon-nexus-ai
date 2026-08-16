@@ -6,10 +6,21 @@ import type { ProviderToolDefinition } from './providers/types';
  * Convert ToolRegistry definitions to provider-agnostic tool definitions.
  * Strips _confirmationToken from schemas — chat UI handles tier 3 approval separately.
  * Also includes contributed agent tools from ContributedToolRegistry when present.
+ *
+ * `grants` (WP-11) is the seam for the context assembler's scoped tool grants
+ * (`ContextBundle.tools`). SIGNATURE ONLY in v0 — nothing populates it, because
+ * narrowing what the model can see changes behaviour and is gated on eval B-03.
+ *
+ * `undefined` means unrestricted and MUST preserve today's behaviour exactly.
+ * An empty array is deliberately treated as unrestricted too: `[]` means
+ * deny-all in this codebase's one existing scoping surface (`agent.tools`,
+ * buildAgentContext.ts:81-87), and an assembler that returned an empty grant
+ * list would otherwise silently strip every tool from the chat model.
  */
 export function adaptToolsForChat(
   registry: ToolRegistry,
   services: NexusServices,
+  grants?: string[],
 ): ProviderToolDefinition[] {
   const mcpTools: McpToolDefinition[] = registry.list(services);
 
@@ -25,7 +36,11 @@ export function adaptToolsForChat(
     })),
   ];
 
-  return allTools.map((tool) => {
+  const granted = grants && grants.length > 0
+    ? allTools.filter((tool) => grants.includes(tool.name))
+    : allTools;
+
+  return granted.map((tool) => {
     // Deep-clone the schema to avoid mutating the original
     const parameters = JSON.parse(JSON.stringify(tool.inputSchema));
 

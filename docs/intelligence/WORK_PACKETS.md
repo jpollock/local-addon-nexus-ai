@@ -536,7 +536,7 @@ graph, injection points where an assembler bundle could enter (ambient policy,
 pushed runbook, retrieval), risks, and a proposed minimal wiring. **This
 unlocks writing the assembler packet (WP-11).**
 
-### [ ] WP-11 · Context assembler v0  **(UNBLOCKED 2026-08-16 — recon reviewed, four owner rulings recorded below)**
+### [x] WP-11 · Context assembler v0  **(DELIVERED 2026-08-15 — outcome + findings in the packet note below)**
 Contract: architecture.md §6 (AssembleRequest → ContextBundle, manifest as
 audit artifact, fail-closed ADR-7) **as amended by ADR-20** (hash re-assert).
 The implementation skeleton IS `recon-ask-tell.md` §4 — new files
@@ -2146,3 +2146,135 @@ coordinate if concurrent). Small; any tier.
   in its notes** (suite output, not the summary line) — that single paste
   completes the diagnosis. Until then the 4 stay explicitly counted in every
   "no new red" comparison.
+---
+
+**WP-11 · Context assembler v0 — outcome (agent session, 2026-08-15).**
+
+**Delivered as specced.** New core `src/intelligence/assemble/{types,assembler}.ts`
+(+ `__tests__`), host adapter `src/main/intelligence-host/chatAssembly.ts`
+(+ `__tests__`), three call-site edits in `ChatService.ts`, one signature
+widening in `tool-adapter.ts`. No `ipc-handlers.ts` or `index.ts` edit.
+Surfaces B/C/D deferred per recon §4.3. **58 new tests; 15/15 mutations
+caught** (battery listed below). Full suite green — see the numbers at the end.
+
+**The five acceptance pins (recon §4.4), each with the test that holds it:**
+
+1. **ULID TaskId per turn, threaded as `correlation`.** `mintTaskId()` per call
+   of `assembleForChatTurn`; pinned by *"mints a ULID TaskId per turn and
+   threads it as correlation, never the sessionId"* — which asserts two turns
+   of the SAME session get different ids, and that
+   `ledger.query({correlation})` returns the manifest.
+2. **The manifest is a ledger event, not an audit-file line.**
+   `task.context.assembled` / `context.assembled/1`, payload = the §6.4
+   manifest verbatim. First `task.*` producer in the codebase.
+3. **Token estimator.** `estimateTokens` = `ceil(chars/4)`, documented as an
+   estimate (±~25%) and **scoped**: the manifest's `budget.scope` says it
+   covers assembler-authored blocks only and excludes the tool schemas that
+   R4 identified as the dominant cost. Mutation M7 (fabricating the number)
+   is caught.
+4. **The freshness-disclosure prose contract** is a single exported constant,
+   `FRESHNESS_DISCLOSURE_CONTRACT`, asserted verbatim by both the core and host
+   suites, so it cannot be softened without a red test.
+5. **Additive parity.** Run before/after with the assembler returning `null`
+   AND with an empty bundle: both produce byte-identical prompts and message
+   arrays, asserted by string equality between the two runs.
+
+**Three findings the owner should see.**
+
+1. **ESCALATION RAISED AND RULED — the `task.*` taxonomy could not be
+   emitted.** `validateEnvelope` requires three topic segments; every `task.*`
+   entry in §4.2 had two, so the entire namespace was unemittable and had never
+   been exercised. Architect ruled: the validator wins, taxonomy respelled to
+   `task.context.assembled` et al. Mutation M11 pins the new spelling (the old
+   one produces zero events, silently, because emission is wrapped).
+2. **`ChatService` needed its own non-fatality guard.** The adapter swallows
+   everything, but the `await` at the call site was still a path by which a
+   future regression inside the adapter could throw into a caller that predates
+   the layer — which the layer invariant forbids. Found by writing the test
+   first, asserting the wrong thing, and noticing the assertion contradicted
+   its own name. Fixed in production, not in the assertion (M14).
+3. **The 4 "known-red" `AgentRegistry.test.ts` tests do not reproduce here.**
+   The architect's WP-12 adjudication asked every packet to count them
+   explicitly. In this worktree that file is **11/11 green**, and the baseline
+   had **zero** failures. Whatever produced the red was environment-specific,
+   not branch state. Nothing was done to fix it — it simply is not present.
+
+**Deviations from the §6.1 sketch, all deliberate and commented in-code:**
+
+- `assemble` is **async** (semantic retrieval is a promise on every store this
+  codebase has; the alternative moves ranking/budget out of the assembler,
+  which ADR-10 forbids).
+- The bundle carries its **rendered blocks**, because the budget number must be
+  measured over the text the actor actually receives.
+- `manifest.policy.age_s` is **null**, not a number: v0 has no pin timestamp to
+  measure from, and inventing one is the staleness-laundering the envelope
+  rules exist to prevent.
+
+**One extra edit outside the three call sites, flagged for review:**
+`wrapUntrusted` in `src/main/mcp/pii.ts` changed from private to **exported**
+(one word; no behaviour change). The assembler must mark site-derived retrieved
+content with the SAME delimiters and spoof-neutralisation the tool path uses,
+and it lives behind the ADR-16 seam so it cannot import that module — the host
+injects the function instead. The alternative was a second copy of a
+security-relevant literal across the seam. **This does not touch
+`maskToolResultsForProvider` or `compressStaleToolResults`, and it is not an
+exemption marker** — it is the opposite: the assembler marks its own retrieved
+content as untrusted so the existing directive covers it. Retrieval is skipped
+entirely when no wrapper is supplied (M5).
+
+**Design points worth carrying forward:**
+
+- **State is never copied, and the tests prove it.** The freshness plane
+  discloses fact key + age + SLO and withholds the value; the episodic plane
+  renders the fact a state event was *about*, never its payload values. Both
+  are pinned by asserting the twin's actual version strings never appear in the
+  rendered text (M4).
+- **`[]` must never reach `adaptToolsForChat` as a filter.** `[]` means
+  deny-all in this codebase's one existing scoping surface (`agent.tools`), so
+  the adapter maps an empty grant list to `undefined`, and the tool adapter
+  treats `[]` as unrestricted too — belt and braces, both pinned (M12).
+- **The per-session policy-hash map is host state, deliberately.** The
+  assembler is stateless (ADR-10/G4), so "what does this actor already carry"
+  is remembered on the host side. A process restart empties it, which is the
+  correct failure direction: the next turn re-asserts the full set rather than
+  assuming presence. This is also what makes a rehydrated session safe.
+- **Consecutive user messages are already normal on every provider here.**
+  Edit #2 pushes a second user-role message; Anthropic and Google already map
+  every tool result to `role:'user'`, so parallel tool calls produce
+  consecutive user turns in the shipping product today. The Anthropic API
+  combines consecutive same-role turns.
+
+**Mutation battery — 15/15 caught.** M1 ambient block dropped from the system
+prompt · M2 carrier sent as a system message (R3) · M3 ADR-20 hash re-assert
+defeated · M4 twin values copied into context · M5 retrieved content unwrapped
+(R7) · M6 relay contract dropped · M7 budget number fabricated · M8 ADR-7
+fail-closed removed · M9 episodic query loses `order:'desc'` · M10 manifest
+emitted without the TaskId correlation · M11 pre-respell topic spelling · M12
+empty grant list leaks as `[]` · M13 `verifyMirror()` not called at assembly
+time · M14 `ChatService` non-fatality guard removed · M15 ADR-16 seam probe
+(an `electron` import from `assemble/` errors, so the WP-06 failure mode is
+not present on this branch).
+
+**One more finding, cheap to repeat and easy to miss.** Two raw control bytes
+(NUL, SOH) reached `assembler.ts` as hash separators. The separators are
+correct — unambiguous field/record boundaries so `['a b', c]` and `[a, 'b c']`
+cannot hash alike — but a literal NUL makes **git classify the file as binary**:
+`Bin 0 -> 19919 bytes` in `--stat`, and **no diff at all in review**. Caught by
+reading the diff stat rather than trusting it. Now written as `\u0000` /
+`\u0001` escapes. Worth a glance on any new file whose `--stat` line says
+`Bin`.
+
+**Milestone DoD (evals B-03/E-01/E-02) NOT run — see the disclosure below.**
+
+**Datapoint for the AgentRegistry diagnosis (added after reading the
+architect's note above).** WP-11's baseline WAS a fresh worktree running the
+FULL suite — `npx jest` with no path filter, 500 suites — and it was **green,
+zero failures**, with `AgentRegistry.test.ts` passing 11/11 both inside that
+run and in isolation. So "fresh-worktree full-suite context" is not by itself
+sufficient to reproduce the 4 reds. Something else differed in the WP-12
+worktree. The post-WP-11 full run is also green at 503/6279. There was no
+failure output to capture here because there was no failure; the standing
+instruction still stands for whichever packet next sees one.
+
+**ABI state: better-sqlite3 is built for system Node (jest), NOT Electron.**
+The owner must run `npm run rebuild` before loading the addon in Local.
