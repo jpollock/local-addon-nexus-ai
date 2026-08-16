@@ -128,14 +128,27 @@ export class ChatService {
       const persisted = db ? getSession(db, sessionId) : null;
 
       if (persisted && persisted.messages.length > 0) {
-        // Reconstruct message array from persisted records
+        // Reconstruct message array from persisted records.
+        // Persisted system rows are deliberately DROPPED: the renderer never writes
+        // one (PanelChat.persistSession filters them), so any that exists is from an
+        // older build and is stale — fleet context is current-state. The prompt is
+        // rebuilt below instead, which also guarantees exactly one system message.
         const history = persisted.messages
           .filter((m: any) => !m.incomplete)
           .filter((m: any) => m.content !== '')
-          .filter((m: any) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
-          .map((m: any) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }));
+          .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+          .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-        session = { id: sessionId, messages: history, abortController, pendingApprovals };
+        // Rebuild the system prompt — without it a reopened session runs with no
+        // fleet context, no tool doctrine, and no UNTRUSTED_DATA_DIRECTIVE.
+        const systemPrompt = await this.buildSystemPrompt(siteId);
+
+        session = {
+          id: sessionId,
+          messages: [{ role: 'system', content: systemPrompt }, ...history],
+          abortController,
+          pendingApprovals,
+        };
       } else {
         // Fresh session — build system prompt
         const systemPrompt = await this.buildSystemPrompt(siteId);

@@ -557,7 +557,17 @@ edit ChatService.ts. Sequence: WP-12 first.**
 Definition of done for the milestone: evals B-03/E-01/E-02 against the real
 ledger (harness rules H-01/H-02).
 
-### [ ] WP-12 · Fix R1 — rehydrated chat sessions lose the system prompt  *(registered from WP-10 review; live security gap, runs BEFORE WP-11)*
+### [x] WP-12 · Fix R1 — rehydrated chat sessions lose the system prompt  *(registered from WP-10 review; live security gap, runs BEFORE WP-11)*
+**Outcome:** fixed as specified — the restore branch now rebuilds the prompt
+via `buildSystemPrompt(siteId)` and prepends it; nothing new is persisted, and
+the renderer is untouched. One extra change the packet asked to be considered:
+persisted `system` rows are now **dropped** from the restored history (the
+filter at ChatService.ts:135 keeps `user|assistant` only), so a session written
+by an older build cannot carry two system messages — which matters because
+`anthropic.ts` and `google.ts` keep the FIRST and silently discard the rest
+(R3), so the stale copy would have won. 21-line diff confined to that one
+branch. 4 pins in `tests/unit/chat/chat-service-rehydration.test.ts`,
+mutation-checked both ways. **WP-11 is now unblocked.**
 `ChatService.sendMessage`'s persisted-history branch (ChatService.ts:130-138)
 restores without ever calling `buildSystemPrompt`, and the renderer strips the
 system message when persisting (PanelChat.tsx:540-550) — so a Docked Panel
@@ -2044,3 +2054,45 @@ session, 2026-08-16).**
 - Sequencing constraint recorded: WP-12 → WP-11, never concurrent (both edit
   ChatService.ts — the protocol's two-packets-one-file trigger, resolved in
   advance by ordering).
+
+---
+
+**WP-12 execution note (agent session, 2026-08-15).**
+
+- **The recon's diagnosis was accurate as written** — both citations verified
+  against the code before implementing: `ChatService.sendMessage`'s restore
+  branch (ChatService.ts:130-138) never called `buildSystemPrompt`, and
+  `PanelChat.persistSession` (PanelChat.tsx:541) filters `m.role !== 'system'`.
+  No reason to deviate from the packet's proposed fix shape was found.
+- **The restore branch was also ignoring `siteId`** — a second-order effect of
+  the same defect, since `siteId` reaches `buildSystemPrompt` and nothing else
+  in that branch. A rehydrated session therefore had no site context even when
+  the renderer sent one. Rebuilding fixes both with one call. (R2 — context
+  computed once per session, never refreshed per turn — is NOT fixed here; it is
+  WP-11's edit #2 and remains open.)
+- **Dropping persisted system rows is load-bearing, not tidying.** Prepending a
+  fresh prompt while keeping the filter's `system` arm would have produced two
+  system messages on any legacy session; per R3, Anthropic and Google keep the
+  first and discard the rest with no error, so the *stale* prompt would have
+  been the one in force — a silent partial revert of this fix. Pin 2 fails if
+  the `system` arm is restored (verified by mutation).
+- **Test infrastructure:** `tests/main/chat-service.test.ts`'s conventions were
+  followed (jest.mock of `chat/providers/index` + a mock provider), extended
+  with a provider that records the message array it was handed — asserting on
+  what actually reaches the provider, rather than on service internals. The DB
+  is a real in-memory better-sqlite3 with `createSessionTables`/`saveSession`,
+  matching `tests/unit/chat/chat-unread.test.ts`.
+- **Note for whoever touches this next:** `tests/unit/chat/chat-service-history.test.ts`
+  is vacuous — it defines its own local copy of `reconstructHistory` and tests
+  that, importing nothing from `src/`. It passed unchanged through both the bug
+  and the fix. Not touched (out of scope), but it is not coverage.
+- **Counts (worktree `wp-12`, measured, not recalled).** Baseline before the
+  change: 499 suites (498 passed, 1 failed), 6229 tests — 6213 passed, 4 failed,
+  12 skipped. After: 500 suites (499 passed, 1 failed), 6233 tests — 6217
+  passed, 4 failed, 12 skipped. Delta is exactly +1 suite / +4 passing tests.
+  The 4 failures are pre-existing and unrelated
+  (`tests/unit/agent-runtime/AgentRegistry.test.ts`); skipped count unchanged,
+  so no suite silently dropped out. `npm run typecheck` clean; eslint clean on
+  both touched files.
+- **ABI state: better-sqlite3 is built for system Node (jest), NOT Electron.**
+  The owner must run `npm run rebuild` before loading the addon in Local.
