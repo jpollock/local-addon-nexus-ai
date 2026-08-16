@@ -1497,3 +1497,28 @@ architect session; supersedes nothing, closes both packets).**
 
   **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
   ABI. `npm run rebuild` is required before loading Local again.**
+
+---
+
+**ARCHITECT ADJUDICATION — WP-08 (appended by the architect session).**
+
+- **WP-08 ACCEPTED.** Merge c9be9b52 audited on the owner's checkout:
+  enforcement surface (`src/main/mcp`, `src/main/graphql`, `src/common`)
+  diff is EMPTY; the `package.json` touch is exactly one `files[]` line
+  (`"law"`) — packaging necessity, not a dependency or version change;
+  the integration lock was never taken (core.law wired in bootstrap, no
+  index.ts edit). The translate-don't-reimplement approach — computing every
+  matrix cell by calling `isOperationAllowed` itself — is endorsed as the
+  strongest possible form of "settings stay authoritative."
+- **M4 disclosure adjudicated:** the by-construction argument (registry is
+  write-only w.r.t. enforcement; enforcement diff empty; 156 deterministic
+  pins green) is accepted for merge. A human M4 eval run is scheduled as a
+  belt-and-braces item BEFORE the M2 PR is opened, not per-packet.
+- **js-yaml finding — owner decision pending:** production code imports a
+  devDependency (pre-existing via AgentRegistry.ts; the law loader is now a
+  second site). Architect recommendation: promote to `dependencies` — this
+  is a latent packaging defect independent of WP-08, not a new dependency.
+  Awaiting owner approval; one-line change when granted.
+- Re-mirroring on settings change deferred to WP-11 is endorsed —
+  `verifyMirror()` at assembly time is the better invariant anyway
+  (fail-closed at the moment of use, per ADR-7's spirit).
