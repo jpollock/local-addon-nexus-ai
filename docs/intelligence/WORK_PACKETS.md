@@ -2096,3 +2096,34 @@ session, 2026-08-16).**
   both touched files.
 - **ABI state: better-sqlite3 is built for system Node (jest), NOT Electron.**
   The owner must run `npm run rebuild` before loading the addon in Local.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-12 (appended by the architect session).**
+
+- **WP-12 ACCEPTED.** Merge 9f6cf35b: 21-line fix confined to the restore
+  branch; both mutations actually run (prompt-rebuild revert and
+  system-row re-admission each fail their pin); the legacy-system-row drop
+  is adjudicated as load-bearing per R3 (Anthropic/Google keep the FIRST
+  system message — a kept stale row would silently win over the fresh one).
+  The incidental siteId fix is accepted in-scope (same call). R2 remains
+  open by design — WP-11 edit #2 owns it.
+- **NEW UNOWNED RED flagged:** the worktree baseline showed 4 pre-existing
+  failures in `AgentRegistry.test.ts` that no packet report has previously
+  disclosed (WP-04c-era runs were green). Not caused by WP-12; owner to run
+  the suite and paste output to the architect for diagnosis before it gets
+  normalized as "expected red." Until diagnosed, every packet's "no NEW
+  red" comparison must count these 4 explicitly.
+- **Vacuous-copy test registered (below):** second instance of the
+  WP-04b pattern — a test file defining its own local copy of the logic it
+  claims to pin.
+
+### [ ] WP-12b · chat-service-history.test.ts is vacuous — port or delete
+Registered from WP-12 finding. `tests/unit/chat/chat-service-history.test.ts`
+defines its own local `reconstructHistory` and imports nothing from `src/` —
+it passed unchanged through both the R1 bug and its fix, which is the proof
+of vacuity. Same remedy as WP-04b: port each assertion onto the real
+`ChatService` restore path (the rehydration suite from WP-12 is the harness
+to extend), waive the unreachable ones with reasons, delete the copy.
+Parallel-safe EXCEPT with WP-11 (ChatService.ts reads, test-file edits only —
+coordinate if concurrent). Small; any tier.
