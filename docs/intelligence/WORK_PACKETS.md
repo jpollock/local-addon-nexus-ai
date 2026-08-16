@@ -478,7 +478,11 @@ appear only for unresolved sites; NO automatic pairing anywhere; Track-1
 files (`src/main/fleet/*`) untouched except any agreed hook, which requires
 owner sign-off first.
 
-### [ ] WP-08 · Policy & runbook repo v0 — translate permissions
+### [x] WP-08 · Policy & runbook repo v0 — translate permissions
+*(Done 2026-08-15: `law/` loader + ConstraintRegistry + settings mirror shipped
+under `src/intelligence/law/`; host adapter `permissionsMirror.ts` computes
+every matrix cell BY CALLING `isOperationAllowed` — zero reimplemented
+semantics, zero diffs on the enforcement surface. See packet notes.)*
 Pattern: none — spec IS `docs/intelligence/anchor-slice/policy/ops-default.md`
 + architecture.md ADR-5/§7. **Serialized (core lock), and every M4 eval case
 is the regression harness: they must stay green untouched.**
@@ -1395,3 +1399,101 @@ architect session; supersedes nothing, closes both packets).**
   lock (`src/intelligence/` + `src/main/intelligence-host/`) until this note
   is superseded by the packet's close-out. No `wpeOperationPermissions`
   semantics will change; M4-04..12 is the regression harness.
+
+- 2026-08-15 · **WP-08 close-out** (policy & runbook repo v0 — translate
+  permissions). Supersedes the lock announcement above; core lock released on
+  merge.
+
+  **What shipped.** (1) `src/intelligence/law/` — `loader.ts` (markdown +
+  YAML frontmatter → `LawDocument`s; zod-validated, js-yaml-parsed, never
+  throws: malformed documents are rejected with recorded errors and siblings
+  still load), `registry.ts` (`ConstraintRegistry` — small read-only lookup
+  surface for WP-11: `byId`, `constraints(filter)`, `documents()`),
+  `permissionsTranslation.ts` (`PermissionsSnapshot` → derived constraints;
+  `comparePermissionMirror` divergence check). (2) `law/policy/ops-default.md`
+  at the repo root — verbatim copy of the reviewed anchor-slice spec, now the
+  first citizen of the policy & runbook repo (ADR-5). (3)
+  `src/main/intelligence-host/permissionsMirror.ts` — builds the snapshot from
+  live settings and stands up the registry; wired into `bootstrap.ts` as
+  optional `core.law` (no `src/main/index.ts` edit needed — the integration
+  lock was not touched).
+
+  **Translation, not reimplementation — how that was made structural.** Every
+  matrix cell in the snapshot is computed by calling `isOperationAllowed`
+  itself against `getEffectiveSettings` — the exact functions enforcement
+  uses — so resolution order, defaults, environment normalisation and both
+  legacy migrations are exercised, never restated. The derived constraints
+  overlay the authored ops-default ids (`c.write-default-deny`,
+  `c.production-writes-off`, `c.delete-promote-opt-in`): the human-reviewed
+  rule text is KEPT, the overlay attaches `derivedFrom:
+  'wpeOperationPermissions'` and the live values as `parameters`. A fourth,
+  registry-only `c.permissions-mirror` carries the complete resolved matrix +
+  exceptions. The ONE deliberate duplication is the two-line `?.length`
+  exception-list precedence (which list is live), pinned by a test that first
+  proves the gate honours the legacy list in that exact state
+  (empty `remoteSiteExceptions` + populated `wpeSiteExceptions`) and then
+  demands the mirror list it too.
+
+  **The tripwire.** `core.law.verifyMirror()` rebuilds a fresh snapshot and
+  compares; each divergence logs a warning naming the constraint id AND both
+  values (registry vs live). Clean-and-silent while settings are unchanged
+  (pinned); mutation-tested (dropping the live value from the message fails
+  the test). v0 divergence is possible only if settings change after build —
+  the registry does not re-mirror on settings updates, deliberately: that
+  wiring wants the `onSettingsUpdated` block in index.ts (the integration
+  lock) and is left for WP-11, whose assembler should call `verifyMirror()`
+  at assembly time anyway (fail-closed per ADR-7 is that packet's decision).
+
+  **M4 regression evidence — disclosed honestly.** The M4 eval cases are
+  human-in-the-loop LLM evals (`tests/evals/runner/run-eval.ts` prints
+  prompts for a reviewer to paste into Claude; promptfoo mode needs live
+  provider keys + real WPE accounts), so they were NOT executed in this
+  autonomous session. What was verified instead: (a) `git diff` on the
+  enforcement surface (`src/main/mcp`, `src/main/graphql`,
+  `src/main/transport`, `src/main/sentinel`, `src/common`) is EMPTY —
+  `operation-permissions.ts` and every caller are byte-identical; (b) the six
+  deterministic suites that pin `isOperationAllowed` semantics all green:
+  operation-permissions, gate-scoping, remote-permissions-migration,
+  surface-equivalence, settings-permissions, safety — 156 tests; (c) full
+  suite before vs after (below). Since the registry is write-only with
+  respect to enforcement (nothing reads it in an allow/deny), M4-04..12
+  behaviors are unchanged by construction; a human run of the eval family
+  remains available as belt-and-braces.
+
+  **Findings.**
+  1. **js-yaml is a devDependency imported by production code** — pre-existing
+     (`AgentRegistry.ts` since the agent-manifest work); `law/loader.ts` is
+     now a second site. The build is plain tsc (no bundler), so the published
+     package resolves js-yaml from whatever node_modules ships. Worth an owner
+     decision: promote js-yaml to `dependencies` (one-line) or vendor a
+     frontmatter parser. Not done here — dependency changes need owner
+     approval per protocol.
+  2. **`law` added to package.json `files[]`** so the published addon carries
+     its law directory (it was absent → the runtime default path would 404 in
+     a packaged install). Markdown only; does not re-list `wp-plugins`, so the
+     ACF prepublish hazard is untouched. A missing law dir degrades
+     gracefully regardless: registry still builds with the derived mirror
+     (pinned by test).
+  3. **Runbook kind is accepted but minimally modelled** — `kind: runbook`
+     loads with raw frontmatter preserved and constraints optional, so WP-09's
+     authored runbooks will load without loader changes; the ADR-17 contract
+     fields (checkpoints, aborts) are NOT yet validated. WP-09 should extend
+     `frontmatterSchema` rather than fork it.
+  4. **Mutation testing:** 3 production-line mutations (negate the
+     `isOperationAllowed` call; flip exception precedence to `??`; drop the
+     live value from the divergence warning) — all 3 caught by the intended
+     test, each failing exactly one pin.
+  5. **Escalation triggers:** none fired. No new event topic, envelope field,
+     or storage marker; no `wpeOperationPermissions` semantics touched; no
+     legacy-parity question arises (the registry is additive and read by
+     nothing yet).
+
+  **Verification.** Typecheck clean; lint clean on all touched files; seam
+  probe re-fired (electron import into `law/types.ts` → 1
+  `no-restricted-imports` error, then removed); intelligence set 21 suites /
+  80 tests green; worktree baseline before changes **494 suites / 6,170
+  passed / 12 skipped / 6,182 total**, after: see merge report (expected
+  delta: exactly the 5 new suites / 34 new tests).
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  ABI. `npm run rebuild` is required before loading Local again.**
