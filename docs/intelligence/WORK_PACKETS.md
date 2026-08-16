@@ -422,6 +422,30 @@ real handler (or explicitly waived with a reason); the copy is deleted or
 reduced to pure input-fixture helpers; SF-01/05/06 eval expectations
 unchanged.
 
+### [ ] WP-04c · Fix the three SF filter-chain divergences  *(registered from WP-04b escalations; legacy bugfix, not intelligence scope)*
+Two live defects in `SITE_FINDER_APPLY` (`src/main/ipc-handlers.ts`),
+measured against the WP-04b fixture: **(1)** `phpVersions` is applied on the
+local chain only — WPE/external chains return every site regardless
+(`phpEolOnly`, same column, IS applied on all three, so this is an omission,
+not a policy); **(2)** `wpeEnvironment` and `minAdminCount` pass `hasFilter`
+but NO chain implements them — either filter alone returns all sites, the
+exact outcome the empty-filter guard exists to prevent.
+**Step 1 is an owner ruling, blocking:** for `wpeEnvironment`/`minAdminCount`
+— implement them, or remove them from `hasFilter` + the UI? (Implementing
+needs the data to exist on the remote chains; check what the graph actually
+carries before choosing.) `phpVersions` needs no ruling: extend to all three
+chains, matching `phpEolOnly`'s placement.
+This packet EDITS `ipc-handlers.ts` filter chains → integration-lock class:
+serialized, announce before starting, no opportunistic refactor of the three
+chains (dedup of the chains is explicitly out of scope — tempting, separate
+decision). On completion, flip WP-04b's deliberately-withheld assertions into
+real pins in `tests/unit/ipc/site-finder-filters.test.ts`.
+Accept: `phpVersions` filters all three chains (pinned per-chain);
+`wpeEnvironment`/`minAdminCount` either implemented (pinned per-chain) or
+fully removed (hasFilter + UI + a pin that they no longer pass the guard);
+all 40 existing WP-04b tests still green; SF eval expectations unchanged
+unless the owner ruling says otherwise (escalate if so).
+
 ---
 
 ## Milestone 2 — designed and speccable now
@@ -1270,3 +1294,26 @@ architect session; supersedes nothing, closes both packets).**
   build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
   ABI 127). `npm run rebuild` is required before loading Local again.** The
   shared `node_modules` every worktree symlinks through is affected.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-04b (appended by the architect session).**
+
+- **WP-04b ACCEPTED.** Merge ea2c092b audited: `git diff --stat` against
+  first parent shows tests + docs only; `src/` diff confirmed empty on the
+  owner's checkout. Classification (27 ported / 2 unreachable-as-written,
+  both ported behaviourally / 1 already-covered, ported anyway) is complete —
+  all 28 accounted for. The per-chain occurrence-indexed mutation kills are
+  accepted as the standard for testing duplicated code paths.
+- **The two escalated divergences are adjudicated as REAL DEFECTS, not
+  behavior to pin.** The agent's refusal to write tests asserting today's
+  broken output is endorsed — a test would have promoted each defect to a
+  regression guard. **WP-04c registered** (Milestone 1 section) to fix both,
+  with the wpeEnvironment/minAdminCount implement-vs-remove question raised
+  to an owner ruling as its blocking first step.
+- **Process note endorsed:** discarding the full-suite run that overlapped
+  the mutation battery's transient `ipc-handlers.ts` rewrite was correct —
+  a green (or red) run against a mutated tree is not evidence. Future
+  batteries: run the battery strictly between full-suite runs, never
+  concurrently; this is now part of the mutation guidance's spirit even
+  though the pattern text doesn't spell it out.
