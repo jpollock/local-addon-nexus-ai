@@ -7,6 +7,13 @@
  * parses — `--json` from one test would still be set in the next.
  */
 
+// Without a top-level import/export TS treats this file as a GLOBAL script,
+// and its ExitError/out/err declarations collide with sync.test.ts's when
+// jest assigns both to one worker — the whole suite then aborts with
+// TS-redeclaration errors and its tests silently vanish from the run
+// (WP-05 finding 7, root-caused in WP-06). This makes the file a module.
+export {};
+
 class ExitError extends Error {
   constructor(readonly code: number) { super(`process.exit(${code})`); }
 }

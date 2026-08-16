@@ -12,6 +12,11 @@
  * call happens.
  */
 
+// Module marker — see the matching comment in host.test.ts: without it these
+// two files are global scripts whose declarations collide in a shared jest
+// worker, silently dropping their tests (WP-05 finding 7 / WP-06 root cause).
+export {};
+
 class ExitError extends Error {
   constructor(readonly code: number) { super(`process.exit(${code})`); }
 }

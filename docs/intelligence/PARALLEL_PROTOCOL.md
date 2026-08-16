@@ -68,7 +68,11 @@ undisclosed.
 - Legacy behavior parity is a hard requirement: enrichment is additive; a
   reader migration that changes existing output semantics is a defect.
 - The nested eslint seam rule (`src/intelligence/.eslintrc.json`) is never
-  weakened.
+  weakened. **Know its failure mode** (WP-06): enforcement rides on eslint 8's
+  `.eslintrc` cascade — a migration to flat config silently kills the rule
+  while lint still exits 0. Any flat-config migration must port the seam rule
+  and re-verify it fires (probe: import `electron` from `src/intelligence/`
+  and confirm the `no-restricted-imports` error appears).
 
 ## Definition of done, per packet
 

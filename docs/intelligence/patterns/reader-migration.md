@@ -141,6 +141,35 @@ dir + `setIntelligenceCore`, an in-memory graph fixture, `runGraphBackfill`
 to seed twins, ~700ms waits for the debounced fold, partial services mock
 cast `as never`.
 
+**Pick the cheapest fixture that still proves what you're asserting**
+*(adopted from WP-03b/WP-06, measured).* Seeding twins via `runGraphBackfill`
++ a ~700ms debounced-fold wait costs ~710ms *per seeding* and is the right
+shape when the test is about the backfill→twin path itself. It is the wrong
+shape for the render-only assertions that make up most of a migration's
+suite, and it compounds: a test that seeds twice runs ~1.4s.
+
+Two cheaper shapes, both already in the tree:
+
+- **Seed once, assert many** — one `beforeAll` doing the backfill, then
+  render-only tests against the shared core. `siteFinderTwins.test.ts` runs
+  12 assertions at 0–1ms each this way. Prefer this when the assertions
+  share a fixture.
+- **Emit directly** — `core.emitter.emit({...})` then `core.scheduleFolds()`,
+  ~6–29ms, with explicit control over event order and `observed_at`. Prefer
+  this when a test needs a *specific* ledger shape (an out-of-order pair, a
+  v1-schema event, a cap boundary) that a backfill can't express. Bonus:
+  ULIDs are monotonic within a process, so direct emission buys deterministic
+  ledger id order, which a backfill-driven fixture cannot promise.
+
+When you emit directly, derive the entity id with
+`provisionalEnvironmentId(localSiteId)` — the same function the producers
+call. A literal `ent_env_…` id makes the test assert a join production never
+mints, and it will pass.
+
+Direct emission does not exercise `runGraphBackfill`. That is fine —
+`graphBackfill.test.ts` owns that path — but don't let an all-emitter suite
+become the only place a migration's twin population is covered.
+
 Assert: (1) the enrichment renders (regex on age/trust), (2) the freshness
 summary, (3) a drift-hint scenario where applicable (delete a cache row the
 ledger knows), (4) **the additive-parity pin** — run the tool once BEFORE
