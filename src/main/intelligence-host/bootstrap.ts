@@ -108,7 +108,10 @@ export function initIntelligenceCore(options: {
         try {
           catchUp(ledger, stateFold);
         } catch (err) {
-          logger.error('[Intelligence] fold error:', (err as Error).message);
+          // Interpolated, not varargs: Local's JSON logger drops extra
+          // arguments, which turned these lines into "[Intelligence] fold
+          // error:" with the reason missing (found during the M1 live smoke).
+          logger.error(`[Intelligence] fold error: ${(err as Error).message}`);
         }
       }, FOLD_DEBOUNCE_MS);
     };
@@ -121,7 +124,7 @@ export function initIntelligenceCore(options: {
         scheduleFolds();
       } catch (err) {
         // Never let the intelligence tap break the event pipeline.
-        logger.error('[Intelligence] tap error:', (err as Error).message);
+        logger.error(`[Intelligence] tap error: ${(err as Error).message}`);
       }
     };
 
@@ -143,7 +146,7 @@ export function initIntelligenceCore(options: {
       },
     };
   } catch (err) {
-    logger.error('[Intelligence] init failed (non-fatal):', (err as Error).message);
+    logger.error(`[Intelligence] init failed (non-fatal): ${(err as Error).message}`);
     return undefined;
   }
 }

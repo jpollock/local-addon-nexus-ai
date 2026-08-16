@@ -152,9 +152,13 @@ is the evidence that the change gate works (a producer without dedup would
 have written a multiple of this on every cycle). The 328 `drift.detected`
 events are the fold's own detector firing on real disagreements.
 
-**One honest weak spot in that table:** the `wp-webhook` producer has fired
-**once**. It is unit-tested (`wiring.test.ts`) but effectively unexercised in
-production, so treat it as the least-proven of the three producers.
+**The `wp-webhook` producer was the least-proven piece of the branch** (it
+had fired exactly once when this table was first captured) — so it was smoke
+-tested live before review: a plugin update through wp-admin on a running
+local site moved `wp-webhook` 1→3, with matching `graph-sync` observations
+and 4 fresh `fold:state-twin` drift events landing seconds later
+(2026-08-16T03:24Z). All three producers are now demonstrated in production,
+not just unit-tested (`wiring.test.ts`).
 
 ## Known issues / explicitly out of scope
 
