@@ -1389,3 +1389,168 @@ architect session; supersedes nothing, closes both packets).**
   **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
   ABI. `npm run rebuild` is required before loading Local again.** (Shared
   `node_modules`, symlinked by every worktree.)
+
+---
+
+- 2026-08-15 · **WP-04c — LOCK ANNOUNCEMENT + Phase 1 scout report (BLOCKING:
+  awaiting owner ruling).** Branch `wp-04c`, worktree `.worktrees/wp-04c`.
+  **Holding the integration lock** for `src/main/ipc-handlers.ts` (the
+  `SITE_FINDER_APPLY` filter chains) from this note until the packet's
+  close-out. Nothing else should edit that file meanwhile. No `src/` change is
+  committed yet — this note is the Phase 1 stop.
+
+  **Worktree baseline BEFORE any change: 494 suites, 6,170 passed, 12 skipped,
+  6,182 total, exit 0.** (WP-07's recorded 6,158 plus WP-04b's 40-test suite
+  landing between them; skipped unchanged at 12, so no artifact-gated suite
+  moved.)
+
+  ### Finding 1 — the surfaces the packet's "remove from hasFilter + the UI"
+  option refers to: **the UI surface does not exist.**
+
+  `wpeEnvironment` and `minAdminCount` appear in exactly three places in `src/`:
+  `src/common/schemas.ts:466-467` (the zod `SiteFinderFiltersSchema` accepts
+  them), and `ipc-handlers.ts:3598-3599` (`hasFilter` blesses them). That is
+  all. Measured by grep across `src/`:
+
+  - **Zero** references in any renderer component — `SiteFinderPanel.tsx`,
+    `SidebarSearchPanel.tsx`, `AISiteFinderPanel.tsx` all have none. There is
+    no control, chip, or manual filter for either.
+  - **Zero** references in `src/main/ai/site-finder-prompt.ts`, the live system
+    prompt that tells the parsing LLM which filters exist. Neither field is
+    documented to the model, so the only way either reaches the handler is a
+    hallucinated key that the schema then happens to accept — or a direct IPC
+    caller.
+  - Three schema-shape tests in `tests/unit/site-finder/parse-accuracy.test.ts`
+    (accepts `wpeEnvironment`, rejects an invalid one, accepts `minAdminCount`).
+
+  So the removal option costs: schema lines + `hasFilter` lines + those three
+  tests. It is cheaper than the packet assumed. Correspondingly, the
+  *implement* option's user-visible payoff requires also adding each field to
+  the prompt — otherwise the filter stays unreachable in practice whichever way
+  the ruling goes. **Flagging that as part of the ruling: "implement" should be
+  read as "implement in the chains AND document in the prompt," or it is a
+  no-op with extra code.**
+
+  ### Finding 2 — `wpeEnvironment`: the data exists, and is complete on both
+  remote chains.
+
+  `sites.environment` is a real column (`GraphService.ts:276`), backfilled by
+  migration (`:1514-1516`) and written on every upsert. `graphService.listSites()`
+  already returns it (`:554`), so the WPE and external loops have it **in hand
+  with no extra query** — same shape as the `php_version` that `phpEolOnly`
+  reads.
+
+  Live coverage, measured on the developer's `graph.db` 2026-08-15:
+
+  | source | active rows | rows carrying `environment` |
+  |---|---|---|
+  | wpe | 342 | **342** — 233 production, 66 staging, 43 development |
+  | local | 40 | **40** — all `development` |
+  | external | 0 in this DB | populated by construction: `nexusHostAdd` writes it at registration (defaults `production`), and it is the write gate documented in CLAUDE.md |
+
+  The LOCAL chain is the asymmetric one: it iterates Local's OWN store
+  (`siteData.getSites()`), not graph rows, so environment for a local site is
+  reachable only through a graph lookup **and only for indexed sites** — live,
+  40 graph rows against 113 sites in Local's store. Local coverage is partial
+  by nature, and every local site's answer is the same constant anyway.
+
+  **RECOMMENDATION — implement, on the WPE and external chains; exclude on
+  local.** Reasons:
+  - It is a one-line predicate on data already loaded, mirroring exactly how
+    `source` is handled per-chain.
+  - Including **external** rather than WPE-only is the reading this codebase's
+    own doctrine demands: CLAUDE.md states repeatedly that "fleet means local +
+    WPE + SSH" and that `source='wpe'` alone is the bug class this project keeps
+    removing. An external host's environment label is first-class here — it is a
+    *write gate*, set by the user at `host add`. A user asking for "staging" who
+    silently misses their staging SSH host is the same defect in a new place.
+  - Excluding **local** because a `wpeEnvironment` filter against a Local site is
+    a category error (and its data is both constant and partially missing). This
+    is the shape `{source:'wpe'}` already has on the local chain.
+  - Cost of this reading: the field NAME then under-describes it (it would
+    accept external hosts too). Renaming is a schema change with its own
+    migration question and is NOT proposed here.
+  - **Conservative alternative if the owner prefers the name taken literally:**
+    WPE chain only, external and local both exclude. Say the word and it is a
+    one-line difference.
+
+  ### Finding 3 — `minAdminCount`: there IS a cross-source admin count, and the
+  query is already canonical in this repo.
+
+  Two candidate sources were checked; only one works across sources.
+
+  - **`users.roles`** (JSON array per user row) — **WPE-only in practice.**
+    Measured live: all **2,175** user rows belong to `source='wpe'` sites;
+    **zero** rows for local or external. `EventProcessor.processUserEvent`
+    (the MU-plugin webhook path) could populate local, but has not. This source
+    cannot serve two of the three chains.
+  - **`sites.user_count_by_role`** (`GraphService.ts:273`) — JSON TEXT,
+    `{"administrator":N,"editor":N,…}` — **written by all three sources**:
+    local via `src/main/content/lifecycle-hooks.ts:335-408`, WPE via
+    `WpeRefreshScheduler.ts:349` and `mcp/modules/wpe/deep-refresh.ts:337`,
+    external via `startup/writeExternalHostData.ts:126-157`.
+
+  And the exact predicate is already the documented house answer: MCP
+  `server-instructions.ts:200` answers *"Which sites have N+ admins?"* with
+  `CAST(json_extract(user_count_by_role,'$.administrator') AS INTEGER) >= N`,
+  and `fleet-sql.ts:34` publishes the column's shape to the model. Implementing
+  `minAdminCount` therefore invents no semantic — it gives Site Finder the same
+  answer `fleet_sql` already gives.
+
+  Live coverage 2026-08-15: local **36 of 40** active rows carry the column,
+  wpe **123 of 342**, external n/a (no rows in this DB).
+
+  **RECOMMENDATION — implement on all three chains**, with NULL treated as
+  *unknown → excluded*, matching the rule the settings_json branch already
+  states in a comment on all three chains ("Sites without settings_json have
+  unknown state — exclude from all settings filters"). **Disclosure the owner
+  should weigh:** that means `minAdminCount` silently misses the 219 WPE
+  installs never deep-refreshed. Excluding them is the honest direction (a site
+  whose admin count is unknown must not be reported as having ≥N admins) and is
+  the same call the codebase already makes for unknown settings — but it is a
+  real coverage limit, not a full-fleet answer, and the same one `fleet_sql`
+  has today.
+
+  ### Finding 4 — `phpVersions` needs no ruling, but its PREDICATE has a data
+  mismatch the owner should see (raised now so this is one stop, not two).
+
+  The packet rules `phpVersions` extends to all three chains. Placement is
+  clear (beside `phpEolOnly`, reading the same `php_version` column). The open
+  detail is which predicate. The local chain uses **exact membership**
+  (`sitePhpVersions.includes(v)`), and the three sources store different
+  granularities. Measured live:
+
+  | source | stored `php_version` |
+  |---|---|
+  | wpe | **major.minor** — `8.2` ×183, `8.4` ×105, `7.4` ×5, NULL ×49 |
+  | local | **full patch** — `8.2.29` ×34, `8.2.30`, `8.2.27`, `8.2` ×1, NULL ×3 |
+  | external | **full patch** — from `wp --info`, e.g. `8.3.33` (CLAUDE.md) |
+
+  The prompt documents the filter as major.minor (`["8.1", "8.2"]`). So exact
+  membership is *correct for WPE* and *misses* local and external, where the
+  stored value carries a patch segment.
+
+  **What I intend to do (no ruling needed, flagging for visibility):** mirror
+  the local chain's exact-membership predicate onto WPE and external. That
+  keeps the diff a fix rather than a redesign, and it makes no site match that
+  the local chain wouldn't. Net effect of the fix: a `{phpVersions:['8.2']}`
+  query goes from "3 of 7 local correct + **all 5 WPE + all 3 external
+  returned unfiltered**" to correctly-filtered on every chain.
+  **Separate follow-up I recommend but am NOT doing here:** unify all three
+  chains on the prefix predicate `wpVersions` already uses in this same handler
+  (`v || startsWith(v+'.') || startsWith(v+'-')`), which would handle both
+  granularities. It changes LOCAL behaviour, so it is its own decision and its
+  own packet.
+
+  ### The ruling I need, in one line each
+
+  1. `wpeEnvironment` — **implement on WPE + external, exclude on local**
+     (recommended) / implement on WPE only / remove entirely?
+  2. `minAdminCount` — **implement on all three via
+     `user_count_by_role.$.administrator`, NULL excluded** (recommended) /
+     remove entirely?
+  3. If either is "implement": also add it to
+     `src/main/ai/site-finder-prompt.ts` so it is actually reachable? (I
+     recommend yes; without it the filter stays dead in practice.)
+
+  Standing by. No handler edit will be made until this is answered.
