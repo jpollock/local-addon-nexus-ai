@@ -43,6 +43,33 @@ export {
 export { loadLawDirectory, parseLawDocument } from './law/loader';
 export { ConstraintRegistry, ConstraintFilter, LawDocumentMeta } from './law/registry';
 export {
+  assemble,
+  estimateTokens,
+  policyVersionHash,
+  renderAmbientBlock,
+  renderTurnBlock,
+  FRESHNESS_DISCLOSURE_CONTRACT,
+  TOKEN_ESTIMATOR_METHOD,
+  TOKEN_ESTIMATOR_SCOPE,
+} from './assemble/assembler';
+export {
+  AssembleRequest,
+  AssembleDeps,
+  AssembleActor,
+  Autonomy,
+  BundleManifest,
+  ContextBundle,
+  EntityRef,
+  FreshnessRecord,
+  PolicySet,
+  PolicyConstraintView,
+  RetrievalRecord,
+  RetrievedItem,
+  SemanticHit,
+  SemanticPort,
+  ToolGrant,
+} from './assemble/types';
+export {
   derivePermissionConstraints,
   comparePermissionMirror,
   PermissionsSnapshot,

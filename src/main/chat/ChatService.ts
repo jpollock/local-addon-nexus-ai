@@ -12,6 +12,7 @@ import { adaptToolsForChat } from './tool-adapter';
 import { buildFleetContext } from '../assistant/AssistantService';
 import { buildWordPressSystemPrompt } from '../assistant/wordpress-knowledge';
 import { getSession, deleteAllSessions } from '../ipc/chat-sessions';
+import { assembleForChatTurn } from '../intelligence-host/chatAssembly';
 
 // ---------------------------------------------------------------------------
 // Site Lifecycle — tools that require a running local site
@@ -119,6 +120,28 @@ export class ChatService {
     }
 
     let session = this.sessions.get(sessionId);
+
+    // WP-11 · context assembler. Runs on EVERY turn, before the user message is
+    // pushed, regardless of which branch below built the session — that is what
+    // makes "the bundle was present" a property of the turn rather than of how
+    // the session happened to start (recon §4.2). Returns null whenever the
+    // intelligence layer is absent or degraded; every use below is guarded, so
+    // a null result leaves this method byte-identical to the pre-WP-11 build.
+    // The adapter already swallows its own failures and returns null. This
+    // second guard is deliberate defence in depth: the layer invariant is that
+    // nothing on this seam can throw into a caller that predates it, and this
+    // await is the one place a regression inside the adapter could.
+    let assembly = null;
+    try {
+      assembly = await assembleForChatTurn({
+        services: this.services,
+        sessionId,
+        userMessage,
+        siteId,
+        buildingSystemPrompt: !session,
+      });
+    } catch { /* context assembly is never worth a lost chat turn */ }
+
     if (!session) {
       const abortController = new AbortController();
       const pendingApprovals = new Map<string, { resolve: (approved: boolean) => void; toolName: string; args: Record<string, unknown> }>();
@@ -141,7 +164,7 @@ export class ChatService {
 
         // Rebuild the system prompt — without it a reopened session runs with no
         // fleet context, no tool doctrine, and no UNTRUSTED_DATA_DIRECTIVE.
-        const systemPrompt = await this.buildSystemPrompt(siteId);
+        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock);
 
         session = {
           id: sessionId,
@@ -151,7 +174,7 @@ export class ChatService {
         };
       } else {
         // Fresh session — build system prompt
-        const systemPrompt = await this.buildSystemPrompt(siteId);
+        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock);
         session = {
           id: sessionId,
           messages: [{ role: 'system', content: systemPrompt }],
@@ -169,6 +192,17 @@ export class ChatService {
     // Add user message
     session.messages.push({ role: 'user', content: userMessage });
 
+    // WP-11 · the per-turn carrier, delivered as a USER-role message.
+    // Never a second system message: anthropic.ts and google.ts keep the FIRST
+    // system message and discard the rest with no error (recon R3), so an
+    // appended system message is a provider-dependent no-op. Never a `tool`
+    // message either: those are truncated to 600 chars after two assistant
+    // turns (compressStaleToolResults) and wrapped as untrusted data, which
+    // would tell the model to ignore the very policy it carries (R5, R7).
+    if (assembly?.turnBlock) {
+      session.messages.push({ role: 'user', content: assembly.turnBlock });
+    }
+
     const config: ChatProviderConfig = {
       apiKey: providerConfig.apiKey,
       model: providerConfig.model,
@@ -177,7 +211,7 @@ export class ChatService {
     // Compress stale tool results to prevent context bloat
     session.messages = this.compressStaleToolResults(session.messages);
 
-    await this.runAgentLoop(session, providerConfig.providerId, config);
+    await this.runAgentLoop(session, providerConfig.providerId, config, assembly?.grants);
   }
 
   /**
@@ -188,6 +222,7 @@ export class ChatService {
     session: ChatSession,
     providerId: string,
     config: ChatProviderConfig,
+    grants?: string[],
   ): Promise<void> {
     const provider = getProvider(providerId);
     if (!provider) return;
@@ -195,7 +230,11 @@ export class ChatService {
     for (let iteration = 0; iteration < CHAT_DEFAULTS.MAX_AGENT_ITERATIONS; iteration++) {
       if (session.abortController.signal.aborted) break;
 
-      const tools = adaptToolsForChat(this.registry, this.services);
+      // WP-11 edit #3: grants pass-through. Recomputed every iteration, so a
+      // grant set could change mid-task without touching the message array.
+      // Signature only in v0 — `grants` is always undefined (unrestricted),
+      // which is today's behaviour exactly.
+      const tools = adaptToolsForChat(this.registry, this.services, grants);
 
       // Stream the LLM response
       let assistantContent = '';
@@ -562,8 +601,14 @@ export class ChatService {
 
   /**
    * Build the system prompt with optional site context.
+   *
+   * `ambientBlock` (WP-11 edit #1) is the assembler's policy set. Its placement
+   * below is deliberate: AFTER the untrusted-data directive, so injected policy
+   * is unambiguously on the trusted side of that boundary, and BEFORE the tool
+   * doctrine, so policy outranks tool enthusiasm. Null/undefined inserts
+   * nothing at all — the additive-parity pin.
    */
-  private async buildSystemPrompt(siteId?: string): Promise<string> {
+  private async buildSystemPrompt(siteId?: string, ambientBlock?: string | null): Promise<string> {
     // Build WordPress-aware fleet context (PHP EOL, site counts, insights)
     let fleetContextSection = '';
     try {
@@ -586,6 +631,7 @@ export class ChatService {
       '',
       UNTRUSTED_DATA_DIRECTIVE,
       '',
+      ...(ambientBlock ? [ambientBlock, ''] : []),
       'IMPORTANT: Always use your tools to get real data. Never fabricate or guess site names, plugin lists, version numbers, or other information.',
       'If asked about sites, call local_list_sites or nexus_list_sites first. If asked about plugins, call wp_plugin_list with the site name.',
       'If asked about WordPress versions, call wp_core_version. If you cannot answer using your available tools, say so.',
