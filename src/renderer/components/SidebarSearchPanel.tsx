@@ -15,13 +15,28 @@ interface SidebarSearchPanelProps {
   hasLLM: boolean;
 }
 
-interface LocalSiteResult {
+/**
+ * Provenance stamped on a result row by the intelligence ledger (WP-04).
+ * Optional on every row: absent when the intelligence core is not running, or
+ * when the query used no plugin filter, or when the ledger has never observed
+ * that plugin on that environment.
+ */
+interface SiteResultProvenance {
+  /** ISO timestamp: when the plugin fact was last true at its source. */
+  observedAt?: string;
+  /** Trust class of the observation. */
+  observedTrust?: string;
+  /** True when the observation is past its freshness SLO. */
+  observedStale?: boolean;
+}
+
+interface LocalSiteResult extends SiteResultProvenance {
   id: string;
   name: string;
   type: 'local';
 }
 
-interface WpeSiteResult {
+interface WpeSiteResult extends SiteResultProvenance {
   id: string;
   name: string;
   domain: string;
@@ -29,7 +44,7 @@ interface WpeSiteResult {
   type: 'wpe';
 }
 
-interface ExternalSiteResult {
+interface ExternalSiteResult extends SiteResultProvenance {
   id: string;
   name: string;
   domain: string;

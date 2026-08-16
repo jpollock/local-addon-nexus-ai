@@ -110,6 +110,7 @@ import { collectFleetCounts } from './fleet/collectFleetCounts';
 import { buildSiteRows } from './fleet/siteRows';
 import { createExternalBulkOps } from './bulk/externalBulkOps';
 import { collectSystemHealth } from './health/collectSystemHealth';
+import { enrichSiteFinderPlugins, summarizeSiteFinderTwins } from './intelligence-host/siteFinderTwins';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -4160,10 +4161,28 @@ Answer:`,
 
       localLogger.info(`[NexusAI] Site Finder results: ${matchingSiteIds.length} total (local + WPE)`);
 
+      // Intelligence twins (WP-04): provenance for the plugin-presence and
+      // plugin-version filters. Enrichment ONLY — `matchingSiteIds` is already
+      // final above and is never re-derived from twin facts. Returns null when
+      // the core is absent or no plugin filter ran, in which case every field
+      // below is simply omitted and the payload is byte-identical to before.
+      const twins = enrichSiteFinderPlugins({
+        siteIds: matchingSiteIds,
+        plugins: validated?.plugins,
+        pluginVersion: validated?.pluginVersion,
+        db,
+      });
+      const provenance = (siteId: string) => {
+        const row = twins?.rows.get(siteId);
+        return row
+          ? { observedAt: row.observedAt, observedTrust: row.trust, observedStale: row.stale }
+          : undefined;
+      };
+
       // Build detailed results for UI display
-      const localResults: Array<{ id: string; name: string; type: 'local' }> = [];
-      const wpeResults: Array<{ id: string; name: string; domain: string; installId: string; type: 'wpe' }> = [];
-      const externalResults: Array<{ id: string; name: string; domain: string; alias: string; environment: string; type: 'external' }> = [];
+      const localResults: Array<{ id: string; name: string; type: 'local'; observedAt?: string; observedTrust?: string; observedStale?: boolean }> = [];
+      const wpeResults: Array<{ id: string; name: string; domain: string; installId: string; type: 'wpe'; observedAt?: string; observedTrust?: string; observedStale?: boolean }> = [];
+      const externalResults: Array<{ id: string; name: string; domain: string; alias: string; environment: string; type: 'external'; observedAt?: string; observedTrust?: string; observedStale?: boolean }> = [];
 
       for (const siteId of matchingSiteIds) {
         // Check if it's a local site
@@ -4172,6 +4191,7 @@ Answer:`,
             id: siteId,
             name: allSites[siteId].name,
             type: 'local',
+            ...provenance(siteId),
           });
         } else {
           // It's a WPE or external site — get details from graph
@@ -4183,6 +4203,7 @@ Answer:`,
               domain: wpeSite.domain || wpeSite.remote_domain || 'Unknown',
               installId: wpeSite.remote_install_id || wpeSite.id,
               type: 'wpe',
+              ...provenance(wpeSite.id),
             });
           } else {
             const externalSite = externalSites.find(s => s.id === siteId);
@@ -4194,6 +4215,7 @@ Answer:`,
                 alias: externalSite.name,
                 environment: externalSite.environment || 'production',
                 type: 'external',
+                ...provenance(externalSite.id),
               });
             }
           }
@@ -4208,6 +4230,17 @@ Answer:`,
         local: localResults,
         wpe: wpeResults,
         external: externalResults,
+        ...(twins
+          ? {
+              intelligence: {
+                freshness: twins.freshness,
+                coverageGap: twins.coverageGap,
+                twinOnly: twins.twinOnly,
+                versionDrift: twins.versionDrift,
+                notes: summarizeSiteFinderTwins(twins),
+              },
+            }
+          : {}),
       };
     } catch (err) {
       localLogger.error('[NexusAI] site-finder:apply failed:', (err as Error).message);

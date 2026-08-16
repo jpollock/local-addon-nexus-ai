@@ -223,6 +223,41 @@ signal", CLAUDE.md). That satisfies "answer from twins" in the pattern's sense
 while keeping membership — and therefore every SF eval expectation — untouched.
 Requesting ack on the lock and a ruling on (a) vs (b) before any edit.
 
+**Owner ruling — 2026-08-15 (architect). Lock GRANTED; semantics = (a).**
+
+*Lock.* `src/main/ipc-handlers.ts` is granted to WP-04 as **integration-lock
+class** — the ownership map predates this file's involvement, so it is treated
+under the same rule as `src/main/index.ts`: wiring edits only, minimal import +
+call, done as the packet's final step, no opportunistic refactoring. No
+contention at grant time (WP-03b owns `detect-drift.ts` only).
+
+*Proposed ownership-map amendment (for the next doc pass — PARALLEL_PROTOCOL.md
+§Ownership map):*
+
+| `src/main/ipc-handlers.ts` | Same lock as index.ts. Wiring edits only, as a packet's final step. It is ~4,700 lines and holds every IPC channel plus the `nexusServices` assignment block — an opportunistic refactor here collides with every future packet. |
+
+*Semantics.* Option (a), **enrich-only + drift hint**, as the only reading
+consistent with the pattern:
+- **Membership := graph predicate, unchanged.** Option (b) changes matching
+  semantics, which is literally `ab.no-legacy-parity`, and resolves the
+  SF-expectation escalation in the wrong direction. SF-01/05/06 must hold **by
+  construction**, not by coincidence of the current data.
+- **Twins add, never subtract:** `row.observedAt` from the twin fact,
+  `row.trust` / `row.stale` from `freshness()` — `sloSeconds`, never hardcoded.
+- **The drift hint is required, not optional** (this is what rules out the
+  no-hint variant). Per-fact variant: environments the ledger shows carrying
+  the plugin that the graph-driven results missed. Skip `active: false` /
+  `removed: true` facts. Keep the two absences distinct — never-observed is a
+  *coverage gap*, observed-but-diverged is *stable divergence*.
+- **Version filters (SF-05/06) follow the same rule.** The version predicate
+  evaluates against the graph, unchanged. Where the twin's observed version
+  disagrees with the graph's on a row that already matched, surface it as a
+  per-row drift marker — do **not** re-evaluate membership against the twin
+  value. If that is a fourth drift-hint variant, add it to the pattern's
+  variant list with a code comment, per the pattern's own instruction.
+- The additive-parity pin must make "SF unchanged by construction" a **failing
+  test** if it is ever violated.
+
 ### [x] WP-05 · Jest roots + CI wiring  **(PREREQUISITE — elevated by calibration finding WP-02.1)**
 Outcome: `roots: ['<rootDir>/tests', '<rootDir>/src']` — one list, so `npm test`
 includes the intelligence suites by default; `test:ci` names the third tree
