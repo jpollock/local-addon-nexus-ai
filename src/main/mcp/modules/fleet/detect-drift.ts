@@ -30,6 +30,12 @@ interface LedgerDrift {
   previous: unknown;
   observed: unknown;
   observedAt: string;
+  /**
+   * When the PREVIOUS value was observed — `drift.detected/2` only. Events
+   * written under v1 of the payload do not carry it, and there is no way to
+   * recover it after the fact, so it stays `undefined` and renders as unknown.
+   */
+  previousObservedAt?: string;
 }
 
 export const detectDriftHandler: McpToolHandler = {
@@ -213,24 +219,33 @@ export const detectDriftHandler: McpToolHandler = {
         for (const t of targetRecords) if (!scope.has(t.entityId)) scope.set(t.entityId, t.name);
 
         // ONE query, bucketed in memory. Per-entity queries would be N round
-        // trips over a fleet-wide default run. The cap is disclosed rather
-        // than silently applied: `query` is ORDER BY id ASC, so hitting the
-        // limit drops the NEWEST events — the opposite of what a change report
-        // wants — and a silent truncation would read as "nothing changed".
+        // trips over a fleet-wide default run. `order: 'desc'` is load-bearing
+        // (WP-03b): the default ASC order made the cap drop the NEWEST events,
+        // so a truncated result read as "nothing changed recently" — backwards
+        // for a change report, and silent. Newest-first means the cap drops the
+        // OLDEST events instead, which is what a "what changed" reader wants
+        // and boring enough not to need disclosing.
         const DRIFT_QUERY_LIMIT = 2000;
-        const raw = core.ledger.query({ topicPrefix: 'state.drift.', limit: DRIFT_QUERY_LIMIT });
-        const truncated = raw.length >= DRIFT_QUERY_LIMIT;
+        const raw = core.ledger.query({
+          topicPrefix: 'state.drift.',
+          limit: DRIFT_QUERY_LIMIT,
+          order: 'desc',
+        });
 
         const byEntity = new Map<string, LedgerDrift[]>();
         for (const ev of raw) {
           const entityId = ev.entity?.environment ?? ev.entity?.site;
           if (!entityId || !scope.has(entityId)) continue;
-          const p = ev.payload as { fact?: string; previous?: unknown; observed?: unknown };
+          const p = ev.payload as {
+            fact?: string; previous?: unknown; observed?: unknown; previous_observed_at?: unknown;
+          };
           if (!p?.fact) continue;
           const list = byEntity.get(entityId);
           const item: LedgerDrift = {
             entityId, fact: p.fact, previous: p.previous, observed: p.observed,
             observedAt: ev.observed_at,
+            previousObservedAt:
+              typeof p.previous_observed_at === 'string' ? p.previous_observed_at : undefined,
           };
           if (list) list.push(item); else byEntity.set(entityId, [item]);
         }
@@ -276,16 +291,30 @@ export const detectDriftHandler: McpToolHandler = {
         if (allDrift.length > 0) {
           enrichment.push('');
           enrichment.push('### Changes Recorded by the Ledger  [origin: ledger]');
-          enrichment.push('| Environment | Fact | Change | Observed |');
-          enrichment.push('|---|---|---|---|');
+          enrichment.push('| Environment | Fact | Change | Diverged for | Observed |');
+          enrichment.push('|---|---|---|---|---|');
+          let anyUnknownDivergence = false;
           for (const d of allDrift) {
+            const diverged = divergenceMs(d);
+            if (diverged === undefined) anyUnknownDivergence = true;
             enrichment.push(
-              `| ${scope.get(d.entityId) ?? d.entityId} | ${d.fact} | ${fmtChange(d.previous, d.observed)} | ${fmtAge(now - Date.parse(d.observedAt))} |`,
+              `| ${scope.get(d.entityId) ?? d.entityId} | ${d.fact} | ${fmtChange(d.previous, d.observed)} ` +
+              `| ${fmtDivergence(diverged)} | ${fmtAge(now - Date.parse(d.observedAt))} |`,
             );
           }
-          if (truncated) {
-            enrichment.push('');
-            enrichment.push(`> ⚠️ Ledger drift query hit its ${DRIFT_QUERY_LIMIT}-event cap; the most recent changes may be missing from this table.`);
+          // Say what the number is. It is the interval between the two
+          // observations, so it bounds how long the previous value had stood —
+          // it is NOT a measured gap between two sites, and a reader who
+          // assumes it is would draw the wrong conclusion from it.
+          enrichment.push('');
+          enrichment.push(
+            '> "Diverged for" is the gap between the previous and current observations — ' +
+            'how long the fact is known to have held its previous value before the change was observed.',
+          );
+          if (anyUnknownDivergence) {
+            enrichment.push(
+              '> Rows showing — predate schema drift.detected/2, which is where that timestamp comes from.',
+            );
           }
         }
 
@@ -358,6 +387,40 @@ export const detectDriftHandler: McpToolHandler = {
     return ok(lines.join('\n'));
   },
 };
+
+/**
+ * How long the previous value is known to have stood: the interval between the
+ * observation that recorded it and the observation that saw it change.
+ *
+ * `undefined` — not zero, not a guess — whenever the answer is unknowable:
+ * a `drift.detected/1` event (no `previous_observed_at` at all), an
+ * unparseable timestamp, or a negative interval (an out-of-order pair the
+ * fold's own guard should prevent, but a fabricated duration is worse than a
+ * blank cell either way).
+ */
+function divergenceMs(d: LedgerDrift): number | undefined {
+  if (!d.previousObservedAt) return undefined;
+  const from = Date.parse(d.previousObservedAt);
+  const to = Date.parse(d.observedAt);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return undefined;
+  const ms = to - from;
+  return ms >= 0 ? ms : undefined;
+}
+
+/**
+ * The "Diverged for" cell. `—` is *unknown*; `<1m` is *known and tiny* — the
+ * two must not collapse into each other.
+ *
+ * `fmtDuration` floors at "1m" because it renders ages, where a sub-minute
+ * age rounds harmlessly. Here the value is a measured interval and zero is
+ * reachable: `stateTwinFold`'s out-of-order guard is a strict `>`, so two
+ * values observed inside one timestamp granule both fold and drift fires with
+ * an interval of 0. Printing "1m" for that claims a minute nobody observed.
+ */
+function fmtDivergence(ms: number | undefined): string {
+  if (ms === undefined) return '—';
+  return ms < 60_000 ? '<1m' : fmtDuration(ms);
+}
 
 /** `{version:'9.5'} → {version:'9.9'}` renders as `9.5 → 9.9`; else compact JSON. */
 function fmtChange(previous: unknown, observed: unknown): string {

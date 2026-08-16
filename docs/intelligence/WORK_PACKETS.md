@@ -120,7 +120,7 @@ by origin; discrepancies between the two detection paths are themselves listed.
 This packet has extra value: it tests our own drift pipeline against the
 existing detector.
 
-### [ ] WP-03b · detect_drift consumes drift.detected/2 + desc-order query
+### [x] WP-03b · detect_drift consumes drift.detected/2 + desc-order query
 Pattern: reader-migration (amendment-aware). Files: `fleet/detect-drift.ts`
 (+ its existing test). Parallel-safe. Natural fit: the session that built
 WP-03. Two changes its own findings asked for, now unblocked by the core
@@ -130,6 +130,16 @@ so the 2000-event cap drops oldest events, not newest — which also makes the
 disclosed truncation warning honest-and-boring instead of load-bearing.
 Accept: both rendered/behaving with tests; additive parity holds; no schema
 or core changes (already landed).
+**Done 2026-08-15 (Opus, branch `wp-03b`).** The ledger change table gains a
+`Diverged for` column from `previous_observed_at` — the interval between the
+observation that recorded the previous value and the one that saw it change —
+with a line saying what the number is, because it bounds how long that value
+held and is NOT a measured site-to-site gap. Three renderings of "no honest
+number" are kept distinct: `—` for unknown (v1 events, unparseable or negative
+timestamps), `<1m` for known-and-tiny, and a real duration otherwise. The
+ledger query is now `order: 'desc'` and the truncation-disclosure branch is
+gone. 4 findings below; 9/9 mutations caught after the battery itself was
+fixed (finding 1). No core, schema, topic or envelope changes.
 
 ### [ ] WP-04 · Site Finder plugin/version filters read twins
 Pattern: reader-migration, adapted — this is the NL→filter surface, so the
@@ -675,3 +685,66 @@ B-03/E-01/E-02 against the real ledger (harness rules H-01/H-02).
   (tracked separately; suspected stale fixture vs access-control v2
   defaults). WP-05 merge audited by diff against first parent: exactly in
   scope, all seven files accounted for.
+
+- 2026-08-15 · **WP-03b calibration findings** (branch `wp-03b`, Opus).
+  Proposals only — nothing amended by this packet. The docs held up: the
+  worktree recipe in §Isolation (symlink + `npm run compile`) worked first try
+  and `npm test` picked the intelligence suites up with no flag, both of which
+  were previous packets' findings paying off.
+
+  **(a) The mutation battery lied, in a way the existing guard does not catch**
+
+  1. **A mutation can apply to PROSE and report as SURVIVED.** WP-03 finding 6
+     added "verify each mutation actually changed the file (checksum)". That
+     guard passed and the result was still wrong: `s/order: 'desc'/order:
+     'asc'/` matched the **comment** that quotes the option — the comment
+     immediately above the call, which this codebase's house style makes
+     near-certain to exist — so the file changed, the code did not, the suite
+     passed, and the battery reported the assertion as weak. It is not; an
+     anchored re-run caught the mutation immediately. Proposed cp.test
+     amendment: *checksum proves a mutation applied; it does not prove it
+     applied to code. Anchor each substitution on syntax a comment cannot have
+     (leading indentation, trailing comma), or assert a witness string that
+     only the mutated CODE line can produce.* This battery now does the latter.
+     Cost of not doing it: a real pin gets deleted as "vacuous".
+  2. **A removal has no honest mutation pin, and saying so beats faking one.**
+     The retired `DRIFT_QUERY_LIMIT` truncation warning cannot be pinned:
+     `not.toContain('event cap')` passes identically whether the branch exists
+     or not, because the fixture cannot reach 2000 events — the same reason
+     WP-03 could not test the branch when it added it. The assertion is kept as
+     a cheap guard against someone re-adding a warning that *does* fire, and is
+     labelled in the test as exactly that, not as a pin.
+
+  **(b) A cheaper fixture shape for reader-migration tests**
+
+  3. **When the behaviour under test is how a reader RENDERS a ledger event,
+     emit the event straight through `core.emitter` — no backfill, no fold, no
+     debounce wait.** The pattern's standard fixture (`runGraphBackfill` + two
+     700ms sleeps) costs ~1.4s per test and is only necessary when the event's
+     *production* is part of what is being tested. The two tests added here run
+     in 4ms and 2ms. It also buys **deterministic ledger id order** (ULIDs are
+     monotonic within a process), which the newest-first test depends on and
+     which a backfill-driven fixture cannot promise — the fold's emission order
+     over gamma/alpha/beta is an implementation detail, and the newest event in
+     that fixture is out of the report's scope. Proposed as a cp.test note.
+  4. **Ordering was pinned behaviourally by clamping the limit, not by counting
+     to 2000.** The test wraps `core.ledger.query` to force `limit: 1` while
+     passing the caller's `order` through, so the real Ledger SQL decides which
+     event survives: `desc` renders the newest change, `asc` renders the oldest
+     — verified by running the mutation with the opts-spy assertion disabled,
+     so the behavioural half is proven to stand on its own. This is the general
+     shape for testing a cap-interaction whose real cap is too large to reach.
+
+  **(c) Found while reviewing the diff, fixed in-packet (own defect)**
+
+  - `fmtDuration` floors at `1m`, which is right for the ages it was written
+    for and wrong for a measured interval. A **zero** interval is reachable —
+    `stateTwinFold`'s out-of-order guard is a strict `>`, so two values
+    observed inside one timestamp granule both fold and drift fires with
+    `previousObservedAt === observedAt` — so the first draft printed "1m" for a
+    minute nobody observed. Now `<1m`, kept distinct from `—` (unknown).
+    Caught by reading the new code against the packet's own "no fabricated
+    duration" clause, not by a test; the test came after and now pins it.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  build. `npm run rebuild` before loading Local.**
