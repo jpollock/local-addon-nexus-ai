@@ -299,7 +299,7 @@ export const detectDriftHandler: McpToolHandler = {
             if (diverged === undefined) anyUnknownDivergence = true;
             enrichment.push(
               `| ${scope.get(d.entityId) ?? d.entityId} | ${d.fact} | ${fmtChange(d.previous, d.observed)} ` +
-              `| ${diverged === undefined ? '—' : fmtDuration(diverged)} | ${fmtAge(now - Date.parse(d.observedAt))} |`,
+              `| ${fmtDivergence(diverged)} | ${fmtAge(now - Date.parse(d.observedAt))} |`,
             );
           }
           // Say what the number is. It is the interval between the two
@@ -405,6 +405,21 @@ function divergenceMs(d: LedgerDrift): number | undefined {
   if (!Number.isFinite(from) || !Number.isFinite(to)) return undefined;
   const ms = to - from;
   return ms >= 0 ? ms : undefined;
+}
+
+/**
+ * The "Diverged for" cell. `—` is *unknown*; `<1m` is *known and tiny* — the
+ * two must not collapse into each other.
+ *
+ * `fmtDuration` floors at "1m" because it renders ages, where a sub-minute
+ * age rounds harmlessly. Here the value is a measured interval and zero is
+ * reachable: `stateTwinFold`'s out-of-order guard is a strict `>`, so two
+ * values observed inside one timestamp granule both fold and drift fires with
+ * an interval of 0. Printing "1m" for that claims a minute nobody observed.
+ */
+function fmtDivergence(ms: number | undefined): string {
+  if (ms === undefined) return '—';
+  return ms < 60_000 ? '<1m' : fmtDuration(ms);
 }
 
 /** `{version:'9.5'} → {version:'9.9'}` renders as `9.5 → 9.9`; else compact JSON. */

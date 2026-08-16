@@ -264,10 +264,27 @@ test('detect_drift: a v1 drift event renders no duration rather than a fabricate
     previousObservedAt: NOW - 1 * H,
   });
 
+  emitDrift(core, {
+    schema: 'drift.detected/2',
+    fact: 'plugin:instant-thing',
+    previous: { version: '5.0' },
+    observed: { version: '6.0' },
+    observedAt: NOW - 6 * H,
+    previousObservedAt: NOW - 6 * H,
+  });
+
   const text = (await detectDriftHandler.execute({ baseline_site: 'alpha' }, services)).content[0].text;
 
   expect(text).toMatch(/\| beta \| plugin:legacy-thing \| 1\.0 → 2\.0 \| — \| 2h ago \|/);
   expect(text).toMatch(/\| beta \| plugin:backwards-thing \| 3\.0 → 4\.0 \| — \| 4h ago \|/);
+
+  // A REACHABLE zero: stateTwinFold's guard is a strict `>`, so two values
+  // observed in the same timestamp granule both fold and drift fires with an
+  // interval of 0. `fmtDuration` floors at "1m", which would claim a minute
+  // that was never observed — the shared age vocabulary is right for ages and
+  // wrong for this. "<1m" is the honest rendering of a known-but-tiny gap, and
+  // it is not "—", which means unknown.
+  expect(text).toMatch(/\| beta \| plugin:instant-thing \| 5\.0 → 6\.0 \| <1m \| 6h ago \|/);
   // The absence is explained where it appears, not left as a bare em dash.
   expect(text).toContain('predate schema drift.detected/2');
   // No duration invented from the missing timestamp.
