@@ -27,6 +27,8 @@ Available filter types:
 - staticFrontPage: boolean — sites using a static page as their front page (not blog roll)
 - plainPermalinks: boolean — sites using plain permalinks (no pretty URL structure)
 - source: "local" or "wpe" — filter to only local sites or only WP Engine sites
+- wpeEnvironment: "production", "staging" or "development" — hosted sites (WP Engine installs and external SSH hosts) labelled with that environment; never use it for queries about local sites, which have no environment
+- minAdminCount: integer — minimum number of administrator users
 - contentQuery: semantic search for indexed site content
 - searchText: exact text match in site names or domains
 
@@ -182,6 +184,18 @@ Assistant: { "filters": { "source": "wpe" } }
 
 User: "only local sites"
 Assistant: { "filters": { "source": "local" } }
+
+User: "my staging sites"
+Assistant: { "filters": { "wpeEnvironment": "staging" } }
+
+User: "production installs"
+Assistant: { "filters": { "wpeEnvironment": "production" } }
+
+User: "sites with more than 2 admins"
+Assistant: { "filters": { "minAdminCount": 3 } }
+
+User: "sites with at least 5 administrators"
+Assistant: { "filters": { "minAdminCount": 5 } }
 
 User: "WooCommerce sites on end-of-life PHP"
 Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
