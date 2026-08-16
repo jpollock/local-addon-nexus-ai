@@ -389,13 +389,20 @@ separate opt-in script — a second script is a second thing to forget, which is
 the failure mode this packet exists to remove. 8 calibration findings recorded
 below, one of them fixed in-packet (the vacuous `pretest` ABI guard).
 
-### [ ] WP-06 · Review sweep
+### [x] WP-06 · Review sweep
 No pattern. Read-mostly. Parallel-safe (but run last, after WP-01..05 merge).
 Accept: lint clean on all intelligence files; no leftover scaffold-isms
 (`(e: any)` casts justified or typed properly against real `NexusServices`);
 every new file has its header comment; a draft PR description exists at
 `docs/intelligence/PR_DESCRIPTION.md` telling the story (model → ADRs → spine
 → readers → live re-check) with verification steps for a reviewer.
+**Done 2026-08-15 (Opus, branch `wp-06`).** All six inherited items closed:
+the `lib/` tsconfig question is RULED (exclude — the trade was largely
+illusory), the CLAUDE.md ABI drift is fixed as a two-values fact rather than
+a new constant, the `(e: any)` hunt found three real regressions against
+`main` and fixed them, the "intermittent" host/sync abort turned out to have
+a **deterministic repro**, and WP-03b's cp.test fixture proposal is CONCURRED
+with an added constraint. 12 findings recorded below.
 
 ### [ ] WP-04b · Port SF filter-apply assertions onto the real handler  *(registered from WP-04 finding; not intelligence-layer work)*
 `tests/unit/site-finder/filter-apply.test.ts` (523 lines, the largest SF test
@@ -903,3 +910,241 @@ architect session; supersedes nothing, closes both packets).**
   the pattern if the sweep agrees; (6) PR_DESCRIPTION.md drift: packet count
   and reader list predate WP-03b/WP-04 (Site Finder surface + `versionDrift`
   are absent), wpe-tools known-issue is now RESOLVED (BackupGate root cause).
+
+---
+
+- 2026-08-15 · **WP-06 review sweep — findings** (branch `wp-06`, Opus).
+  Read-mostly packet; edits confined to casts, comments, `CLAUDE.md`, and
+  `PR_DESCRIPTION.md`. Nothing here changes behavior.
+
+  **Verification baseline.** `npm run typecheck` clean. `npx jest src/` →
+  **14 suites / 34 tests**, all pass. Full `npm test` → **492 suites, 6,146
+  passed, 12 skipped, 6,158 total**, exit 0. Recording the SKIPPED count per
+  the protocol amendment: **12**, in this worktree, with the local ONNX model
+  files absent. WP-05 measured 488/6139 and did not record its skipped count,
+  so the 488→492 / 6139→6158 delta is the WP-03b and WP-04 merges landing
+  after that measurement, not a change from this packet.
+
+  1. **The seam lint rule was verified to FIRE, not merely to exist.** `npx
+     eslint src/intelligence src/main/intelligence-host` exits 0 — but a
+     zero-error run proves nothing about a rule that might not be loaded at
+     all. The repo is on eslint 8 with `.eslintrc` cascade (no flat config),
+     so the nested `src/intelligence/.eslintrc.json` does apply; confirmed by
+     a throwaway probe file importing `electron` and `../main/index`, which
+     produced exactly two `no-restricted-imports` errors with the ADR-16
+     messages. **Anyone re-verifying the seam should re-run that probe rather
+     than trusting a clean exit code** — the day this repo moves to eslint's
+     flat config, the nested `.eslintrc.json` becomes dead and the seam
+     silently stops being enforced while lint still reports clean.
+
+  2. **Scaffold-ism hunt: the intelligence layer itself is clean; the
+     regressions were in the readers it touched.** Zero `any` of any shape in
+     non-test code under `src/intelligence/` or
+     `src/main/intelligence-host/`. But three reader files had `(e) =>
+     e.structure` on `main` and `(e: any) => e.structure` on this branch —
+     `find-sites-with-plugin.ts`, `find-sites-with-theme.ts`,
+     `find-outdated-sites.ts`. A widening, introduced by the migrations, of a
+     parameter TypeScript was already inferring correctly from
+     `IndexRegistry.listAll()`. Reverted to `(e)`; typecheck stays clean,
+     which is itself the proof the annotation was never load-bearing.
+     *Method note for the next sweep: grep the branch's ADDED lines
+     (`git diff main...HEAD | grep '^+'`), not the working tree. A tree-wide
+     grep buries three real regressions in ~40 pre-existing hits.*
+
+  3. **`(services as any).graphService` is NOT a scaffold-ism and was left
+     alone** — six occurrences, all pre-existing on `main`. It is also
+     already redundant: `graphService?: any` is a declared member of the MCP
+     `NexusServices` (`src/main/mcp/types.ts:120`), so the cast is an `any`
+     applied to an `any`. Typing it properly means giving `GraphService` a
+     real type on the interface, which changes a shared type used far beyond
+     these readers — out of scope for a review packet, and registered here
+     rather than done quietly.
+
+  4. **Header comments: all production files had them; ten test files did
+     not.** Every file under `src/intelligence/` and
+     `src/main/intelligence-host/` that ships behavior already carried a
+     header. Added headers to the ten intelligence-layer test files that
+     lacked one (4 core, 3 host, 3 fleet-module), each stating what the suite
+     *pins* rather than what it does. One draft header was wrong and rewritten
+     before commit: it claimed `overnightMigrations.test.ts` pinned the
+     "outdated counts are `null`, never `0`" rule, which is a real repo
+     invariant but not what that test asserts — it exercises ledger gap-fill.
+     Worth repeating because it is the failure this project keeps producing:
+     **a plausible claim about a test, written without reading its
+     assertions, survives review and then propagates.**
+
+  5. **Track-1 files are new on this branch and have no headers**
+     (`src/main/fleet/*` ×5, `src/main/mcp/modules/fleet-links/*` ×4,
+     `src/main/safety/BackupGate.ts`). Deliberately NOT touched — outside the
+     intelligence layer, different owner, and a review packet should not
+     sprawl into an adjacent body of work. Registered, not fixed.
+
+  6. **RULING on the `lib/` test-shipping tsconfig question (WP-05 finding 6):
+     exclude them.** Add `"src/**/__tests__/**"` to `tsconfig.json`'s
+     `exclude`. **The trade this was held open for is largely illusory**, and
+     that is the finding:
+     - **Cost today:** 56 files / ~158 KB of compiled test code (14 `.js`, 14
+       `.d.ts`, plus maps) ship in the published package, because
+       `package.json`'s `files[]` lists `lib` wholesale.
+     - **The supposed loss — `tsc --noEmit` coverage of tests — is already
+       partial and asymmetric.** `tsconfig.json` excludes `tests/`, so the
+       5,000+ legacy tests have NEVER been under `tsc --noEmit`. The only
+       tests it covers are the 14 `src/**/__tests__` files, and only by
+       accident of where the intelligence layer put them.
+     - **ts-jest type-checks every test file it runs**, diagnostics on,
+       against `tsconfig.test.json` (which includes both `src/**` and
+       `tests/**`). Measured both directions rather than assumed: an injected
+       `const x: number = "s"` in `ulid.test.ts` is **missed** by `tsc -p`
+       with the exclude applied and **caught** by ts-jest (suite fails,
+       0 tests run). Finding 7 below is the same mechanism observed in the
+       wild.
+     - **Residual gap, stated honestly:** ts-jest only checks a file it
+       actually runs, so a test excluded by a `-t`/path filter goes
+       unchecked; `tsc` checked it unconditionally. `npm run test:ci` runs
+       them all, so this costs nothing in the gate that matters.
+     - Alternative considered and rejected: a fourth tsconfig
+       (`tsconfig.build.json` for `compile`, `tsconfig.json` for
+       `typecheck`). It preserves both properties, but buys coverage ts-jest
+       already provides at the price of another config file to keep in sync
+       in a repo that has three.
+     - **Not applied in this packet** — a build-config change is outside a
+       review sweep's edit scope and wants its own commit.
+
+  7. **The "intermittent" host/sync abort is NOT intermittent — it has a
+     deterministic repro, and it silently loses 10 tests.** WP-05 finding 7
+     recorded it as rare (1 in 8 runs), config-independent, passing in
+     isolation. Root cause found:
+
+         npx jest tests/unit/cli/commands/host.test.ts \
+                  tests/unit/cli/commands/sync.test.ts --runInBand
+
+     fails **every time** with four `TS2451 Cannot redeclare block-scoped
+     variable` errors. **Neither file has a single top-level `import` or
+     `export`**, so TypeScript treats both as global *scripts*, not modules —
+     and both declare `ExitError`, `out`, `err` and `exitCodes` at top level,
+     into the same global scope. ts-jest type-checks with a language service
+     **per worker process**, so the collision materializes only when jest's
+     scheduler happens to place both files in the same worker. That is the
+     entire "intermittence": the bug is deterministic, its *trigger* is
+     worker assignment. It also explains every other reported symptom — 0
+     tests run (a compile error, not a test failure), passes in isolation (no
+     second file), config-independent (nothing to do with jest config).
+     Severity is higher than "flaky suite" suggests: in the repro, the run
+     reports 20 passing tests where 30 exist — `host.test.ts`'s 10 tests
+     vanish while the run still looks like it covered them.
+     **Fix (verified, then reverted — out of this packet's edit scope):**
+     append `export {};` to each of the two files. With it, the same command
+     gives 2 passed / 30 tests. One line per file.
+     **Blast radius:** 14 test files repo-wide are global scripts (scan in the
+     packet transcript); today exactly one pair collides, so this is the only
+     live instance — but the other 12 are one duplicated top-level name away
+     from the same failure, and it will present as "a flaky suite" again.
+     Recommend the two-line fix plus, optionally, a lint rule requiring test
+     files to be modules.
+
+  8. **CONCUR with WP-03b's cp.test fixture proposal, with one added
+     constraint. Proposed pattern text is in item 9.** Measured this session
+     from `npx jest src/ --verbose`, which settles it:
+     - `runGraphBackfill` + a 700 ms debounced-fold wait: **709–745 ms** per
+       seeding; tests that seed twice cost **1,413–1,471 ms**.
+     - Tests that emit through `core.emitter` directly: **6–29 ms**
+       (`detect_drift`'s v1-duration and newest-first-cap tests are the live
+       examples).
+     - **A third technique already in the tree beats both, and the proposal
+       should name it:** `siteFinderTwins.test.ts` seeds ONCE in `beforeAll`
+       and then runs **12 assertions at 0–1 ms each**. The real cost driver
+       is not backfill-vs-emitter, it is *seeding per test*.
+     - **The constraint:** a test that emits directly must derive its entity
+       id with `provisionalEnvironmentId()` — the same function the producers
+       use — never a literal. Hand-written ids pass against a join production
+       never mints. (`overnightMigrations.test.ts` sidesteps this by looking
+       the id back out of a backfill-seeded twin; that works but re-imports
+       the 700 ms cost it was trying to avoid.)
+     - **And the boundary:** direct emission does not exercise
+       `runGraphBackfill`. That is acceptable *because* `graphBackfill.test.ts`
+       owns that path — but a migration whose suite goes all-emitter must not
+       also be the only coverage of how twins get populated.
+
+  9. **Proposed text for `patterns/reader-migration.md` § cp.test — NOT
+     applied (pattern files are owner-approval).** Insert after the existing
+     "Follow `findSitesWithPlugin.test.ts` …" paragraph:
+
+     > **Pick the cheapest fixture that still proves what you're asserting.**
+     > Seeding twins via `runGraphBackfill` + a ~700 ms debounced-fold wait
+     > costs ~710 ms *per seeding* and is the right shape when the test is
+     > about the backfill→twin path itself. It is the wrong shape for the
+     > render-only assertions that make up most of a migration's suite, and
+     > it compounds: a test that seeds twice runs ~1.4 s.
+     >
+     > Two cheaper shapes, both already in the tree:
+     > - **Seed once, assert many** — one `beforeAll` doing the backfill, then
+     >   render-only tests against the shared core.
+     >   `siteFinderTwins.test.ts` runs 12 assertions at 0–1 ms each this way.
+     >   Prefer this when the assertions share a fixture.
+     > - **Emit directly** — `core.emitter.emit({...})` then
+     >   `core.scheduleFolds()`, ~6–29 ms, with explicit control over event
+     >   order and `observed_at`. Prefer this when a test needs a *specific*
+     >   ledger shape (an out-of-order pair, a v1-schema event, a cap
+     >   boundary) that a backfill can't express.
+     >
+     > When you emit directly, derive the entity id with
+     > `provisionalEnvironmentId(localSiteId)` — the same function the
+     > producers call. A literal `ent_env_…` id makes the test assert a join
+     > production never mints, and it will pass.
+     >
+     > Direct emission does not exercise `runGraphBackfill`. That is fine —
+     > `graphBackfill.test.ts` owns that path — but don't let an all-emitter
+     > suite become the only place a migration's twin population is covered.
+
+  10. **CLAUDE.md ABI drift fixed as a two-valued fact, not a new constant.**
+      The old text ("System Node: 22.16.0 … MODULE_VERSION 127") was not
+      simply wrong: it is exactly what `.nvmrc` pins and what every CI job
+      reads. It is wrong only at a developer's terminal — measured here,
+      Node **25.9.0 → ABI 141**. Rewriting it to a fresh constant would have
+      re-created the same trap for the next Node upgrade, so the section now
+      names **both** values, says which is which, and gives the three
+      commands that measure them. Electron 42.2.0 → ABI 146 was verified
+      against `Local.app`'s own `Electron Framework.framework` plist and the
+      patched `node-abi` registry, and is unchanged.
+
+  11. **PR_DESCRIPTION.md rewritten against measured branch state.** What was
+      stale: "5 fleet tools migrated" (**6**, and its own prose already listed
+      six — the count and the list disagreed inside one sentence); "Six work
+      packets" (**seven**, counting WP-03b and this one); "10 intelligence
+      suites (~15 tests)" (**14 suites / 34 tests**); "Two integration-point
+      diffs" (**four** — `ipc-handlers.ts` and `SidebarSearchPanel.tsx` joined
+      after WP-04); "~5k facts" backfilled (**7,012**). Absent entirely: the
+      Site Finder surface, `versionDrift`, and detect_drift's divergence
+      duration and newest-first query. The wpe-tools RESOLVED note was
+      verified line-by-line against commit `c9fbe423` and is accurate — the
+      only thing it omitted was that the fix carries a 15 s timeout for the
+      gate's real 2 s poll, now stated.
+      Two things added that were not on the inherited list:
+      - **A scope note at the top.** The branch is 113 files, and the
+        intelligence layer is 71 of them; Track 1 (fleet identity, BackupGate,
+        Fleet tab — 44 files, ~6,100 insertions) landed before the
+        intelligence baseline and the description did not acknowledge it at
+        all. A reviewer opening this PR would have seen half the diff
+        undescribed.
+      - **The live ledger table** from this machine (8,614 events / 6,308
+        twin facts), because it is the only evidence in the document that the
+        layer runs outside tests — and because it surfaces the honest weak
+        spot in finding 12.
+
+  12. **The `wp-webhook` producer has fired exactly ONCE in production.**
+      Live ledger, 2026-08-15: `graph-backfill` 7,012 events, `graph-sync*`
+      1,273, `fold:state-twin` 328 drift events — and `wp-webhook` **1**. The
+      other two producers are demonstrably exercised; the webhook tap is
+      unit-tested (`wiring.test.ts`) and effectively unproven in the field.
+      Disclosed in the PR description rather than left for a reviewer to
+      discover. Not a defect and not fixed here — but it is the piece of this
+      branch most likely to have a problem nobody has met yet.
+      *(Corollary worth keeping: the 1,273 `graph-sync*` events are also the
+      best evidence the change gate works. A producer without dedup would
+      have written a multiple of that on every sync cycle.)*
+
+  **ABI STATE: this session ran jest — better-sqlite3 was found on the
+  Electron build (146) and was rebuilt to the system-Node ABI (141) via
+  `npm rebuild better-sqlite3`. `npm run rebuild` is required before loading
+  Local again.** Note this touches the shared `node_modules` that every
+  worktree symlinks through.
