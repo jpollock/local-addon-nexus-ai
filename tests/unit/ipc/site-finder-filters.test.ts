@@ -506,7 +506,7 @@ describe('P2: plainPermalinks filter — both directions', () => {
 });
 
 describe('P2: unknown settings state is excluded from BOTH directions', () => {
-  it('excludes a site with no settings_json at all', async () => {
+  it('[new] excludes a site with no settings_json at all', async () => {
     // wpe-prod and ext-host have settings_json NULL. Unknown is not "false".
     for (const direction of [true, false]) {
       const results = await names({ commentsDisabled: direction });
