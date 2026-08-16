@@ -1389,3 +1389,9 @@ architect session; supersedes nothing, closes both packets).**
   **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
   ABI. `npm run rebuild` is required before loading Local again.** (Shared
   `node_modules`, symlinked by every worktree.)
+
+- 2026-08-15 · **WP-08 lock announcement.** WP-08 (policy & runbook repo v0 —
+  translate permissions) starting now on worktree `wp-08`. Holding the core
+  lock (`src/intelligence/` + `src/main/intelligence-host/`) until this note
+  is superseded by the packet's close-out. No `wpeOperationPermissions`
+  semantics will change; M4-04..12 is the regression harness.
