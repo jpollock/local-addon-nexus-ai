@@ -404,7 +404,10 @@ a new constant, the `(e: any)` hunt found three real regressions against
 a **deterministic repro**, and WP-03b's cp.test fixture proposal is CONCURRED
 with an added constraint. 12 findings recorded below.
 
-### [ ] WP-04b · Port SF filter-apply assertions onto the real handler  *(registered from WP-04 finding; not intelligence-layer work)*
+### [x] WP-04b · Port SF filter-apply assertions onto the real handler  *(registered from WP-04 finding; not intelligence-layer work)*
+**DONE** — `tests/unit/ipc/site-finder-filters.test.ts` (40 tests) drives the
+real handler; the copy is deleted; two live chain divergences found and
+escalated, not fixed. Notes at the end of this file.
 `tests/unit/site-finder/filter-apply.test.ts` (523 lines, the largest SF test
 artifact) declares its OWN `applyFilter()` and imports nothing from `src/` —
 the Site Finder filter semantics are pinned to a copy, so a regression in the
@@ -1148,3 +1151,122 @@ architect session; supersedes nothing, closes both packets).**
   `npm rebuild better-sqlite3`. `npm run rebuild` is required before loading
   Local again.** Note this touches the shared `node_modules` that every
   worktree symlinks through.
+
+---
+
+- 2026-08-15 · **WP-04b — SF filter-apply assertions ported onto the real
+  handler** (branch `wp-04b`, Opus). Tests only: one file added under
+  `tests/`, one deleted. `src/main/ipc-handlers.ts` was READ, and was
+  temporarily mutated during the mutation battery and restored — the commit
+  contains no `src/` change.
+
+  **Verification.** Worktree baseline BEFORE any change: **492 suites, 6,146
+  passed, 12 skipped, 6,158 total**, exit 0 (identical to WP-06's recorded
+  baseline). AFTER: **492 suites, 6,158 passed, 12 skipped, 6,170 total**,
+  exit 0. Suites unchanged (one deleted, one added); tests **+12**, which is
+  exactly 40 new minus the copy's 28; **skipped unchanged at 12**, so the
+  delta is not an artifact-gated suite appearing or vanishing. `npm run
+  typecheck` clean — but note it proves nothing about the new file:
+  `tsconfig.json` excludes `tests`, so the type check that covers it is
+  ts-jest's, under `tsconfig.test.json`, at suite run time. Touched-area
+  legacy suites green together: `site-finder-soft-delete`, `parse-accuracy`,
+  `siteFinderTwins`, plus the new file — 4 suites / 80 tests. SF-01/05/06 eval
+  YAML untouched (they are LLM-driven cases under `tests/evals/cases/`, not
+  jest, and nothing in them referenced the deleted file).
+
+  **Location.** `tests/unit/ipc/site-finder-filters.test.ts`, beside
+  `site-finder-soft-delete.test.ts` — the other suite that drives the real
+  `SITE_FINDER_APPLY` through `registerIpcHandlers`. `grep -rl
+  SITE_FINDER_APPLY tests/` now returns both real-handler suites from one
+  directory. `tests/unit/site-finder/` keeps `parse-accuracy.test.ts`, which
+  is about AI filter *parsing*, not filter *application*.
+
+  **Classification of the copy's 28 cases** (accept bar: every semantic pinned
+  or explicitly waived):
+  - **(a) portable — 27**, ported one-to-one.
+  - **(b) unreachable — 1**: the empty-filter guard case asserted a
+    *re-declared* `hasFilter()` predicate directly. The real one is a
+    closure-local `const` inside the handler and is not exported, so the unit
+    shape cannot be reached; ported behaviourally as 4 cases over the same
+    four inputs, asserted through the handler's result.
+  - **(b) partially unreachable as written — 1** (also counted in (a)): the
+    `maxUserCount` case read `sites.user_count` for every source. The real
+    handler reads that column on the LOCAL chain only; WPE and external count
+    rows in the `users` table. The assertion's intent is ported by giving
+    wpe-stg two `users` rows; the copy's data source is not reachable for that
+    chain.
+  - **(c) already covered — 1** (ported anyway): `pluginVersion` membership on
+    local+WPE is also pinned by `siteFinderTwins.test.ts`. That suite exists to
+    pin the intelligence enrichment and its fixture is free to change for
+    reasons unrelated to filter semantics, so filter membership should not
+    depend on it alone.
+  - **9 NEW cases** (marked `[new]` in the file), all pinning branches the
+    handler already has and the copy left unpinned: three boundary values
+    (`>=` vs `>` on maxPostCount, maxUserCount, wpVersionOlderThan), the NULL
+    `last_post_at` asymmetry between stale/recent, the missing-settings-key
+    branch, the settings_json-absent branch, the `plugins`-vs-`pluginVersion`
+    `is_active` asymmetry, and the per-source result bucket.
+  - Result: **40 tests** = 31 ported (27 + the guard's 4) + 9 new.
+
+  **Every ported assertion runs against the chain the original targeted, and
+  most against all three.** The handler has three near-duplicate filter chains
+  (local / WPE / external) and the copy had one, so chain divergence was
+  structurally invisible to it. Two live divergences fell out of that
+  comparison. **Both are code defects. Neither is fixed here (the packet
+  forbids editing the handler) and neither is given a test, because a test
+  asserting today's output would convert a defect into a regression guard:**
+
+  1. **`phpVersions` is applied on the LOCAL chain only.** Neither the WPE loop
+     nor the external loop has a `phpVersions` branch at all. Measured live
+     against the new fixture (throwaway probe, not committed): a
+     `{phpVersions:['8.2.29']}` query filtered the local sites correctly (3 of
+     7 matched) and returned **5 of 5 WPE installs and 3 of 3 external hosts**,
+     none of which is on 8.2.29. The Site Finder UI offers this filter, so
+     "show me sites on PHP X" silently reports every remote site as a match.
+     Note `phpEolOnly` — the same data, a different predicate — IS applied on
+     all three chains, so this is an omission, not a policy.
+  2. **`wpeEnvironment` and `minAdminCount` pass the `hasFilter` guard but no
+     chain implements them.** Measured live: either one alone returns **all 15
+     fixture sites**. That is precisely the outcome `hasFilter` exists to
+     prevent ("an empty filter means the AI couldn't map the query — returning
+     everything is misleading"), reached through a filter the schema accepts
+     and the guard blesses.
+
+  A third asymmetry is deliberate and documented in the handler, so it is
+  pinned rather than reported: user counts come from `sites.user_count` on the
+  local chain and from `COUNT(*) FROM users` on the remote chains.
+
+  **Mutation battery — 8/8 CAUGHT, each with its witness.** Committed first
+  (the pattern's rule), each substitution anchored to a code line with enough
+  surrounding syntax that a comment quoting it cannot match, sha256 verified
+  changed before running, and the *specific* expected test asserted to be among
+  the failures — a non-zero exit alone was not accepted as a kill. Three
+  substitutions were occurrence-indexed to reach a specific chain, since the
+  three chains contain byte-identical lines:
+
+  | mutation | chain | witness |
+  |---|---|---|
+  | `recentPostDays` `<` → `>` | local | 5 failed, incl. "within 7 days" |
+  | `recentPostDays` `<` → `>` | external | 3 failed, incl. "within 7 days" |
+  | `maxPostCount` `>=` → `>` | wpe | "exactly on the cap, on all three chains" |
+  | `source !== 'external'` → `'wpe'` | external | "source=external returns only external hosts" |
+  | `blog_public === '0'` → `!==` | external (3rd occurrence) | "sites blocking search engines" |
+  | `pluginVersion` drops `AND is_active=1` | wpe (2nd occurrence) | "requires the plugin to be ACTIVE" |
+  | `if (!hasFilter)` → `if (false)` | handler entry | "an empty filter returns no results" |
+  | `minPostCount` `<` → `>` | local | "recently active large sites" |
+
+  The two per-chain kills (local and external `recentPostDays`, and the
+  occurrence-indexed wpe/external ones) are the evidence that "exercises all
+  three chains" is a real property of the suite and not just a comment.
+
+  **Process note worth keeping.** The first full-suite run was started in the
+  background and overlapped the mutation battery, which was rewriting
+  `ipc-handlers.ts` underneath it. That run was killed and discarded, not
+  reported: a full-suite number measured while the source tree is being mutated
+  is not a baseline comparison, it is noise that happens to be shaped like one.
+  Never let a mutation battery and a verification run share a worktree in time.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
+  ABI 127). `npm run rebuild` is required before loading Local again.** The
+  shared `node_modules` every worktree symlinks through is affected.
