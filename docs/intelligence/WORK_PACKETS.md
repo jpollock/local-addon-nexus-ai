@@ -422,7 +422,15 @@ real handler (or explicitly waived with a reason); the copy is deleted or
 reduced to pure input-fixture helpers; SF-01/05/06 eval expectations
 unchanged.
 
-### [ ] WP-04c · Fix the three SF filter-chain divergences  *(registered from WP-04b escalations; legacy bugfix, not intelligence scope)*
+### [x] WP-04c · Fix the three SF filter-chain divergences  *(registered from WP-04b escalations; legacy bugfix, not intelligence scope)*
+**DONE 2026-08-15** — all three now apply per-chain: `phpVersions` extended to
+WPE + external (exact membership, beside `phpEolOnly`); `wpeEnvironment`
+honoured on WPE + external and pinned as matching nothing on local (owner
+ruling); `minAdminCount` honoured on all three from `sites.user_count_by_role`,
+NULL excluded. Both previously-dead filters wired into the Site Finder prompt.
+40/40 WP-04b tests green untouched, +13 new pins, 8/8 mutations caught with
+named per-chain witnesses. The three chains remain three chains. Notes at the
+end of this file.
 Two live defects in `SITE_FINDER_APPLY` (`src/main/ipc-handlers.ts`),
 measured against the WP-04b fixture: **(1)** `phpVersions` is applied on the
 local chain only — WPE/external chains return every site regardless
@@ -1600,3 +1608,120 @@ architect session; supersedes nothing, closes both packets).**
   **FOLLOW-UP REGISTERED (not done here):** `minAdminCount` silently excludes
   never-refreshed installs; candidate for the intelligence layer's
   `coverageGap` surfacing — the WP-04 payload block already has the vocabulary.
+
+  **WP-04c PHASE 2 CLOSE-OUT — executed, verified, findings.**
+
+  **Verification.** Worktree baseline BEFORE: **494 suites, 6,170 passed, 12
+  skipped, 6,182 total**, exit 0. AFTER: **494 suites, 6,183 passed, 12
+  skipped, 6,195 total**, exit 0. Suites unchanged; tests **+13**, exactly the
+  13 new pins; **skipped unchanged at 12**, so the delta is not an
+  artifact-gated suite appearing or vanishing. `npm run typecheck` clean;
+  `npx eslint` clean on all three touched files. All **40** WP-04b tests green
+  and unmodified (the suite is now 53). Touched-area legacy suites green
+  together: `parse-accuracy`, `site-finder-soft-delete`, `siteFinderTwins` —
+  3 suites / 40 tests, **with no expectation changed**, so the ruling's
+  escalation trigger did not fire on the jest side.
+
+  **Mutation battery — 8/8 CAUGHT, each with its named witness.** Committed
+  first (the pattern's rule). Each substitution is anchored to the production
+  line with enough surrounding syntax that a comment quoting it cannot match;
+  the harness asserts the anchor matches **exactly once**, that the file hash
+  actually changed, that the *named* witness test is among the failures (a
+  non-zero exit alone was not accepted as a kill), and that the tree restores
+  to the original hash afterwards. Because the three chains contain
+  byte-identical lines, `minAdminCount` was anchored through its differing
+  `.get(siteId)` / `.get(wpeSite.id)` / `.get(externalSite.id)` argument rather
+  than by occurrence index — a sharper anchor than WP-04b could use.
+
+  | # | mutation | chain | witness |
+  |---|---|---|---|
+  | M1 | delete the `phpVersions` branch (restores the original defect) | wpe | "no longer returns every remote site unfiltered" |
+  | M2 | delete the `phpVersions` branch | external | "filters the EXTERNAL chain in isolation" |
+  | M3 | `environment !==` → `===` | wpe | "returns only staging, across BOTH remote chains" |
+  | M4 | `environment !==` → `===` | external | "returns only staging, across BOTH remote chains" |
+  | M5 | the deliberate local no-match becomes a no-op | local | "matches NO local site, on purpose" |
+  | M6 | `minAdminCount` `<` → `>` | local | "at least 2 administrators, on all three chains" |
+  | M7 | NULL becomes "no constraint" instead of excluded | wpe | "excludes a NULL user_count_by_role as UNKNOWN" |
+  | M8 | `minAdminCount` `<` → `>` | external | "at least 2 administrators, on all three chains" |
+
+  Six of the eight are per-chain kills on lines whose siblings were left
+  untouched, which is the evidence that "exercises all three chains" is a real
+  property of the new pins and not a comment. The battery ran strictly between
+  the two full-suite runs, never concurrently — WP-04b's process note, now
+  followed as standing practice.
+
+  ### Findings
+
+  1. **The local `phpVersions` predicate was already the odd one out, and this
+     packet did not change that.** The predicate is exact membership on all
+     three chains now, but the three sources store different granularities —
+     measured live 2026-08-15: WP Engine stores **major.minor** (`8.2` ×183,
+     `8.4` ×105, `7.4` ×5), Local stores a **full patch** version (`8.2.29`
+     ×34), and external SSH hosts store full patch too (from `wp --info`). The
+     prompt documents the filter as major.minor (`["8.1","8.2"]`). So after
+     this fix a `{phpVersions:['8.2']}` query is *correct* on the WPE chain and
+     *misses* local and external sites that are on 8.2.x. Mirroring the local
+     chain's predicate was chosen deliberately over inventing a new one: it
+     keeps the diff a fix, and it makes no site match that the local chain
+     wouldn't. **Recommended follow-up (not done, needs its own decision
+     because it changes LOCAL behaviour):** unify all three chains on the
+     prefix predicate `wpVersions` already uses *in this same handler*
+     (`v || startsWith(v+'.') || startsWith(v+'-')`), which handles both
+     granularities. The fixture's PHP column is deliberately mixed-granularity
+     so that whoever takes that packet has the discriminating cases already.
+  2. **How this state arose, so the next schema addition doesn't repeat it.**
+     `wpeEnvironment` and `minAdminCount` were two schema keys with **neither a
+     prompt line nor a chain implementation behind them** — speculative
+     scaffolding that survived precisely because nothing could ever exercise
+     it: the zod schema accepted them, `hasFilter` blessed them, and the only
+     tests were schema-shape tests that passed on an empty implementation. The
+     rule that would have caught it: **a filter key lands with its chain, its
+     prompt line, and its pins in the same commit, or it does not land.** A key
+     that only a hallucinating parser could emit is not a feature behind a
+     flag, it is a guard-passing path to "returns everything".
+  3. **`minAdminCount`'s coverage gap is real and is now a named follow-up.**
+     It silently excludes never-refreshed installs (live: 219 of 342 active WPE
+     rows have no `user_count_by_role`). Excluding them is the honest direction
+     and matches the settings_json precedent, but the user cannot see the
+     difference between "no site has 3+ admins" and "we never looked". Recorded
+     above as a candidate for the intelligence layer's `coverageGap` surfacing
+     — the WP-04 payload block already has the vocabulary. Note the same limit
+     already applies to `fleet_sql`'s documented answer to this question, so
+     this packet did not introduce it.
+  4. **`wpeEnvironment`'s name now under-describes it** — it accepts external
+     SSH hosts too, which is the ruled behaviour. Renaming was ruled OUT of
+     scope (it would churn the NL parser schema and the SF evals for zero
+     user-visible gain). Recorded here so a future reader finds a decision
+     rather than an inconsistency. The prompt line names the behaviour
+     explicitly ("WP Engine installs and external SSH hosts") so the parser is
+     not misled by the key name.
+  5. **Scope held: the three chains are still three chains.** Deduplicating
+     them was tempting on every one of the nine insertions — the
+     `minAdminCount` block is byte-identical across all three but for its `id`
+     argument — and was left alone per the packet. The diff makes the chains
+     *more* consistent (each now carries the same three predicates in the same
+     order) without making them *fewer*, which is what a future dedup packet
+     needs as its starting point.
+  6. **What I could NOT mechanically verify: the SF evals.** The ruling raised
+     the bar to "parse-accuracy green AND the SF evals green". The jest half is
+     done and clean. The SF eval half is **human-in-the-loop by construction** —
+     `tests/evals/runner/run-eval.ts` prints a prompt for a reviewer to paste
+     into Claude and `score-eval.ts` asks the reviewer for scores; there is no
+     deterministic pass/fail I can execute, and `auto-eval.ts` needs a live LLM
+     against the real fleet. So, precisely: **`tests/evals/` is untouched by
+     this packet** (verified against the diff), and **no SF case's
+     `expected_filter_json` or `expected_result_count` references
+     `phpVersions`, `wpeEnvironment` or `minAdminCount`** (verified by grep
+     across all eight SF-*.yaml) — the eight cases exercise plugins, phpEolOnly,
+     pluginVersion, recentPostDays, settings and post counts only. The residual
+     risk the ruling was guarding against is that four added prompt lines shift
+     an existing parse; the nearest case is SF-07 ("outdated plugins" →
+     needsClarification) and my additions mention neither plugins nor PHP. That
+     residual is **not zero and is not verified** — an eval run is the owner's
+     to make. I am not claiming those evals green; I am claiming their inputs
+     unchanged and their subject matter disjoint from the change.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
+  ABI 127). `npm run rebuild` is required before loading Local again.** The
+  shared `node_modules` every worktree symlinks through is affected.
