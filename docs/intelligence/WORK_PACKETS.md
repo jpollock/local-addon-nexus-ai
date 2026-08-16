@@ -2244,6 +2244,15 @@ time · M14 `ChatService` non-fatality guard removed · M15 ADR-16 seam probe
 (an `electron` import from `assemble/` errors, so the WP-06 failure mode is
 not present on this branch).
 
+**One more finding, cheap to repeat and easy to miss.** Two raw control bytes
+(NUL, SOH) reached `assembler.ts` as hash separators. The separators are
+correct — unambiguous field/record boundaries so `['a b', c]` and `[a, 'b c']`
+cannot hash alike — but a literal NUL makes **git classify the file as binary**:
+`Bin 0 -> 19919 bytes` in `--stat`, and **no diff at all in review**. Caught by
+reading the diff stat rather than trusting it. Now written as `\u0000` /
+`\u0001` escapes. Worth a glance on any new file whose `--stat` line says
+`Bin`.
+
 **Milestone DoD (evals B-03/E-01/E-02) NOT run — see the disclosure below.**
 
 **ABI state: better-sqlite3 is built for system Node (jest), NOT Electron.**
