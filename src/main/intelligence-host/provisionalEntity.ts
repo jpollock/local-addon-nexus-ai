@@ -39,3 +39,34 @@ export function provisionalEnvironmentId(localSiteId: string): string {
 export function provisionalSiteId(localSiteId: string): string {
   return `ent_site_${derive26('local.site_id.logical', localSiteId)}`;
 }
+
+/** The one method producers need — avoids importing the whole service type. */
+interface EntityEnsurer {
+  ensure(type: string, namespace: string, value: string): string;
+}
+
+/**
+ * WP-07: producers register entities through `ensure()` when the entity
+ * service is up, and fall back to the pure derivation when it is not (init
+ * failure is non-fatal by design). The ids are identical by construction —
+ * `ensure()` derives from the same (namespace, value) — which is what lets
+ * producers adopt the service with zero id changes anywhere.
+ */
+export function environmentEntityId(entities: EntityEnsurer | undefined, siteId: string): string {
+  try {
+    if (entities) return entities.ensure('env', 'local.site_id', siteId);
+  } catch {
+    /* a faulty entity service must never break a producer */
+  }
+  return provisionalEnvironmentId(siteId);
+}
+
+/** Site-entity counterpart of `environmentEntityId` — same contract. */
+export function siteEntityId(entities: EntityEnsurer | undefined, siteId: string): string {
+  try {
+    if (entities) return entities.ensure('site', 'local.site_id.logical', siteId);
+  } catch {
+    /* a faulty entity service must never break a producer */
+  }
+  return provisionalSiteId(siteId);
+}

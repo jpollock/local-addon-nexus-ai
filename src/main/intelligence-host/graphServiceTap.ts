@@ -19,7 +19,7 @@
  * observers emit their own heartbeats.
  */
 import { IntelligenceCore } from './bootstrap';
-import { provisionalEnvironmentId, provisionalSiteId } from './provisionalEntity';
+import { environmentEntityId, siteEntityId } from './provisionalEntity';
 import { createChangeGate, rowTimeToIso as toIso } from './changeGate';
 
 interface MinimalLogger {
@@ -47,7 +47,7 @@ export function tapGraphService(
       const siteId = String(plugin.site_id ?? '');
       const slug = String(plugin.slug ?? '');
       if (siteId && slug) {
-        const entityId = provisionalEnvironmentId(siteId);
+        const entityId = environmentEntityId(core.entities, siteId);
         const value = {
           version: plugin.version == null ? undefined : String(plugin.version),
           active: Boolean(plugin.is_active),
@@ -57,7 +57,7 @@ export function tapGraphService(
             observed_at: toIso(plugin.updated_at),
             topic: 'state.plugin.observed',
             schema: 'plugin.observed/1',
-            entity: { site: provisionalSiteId(siteId), environment: entityId },
+            entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
             actor: { id: 'act_graph_sync', kind: 'system' },
             source: { class: 'platform', system: 'graph-sync', trust: 'observed' },
             payload: { slug, version: value.version ?? '', active: value.active },
@@ -79,7 +79,7 @@ export function tapGraphService(
         const siteId = String(theme.site_id ?? '');
         const slug = String(theme.slug ?? '');
         if (siteId && slug) {
-          const entityId = provisionalEnvironmentId(siteId);
+          const entityId = environmentEntityId(core.entities, siteId);
           const value = {
             version: theme.version == null ? undefined : String(theme.version),
             active: Boolean(theme.is_active),
@@ -89,7 +89,7 @@ export function tapGraphService(
               observed_at: toIso(theme.updated_at),
               topic: 'state.theme.observed',
               schema: 'theme.observed/1',
-              entity: { site: provisionalSiteId(siteId), environment: entityId },
+              entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
               actor: { id: 'act_graph_sync', kind: 'system' },
               source: { class: 'platform', system: 'graph-sync', trust: 'observed' },
               payload: { slug, version: value.version ?? '', active: value.active },
@@ -110,7 +110,7 @@ export function tapGraphService(
     try {
       const siteId = String(site.id ?? '');
       if (siteId) {
-        const entityId = provisionalEnvironmentId(siteId);
+        const entityId = environmentEntityId(core.entities, siteId);
         const value = {
           name: site.name == null ? undefined : String(site.name),
           domain: site.domain == null ? undefined : String(site.domain),
@@ -122,7 +122,7 @@ export function tapGraphService(
             observed_at: toIso(site.updated_at),
             topic: 'state.site.observed',
             schema: 'site.observed/1',
-            entity: { site: provisionalSiteId(siteId), environment: entityId },
+            entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
             actor: { id: 'act_graph_sync', kind: 'system' },
             source: {
               class: 'platform',

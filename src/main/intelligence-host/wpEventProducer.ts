@@ -16,7 +16,7 @@
  * source timestamps exist, they pass their own observed_at.
  */
 import { EventDraft } from '../../intelligence';
-import { provisionalEnvironmentId, provisionalSiteId } from './provisionalEntity';
+import { environmentEntityId, siteEntityId } from './provisionalEntity';
 
 const PLUGIN_VERBS: Record<string, string> = {
   plugin_installed: 'observed',
@@ -30,13 +30,17 @@ export function draftFromWpEvent(
   siteId: string,
   eventType: string,
   payload: Record<string, unknown>,
-  observedAt: Date
+  observedAt: Date,
+  // WP-07: register the entity while deriving its id. Optional so the
+  // function stays pure when the entity service is down — the ids are
+  // identical either way (see provisionalEntity.ts).
+  entities?: { ensure(type: string, namespace: string, value: string): string }
 ): EventDraft | null {
   const base = {
     observed_at: observedAt.toISOString(),
     entity: {
-      site: provisionalSiteId(siteId),
-      environment: provisionalEnvironmentId(siteId),
+      site: siteEntityId(entities, siteId),
+      environment: environmentEntityId(entities, siteId),
     },
     // The MU-plugin webhook is the platform speaking about itself.
     actor: { id: 'act_wp_webhook', kind: 'system' as const },

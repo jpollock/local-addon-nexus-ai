@@ -14,7 +14,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveTransport } from '../../../transport';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
-import { provisionalEnvironmentId, provisionalSiteId } from '../../../intelligence-host/provisionalEntity';
+import { environmentEntityId, siteEntityId } from '../../../intelligence-host/provisionalEntity';
 
 interface LivePlugin {
   slug: string;
@@ -118,7 +118,7 @@ export const verifySiteLiveHandler: McpToolHandler = {
     // Prefer an existing twin entity whose site.core name matches (covers the
     // case where graph row ids differ from transport labels); fall back to
     // deriving from the transport's own key.
-    let entityId = provisionalEnvironmentId(entityKey);
+    let entityId = environmentEntityId(core.entities, entityKey);
     if (!core.twins.get(entityId, 'site.core') && core.twins.search('site.').length > 0) {
       const byName = core.twins
         .search('site.')
@@ -170,7 +170,7 @@ export const verifySiteLiveHandler: McpToolHandler = {
         observed_at: observedAt,
         topic: 'state.plugin.observed',
         schema: 'plugin.observed/1',
-        entity: { site: provisionalSiteId(entityKey), environment: entityId },
+        entity: { site: siteEntityId(core.entities, entityKey), environment: entityId },
         actor: { id: 'act_live_recheck', kind: 'system' },
         source: { class: 'platform', system: observationSystem, trust: 'observed' },
         payload: { slug: p.slug, version: p.version, active: p.active },
@@ -182,7 +182,7 @@ export const verifySiteLiveHandler: McpToolHandler = {
         observed_at: observedAt,
         topic: 'state.plugin.removed',
         schema: 'plugin.observed/1',
-        entity: { site: provisionalSiteId(entityKey), environment: entityId },
+        entity: { site: siteEntityId(core.entities, entityKey), environment: entityId },
         actor: { id: 'act_live_recheck', kind: 'system' },
         source: { class: 'platform', system: observationSystem, trust: 'observed' },
         payload: { slug: d.slug, version: d.cached?.version ?? '', active: false },

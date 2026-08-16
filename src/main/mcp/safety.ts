@@ -183,6 +183,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   describe_site_fields: 1,
   detect_drift: 1,
   compare_sites: 1,
+  nexus_pairing_proposals: 1, // read-only: proposals are information, linking stays in nexus_link_site (Tier 2)
   find_outdated_sites: 1,
   find_sites_with_plugin: 1,
   find_sites_with_theme: 1,

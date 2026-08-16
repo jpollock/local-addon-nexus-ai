@@ -17,11 +17,15 @@ describe('generic fleet queries include external sites', () => {
     // a complete picture. WPE-specific tools live in modules/wpe/ and are
     // deliberately not covered by this scan.
     // CASE expressions that compute WPE-only aggregates within a broadened query are allowed.
+    // Lines carrying a `wpe-by-nature:` marker are exempt too: queries keying on
+    // remote_install_id / wpe_site_id / CAPI are WP Engine by definition (CLAUDE.md,
+    // "Fleet means local + WPE + SSH"), and the marker forces the justification to
+    // live on the query line itself rather than in an allowlist that drifts.
     const offenders: string[] = [];
     for (const dir of FLEET_DIRS) {
       for (const file of tsFiles(dir)) {
         fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-          if (/source\s*=\s*'wpe'/.test(line) && !/CASE\s+WHEN/i.test(line)) {
+          if (/source\s*=\s*'wpe'/.test(line) && !/CASE\s+WHEN/i.test(line) && !/wpe-by-nature:/.test(line)) {
             offenders.push(`${path.basename(dir)}/${path.basename(file)}:${i + 1}`);
           }
         });

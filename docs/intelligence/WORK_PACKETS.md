@@ -450,7 +450,11 @@ unless the owner ruling says otherwise (escalate if so).
 
 ## Milestone 2 — designed and speccable now
 
-### [ ] WP-07 · Wire entity service v0  **(REWRITTEN per reconciliation — read `reconciliation-entity-identity.md` first)**
+### [x] WP-07 · Wire entity service v0  **(REWRITTEN per reconciliation — read `reconciliation-entity-identity.md` first)**
+*Done 2026-08-15 — entity service wired as a `site_links` consumer: mirror sweep
+after startup reconciliation, both-alias env entities, ensure()-adopted ids
+(all pre-existing tests green, unchanged), `nexus_pairing_proposals` scoped to
+the unresolved report. Track-1 files untouched. See packet notes below.*
 Patterns: `add-a-producer.md` for wiring discipline; the governing decision is
 `docs/intelligence/reconciliation-entity-identity.md` (Track 1 keeps runtime
 ownership; the entity service is a consumer of `site_links`, never a
@@ -1317,3 +1321,71 @@ architect session; supersedes nothing, closes both packets).**
   batteries: run the battery strictly between full-suite runs, never
   concurrently; this is now part of the mutation guidance's spirit even
   though the pattern text doesn't spell it out.
+- 2026-08-15 · **WP-07 executed** (entity service v0 wired as a `site_links`
+  consumer; serialized core-lock packet). All six steps landed; Track-1 files
+  (`src/main/fleet/*`, `fleet-links/*`) untouched — no hook inside them was
+  needed, so no escalation. Findings and judgment calls:
+
+  1. **Where each mapped assertion lives.** A `site_links` row lands as a
+     `has_environment` link from the install's logical Site entity to the
+     local env entity, carrying the mapped `established_by`/confidence
+     (user→`user_link` 1.0, hostConnection→`host_connection` 0.95,
+     inferred→`name_heuristic` 0.5) with `verified_at` as `created_at`. The
+     identities themselves (row id, install id, install name, wpe_site_id)
+     land as aliases at `derivation`/1.0 — the DoD's "rows visible as aliases
+     with correct established_by" is satisfied across aliases + links
+     together, because an alias is (namespace, value)→entity and cannot
+     itself express "X is the sandbox of Y".
+  2. **The Site container is keyed by `wpe.site_id` when CAPI provides one**
+     (`ensure('site','wpe.site_id', …)`), else the row's own provisional
+     logical-site id. Keying it off the local site instead would let two
+     installs of one wpe_site_id fight over the `wpe.site_id` alias (UNIQUE
+     namespace+value repoints on conflict). Consequence, disclosed: the
+     per-row provisional site ids already stamped on WPE events remain
+     placeholders — v0 does not merge them into the wpe_site_id-keyed
+     entity. That unification is the note's post-WP-07 item.
+  3. **user_link precedence is now enforced ledger-side too**, not just
+     ordered: `addAlias`/`link` upserts carry a `WHERE existing != 'user_link'
+     OR incoming = 'user_link'` guard, mirroring SiteLinkResolver's
+     short-circuit. Nothing in the current mirror flow can trigger it (Track-1
+     protects upstream), but the entity tables are now safe against a future
+     careless writer. Pinned in `entityService.test.ts`.
+  4. **Producers adopt `ensure()` through fallback helpers**
+     (`environmentEntityId`/`siteEntityId` in `provisionalEntity.ts`): ensure
+     when the service is up, pure derivation when it is not (or throws) — ids
+     identical by construction, asserted in `siteLinkMirror.test.ts`, and the
+     entire pre-existing suite passing unchanged is the adoption proof. The
+     fleet READERS deliberately keep the pure helper: a read surface must not
+     create entities as a side effect.
+  5. **Re-mirror cadence judgment call:** subscribing to individual link
+     changes needs a hook inside Track-1's `SiteLinkStore.put` (frozen), so
+     the mirror re-runs per sweep (wired after `runStartupReconciliation` in
+     `index.ts` — the reconciliation note's sanctioned alternative). A link
+     made via `nexus_link_site` mid-session mirrors at next startup; the
+     proposals tool reads Track-1's report directly, so its output is never
+     stale with respect to what is unresolved.
+  6. **Proposals surface judgment call:** `nexus_fleet_list`/`link-site.ts`
+     are frozen, so proposals surface as a NEW read-only Tier-1 tool
+     (`nexus_pairing_proposals`) whose every proposal spells out the exact
+     `nexus_link_site` acceptance call — information beside the flow, not a
+     parallel queue; executing it writes nothing (pinned).
+  7. **Two guard tests updated for deliberate additions:** the fleet-module
+     count pin (7→8), and `external-visibility.test.ts` gained a
+     `wpe-by-nature:` inline-marker exemption — the proposals tool's install
+     mapping keys on `remote_install_id` (WPE by definition, per CLAUDE.md
+     source semantics), and the marker forces the justification onto the
+     query line instead of an allowlist that drifts. The scan is otherwise
+     unweakened.
+  8. **Pattern note (add-a-producer):** the mirror is not an event producer —
+     it writes entity tables, no envelopes, so cp.envelope/cp.dedup/cp.fold
+     don't apply; cp.nonfatal and cp.test do and were followed. If a future
+     packet wants link changes as ledger *events* (identity.linked topic),
+     that is an ab.new-topic-namespace escalation, deliberately not done here.
+  9. Verification: typecheck clean; full suite **494 suites / 6,158 passed /
+     12 skipped** (baseline before changes: 6,145 passed / 12 skipped — the
+     delta is exactly the new pins); seam-rule probe re-fired post-change;
+     lint clean on all touched trees.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  ABI. `npm run rebuild` is required before loading Local again.** (Shared
+  `node_modules`, symlinked by every worktree.)
