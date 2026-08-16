@@ -43,16 +43,26 @@
  * `pluginVersion` `is_active` asymmetry. Each is a branch the handler already
  * has and the copy left unpinned; none changes the handler.
  *
- * NOT pinned here, deliberately — two live divergences found while porting.
- * They are code defects, recorded in `docs/intelligence/WORK_PACKETS.md`
- * (WP-04b notes) and escalated rather than fixed in this packet, and are NOT
- * given tests because a test asserting today's output would turn a defect into
- * a regression guard:
- *   1. `phpVersions` is applied on the local chain ONLY. A PHP-version query
- *      returns every WPE install and external host unfiltered.
- *   2. `wpeEnvironment` and `minAdminCount` pass the `hasFilter` guard but no
- *      chain implements them, so either one alone returns the whole fleet —
- *      the exact outcome the guard exists to prevent.
+ * ── WP-04c — the three divergences, now FIXED and pinned ─────────────────────
+ * WP-04b found these while porting and deliberately left them untested: a test
+ * asserting the then-current output would have promoted each defect into a
+ * regression guard. WP-04c fixed all three in `ipc-handlers.ts`, so the
+ * withheld assertions become real pins below (`phpVersions`, `wpeEnvironment`,
+ * `minAdminCount` blocks):
+ *   1. `phpVersions` was applied on the local chain ONLY — a PHP-version query
+ *      returned every WPE install and external host unfiltered. Now applied on
+ *      all three, with the same exact-membership predicate the local chain uses.
+ *   2. `wpeEnvironment` passed the `hasFilter` guard with no chain implementing
+ *      it, so it alone returned the whole fleet — the exact outcome the guard
+ *      exists to prevent. Now honoured on the WPE and external chains, and
+ *      DELIBERATELY matching nothing on the local chain (owner ruling: a Local
+ *      site's environment is a constant, and is present only for the minority
+ *      of Local sites that have a graph row at all, so matching on it would
+ *      match on indexing coverage rather than on a fact). That choice is pinned
+ *      as a choice, not left as an absence.
+ *   3. `minAdminCount` had the same guard-passes-nothing-implements defect.
+ *      Now honoured on all three chains from `sites.user_count_by_role`, with
+ *      NULL (never collected) excluded rather than read as zero.
  */
 
 import Database from 'better-sqlite3';
@@ -92,34 +102,51 @@ const SETTINGS_NORMAL = {
  * Fixture. The copy's seven sites, plus per-chain mirrors so a semantic the
  * copy could only prove on one chain is proved on all three.
  *
+ * `admins` is `sites.user_count_by_role.$.administrator`; "—" means the column
+ * is NULL (never collected), which `minAdminCount` must treat as unknown.
+ *
  *   local (also present in Local's own store — the local chain reads BOTH):
- *     myloop      WP 7.0  PHP 8.2.29  59 posts  81 users  -2d   ACF 6.8.3, WooCommerce 9.1.0 INACTIVE
- *     oldsite     WP 6.8  PHP 7.4.33   3 posts   1 user  -90d   WooCommerce 8.0.0, ACF 5.12.0
- *     newsite     WP 7.0  PHP 8.3.1    2 posts   2 users  -5d   Akismet (no ACF)
- *     hiddensite  WP 7.0  PHP 8.2.29  10 posts   3 users -60d   blog_public=0
- *     regopen     WP 7.0  PHP 8.2.29   5 posts  20 users  -7d   users_can_register=1
- *     neverposted WP 7.0  PHP 8.2      1 post    1 user  NULL   last_post_at NULL
- *     partialset  WP 7.0  PHP 8.2      1 post    1 user   -3d   settings_json with NO filterable keys
+ *     myloop      WP 7.0  PHP 8.2.29  59 posts  81 users  -2d   3 admins  ACF 6.8.3, WooCommerce 9.1.0 INACTIVE
+ *     oldsite     WP 6.8  PHP 7.4.33   3 posts   1 user  -90d   1 admin   WooCommerce 8.0.0, ACF 5.12.0
+ *     newsite     WP 7.0  PHP 8.3.1    2 posts   2 users  -5d   — admins  Akismet (no ACF)
+ *     hiddensite  WP 7.0  PHP 8.2.29  10 posts   3 users -60d   — admins  blog_public=0
+ *     regopen     WP 7.0  PHP 8.2.29   5 posts  20 users  -7d   — admins  users_can_register=1
+ *     neverposted WP 7.0  PHP 8.2      1 post    1 user  NULL   — admins  last_post_at NULL
+ *     partialset  WP 7.0  PHP 8.2      1 post    1 user   -3d   — admins  settings_json with NO filterable keys
  *   wpe (graph only; user counts come from the `users` table):
- *     wpe-prod    WP 6.9  PHP 8.2  100 posts  5 users  -3d   ACF 6.8.3, no settings_json
- *     wpe-stg     WP 6.9  PHP 7.4   10 posts  2 users -15d   ACF 5.9.0,  no settings_json
- *     wpe-inact   WP 7.0  PHP 8.3    5 posts  0 users  -1d   ACF 5.0.1 INACTIVE
- *     wpe-special WP 7.0  PHP 8.3    8 posts  0 users  -2d   settings = SPECIAL
- *     wpe-normal  WP 7.0  PHP 8.3    9 posts  0 users  -2d   settings = NORMAL
+ *     wpe-prod    WP 6.9  PHP 8.2  100 posts  5 users  -3d  production  2 admins  ACF 6.8.3, no settings_json
+ *     wpe-stg     WP 6.9  PHP 7.4   10 posts  2 users -15d  staging     0 admins  ACF 5.9.0,  no settings_json
+ *     wpe-inact   WP 7.0  PHP 8.3    5 posts  0 users  -1d  production  — admins  ACF 5.0.1 INACTIVE
+ *     wpe-special WP 7.0  PHP 8.3    8 posts  0 users  -2d  production  — admins  settings = SPECIAL
+ *     wpe-normal  WP 7.0  PHP 8.3    9 posts  0 users  -2d  production  — admins  settings = NORMAL
  *   external:
- *     ssh:ext-host    WP 6.9 PHP 8.1  12 posts  4 users -20d  ACF 6.0.0, no settings_json
- *     ssh:ext-special WP 7.0 PHP 8.3   5 posts  0 users  -2d  settings = SPECIAL
- *     ssh:ext-normal  WP 7.0 PHP 8.3   6 posts  0 users  -2d  settings = NORMAL
+ *     ssh:ext-host    WP 6.9 PHP 8.1  12 posts  4 users -20d  production  4 admins  ACF 6.0.0, no settings_json
+ *     ssh:ext-special WP 7.0 PHP 8.3   5 posts  0 users  -2d  production  — admins  settings = SPECIAL
+ *     ssh:ext-normal  WP 7.0 PHP 8.3   6 posts  0 users  -2d  STAGING     2 admins  settings = NORMAL
+ *
+ * The PHP column is deliberately mixed-granularity, because the real data is:
+ * WP Engine stores major.minor (`8.2`), Local and external SSH hosts store a
+ * full patch version (`8.2.29`). The `phpVersions` predicate is exact
+ * membership on all three chains, so the fixture must be able to tell those
+ * apart — see the `phpVersions` block below.
  */
 type SiteRow = {
   id: string; name: string; source: 'local' | 'wpe' | 'external'; domain: string;
   wp: string; php: string; posts: number | null; users: number | null;
   lastPost: number | null; settings?: Record<string, string>; env?: string;
+  /**
+   * Administrator count, written into `sites.user_count_by_role` as
+   * `{"administrator":N,"editor":0}`. **Omitting it leaves the column NULL** —
+   * "never collected", which `minAdminCount` must treat as unknown-and-excluded
+   * rather than as zero. Live, that NULL is the common case, not the edge one:
+   * 219 of 342 active WPE rows have never been deep-refreshed.
+   */
+  admins?: number;
 };
 
 const SITES: SiteRow[] = [
-  { id: 'myloop',      name: 'myloop',      source: 'local', domain: 'myloop.local',      wp: '7.0', php: '8.2.29', posts: 59, users: 81, lastPost: NOW - 2 * DAY,  settings: { ...SETTINGS_NORMAL, permalink_structure: '' } },
-  { id: 'oldsite',     name: 'oldsite',     source: 'local', domain: 'oldsite.local',     wp: '6.8', php: '7.4.33', posts: 3,  users: 1,  lastPost: NOW - 90 * DAY, settings: { ...SETTINGS_NORMAL, default_comment_status: 'closed' } },
+  { id: 'myloop',      name: 'myloop',      source: 'local', domain: 'myloop.local',      wp: '7.0', php: '8.2.29', posts: 59, users: 81, lastPost: NOW - 2 * DAY,  settings: { ...SETTINGS_NORMAL, permalink_structure: '' }, admins: 3 },
+  { id: 'oldsite',     name: 'oldsite',     source: 'local', domain: 'oldsite.local',     wp: '6.8', php: '7.4.33', posts: 3,  users: 1,  lastPost: NOW - 90 * DAY, settings: { ...SETTINGS_NORMAL, default_comment_status: 'closed' }, admins: 1 },
   { id: 'newsite',     name: 'newsite',     source: 'local', domain: 'newsite.local',     wp: '7.0', php: '8.3.1',  posts: 2,  users: 2,  lastPost: NOW - 5 * DAY,  settings: { ...SETTINGS_NORMAL, show_on_front: 'page' } },
   { id: 'hiddensite',  name: 'hiddensite',  source: 'local', domain: 'hiddensite.local',  wp: '7.0', php: '8.2.29', posts: 10, users: 3,  lastPost: NOW - 60 * DAY, settings: { ...SETTINGS_NORMAL, blog_public: '0' } },
   { id: 'regopen',     name: 'regopen',     source: 'local', domain: 'regopen.local',     wp: '7.0', php: '8.2.29', posts: 5,  users: 20, lastPost: NOW - 7 * DAY,  settings: { ...SETTINGS_NORMAL, users_can_register: '1' } },
@@ -127,15 +154,17 @@ const SITES: SiteRow[] = [
   // settings_json present but carrying none of the five filterable keys.
   { id: 'partialset',  name: 'partialset',  source: 'local', domain: 'partialset.local',  wp: '7.0', php: '8.2',    posts: 1,  users: 1,  lastPost: NOW - 3 * DAY,  settings: { blogname: 'Partial' } },
 
-  { id: 'wpe-prod',    name: 'wpe-prod',    source: 'wpe', domain: 'prod.wpengine.com', wp: '6.9', php: '8.2', posts: 100, users: null, lastPost: NOW - 3 * DAY,  env: 'production' },
-  { id: 'wpe-stg',     name: 'wpe-stg',     source: 'wpe', domain: 'stg.wpengine.com',  wp: '6.9', php: '7.4', posts: 10,  users: null, lastPost: NOW - 15 * DAY, env: 'staging' },
+  { id: 'wpe-prod',    name: 'wpe-prod',    source: 'wpe', domain: 'prod.wpengine.com', wp: '6.9', php: '8.2', posts: 100, users: null, lastPost: NOW - 3 * DAY,  env: 'production', admins: 2 },
+  { id: 'wpe-stg',     name: 'wpe-stg',     source: 'wpe', domain: 'stg.wpengine.com',  wp: '6.9', php: '7.4', posts: 10,  users: null, lastPost: NOW - 15 * DAY, env: 'staging', admins: 0 },
   { id: 'wpe-inact',   name: 'wpe-inact',   source: 'wpe', domain: 'inact.wpengine.com', wp: '7.0', php: '8.3', posts: 5,  users: null, lastPost: NOW - 1 * DAY,  env: 'production' },
   { id: 'wpe-special', name: 'wpe-special', source: 'wpe', domain: 'sp.wpengine.com',   wp: '7.0', php: '8.3', posts: 8,   users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_SPECIAL, env: 'production' },
   { id: 'wpe-normal',  name: 'wpe-normal',  source: 'wpe', domain: 'no.wpengine.com',   wp: '7.0', php: '8.3', posts: 9,   users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_NORMAL,  env: 'production' },
 
-  { id: 'ssh:ext-host',    name: 'ext-host',    source: 'external', domain: 'ext.example.com',  wp: '6.9', php: '8.1', posts: 12, users: null, lastPost: NOW - 20 * DAY, env: 'production' },
+  { id: 'ssh:ext-host',    name: 'ext-host',    source: 'external', domain: 'ext.example.com',  wp: '6.9', php: '8.1', posts: 12, users: null, lastPost: NOW - 20 * DAY, env: 'production', admins: 4 },
   { id: 'ssh:ext-special', name: 'ext-special', source: 'external', domain: 'sp.example.com',   wp: '7.0', php: '8.3', posts: 5,  users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_SPECIAL, env: 'production' },
-  { id: 'ssh:ext-normal',  name: 'ext-normal',  source: 'external', domain: 'no.example.com',   wp: '7.0', php: '8.3', posts: 6,  users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_NORMAL,  env: 'production' },
+  // The one non-production external host: proves the external chain reads its
+  // OWN environment label rather than defaulting every SSH host to production.
+  { id: 'ssh:ext-normal',  name: 'ext-normal',  source: 'external', domain: 'no.example.com',   wp: '7.0', php: '8.3', posts: 6,  users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_NORMAL,  env: 'staging', admins: 2 },
 ];
 
 /** site_id -> number of rows in the `users` table (how WPE/external counts are read). */
@@ -158,20 +187,25 @@ function makeGraphDb() {
   db.exec(`
     CREATE TABLE sites (id TEXT PRIMARY KEY, name TEXT, domain TEXT, wp_version TEXT,
       php_version TEXT, source TEXT, updated_at INTEGER, is_active INTEGER,
-      post_count INTEGER, user_count INTEGER, last_post_at INTEGER, settings_json TEXT,
+      post_count INTEGER, user_count INTEGER, user_count_by_role TEXT,
+      last_post_at INTEGER, settings_json TEXT,
       remote_install_id TEXT, remote_domain TEXT, environment TEXT, account_id TEXT);
     CREATE TABLE plugins (site_id TEXT, slug TEXT, name TEXT, version TEXT, is_active INTEGER, updated_at INTEGER);
     CREATE TABLE users (site_id TEXT, role TEXT);
   `);
   const insertSite = db.prepare(
     `INSERT INTO sites (id,name,domain,wp_version,php_version,source,updated_at,is_active,
-      post_count,user_count,last_post_at,settings_json,environment)
-     VALUES (?,?,?,?,?,?,?,1,?,?,?,?,?)`,
+      post_count,user_count,user_count_by_role,last_post_at,settings_json,environment)
+     VALUES (?,?,?,?,?,?,?,1,?,?,?,?,?,?)`,
   );
   for (const s of SITES) {
     insertSite.run(
       s.id, s.name, s.domain, s.wp, s.php, s.source, NOW,
-      s.posts, s.users, s.lastPost, s.settings ? JSON.stringify(s.settings) : null, s.env ?? null,
+      s.posts, s.users,
+      // Real shape, per GraphService and the MCP server instructions:
+      // `{"administrator":N,"editor":N,...}`. NULL when never collected.
+      s.admins === undefined ? null : JSON.stringify({ administrator: s.admins, editor: 0 }),
+      s.lastPost, s.settings ? JSON.stringify(s.settings) : null, s.env ?? null,
     );
   }
   const insertPlugin = db.prepare(
@@ -575,6 +609,145 @@ describe('P3: source filter', () => {
     // …and the external bucket carries the fields only that bucket has.
     const host = res.external.find((r: any) => r.id === 'ssh:ext-host');
     expect(host).toMatchObject({ type: 'external', alias: 'ext-host', environment: 'production' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-04c — the three divergences WP-04b found and withheld. See the file header.
+// ---------------------------------------------------------------------------
+
+describe('WP-04c: phpVersions filter — all three chains', () => {
+  it('filters LOCAL sites on an exact full-patch version', async () => {
+    const results = await names({ phpVersions: ['8.2.29'] });
+    expect(results).toContain('myloop');
+    expect(results).toContain('hiddensite');
+    expect(results).toContain('regopen');
+    expect(results).not.toContain('newsite');  // 8.3.1
+    expect(results).not.toContain('oldsite');  // 7.4.33
+  });
+
+  it('no longer returns every remote site unfiltered — the WP-04b defect', async () => {
+    // Before the fix, neither the WPE loop nor the external loop had a
+    // phpVersions branch at all: this exact query filtered the local sites
+    // correctly and returned 5 of 5 WPE installs and 3 of 3 external hosts,
+    // none of them on 8.2.29. The buckets, not `siteIds`, are asserted so the
+    // regression cannot hide behind a local match.
+    const res = await apply({ phpVersions: ['8.2.29'] });
+    expect(res.wpe).toHaveLength(0);
+    expect(res.external).toHaveLength(0);
+    expect(res.local.length).toBeGreaterThan(0); // and the chain that DID work still does
+  });
+
+  it('filters the WPE chain, whose stored version is major.minor', async () => {
+    const results = await names({ phpVersions: ['8.2'] });
+    expect(results).toContain('wpe-prod');     // wpe, stored '8.2'
+    expect(results).toContain('neverposted');  // local, stored '8.2'
+    expect(results).not.toContain('myloop');   // local, '8.2.29' — exact, not prefix
+    expect(results).not.toContain('wpe-stg');  // 7.4
+  });
+
+  it('filters the EXTERNAL chain in isolation', async () => {
+    // ext-host is the only site in the fixture on 8.1, so a match here cannot
+    // be an accident of another chain.
+    const res = await apply({ phpVersions: ['8.1'] });
+    expect(res.external.map((r: any) => r.name)).toEqual(['ext-host']);
+    expect(res.local).toHaveLength(0);
+    expect(res.wpe).toHaveLength(0);
+  });
+
+  it('matches across the WPE and external chains at once', async () => {
+    const results = await names({ phpVersions: ['8.3'] });
+    expect(results).toContain('wpe-inact');
+    expect(results).toContain('ext-special');
+    expect(results).toContain('ext-normal');
+    expect(results).not.toContain('newsite'); // local '8.3.1' — exact membership
+  });
+});
+
+describe('WP-04c: wpeEnvironment filter', () => {
+  it('returns only staging, across BOTH remote chains', async () => {
+    // ext-normal is the fixture's one non-production external host: this is the
+    // assertion that proves the external chain reads its own label rather than
+    // treating every SSH host as production.
+    const results = await names({ wpeEnvironment: 'staging' });
+    expect(results.sort()).toEqual(['ext-normal', 'wpe-stg']);
+  });
+
+  it('returns only production', async () => {
+    const results = await names({ wpeEnvironment: 'production' });
+    expect(results).toContain('wpe-prod');
+    expect(results).toContain('ext-host');
+    expect(results).not.toContain('wpe-stg');    // staging
+    expect(results).not.toContain('ext-normal'); // staging
+  });
+
+  it('matches NO local site, on purpose — this is a decision, not a gap', async () => {
+    // Owner ruling (WP-04c): a Local site has no meaningful environment axis.
+    // The graph stores a constant 'development' for every one, and most Local
+    // sites have no graph row at all, so matching on it would be matching on
+    // indexing coverage rather than on a fact about the site. Asserted for all
+    // three values so a future implementation on the local chain fails here
+    // rather than passing silently.
+    for (const env of ['production', 'staging', 'development'] as const) {
+      const res = await apply({ wpeEnvironment: env });
+      expect([env, res.local]).toEqual([env, []]);
+    }
+  });
+
+  it('no longer returns the whole fleet — the WP-04b defect', async () => {
+    // Before the fix, no chain implemented this, so the filter passed hasFilter
+    // and then matched everything: all 15 fixture sites, the exact outcome the
+    // empty-filter guard exists to prevent.
+    const results = await names({ wpeEnvironment: 'staging' });
+    expect(results.length).toBeLessThan(SITES.length);
+    expect(results).not.toContain('myloop');
+  });
+});
+
+describe('WP-04c: minAdminCount filter — all three chains', () => {
+  it('returns sites with at least 2 administrators, on all three chains', async () => {
+    const results = await names({ minAdminCount: 2 });
+    expect(results).toContain('myloop');     // local,    3
+    expect(results).toContain('wpe-prod');   // wpe,      2 — exactly on the bound
+    expect(results).toContain('ext-host');   // external, 4
+    expect(results).toContain('ext-normal'); // external, 2
+    expect(results).not.toContain('oldsite'); // local, 1
+    expect(results).not.toContain('wpe-stg'); // wpe,   0
+  });
+
+  it('[boundary] the bound is inclusive (>=), not strict', async () => {
+    // wpe-prod and ext-normal both have exactly 2 admins: in at 2, out at 3.
+    expect(await names({ minAdminCount: 2 })).toEqual(expect.arrayContaining(['wpe-prod', 'ext-normal']));
+    const strict = await names({ minAdminCount: 3 });
+    expect(strict).toContain('myloop');           // 3
+    expect(strict).not.toContain('wpe-prod');     // 2
+    expect(strict).not.toContain('ext-normal');   // 2
+  });
+
+  it('excludes a NULL user_count_by_role as UNKNOWN, on each chain separately', async () => {
+    // The rule is the settings_json precedent already stated on all three
+    // chains: unknown state is excluded from the filter, never defaulted. A
+    // site whose admin count was never collected must not be reported as
+    // having N admins. minAdminCount:1 is the weakest possible threshold — if
+    // NULL were being read as 0 these would still be out, but if it were being
+    // read as "no constraint" (or the column ignored) they would be IN.
+    const results = await names({ minAdminCount: 1 });
+    for (const name of ['newsite', 'hiddensite', 'regopen']) {   // local, NULL
+      expect([name, results.includes(name)]).toEqual([name, false]);
+    }
+    for (const name of ['wpe-inact', 'wpe-special', 'wpe-normal']) { // wpe, NULL
+      expect([name, results.includes(name)]).toEqual([name, false]);
+    }
+    expect([results.includes('ext-special')]).toEqual([false]);   // external, NULL
+    // …and the sites that DO have a count are still there, so the assertion
+    // above is not passing because the filter excluded everything.
+    expect(results).toEqual(expect.arrayContaining(['myloop', 'oldsite', 'wpe-prod', 'ext-host']));
+  });
+
+  it('no longer returns the whole fleet — the WP-04b defect', async () => {
+    const results = await names({ minAdminCount: 2 });
+    expect(results.length).toBeLessThan(SITES.length);
+    expect(results).not.toContain('oldsite');
   });
 });
 

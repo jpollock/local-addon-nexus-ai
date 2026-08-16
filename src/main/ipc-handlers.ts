@@ -3814,6 +3814,29 @@ Answer:`,
           if (validated.source !== 'local') matches = false; // local site loop, always source='local'
         }
 
+        // P3: wpeEnvironment — DELIBERATELY matches no local site (WP-04c ruling).
+        // A Local site has no meaningful environment axis: the graph stores a
+        // constant 'development' for every one, and most Local sites have no
+        // graph row at all (live 2026-08-15: 40 rows against 113 sites in
+        // Local's own store), so filtering on it would filter on an artifact of
+        // INDEXING COVERAGE rather than on a fact about the site. This is a
+        // decision, not a gap — pinned in tests/unit/ipc/site-finder-filters.ts.
+        if (matches && validated?.wpeEnvironment) {
+          matches = false;
+        }
+
+        // P3: minAdminCount — administrator count from sites.user_count_by_role
+        // (JSON `{"administrator":N,...}`), the same column and expression the
+        // MCP server instructions publish as the canonical "which sites have N+
+        // admins?" query. NULL/missing means the count was never collected;
+        // those sites are EXCLUDED, following the settings_json precedent above
+        // ("unknown state — exclude from the filter"). Never treat unknown as 0.
+        if (matches && validated?.minAdminCount && db) {
+          const row = db.prepare(`SELECT json_extract(user_count_by_role, '$.administrator') AS admins FROM sites WHERE id = ?`)
+            .get(siteId) as { admins: number | null } | undefined;
+          if (row?.admins == null || Number(row.admins) < validated.minAdminCount) matches = false;
+        }
+
         // WP version filter (use graph - works on all sites) - OR logic within array
         if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
           if (db) {
@@ -3915,6 +3938,17 @@ Answer:`,
           if (!wpeSite.last_post_at || wpeSite.last_post_at < cutoff) matches = false;
         }
 
+        // PHP version filter — same column phpEolOnly reads below, same exact
+        // membership predicate the local chain uses. WP-04c: this branch did not
+        // exist, so a phpVersions query returned every WPE install unfiltered
+        // while correctly filtering local sites (phpEolOnly, the same data with a
+        // different predicate, was applied on all three chains — an omission,
+        // not a policy).
+        if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
+          const sitePhp = wpeSite.php_version;
+          if (!sitePhp || !validated.phpVersions.includes(sitePhp)) matches = false;
+        }
+
         // P1: phpEolOnly
         const WPE_PHP_EOL = ['5.6','7.0','7.1','7.2','7.3','7.4','8.0','8.1'];
         if (matches && validated?.phpEolOnly) {
@@ -3980,6 +4014,22 @@ Answer:`,
         // P3: source filter — WPE loop, always source='wpe'
         if (matches && validated?.source) {
           if (validated.source !== 'wpe') matches = false;
+        }
+
+        // P3: wpeEnvironment — `environment` is already on the row from
+        // listSites(), no extra query. Live 2026-08-15: every active WPE row
+        // carries one (233 production / 66 staging / 43 development). A row with
+        // no value is unknown and is excluded, not defaulted.
+        if (matches && validated?.wpeEnvironment) {
+          if (wpeSite.environment !== validated.wpeEnvironment) matches = false;
+        }
+
+        // P3: minAdminCount — see the local chain for the rule. NULL/missing is
+        // unknown and is EXCLUDED (settings_json precedent), never read as 0.
+        if (matches && validated?.minAdminCount && db) {
+          const row = db.prepare(`SELECT json_extract(user_count_by_role, '$.administrator') AS admins FROM sites WHERE id = ?`)
+            .get(wpeSite.id) as { admins: number | null } | undefined;
+          if (row?.admins == null || Number(row.admins) < validated.minAdminCount) matches = false;
         }
 
         // WP version filter (prefix match: "7" matches "7.0", "7.0.1")
@@ -4071,6 +4121,13 @@ Answer:`,
           if (!externalSite.last_post_at || externalSite.last_post_at < cutoff) matches = false;
         }
 
+        // PHP version filter — see the WPE chain. WP-04c: this branch did not
+        // exist, so a phpVersions query returned every external host unfiltered.
+        if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
+          const sitePhp = externalSite.php_version;
+          if (!sitePhp || !validated.phpVersions.includes(sitePhp)) matches = false;
+        }
+
         // P1: phpEolOnly
         const WPE_PHP_EOL = ['5.6','7.0','7.1','7.2','7.3','7.4','8.0','8.1'];
         if (matches && validated?.phpEolOnly) {
@@ -4136,6 +4193,24 @@ Answer:`,
         // P3: source filter — external loop, always source='external'
         if (matches && validated?.source) {
           if (validated.source !== 'external') matches = false;
+        }
+
+        // P3: wpeEnvironment — external hosts carry a real environment label, set
+        // by the user at `nexus host add`, and it is the write gate documented in
+        // CLAUDE.md. Honoured here for the reason the fleet doctrine gives: a
+        // "staging" query that silently omits the user's staging SSH host is the
+        // `source='wpe'`-alone bug in a new place. (The field name predates this
+        // and under-describes it; renaming is out of scope — WP-04c ruling.)
+        if (matches && validated?.wpeEnvironment) {
+          if (externalSite.environment !== validated.wpeEnvironment) matches = false;
+        }
+
+        // P3: minAdminCount — see the local chain for the rule. NULL/missing is
+        // unknown and is EXCLUDED (settings_json precedent), never read as 0.
+        if (matches && validated?.minAdminCount && db) {
+          const row = db.prepare(`SELECT json_extract(user_count_by_role, '$.administrator') AS admins FROM sites WHERE id = ?`)
+            .get(externalSite.id) as { admins: number | null } | undefined;
+          if (row?.admins == null || Number(row.admins) < validated.minAdminCount) matches = false;
         }
 
         // WP version filter (prefix match: "7" matches "7.0", "7.0.1")
