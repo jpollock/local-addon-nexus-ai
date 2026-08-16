@@ -536,11 +536,41 @@ graph, injection points where an assembler bundle could enter (ambient policy,
 pushed runbook, retrieval), risks, and a proposed minimal wiring. **This
 unlocks writing the assembler packet (WP-11).**
 
-### [blocked] WP-11 · Context assembler v0
-Blocked on WP-10's recon + owner review of its proposal. Contract:
-architecture.md §6 (AssembleRequest → ContextBundle, manifest as audit
-artifact, fail-closed rule ADR-7). Definition of done for the milestone: evals
-B-03/E-01/E-02 against the real ledger (harness rules H-01/H-02).
+### [ ] WP-11 · Context assembler v0  **(UNBLOCKED 2026-08-16 — recon reviewed, four owner rulings recorded below)**
+Contract: architecture.md §6 (AssembleRequest → ContextBundle, manifest as
+audit artifact, fail-closed ADR-7) **as amended by ADR-20** (hash re-assert).
+The implementation skeleton IS `recon-ask-tell.md` §4 — new files
+`src/intelligence/assemble/*` + `src/main/intelligence-host/chatAssembly.ts`,
+exactly three call-site edits in `src/main/chat/ChatService.ts` (unlocked
+file), one signature widening in `tool-adapter.ts`. No `ipc-handlers.ts` or
+`index.ts` edit. §4.3's deferrals (surfaces B/C/D, ToolGrant population, R1)
+are adopted as scope law; §4.4's five pins are acceptance criteria verbatim
+(TaskId-per-turn as `correlation`; manifest emitted as
+`task.context_assembled` to the LEDGER, not operation-audit.log; a token
+estimator; the freshness-disclosure prose contract; the additive-parity pin —
+empty bundle ⇒ byte-identical prompt).
+Owner rulings (2026-08-16): demo surface = Docked Panel; ambient cadence =
+version-hash per turn, full set on change/absence (ADR-20); staleness =
+model-must-relay in prose, no new UI channel; R1 = fixed separately (WP-12).
+**Serialized (core lock), and MUST NOT run concurrently with WP-12 — both
+edit ChatService.ts. Sequence: WP-12 first.**
+Definition of done for the milestone: evals B-03/E-01/E-02 against the real
+ledger (harness rules H-01/H-02).
+
+### [ ] WP-12 · Fix R1 — rehydrated chat sessions lose the system prompt  *(registered from WP-10 review; live security gap, runs BEFORE WP-11)*
+`ChatService.sendMessage`'s persisted-history branch (ChatService.ts:130-138)
+restores without ever calling `buildSystemPrompt`, and the renderer strips the
+system message when persisting (PanelChat.tsx:540-550) — so a Docked Panel
+session reopened after a restart runs with NO fleet context, NO tool
+doctrine, and NO `UNTRUSTED_DATA_DIRECTIVE` (the prompt-injection defense).
+Fix shape (agent to confirm): on the restore branch, rebuild the system
+prompt fresh and prepend it — never persist it (a stored prompt goes stale;
+rebuilding is the R2-friendly direction). Renderer persistence stays as-is
+unless the agent shows why not. Pin with a test that rehydrates a session and
+asserts `messages[0].role === 'system'` and contains the untrusted-data
+directive; ChatTab (never persists) must be unaffected.
+Parallel-safe with everything EXCEPT WP-11 (same file). Not intelligence
+scope; normal protocol applies.
 
 ---
 
@@ -1997,3 +2027,20 @@ Low urgency; do not run concurrently with other ipc-handlers work.
   the anchor-slice demo runs in the Docked Panel or the Chat tab, since they are
   separate components with different persistence behaviour and only one is
   affected by R1.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-10 + owner rulings (appended by the architect
+session, 2026-08-16).**
+
+- **WP-10 ACCEPTED** — the strongest artifact any packet has produced. Every
+  claim cited; the four-surface map, the `ai-context/` red herring, and R1–R10
+  are adopted as WP-11's ground truth. §4's proposed wiring is endorsed as the
+  WP-11 skeleton unchanged.
+- **The four §5 questions were put to the owner and ruled** (recorded in the
+  WP-11 entry above): Docked Panel; hash-re-assert (now **ADR-20**, with the
+  ADR-19 refinement naming the Docked Panel); model-must-relay staleness;
+  R1 fixed now as its own packet (**WP-12**, registered above).
+- Sequencing constraint recorded: WP-12 → WP-11, never concurrent (both edit
+  ChatService.ts — the protocol's two-packets-one-file trigger, resolved in
+  advance by ordering).
