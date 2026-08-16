@@ -2278,3 +2278,51 @@ instruction still stands for whichever packet next sees one.
 
 **ABI state: better-sqlite3 is built for system Node (jest), NOT Electron.**
 The owner must run `npm run rebuild` before loading the addon in Local.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-11 (appended by the architect session).**
+
+- **WP-11 ACCEPTED.** Merge c42399e7 audited from the owner's checkout. The
+  three ChatService call sites match recon §4.2 exactly, compose with
+  WP-12's fix, and carry their risk citations in comments. All five §4.4
+  pins verified present in the report; 15/15 mutations; additive parity
+  proven both ways.
+- **The fourth edit (pii.ts `wrapUntrusted` export) is RATIFIED.** Strictly
+  it touched the R7 machinery's module without pre-escalation — but the
+  change reuses the delimiters rather than altering their treatment, the
+  seam-respecting injection (host supplies the function; assembler cannot
+  import the module) is the correct shape, and no-wrapper⇒drop-retrieval is
+  fail-closed. For the record: a one-line pre-escalation would have been
+  preferred; the substance would have been approved unchanged.
+- **The task.* escalation is closed** — first producer shipped against the
+  respelled taxonomy (`task.context.assembled` / `context.assembled/1`),
+  M11 pins the spelling.
+- **AgentRegistry datapoint recorded:** the 4 reds did NOT reproduce in
+  WP-11's fresh-worktree full-suite baseline — so the context hypothesis is
+  insufficient; the failure is scheduling- or state-dependent (same family
+  as the host/sync worker collision, which also fired intermittently).
+  Capture instruction stands.
+- **Milestone DoD is NOT yet met, by honest disclosure:** evals B-03/E-01/
+  E-02 exist only as YAML specs; no runner loads them. **WP-13 registered**
+  (below). M2 is code-complete; the milestone closes when WP-13's runner
+  executes those three evals green against the real ledger.
+
+### [ ] WP-13 · Eval spec runner + milestone verification  **(the M2 close-out gate)**
+The anchor-slice eval specs (`docs/intelligence/anchor-slice/evals/*.yaml`,
+incl. B-03/E-01/E-02) have no runner: nothing in `src/` or `tests/` loads
+them, and `tests/eval/` is an unrelated chat-quality harness. Build the
+minimal runner that: loads the YAML specs (WP-08's law loader shows the
+frontmatter-parsing house style); executes each against the REAL
+intelligence core (harness rules H-01/H-02 in the eval doc govern — read
+`docs/intelligence/eval-stress-test-set.md` first); reports per-criterion
+pass/fail with evidence, never a bare boolean. Where a spec requires live
+LLM judgment, follow the WP-08/WP-04c precedent: print the
+human-in-the-loop prompt and mark the criterion OWNER-PENDING rather than
+faking a verdict. Scope the runner under `tests/intelligence-evals/` (new
+tree, jest-invocable) or propose better in your scout note. Milestone DoD:
+B-03, E-01, E-02 green (or OWNER-PENDING with the owner's run
+instructions), executed against a ledger seeded by the real producers.
+Parallel-safe (new tree + read-only on everything else). Any spec found
+unimplementable as written is a WP-11-style escalation — the spec gets
+fixed in the record, not worked around.
