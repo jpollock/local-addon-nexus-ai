@@ -1554,3 +1554,49 @@ architect session; supersedes nothing, closes both packets).**
      recommend yes; without it the filter stays dead in practice.)
 
   Standing by. No handler edit will be made until this is answered.
+
+  **RULING RECEIVED (architect, endorsed for owner) — Phase 1 unblocked.**
+
+  1. **`wpeEnvironment` → implement on WPE + external; local pinned to match
+     nothing.** The deciding detail is the scout's own: with zero renderer and
+     zero prompt references, the only consumer is the NL→filter parse — a user
+     saying *"my staging sites"*. For that intent, silently missing a staging
+     SSH host is the same defect class this packet exists to fix, and the
+     CLAUDE.md fleet doctrine settles external's inclusion. Local is excluded
+     because a Local site has no meaningful environment axis: the value is a
+     constant `development` AND 65% of Local's sites lack a graph row, so
+     matching on it would be matching on an artifact of **indexing coverage**,
+     not on a fact. Conditions: (a) pin the category-error choice explicitly —
+     a per-chain test asserting local matches nothing, commented as deliberate,
+     so a future reader sees a decision and not a gap; (b) the two
+     parse-accuracy schema tests stay as-is (the schema surface does not
+     change); (c) the name-under-describes concern is real but **renaming is
+     OUT of scope** — it would churn the NL parser schema and the SF evals for
+     zero user-visible gain. Recorded as a note, not a change.
+  2. **`minAdminCount` → implement on all three chains, NULL excluded.** The
+     semantic already exists as the house-documented canonical query, so
+     implementing invents nothing and *removing* would leave the filter surface
+     contradicting the MCP server's own instructions; NULL-as-excluded follows
+     the settings_json precedent already stated on all three chains, so no new
+     unknown-handling rule enters the codebase. Conditions: (a) pin the
+     NULL-exclusion per chain, in the style of WP-04b's `last_post_at`
+     asymmetry pins, commented with the settings_json precedent as the rule
+     being followed; (b) the 219 never-deep-refreshed WPE installs are a real
+     coverage gap and the disclosure instinct is right, but surfacing it is out
+     of scope for a legacy bugfix — recorded as a named follow-up below;
+     (c) the one schema test stays as-is.
+  3. **Both filters are wired into the prompt.** An implemented-but-unpromptable
+     filter fails this packet's own purpose: the defect was "filter selected
+     returns everything," and a filter nobody can select is the same
+     user-facing nothing with more code behind it. The prompt addition is part
+     of the fix, not scope creep. Conditions: (a) mirror the existing
+     description style of the other filters exactly, including
+     `wpeEnvironment`'s local-matches-nothing caveat in one clause so the parser
+     does not emit it for queries about local sites; (b) **the verification bar
+     rises**: parse-accuracy green AND the SF evals green, and since prompt text
+     can shift parse behaviour subtly, **any** change to an existing
+     parse-accuracy or SF expectation is an ESCALATION, not a test update.
+
+  **FOLLOW-UP REGISTERED (not done here):** `minAdminCount` silently excludes
+  never-refreshed installs; candidate for the intelligence layer's
+  `coverageGap` surfacing — the WP-04 payload block already has the vocabulary.
