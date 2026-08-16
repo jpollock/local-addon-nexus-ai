@@ -519,7 +519,12 @@ sentinel eval's ground truth + eval doc D-02).
 Accept: each has frontmatter that validates (checkpoints enumerated for
 strict), a `requires_sources` bill, abort paths, and a communication block.
 
-### [ ] WP-10 · Recon: the Ask/Tell context path  *(Explore-shaped — touch nothing)*
+### [x] WP-10 · Recon: the Ask/Tell context path  *(Explore-shaped — touch nothing)*
+**Outcome:** `docs/intelligence/recon-ask-tell.md` delivered — four actor
+surfaces mapped, injection points per distribution pattern, 10 risks, a
+three-call-site wiring proposal confined to `src/main/chat/ChatService.ts`.
+**Awaiting owner review of §4 before WP-11 is unblocked.**
+
 No pattern. Read-only reconnaissance; any model tier. Parallel-safe.
 Map how the in-product agent surface builds context today: where the system
 prompt is assembled, where tools are granted, where conversation state lives,
@@ -1926,3 +1931,69 @@ behaviour**, so it is its own packet with its own parity analysis — the
 WP-04b/04c suite (53 tests) is the harness; expect to UPDATE some pins
 deliberately and say which. Integration-lock class (edits the chains).
 Low urgency; do not run concurrently with other ipc-handlers work.
+- 2026-08-15 · **WP-10 recon delivered** — `docs/intelligence/recon-ask-tell.md`.
+  Read-only packet: no production file touched, no test run, **ABI state
+  unchanged** (this session ran no jest; whatever the tree was in, it still is).
+
+  Headline findings the owner should see before approving WP-11's scope:
+
+  1. **There are four actor surfaces, not one.** Docked-Panel/Chat-tab →
+     `ChatService` (the ADR-19 anchor, tools, ~190 of them); AssistantPanel →
+     `ASSISTANT_QUERY` (single-shot, no tools, stateless — and it already does a
+     hand-rolled retrieval + grounding pass); the agent runtime (no system
+     message at all, `agent.tools` allow-list is the only scoping); and external
+     MCP clients (`initialize` instructions + a live fleet snapshot — the only
+     existing ambient-shaped mechanism in the tree, but session-scoped).
+  2. **A rehydrated chat session runs with no system prompt at all.** The
+     renderer strips `role:'system'` when persisting (`PanelChat.tsx:541`) and
+     `ChatService` takes the restore branch *instead of* building a prompt
+     (`ChatService.ts:130-141`). Reopening an old Docked-Panel session after a
+     Local restart loses the fleet context, the tool doctrine, **and the
+     untrusted-data directive**. This is a pre-existing live defect, out of
+     WP-11's scope, but it means an assembler that injects only into
+     `messages[0]` would be fail-*open* on the most ordinary resumption path.
+     Recorded as R1; wants its own packet.
+  3. **A second system message is silently dropped on Anthropic and Google**
+     (`anthropic.ts:43-44`, `google.ts:72-73` — `find` + `filter`), passed
+     through on OpenAI. "Append the bundle as a new system message" is a
+     provider-dependent no-op that would test green on OpenAI and fail
+     invisibly on the default path. R3.
+  4. **The untrusted-data directive and a pushed runbook are in direct
+     tension.** Tool results are wrapped in `<untrusted_data>` and the model is
+     told never to obey instructions inside them (`pii.ts:39-44`). Authored,
+     signed procedure therefore cannot ride the `tool` role. R7 — this is the
+     sharpest constraint on the procedure injection point.
+  5. **Nothing measures tokens, and the tool schemas dominate.** ~190 tool
+     schemas are re-sent on each of up to 25 loop iterations
+     (`ChatService.ts:182-185`, `constants.ts:450`); `search_tools` exists
+     because the list is already unmanageable (`search-tools.ts:3-5`).
+     `AssembleRequest.budget` and the manifest's `budget` block have no
+     existing source of truth — WP-11 must bring an estimator. R4.
+  6. **No `task.*` event has ever been produced.** All ten `emitter.emit(` call
+     sites emit `state.*`; `sessionId` is renderer-minted and not a ULID, so it
+     cannot serve as `correlation`. WP-11 must mint a real `TaskId` per turn.
+     R6.
+  7. **`src/main/ai-context/` is a red herring** — it generates an
+     `AI-CONTEXT.md` file inside a WordPress site for third-party coding
+     assistants and never touches a chat turn. Named in the packet; checked so
+     nobody re-checks.
+
+  Proposal (§4, awaiting owner review): **three call sites, all in
+  `src/main/chat/ChatService.ts`** (:574 ambient block, :157 per-turn bundle
+  carrier as a `user`-role message, :185 tool-grant pass-through), plus an
+  optional third parameter on `tool-adapter.ts:10`. All assembler logic lands in
+  new files — `src/intelligence/assemble/` (behind the ADR-16 seam) and one host
+  adapter `src/main/intelligence-host/chatAssembly.ts`. **No edit to
+  `ipc-handlers.ts` or `index.ts`**, so the integration lock is not needed.
+  Anchoring the per-turn carrier at `:157` rather than only at the system-prompt
+  builder is deliberate: it is the one injection point where "the bundle was
+  present" is a property of the turn rather than of how the session started —
+  which is what makes it immune to finding 2 without depending on that fix.
+
+  Deferred with reasons stated in §4.3: surfaces B/C/D, populating
+  `ToolGrant[]` (needs B-03 as its gate), and fixing R1.
+
+  Four open questions for the owner are in §5 — the load-bearing one is whether
+  the anchor-slice demo runs in the Docked Panel or the Chat tab, since they are
+  separate components with different persistence behaviour and only one is
+  affected by R1.
