@@ -148,8 +148,13 @@ procedure.runbook.published  procedure.runbook.deprecated
 policy.constraint.published  policy.constraint.retired
 episodic.*                 // reserved: episodic IS the ledger; this namespace
                            // exists only for imported histories
-task.assigned  task.context_assembled  task.action_executed
-task.completed task.outcome_recorded   task.rationale_recorded
+task.run.assigned    task.context.assembled  task.action.executed
+task.run.completed   task.outcome.recorded   task.rationale.recorded
+                           // (respelled 2026-08-16 at WP-11 escalation: the
+                           // original two-segment spellings predated any
+                           // producer and failed the validator's three-segment
+                           // rule — the validator was right; entity.verb
+                           // matches every other namespace)
 control.grant.issued  control.grant.revoked  control.threshold.changed
 control.audit.finding
 ```
