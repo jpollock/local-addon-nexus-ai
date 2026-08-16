@@ -557,6 +557,13 @@ edit ChatService.ts. Sequence: WP-12 first.**
 Definition of done for the milestone: evals B-03/E-01/E-02 against the real
 ledger (harness rules H-01/H-02).
 
+**LOCK ANNOUNCED 2026-08-15 (agent session).** WP-11 is IN FLIGHT and holds the
+core lock: `src/intelligence/` + `src/main/intelligence-host/`, plus
+`src/main/chat/ChatService.ts` and `src/main/chat/tool-adapter.ts` (the three
+call-site edits + the signature widening). Worktree `wp-11`, branch `wp-11`,
+based on the WP-12 merge (9f6cf35b) plus the architect-docs commit. WP-12b must
+wait for this merge — same file.
+
 ### [x] WP-12 · Fix R1 — rehydrated chat sessions lose the system prompt  *(registered from WP-10 review; live security gap, runs BEFORE WP-11)*
 **Outcome:** fixed as specified — the restore branch now rebuilds the prompt
 via `buildSystemPrompt(siteId)` and prepends it; nothing new is persisted, and
