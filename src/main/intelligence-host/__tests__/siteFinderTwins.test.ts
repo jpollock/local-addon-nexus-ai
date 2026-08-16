@@ -53,6 +53,10 @@ const HOUR = 3600_000;
  *   wpe-modern (wpe)   — ACF 7.0.0                     → excluded by version filter
  *   wpe-ghost  (wpe)   — ACF row deleted after backfill → twin-only drift hint
  *   loc-nogap  (local) — ACF present, never backfilled  → coverage gap
+ *   wpe-gone   (wpe)   — ACF observed INACTIVE, row deleted → must NOT hint
+ *
+ * loc-fresh also carries WooCommerce observed 20h ago, so a query naming both
+ * slugs has a row with two observations of different ages.
  */
 function makeGraphDb() {
   const db = new Database(':memory:');
@@ -78,6 +82,7 @@ function makeGraphDb() {
   site.run('wpe-drift', 'wpe-drift', 'd.com', '7.0', '8.3', 'wpe', fresh);
   site.run('wpe-modern', 'wpe-modern', 'm.com', '7.0', '8.3', 'wpe', fresh);
   site.run('wpe-ghost', 'wpe-ghost', 'g.com', '7.0', '8.3', 'wpe', fresh);
+  site.run('wpe-gone', 'wpe-gone', 'x.com', '7.0', '8.3', 'wpe', fresh);
 
   plugin.run('loc-fresh', 'advanced-custom-fields', 'ACF', '6.2.0', fresh);
   // Present in the cache, so it matches; hidden from the backfill (see below),
@@ -87,6 +92,14 @@ function makeGraphDb() {
   plugin.run('wpe-drift', 'advanced-custom-fields', 'ACF', '6.2.0', fresh);
   plugin.run('wpe-modern', 'advanced-custom-fields', 'ACF', '7.0.0', fresh);
   plugin.run('wpe-ghost', 'advanced-custom-fields', 'ACF', '6.2.0', fresh);
+  // Two observations of different ages on ONE row, so "report the stalest"
+  // is a claim the fixture can actually falsify.
+  plugin.run('loc-fresh', 'woocommerce', 'WooCommerce', '9.0.0', stale);
+  // Observed INACTIVE. Its cache row is deleted after the backfill, so without
+  // the active:false skip it would surface as a twin-only drift hint — an
+  // uninstalled plugin reported as "missing from cache results".
+  db.prepare(`INSERT INTO plugins (site_id,slug,name,version,is_active,updated_at) VALUES (?,?,?,?,0,?)`)
+    .run('wpe-gone', 'advanced-custom-fields', 'ACF', '6.2.0', fresh);
   return db;
 }
 
@@ -137,6 +150,7 @@ describe('SITE_FINDER_APPLY — twin-backed provenance (WP-04)', () => {
   let baseline: any;
   let enriched: any;
   let versionEnriched: any;
+  let multiEnriched: any;
 
   beforeAll(async () => {
     graphDb = makeGraphDb();
@@ -172,6 +186,7 @@ describe('SITE_FINDER_APPLY — twin-backed provenance (WP-04)', () => {
     graphDb.prepare(`UPDATE plugins SET version='6.2.0' WHERE site_id='wpe-drift'`).run();
     graphDb.prepare(`UPDATE sites SET is_active=1 WHERE id='loc-nogap'`).run();
     graphDb.prepare(`DELETE FROM plugins WHERE site_id='wpe-ghost'`).run();
+    graphDb.prepare(`DELETE FROM plugins WHERE site_id='wpe-gone'`).run();
 
     // ── Baseline: the same handler, same graph, NO core registered ──────────
     baseline = await mockIpc.invoke(IPC_CHANNELS.SITE_FINDER_APPLY, {
@@ -185,6 +200,9 @@ describe('SITE_FINDER_APPLY — twin-backed provenance (WP-04)', () => {
     });
     versionEnriched = await mockIpc.invoke(IPC_CHANNELS.SITE_FINDER_APPLY, {
       pluginVersion: { slug: 'advanced-custom-fields', olderThan: '6.3.0' },
+    });
+    multiEnriched = await mockIpc.invoke(IPC_CHANNELS.SITE_FINDER_APPLY, {
+      plugins: ['advanced-custom-fields', 'woocommerce'],
     });
   }, 30_000);
 
@@ -244,6 +262,24 @@ describe('SITE_FINDER_APPLY — twin-backed provenance (WP-04)', () => {
     const twinOnlyNames = enriched.intelligence.twinOnly.map((t: any) => t.name);
     expect(twinOnlyNames).not.toContain('loc-nogap');
     expect(enriched.intelligence.notes.join('\n')).toContain('Coverage gap');
+  });
+
+  it('does not hint an environment whose fact says the plugin is inactive', () => {
+    // wpe-gone is observed with active:false and its cache row is gone. That is
+    // an uninstall the ledger recorded, not a cache that lost a row.
+    const names = enriched.intelligence.twinOnly.map((t: any) => t.name);
+    expect(names).not.toContain('wpe-gone');
+    expect(names).toContain('wpe-ghost'); // the genuine disagreement still hints
+  });
+
+  it('reports the STALEST observation when a row matched on several queried slugs', () => {
+    // loc-fresh holds ACF (2h) and WooCommerce (20h). A result is only as
+    // trustworthy as its oldest input, so the row must read as stale.
+    const row = multiEnriched.local.find((r: any) => r.id === 'loc-fresh');
+    expect(row.observedStale).toBe(true);
+    // …and it is genuinely the older fact being reported, not a coincidence:
+    // the same row in the ACF-only query is fresh.
+    expect(enriched.local.find((r: any) => r.id === 'loc-fresh').observedStale).toBe(false);
   });
 
   // ── the version filter (SF-06 shape) is enriched the same way ─────────────
