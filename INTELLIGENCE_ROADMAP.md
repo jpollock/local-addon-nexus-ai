@@ -1,6 +1,11 @@
 # Intelligence Layer — Roadmap
 
-*Branch: `poc/nexintelligence` · 2026-08-15 · Companion docs: [`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (19 ADRs), [`docs/intelligence/eval-stress-test-set.md`](docs/intelligence/eval-stress-test-set.md), anchor-slice specs in [`docs/intelligence/anchor-slice/`](docs/intelligence/anchor-slice/)*
+*Branch: `poc/nexintelligence` · updated 2026-08-16 · Companion docs:
+[`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (ADRs 1–20 + candidates 21–23),
+[`docs/intelligence/reconciliation-site-environment-model.md`](docs/intelligence/reconciliation-site-environment-model.md),
+[`docs/intelligence/implementation-audit-three-layer.md`](docs/intelligence/implementation-audit-three-layer.md),
+[`docs/intelligence/TESTING_STRATEGY.md`](docs/intelligence/TESTING_STRATEGY.md),
+packet detail in [`docs/intelligence/WORK_PACKETS.md`](docs/intelligence/WORK_PACKETS.md)*
 
 The thesis, one line: intelligence for AI actors is five kinds of knowledge (state,
 semantic, procedural, policy, episodic) drawn from nine sources, each with its own
@@ -10,91 +15,94 @@ everything situational.
 
 ---
 
-## Done (this branch)
+## Done
 
-- **Model & docs** — the conceptual model (interactive artifact), the eval
-  stress-test set, the architecture doc with ADRs 1–19, and the anchor-slice
-  spec pack (strict runbook, policy v0, envelope schema, DoD evals).
-- **Step 1: the spine** — `src/intelligence/`: event envelopes (nine sources,
-  nine trust classes, `observed_at` ≠ `recorded_at`), append-only SQLite ledger,
-  emission middleware (satellite identity per ADR-14), twins as folds, freshness
-  SLOs. Extraction seam enforced by lint (ADR-16).
-- **Phase A: observation taps** — WP webhook events and every
-  `GraphService.upsertSite/upsertPlugin` (CAPI sync, WP-CLI refresh) emit
-  change-deduped, provenance-stamped observations. Drift between observers
-  surfaces as `state.drift.detected` events.
-- **Phase B: seeding + first reader** — one-shot backfill of graph.db
-  (~5k facts, honest `observed_at` from row timestamps, soft-deletes excluded);
-  fleet twin reads (`byFact`/`search`); `find_sites_with_plugin` migrated —
-  answers now carry observation age, trust class, stale flags vs SLO, and
-  drift hints. User-visible result: the assistant discloses "data is ~9h old
-  (cached); I can run a live check before you act."
+**Milestone 1 — honest reads everywhere** *(closed, live-smoked).* The spine
+(envelopes, append-only ledger, twins, SLOs, seam-linted); producers (webhook
+tap, graph-sync chokepoint, backfill — all three proven in production);
+six migrated readers + `verify_site_live`; Site Finder provenance; jest/CI
+wiring; review sweep. User-visible: answers carry observation age and trust,
+disclose staleness, and offer the live re-check.
 
-## Milestone 1 — Honest reads everywhere
+**Milestone 2 — governance + assembly** *(code-complete; formal close = WP-13
+evals).* Entity service wired as `site_links` consumer; policy & runbook repo
+v0 (law loader, permissions mirror — translation, not enforcement); four
+owner-reviewed runbooks; Ask/Tell recon; **context assembler v0 live in the
+Docked Panel** — every chat turn mints a TaskId and writes a
+`task.context.assembled` manifest to the ledger; R1 security fix (rehydrated
+sessions get their system prompt back).
 
-Finish the satellite read path.
+**Decided, governing what's next:** the three-layer model (Site / Environment
+/ Working copy, per-type routing, two flows — candidate ADRs 21–23 pending
+adoption); the id-freeze ruling; the implementation audit (A1–A9) proving the
+model adopts additively; the nine-layer testing strategy.
 
-- [ ] Migrate remaining fleet readers on the established template
-      (`find_sites_with_theme`, `find_outdated_sites`, fleet health, Site
-      Finder filters): entity join via provisional ids, optional core via
-      `coreRegistry`, enrich-don't-replace, drift-as-signal.
-- [ ] **Live re-check path**: gateway action that pulls live state, emits the
-      fresh observation, updates the twin — the pull-live gate (eval B-01)
-      behind the "I can run a live check" offer.
-- [ ] Team review of this branch; new test suites into `test:ci`.
+## Now — three tracks, one page
 
-## Milestone 2 — The anchor slice end to end (ADR-18/19)
+*The rule for this phase: agents build what's already named; words get named
+before wave-2 code freezes them; the owner clears the small decision queue.*
 
-"Update WooCommerce across my staging sites" runs the full journey:
-policy ambient → runbook pushed → history consulted → state pulled live →
-gated execution → outcome + rationale emitted.
+**Track A · Agents — Wave 1 (all parallel, launch together):**
+- [ ] **WP-16** verify_site_live identity fix *(confirmed live defect; smallest packet)*
+- [ ] **WP-13** eval spec runner → runs B-03/E-01/E-02 = **M2 formally closed**
+- [ ] **WP-12b** vacuous chat-history test port *(optional filler, any tier)*
 
-- [ ] **Entity service v0** (migration step 3): aliases table, local↔WPE
-      pairing queue (pull-lineage > user-link > heuristics, each with
-      confidence + established_by), adoption of the provisional ids.
-- [ ] **Policy & runbook repo v0** (step 4): translate
-      `wpeOperationPermissions` + site exceptions into the constraint
-      registry (M4 evals stay green as the regression harness); author the
-      five v0 runbooks in the ADR-17 format (bulk-update, promotion, pull,
-      diagnose, incident response).
-- [ ] **Context assembler + bundle manifests** (step 5), wired into the
-      product's own agent surface (ADR-19). Fail-closed on stale law for
-      autonomous actors (ADR-7); mandatory consult-history retrieval on
-      risky capabilities.
-- [ ] **Definition of done**: evals B-03, E-01, E-02 pass against the real
-      ledger at pass^3 (harness rules H-01/H-02).
+**Track B · Architect — words before schemas (gates Wave 2):**
+- [ ] Shipped-behavior user docs — help articles for what M1/M2 already does
+      (ages, re-check, proposals). Anything unwritable = a product finding.
+- [ ] Working-backwards docs for the three-layer model ("your copy and the
+      live site", "why can't I just push everything?") → yields the
+      **controlled vocabulary** that WP-14/15/17 naming must conform to.
+- [ ] Concept mockups (HTML) of the four new surfaces: where-am-I status ·
+      safe-split offer · health report · grouped-Site listing — the briefing
+      packet for real docs/design people when they join.
 
-## Milestone 3 — The hub
+**Track C · Owner — the decision queue (~30 minutes):**
+- [ ] Commit the pending docs (`git add docs/intelligence/ && git commit`)
+- [ ] js-yaml → `dependencies` (recommended yes; latent packaging defect)
+- [ ] Adopt ADRs 21–23 into architecture.md, or let the reconciliation sit
+- [ ] Housekeeping: `git worktree remove .worktrees/wp-05; git branch -d wp-05 wp-7`
+- [ ] After WP-13 reports: the consolidated eval sitting (SF parse + M4 +
+      whatever lands OWNER-PENDING)
 
-- [ ] Reopen tenancy (ADR-11 watch item) with real compliance requirements.
-- [ ] Hub stores: ledger, entity graph, policy & runbook repo canonical copies;
-      control plane (grants, thresholds, audit views).
-- [ ] The four sync flows: episodic ↑ append-only · policy/procedure ↓
-      version-pinned, fail-closed · state federated · semantic lazy.
-- [ ] Multi-actor grants + session auth on the satellite (watch item 4).
+## Next — Wave 2 (starts when Wave 1 merges AND Track B has named the vocabulary)
 
-## Milestone 4 — Instruments, feeds, and the adjacent jobs
+Sequential on the core lock, with one parallel lane:
+1. [ ] **WP-17** health surface + degradation tests *(first — so WP-14's
+       producer is born monitored; vocabulary from Track B)*
+2. [ ] **WP-14** sync-event producer + lineage edges *(makes the lineage
+       record real)* — **WP-18** e2e harness runs parallel (read-only)
+3. [ ] **WP-15** divergence comparator + lineage-aware drift
 
-- [ ] GA4/GSC + vulnerability-feed conductors (summaries-in, raw
-      query-through — ADR-13; `state.instrument.summarized`).
-- [ ] Adjacent jobs from the use-case gallery become products: vulnerability
-      triage against live plugin inventory · monthly client report ·
-      traffic-drop correlation (instruments × episodic) · safe-update
-      orchestration with clone rehearsal.
+Exit state: the three-layer model has its full substrate — lineage recorded,
+divergence measurable per flow, pipeline watching itself.
 
-## Continuous
+## Later — deliberately not now
 
-- Eval families land with the components they test: Family A (source/trust)
-  with the re-check path; C (governance) with the policy registry; E (loop)
-  with the assembler; F (injection) before any autonomous mode ships.
-- Harness: pass^k on gated writes, programmatic end-state verification,
-  cost-of-pass tracking (H-01…H-07).
-- Loop plane: distillation of runs into runbook drafts + PR-based review
-  arrives with the runbook repo (it is literally a pull-request workflow).
+- **M3 remainder:** assembler task frame (per-type routing), instruments
+  (GA4/GSC summaries-in, audience→production routing), `code_ref` on
+  git-backed observations, surfaces B/C/D (agent runtime = where ADR-7
+  fail-closed bites), hub + tenancy + sync flows.
+- **Backlog:** WP-04d phpVersions granularity; ToolGrant population (gated on
+  eval B-03); reader Site-grouping enrichments; the flat-count semantics
+  version change.
+- **Post-M4 / product:** the UI inversion (one Site card, N environments,
+  copies as tracked snapshots) — the entity graph makes it a rendering
+  change, not a migration.
+
+## Process cadence (standing)
+
+Per packet: protocol DoD (TDD, mutation witnesses, parity pins, baselines).
+Pre-merge/release: e2e journeys + real-ledger replay (once WP-18 lands).
+Continuous: the health surface (once WP-17 lands). Per milestone: the eval
+sitting **and the surface review** — docs + design review any new
+user-visible language against the controlled vocabulary.
 
 ## Sequencing logic
 
-Each milestone makes the next one's data or decisions exist: readers needed
-twins (done) → the slice needs entities and law (M2) → the hub needs a slice
-worth syncing (M3) → instruments need a hub to conduct from (M4). Nothing
-waits on anything it doesn't actually depend on.
+Unchanged in spirit, updated in content: Wave 1 closes what's open; Track B
+names things while agents can't collide with it; Wave 2 builds the
+three-layer substrate on frozen ids and reviewed words; instruments and the
+task frame then route through machinery that already describes itself.
+Nothing waits on anything it doesn't actually depend on — and nothing ships
+a name the docs couldn't write first.
