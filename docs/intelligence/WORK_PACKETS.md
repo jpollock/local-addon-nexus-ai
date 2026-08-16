@@ -141,7 +141,7 @@ ledger query is now `order: 'desc'` and the truncation-disclosure branch is
 gone. 4 findings below; 9/9 mutations caught after the battery itself was
 fixed (finding 1). No core, schema, topic or envelope changes.
 
-### [ ] WP-04 · Site Finder plugin/version filters read twins
+### [x] WP-04 · Site Finder plugin/version filters read twins
 Pattern: reader-migration, adapted — this is the NL→filter surface, so the
 change is in the filter ENGINE, not a chat tool. Scout `filterEngine` service
 first (services registry in `src/main/mcp/types.ts`; SF eval cases in
@@ -151,6 +151,221 @@ Accept: plugin-presence and plugin-version filters answer from
 `twins.byFact`/`search` with the graph as fallback; SF-01/05/06 eval
 expectations unchanged; result payload gains observed_at per row where the UI
 can carry it. Escalate before changing any SF eval expectation.
+
+**Scout note — 2026-08-15 (Opus, branch `wp-04`). Verdict:
+SERIALIZED-WITH-OWNER. Awaiting ack before phase 2.**
+
+*S1 — `services.filterEngine` is NOT the Site Finder filter engine.* The
+registry entry (`src/main/mcp/types.ts:132`) resolves to
+`src/main/search/FilterEngine.ts`, which is the eight smart-filter *chips*
+engine (security / maintenance / activity / health) behind `fleet_filter` and
+the fleet-discovery UI. It has **no plugin-presence and no plugin-version
+filter** — its nearest neighbour is `filterSecurityUpdates` ("sites with >10
+plugins"), and three of its eight filters (`large-db`, `low-disk`,
+`low-health`) are hardcoded `return []` placeholders. Nothing in this packet's
+accept criteria can be satisfied there. The packet's "scout `filterEngine`
+first" instruction points at the wrong object; the name collides.
+
+*S2 — the real engine is the `SITE_FINDER_APPLY` IPC handler, inlined in
+`src/main/ipc-handlers.ts` (~L3567–4215).* That is where `plugins: [...]` and
+`pluginVersion: {slug, olderThan}` — the two filters SF-01/05/06 assert — are
+actually evaluated. It is one ~650-line handler with **three near-duplicate
+copies** of the whole filter chain (local sites L3661+, WPE L3855+, external
+L4010+); `pluginVersion` alone appears three times (L3766, L3940, L4096), each
+with its own inline `norm()` zero-padded semver comparator. The result payload
+built at L4162–4210 is three arrays (`local` / `wpe` / `external`) of flat row
+objects — that is the surface that would gain `observedAt`.
+
+*S3 — ownership test result: near core services, so serialized.*
+`ipc-handlers.ts` is ~4,700 lines and holds essentially every IPC channel,
+`__agentSettingsCache`, the `FilterEngine` construction (L2566), and the
+`nexusServices` assignment block (L3168). It is not the packet-per-file shape
+the ownership map calls parallel-safe (`fleet/<one-tool>.ts`), and any other
+packet that needs an IPC edit lands in the same file. Two packets needing the
+same file is itself an escalation trigger in PARALLEL_PROTOCOL.md, so this one
+takes the owner lock rather than racing for it.
+
+*S4 — the SF filter suite does not execute the production filter code.*
+`tests/unit/site-finder/filter-apply.test.ts` (523 lines, the largest SF
+artifact) declares its own `applyFilter(db, filter)` at L91 and asserts against
+**that** re-implementation; it imports `better-sqlite3` and nothing from
+`src/`. So the filter semantics SF-01/05/06 encode are pinned to a copy, not to
+`ipc-handlers.ts`. A regression in the real handler is invisible to it. This is
+a vacuous-guard shape and it is pre-existing — flagging, not fixing, in this
+packet. The one suite that *does* drive the real handler is
+`tests/unit/ipc/site-finder-soft-delete.test.ts` (MockIpcMain +
+`registerIpcHandlers` with a partial deps object); that is the harness a WP-04
+test should extend.
+
+*S5 — the twin side is ready; no core change needed.* `graphBackfill.ts:130-150`
+emits `plugin:<slug>` with value `{version?: string, active: boolean}` — both
+the presence and the version predicate are answerable from
+`twins.byFact('plugin:<slug>')`. `sloFor` already carries `/^plugin:/ → 8h`, so
+`freshness().sloSeconds` is available and nothing needs a hardcoded SLO.
+Entity join is clean: local rows key on the Local store site id and remote rows
+on graph `sites.id`, which is exactly what `provisionalEnvironmentId` takes in
+the exemplar (`find-sites-with-plugin.ts:67,103`) — no display names anywhere
+in the join.
+
+*S6 — eval-expectation risk is low but not nil.* SF-01/05/06 assert
+`expected_filter_json` (the NL→filter mapping, produced by
+`site-finder-prompt.ts` / `SITE_FINDER_AI_PARSE`) plus result-set membership.
+Enrichment touches neither: the plan is twin-answered predicates with the graph
+as fallback, additive `observedAt` on rows, membership unchanged. The live
+question for the owner is S7.
+
+*S7 — one genuine design question for the owner (blocks phase 2).*
+"Answer from twins with the graph as fallback" can mean two different things
+for a *filter*, and they differ in observable behaviour:
+  (a) **enrich-only** — the graph continues to decide membership; twins add
+      `observedAt`/trust/staleness per row. Strictly additive, zero eval risk.
+  (b) **twins-decide-with-graph-fallback** — a twin fact, where present, is the
+      authority for the predicate, and the graph answers only where the ledger
+      has not observed. This is what the accept text reads like literally, but
+      it *can* change result-set membership (a twin observed more recently than
+      the graph row, or a `plugin:` fact the graph has since lost), which is the
+      `ab.no-legacy-parity` abort condition and touches SF-01/05/06's
+      `expected_sites`.
+Recommendation: **(a) plus a drift hint** naming the twin-only population — the
+same shape as the exemplar, which enriches rows and reports ledger-vs-cache
+disagreement rather than merging it ("enrich, don't replace; disagreement is a
+signal", CLAUDE.md). That satisfies "answer from twins" in the pattern's sense
+while keeping membership — and therefore every SF eval expectation — untouched.
+Requesting ack on the lock and a ruling on (a) vs (b) before any edit.
+
+**Owner ruling — 2026-08-15 (architect). Lock GRANTED; semantics = (a).**
+
+*Lock.* `src/main/ipc-handlers.ts` is granted to WP-04 as **integration-lock
+class** — the ownership map predates this file's involvement, so it is treated
+under the same rule as `src/main/index.ts`: wiring edits only, minimal import +
+call, done as the packet's final step, no opportunistic refactoring. No
+contention at grant time (WP-03b owns `detect-drift.ts` only).
+
+*Proposed ownership-map amendment (for the next doc pass — PARALLEL_PROTOCOL.md
+§Ownership map):*
+
+| `src/main/ipc-handlers.ts` | Same lock as index.ts. Wiring edits only, as a packet's final step. It is ~4,700 lines and holds every IPC channel plus the `nexusServices` assignment block — an opportunistic refactor here collides with every future packet. |
+
+*Semantics.* Option (a), **enrich-only + drift hint**, as the only reading
+consistent with the pattern:
+- **Membership := graph predicate, unchanged.** Option (b) changes matching
+  semantics, which is literally `ab.no-legacy-parity`, and resolves the
+  SF-expectation escalation in the wrong direction. SF-01/05/06 must hold **by
+  construction**, not by coincidence of the current data.
+- **Twins add, never subtract:** `row.observedAt` from the twin fact,
+  `row.trust` / `row.stale` from `freshness()` — `sloSeconds`, never hardcoded.
+- **The drift hint is required, not optional** (this is what rules out the
+  no-hint variant). Per-fact variant: environments the ledger shows carrying
+  the plugin that the graph-driven results missed. Skip `active: false` /
+  `removed: true` facts. Keep the two absences distinct — never-observed is a
+  *coverage gap*, observed-but-diverged is *stable divergence*.
+- **Version filters (SF-05/06) follow the same rule.** The version predicate
+  evaluates against the graph, unchanged. Where the twin's observed version
+  disagrees with the graph's on a row that already matched, surface it as a
+  per-row drift marker — do **not** re-evaluate membership against the twin
+  value. If that is a fourth drift-hint variant, add it to the pattern's
+  variant list with a code comment, per the pattern's own instruction.
+- The additive-parity pin must make "SF unchanged by construction" a **failing
+  test** if it is ever violated.
+
+**Done 2026-08-15 (Opus, branch `wp-04`, worktree `.worktrees/wp-04`).**
+Outcome: `SITE_FINDER_APPLY` result rows gain optional `observedAt` /
+`observedTrust` / `observedStale`, plus a top-level `intelligence` block
+(freshness counts, `twinOnly`, `versionDrift`, `coverageGap`, rendered
+`notes`). All logic lives in the new
+`src/main/intelligence-host/siteFinderTwins.ts`; the integration-locked
+`ipc-handlers.ts` takes **39 lines** — one import, one call, three
+`...provenance(id)` spreads, three row-type widenings, one payload block, no
+refactoring. `SidebarSearchPanel.tsx`'s three row interfaces extend a shared
+optional `SiteResultProvenance` so the UI can carry the fields; no rendering
+changed. Membership is the graph predicate throughout, so SF-01/05/06 are
+unchanged by construction — **no eval expectation was touched.**
+
+*Verification.* `npm run typecheck` clean. `npm test` 492 suites / 6146 passed
+/ 12 skipped, against a base-branch baseline of 491 / 6144 / 2 measured on the
+primary checkout at `303474c3` — reconciles exactly as +12 mine, −10 skipped
+for the worktree's missing model (finding 4). Legacy suites for the touched
+files: 192 suites / 2048 tests green (`tests/unit/{site-finder,ipc,audit,main,
+fleet,agent-runtime,renderer,chat,common,events}`), which includes both real
+SF suites. Base (WP-03b) was merged into `wp-04` before the final run.
+
+*Mutation testing.* 7 of 7 caught after two fixture gaps were closed: wrong
+entity-id source (6 fail), hardcoded SLO (2), merged absences (1), no
+`active:false` skip (2), no version-drift report (1), freshest-instead-of-
+stalest (1), and — the one that matters — **twins-decide membership**, injected
+at the `ipc-handlers.ts` call site, which fails exactly the two parity tests.
+The ruling's "failing test, not a judgment call" requirement is met.
+
+**WP-04 calibration findings:**
+
+1. **The packet's own scout pointer was wrong, and the name collision is the
+   trap.** "Scout `filterEngine` (services registry in `src/main/mcp/types.ts`)"
+   leads to `src/main/search/FilterEngine.ts`, which has no plugin filter at
+   all; the Site Finder filter engine is the `SITE_FINDER_APPLY` handler inlined
+   in `ipc-handlers.ts`. A packet that names a service handle should name the
+   file it expects, or a symbol that only exists in one place. Full detail in
+   the scout note above (S1/S2).
+2. **`cp.drift-hint`'s per-fact variant assumes a single-predicate tool, and
+   silently misfires on a composite one.** The exemplar computes the twin-only
+   population as "ledger entities with the fact, minus the result set" —
+   sound when the result set IS the fact's population. Site Finder composes many
+   predicates, so a site excluded by `phpEolOnly` would have been reported as a
+   ledger-vs-cache disagreement it is not. Fixed by defining the disagreement
+   against the **cache's own plugin rows** rather than the result set. Worth a
+   sentence in cp.drift-hint: *for a multi-predicate tool, subtract the cache
+   population for that fact, never the tool's result set.*
+3. **Fourth drift-hint variant, per the pattern's request to record one:
+   VALUE MISMATCH ON A MATCHED ROW.** The three listed variants are all
+   absences (per-fact missing, per-dimension skew, population-level). A plugin
+   fact carries a version, so a row can be present in both populations and still
+   disagree about *what* is installed — reported as `versionDrift`, never acted
+   on. Named and commented at its definition in `siteFinderTwins.ts`.
+4. **A fresh worktree silently runs 10 FEWER tests than the primary checkout.**
+   `tests/main/embedding-service.test.ts` gates on
+   `models/all-MiniLM-L6-v2-quantized/{model.onnx,vocab.txt}`, which is a
+   downloaded, untracked artifact — absent in every new worktree, so the suite
+   `describe.skip`s and reports green. This produced a phantom 10-test delta
+   while comparing against the primary checkout. PARALLEL_PROTOCOL's setup
+   section should say so: *green in a worktree is a smaller set than green in
+   the primary checkout; diff skipped counts, not just failures.*
+5. **`.gitignore`'s `node_modules/` does not match the symlink the protocol's
+   own setup step creates.** The trailing slash means directories only, so
+   `ln -s ../../node_modules node_modules` produces a tracked-able symlink that
+   a `git add -A` commits (this packet did, and reverted it in `4a6…`). Either
+   the protocol should say "`git add` explicit paths in a worktree", or the
+   ignore rule should lose its trailing slash.
+6. **Extend WP-01's finding 2 to non-text surfaces.** The parity pin for a
+   JSON/IPC payload cannot use `startsWith` or `toContain` at all: strip exactly
+   the keys the enrichment adds (per row, plus the top-level block) and assert
+   **deep equality**. Only that catches a row appearing, vanishing, or changing
+   order — which is precisely what a twins-decide regression does.
+7. **Sequence the parity baseline AFTER every fixture mutation.** The first
+   draft captured the pre-core baseline before deleting the cache row that
+   creates the drift scenario, so the pin compared two different graph states
+   and failed on the fixture rather than the code. `initIntelligenceCore` does
+   not register the core (`setIntelligenceCore` does), so the baseline run can
+   sit anywhere between them — put it last.
+8. **The base branch moved mid-packet and a naive baseline comparison invented
+   a regression.** WP-03b landed on `poc/nexintelligence` while this packet was
+   in flight, so `detectDrift.test.ts` differed 5-vs-8 tests against current
+   HEAD. Compare against the worktree's **merge-base**, or merge the base in
+   first (done here) — never against a HEAD that has advanced.
+9. **Pre-existing, flagged not fixed: the largest SF test artifact does not
+   execute the code it appears to guard.**
+   `tests/unit/site-finder/filter-apply.test.ts` (523 lines) declares its own
+   `applyFilter()` at L91 and imports nothing from `src/`, so the filter
+   semantics SF-01–08 encode are pinned to a copy. A regression in the real
+   handler is invisible to it. Out of scope here (fixing it means porting 500
+   lines of assertions onto `registerIpcHandlers`), but it is the reason this
+   packet's test drives the real handler instead.
+10. **Observed once, not reproduced:** one `npm test` run failed
+    `tests/unit/cli/commands/sync.test.ts` (10 tests, CLI, untouched by this
+    diff) immediately after a mutation-testing loop. It did not recur in three
+    isolated runs or four subsequent full runs. Most likely stale ts-jest cache
+    from the mutation churn; recorded rather than dismissed.
+
+**ABI state: system-Node (jest was run). `npm run rebuild` is required before
+loading the addon in Local again.**
 
 ### [x] WP-05 · Jest roots + CI wiring  **(PREREQUISITE — elevated by calibration finding WP-02.1)**
 Outcome: `roots: ['<rootDir>/tests', '<rootDir>/src']` — one list, so `npm test`
