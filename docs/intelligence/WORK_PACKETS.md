@@ -2134,3 +2134,15 @@ of vacuity. Same remedy as WP-04b: port each assertion onto the real
 to extend), waive the unreachable ones with reasons, delete the copy.
 Parallel-safe EXCEPT with WP-11 (ChatService.ts reads, test-file edits only —
 coordinate if concurrent). Small; any tier.
+
+- **AgentRegistry red — partial diagnosis (architect, 2026-08-16):** the suite
+  passes 11/11 on the primary checkout run in isolation (`npx jest
+  AgentRegistry --runInBand`). The 4 failures WP-12 baselined therefore
+  manifest only in a fresh-worktree full-suite context — the same family as
+  the embedding-model skips (untracked artifact) and the host/sync worker
+  collision (WP-05 finding 7). Root cause unknown; the failure TEXT was not
+  preserved, only the count. **Standing instruction: the next packet whose
+  worktree baseline shows these failures must capture the full failure output
+  in its notes** (suite output, not the summary line) — that single paste
+  completes the diagnosis. Until then the 4 stay explicitly counted in every
+  "no new red" comparison.
