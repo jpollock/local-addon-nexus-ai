@@ -148,6 +148,21 @@ will silently destroy uncommitted work — and verify each mutation actually
 changed the file (checksum before/after), so a non-applying substitution
 reports itself instead of masquerading as a caught mutation.
 
+The checksum guard is necessary but NOT sufficient (WP-03b finding): a
+substitution can apply to a **comment quoting the code** instead of the code
+itself — the file changes, the checksum guard passes, the behavior doesn't
+change, and a genuinely strong assertion gets reported as SURVIVED. This
+codebase's comment style quotes option names and values routinely, so the
+collision is likely, not freak. Anchor every substitution to the code line
+(enough surrounding syntax that a comment can't match), and after mutating,
+assert a **witness**: some observable only the mutated code line can produce
+(a changed output string, a spied argument) — if the witness doesn't appear,
+the mutation didn't land where you thought. Two honest labels for pins that
+can't be mutation-tested: a pure *removal* has no mutation to apply — label
+its `not.toContain` guard as unpinned-by-mutation rather than faking one; a
+*cap too large to reach* in fixtures is pinned behaviourally by clamping the
+limit down in the test instead.
+
 Run `npm test` green (jest's roots cover `src` since WP-05 — no flag needed;
 `npx jest src/` narrows to this subsystem), plus any legacy suites covering
 your tool (`grep -rl <tool-basename> tests/`).
