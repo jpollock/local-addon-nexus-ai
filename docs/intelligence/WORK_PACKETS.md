@@ -5018,3 +5018,32 @@ core is dark; absent on `no-sync` / `ambiguous` / `unlinked`; the strip still
 renders and the composer is never blocked while the call is in flight; time
 units, never item counts (docs finding №3). Vocabulary v1: "pulled from <source>
 <time> ago".
+
+---
+
+**ARCHITECT ADJUDICATION — WP-22 (appended by the architect session).**
+
+- **WP-22 ACCEPTED.** Merge 42c87015: renderer + DockedPanel only, exactly
+  as scoped; the DOM-fact wiring (Local's `data-location` attribute + the
+  two listeners) is the right seam for a panel mounted outside the router.
+  The precedence decision is RATIFIED: a pin equal to the viewed site
+  stays an override rather than decaying — decay would silently drop the
+  pin on navigation, and silent scope movement is exactly what the strip
+  exists to prevent. Deriving the band and the outgoing siteId from one
+  module so they cannot disagree is the derived-never-authored principle
+  applied to the UI's own state.
+- **A correction to the architect's record:** the WP-22 prompt described
+  `feat/agent-site-picker` as prior art that "apparently stalled." It
+  SHIPPED — its commit is an ancestor of the branch and its components are
+  live. The agent's ancestry check (`git merge-base --is-ancestor`) is now
+  in the protocol; the deliberate non-reuse (a fleet-wide multi-select
+  basket cannot wear "your copy") was the right vocabulary-driven call.
+- Two testing traps from finding 3 are now protocol text: bare `npx jest`
+  skips the pretest ABI hook (mass NODE_MODULE_VERSION reds that look
+  real), and `--testPathIgnorePatterns` REPLACES the config's ignore list.
+- The screenshot pass earned its place in the DoD for UI packets: both
+  truncation bugs it caught were cases where the ellipsis ate the clause
+  carrying the meaning. Wrapped, pinned.
+- **WP-22b** (content-age chip — needs one IPC channel, integration lock)
+  accepted as registered by the agent; correctly excluded from this
+  packet's file scope.

@@ -35,6 +35,12 @@ reported a failure that did not exist. Before diagnosing a
 worktree-only failure as real, re-run the suite with `--no-cache`; before
 trusting a worktree-only green, likewise.
 
+**A "dormant" branch may have already shipped** (WP-22 finding): before
+treating branch work as stalled prior art, run
+`git merge-base --is-ancestor <branch> poc/nexintelligence` — the
+agent-site-picker branch's content was live in the tree while its branch
+name sat in the worktree list looking abandoned.
+
 **Before creating the worktree, confirm the intelligence layer is
 actually tracked**: `git status` in the primary checkout must not show
 `src/intelligence/` or `docs/intelligence/` as untracked — if it does, stop
@@ -47,7 +53,12 @@ happened on the first run.)*
 better-sqlite3 is built for EITHER Electron (Local can load the addon) OR
 system Node (jest can run) — never both at once (see CLAUDE.md "Native
 Modules"). The repo's `pretest` hook rebuilds for Node automatically when
-needed. If your session ran jest, say so in your report: the owner must
+needed — **but ONLY via `npm test`; bare `npx jest` skips the hook** and a
+wrong-ABI tree reports a mass NODE_MODULE_VERSION failure that looks like
+hundreds of real reds (WP-22 finding: 82 suites "failed" this way). Second
+trap in the same family: `--testPathIgnorePatterns` REPLACES jest.config's
+ignore list rather than extending it, silently re-enabling `/e2e/`.
+Baseline with `npm test`, or run the pretest guard first. If your session ran jest, say so in your report: the owner must
 `npm run rebuild` before loading Local again. Never leave the ABI state
 undisclosed.
 
