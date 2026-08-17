@@ -2865,3 +2865,37 @@ starts with a design note, not code. **B-03's eleven criteria are the
 acceptance evals**; the anchor-slice DoD completes when they pass at
 pass^3. Depends: WP-19 (its events are half of B-03's evidence), the M3
 task frame recommended first.
+
+---
+
+**ARCHITECT NOTE — sitting executability finding (2026-08-17).** The
+OWNER-PENDING instructions ("point a dev build at the fixture dataDir, open
+the Docked Panel with a fixture site selected") are not literally
+executable: the fixture seeds the LEDGER only; fixture sites do not exist
+in Local's site store, so the panel cannot select them, and without a
+fixture target the assembler never retrieves the planted history. Caught
+before the owner ran the sitting. The bridge is transcript capture — the
+existing integration-harness shape (real ChatService + fixture services)
+extended to a live model call. Registered as WP-13b; the sitting becomes
+"read six transcript sets and judge," which is also more repeatable than
+manual panel-driving (and pre-builds half of WP-18's journey machinery).
+
+### [ ] WP-13b · Sitting harness — live-model transcript capture over the eval fixture  *(unblocks the M2 sitting; small)*
+Build `tests/intelligence-evals/sitting.ts` (invoked via ts-node, NEVER in
+npm test — it spends real API tokens): construct the WP-13 fixture core
+(`createEvalFixture`), build a fixture `NexusServices` around it (the
+integration suites — `chatAssembly.test.ts`, `siteFinderTwins.test.ts` —
+show the mock shape; fleet tools should answer from the fixture twins),
+instantiate the REAL `ChatService` with a REAL provider key (read from the
+owner's existing key storage or an env var — scout; never hardcode), select
+the flagged fixture site as `siteId`, and send E-01's verbatim prompt.
+Capture the FULL transcript (system prompt, turn block, tool calls +
+results, model output) to `/tmp/wp13-sitting/run-<n>.md`, three runs per
+H-01. Print the six judgment criteria beside the transcript paths. Honest
+bounds stated in output: this drives the real assembler + real chat loop
+with fixture tools — it is NOT the full product UI (approval cards render
+as text); say so in every transcript header. Escalate if ChatService
+cannot be constructed against fixture services without production edits —
+do not modify src/ in this packet. Parallel-safe (new file in the evals
+tree). Acceptance: three captured transcripts where the tool trace shows
+the planted incident retrievable, ready for owner judgment.
