@@ -2517,7 +2517,71 @@ graph caches by hostConnections install-name) with the comparator's output
 as APPENDED enrichment per the reader-migration pattern; do not change its
 legacy output. DriftNotice stays single-entity; shipped folds untouched.
 
-### [ ] WP-16 · verify_site_live identity fix  *(confirmed live defect — audit A7; small, immediate, parallel-safe)*
+### [x] WP-16 · verify_site_live identity fix  **(DELIVERED 2026-08-16 — outcome + findings below)**
+**Outcome:** delivered as specified, both halves.
+
+*verify_site_live* — resolution is now a ladder, and only its last rung writes:
+sanctioned aliases (`wpe.install_name`, then `wpe.install_id` on the same value,
+because callers address installs by name OR UUID) → the twin name-match →
+derivation. `resolveIdentity`/`sanctionedHandles`/`resolveEnvEntity` carry it;
+`resolve()` is a READ, so a target the ledger already knows can no longer gain a
+second entity. **External targets got the same shape, and they had the same
+defect**: the tool keyed them by the bare SSH ALIAS, while every producer keys
+them by the graph row id `ssh:<alias>/<site>` — so `ssh_target` is now parsed
+back to that row id (`externalRowId`) and resolved through
+`graph.site_row`/`local.site_id`. The bare `ssh:<alias>@<env>` form has no row
+id to recover and still falls back to the alias, as before.
+The **`site` role is now omitted rather than fabricated** when the producers'
+key is not in hand (a WPE install resolved through an alias yields no graph row
+id, and the entity service has no env→Site traversal). A7 named the name-derived
+`site` stamp as half the defect; absent is honest, wrong is not. Local and
+external keep stamping it, unchanged.
+The pre-WP-16 twin-match guard is preserved *verbatim* but computed through the
+PURE `provisionalEnvironmentId`, so the losing branch no longer registers an
+entity on the way past.
+
+*chatAssembly* — `resolveTargets` returns the `{role:'site'}` target alongside
+the environment; assembler untouched.
+
+**Pins** (8 in `verifySiteLive.test.ts`, +1 in `chatAssembly.test.ts`, all six
+production mutations caught): row-id ≠ install-name lands on the mirror's entity
+with `COUNT(*) FROM entities` unmoved; install-id addressing; external row-id
+resolution; twin-match still rescues a pre-mirror target and mints nothing; a
+same-named STRANGER never outranks the target's own entity (seeded to sort first
+in `TwinStore.search`'s entity-id order, with that ordering asserted so the test
+cannot go vacuous); and the parity pin — a target the layer has never seen still
+records, under exactly the pre-WP-16 id.
+
+**Finding — the A3 fix duplicates episodic lines, measured, unfixed.**
+`collectEpisodic` iterates targets and `Ledger.query`'s entityId filter matches
+ANY role, so an event stamped with BOTH roles (every producer dual-stamps) is
+now retrieved twice and rendered twice in the turn block — same event id, two
+identical lines. Measured directly: 1 dual-stamped event → 2 lines. Nothing
+fails, no test asserts it, and Site-scoping genuinely works (an event on a
+sibling environment now reaches the turn, which is pinned). But it is an output
+change to a shipped surface, it doubles the episodic token spend on the common
+case, and the honest reading of "additive" does not stretch to duplicated rows.
+**The fix is one line in the assembler** (dedupe episodic by event id in
+`collectEpisodic`, or key the whole retrieved list by `store+id`) — deliberately
+NOT taken here: `src/intelligence/` is the serialized core lock, the packet says
+"assembler unchanged", and A3 already schedules per-plane routing
+(freshness→copy, episodic→Site) for M3, which subsumes it. Owner call: take the
+one-line dedupe now, or ride it to M3.
+
+**Finding — the reconciliation's namespace table is prose, not a table.**
+`reconciliation-entity-identity.md` names the four namespaces in a bullet under
+"Consequences for the code"; the audit (A7) is what states which ones a WPE env
+may be addressed by. Nothing in either doc says what an EXTERNAL host's
+sanctioned namespace is — it is `local.site_id` (i.e. graph `sites.id`) only by
+reading `graphBackfill` and `externalSiteStore.externalSiteId`. Worth one real
+table in the doc before another packet re-derives it.
+
+**ABI: better-sqlite3 is built for SYSTEM NODE** (jest ran here, repeatedly).
+`npm run rebuild` is required before loading this in Local.
+Measured in this session: system Node **v25.9.0 → ABI 141** (`.nvmrc` still
+pins 22.16.0 → ABI 127 for CI).
+
+*Original packet text:*
 For WPE targets the tool derives `ensure('env','local.site_id',
 <install NAME>)` — a WRITE registering a divergent entity whenever graph row
 id ≠ install name; the emit path then stamps a name-derived `site` entity,

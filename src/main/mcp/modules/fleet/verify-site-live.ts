@@ -13,8 +13,13 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveTransport } from '../../../transport';
+import type { SiteRef } from '../../../transport/types';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
-import { environmentEntityId, siteEntityId } from '../../../intelligence-host/provisionalEntity';
+import {
+  environmentEntityId,
+  provisionalEnvironmentId,
+  siteEntityId,
+} from '../../../intelligence-host/provisionalEntity';
 
 interface LivePlugin {
   slug: string;
@@ -89,11 +94,17 @@ export const verifySiteLiveHandler: McpToolHandler = {
       if (transport.siteRef.kind === 'wpe') {
         siteLabel = transport.siteRef.installName;
         observationSystem = 'live-recheck:wpe-ssh';
+        entityKey = siteLabel;
       } else {
         siteLabel = (transport.siteRef as { alias?: string }).alias ?? 'external host';
         observationSystem = 'live-recheck:external-ssh';
+        // An external row's graph id IS `ssh:<alias>/<site>`
+        // (externalSiteStore.externalSiteId) — the key every producer derives
+        // its entity from. The bare `ssh:<alias>@<env>` form names a connection
+        // rather than a site, so there is no row id to recover; the alias then
+        // stands in, exactly as it did before WP-16.
+        entityKey = externalRowId(args) ?? siteLabel;
       }
-      entityKey = siteLabel;
     } else {
       const siteId = transport.siteRef.kind === 'local' ? transport.siteRef.siteId : '';
       const status = services.localServices!.getSiteStatus(siteId);
@@ -115,16 +126,24 @@ export const verifySiteLiveHandler: McpToolHandler = {
     }
 
     // ── 2. Resolve the entity the twins are keyed by ──────────────────────
-    // Prefer an existing twin entity whose site.core name matches (covers the
-    // case where graph row ids differ from transport labels); fall back to
-    // deriving from the transport's own key.
-    let entityId = environmentEntityId(core.entities, entityKey);
-    if (!core.twins.get(entityId, 'site.core') && core.twins.search('site.').length > 0) {
-      const byName = core.twins
-        .search('site.')
-        .find((f) => ((f.value as { name?: string }).name ?? '').toLowerCase() === siteLabel.toLowerCase());
-      if (byName) entityId = byName.entityId;
-    }
+    // Identity first, derivation last (WP-16, audit A7). A remote target
+    // arrives as a NAME; the ledger keys that site's history by the id the
+    // producers derive, which is the graph row id. Deriving an entity from the
+    // name is a WRITE that registers a second, divergent entity for a site the
+    // layer already knows — splitting its history silently.
+    const identity = resolveIdentity(core, transport.siteRef, entityKey, siteLabel);
+    const entityId = identity.envId;
+    // The logical Site is stamped only when the producers' own key is in hand
+    // (audit A7: a name-derived `site` splits history exactly as a name-derived
+    // environment does). A WPE install resolved through its alias does not
+    // yield the graph row id, and there is no env→Site traversal in the entity
+    // service yet, so the role is OMITTED rather than fabricated — absent is
+    // honest, wrong is not. The env→Site reverse lookup is WP-14/WP-15 work.
+    const siteRole = identity.siteKey ? siteEntityId(core.entities, identity.siteKey) : undefined;
+    const entityBlock: Record<string, string> = {
+      ...(siteRole ? { site: siteRole } : {}),
+      environment: entityId,
+    };
 
     // ── 3. Diff live state against cached twins (BEFORE recording) ────────
     const now = Date.now();
@@ -170,7 +189,7 @@ export const verifySiteLiveHandler: McpToolHandler = {
         observed_at: observedAt,
         topic: 'state.plugin.observed',
         schema: 'plugin.observed/1',
-        entity: { site: siteEntityId(core.entities, entityKey), environment: entityId },
+        entity: entityBlock,
         actor: { id: 'act_live_recheck', kind: 'system' },
         source: { class: 'platform', system: observationSystem, trust: 'observed' },
         payload: { slug: p.slug, version: p.version, active: p.active },
@@ -182,7 +201,7 @@ export const verifySiteLiveHandler: McpToolHandler = {
         observed_at: observedAt,
         topic: 'state.plugin.removed',
         schema: 'plugin.observed/1',
-        entity: { site: siteEntityId(core.entities, entityKey), environment: entityId },
+        entity: entityBlock,
         actor: { id: 'act_live_recheck', kind: 'system' },
         source: { class: 'platform', system: observationSystem, trust: 'observed' },
         payload: { slug: d.slug, version: d.cached?.version ?? '', active: false },
@@ -223,6 +242,112 @@ export const verifySiteLiveHandler: McpToolHandler = {
     return ok(lines.join('\n'));
   },
 };
+
+/**
+ * The graph row id behind an `ssh:<alias>/<site>[@<env>]` target, or undefined
+ * for the bare connection form. Parsing only — nothing is registered here.
+ */
+function externalRowId(args: Record<string, unknown>): string | undefined {
+  const target = typeof args.ssh_target === 'string' ? args.ssh_target.trim() : '';
+  if (!target.startsWith('ssh:')) return undefined;
+  const withoutEnv = target.split('@')[0];
+  return withoutEnv.includes('/') ? withoutEnv : undefined;
+}
+
+/**
+ * The handles a target may legitimately be known by, in evidence order.
+ *
+ * These are the namespaces the reconciliation's identity table sanctions:
+ * `wpe.install_name` / `wpe.install_id` for WP Engine installs (written by
+ * `siteLinkMirror`), and `graph.site_row` / `local.site_id` for a graph row —
+ * the latter meaning "graph sites.id", NOT "a Local site" (audit A1 declared
+ * the namespace opaque legacy). An install NAME is not a `local.site_id`, and
+ * writing it as one is the defect this ordering removes.
+ */
+function sanctionedHandles(siteRef: SiteRef, entityKey: string): Array<[string, string]> {
+  if (siteRef.kind === 'wpe') {
+    // The same value is tried as a name and as an id: callers address installs
+    // both ways (see the WPE install-pattern pitfall — `remote_install_id`
+    // holds a name OR a UUID).
+    return [
+      ['wpe.install_name', siteRef.installName],
+      ['wpe.install_id', siteRef.installName],
+    ];
+  }
+  if (siteRef.kind === 'external') {
+    return entityKey.startsWith('ssh:') && entityKey.includes('/')
+      ? [['graph.site_row', entityKey], ['local.site_id', entityKey]]
+      : [];
+  }
+  return [['local.site_id', entityKey]];
+}
+
+interface ResolvedIdentity {
+  /** The environment entity this check's observations belong to. */
+  envId: string;
+  /**
+   * The producers' own key for this site (graph `sites.id`), when it is in
+   * hand — the value `site`/`environment` ids are derived from. Absent means
+   * the logical Site could not be established without inventing one.
+   */
+  siteKey?: string;
+}
+
+/**
+ * Resolve first, name-match second, derive last (audit A7).
+ *
+ * Resolution is a READ: it registers nothing, so a target the ledger already
+ * knows can never gain a second entity. Only the terminal derivation writes,
+ * and it runs only when no sanctioned handle and no twin name matches — i.e.
+ * for a site the layer has genuinely never seen, where the pre-WP-16 id is
+ * still the right one to keep using.
+ */
+function resolveIdentity(
+  core: NonNullable<ReturnType<typeof getIntelligenceCore>>,
+  siteRef: SiteRef,
+  entityKey: string,
+  siteLabel: string
+): ResolvedIdentity {
+  for (const [namespace, value] of sanctionedHandles(siteRef, entityKey)) {
+    const envId = resolveEnvEntity(core.entities, namespace, value);
+    // `local.site_id` IS the producers' derivation key, so resolving through
+    // it also yields the Site key; an install alias does not.
+    if (envId) return { envId, ...(namespace === 'local.site_id' ? { siteKey: value } : {}) };
+  }
+
+  // Nothing sanctioned matched. From here the pre-WP-16 preference is kept
+  // verbatim — a twin whose site.core name matches the transport's label, but
+  // only when the derived entity has no site.core of its own. It is computed
+  // through the PURE derivation, so the losing branch never registers an
+  // entity: `provisionalEnvironmentId` and `environmentEntityId` produce the
+  // same id by construction, one writing and one not.
+  const derivedId = provisionalEnvironmentId(entityKey);
+  if (!core.twins.get(derivedId, 'site.core') && core.twins.search('site.').length > 0) {
+    const byName = core.twins
+      .search('site.')
+      .find((f) => ((f.value as { name?: string }).name ?? '').toLowerCase() === siteLabel.toLowerCase());
+    if (byName) return { envId: byName.entityId };
+  }
+
+  return { envId: environmentEntityId(core.entities, entityKey), siteKey: entityKey };
+}
+
+/** Highest-confidence ENV entity carrying this alias, or nothing. */
+function resolveEnvEntity(
+  entities: NonNullable<ReturnType<typeof getIntelligenceCore>>['entities'],
+  namespace: string,
+  value: string
+): string | undefined {
+  if (!entities || !value) return undefined;
+  try {
+    return entities
+      .resolve(value, namespace)
+      .filter((c) => c.type === 'env')
+      .sort((a, b) => b.matchedAlias.confidence - a.matchedAlias.confidence)[0]?.entityId;
+  } catch {
+    return undefined; // a faulty entity service must never break a live check
+  }
+}
 
 function fmtAge(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return 'just now';
