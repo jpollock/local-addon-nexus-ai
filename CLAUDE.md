@@ -779,7 +779,15 @@ arbitrary WP-CLI over SSH against a production install *and* raw
 audited now. Before adding a coverage claim here, grep for the surface rather
 than reasoning about which wave "should" have covered it.
 
-### Three sinks, not one
+### Four sinks, not one *(was "Three sinks" — WP-19 added the fourth)*
+
+The intelligence ledger is now a DURABLE AUDIT SINK: `task.action.executed` /
+`task.outcome.recorded` / `task.rationale.recorded` are emitted at both
+dispatch chokepoints (ToolRegistry.call, AgentDispatcher) for gated calls,
+with the same redaction obligation as the other sinks (the shared redaction
+walk applies — see WP-19's packet notes).
+
+### The original three sinks
 
 There are three durable audit writers, and they are easy to confuse:
 

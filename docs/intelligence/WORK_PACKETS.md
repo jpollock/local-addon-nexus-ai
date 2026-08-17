@@ -4233,3 +4233,31 @@ health SLO string.
 **ABI state: better-sqlite3 is built for SYSTEM NODE (jest), not Electron.**
 Run `npm run rebuild` before loading this in Local. Measured this session:
 Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).
+
+---
+
+**ARCHITECT ADJUDICATION — WP-19 (appended by the architect session).**
+
+- **WP-19 ACCEPTED.** Merge 6307b5fd. The eval movement is the acceptance
+  evidence: 2→6 PASS, 0 FAIL, spec-defects 1→0; the anchor slice's audit
+  loop (context assembled → action executed → outcome recorded → rationale
+  on file, one TaskId, causation approval→action) is CLOSED for the first
+  time, driven not asserted. The design call of the packet — discovering
+  the bypass's SECOND caller (McpServer.ts:326) and moving emission to
+  AgentDispatcher.dispatch, the true chokepoint — is exactly the
+  find-every-chokepoint discipline; ratified, recon-ask-tell.md corrected,
+  and codified as the add-a-producer pattern's fifth shape (F5, applied).
+- Findings applied by the architect: architecture §7 respelled (F1);
+  CLAUDE.md "Three sinks" is now "Four sinks" with the ledger's redaction
+  obligation stated (F2); the anchor-on-two-lines mutation memory added to
+  the pattern (F6). F3 (IdentityPort.actor()'s first consumer) noted for
+  the record. **F4 registered below.**
+- The new OWNER-PENDING (rationale quality, E-02's judged criterion) is
+  QUEUED for the next sitting — batch it with WP-20's eventual criteria and
+  the M3 surface review; no separate ceremony.
+
+### [ ] WP-19b · AgentDispatcher timer leak on the throw path  *(pre-existing legacy defect, from WP-19 finding 4; tiny, parallel-safe)*
+`AgentDispatcher` clears its 5-minute handler timeout only on the success
+path — a throwing handler leaks the timer. Fix + pin (throwing handler:
+timer cleared, no unhandled rejection). Not intelligence scope; any tier;
+touches the dispatch module WP-19 just instrumented, so rebase on current.

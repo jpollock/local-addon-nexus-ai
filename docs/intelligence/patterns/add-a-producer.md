@@ -87,3 +87,18 @@ Follow `graphServiceTap.test.ts` / `graphBackfill.test.ts`: real core on temp
 dir, fixture source, assert (1) emission count and topics, (2) dedup on repeat,
 (3) `observed_at` provenance (an aged fixture stays aged), (4) twin fold
 result, (5) the non-fatal path (a throwing source doesn't propagate).
+
+## Fifth shape (WP-19): gateway emission at a dispatch chokepoint
+
+When the observed thing is an ACT rather than a state change, the producer
+lives inside the dispatching module itself (ToolRegistry.call,
+AgentDispatcher.dispatch) — necessarily an edit to that module, which is why
+this shape alone is exempt from "producers never touch dispatch code."
+Rules: find EVERY dispatch chokepoint before instrumenting any (WP-19's
+bypass had two callers; instrumenting one caller records chat-driven calls
+and silently drops identical external ones — instrument the shared dispatch,
+not a caller); audit emission is non-fatal and ordered AFTER the gate (the
+gate blocks, the audit records — an audit failure must never block the act
+it audits); the tier boundary is explicit (audit gated acts, don't
+keystroke-log reads); rationale is verbatim actor-produced text, never
+synthesized.

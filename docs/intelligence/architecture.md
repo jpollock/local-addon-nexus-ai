@@ -320,7 +320,7 @@ The assembler holds no session state (G4). Bundles are cacheable on `(actor-clas
 - **Grant model:** `grant = (actor, capability, scope, conditions, runbook_hash, expiry)`. Issued in the control UI, stored as `control.grant.issued` events — the grant table is itself a fold view, so grant history is audit-native. Today's `wpeOperationPermissions` + site exceptions map directly: operation → capability, environment defaults → scope conditions, exceptions → per-entity condition overrides (the M4-09/10 semantics carry over unchanged).
 - **Evaluation:** every tool call passes `(actor, capability, target, operation, args)` through the policy engine. v1 is a small custom evaluator over the registry (the semantics are simple: default-deny for writes, scoped allows, exceptions, thresholds); OPA/Rego or Cedar is the swap-in when policy outgrows it (ADR-8). Confirmation tiers (the existing Tier-3 token pattern) are conditions, not code paths.
 - **Stamping middleware:** every tool *response* is wrapped: `{ data, provenance: { source, trust, observed_at, entity } }` before it reaches the agent. Agents never see naked facts — which is what makes "the answer names its source" (A-01's communication assertion) enforceable rather than aspirational.
-- **Emission:** the gateway emits `task.action_executed` (+ outcome) for every call. The loop's write side costs agents nothing.
+- **Emission:** the gateway emits `task.action.executed` (+ `task.outcome.recorded`) for every gated call *(respelled to the §4.2 three-segment taxonomy; implemented WP-19 at both dispatch chokepoints — ToolRegistry.call and AgentDispatcher)*. The loop's write side costs agents nothing.
 
 ---
 

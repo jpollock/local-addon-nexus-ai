@@ -279,6 +279,10 @@ the pattern with the weakest existing hook.
 | A first-turn intent classifier in `sendMessage` | ChatService.ts:157-167 | C | Adds a model call before the model call. Defer. |
 | `agent.tools` allow-list analogue for chat | tool-adapter.ts:14 | B | Would let a granted capability narrow the offered tool set to the runbook's steps — a real ADR-12 "strict" enabler, but it is the largest behavioural change on this page. |
 
+**CORRECTION (WP-19): the contributed bypass has TWO callers, not one —
+`McpServer.ts:326` also dispatches `agent__*` for external MCP clients.
+Emission therefore lives in `AgentDispatcher.dispatch` (the true second
+chokepoint), not in either caller.** Original note follows.
 Note ChatService.ts:304-325: contributed `agent__*` tools bypass
 `ToolRegistry.call()` entirely and dispatch straight to `AgentDispatcher`. Any
 procedure hook placed at the registry call site misses them — the same class of

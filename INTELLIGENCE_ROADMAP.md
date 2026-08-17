@@ -82,7 +82,7 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
 ## Now — Wave 3 (M3 opens)
 
 **Parallel, launch together:**
-- [ ] **WP-19** gateway emission — task.action/outcome/rationale events
+- [x] **WP-19** gateway emission — DONE 2026-08-17 (E-02: 2→6 PASS, 0 spec-defects remain)
       *(unblocks 7 E-02 criteria; ChatService/registry seams)*
 - [ ] **WP-04d** phpVersions granularity unification *(ipc-handlers lock,
       independent)*

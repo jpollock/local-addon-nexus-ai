@@ -194,8 +194,10 @@ itself — the file changes, the checksum guard passes, the behavior doesn't
 change, and a genuinely strong assertion gets reported as SURVIVED. This
 codebase's comment style quotes option names and values routinely, so the
 collision is likely, not freak. Anchor every substitution to the code line
-(enough surrounding syntax that a comment can't match), and after mutating,
-assert a **witness**: some observable only the mutated code line can produce
+(enough surrounding syntax that a comment can't match — and prefer anchors
+spanning TWO adjacent lines: WP-19 found two SURVIVED verdicts that were
+anchor bugs, not test gaps; reproduce a survivor by hand before believing
+it), and after mutating, assert a **witness**: some observable only the mutated code line can produce
 (a changed output string, a spied argument) — if the witness doesn't appear,
 the mutation didn't land where you thought. Two honest labels for pins that
 can't be mutation-tested: a pure *removal* has no mutation to apply — label
