@@ -3681,13 +3681,21 @@ Answer:`,
           }
         }
 
-        // PHP version filter — match against any available source for this site
+        // PHP version filter — match against any available source for this site.
+        // Prefix match, the same predicate wpVersions uses below: filter "8.2"
+        // matches site "8.2", "8.2.29", "8.2-1ubuntu2" etc. WP-04d: this was
+        // exact membership on all three chains, which under-matched because the
+        // three sources store different granularities (WP Engine major.minor,
+        // Local and external SSH hosts a full patch version), so a "PHP 8.2"
+        // query missed every local site actually running 8.2.x.
         if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
           const cached = metadataCache?.get?.(siteId);
           const s = site as any;
           const sitePhpVersions = [cached?.phpVersion, s.php?.version, s.phpVersion]
             .filter((v): v is string => !!v && typeof v === 'string');
-          const phpMatch = validated.phpVersions.some((v: string) => sitePhpVersions.includes(v));
+          const phpMatch = validated.phpVersions.some((v: string) => sitePhpVersions.some(
+            (sitePhp) => sitePhp === v || sitePhp.startsWith(v + '.') || sitePhp.startsWith(v + '-'),
+          ));
           if (!phpMatch) matches = false;
         }
 
@@ -3938,15 +3946,21 @@ Answer:`,
           if (!wpeSite.last_post_at || wpeSite.last_post_at < cutoff) matches = false;
         }
 
-        // PHP version filter — same column phpEolOnly reads below, same exact
-        // membership predicate the local chain uses. WP-04c: this branch did not
-        // exist, so a phpVersions query returned every WPE install unfiltered
-        // while correctly filtering local sites (phpEolOnly, the same data with a
+        // PHP version filter — same column phpEolOnly reads below, same prefix
+        // predicate the local chain uses. WP-04c: this branch did not exist, so
+        // a phpVersions query returned every WPE install unfiltered while
+        // correctly filtering local sites (phpEolOnly, the same data with a
         // different predicate, was applied on all three chains — an omission,
-        // not a policy).
+        // not a policy). WP-04d: the predicate went from exact membership to the
+        // prefix match — see the local chain. A NULL php_version (never
+        // collected — 49 of 342 active rows live) matches nothing: unknown is
+        // excluded, never defaulted into a version it was never observed at.
         if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
           const sitePhp = wpeSite.php_version;
-          if (!sitePhp || !validated.phpVersions.includes(sitePhp)) matches = false;
+          const phpMatch = !!sitePhp && validated.phpVersions.some((v: string) =>
+            sitePhp === v || sitePhp.startsWith(v + '.') || sitePhp.startsWith(v + '-'),
+          );
+          if (!phpMatch) matches = false;
         }
 
         // P1: phpEolOnly
@@ -4123,9 +4137,15 @@ Answer:`,
 
         // PHP version filter — see the WPE chain. WP-04c: this branch did not
         // exist, so a phpVersions query returned every external host unfiltered.
+        // WP-04d: prefix predicate. It matters most here — an external host's
+        // version comes from `wp --info`, i.e. PHP_VERSION, which on a
+        // distro-packaged PHP carries a packaging suffix (`8.3.6-1~deb12u1`).
         if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
           const sitePhp = externalSite.php_version;
-          if (!sitePhp || !validated.phpVersions.includes(sitePhp)) matches = false;
+          const phpMatch = !!sitePhp && validated.phpVersions.some((v: string) =>
+            sitePhp === v || sitePhp.startsWith(v + '.') || sitePhp.startsWith(v + '-'),
+          );
+          if (!phpMatch) matches = false;
         }
 
         // P1: phpEolOnly
