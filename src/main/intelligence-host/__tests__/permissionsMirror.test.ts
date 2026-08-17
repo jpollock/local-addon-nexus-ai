@@ -8,6 +8,8 @@
  * not a reimplementation test — if the gate's semantics ever change, the
  * mirror follows automatically and these assertions keep holding.
  */
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import {
   isOperationAllowed,
@@ -177,33 +179,66 @@ describe('initLawRegistry', () => {
     const logger = makeLogger();
     const handle = initLawRegistry({ storage: storageWith({}), logger, lawDir: REPO_LAW_DIR });
 
-    // The three within the ceiling; the two over it are refused, not served.
+    // WP-20c split the two documents that used to be refused here, so the
+    // shipped set is now served whole. Load order is the loader's: depth-first,
+    // alphabetical.
     expect(handle!.runbooks.runbooks().map((r) => r.id)).toEqual([
       'rb.bulk-plugin-update',
       'rb.diagnose-site',
+      'rb.incident-containment',
+      'rb.incident-remediation',
+      'rb.promotion-execute',
+      'rb.promotion-preflight',
       'rb.wpe-pull',
     ]);
     expect(handle!.runbooks.byCapability('cap.bulk_plugin_update')?.hash).toMatch(/^sha256:/);
   });
 
-  it('reports a refused runbook in its own list and in the log, without polluting loadErrors', () => {
+  it('the shipped set is served whole — nothing loaded, nothing refused silently', () => {
     const logger = makeLogger();
     const handle = initLawRegistry({ storage: storageWith({}), logger, lawDir: REPO_LAW_DIR });
 
-    // The loader loaded all five documents — the refusal is the runbook
-    // contract's, and conflating the two lists would read as a corrupt law file.
     expect(handle!.loadErrors).toEqual([]);
-    expect(handle!.runbookErrors.map((e) => e.runbookId).sort()).toEqual([
-      'rb.incident-response',
-      'rb.staging-promotion',
-    ]);
+    // Zero refusals is a CLAIM, not an absence: the two documents that were
+    // refused before WP-20c were split, and if a future edit pushes one back
+    // over the ceiling this is where it surfaces.
+    expect(handle!.runbookErrors).toEqual([]);
+    expect(logger.lines.info.join('\n')).toMatch(/7 runbook\(s\) loaded, 0 refused, 0 near ceiling/);
+  });
+
+  it('reports a refused runbook in its own list and in the log, without polluting loadErrors', () => {
+    // A real refusal, from a real law directory, now that the shipped set has
+    // none: an over-ceiling strict runbook beside an intact policy document.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'law-refusal-'));
+    fs.mkdirSync(path.join(dir, 'runbooks'));
+    fs.copyFileSync(
+      path.join(REPO_LAW_DIR, 'policy', 'ops-default.md'),
+      path.join(dir, 'ops-default.md')
+    );
+    fs.writeFileSync(
+      path.join(dir, 'runbooks', 'huge.md'),
+      ['---', 'id: rb.huge', 'kind: runbook', 'version: 1.0.0', 'strictness: strict',
+       'capability: cap.huge', 'checkpoints:', '  - id: cp.only', '---', '',
+       'x'.repeat(11000), ''].join('\n')
+    );
+    const logger = makeLogger();
+    const handle = initLawRegistry({ storage: storageWith({}), logger, lawDir: dir });
+
+    // The loader accepted the document — the refusal is the runbook contract's,
+    // and conflating the two lists would read as a corrupt law file.
+    expect(handle!.loadErrors).toEqual([]);
+    expect(handle!.runbookErrors.map((e) => e.runbookId)).toEqual(['rb.huge']);
+    expect(handle!.runbookErrors[0].code).toBe('over-ceiling');
+    // The policy set is untouched by its neighbour's refusal.
+    expect(handle!.registry.constraints().length).toBeGreaterThan(0);
 
     const logged = logger.lines.info.join('\n');
-    expect(logged).toContain('rb.incident-response');
+    expect(logged).toContain('rb.huge');
     expect(logged).toMatch(/refused/i);
     // Counts both ways round: a reader must not have to infer the refusals from
     // a loaded count that looks plausible on its own.
-    expect(logged).toMatch(/3 runbook\(s\) loaded, 2 refused/);
+    expect(logged).toMatch(/0 runbook\(s\) loaded, 1 refused/);
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('a missing law directory yields an empty runbook registry rather than undefined', () => {

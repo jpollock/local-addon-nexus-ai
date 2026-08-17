@@ -21,7 +21,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { loadLawDirectory } from '../law/loader';
-import { RunbookRegistry, STRICT_RUNBOOK_CEILING_BYTES } from '../law/runbookRegistry';
+import {
+  RunbookRegistry,
+  RUNBOOK_NEAR_CEILING_BYTES,
+  STRICT_RUNBOOK_CEILING_BYTES,
+} from '../law/runbookRegistry';
 
 /** A strict runbook with the minimum ADR-17 contract: capability + ordered checkpoints. */
 const STRICT = `---
@@ -410,6 +414,55 @@ describe('RunbookRegistry', () => {
       expect(reason).toMatch(/split/i);
       // Refusal, not trimming: the reason must not offer a truncated procedure.
       expect(reason).not.toMatch(/trim|truncat/i);
+    });
+
+    it('warns, and still loads, one byte past the 90% line', () => {
+      write('runbooks/strict.md', sizedStrict(RUNBOOK_NEAR_CEILING_BYTES + 1));
+
+      const { registry } = build();
+
+      // Loaded — a warning is not a refusal, and conflating them would make the
+      // margin report indistinguishable from a failure.
+      expect(registry.byId('rb.test-strict')).toBeDefined();
+      expect(registry.errors()).toEqual([]);
+      expect(registry.warnings()).toHaveLength(1);
+      expect(registry.warnings()[0]).toMatchObject({
+        runbookId: 'rb.test-strict',
+        code: 'near-ceiling',
+        path: 'runbooks/strict.md',
+      });
+      // The number an author acts on is the REMAINING margin, not the size.
+      expect(registry.warnings()[0].reason).toContain(
+        String(STRICT_RUNBOOK_CEILING_BYTES - RUNBOOK_NEAR_CEILING_BYTES - 1)
+      );
+    });
+
+    it('is silent exactly ON the 90% line — the warning is for past it', () => {
+      write('runbooks/strict.md', sizedStrict(RUNBOOK_NEAR_CEILING_BYTES));
+
+      expect(build().registry.warnings()).toEqual([]);
+    });
+
+    it('does not warn about a guided runbook — it has no margin to spend', () => {
+      const base = GUIDED;
+      const pad = RUNBOOK_NEAR_CEILING_BYTES + 1 - Buffer.byteLength(base, 'utf8');
+      write('runbooks/guided.md', base + 'x'.repeat(pad));
+
+      const { registry } = build();
+
+      expect(registry.byId('rb.test-guided')).toBeDefined();
+      expect(registry.warnings()).toEqual([]);
+    });
+
+    it('refuses an over-ceiling runbook WITHOUT also warning about it', () => {
+      // Two reports of one document would read as two documents, and the
+      // refusal is the louder, truer one.
+      write('runbooks/strict.md', sizedStrict(STRICT_RUNBOOK_CEILING_BYTES + 1));
+
+      const { registry } = build();
+
+      expect(registry.errors()).toHaveLength(1);
+      expect(registry.warnings()).toEqual([]);
     });
 
     it('does not apply the ceiling to a guided runbook (the ruled scope is strict)', () => {

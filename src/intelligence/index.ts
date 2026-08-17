@@ -70,7 +70,10 @@ export {
   RunbookRefusalCode,
   RunbookStrictness,
   RunbookTool,
+  RunbookWarning,
+  RunbookWarningCode,
   RUNBOOK_REFUSAL_CODES,
+  RUNBOOK_WARNING_CODES,
   RUNBOOK_STRICTNESS,
   ToolMode,
   ToolScope,
@@ -80,7 +83,12 @@ export {
 export { loadLawDirectory, parseLawDocument } from './law/loader';
 export { canonicalDocumentText, canonicalByteLength, documentHash } from './law/hash';
 export { ConstraintRegistry, ConstraintFilter, LawDocumentMeta } from './law/registry';
-export { RunbookRegistry, RunbookFilter, STRICT_RUNBOOK_CEILING_BYTES } from './law/runbookRegistry';
+export {
+  RunbookRegistry,
+  RunbookFilter,
+  STRICT_RUNBOOK_CEILING_BYTES,
+  RUNBOOK_NEAR_CEILING_BYTES,
+} from './law/runbookRegistry';
 export {
   assemble,
   estimateTokens,
@@ -88,6 +96,14 @@ export {
   renderAmbientBlock,
   renderTurnBlock,
   renderRoutingBlock,
+  // WP-20c · procedure delivery
+  buildProcedureIndex,
+  renderProcedureBlock,
+  renderProcedureIndex,
+  renderProcedureSection,
+  resolveProcedure,
+  ResolvedProcedure,
+  PROCEDURE_TOKEN_CEILING,
   ROUTING_TABLE,
   NO_INSTRUMENT_SOURCE,
   FRESHNESS_DISCLOSURE_CONTRACT,
@@ -107,6 +123,18 @@ export {
   IntelligencePlane,
   PolicySet,
   PolicyConstraintView,
+  ProcedureArmedBy,
+  ProcedureCheckpointView,
+  ProcedureCursor,
+  ProcedureDelivery,
+  ProcedureGrantRef,
+  ProcedureIndexEntry,
+  ProcedureOutcome,
+  ProcedureRefusal,
+  ProcedureRefusalCode,
+  ProcedureRequest,
+  PROCEDURE_REFUSAL_CODES,
+  RunbookRegistryPort,
   RetrievalRecord,
   RetrievedItem,
   RoutingRecord,

@@ -39,16 +39,25 @@
  * whole file) and what the delivered payload actually is: for these runbooks the
  * obligations that make a procedure a procedure (checkpoints, aborts,
  * communication) live in the frontmatter, and a ceiling that ignores them
- * measures the smaller half of what rides the turn. This reproduces the ruled
- * outcome exactly — three loaded, `rb.incident-response` and
- * `rb.staging-promotion` refused — and it is the reading recorded in the
- * WP-20a packet notes for ratification.
+ * measures the smaller half of what rides the turn. RATIFIED at the WP-20a
+ * adjudication, and corrected at source in ADR-17's third amendment.
+ *
+ * At WP-20a this reading refused two of the five shipped runbooks —
+ * `rb.incident-response` (15,853 bytes) and `rb.staging-promotion` (10,453) —
+ * which is the outcome the phase-1 ruling predicted. **WP-20c split both**, so
+ * the shipped set is now seven documents and none of them is refused; the
+ * ceiling's behaviour is unchanged and is pinned over fixtures rather than over
+ * the shipped set (`runbookRegistry.test.ts`, and the delivery-side guard in
+ * `assemble/procedure.ts`).
  *
  * The ceiling applies to `strictness: strict` only, per the note's own
- * qualifier. Consequence, measured and stated so it is not a surprise: the two
- * GUIDED runbooks are 8,967 and 8,359 canonical bytes — both over 8 KB — and
- * both load. Widening the ceiling to guided runbooks would refuse four of five
- * shipped documents, so it is a ruling, not a tidy-up.
+ * qualifier — a registered exception (WP-20a adjudication, ruling 2), because
+ * nothing obliges a turn to carry a guided runbook whole. At 8 KiB that
+ * exception was doing real work: the two guided documents (8,970 and 8,361
+ * canonical bytes) were both over it. At the gate's 10 KiB they are both under
+ * it, so the exception is currently VACUOUS in fact while remaining live in
+ * rule — worth knowing before anyone reads "no guided runbook is over ceiling"
+ * as evidence that scoping it to strict no longer matters.
  */
 import { z } from 'zod';
 import {
@@ -61,17 +70,38 @@ import {
   RunbookLoadError,
   RunbookStrictness,
   RunbookTool,
+  RunbookWarning,
   RUNBOOK_STRICTNESS,
   TOOL_MODES,
   TOOL_SCOPES,
 } from './types';
 
 /**
- * 8 KiB ≈ 2k tokens at the assembler's own estimator. Ruled at WP-20 phase 1
- * (escalation 5: "8 KB + split", over 16 KB) — a 16 KB strict runbook rides a
- * turn at 4k tokens, at which point the ceiling stops meaning anything.
+ * 10 KiB ≈ 2.5k tokens at the assembler's own estimator.
+ *
+ * Ruled at WP-20 phase 1 as 8 KiB ("8 KB + split", over 16 KB — a 16 KB strict
+ * runbook rides a turn at 4k tokens, at which point the ceiling stops meaning
+ * anything), and **raised to 10 KiB at the WP-20c gate**, on evidence the split
+ * produced: the two halves of `rb.incident-response` cleared 8,192 by 138 and 88
+ * bytes, and what remains at that size is CONTRACT — checkpoints, aborts,
+ * communication obligations — not prose. A bound that forces the contract itself
+ * to be written thinner than it wants is bounding the wrong thing.
+ *
+ * The raise is not retroactive amnesty: both pre-split originals (15,853 and
+ * 10,453 bytes) still refuse at 10,240, so the splits they forced were real.
  */
-export const STRICT_RUNBOOK_CEILING_BYTES = 8 * 1024;
+export const STRICT_RUNBOOK_CEILING_BYTES = 10 * 1024;
+
+/**
+ * 90% of the ceiling. A strict runbook admitted above this line loads and is
+ * WARNED about, never refused.
+ *
+ * The failure this prevents is the one the gate found by hand: an author spends
+ * the last of the margin on a sentence, and nobody learns until a runbook that
+ * used to load stops loading — in production, on the turn that needed it. A
+ * warning at load time puts the margin where the authoring happens.
+ */
+export const RUNBOOK_NEAR_CEILING_BYTES = Math.floor(STRICT_RUNBOOK_CEILING_BYTES * 0.9);
 
 const toolSchema = z.union([
   z.string().min(1),
@@ -156,6 +186,7 @@ export class RunbookRegistry {
   private readonly byIdIndex = new Map<string, Runbook>();
   private readonly byCapabilityIndex = new Map<string, Runbook>();
   private readonly refusals: RunbookLoadError[] = [];
+  private readonly cautions: RunbookWarning[] = [];
 
   private constructor() {}
 
@@ -259,6 +290,26 @@ export class RunbookRegistry {
       return;
     }
 
+    // Admitted, and told how close it came. Scoped to strict for the same
+    // reason the ceiling is: nothing bounds a guided runbook, so warning about
+    // a margin it does not have would be noise about a rule that never applies
+    // to it.
+    if (
+      strictness === 'strict' &&
+      doc.canonicalBytes > RUNBOOK_NEAR_CEILING_BYTES
+    ) {
+      this.cautions.push({
+        path: doc.path,
+        runbookId: doc.id,
+        code: 'near-ceiling',
+        reason:
+          `strict runbook is ${doc.canonicalBytes} bytes, within ` +
+          `${STRICT_RUNBOOK_CEILING_BYTES - doc.canonicalBytes} bytes of the ` +
+          `${STRICT_RUNBOOK_CEILING_BYTES}-byte ceiling. It loads. Budget the remaining ` +
+          'margin deliberately: past the ceiling it is refused outright, never shortened.',
+      });
+    }
+
     const armsOn: RunbookArmingPredicate | undefined = fm.arms_on
       ? { verbs: [...fm.arms_on.verbs], subjects: [...fm.arms_on.subjects] }
       : undefined;
@@ -277,6 +328,7 @@ export class RunbookRegistry {
       toolScope: fm.tool_scope ?? 'advisory',
       ...(armsOn ? { armsOn } : {}),
       body: doc.body,
+      canonicalText: doc.canonicalText,
       frontmatter: doc.frontmatter,
     };
 
@@ -304,5 +356,14 @@ export class RunbookRegistry {
   /** Runbooks that loaded as documents but were refused as procedures. Never empty silently. */
   errors(): RunbookLoadError[] {
     return [...this.refusals];
+  }
+
+  /**
+   * Runbooks that LOADED and are near the ceiling (WP-20c gate). A separate list
+   * from `errors()` on purpose: these documents work, and merging them would
+   * make a margin report indistinguishable from a failure.
+   */
+  warnings(): RunbookWarning[] {
+    return [...this.cautions];
   }
 }

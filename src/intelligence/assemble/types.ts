@@ -21,7 +21,14 @@
  * the real classes satisfy structurally.
  */
 import { ActorKind, TrustClass } from '../envelope/types';
-import { Constraint, Enforcement } from '../law/types';
+import {
+  AttestClass,
+  Constraint,
+  Enforcement,
+  Runbook,
+  RunbookLoadError,
+  RunbookStrictness,
+} from '../law/types';
 import { ConstraintFilter } from '../law/registry';
 import { EventEnvelope } from '../envelope/types';
 import { QueryOptions } from '../ledger/ledger';
@@ -124,10 +131,134 @@ export interface RoutingRecord {
   unavailable?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Procedure (WP-20c) — what the caller supplies, what the bundle carries
+// ---------------------------------------------------------------------------
+
+/**
+ * A capability grant, as the DELIVERY layer needs it: identity plus the pin.
+ *
+ * Deliberately structural and deliberately smaller than WP-20b's own
+ * `CapabilityGrant` (which also carries scope and an enabled flag). 20b decides
+ * WHETHER a capability is armed and for which sites; the assembler decides only
+ * whether the document it is about to deliver is the document that was granted.
+ * Its objects satisfy this shape without an import in either direction.
+ */
+export interface ProcedureGrantRef {
+  capability: string;
+  runbookId: string;
+  /** `sha256:…` over the canonical document, as reviewed. The integrity pin (§6b). */
+  runbookHash: string;
+}
+
+/** How the capability came to be armed — recorded, because "why the ceremony?" is the first question. */
+export type ProcedureArmedBy = 'predicate' | 'model-request' | 'late-gate';
+
+/**
+ * Checkpoint progress, folded by WP-20d from `task.*` events.
+ *
+ * **Absent means "the platform is not tracking attestation", not "nothing has
+ * been attested"** — and the rendered block says exactly that. The two are
+ * different facts, and rendering the second when the first is true is the
+ * green-tick-over-an-unchecked-step failure §7 names.
+ */
+export interface ProcedureCursor {
+  /** Checkpoint ids attested so far, in attestation order. */
+  attested: string[];
+  /** The abort taken, when the run aborted. */
+  aborted?: string;
+}
+
+/** The procedure half of a request: what the actor holds, and what is armed now. */
+export interface ProcedureRequest {
+  /**
+   * Every capability grant this actor holds. The always-on procedure index is
+   * one line per entry — so an actor with NO grants gets no index at all, which
+   * is what keeps every caller predating WP-20 byte-identical.
+   */
+  grants: ProcedureGrantRef[];
+  /** The capability armed for THIS task (WP-20b's `armFor`). Absent ⇒ not armed. */
+  armed?: { capability: string; armedBy: ProcedureArmedBy };
+  cursor?: ProcedureCursor;
+}
+
+export const PROCEDURE_REFUSAL_CODES = ['not-loaded', 'over-ceiling', 'hash-mismatch'] as const;
+/**
+ * Three refusals and one absence, and they are four different facts:
+ * `not-loaded` (the document is missing or its contract is unhonourable),
+ * `over-ceiling` (it exists and is too large to deliver whole — never trimmed),
+ * `hash-mismatch` (it exists and is not the reviewed document — integrity), and
+ * `procedure: null` (nothing was armed, so nothing was owed).
+ */
+export type ProcedureRefusalCode = (typeof PROCEDURE_REFUSAL_CODES)[number];
+
+export interface ProcedureCheckpointView {
+  id: string;
+  /** Never upgraded here: `narrative` unless the runbook itself declared otherwise. */
+  attest: AttestClass;
+  /** True only when a cursor SAYS so. No cursor ⇒ false for every checkpoint. */
+  attested: boolean;
+}
+
+export interface ProcedureDelivery {
+  status: 'delivered';
+  capability: string;
+  runbookId: string;
+  version: string;
+  hash: string;
+  strictness: RunbookStrictness;
+  armedBy: ProcedureArmedBy;
+  /** ADR-20 extended to procedure: the full document rides only when it must. */
+  assertFull: boolean;
+  /**
+   * Whether the canonical document itself rode this turn. False on a re-assert,
+   * and false for a GUIDED runbook always — nothing delivers a guided procedure
+   * whole, which is the premise of the ceiling's strict-only scope.
+   */
+  bodyDelivered: boolean;
+  checkpoints: ProcedureCheckpointView[];
+  /** Ordered step ids, for guided runbooks. Empty for strict ones. */
+  steps: string[];
+  /** Estimated tokens of the rendered procedure section (see `estimateTokens`). */
+  tokens: number;
+}
+
+export interface ProcedureRefusal {
+  status: 'refused';
+  capability: string;
+  code: ProcedureRefusalCode;
+  /** The runbook the grant NAMED, when a grant was found. */
+  runbookId: string | null;
+  reason: string;
+  /** The hash the grant pinned, and the hash on disk. Both, in full, on a mismatch. */
+  expectedHash?: string;
+  actualHash?: string;
+  tokens: number;
+}
+
+export type ProcedureOutcome = ProcedureDelivery | ProcedureRefusal;
+
+/** One line of the always-on index — what is grantable, and whether it is servable. */
+export interface ProcedureIndexEntry {
+  capability: string;
+  runbookId: string;
+  version: string | null;
+  strictness: RunbookStrictness | null;
+  checkpoints: number | null;
+  /** Present when this grant's runbook cannot currently be served. */
+  unavailable?: ProcedureRefusalCode;
+}
+
 export interface AssembleRequest {
   actor: AssembleActor;
   /** The granted capability this task runs under. v0 chat has no grant: null. */
   capability?: string | null;
+  /**
+   * WP-20c. Grants held, the capability armed for this task, and the checkpoint
+   * cursor. Absent ⇒ no index, no procedure, and a turn block byte-identical to
+   * the pre-WP-20 build.
+   */
+  procedure?: ProcedureRequest;
   task: { id: string; intent: string };
   targets: EntityRef[];
   /**
@@ -154,6 +285,17 @@ export interface AssembleRequest {
      * prompt".
      */
     rebuildingDurableContext?: boolean;
+    /**
+     * WP-20c: the same ADR-20 mechanism, for procedure. The content hash of the
+     * runbook the actor's context already carries this task. Equal ⇒ the carrier
+     * re-asserts by hash and cursor; different or absent ⇒ the full document
+     * rides.
+     *
+     * `rebuildingDurableContext` deliberately does NOT suppress it the way it
+     * suppresses policy: the procedure never rides the system prompt (§3), so
+     * there is no other copy for the carrier to defer to.
+     */
+    procedureHash?: string;
   };
   /**
    * Divergences the host's `verifyMirror()` reported at assembly time. Non-zero
@@ -289,8 +431,39 @@ export interface BundleManifest {
     age_s: null;
     divergences: number;
   } | null;
-  /** Deferred to the procedure packet — always null in v0. */
-  procedure: null;
+  /**
+   * WP-20c widened this from `null` IN PLACE, inside `context.assembled/1`
+   * (escalation 1, ratified): `procedure: null` and `procedure: {…}` are the
+   * same field answering the same question — what procedure governed this turn
+   * — and a reader that ignores it is unaffected either way.
+   *
+   * `null` means nothing was armed. It never means "something was armed and we
+   * are not saying", which is what the `refused` status is for.
+   */
+  procedure: {
+    capability: string;
+    /** The runbook the grant named. Null when no grant could be found at all. */
+    runbook: string | null;
+    version: string | null;
+    /** The hash of the document that actually rode, or null when none did. */
+    hash: string | null;
+    status: 'delivered' | 'refused';
+    /** ADR-20's claim, stated not implied — as it already is for policy. */
+    asserted?: 'full' | 'hash';
+    armed_by?: ProcedureArmedBy;
+    strictness?: RunbookStrictness;
+    /** How many checkpoints the runbook declares, and how many a cursor attests. */
+    checkpoints?: number;
+    attested?: number;
+    /** Estimated tokens the procedure section cost this turn; inside `budget.tokens_used`. */
+    tokens: number;
+    refusal?: {
+      code: ProcedureRefusalCode;
+      reason: string;
+      expected_hash?: string;
+      actual_hash?: string;
+    };
+  } | null;
   tools: string[];
   retrieval: RetrievalRecord[];
   /**
@@ -315,7 +488,10 @@ export interface BundleManifest {
 export interface ContextBundle {
   manifest: BundleManifest;
   ambient: PolicySet | null;
-  procedure: null;
+  /** WP-20c: the delivered procedure, the refusal that replaced it, or null when unarmed. */
+  procedure: ProcedureOutcome | null;
+  /** The always-on index — one entry per grant held. Empty when none are. */
+  procedureIndex: ProcedureIndexEntry[];
   tools: ToolGrant[];
   retrieved: RetrievedItem[];
   /** Rendered text, ready for the actor surface. Null when there is nothing to say. */
@@ -336,6 +512,18 @@ export interface ContextBundle {
 export interface ConstraintRegistryPort {
   constraints(filter?: ConstraintFilter): Constraint[];
   documents(): Array<{ id: string; version: string }>;
+}
+
+/**
+ * The runbook index, as the assembler consumes it (WP-20a's `RunbookRegistry`
+ * satisfies this structurally). `errors()` is not optional decoration: a runbook
+ * the registry REFUSED is the difference between "this capability has no
+ * procedure" and "this capability's procedure is over the ceiling", and those
+ * are two different things to tell a user.
+ */
+export interface RunbookRegistryPort {
+  byCapability(capability: string): Runbook | undefined;
+  errors(): RunbookLoadError[];
 }
 
 export interface LedgerPort {
@@ -361,6 +549,8 @@ export interface SemanticPort {
 
 export interface AssembleDeps {
   law?: ConstraintRegistryPort;
+  /** WP-20c. Absent ⇒ an armed capability refuses (`not-loaded`) rather than improvising. */
+  runbooks?: RunbookRegistryPort;
   ledger?: LedgerPort;
   twins?: TwinsPort;
   semantic?: SemanticPort;
