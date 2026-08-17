@@ -2672,3 +2672,42 @@ wins). Pins: (1) a dual-stamped event renders exactly once; (2) the
 sibling-environment event still reaches the turn (WP-16's pin stays green);
 (3) additive parity (null/empty bundle) untouched. Announce the core lock;
 smallest possible diff; suitable for the WP-16 agent as a continuation.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-13 + two escalation rulings (appended by the
+architect session).**
+
+- **WP-13 ACCEPTED.** Merge 75f5f06b. The five-verdict design with
+  "unmapped criterion is BLOCKED, never green" is endorsed as the harness's
+  founding rule; the YAML quoting fix is ratified per the pii.ts precedent
+  (spec text byte-identical, revert is two hunks); the mid-flight
+  correlation:undefined fix and the two self-skeptical mutations
+  (manufactured-finding guards) are noted as exemplary.
+- **ESCALATION 1 RULED — B-03 exits the M2 gate.** The circularity is real:
+  WP-11 gated procedure/tool population ON B-03 while its adjudication made
+  B-03 an M2 gate — both cannot hold, and the runner proved it empirically.
+  B-03 becomes the ACCEPTANCE EVAL of the future procedure-population
+  packet (deferred surface, post-M3 task frame). **M2's close is redefined
+  as: the runner merged (done) + E-01/E-02's executable criteria PASS +
+  the owner sitting clearing the 6 OWNER-PENDING criteria.** The WP-11
+  adjudication's milestone-DoD line is superseded on this point.
+- **ESCALATION 2 RULED + EXECUTED — E-02's four task.* topics respelled**
+  to the three-segment forms (context.assembled, action.executed,
+  outcome.recorded, rationale.recorded), same principle as the WP-11
+  ruling; note appended in the spec file. runner.test.ts's wording pin
+  will need the matching one-line update — fold into WP-16b (below).
+- **Finding 4 (E-01 history unreachable from the wired surface) → folded
+  into WP-16b:** chatAssembly passes no episodic retrieval config, so the
+  wired default prefix ('state.') can never retrieve episodic.* history.
+  WP-16b gains item (2): include episodic.* in wired retrieval (pass
+  episodicTopicPrefix from chatAssembly, or better: teach collectEpisodic
+  to take a topic-prefix LIST defaulting to ['state.','episodic.']) with a
+  pin that a planted episodic event reaches the turn block through the
+  REAL wired path; plus item (3): update runner.test.ts's E-02 wording pin
+  for the respell. Same core lock, same sitting.
+- Finding 5 (no episodic.* producer) is already WP-14's charter —
+  no action.
+- Housekeeping commits a3abcae2 / 42a58f26 / b230882c verified attributed —
+  the protocol's verbatim-commit practice, third exercise, working as
+  written.
