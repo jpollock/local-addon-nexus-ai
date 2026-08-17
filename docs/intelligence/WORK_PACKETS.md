@@ -3077,3 +3077,49 @@ pins 22.16.0 → ABI 127 for CI).
 
 **Token cost of this session's own test runs: zero API tokens.** Every suite and
 every mutation run scripts the model call; the live harness was never executed.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-13b (appended by the architect session).**
+
+- **WP-13b ACCEPTED.** Merge 601a9388 verified src/-clean on the owner's
+  checkout; the escalation trigger never fired because ChatService
+  constructs against fixture services unmodified. Three design decisions
+  are endorsed as standing doctrine for eval harnesses: (1) the CLOSED tool
+  surface where ABSENCE is load-bearing (no path to the real fleet, real
+  history, or the compliance log); (2) capturing what the MODEL WAS SENT by
+  wrapping the provider instance rather than re-calling the assembler
+  (which would double-emit manifests and make the ledger lie); (3) the
+  disclosed-and-honest mutation report — three first-pass misses named as
+  weak pins and strengthened, which is the battery working, not failing.
+- **FINDING RULED — the retrieved-substance gap (WP-13c, below).** The
+  finding is confirmed at assembler.ts:260/288: `factKeyOf` renders only
+  fact/slug/name, so an episodic item reaches the turn block as topic + age
+  + id with NONE of its payload substance. The two-criteria tension is
+  real: "plain-language finding" is unsatisfiable without fabrication on
+  this substrate. **The sitting is POSTPONED until WP-13c lands** — running
+  it now would judge the substrate, not the model. Ruling on the fix shape:
+  a payload-summary channel on RetrievedItem (not a widened factKeyOf —
+  fact-keying and rendering are different jobs; conflating them would leak
+  arbitrary payload keys into fact identity).
+- max_tokens 4096 + no thinking config on the product provider: recorded
+  as a backlog item for the chat-provider surface (affects the product, not
+  just the harness); candidate for the M3 surface review.
+- Key finding (safeStorage ciphertext refused rather than 401-ing) is the
+  right behavior; NEXUS_EVAL_API_KEY is the documented sitting path.
+
+### [ ] WP-13c · Episodic items carry their substance into the turn block  *(micro-packet, core lock; GATES THE SITTING)*
+Fix per the ruling: `RetrievedItem` gains an optional `summary` field;
+`collectEpisodic` populates it for ledger items from a bounded, explicit
+payload rendering (for `episodic.*`: component, versions, impact/symptom,
+correlate, resolved — cap length; never dump raw JSON); `renderRetrieved`
+includes it. `factKeyOf` unchanged. Pins: (1) the planted E-01 incident's
+component + symptom + gateway correlation appear in the turn block through
+the REAL wired path (the WP-13b end-to-end pin is the harness — extend it);
+(2) sitting.test.ts's finding pin FAILS and is retired per its own design;
+(3) additive parity (null/empty) untouched; (4) state.* items render as
+before. ALSO in scope (both pre-approved, evals tree + fixture.ts):
+the two WP-13b follow-ups — `createEvalFixture({plantIncidents})`
+collapsing the empty-history twin's duplicated loop, and
+`nativeModuleRemedy()` shared so run.ts stops inheriting bare ABI crashes.
+Sequence: BEFORE WP-17 (both core lock); the sitting runs on its merge.
