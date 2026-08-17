@@ -4876,7 +4876,7 @@ carry both roles; old rows unaffected; `detect_drift` and the episodic
 union unchanged in output today (the union narrows in a LATER packet once
 dual-stamped rows dominate — do not narrow it here).
 
-### [ ] WP-22 · Site context into the chat — wire it AND show it  *(from the owner's live where-am-I test; renderer + panel; the designer's "Currently in" strip)*
+### [x] WP-22 · Site context into the chat — wire it AND show it  *(from the owner's live where-am-I test; renderer + panel; the designer's "Currently in" strip)*
 Diagnosis (verified): `PanelChat.tsx:503` sends `siteId =
 selectedSiteIds[0]`; `DockedPanelContainer` initializes `selectedSiteIds:
 []` and NOTHING populates it from Local's navigation — the panel never
@@ -4900,3 +4900,121 @@ Pins: siteId flows on every turn when a site page is open; empty when
 none; override wins; the strip renders the three states (viewed /
 overridden / none). Renderer + DockedPanel files only; ChatService
 untouched; parallel-safe with everything current.
+
+**WP-22 OUTCOME — done (merge 42c8701, branch `wp-22`).** The site on screen now
+reaches `CHAT_SEND`, an explicit pin outlives navigation, and the band above the
+composer says which of the three is true.
+
+Receipt (`git diff --stat 42c8701^1 42c8701`):
+
+    DockedPanel/DockedPanelContainer.tsx  | 192 +-
+    DockedPanel/PanelChat.tsx             |  25 +
+    DockedPanel/SiteContextStrip.tsx      | 242 +
+    DockedPanel/siteContextModel.ts       | 130 +
+    renderer/utils/panelReflow.ts         |   9 +
+    tests/unit/renderer/docked-panel-site-context.test.ts | 277 +
+    tests/unit/renderer/site-context-model.test.ts        | 166 +
+    tests/unit/renderer/site-context-strip.test.tsx       | 166 +
+    8 files changed, 1202 insertions(+), 5 deletions(-)
+
+Jest, measured IN the worktree (protocol): baseline 536 suites / 6786 passed /
+**12 skipped**; final 539 / 6841 / **12 skipped**. Delta +3 suites, +55 tests,
+skipped UNCHANGED. `npx tsc -p . --noEmit` clean. Mutation battery 17/17 caught.
+
+**The wiring.** The panel mounts on `document.body`, outside Local's router
+(`renderer/index.tsx`), so there is no route prop and no history to subscribe
+to. Local publishes its path on its own shell — `<div class="Window"
+data-location={currentPath}>`, `app/renderer/app/MainPage.tsx` — so the site on
+screen is a DOM fact. Two listeners, because each alone has a hole: the
+attribute mutation catches navigation WITHIN the main window (React updates the
+attribute in place), `hashchange` catches a REPLACED shell (Local uses
+HashHistory). `currentLocation()` prefers the shell attribute and falls back to
+the hash; `querySelector` takes the first match in document order, which is the
+outer shell — CreateSite and PullSite render their own nested `Window`.
+
+**The precedence rule lives in exactly one place** (`siteContextModel.ts`) and
+the container derives BOTH `selectedSiteIds` and the strip's props from the same
+`resolveSiteContext()` result, so the band and the outgoing id cannot disagree.
+One decision worth recording: a pin equal to the viewed site stays `'override'`
+rather than decaying to `'viewed'`. They name the same site today and obey
+different rules tomorrow — decaying it would silently drop the pin the moment
+the user navigated away, which is the exact behaviour the pin exists to prevent.
+M03 in the battery is that rule's witness.
+
+**Three findings.**
+
+1. **PRIOR ART: `feat/agent-site-picker` did NOT stall — it SHIPPED.** Commit
+   5d9e9512 is an ancestor of `poc/nexintelligence`; `git branch --contains`
+   lists poc, main and six others. `SitePicker.tsx` and `fetchScopeSites.ts` are
+   live in the tree today, used by `AgentRunModal` and
+   `AgentWorkspaceSettings`. The branch ref is a stale tip, not unmerged work —
+   a dormant *branch name* is not evidence of dormant *work*, and the check is
+   `git merge-base --is-ancestor`, not the branch list. Not reused, for a
+   reason: it is a multi-select basket over the whole fleet (WPE + Local +
+   external, with production escalation), and this band says "your copy", which
+   is true of a Local site and false of a WP Engine install. Its two
+   *conventions* were reused and are pinned by tests: the parent owns the
+   selection, and filtering narrows what is LISTED, never what is selected.
+2. **A stale `readSiteId` was sitting in `utils/panelReflow.ts` with a regex
+   that never matched.** It looks for `/site-info/<id>`; Local pushes
+   `/main/site-info/<id>`. Zero callers — the collapsed tab's scoped badge it
+   was written for was abandoned for an honest fleet-wide count — so it is
+   marked dead and wrong IN PLACE, pointing at the live parser, rather than
+   deleted (no live surface, per the mid-task scope rule) or repaired (nothing
+   would call the repair). Anyone reaching for the obvious-looking helper now
+   reads why not.
+3. **THE BASELINE THAT LIED, AGAIN — a new shape of the WP-04/WP-15 warning.**
+   The first baseline reported **82 failed suites / 868 failed tests** and would
+   have read as a catastrophic branch regression. It was the native-module ABI:
+   `npx jest` skips the `pretest` hook that rebuilds better-sqlite3 for system
+   Node, and the module was sitting at Electron's ABI 146 against a shell Node
+   needing 141. Every failure was the same `NODE_MODULE_VERSION` line. **Run the
+   baseline through `npm test`, not `npx jest`, or the number is fiction.**
+   Second trap in the same command: passing `--testPathIgnorePatterns` to
+   exclude your own new suites REPLACES `jest.config.js`'s list rather than
+   adding to it, so the run silently pulled in `/e2e/` and sat there. Restate
+   the config's seven patterns alongside yours.
+
+**Not built, and why: the content-age chip.** The packet made it conditional on
+being cheap from existing data paths. It is not. `siteStatus()`'s model carries
+`behindSeconds`, but every renderer-reachable channel is the wrong fact:
+`GET_SITES` has `created_at` (first time Nexus indexed) and `GET_SITE_ROWS` has
+`content_indexed_at` (when Nexus last indexed) — neither is "pulled from the
+live site N days ago", and rendering either under the vocabulary's words would
+be a different fact wearing them. The honest path is one IPC channel exposing
+`siteStatus`'s model, which is the `ipc-handlers.ts` integration lock and
+outside this packet's declared file scope. **Registered as WP-22b below.** The
+band therefore ships name-only, which is also its degraded mode: the strip never
+touches the intelligence core, so a dark core costs it nothing (pinned by
+"survives a site list that never arrives").
+
+**Design note for the surface review.** Both lines WRAP rather than ellipsize.
+The first screenshot pass caught the reason: at the docked panel's 380px,
+`text-overflow: ellipsis` cut "No site selected — answers will be fleet-…" and
+"it stays on alpine-outfitters u…" — in each case the truncated clause was the
+one carrying the meaning. A band that grows a line is cheaper than a disclosure
+that cannot be read. The designer's 52px is the height of three facts; this
+carries one and sizes to content (~34px viewed, ~50px overridden), growing into
+the band when the chip lands.
+
+**ABI state: better-sqlite3 is built for ELECTRON (146).** Jest ran during this
+session, which left it at system Node, and `./dev-reload.sh` rebuilt it back for
+Local. To run jest again: `npm test` (the `pretest` hook handles it), never
+`npx jest` alone — see finding 3.
+
+### [ ] WP-22b · The content-age chip needs one IPC channel  *(micro; integration lock; from WP-22's not-built list)*
+`siteStatus()` (`intelligence-host/siteStatus.ts`) already returns a structured
+`SiteStatusModel` with `content.state`, `content.sourceName` and
+`content.behindSeconds` — the exact inputs the "Currently in" band's chip wants,
+and the same ones `nexus_where_am_i` renders to prose. Nothing renderer-side can
+reach them: there is no generic MCP-call IPC, and the two site channels carry
+INDEX ages, not content lineage. Scope: one read-only IPC channel returning the
+model for a Local site id, wired as a minimal handler (integration lock rules —
+wiring only, logic stays in `siteStatus`); `SiteContextStrip` grows a chip that
+renders ONLY when `state === 'pulled'` and stays absent otherwise (omit, never
+"unknown" — WP-16 doctrine, and `siteStatus` already distinguishes three
+absences for reasons the chip must not collapse). Pins: chip absent when the
+core is dark; absent on `no-sync` / `ambiguous` / `unlinked`; the strip still
+renders and the composer is never blocked while the call is in flight; time
+units, never item counts (docs finding №3). Vocabulary v1: "pulled from <source>
+<time> ago".
