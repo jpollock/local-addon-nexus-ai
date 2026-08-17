@@ -5705,7 +5705,29 @@ the arming doctrine's refuse-to-pick — load order is deterministic
 (depth-first, alphabetical), and refusing both would strand a capability
 because someone added a draft.
 
-**ABI state on exit: system Node (jest).** This session ran `npm test` four
-times, so `better-sqlite3` is built for the shell's Node (measured 25.9.0 →
-ABI 141; `.nvmrc`/CI is 22.16.0 → 127). **Run `npm run rebuild` before loading
-the addon in Local.**
+**The real-app pass — the refusal is real, not just tested.** Local was rebuilt
+and relaunched (`./dev-reload.sh`) on the merged tree, and
+`~/Library/Logs/local-lightning-verbose.log` carries, at 19:54:20:
+
+    [Intelligence] law registry loaded: 6 document(s), 10 constraint(s), …
+    [Intelligence] runbook refused rb.incident-response [runbooks/incident-response.md]
+      (over-ceiling): strict runbook is 15853 bytes, over the 8192-byte ceiling …
+    [Intelligence] runbook refused rb.staging-promotion [runbooks/staging-promotion.md]
+      (over-ceiling): strict runbook is 10453 bytes, over the 8192-byte ceiling …
+    [Intelligence] runbook registry: 3 runbook(s) loaded, 2 refused
+
+Six documents where every previous boot on this machine logged **one** — the
+runbooks were not in `law/` at all before this packet, and would have been
+rejected by the loader if they had been (finding 1). The scheduled agents ran
+their next cycle normally afterwards (`auth-probe` at 12:54 local in
+`nexus-2026-08-17.log`), so the added bootstrap work broke nothing downstream
+of it. Worth noting for whoever reads the log next: these lines go to Local's
+own verbose log, NOT to `nexus-YYYY-MM-DD.log` — `initLawRegistry` takes the
+main-process logger, not `EventLog`.
+
+**ABI state on exit: ELECTRON (146) — Local is loadable as it stands.** This
+session ran `npm test` four times, which leaves `better-sqlite3` built for the
+shell's Node (measured 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 → 127), and
+then `./dev-reload.sh` rebuilt it to Electron 42.2.0 for the pass above.
+**To run jest again: `npm test`** (the `pretest` hook flips it back), never
+bare `npx jest`.
