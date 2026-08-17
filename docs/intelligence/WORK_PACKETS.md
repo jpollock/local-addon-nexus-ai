@@ -2706,7 +2706,7 @@ Serialized (core lock) for the health internals; the tool file itself is
 parallel-safe. Liveness SLO values are owner-tunable constants beside
 DEFAULT_FRESHNESS_SLOS — propose defaults, escalate none.
 
-### [ ] WP-18 · MCP-driven e2e harness + real-ledger replay  **(robustness track; codifies the live smokes)**
+### [x] WP-18 · MCP-driven e2e harness + real-ledger replay  **(robustness track; codifies the live smokes)**
 Every real incident this project caught was found by hand-driving the MCP
 surface of a RUNNING Local instance. Codify it. Read
 `docs/intelligence/TESTING_STRATEGY.md` first.
@@ -2727,6 +2727,76 @@ every drift event well-formed. Run manually / pre-release; document the
 one-liner. Parallel-safe; no production code changes (WP-17's tool is a
 dependency for one journey — sequence after it or mark that journey
 pending).
+
+**OUTCOME (2026-08-17, merge below).** Delivered in `tests/e2e-intelligence/`.
+Zero production edits; the only non-test change is three npm scripts.
+Baseline 514 suites / 6493 passed / 12 skipped → **524 / 6616 / 12** (+10
+suites, +123 pins, skipped unchanged). Mutation battery **19/19 caught** —
+18 behaviourally, 1 (the layout guard's forbidden-list) only as a ts-jest
+compile error, labelled as the weaker witness it is rather than counted as
+a behavioural catch.
+
+*Ran live during development, against a running Local: all four journeys,
+26/26.* Verified by measurement, not by inspection — journey 2 moved the
+ledger 9,332 → 9,384 events and `live-recheck:local` appeared in the health
+tool's "Other sources" line; journey 3 rendered 30-odd rows carrying real
+ages and trust classes. Nothing is delivered untested-live. The loud-banner
+path was verified the same way, by running the suite with Local down: fenced
+banner, **exit code 2**, remedy named.
+
+**Findings, both from running it for real, both folded back in as pins:**
+
+1. **Drift events carry two different actor ids.** 328 of 365 are
+   `act_fold_plugin_twin` at schema `drift.detected/1`; 37 are
+   `act_fold_state_twin` at `/2`. The actor id was renamed alongside the
+   schema bump while `source.system` was already `fold:state-twin` in both.
+   A checker knowing only today's id reports a developer's entire drift
+   history as malformed — a false RED on real data, the one failure mode a
+   layer-6 check must not have. Now a SET of known fold actors; an unknown
+   actor is still flagged.
+2. **Local's `local-lightning.log` carries warn/error ONLY.** WP-17's health
+   line is `logger.info`, so `local-lightning-verbose.log` (in
+   `~/Library/Logs/`, not Application Support — the latter had been dead
+   since May) is the only file it ever reaches. The first locator produced a
+   false RED against a working wire. Both families are searched now, verbose
+   first, and the journey names every path it looked in. *The line itself is
+   confirmed present and OK across every check — WP-17's wire works; it was
+   simply unobservable from where anyone would first look.*
+
+**The determinism claim is now tested against real data and holds.** 9,472
+events · 9,100 state observations · 371 drift · 6,335 twin facts over 386
+entities, replayed from event 0 into a temp store: **identical to live**,
+value, `observed_at`, trust and provenance pointer alike. Proven
+non-vacuous by mutation — perturbing one replayed fact out of 6,335 flips
+the run to FAIL and names it.
+
+**Scouted and reported rather than worked around: the chat turn cannot be
+driven headlessly.** `assembleForChatTurn` has exactly one caller,
+`ChatService.sendMessage`, reached only from the `CHAT_SEND`
+`ipcMain.handle` channel. No GraphQL mutation (nothing chat-shaped in
+`schema.ts`), no `nexus chat` CLI command, no MCP tool — `tests/e2e-cli`'s
+own chat suites already say as much. Driving it would mean adding a
+production seam whose only consumer is a test, on a zero-production-edit
+packet. Journey 4 therefore uses the sanctioned fallback (the health tool's
+manifest-age line) and states in its own header what it does NOT prove:
+that *this run* produced a manifest. Closing that gap needs a drivable chat
+seam and is a future packet's call, not something to fake here.
+
+**Two mechanisms keep the journeys out of `npm test`**, because one is a
+config nobody re-reads: the root config never loads this jest config, AND
+journeys are named `*.journey.ts`, which jest's default `testMatch` does not
+collect. `layout.test.ts` pins both, plus "no journey imports
+better-sqlite3" (they run while Local holds the Electron-ABI build) and "no
+`lib/` directory here" — the root config ignores every path containing
+`/lib/`, so pins placed there would collect silently zero tests. That last
+one cost this packet a puzzled minute before it became a pin.
+
+**Amendment for the protocol, not just this packet:** a guard that greps a
+file for a forbidden string will fire on the COMMENT explaining the rule.
+The first version of the SQLite guard did exactly that. It now parses import
+specifiers, and has its own three pins proving the scan finds imports,
+ignores prose, and catches a real offender. Same family as the mutation
+rules' "a mutation can land in a comment quoting the code".
 
 ---
 
