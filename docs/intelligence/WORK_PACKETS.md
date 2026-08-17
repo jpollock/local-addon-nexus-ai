@@ -4875,3 +4875,28 @@ construction; note this reasoning in a comment). Pin: new drift events
 carry both roles; old rows unaffected; `detect_drift` and the episodic
 union unchanged in output today (the union narrows in a LATER packet once
 dual-stamped rows dominate — do not narrow it here).
+
+### [ ] WP-22 · Site context into the chat — wire it AND show it  *(from the owner's live where-am-I test; renderer + panel; the designer's "Currently in" strip)*
+Diagnosis (verified): `PanelChat.tsx:503` sends `siteId =
+selectedSiteIds[0]`; `DockedPanelContainer` initializes `selectedSiteIds:
+[]` and NOTHING populates it from Local's navigation — the panel never
+knows which site page the user is viewing, so the site block, task frame,
+and `nexus_where_am_i` all receive undefined. Everything downstream
+already works; this is pure renderer wiring plus one visible strip.
+Scope: (1) **Scout** how the addon's renderer learns Local's
+currently-viewed site (Local router/hooks; ALSO check the pre-existing
+`feat/agent-site-picker` branch — prior art on site selection, unmerged;
+report what it did and why it stalled before building anew). (2) Default
+`selectedSiteIds` to the currently-viewed site, live-updating as the user
+navigates, WITH explicit user override retained (pin: override survives
+navigation until cleared). (3) The "Currently in" strip per the designer's
+IA (52px band: site name + "your copy" framing; content-age chip when
+`nexus_where_am_i` data is cheap to hand — degrade to name-only when the
+core is absent). Vocabulary v1 governs every string. (4) Mid-session site
+change: the NEXT turn carries the new siteId (per-turn is already the
+contract — R2 fixed the frozen-context half); the strip is the disclosure
+that scope moved (designer behaviour table: scope changes are announced).
+Pins: siteId flows on every turn when a site page is open; empty when
+none; override wins; the strip renders the three states (viewed /
+overridden / none). Renderer + DockedPanel files only; ChatService
+untouched; parallel-safe with everything current.

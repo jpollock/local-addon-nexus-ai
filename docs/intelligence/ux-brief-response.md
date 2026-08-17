@@ -176,3 +176,30 @@ the Settings screen copy accordingly.
 *Response prepared from the shipped tree at `poc/nexintelligence`
 (M1+M2 closed, Wave 3 near-complete). Everything cited is merged code or a
 recorded ruling, referenced by packet in `docs/intelligence/WORK_PACKETS.md`.*
+
+---
+
+## 6. Loop closed — designer v2 received (2026-08-17, same day)
+
+The revised package landed with every recalibration implemented in the
+build, not just acknowledged:
+
+- **R1** — `STALE_AFTER_HOURS` deleted; per-class SLOs fed by the layer
+  (plugin 8h, core/PHP 24h, certificates 168h), with the behavioral proof
+  visible on the Site screen (a 6-day-old SSL read unflagged beside a
+  flagged 3-day-old plugin read — exactly the semantics the layer ships).
+- **R3** — "used here" replaced by the three honest states: supplied /
+  quoted-in-this-answer / connected-but-neither. Silent reliance never
+  claimed.
+- **R4** — Settings tells the grant story; "Allow just this install" is
+  now "Grant this install."
+- **Q1** — the safe split's content half ends in a pointer, not a
+  dead-end action.
+- **Q2** — narrowing announces itself with the widening phrase offered.
+
+**Status: the design and architecture records are fully reconciled — no
+open disagreements, no unanswered questions on either side.** The next
+design cycle's target stands as §5.1: the procedure/runbook execution
+surfaces, in time to meet WP-20's build. The prototype's scenario switch
+remains the design-side chaos rig, to be kept in sync with the eval
+fixtures.
