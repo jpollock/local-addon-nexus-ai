@@ -13,6 +13,7 @@ import { buildAgentContext } from './buildAgentContext';
 import { getAgentSetting } from '../ipc-handlers';
 import type { EventLog } from '../logging/eventLog';
 import { newRunId } from '../logging/runId';
+import { recordGatedAction } from '../intelligence-host/actionProducer';
 
 // Ban consecutive underscores so the __ MCP delimiter is unambiguous.
 const VALID_AGENT_NAME = /^[a-z0-9](?:[a-z0-9]|_(?!_)|-)*[a-z0-9]$|^[a-z0-9]$/;
@@ -57,7 +58,18 @@ export class AgentDispatcher {
     this.resolvedProvider = provider;
   }
 
-  async dispatch(agentName: string, toolName: string, args: unknown): Promise<McpToolResult> {
+  /**
+   * @param task - optional task moment (WP-19). The caller's turn id becomes
+   *   the ledger `correlation`; only ChatService has one, so an MCP client
+   *   calling the same tool records the act with no correlation, honestly,
+   *   rather than with an invented one.
+   */
+  async dispatch(
+    agentName: string,
+    toolName: string,
+    args: unknown,
+    task?: { id?: string; causation?: string },
+  ): Promise<McpToolResult> {
     // A disabled agent must not run via ANY path — checked before tool lookup so a
     // disabled agent never leaks which tools it has. This mirrors the guard already
     // in the AGENT_RUN_NOW IPC handler. Without this, an MCP tool call (e.g. from the
@@ -158,6 +170,31 @@ export class AgentDispatcher {
         });
       }
     } catch { /* never throw from an audit path */ }
+
+    // WP-19 · the same act, on the episodic spine.
+    //
+    // This is chokepoint TWO, and it is instrumented HERE rather than at its
+    // callers for the reason CLAUDE.md gives for the audit write beside it:
+    // contributed tools reach `ToolRegistry.call` never, and they have two
+    // callers (ChatService's `agent__*` branch and McpServer's), so a producer
+    // wired at one caller would leave the other silently unrecorded.
+    //
+    // `registered.permissionTier` is the tool's DECLARED tier — the same value
+    // the durable audit above gates on — so both records cover exactly the
+    // same population. The safety table cannot answer for these names.
+    recordGatedAction({
+      toolName: `${agentName}/${toolName}`,
+      args: args && typeof args === 'object' ? (args as Record<string, unknown>) : {},
+      services: this.services,
+      accessMethod: 'agent',
+      dispatch: 'contributed',
+      tier: registered.permissionTier,
+      taskId: task?.id,
+      causation: task?.causation,
+      outcome: outcome === 'ok' ? 'success' : 'failure',
+      error: outcome === 'error' ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+      durationMs,
+    });
 
     return result;
   }

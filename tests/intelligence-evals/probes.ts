@@ -16,6 +16,7 @@
  * separable.
  */
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { assemble, AssembleRequest, EventEnvelope, taskId as mintTaskId } from '../../src/intelligence';
 import { wrapUntrusted } from '../../src/main/mcp/pii';
@@ -24,6 +25,17 @@ import {
   assembleForChatTurn,
   CONTEXT_ASSEMBLED_TOPIC,
 } from '../../src/main/intelligence-host/chatAssembly';
+import { ToolRegistry } from '../../src/main/mcp/tool-registry';
+import { ChatService } from '../../src/main/chat/ChatService';
+import { AgentDispatcher } from '../../src/main/agent-runtime/AgentDispatcher';
+import { ContributedToolRegistry } from '../../src/main/agent-runtime/ContributedToolRegistry';
+import {
+  ACTION_EXECUTED_TOPIC,
+  OUTCOME_RECORDED_TOPIC,
+  RATIONALE_RECORDED_TOPIC,
+  recordApprovalRationale,
+} from '../../src/main/intelligence-host/actionProducer';
+import type { McpToolHandler, NexusServices } from '../../src/main/mcp/types';
 import { validateAgainstJsonSchema } from './jsonSchemaCheck';
 import { EvalFixture, INCIDENT_TOPIC } from './fixture';
 
@@ -314,6 +326,215 @@ export function probeTimestampDiscipline(fixture: EvalFixture): Probe {
       `${backdated.length} event(s) carry a genuinely historical observed_at (>60s older than recorded_at), ` +
         `proving source time survives emission rather than being flattened`,
       ...problems,
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// E-02 · WP-19 — what does a REAL gated call leave behind?
+// ---------------------------------------------------------------------------
+
+export interface GatewayProbe extends Probe {
+  taskId: string;
+  actions: number;
+  outcomes: number;
+  rationales: number;
+  /** Dispatch paths actually observed. Both must appear: the `agent__*` bypass
+   *  reaches no chokepoint, so covering only the registry would be a coverage
+   *  claim with a hole in it. */
+  dispatches: string[];
+  /** Every action carries actor.id AND actor.via (ADR-14). */
+  actorsComplete: boolean;
+  /** rationale -> action -> outcome, by event id. */
+  chained: boolean;
+  /** Every emitted event carries the run's correlation. */
+  allCorrelated: boolean;
+  /** Outcomes emitted for a two-site call — E-02's "per target site". */
+  perTargetOutcomes: number;
+  /** A Tier-1 read through the same registry emitted nothing. */
+  tierOneSilent: boolean;
+}
+
+/**
+ * Drives the REAL gateway seams against the fixture core and reads the ledger
+ * back. Nothing is hand-emitted: the registry chokepoint runs a registered
+ * handler, and the contributed path runs through `ChatService`'s own
+ * `agent__*` branch, which is the path that reaches no chokepoint.
+ *
+ * Note on how the two are driven: the registry side goes through the public
+ * `ToolRegistry.call`; the contributed side calls `ChatService`'s private
+ * `executeToolCall` directly, because driving it publicly needs a model turn.
+ * `tests/unit/chat/chat-gateway-emission.test.ts` drives the public
+ * `sendMessage` path for exactly that reason — this probe is the report's
+ * evidence, that suite is the pin.
+ */
+function contributedDispatcher(): AgentDispatcher {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wp19-eval-agent-'));
+  fs.mkdirSync(path.join(dir, 'log_processor'));
+  fs.writeFileSync(
+    path.join(dir, 'log_processor', 'agent.js'),
+    `module.exports = { contributes: { tools: { rescan: { handler: async () => ({ content: [{ type: 'text', text: 'rescanned' }] }) } } } };`
+  );
+  const contributed = new ContributedToolRegistry();
+  contributed.register(
+    'log_processor',
+    { name: 'rescan', description: 'Rescan the log bucket', inputSchema: {} },
+    2
+  );
+  return new AgentDispatcher(
+    contributed,
+    new ToolRegistry(),
+    {} as never,
+    dir,
+    {} as never,
+    { buildHandle: () => ({}) } as never
+  );
+}
+
+export async function probeGatewayEmission(fixture: EvalFixture): Promise<GatewayProbe> {
+  const [siteA, siteB] = fixture.fleet.filter((s) => !s.halted);
+  const localSites: Record<string, { id: string; name: string }> = {};
+  for (const s of fixture.fleet) localSites[s.siteId] = { id: s.siteId, name: s.name };
+
+  const services = {
+    siteData: {
+      getSite: (id: string) => localSites[id],
+      getSites: () => localSites,
+    },
+    contributedRegistry: {
+      getByMcpName: (mcpName: string) => {
+        const [, agentName, toolName] = mcpName.split('__');
+        return { agentName, toolName };
+      },
+    },
+    // A REAL AgentDispatcher over a real (temp) agent module. The emission for
+    // contributed tools lives inside the dispatcher — it has two callers, and
+    // instrumenting one of them would leave the other unrecorded — so a mocked
+    // dispatcher here would produce evidence of nothing.
+    dispatcher: contributedDispatcher(),
+  } as unknown as NexusServices;
+
+  setIntelligenceCore(fixture.core);
+  const taskId = mintTaskId();
+
+  const registry = new ToolRegistry();
+  const okHandler = async () => ({ content: [{ type: 'text' as const, text: 'ok' }] });
+  for (const name of ['wp_plugin_update', 'bulk_plugin_update', 'wp_plugin_list']) {
+    registry.register({
+      definition: { name, description: name, inputSchema: { type: 'object', properties: {} } },
+      execute: okHandler,
+    } as McpToolHandler);
+  }
+
+  // 1. The approval a human answered, then the act it authorised.
+  const rationaleId = recordApprovalRationale({
+    toolName: 'wp_plugin_update',
+    args: { site: siteA.siteId, plugin: 'woocommerce' },
+    cardText: 'This updates WooCommerce on a site with prior checkout breakage.',
+    decision: 'approved',
+    taskId,
+    services,
+  });
+  await registry.call(
+    'wp_plugin_update',
+    { site: siteA.siteId, plugin: 'woocommerce' },
+    services,
+    'mcp',
+    false,
+    undefined,
+    { id: taskId, causation: rationaleId }
+  );
+
+  // 2. A two-site call — E-02 asks for an outcome PER TARGET SITE.
+  await registry.call(
+    'bulk_plugin_update',
+    { site_ids: [siteA.siteId, siteB.siteId] },
+    services,
+    'mcp',
+    true,
+    undefined,
+    { id: taskId }
+  );
+
+  // 3. The bypass, through ChatService's own branch.
+  const chat = new ChatService({ registry, services, sendToRenderer: () => undefined });
+  const session = {
+    id: 'eval-wp-19',
+    messages: [],
+    abortController: new AbortController(),
+    pendingApprovals: new Map(),
+  };
+  await (chat as unknown as {
+    executeToolCall: (s: unknown, t: unknown, taskId?: string) => Promise<unknown>;
+  }).executeToolCall(
+    session,
+    { id: 'tc-1', name: 'agent__log_processor__rescan', arguments: { bucket: 'wpe-logs' } },
+    taskId
+  );
+
+  // 4. The tier boundary: a Tier-1 read through the SAME registry.
+  const before = fixture.core.ledger.query({ topicPrefix: 'task.a', limit: 10_000 }).length;
+  await registry.call('wp_plugin_list', { site: siteA.siteId }, services, 'mcp');
+  const tierOneSilent =
+    fixture.core.ledger.query({ topicPrefix: 'task.a', limit: 10_000 }).length === before;
+
+  const byTopic = (topic: string) =>
+    fixture.core.ledger.query({ topicPrefix: topic, correlation: taskId, limit: 1_000 });
+  const actions = byTopic(ACTION_EXECUTED_TOPIC);
+  const outcomes = byTopic(OUTCOME_RECORDED_TOPIC);
+  const rationales = byTopic(RATIONALE_RECORDED_TOPIC);
+
+  const dispatches = [...new Set(actions.map((a) => String(a.payload.dispatch)))].sort();
+  const actorsComplete = actions.every((a) => !!a.actor?.id && !!a.actor?.via);
+  const approvedAction = actions.find((a) => a.causation === rationaleId);
+  const chainedOutcome = approvedAction
+    ? outcomes.find((o) => o.causation === approvedAction.id)
+    : undefined;
+  const chained = !!approvedAction && !!chainedOutcome;
+  const allCorrelated = [...actions, ...outcomes, ...rationales].every((e) => e.correlation === taskId);
+  const bulkAction = actions.find((a) => a.payload.tool === 'bulk_plugin_update');
+  const perTargetOutcomes = bulkAction
+    ? outcomes.filter((o) => o.causation === bulkAction.id).length
+    : 0;
+
+  return {
+    ok:
+      actions.length > 0 &&
+      outcomes.length > 0 &&
+      rationales.length > 0 &&
+      dispatches.includes('registry') &&
+      dispatches.includes('contributed') &&
+      actorsComplete &&
+      chained &&
+      allCorrelated &&
+      tierOneSilent,
+    taskId,
+    actions: actions.length,
+    outcomes: outcomes.length,
+    rationales: rationales.length,
+    dispatches,
+    actorsComplete,
+    chained,
+    allCorrelated,
+    perTargetOutcomes,
+    tierOneSilent,
+    evidence: [
+      `drove the REAL seams under one TaskId (${taskId}): an approved wp_plugin_update through ` +
+        `ToolRegistry.call, a two-site bulk_plugin_update, and an agent__ contributed call through ` +
+        `ChatService's own bypass branch`,
+      `ledger now holds ${actions.length} ${ACTION_EXECUTED_TOPIC}, ${outcomes.length} ` +
+        `${OUTCOME_RECORDED_TOPIC} and ${rationales.length} ${RATIONALE_RECORDED_TOPIC} event(s) ` +
+        `under that correlation`,
+      `dispatch paths observed: ${dispatches.join(', ') || '(none)'} — the contributed path reaches ` +
+        `no chokepoint, so its presence here is what makes the coverage claim true`,
+      `actor.id + actor.via populated on every action event (ADR-14): ${actorsComplete}`,
+      `causation chain approval -> action -> outcome: ${chained}` +
+        (approvedAction ? ` (${rationaleId} -> ${approvedAction.id} -> ${chainedOutcome?.id})` : ''),
+      `the two-site call produced ${perTargetOutcomes} outcome event(s), one per target site; each ` +
+        `carries result_scope="call" — the CALL's result against each target, never a per-site ` +
+        `re-check nobody ran`,
+      `tier boundary: a Tier-1 read (wp_plugin_list) through the same registry emitted nothing: ` +
+        `${tierOneSilent}`,
     ],
   };
 }

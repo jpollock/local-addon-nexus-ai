@@ -13,6 +13,7 @@ import { buildFleetContext } from '../assistant/AssistantService';
 import { buildWordPressSystemPrompt } from '../assistant/wordpress-knowledge';
 import { getSession, deleteAllSessions } from '../ipc/chat-sessions';
 import { assembleForChatTurn } from '../intelligence-host/chatAssembly';
+import { recordApprovalRationale } from '../intelligence-host/actionProducer';
 
 // ---------------------------------------------------------------------------
 // Site Lifecycle — tools that require a running local site
@@ -211,7 +212,11 @@ export class ChatService {
     // Compress stale tool results to prevent context bloat
     session.messages = this.compressStaleToolResults(session.messages);
 
-    await this.runAgentLoop(session, providerConfig.providerId, config, assembly?.grants);
+    // WP-19 · the turn's TaskId rides down to both dispatch paths, so every
+    // gated act this turn produces joins the assembly manifest on one
+    // `WHERE correlation = ?`. Undefined whenever the layer contributed
+    // nothing, which is the pre-WP-19 behaviour exactly.
+    await this.runAgentLoop(session, providerConfig.providerId, config, assembly?.grants, assembly?.taskId);
   }
 
   /**
@@ -223,6 +228,7 @@ export class ChatService {
     providerId: string,
     config: ChatProviderConfig,
     grants?: string[],
+    taskId?: string,
   ): Promise<void> {
     const provider = getProvider(providerId);
     if (!provider) return;
@@ -296,7 +302,7 @@ export class ChatService {
         for (const tc of toolCalls) {
           if (session.abortController.signal.aborted) break;
 
-          const result = await this.executeToolCall(session, tc);
+          const result = await this.executeToolCall(session, tc, taskId);
 
           // Add tool result message
           session.messages.push({
@@ -350,6 +356,7 @@ export class ChatService {
   private async executeToolCall(
     session: ChatSession,
     toolCall: ToolCallRequest,
+    taskId?: string,
   ): Promise<{ text: string; isError?: boolean }> {
     // Contributed agent tools (agent__<agentName>__<toolName>) bypass the built-in
     // registry and route directly through AgentDispatcher.
@@ -362,8 +369,15 @@ export class ChatService {
           this.emit(sessionId(session), {
             type: 'tool_call_executing', id: toolCall.id, name: toolCall.name,
           });
+          // WP-19 · the bypass carries the turn's task frame. The EMISSION
+          // lives inside `AgentDispatcher.dispatch` (audit chokepoint two),
+          // not here: this branch is one of two callers of that dispatcher —
+          // McpServer is the other — and instrumenting the caller would leave
+          // the other one silently unrecorded, which is the same shape of gap
+          // the registry-only wiring would have had.
           const result = await dispatcher.dispatch(
             registered.agentName, registered.toolName, toolCall.arguments ?? {},
+            { id: taskId },
           );
           const text = result.content.map((c: { text: string }) => c.text).join('\n');
           this.emit(sessionId(session), {
@@ -382,15 +396,31 @@ export class ChatService {
     // (wp_eval, wp_search_replace) that a prompt-injected model — fed untrusted site content — could
     // be steered into calling (T-INJECTION). Both route through the same approval card below.
     if (requiresHumanApproval(toolCall.name)) {
+      const cardText = safety.confirmationMessage ?? 'This action may have significant consequences.';
       this.emit(sessionId(session), {
         type: 'tool_call_approval_needed',
         id: toolCall.id,
         name: toolCall.name,
         arguments: toolCall.arguments,
-        warning: safety.confirmationMessage ?? 'This action may have significant consequences.',
+        warning: cardText,
       });
 
       const approved = await this.waitForApproval(session, toolCall.id, toolCall.name, toolCall.arguments);
+
+      // WP-19 · task.rationale.recorded v0 — the card the human was shown and
+      // the arguments they ruled on, VERBATIM. No prose is composed here: the
+      // actor produced a decision, not an explanation, and inventing one would
+      // be the boilerplate rationale E-02 forbids wearing a better disguise.
+      // Recorded on BOTH decisions — a denial with no record leaves "did it
+      // proceed anyway?" with only one side of the comparison.
+      const rationaleId = recordApprovalRationale({
+        toolName: toolCall.name,
+        args: toolCall.arguments ?? {},
+        cardText,
+        decision: approved ? 'approved' : 'denied',
+        taskId,
+        services: this.services,
+      });
 
       if (!approved) {
         const denialText = `Tool "${toolCall.name}" was denied by user.`;
@@ -418,7 +448,12 @@ export class ChatService {
       });
 
       const { startedIds: _s3, autoStop: _as3 } = await this.prepareSiteLifecycle(toolCall.name, toolCall.arguments);
-      const result3 = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp', false);
+      // The approval is this act's cause: `causation` makes the chain
+      // approval -> action -> outcome readable straight off the ledger.
+      const result3 = await this.registry.call(
+        toolCall.name, toolCall.arguments, this.services, 'mcp', false, undefined,
+        { id: taskId, causation: rationaleId },
+      );
       const _note3 = await this.teardownSiteLifecycle(_s3, _as3);
       const text3 = result3.content.map((c) => c.text).join('\n') + _note3;
 
@@ -441,7 +476,11 @@ export class ChatService {
     });
 
     const { startedIds: _s, autoStop: _as } = await this.prepareSiteLifecycle(toolCall.name, toolCall.arguments);
-    const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp');
+    // No approval preceded this one, so no causation rides with it — the
+    // absence is the honest record of a call that needed no human decision.
+    const result = await this.registry.call(
+      toolCall.name, toolCall.arguments, this.services, 'mcp', true, undefined, { id: taskId },
+    );
     const _note = await this.teardownSiteLifecycle(_s, _as);
     const text = result.content.map((c) => c.text).join('\n') + _note;
 

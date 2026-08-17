@@ -111,6 +111,36 @@ export const PRODUCER_LIVENESS_SLOS: readonly ProducerLivenessSlo[] = [
     sloSeconds: 30 * DAYS,
   },
   {
+    // WP-19 · every GATED (Tier 2+) tool call, from any surface: chat, CLI,
+    // GraphQL resolvers, the agent runtime, contributed agent tools. Two
+    // properties set this SLO.
+    //
+    // First, the population is deliberately narrow — Tier-1 reads emit
+    // nothing — so a user who spends a fortnight only LOOKING at the fleet
+    // (`nexus_list_sites`, health, search: all Tier 1) legitimately produces
+    // none of these. Silence here is a statement about what the user did,
+    // not about whether the pipeline works.
+    //
+    // Second, it is the one producer whose absence is genuinely ambiguous:
+    // "nothing was changed" and "changes stopped being recorded" look
+    // identical from outside. That argues for a tighter bound than the
+    // 30-day user-initiated lines (sync, drift) but a looser one than the
+    // chat assembler's 7 days, which fires on every turn including read-only
+    // ones. 14 days is where "nobody updated a plugin, changed an option or
+    // ran a write against anything, anywhere, in two weeks" stops being an
+    // ordinary quiet stretch on a working machine — the same reasoning, and
+    // the same value, as the graph-sync lines above.
+    system: 'gateway:tool-call',
+    label: 'Actions taken',
+    sloSeconds: 14 * DAYS,
+    // NOTE — `gateway:approval` (task.rationale.recorded) deliberately has NO
+    // entry. It fires only when a human answers an approval card, which many
+    // users never do at all, so a line for it would read "nothing yet"
+    // forever on a perfectly healthy machine. `unlistedProducersLine` still
+    // surfaces it as an unmonitored source once it appears, which is the
+    // honest treatment: visible, without a liveness claim nobody can meet.
+  },
+  {
     // One manifest per docked-panel chat turn — the only producer a user
     // drives directly, which makes it the sharpest signal in the table: if
     // chat has been used this week and no manifest exists, assembly is
