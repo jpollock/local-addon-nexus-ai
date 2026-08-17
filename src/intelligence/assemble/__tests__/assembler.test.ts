@@ -291,9 +291,12 @@ describe('assemble — retrieval', () => {
     expect(episodic[0].id).toBe(EVT);
     expect(episodic[0].entityId).toBe(ENV); // first occurrence wins, so the first target's
     expect(b.blocks.turn!.match(new RegExp(EVT, 'g'))).toHaveLength(1);
-    // Provenance is NOT deduped: both queries really ran and both are recorded,
-    // so the manifest still answers "what was asked of the ledger this turn".
-    expect(b.manifest.retrieval.filter((r) => r.store === 'ledger')).toHaveLength(2);
+    // Provenance is NOT deduped: every query really ran and every one is
+    // recorded — one per target per topic prefix — so the manifest still
+    // answers "what was asked of the ledger this turn".
+    const ledgerRecords = b.manifest.retrieval.filter((r) => r.store === 'ledger');
+    expect(ledgerRecords).toHaveLength(DUAL_TARGETS.length * 2); // × state. and episodic.
+    expect(ledgerRecords.every((r) => r.ids.includes(EVT))).toBe(true);
   });
 
   test('distinct events across targets are all kept, in the order they were returned', async () => {
@@ -314,6 +317,51 @@ describe('assemble — retrieval', () => {
     // The shared event once, then the Site-only one — newest-first inside each
     // target, target order preserved. Dedupe must not reorder.
     expect(episodic.map((i) => i.id)).toEqual([`${EVT}1`, `${EVT}2`]);
+  });
+
+  /**
+   * WP-16b item 2 (WP-13 finding 4). Episodic memory is what "consult the
+   * history before you act" runs on, and the only wired surface never asked
+   * for it: the default prefix was `state.` alone, so `episodic.*` — the
+   * family the incident history lives in — was unreachable through the real
+   * chat path no matter what the model did. The default is a LIST now.
+   */
+  test('the episodic slice covers episodic.* as well as state.* on the defaults', async () => {
+    const asked: string[] = [];
+    const b = await assemble(
+      request(),
+      deps({
+        ledger: {
+          query: (opts: Record<string, unknown>) => {
+            asked.push(String(opts.topicPrefix));
+            return [opts.topicPrefix === 'episodic.' ? event(`${EVT}9`, 2) : event(`${EVT}1`, 1)] as never[];
+          },
+        },
+      })
+    );
+
+    expect(asked).toEqual(['state.', 'episodic.']);
+    expect(b.retrieved.filter((i) => i.store === 'ledger').map((i) => i.id)).toEqual([
+      `${EVT}1`,
+      `${EVT}9`,
+    ]);
+  });
+
+  test('an explicit prefix is honoured, as a string or as a list', async () => {
+    const asked: string[] = [];
+    const ledger = {
+      query: (opts: Record<string, unknown>) => {
+        asked.push(String(opts.topicPrefix));
+        return [] as never[];
+      },
+    };
+
+    await assemble(request({ retrieval: { episodicTopicPrefix: 'episodic.' } }), deps({ ledger }));
+    expect(asked).toEqual(['episodic.']); // the shipped single-string form still works
+
+    asked.length = 0;
+    await assemble(request({ retrieval: { episodicTopicPrefix: ['a.', 'b.'] } }), deps({ ledger }));
+    expect(asked).toEqual(['a.', 'b.']);
   });
 
   test('retrieved content is wrapped as untrusted data (R7)', async () => {

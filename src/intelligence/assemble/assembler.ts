@@ -202,7 +202,14 @@ function collectFreshness(
 // Retrieval — episodic (ledger) + semantic (host search)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_EPISODIC_PREFIX = 'state.';
+/**
+ * WP-16b (WP-13 finding 4). `state.` alone made `episodic.*` — the family the
+ * incident history lives in — unreachable from the only wired surface, so the
+ * "consult the history before you act" criterion could not be satisfied no
+ * matter what the model did. The default is a LIST, and it covers both; a
+ * caller may still narrow it with a string or a list of its own.
+ */
+const DEFAULT_EPISODIC_PREFIXES = ['state.', 'episodic.'];
 const DEFAULT_EPISODIC_LIMIT = 8;
 const DEFAULT_SEMANTIC_LIMIT = 5;
 
@@ -213,7 +220,8 @@ function collectEpisodic(
   records: RetrievalRecord[]
 ): RetrievedItem[] {
   if (!deps.ledger || req.targets.length === 0) return [];
-  const topicPrefix = req.retrieval?.episodicTopicPrefix ?? DEFAULT_EPISODIC_PREFIX;
+  const asked = req.retrieval?.episodicTopicPrefix ?? DEFAULT_EPISODIC_PREFIXES;
+  const prefixes = typeof asked === 'string' ? [asked] : asked;
   const limit = req.retrieval?.episodicLimit ?? DEFAULT_EPISODIC_LIMIT;
   const items: RetrievedItem[] = [];
   /**
@@ -231,36 +239,39 @@ function collectEpisodic(
   const seen = new Set<string>();
 
   for (const target of req.targets) {
-    // order:'desc' is load-bearing — an ascending query that hits its limit
-    // silently drops the NEWEST events, which reads as "nothing happened
-    // recently" (WP-03 calibration finding).
-    const events =
-      safely(
-        () => deps.ledger!.query({ entityId: target.id, topicPrefix, order: 'desc', limit }),
-        []
-      ) ?? [];
+    for (const topicPrefix of prefixes) {
+      // order:'desc' is load-bearing — an ascending query that hits its limit
+      // silently drops the NEWEST events, which reads as "nothing happened
+      // recently" (WP-03 calibration finding). The limit is PER QUERY, so a
+      // busy `state.` family cannot crowd out the incident history.
+      const events =
+        safely(
+          () => deps.ledger!.query({ entityId: target.id, topicPrefix, order: 'desc', limit }),
+          []
+        ) ?? [];
 
-    for (const e of events) {
-      if (seen.has(e.id)) continue;
-      seen.add(e.id);
-      items.push({
+      for (const e of events) {
+        if (seen.has(e.id)) continue;
+        seen.add(e.id);
+        items.push({
+          store: 'ledger',
+          id: e.id,
+          title: e.topic,
+          ...(factKeyOf(e.payload) ? { detail: factKeyOf(e.payload) } : {}),
+          source: e.source?.system,
+          trust: e.source?.trust as TrustClass,
+          observedAt: e.observed_at,
+          ageSeconds: ageSeconds(e.observed_at, now),
+          entityId: target.id,
+        });
+      }
+      records.push({
+        query: `entity=${target.id} topic=${topicPrefix}* order=desc limit=${limit}`,
         store: 'ledger',
-        id: e.id,
-        title: e.topic,
-        ...(factKeyOf(e.payload) ? { detail: factKeyOf(e.payload) } : {}),
-        source: e.source?.system,
-        trust: e.source?.trust as TrustClass,
-        observedAt: e.observed_at,
-        ageSeconds: ageSeconds(e.observed_at, now),
-        entityId: target.id,
+        returned: events.length,
+        ids: events.map((e) => e.id),
       });
     }
-    records.push({
-      query: `entity=${target.id} topic=${topicPrefix}* order=desc limit=${limit}`,
-      store: 'ledger',
-      returned: events.length,
-      ids: events.map((e) => e.id),
-    });
   }
   return items;
 }

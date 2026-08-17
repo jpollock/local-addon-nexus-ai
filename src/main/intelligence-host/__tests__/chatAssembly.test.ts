@@ -224,6 +224,35 @@ describe('assembleForChatTurn — freshness disclosure reaches the turn', () => 
     expect(queries.some((q) => q.includes(SITE_ENT))).toBe(true);
   });
 
+  /**
+   * WP-16b item 2 (WP-13 finding 4), pinned through the REAL wired path: the
+   * eval harness measured that a planted incident history was in the ledger and
+   * unreachable from the docked panel, because the assembler's episodic prefix
+   * defaulted to `state.` alone. This is the surface that finding was about, so
+   * this is where it has to be proven — not only at the core.
+   */
+  test('planted episodic.* history reaches the turn through the wired chat path', async () => {
+    core.emitter.emit({
+      observed_at: new Date(Date.now() - 30 * 24 * HOUR).toISOString(),
+      topic: 'episodic.incident.recorded',
+      schema: 'incident.recorded/1',
+      entity: { environment: ENV_ID },
+      actor: { id: 'act_seed', kind: 'system' },
+      source: { class: 'work', system: 'fixture:incident', trust: 'emitted' },
+      payload: { component: 'woocommerce', impact: 'checkout returned HTTP 500 after update' },
+    });
+
+    const r = await assembleForChatTurn({
+      services: services(), sessionId: 's1', userMessage: 'is it safe to update WooCommerce?',
+      siteId: SITE_ID, buildingSystemPrompt: false,
+    });
+
+    expect(r!.turnBlock).toContain('episodic.incident.recorded');
+    const [event] = core.ledger.query({ topicPrefix: 'task.' });
+    const queries = (event.payload.retrieval as Array<{ query: string }>).map((q) => q.query);
+    expect(queries.some((q) => q.includes('topic=episodic.*'))).toBe(true);
+  });
+
   test('no site selected means no freshness section and no episodic query', async () => {
     seedObservation(20);
     const r = await assembleForChatTurn({
