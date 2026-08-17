@@ -5318,7 +5318,7 @@ is WHY two checkpoints are narrative. Adding both converts them to
 event-attested. Tool-surface change; parallel-safe; sequence after 20d so
 the attestation consumes it.
 
-### [ ] WP-23 · AgentRegistry fixture environment — reconcile and fix  *(from WP-19b finding 3 + WP-20 housekeeping; small)*
+### [x] WP-23 · AgentRegistry fixture environment — reconcile and fix  *(from WP-19b finding 3 + WP-20 housekeeping; small)* — **DONE 2026-08-17, see outcome at the end of this file**
 Two verified datapoints: an uncompiled worktree fails the four (fixture
 `path.resolve('lib/main/agent-sdk')` — WP-20, verified both directions);
 WP-19b reproduced them in a worktree that HAD compiled (symptom:
@@ -6759,3 +6759,122 @@ delivered with this entry.** After 20e: the B-03 sitting needs
 remains standing. ABI on exit was not explicitly stated by the report —
 the merged base was re-measured with jest, so assume SYSTEM NODE:
 `npm run rebuild` before loading Local.
+
+---
+
+**WP-23 OUTCOME — done (branch `wp-23`, worktree `.worktrees/wp-23`, Opus).**
+One file, ten lines: `tests/unit/agent-runtime/AgentRegistry.test.ts`. The
+fixture agent no longer requires the compiled tree. **The oldest open mystery on
+this branch is closed, and it was not a mystery — it was a documentation
+error.**
+
+**Both known states reproduced first, in a fresh worktree, before anything was
+changed.** Uncompiled (`node_modules` symlinked, no `lib/`): **4 failed / 7
+passed, exit 1**. Same worktree after `npm run compile` (exit 0): **11 passed,
+exit 0**. That half was never in doubt; it is recorded because the packet's
+whole point is that the two halves be measured in one place.
+
+**The residual is not reproducible, and the reason is that it never happened.**
+WP-19b's four reds were attributed to a worktree that "HAD compiled" — that
+attribution is not in WP-19b's own report. Three measurements retire it:
+
+1. **`.worktrees/wp-19b` has no `lib/` directory at all.** The `node_modules`
+   symlink is there, dated 17 Aug 11:33; `lib/` was never produced. The worktree
+   is parked post-merge and nothing in the repo removes `lib/` except
+   `npm run clean`, which only `npm run build` invokes.
+2. **WP-19b's report never claims a compile step.** `grep -i 'compil\|lib/'`
+   over its entire outcome section returns nothing. The "post-compile" reading
+   originates in the WP-23 registration, not in the packet it summarises.
+3. **WP-19b's own diagnosis is falsifiable and false.** It reads "the fixtures
+   write `agent.ts`, whose load depends on the ts-node registration" and
+   suspects symlinked `node_modules`. The fixtures write **`agent.js`**
+   (`writeAgent`, line 15) — ts-node is never reached, and the symlink is
+   irrelevant. A speculative cause recorded in the same paragraph as a real
+   observation is how this survived four packets.
+
+**The ABI flip is RULED OUT as a cause, by measurement rather than by
+argument** — and this is the part worth keeping. The chain is real: the fixture
+required `lib/main/agent-sdk` → `index.js` → `testing.js` →
+`require('better-sqlite3')`, so a wrong-ABI tree genuinely would break the
+fixture. But `AgentRegistry.ts` imports `AgentDbManager`, which requires
+better-sqlite3 at **module top level**, so the suite cannot even be imported
+under a wrong ABI. Simulated with an unloadable stub carrying a real
+`NODE_MODULE_VERSION 146 / 141` message
+(`--moduleNameMapper '{"^better-sqlite3$":"…"}'`): **Test suite failed to run,
+Tests: 0 total**. An ABI flip produces zero tests run, never four reds. The two
+failure signatures are distinguishable on sight, which is the useful residue:
+**four reds = no `lib/`; zero tests = wrong ABI.**
+
+Cache poisoning is likewise ruled out for this suite: three consecutive compiled
+runs plus one `--no-cache` run, all 11/11; and two jest processes racing the
+same suite concurrently (the whole `tests/unit/agent-runtime/` directory
+alongside the single file), **259/259 and 11/11, both exit 0**.
+
+**The fix.** `path.resolve('lib/main/agent-sdk')` →
+`path.resolve(__dirname, '..', '..', '..', 'src', 'main', 'agent-sdk')`. The
+fixture is loaded by `AgentRegistry`'s own `require()`, which under jest is
+jest's require, so the SDK **source** resolves and transforms exactly as any
+other import does. Two properties, both deliberate:
+
+- **The same real `defineAgent` and `cron` still build the fixture agent.** This
+  is not a stub. Every assertion is byte-identical; what moved is where the
+  dependency lives, not what the suite proves.
+- **`__dirname`-relative, not cwd-relative.** The old form resolved against
+  `process.cwd()`, so the fixture also pointed wherever jest happened to be
+  invoked from — a second latent failure mode, never observed, now unreachable.
+
+**Acceptance criterion met literally.** A fresh worktree cut from `wp-23`,
+`node_modules` symlinked, **`lib/` absent** (verified: `ls -d lib` → No such
+file or directory): **11 passed, exit 0**, the four formerly-red tests named
+individually in the log.
+
+**Three mutation witnesses, all killed at exactly 4 reds** — the four being
+precisely the fixture-loading tests:
+
+| # | mutation (PRODUCTION line) | result |
+|---|---|---|
+| M1 | `loadAgent`'s entry resolution drops the `agent.js` branch | 4 failed / 7 passed |
+| M2 | `if (def.default) def = def.default` removed | 4 failed / 7 passed |
+| M3 | `defineAgent` in **`src/main/agent-sdk/define-agent.ts`** returns `{...def, name: ''}` | 4 failed / 7 passed |
+
+M3 is the one that matters and it was run **with `lib/` present and pristine**
+(`grep -c "name: ''" lib/main/agent-sdk/define-agent.js` → 0). The suite failed
+because the *source* was mutated while the compiled copy was untouched — direct
+proof the fixture now reads `src/`, not `lib/`. All three restorations verified
+with `git diff --stat src/` → empty; **no `src/` file is in this packet's diff.**
+
+**Verification.** Full `npm test`, compiled worktree, tree held still, exit code
+captured before any pipe. BEFORE (clean tree, fix reverted via
+`git checkout`, never `git stash` — protocol): **556 suites / 7,155 passed / 12
+skipped / 7,167 total, exit 0**. AFTER: **556 / 7,155 / 12 / 7,167, exit 0**.
+Identical in every column, including skipped — correct for this packet: it adds
+no test and changes no assertion, it changes only whether four existing tests
+can run in an uncompiled tree. `npm run typecheck` exit 0; `npx eslint` on the
+touched file exit 0.
+
+**The doc reference count in the packet brief was wrong, measured.** The brief
+says "the two protocol/CLAUDE.md references to the four-red trap." There is
+**one**: `PARALLEL_PROTOCOL.md:77`. `CLAUDE.md` has no mention of AgentRegistry
+or the trap at all (`grep -i 'AgentRegistry\|uncompiled'` → no match), so there
+was nothing to update there. The protocol paragraph is architect-owned and was
+**not edited** — exact replacement text is proposed in the merge report, keeping
+the paragraph as history with a "resolved by WP-23" line, because it is still
+the reason the compile step exists. `INTELLIGENCE_ROADMAP.md` also carries
+WP-23 under "Registered, not now" and now wants moving; likewise proposed, not
+edited.
+
+**What generalises.** *A speculative cause and a measured observation must not
+share a paragraph.* WP-19b recorded a real failure (four reds, captured verbatim
+— genuinely useful) and a guess about why (ts-node, `agent.ts`, symlinks) in the
+same finding. Downstream, the guess was carried forward with the observation's
+authority, became "the single outlier WP-23 must explain" in an architect
+adjudication, and bought a packet number. The forensic check that dissolved it —
+does that worktree have a `lib/`? — took one `ls`. **Before a residual earns a
+packet, check whether the environment that produced it still exists on disk.**
+
+**ABI state on exit: SYSTEM NODE (measured 25.9.0 → ABI 141).** This session ran
+jest repeatedly; `better-sqlite3` is built for the shell's Node.
+**`npm run rebuild` is required before loading Local.** No `npm run rebuild` was
+run at any point in this session, so no other worktree's suite was flipped under
+it — the one experiment that would have flipped the shared tree was deliberately
+simulated with a stub instead.
