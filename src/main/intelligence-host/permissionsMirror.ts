@@ -94,6 +94,12 @@ export function initLawRegistry(options: {
   logger: MinimalLogger;
   /** Defaults to the addon's shipped law/ directory. */
   lawDir?: string;
+  /**
+   * WP-17: hand the failure REASON back to the caller so it can be persisted.
+   * Logging it here and returning bare `undefined` left the health surface
+   * able to say the mirror was missing but never why.
+   */
+  onFailure?: (message: string) => void;
 }): LawRegistryHandle | undefined {
   const { storage, logger } = options;
   const warn = (msg: string) => (logger.warn ? logger.warn(msg) : logger.error(msg));
@@ -134,7 +140,13 @@ export function initLawRegistry(options: {
 
     return { registry, loadErrors: errors, verifyMirror };
   } catch (err) {
-    logger.error(`[Intelligence] law registry init failed: ${(err as Error).message}`);
+    const message = (err as Error).message;
+    logger.error(`[Intelligence] law registry init failed: ${message}`);
+    try {
+      options.onFailure?.(message);
+    } catch {
+      /* a reporting hook must never widen the failure it reports */
+    }
     return undefined;
   }
 }

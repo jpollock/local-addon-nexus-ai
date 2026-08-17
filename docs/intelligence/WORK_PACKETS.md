@@ -2686,7 +2686,7 @@ base: 10 failing before this packet). Legacy parity suite
 pins) green and untouched. **ABI: system Node** (v25.9.0 → ABI 141) — `npm run
 rebuild` before loading in Local.
 
-### [ ] WP-17 · Intelligence health surface + degradation tests  **(robustness track — would have caught the M1 silent-init incident)**
+### [x] WP-17 · Intelligence health surface + degradation tests  **(robustness track — would have caught the M1 silent-init incident)**  **(BUILT 2026-08-17 — outcome, SLO justifications and findings at the end of this file)**
 The layer is non-fatal by construction, which converts real failure into
 SILENT absence: the M1 ABI incident ran for hours with green tests, a working
 app, and a dark ledger. Fix: the layer monitors itself with its own
@@ -3313,3 +3313,163 @@ M1+M2 together: the spine, the producers, honest readers, identity,
 policy mirror, runbooks, the assembler with manifests, the eval harness
 that judged it — all live, all audited, all on the record.
 ════════════════════════════════════════════════════════════════════
+---
+
+**ANNOUNCEMENT — WP-17 HOLDS THE CORE LOCK from 2026-08-17 (released on
+merge).** Worktree `.worktrees/wp-17`, branch `wp-17`. Files claimed:
+`src/main/intelligence-host/bootstrap.ts`, `permissionsMirror.ts`, the new
+`health.ts` (+ `__tests__/health.test.ts`, `__tests__/degradation.test.ts`);
+under the integration lock, the minimal registration edits to
+`src/main/mcp/modules/fleet/index.ts`, `src/main/mcp/safety.ts` and
+`src/main/index.ts`; parallel-safe, the new
+`src/main/mcp/modules/fleet/intelligence-health.ts` + its test; and the
+count line in the legacy `tests/main/fleet-tools.test.ts`.
+Baseline in the fresh worktree BEFORE any change: **511 suites / 6462 passed
+/ 12 skipped / 6474 total / 0 failed**. No AgentRegistry reds were present.
+
+**WP-17 OUTCOME — the layer now says when it is not working.**
+
+The non-fatality claims left comments and became pins, and the silent half of
+non-fatality — that a working app plus green tests plus a dark ledger is
+indistinguishable from health — is now visible from three places: an MCP
+tool, a startup log line, and a persisted record that survives the boot it
+happened on.
+
+**Delivered**
+
+- **`bootstrap.ts` persists init OUTCOMES** under one new marker,
+  `intelligence_init_state`: `{ last_failure: { at, stage, message },
+  last_success_at }`, `stage ∈ core | entity-service | law-registry`. Read at
+  the TOP of `initIntelligenceCore`, so a failure written by a previous
+  process is readable from this one. **A later success never clears the
+  failure** — that persistence is the entire requirement; the reader renders
+  it with its age and the current session's state instead. `initLawRegistry`
+  gained an `onFailure` callback for the same reason (its reason used to
+  reach only the log). `IntelligenceCore` gained `folds: Fold[]` so health
+  measures lag against what is WIRED, not a hand-copied list.
+- **`intelligence-host/health.ts`** — `collectIntelligenceHealth()` returns
+  every line as value + threshold + verdict (internal OK/STALE/DARK):
+  core init state incl. the last failure reason; per-producer liveness from
+  ONE ledger `GROUP BY json_extract(source,'$.system')`; a whole-ledger
+  "recorded so far" line; fold lag per wired fold (ledger head vs cursor);
+  `verifyMirror()` divergence count; entity service presence; and the
+  assembler manifest age. Plus `formatHealthLogLine()` for the boot line.
+- **`nexus_intelligence_health`** (Tier 1, registered in `fleet/index.ts`
+  under the integration lock) renders it in Controlled Vocabulary v1: **OK /
+  needs a check / not reporting**, translated source names
+  (`wp-webhook` → *In-site events*), and the non-fatality promise as the
+  closing sentence.
+- **A startup log line**, every boot, whether or not the core came up:
+  `[Intelligence] health: DARK — core=DARK(not started) …`, grep-able by key.
+- **Degradation tests** (TESTING_STRATEGY layer 7): corrupt ledger file,
+  throwing entity service, simulated `NODE_MODULE_VERSION` mismatch — each
+  asserting BOTH halves, the addon unaffected AND the outage reported with
+  its reason. The "addon unaffected" pin reconstructs the exact
+  `HttpEventInterface.onEvent` closure `index.ts` wires, so it pins the real
+  shape rather than a paraphrase of it.
+
+**PRODUCER LIVENESS SLOs — proposed defaults, owner-tunable constants**
+(`PRODUCER_LIVENESS_SLOS`, `health.ts`). Every value sits at the point where
+SILENCE STOPS BEING NORMAL for that producer, because a monitor that cries
+wolf on an idle laptop gets ignored, and an ignored monitor certifies the
+silence it was built to break:
+
+| producer | user name | SLO | why that number |
+|---|---|---|---|
+| `wp-webhook` | In-site events | **3d** | fires only when someone changes a RUNNING Local site; a weekend idle is ordinary, so anything tighter alarms every Monday |
+| `graph-sync` | Plugin and theme updates | **14d** | change-gated — an unchanged fleet emits nothing however often it syncs; silence is the steady state, not a symptom |
+| `graph-sync:wpe` | WP Engine site updates | **14d** | same gate, and WPE refresh is opt-in (default false), so "never" is a legitimate reading |
+| `fold:state-twin` | Change detection | **30d** | drift fires only when two observations disagree; loosest by design, for visibility not alarm |
+| `assembler:chat` | Chat context | **7d** | one manifest per docked-panel turn — the only producer a user drives directly, so the sharpest signal in the table. This line IS the packet's "assembler last-manifest age" |
+
+`FOLD_LAG_SLO_EVENTS = 500` — `runFold` consumes 500 per transaction, so a
+fold caught mid-batch can legitimately sit one batch behind; past one batch
+it is not catching up.
+
+**Three judgment calls worth carrying forward**
+
+- **Never-observed is not degradation.** A producer that has never emitted
+  reads DARK on its own line but is excluded from the summary verdict
+  (`countsTowardWorst: false`). Without this, every machine with no WP Engine
+  account summarises as *not reporting* forever. What keeps the M1 shape
+  catchable is a separate whole-ledger line: a core that started and has
+  recorded NOTHING reads *needs a check* and says why.
+- **Liveness reads `recorded_at`, never `observed_at`.** They are never
+  conflated in this codebase, and here it is load-bearing: a backfill
+  legitimately carries months-old `observed_at`, so a producer that had just
+  run one would read as long dead. Pinned by its own test.
+- **A verdict must not flap.** Folds are debounced 500ms behind emission, so
+  a missing cursor alone is a race, not an outage; DARK is reserved for a
+  missing cursor with more than one whole batch waiting. A verdict that
+  changes twice a second is a verdict nobody trusts.
+
+**Mutation battery — 17 mutations, 17 killed, 1 disclosed survivor.**
+All on production lines, each with a witness naming an observable only the
+mutated line produces. Killers: liveness read from `observed_at` (1 fail);
+never-observed counted toward the summary (3); core init failure not
+persisted — the M1 gap restored (3); a success clearing the earlier failure
+(2); entity-service reason not persisted (1); fold lag hardcoded instead of
+read from `core.folds` (2); missing cursor always DARK (4); `safely()`
+rethrowing (3); missing entity service reported OK (1, restated type-valid
+after the first attempt was a compile error — per the WP-13c doctrine, a
+compile error is protection but not evidence the assertions have teeth);
+empty ledger reported OK (1); a write smuggled into the read path (2);
+internal verdict words leaked to the user (3); the tool's outermost guard
+removed (1); the promise sentence dropped (2); an SLO that can never be
+exceeded (2); the Tier-1 override dropped (1); the tool never registered (2).
+
+**DISCLOSED SURVIVOR: the startup log CALL SITE in `index.ts` is unpinned.**
+Deleting `localLogger.info(formatHealthLogLine(...))` from `src/main/index.ts`
+fails ZERO tests — `formatHealthLogLine` itself is pinned, the wiring is not.
+Labelled rather than fake-pinned: a source-text assertion would be the
+checksum-guard shape the doctrine already rejects. WP-18's e2e journey is the
+honest place to catch it.
+
+**Findings**
+
+1. **The surface mockups artifact could not be found.** Tab 3 was named as
+   the source for the intended rendering and the promise sentence; it is not
+   in `docs/intelligence/user-docs/` (only `what-you-see-today.md` and
+   `your-copy-and-the-live-site.md`), not anywhere in the repo, and not in
+   this account's published artifacts. The rendering was derived from the
+   Controlled Vocabulary v1 table and the packet text instead; the closing
+   sentence is written to that voice, not quoted from the mockup. **If the
+   mockup exists, its sentence should replace `NON_FATALITY_PROMISE`
+   verbatim** — one constant, one edit.
+2. **A new storage marker was created, which is normally an escalation
+   trigger** (PARALLEL_PROTOCOL "Escalation triggers"). Not escalated,
+   because the packet's own wording directs it ("persist init failures to
+   storage in bootstrap"). `intelligence_init_state` follows the
+   `intelligence_*` convention, is owned by `bootstrap.ts`, and is read
+   elsewhere only through `getIntelligenceInitState()`. **CLAUDE.md's marker
+   list should gain it** — owner-approval file, not edited here.
+3. **`PRODUCER_LIVENESS_SLOS` does NOT sit literally beside
+   `DEFAULT_FRESHNESS_SLOS`.** The packet said "beside"; the seam says
+   otherwise — `wp-webhook` and `graph-sync` are HOST facts, and putting them
+   in `src/intelligence/folds/twinStore.ts` teaches the core its host's
+   producer names. Same shape and same tunability, one layer out, with a
+   comment saying why. Flagged in case the owner wants the literal reading.
+4. **Only ONE fold is wired.** `createPluginTwinFold` exists and is exported
+   but has zero production callers; `state-twin/1` is the only fold
+   `bootstrap` catches up. That was invisible before this packet and is now
+   a line in the health report — and because lag is read from `core.folds`, a
+   second fold becomes monitored the day it is wired, with no edit here.
+5. **One deliberate vocabulary exception, pinned rather than hidden.** The
+   "Other sources" line names unmonitored producers by their raw system id
+   (`graph-backfill`), because a diagnostic surface that cannot name an
+   unknown source cannot diagnose it, and inventing a friendly label for
+   something the vocabulary does not cover would be worse.
+6. **`verifyMirror()` logs a warning on divergence**, so the health check can
+   cause a log write. Accepted: it is the mirror's own tripwire, the packet
+   asks for the divergence count, and no state changes. The no-writes pin
+   covers events, twin facts, cursors AND storage.
+
+**Counts.** Baseline in this worktree before any change: **511 suites / 6462
+passed / 12 skipped / 6474 total / 0 failed**. After: **514 suites / 6493
+passed / 12 skipped / 6505 total / 0 failed** — +3 suites, +31 tests, skipped
+UNCHANGED (so the delta is new tests, not artifact-gated drift). Legacy suite
+touched: `tests/main/fleet-tools.test.ts`'s registration count 8 → 9, with
+the new tool named. `npm run typecheck` clean; eslint clean on the new files.
+
+**ABI: system Node** (v25.9.0 → ABI 141). Run `npm run rebuild` before
+loading the addon in Local.

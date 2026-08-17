@@ -57,6 +57,7 @@ import { initIntelligenceCore } from './intelligence-host/bootstrap';
 import { tapGraphService } from './intelligence-host/graphServiceTap';
 import { scheduleGraphBackfill } from './intelligence-host/graphBackfill';
 import { setIntelligenceCore } from './intelligence-host/coreRegistry';
+import { collectIntelligenceHealth, formatHealthLogLine } from './intelligence-host/health';
 import { runSiteLinkMirror } from './intelligence-host/siteLinkMirror';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
 import { WPESyncService } from './events/WPESyncService';
@@ -355,6 +356,16 @@ export default function main(context: any): void {
   // Phase B seeding: one-shot backfill of the graph's current active rows so
   // twins cover the whole fleet, not just post-install changes (marker-guarded,
   // polls until graph.db's async init completes).
+  // WP-17: one line, every boot, whether or not the core came up — a failed
+  // init used to say so once and leave nothing a later session could read.
+  // `grep '\[Intelligence\] health'` now answers "was the layer alive?" from
+  // the log alone. Guarded: the health check must never break startup.
+  try {
+    localLogger.info(formatHealthLogLine(collectIntelligenceHealth({ core: intelligenceCore })));
+  } catch (err) {
+    localLogger.error(`[Intelligence] health check failed (non-fatal): ${(err as Error).message}`);
+  }
+
   if (intelligenceCore) {
     setIntelligenceCore(intelligenceCore); // late-wired consumers (MCP tools) read this registry
     tapGraphService(graphService as never, intelligenceCore, localLogger);

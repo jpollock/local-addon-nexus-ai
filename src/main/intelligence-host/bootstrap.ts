@@ -34,6 +34,14 @@ export interface IntelligenceCore {
   emitter: Emitter;
   twins: TwinStore;
   /**
+   * The folds this core actually catches up (WP-17). Exported so the health
+   * surface measures fold lag against what is WIRED rather than against a
+   * hand-maintained list — a fold added here is monitored the same day, and a
+   * fold that is registered but never drained is exactly the class of silent
+   * failure this packet exists to make visible.
+   */
+  folds: Fold[];
+  /**
    * Identity spine (WP-07). OPTIONAL by construction: an entity-service
    * failure must never take the core down, so consumers fall back to the
    * provisional-id derivation (which mints the identical ids) when absent.
@@ -67,12 +75,90 @@ interface MinimalLogger {
 const SATELLITE_ID_KEY = 'intelligence_satellite_id';
 const FOLD_DEBOUNCE_MS = 500;
 
+/**
+ * WP-17 · Init outcomes are PERSISTED, not just logged.
+ *
+ * The M1 ABI incident ran for hours with green tests, a working app and a dark
+ * ledger: init had failed, said so once in a log nobody was reading, and left
+ * no trace any later session could find. A boot that fails must be visible
+ * from the boot that succeeds — so the last failure (with its stage and
+ * reason) and the last success are written here and read back by the health
+ * surface.
+ *
+ * Owned by this module, per the storage-marker rule in CLAUDE.md; every other
+ * reader goes through `getIntelligenceInitState()`. This is the ONLY write in
+ * the whole health feature — the health surface itself is strictly read-only.
+ */
+const INIT_STATE_KEY = 'intelligence_init_state';
+
+export type InitStage = 'core' | 'entity-service' | 'law-registry';
+
+export interface IntelligenceInitFailure {
+  /** ISO timestamp of the failure. */
+  at: string;
+  stage: InitStage;
+  message: string;
+}
+
+export interface IntelligenceInitState {
+  /** The LAST recorded failure, from ANY boot. Never cleared by a later success —
+   *  that persistence is the whole point; the reader renders it with its age. */
+  last_failure?: IntelligenceInitFailure;
+  /** ISO timestamp of the last boot that completed core init. */
+  last_success_at?: string;
+}
+
+/** In-process mirror of the persisted state, so readers need no storage handle. */
+let initState: IntelligenceInitState = {};
+
+/**
+ * What the last boots recorded. Populated at the top of `initIntelligenceCore`
+ * from storage, so a failure written by a PREVIOUS process is readable from
+ * this one. Empty when init has never been attempted in this process.
+ */
+export function getIntelligenceInitState(): IntelligenceInitState {
+  return initState;
+}
+
+function loadInitState(storage: MinimalStorage): IntelligenceInitState {
+  try {
+    const raw = storage.get(INIT_STATE_KEY);
+    return raw && typeof raw === 'object' ? (raw as IntelligenceInitState) : {};
+  } catch {
+    return {}; // a storage read must never be the thing that breaks startup
+  }
+}
+
+function writeInitState(storage: MinimalStorage, next: IntelligenceInitState): void {
+  initState = next;
+  try {
+    storage.set(INIT_STATE_KEY, next);
+  } catch {
+    /* best effort: the in-process mirror still carries it for this session */
+  }
+}
+
+function recordInitFailure(
+  storage: MinimalStorage,
+  stage: InitStage,
+  err: unknown,
+  now: Date
+): void {
+  writeInitState(storage, {
+    ...initState,
+    last_failure: { at: now.toISOString(), stage, message: String((err as Error)?.message ?? err) },
+  });
+}
+
 export function initIntelligenceCore(options: {
   storage: MinimalStorage;
   logger: MinimalLogger;
   dataDir: string;
 }): IntelligenceCore | undefined {
   const { storage, logger, dataDir } = options;
+  // Read FIRST: a failure recorded by an earlier process must be visible from
+  // this one, whether or not this one succeeds.
+  initState = loadInitState(storage);
   try {
     fs.mkdirSync(dataDir, { recursive: true });
     const ledger = new Ledger(path.join(dataDir, 'ledger.db'));
@@ -142,12 +228,18 @@ export function initIntelligenceCore(options: {
       entities = new EntityService(ledger);
     } catch (err) {
       logger.error(`[Intelligence] entity service init failed (non-fatal): ${(err as Error).message}`);
+      recordInitFailure(storage, 'entity-service', err, new Date());
     }
 
     // WP-08: policy registry v0 — mirrors wpeOperationPermissions, enforces
     // nothing. initLawRegistry carries its own try/catch and returns
-    // undefined on failure, so no extra wrapping is needed here.
-    const law = initLawRegistry({ storage, logger });
+    // undefined on failure, so no extra wrapping is needed here — but the
+    // REASON only reached the log, so WP-17 has it hand the message back.
+    const law = initLawRegistry({
+      storage,
+      logger,
+      onFailure: (message) => recordInitFailure(storage, 'law-registry', new Error(message), new Date()),
+    });
 
     const tap: WpEventTap = (siteId, eventType, payload) => {
       try {
@@ -162,10 +254,14 @@ export function initIntelligenceCore(options: {
     };
 
     logger.info(`[Intelligence] core ready (ledger: ${path.join(dataDir, 'ledger.db')}, via: ${satelliteId})`);
+    // Success is recorded too: without it, a persisted failure has no anchor —
+    // the reader could not say whether it predates the running session.
+    writeInitState(storage, { ...initState, last_success_at: new Date().toISOString() });
     return {
       ledger,
       emitter,
       twins: new TwinStore(ledger),
+      folds: [stateFold],
       entities,
       law,
       tap,
@@ -182,6 +278,9 @@ export function initIntelligenceCore(options: {
     };
   } catch (err) {
     logger.error(`[Intelligence] init failed (non-fatal): ${(err as Error).message}`);
+    // The M1 lesson: a log line is not a record. Persist the reason so the
+    // health surface can name it — including from a later, successful boot.
+    recordInitFailure(storage, 'core', err, new Date());
     return undefined;
   }
 }
