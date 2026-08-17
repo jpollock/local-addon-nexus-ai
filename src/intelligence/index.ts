@@ -115,6 +115,7 @@ export {
   buildProcedureIndex,
   renderProcedureBlock,
   renderProcedureIndex,
+  nextGatedCheckpoint,
   renderProcedureSection,
   resolveProcedure,
   ResolvedProcedure,

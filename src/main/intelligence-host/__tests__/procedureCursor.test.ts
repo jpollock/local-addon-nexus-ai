@@ -355,3 +355,50 @@ describe('non-fatal by construction', () => {
     expect(runForTask(t2)).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// WP-20e · the evidence behind an attestation
+// ---------------------------------------------------------------------------
+
+describe('attestation evidence (WP-20e)', () => {
+  test('names the event that attested each checkpoint, so "how do you know?" has an answer', () => {
+    armedRun([t1, t2]);
+    emitManifest(t2, [{ store: 'ledger', query: 'entity=x topic=episodic.*', returned: 2 }]);
+    emitRationale(t2, 'approved');
+    emitAction(t2, 'wpe_backup_and_verify');
+
+    const cursor = fold();
+    const evidence = cursor.evidence ?? {};
+
+    // Every attested checkpoint carries an id, and the id resolves to a real
+    // event of the topic the runbook's own `evidence.topic` names. An
+    // attestation whose evidence is unverifiable is the shape this whole layer
+    // exists to refuse.
+    for (const id of cursor.attested) {
+      const record = evidence[id];
+      expect(record).toBeDefined();
+      const [event] = core.ledger.query({ limit: 10_000 }).filter((e) => e.id === record.eventId);
+      expect(event).toBeDefined();
+      expect(event.topic).toBe(record.topic);
+    }
+    expect(cursor.attested).toEqual(
+      expect.arrayContaining(['cp.consult-history', 'cp.approval', 'cp.backup'])
+    );
+
+    // The ACTION is the subject, not the outcome: `evidence.topic` on cp.backup
+    // says task.action.executed, and the id has to be one.
+    expect(evidence['cp.backup'].topic).toBe(ACTION_EXECUTED_TOPIC);
+  });
+
+  test('carries no evidence for a checkpoint nothing attested', () => {
+    armedRun([t1, t2]);
+    emitRationale(t2, 'denied');
+
+    const cursor = fold();
+    expect(cursor.denied).toContain('cp.approval');
+    // A denial is evidence that says NO. It must not be filed as evidence that
+    // the checkpoint happened.
+    expect(cursor.evidence?.['cp.approval']).toBeUndefined();
+    expect(cursor.evidence?.['cp.backup']).toBeUndefined();
+  });
+});

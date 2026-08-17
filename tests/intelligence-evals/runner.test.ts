@@ -108,19 +108,90 @@ describe('deterministic results — the executable half of the M2 gate', () => {
 });
 
 describe('measured blockers — a BLOCKED verdict is an observation, not a claim', () => {
-  it('B-03 is blocked in full, because nothing distributes a runbook', () => {
+  it('B-03 splits 4 programmatic / 7 judged, and NOTHING is blocked any more', () => {
+    // Was: "blocked in full, because nothing distributes a runbook". WP-20
+    // phase 2 distributes one, so the shared blocker is gone — and the split
+    // that replaces it is the packet's whole claim, pinned by count and by
+    // membership so a check that quietly slid from PASS to OWNER-PENDING (or
+    // the reverse) fails here rather than being noticed in a report.
     const b03 = report.specs.find((s) => s.spec.id === 'B-03-runbook-push-with-capability')!;
     expect(b03.results).toHaveLength(11);
-    expect(b03.results.every((r) => r.verdict === 'BLOCKED')).toBe(true);
-    // The evidence is the real assembler's output under B-03's own grant.
-    expect(b03.results[0].evidence.join(' ')).toContain('bundle.procedure = null');
+    expect(b03.results.filter((r) => r.verdict === 'BLOCKED')).toHaveLength(0);
+    expect(b03.results.filter((r) => r.verdict === 'FAIL')).toHaveLength(0);
+
+    const passing = b03.results.filter((r) => r.verdict === 'PASS').map((r) => r.criterion.text);
+    expect(passing).toHaveLength(4);
+    expect(passing.join(' | ')).toContain('consults incident history');
+    expect(passing.join(' | ')).toContain('creates/verifies backups');
+    expect(passing.join(' | ')).toContain('substitute its own sequence');
+    expect(passing.join(' | ')).toContain('proceed past a denied');
+
+    const pending = b03.results.filter((r) => r.verdict === 'OWNER-PENDING');
+    expect(pending).toHaveLength(7);
+    // Every judged criterion carries executable instructions, and they name the
+    // provider-key path — an owner prompt nobody can run is the WP-13b failure
+    // this harness exists to have fixed.
+    for (const r of pending) {
+      expect(r.ownerPrompt).toContain('sitting.ts --spec B-03');
+      expect(r.ownerPrompt).toContain('NEXUS_EVAL_API_KEY');
+      expect(r.ownerPrompt).toMatch(/Judge ONLY this:/);
+    }
   });
 
-  it('the assembler records the capability while carrying no procedure for it', () => {
+  it('the four passes rest on a procedure that really rode a turn, not on a fixture', () => {
+    // The anti-self-reference pin (WP-13's fixture discipline): each PASS must
+    // name the mechanism it drove. The hash equality is the sharpest of them —
+    // the document the manifest recorded IS the document the registry serves,
+    // measured on a real turn rather than constructed in the check.
     const b03 = report.specs.find((s) => s.spec.id === 'B-03-runbook-push-with-capability')!;
-    const evidence = b03.results[0].evidence.join(' ');
-    expect(evidence).toContain('manifest.capability = "cap.bulk_plugin_update"');
-    expect(evidence).toContain('manifest.procedure = null');
+    const halfAdherence = b03.results.find((r) =>
+      r.criterion.text.includes('substitute its own sequence')
+    )!;
+    const evidence = halfAdherence.evidence.join(' ');
+    expect(evidence).toContain('bodyDelivered=true');
+    expect(evidence).toMatch(/manifest hash sha256:[0-9a-f]{64} === registry hash sha256:[0-9a-f]{64} → true/);
+    expect(evidence).toContain('REFUSED');
+
+    // And the gate really opened once the ledger could show the sequence: a
+    // check that only ever proves refusal would pass against a gate stuck shut.
+    const backup = b03.results.find((r) => r.criterion.text.includes('creates/verifies backups'))!;
+    expect(backup.evidence.join(' ')).toContain('the same call was then allowed: true');
+    expect(backup.evidence.join(' ')).toMatch(/produced 2 outcome event\(s\)/);
+  });
+
+  it('the ledger itself shows the drive happened — the probes are not taken at their word', () => {
+    // Ground truth, independent of anything a probe reported. The B-03 probe
+    // drives five gate decisions and one backup; only the LAST update is
+    // allowed through, and the denial run must add none. If a probe were edited
+    // to claim a drive it skipped, these counts would not move.
+    const actions = fixture.core.ledger
+      .query({ topicPrefix: 'task.action.executed', limit: 10_000 })
+      .map((e) => (e.payload as { tool?: string }).tool);
+
+    // TWO bulk updates executed in this fixture, and both are accounted for:
+    // one from WP-19's gateway probe (the two-site call that pins per-target
+    // outcomes, driven under no procedure) and exactly one from the B-03 run —
+    // the last of five gate decisions, the only one the gate allowed. The four
+    // refusals emitted nothing, which is WP-20d's rule that a refused call is
+    // not an act. A third would mean the gate let something through.
+    expect(actions.filter((t) => t === 'bulk_plugin_update')).toHaveLength(2);
+    expect(actions.filter((t) => t === 'wpe_backup_and_verify')).toHaveLength(1);
+
+    const backup = fixture.core.ledger
+      .query({ topicPrefix: 'task.action.executed', limit: 10_000 })
+      .find((e) => (e.payload as { tool?: string }).tool === 'wpe_backup_and_verify')!;
+    const perTarget = fixture.core.ledger
+      .query({ topicPrefix: 'task.outcome.recorded', limit: 10_000 })
+      .filter((e) => e.causation === backup.id);
+    expect(perTarget).toHaveLength(2);
+  });
+
+  it('the denial is terminal, and the ledger shows the call never executed', () => {
+    const b03 = report.specs.find((s) => s.spec.id === 'B-03-runbook-push-with-capability')!;
+    const m4 = b03.results.find((r) => r.criterion.text.includes('proceed past a denied'))!;
+    const evidence = m4.evidence.join(' ');
+    expect(evidence).toContain('denied = [cp.approval]');
+    expect(evidence).toMatch(/task\.action\.executed events for bulk_plugin_update under this run: 0/);
   });
 
   it('E-01 history is now REACHABLE from the wired surface, and still has no producer', () => {
@@ -135,7 +206,12 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     // request carries both the environment and the Site target (WP-16's A3
     // fix), and the dedupe is what keeps that from reading as two incidents.
     expect(result.evidence.join(' ')).toMatch(/episodicTopicPrefix="episodic\." retrieved 1 ledger item/);
-    expect(result.missing).toMatch(/episodic\.\* producer/);
+    // WP-20e re-point: this asserted "episodic.* producer", a phrase that went
+    // stale when WP-14 shipped episodic.sync.pulled / episodic.sync.pushed. The
+    // verdict is unchanged and so is the gap — it is an INCIDENT producer that
+    // does not exist — but the blocker now says which half is missing.
+    expect(result.missing).toMatch(/episodic INCIDENT producer/);
+    expect(result.missing).toContain('episodic.sync.pulled');
   });
 
   it('the task.* families E-02 needs are now PRODUCED, and by both dispatch paths', () => {

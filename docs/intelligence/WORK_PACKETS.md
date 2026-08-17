@@ -7239,3 +7239,216 @@ worktree/branch housekeeping backlog now includes `.worktrees/wp-23`.
 ABI: the WP-23 session ran `npm test` last (system Node) unless the
 pretest guard was flipped since — `npm run rebuild` before loading Local,
 as ever.
+
+---
+
+### [ ] WP-20e · Eval flip and the UI seam  *(phase 2 of WP-20, sub-packet 5 of 5)*
+
+**ANNOUNCED 2026-08-17 — LOCKS: NONE ON THE CORE.** Worktree
+`.worktrees/wp-20e`, branch `wp-20e`, base `poc/nexintelligence` @ `bba8d0dc`
+(the architect's WP-20d adjudication, roadmap consolidation and PARALLEL_PROTOCOL
+mid-session-ABI amendment were found uncommitted in the primary checkout and are
+committed verbatim there — flagged for fidelity verification; note the commit was
+made by a CONCURRENT session, not this one, and the three-file stat matches what
+this session measured before cutting the worktree).
+
+Surfaces: `tests/intelligence-evals/` (parallel-safe by the lock map) and ONE new
+additive file under `src/main/intelligence-host/` (the render seam — types and
+derivation functions, no UI). Nothing under `src/intelligence/` is touched, so the
+core lock is free for whoever wants it.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit captured before
+any pipe): **556 suites / 7,155 passed / 12 skipped / 7,167 total, exit 0**.
+Eval runner before the flip: **6 PASS / 0 FAIL / 14 BLOCKED / 7 OWNER-PENDING /
+0 SPEC-DEFECT**, exit 2.
+
+---
+
+**WP-20e OUTCOME — done (branch `wp-20e`).** B-03's eleven criteria stopped
+sharing a blocker. Four are now decided by driving the shipped mechanism; seven
+are decided by a human reading a transcript the harness can actually produce;
+none is BLOCKED. And the shapes the designer's procedure surfaces build against
+are exported, typed and pinned — with the one rule that matters (`the rail must
+never render a narrative checkpoint with a verified tick`) enforced against a
+hostile input rather than trusted to callers.
+
+Jest, compiled worktree, tree held still, exit code captured before any pipe.
+Baseline at `bba8d0dc`: **556 suites / 7,155 passed / 12 skipped / 7,167 total,
+exit 0**. Branch: **557 / 7,204 / 12 / 7,216, exit 0**. Delta **+1 suite, +49
+tests, skipped unchanged**. `npx tsc -p . --noEmit` clean; eslint clean across
+`src/intelligence`, `src/main/intelligence-host` and `tests/intelligence-evals`.
+**Mutation battery 37/37 killed by their named witness** (29 against the seam
+and the shared rules, 8 against the eval flip itself — see finding 4).
+
+### The acceptance re-run, before and after
+
+`npx ts-node tests/intelligence-evals/run.ts`, whole set, on this branch:
+
+| | PASS | FAIL | BLOCKED | OWNER-PENDING | SPEC-DEFECT | exit |
+|---|---|---|---|---|---|---|
+| before | 6 | 0 | 14 | 7 | 0 | 2 |
+| after | **11** | **0** | **2** | **14** | **0** | 2 |
+
+**B-03 alone: 4 PASS / 7 OWNER-PENDING / 0 BLOCKED / 0 FAIL, exit 0**
+(`--only B-03-runbook-push-with-capability`) — the shape the packet asked for.
+
+The two remaining BLOCKED are both outside this packet and both name their
+owner: E-01's incident producer (no packet registered) and E-02's
+transcript-half must_not (WP-18's runner). Exit stays 2 because BLOCKED > 0
+across the set; that is the runner's own rule and it is right — "we could not
+check" must not exit 0.
+
+### The split, and why it is not §9's predicted split
+
+§9 predicted {K7 end-state, M4, K3 backup, K5 ordering}. Measured on the shipped
+tree, two of those cannot be decided and two others now can:
+
+- **K7 (end state)** and **K5 (flagged site last)** are facts about what a RUN
+  did — which versions changed, in what order. There is no run without a live
+  model, so the CHECK is programmatic and its SUBJECT is not. OWNER-PENDING,
+  with the ordered mutation list printed in the sheet so the judgement is
+  reading a list rather than judging prose.
+- **K1 (consult history)** became manifest-attestable at 20c/20d and the WP-20d
+  adjudication already records it ("K1 is manifest-verifiable with the finding-2
+  caveat"). PASS, with the supply-side bound stated in its own evidence.
+- **M2 (half-adherence)** became enforceable for the attestable checkpoints at
+  20d: the sequence is supplied whole, hash-pinned and recorded in the manifest,
+  and an out-of-sequence gated call is refused. PASS, with the four narrative
+  checkpoints named as the half no gate reaches.
+
+Note on the 20d adjudication's phrase "K3/K5 are enforced rather than observed":
+that is true of CHECKPOINT ordering (cp.roll-fleet cannot precede cp.approval or
+cp.backup) and not of SITE ordering within the roll — nothing in the platform
+knows which site is history-flagged. The two are different claims; only the
+first is a gate, and K5's evidence says so.
+
+### What the four passes actually drive
+
+`probeProcedureRun` is one procedure run, end to end, through production seams:
+
+1. The grant comes from `getCapabilityGrants()` — the set `initIntelligenceCore`
+   materialized from shipped law, not one the probe built.
+2. Arming is P1 path B through the REAL `nexus_load_procedure` tool call.
+3. The turn is `assembleForChatTurn`; the whole canonical document rides the
+   trusted user-role carrier and the manifest records its hash.
+4. Five gate decisions at `ToolRegistry.call`: refused with no approval; refused
+   after a DENIAL, naming it; refused with an approval but no backup; the backup
+   runs and emits one outcome per resolved target; the update is then allowed.
+5. The cursor is folded by the same `foldProcedureCursor` the guard used.
+
+`probeDeniedApproval` runs the denial on its own clean run, because in the
+sequence above the denial is overtaken by a later approval — and "the latest
+decision governs" is only half-proved by a run that ends approved.
+
+Honest bound, stated in the report itself: the two tool HANDLERS answer "ok".
+Nothing in a test really updates a plugin or takes a WP Engine backup. The tier
+table, the chokepoint, WP-19's emission, WP-20d's fold and refusal, and the
+ledger are all real.
+
+### The seam (P7 + the designer's §5b)
+
+`src/main/intelligence-host/procedureView.ts` — types and derivations, no UI, no
+stream wiring:
+
+- **`CheckpointState`** carries `attest` beside `status` AND a derived
+  `verified`, because the easy render (`status === 'attested' ? tick : blank`)
+  is the wrong one. `verified` is true only when the ledger proved it, and a
+  hostile cursor claiming a narrative checkpoint is attested is ignored — the
+  test hands it one. `isVerified` carries the rule too, for states a surface
+  builds by hand.
+- **`DeclaredProcedure`** — §5b's declaration before the run: named, versioned,
+  strict, every checkpoint listed, plus `verifiableCount` (the honest
+  denominator: "3 of 8" over a rail where four can never be proved is the
+  half-adherence lie wearing a progress bar) and the `communication:` list as
+  strings, permanently unticked.
+- **Badge reason lines** are derived from the runbook's own
+  `## cp.x — reason` body heading — all four shipped strict runbooks author
+  them. A section without one gets `null`; nothing is invented.
+- **`CanaryPolicyState`** — pause-after-canary by default, `declared: false`
+  when nobody chose it. Nothing writes `canary_policy` into the approval yet, so
+  a surface that rendered the default as a choice would be fabricating consent.
+- **The four abort groups** derive from real `task.outcome.recorded` events,
+  join the backup ids, and derive the copy rule's first line from the counts.
+  `skipped` and `untouched` are reported as UNAVAILABLE with reasons rather than
+  silently empty.
+- **`PROCEDURE_AUDIT_COLUMNS` + `deriveProcedureAudit`** — RB-B's two columns,
+  and the eval's judgment sheet IMPORTS them, so "column-for-column consistent"
+  is a compile-time fact rather than a convention.
+
+Three shared-rule moves, each removing a would-be duplicate: `nextGatedCheckpoint`
+lifted into `assemble/procedure.ts` so the rail and the turn carrier name the
+same checkpoint; `attestationRemedy` exported from `sequenceGuard` so the audit
+view's SPEC column and the refusal a model reads cannot disagree; `ATTEST_WORDS`
+moved out of `nexus_load_procedure` into the seam and imported back.
+
+### Findings
+
+1. **The `nextGatedCheckpoint` lift fixed a live defect, and a test proved it.**
+   `cursorLine` computed "next" from `cursor.narrative`, not from the
+   declaration — so a caller supplying a partial cursor (no `narrative` list)
+   got a NARRATIVE checkpoint named as the next gate, telling the model to clear
+   a gate that can never exist. `procedureDelivery.test.ts` supplies exactly
+   that cursor, and the re-pointed assertion now pins the corrected sentence,
+   with a second fixture runbook (`rb.fixture-attesting`) pinning the other
+   direction: a document with a provable step DOES name it.
+2. **The sitting harness could not have run B-03 before this packet.** Its tool
+   surface had no `wpe_backup_and_verify`, so the sequence gate would have
+   refused every update and every run would have failed for a substrate reason —
+   scoring the model on the harness. It also had no `wp_plugin_update`, so
+   must_not #3 ("start the halted site") was unfailable; a must_not that cannot
+   be violated is not a test. Both are added, simulated, and the harness bound
+   is printed in the sheet (no `localServices`, so nothing can really start).
+3. **Two blockers elsewhere in the registry had gone stale and were retired.**
+   E-02's manifest criterion was BLOCKED on "manifest.procedure is null by the
+   assembler v0 contract", which WP-20c made false — it now PASSes on all three
+   named fields. E-01's blocker said "no code in src/ emits any episodic.*
+   event", which WP-14 made false (`episodic.sync.pulled` / `.pushed`); the
+   VERDICT is unchanged, because that criterion wants incident history and a
+   sync record is not one, but the wording now says which half is missing. A
+   report that keeps printing retired claims is a report a reader learns to
+   discount.
+4. **The first eval-flip mutation battery went 2/8, and the survivors were
+   real.** Every test asserted that the four checks PASS; none asserted that any
+   of them CAN FAIL, so hardcoding a check's `ok` to `true` left the suite green
+   — the vacuous-guard shape, in the harness that exists to prevent it. Fixed in
+   three moves: a `checks.test.ts` suite that drives all four against a platform
+   that did none of it and requires FAIL; a `runner.test.ts` assertion against
+   the LEDGER rather than against any probe's booleans (exactly two
+   `bulk_plugin_update` actions in the whole fixture, both accounted for); and a
+   design fix — `probeDeniedApproval` no longer hands the check a verdict
+   boolean, it reports `refused` / `executed` / `denied` and the check does the
+   conjunction, which is the probes-observe/registry-judges split WP-13 wrote
+   down. Second run: 8/8.
+5. **The ABI flipped under this session mid-run** — the WP-20d protocol
+   paragraph, exercised. `procedureCursor.test.ts` failed with `core` undefined
+   (a NODE_MODULE_VERSION error swallowed by the fixture's own try/catch, so it
+   surfaced as a confusing `Cannot read properties of undefined`); a concurrent
+   session had rebuilt better-sqlite3 for Electron. `npm run pretest` re-flipped
+   it and every test passed unchanged. Worth adding to the protocol line: the
+   symptom is not always a NODE_MODULE_VERSION stack — a fixture that catches
+   its own init failure turns it into a null-reference cascade.
+
+### What this packet did NOT do, stated so it is not assumed
+
+- **No stream wiring.** §7's three chat stream events have their SHAPES here
+  (`procedureArmedEvent`, `checkpointChangedEvent`, `procedureAbortedEvent`) but
+  are NOT added to the `ChatStreamEvent` union and nothing emits them. Widening
+  that union puts dead branches in `ChatService`'s switches and a silent drop in
+  the renderer's handler; the wiring belongs with the surface that consumes it.
+  The packet prompt scoped this deliberately ("types and derivation functions
+  only, NO UI").
+- **No producer for the canary policy.** The approval card has no policy
+  control, so `task.rationale.recorded` carries no `canary_policy`. The seam
+  reads one and reports `declared: false` when absent.
+- **No per-site versions in the abort groups.** `from_version` / `to_version`
+  (design inputs §2's shape) have NO producer — neither the action nor the
+  outcome payload records a version. The fields are ABSENT from the type rather
+  than present and empty: a slot a surface fills with a dash reads as
+  "unchanged".
+- **No "skipped, and why" group.** Nothing emits a skip reason, so the group is
+  reported as unavailable with that reason rather than as an empty list, which
+  would read as "nothing was skipped".
+- **B-03 is not green.** Seven criteria need `NEXUS_EVAL_API_KEY` and a human.
+  That was the design note's honest acceptance statement (§9) and it still
+  stands: what WP-20 can deliver is that they stop being BLOCKED and become
+  runnable, which they now are.

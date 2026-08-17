@@ -54,6 +54,36 @@ Update the fixture fleet, carefully.
 Ask the ledger first.
 `;
 
+/**
+ * WP-20e · a strict runbook that DECLARES an attestable checkpoint.
+ *
+ * `STRICT_RUNBOOK` above declares none — every checkpoint falls to the
+ * `narrative` default — so it can only ever pin the "nothing is gateable" half
+ * of the cursor line. This one pins the other half.
+ */
+const ATTESTING_RUNBOOK = `---
+id: rb.fixture-attesting
+kind: runbook
+version: 1.0.0
+strictness: strict
+capability: cap.fixture_attesting
+owner: ops
+checkpoints:
+  - id: cp.consult-history
+    attest: manifest
+    evidence: { topic: task.context.assembled }
+  - id: cp.dry-run
+    attest: narrative
+  - id: cp.approval
+    attest: event
+    evidence: { topic: task.rationale.recorded, decision: approved }
+---
+
+# Fixture attesting
+
+Two provable steps and one that never can be.
+`;
+
 const GUIDED_RUNBOOK = `---
 id: rb.fixture-guided
 kind: runbook
@@ -121,6 +151,12 @@ function depsWith(reg: RunbookRegistry, over: AssembleDeps = {}): AssembleDeps {
 }
 
 const strictReg = () => registryOf(['runbooks/fixture-update.md', STRICT_RUNBOOK]);
+const attestingReg = () => registryOf(['runbooks/fixture-attesting.md', ATTESTING_RUNBOOK]);
+const ATTESTING_GRANT = {
+  capability: 'cap.fixture_attesting',
+  runbookId: 'rb.fixture-attesting',
+  runbookHash: documentHash(ATTESTING_RUNBOOK),
+};
 
 // ---------------------------------------------------------------------------
 
@@ -239,7 +275,34 @@ describe('delivery — the full document, once', () => {
     expect(turn).not.toContain('Update the fixture fleet, carefully.');
     expect(turn).toContain('remains in effect');
     expect(turn).toContain('cp.consult-history');
-    expect(turn).toContain('cp.approval'); // the NEXT unattested checkpoint, named
+    // WP-20e re-point, and it is a FIX rather than a relabelling. This fixture's
+    // three checkpoints all default to `attest: narrative`, and the cursor
+    // supplied here carries no `narrative` list — so the old rule
+    // (`!cursor.narrative.includes(id)`) named cp.approval as the "next gated
+    // checkpoint", telling the model to clear a gate that can never exist. That
+    // is the exact failure `cursorLine`'s own comment warns about, reachable
+    // through the public API whenever a caller supplies a partial cursor.
+    // `nextGatedCheckpoint` keys on the DECLARATION instead, so a document with
+    // nothing provable says so.
+    expect(turn).toContain('Every checkpoint the platform can verify is attested');
+    expect(turn).not.toContain('Next gated checkpoint');
+
+    // …and the other direction, on a document that DOES declare a provable
+    // step: the next gated checkpoint is named, and the narrative one before it
+    // is stepped over rather than announced as a gate.
+    const gateable = await assemble(
+      baseRequest({
+        context: { procedureHash: ATTESTING_GRANT.runbookHash },
+        procedure: {
+          grants: [ATTESTING_GRANT],
+          armed: { capability: ATTESTING_GRANT.capability, armedBy: 'predicate' },
+          cursor: { attested: ['cp.consult-history'], narrative: ['cp.dry-run'] },
+        },
+      }),
+      depsWith(attestingReg())
+    );
+    expect(gateable.blocks.turn).toContain('Next gated checkpoint: cp.approval');
+    expect(gateable.blocks.turn).not.toContain('Next gated checkpoint: cp.dry-run');
 
     // The cadence is the whole point of ADR-20, so it is pinned as a RATIO of
     // two measured numbers rather than against a remembered token count: a

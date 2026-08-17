@@ -51,6 +51,7 @@ import { TrustClass } from '../envelope/types';
 export * from './types';
 export {
   buildProcedureIndex,
+  nextGatedCheckpoint,
   renderProcedureBlock,
   renderProcedureIndex,
   renderProcedureSection,

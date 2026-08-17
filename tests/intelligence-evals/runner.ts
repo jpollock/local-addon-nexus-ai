@@ -13,11 +13,12 @@ import { createEvalFixture, EvalFixture } from './fixture';
 import { criteriaOf, loadEvalSpecs } from './specLoader';
 import { checkFor } from './checks';
 import {
+  probeDeniedApproval,
   probeEnvelopeSchema,
   probeEpisodicRetrieval,
   probeGatewayEmission,
   probeManifestEvent,
-  probeProcedureDistribution,
+  probeProcedureRun,
   probeTimestampDiscipline,
   probeTopicFamily,
 } from './probes';
@@ -64,16 +65,23 @@ export const SPEC_FINDINGS: Record<string, SpecFinding[]> = {
     {
       kind: 'NOTE',
       summary:
-        'B-03 is WP-20\'s acceptance eval, not an M2 gate — ruled 2026-08-17. Its eleven BLOCKED ' +
-        'criteria are therefore EXPECTED, not a regression.',
+        'B-03 is WP-20\'s acceptance eval, not an M2 gate — ruled 2026-08-17. WP-20 phase 2 has ' +
+        'shipped, so the eleven criteria are no longer BLOCKED: four are platform properties this ' +
+        'report DRIVES, and seven need a live model.',
       detail: [
         'Was a SPEC-DEFECT here: the record had B-03 gating M2 while the assembler contract ' +
           '(src/intelligence/assemble/types.ts:16-18) had procedure distribution gated on B-03.',
         'Ruled at the WP-13 escalation and applied to the record: the spec file carries a ROLE ' +
           'RULING block naming WP-20 as the packet B-03 accepts, and the WP-11 adjudication\'s ' +
           'milestone-DoD sentence is superseded by the WP-13 adjudication in WORK_PACKETS.md.',
-        'Kept as a NOTE rather than deleted so the report still explains why every B-03 criterion ' +
-          'reads BLOCKED: the runbook is not delivered yet, by design, until WP-20 ships.',
+        'WP-20e (2026-08-17) then flipped the criteria themselves. The blocker they shared — ' +
+          '"nothing delivers a runbook to an actor" — is retired: a grant arms a capability, the ' +
+          'hash-pinned document rides the trusted turn carrier, and an out-of-sequence gated call ' +
+          'is refused at the dispatch chokepoint. This report drives all three, per run.',
+        'What is left is not a platform gap: "did it canary one low-risk site", "was the flagged ' +
+          'site last", "did it say it skipped the halted one" are facts about what an ACTOR did. ' +
+          'They are OWNER-PENDING with sitting-harness instructions, and they need ' +
+          'NEXUS_EVAL_API_KEY — the one dependency of this milestone that is not code.',
       ],
     },
   ],
@@ -82,11 +90,13 @@ export const SPEC_FINDINGS: Record<string, SpecFinding[]> = {
       kind: 'NOTE',
       summary:
         'E-01\'s fixture cannot be built by any production producer: nothing in src/ emits an ' +
-        'episodic.* event.',
+        'episodic INCIDENT event.',
       detail: [
-        'The only topics emitted anywhere in src/ are state.plugin.observed, state.plugin.removed, ' +
-          'state.theme.observed, state.user.observed, state.site.observed, state.drift.detected, ' +
-          'semantic.content.changed and task.context.assembled.',
+        'Measured at WP-20e rather than inherited: the episodic family is NO LONGER empty — ' +
+          'WP-14\'s syncProducer.ts emits episodic.sync.pulled and episodic.sync.pushed, and ' +
+          'WP-19/WP-20b added task.action.executed, task.outcome.recorded, ' +
+          'task.rationale.recorded, control.grant.issued and control.grant.revoked. What no ' +
+          'producer emits is an INCIDENT: "this update broke checkout here, before".',
         'This runner therefore plants the incident history through the real Emitter (real ' +
           'validation, real ids) under source.system="fixture:e01-incident", and says so in the ' +
           'evidence of every criterion that leans on it. Nothing in this report rests silently on ' +
@@ -117,7 +127,13 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
     // state, and re-running them per criterion would let two criteria in the
     // same report disagree about what the ledger contains.
     const probes = {
-      procedure: await probeProcedureDistribution(fixture),
+      // WP-20e. Runs FIRST, and it is the one probe that changes the world: it
+      // arms a capability, delivers a runbook, and drives five gate decisions
+      // through the production chokepoint. Everything below therefore reads a
+      // ledger that contains a real procedure run — which is the point, and is
+      // why the schema and timestamp probes still run last.
+      procedure: await probeProcedureRun(fixture),
+      deniedApproval: await probeDeniedApproval(fixture),
       episodic: await probeEpisodicRetrieval(fixture),
       manifest: await probeManifestEvent(fixture),
       // WP-19. Runs BEFORE the schema/timestamp probes below read the ledger,

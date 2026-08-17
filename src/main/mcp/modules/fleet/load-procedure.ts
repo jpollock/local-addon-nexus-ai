@@ -30,19 +30,19 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
 import { getCapabilityGrants } from '../../../intelligence-host/capabilityGrants';
 import { recordArmingRequest } from '../../../intelligence-host/procedureArming';
-import { AttestClass, Runbook } from '../../../../intelligence';
-
 /**
  * How a checkpoint's attestation class reads to whoever is looking at it.
  * Controlled-vocabulary discipline, applied to procedure rather than to
  * freshness: the words distinguish proof from testimony, and `narrative`'s
  * wording is deliberately the least flattering of the three.
+ *
+ * WP-20e moved the table into the render seam and imports it back, because the
+ * rail a human reads and this acknowledgement a model reads describe the same
+ * checkpoint — two copies of these three sentences would be two places for them
+ * to drift.
  */
-const ATTEST_WORDS: Record<AttestClass, string> = {
-  event: 'verified from records',
-  manifest: 'verified as supplied',
-  narrative: 'your account only, not verified',
-};
+import { ATTEST_WORDS } from '../../../intelligence-host/procedureView';
+import { Runbook } from '../../../../intelligence';
 
 export const loadProcedureHandler: McpToolHandler = {
   definition: {

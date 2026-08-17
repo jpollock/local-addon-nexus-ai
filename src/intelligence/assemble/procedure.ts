@@ -59,8 +59,29 @@ import {
   ProcedureRequest,
   RunbookRegistryPort,
 } from './types';
-import { Runbook } from '../law/types';
+import { AttestClass, Runbook } from '../law/types';
 import { STRICT_RUNBOOK_CEILING_BYTES } from '../law/runbookRegistry';
+
+/**
+ * The next checkpoint the platform can PROVE — the one the gateway refuses this
+ * capability's tools until it sees (WP-20d).
+ *
+ * Exported, and used by both the turn carrier below and WP-20e's render seam,
+ * because the model is told "Next gated checkpoint: X" in the same moment a rail
+ * shows one checkpoint as active. Two copies of this two-line rule would be two
+ * places for the product to contradict itself about which step it is standing
+ * on — the duplicated-rule shape this codebase pins with a shared case table
+ * when it cannot avoid it, and avoids outright when it can.
+ *
+ * A narrative checkpoint is skipped, always: nothing can ever attest one, so
+ * naming it would tell the actor to clear a gate that does not exist.
+ */
+export function nextGatedCheckpoint<T extends { id: string; attest: AttestClass }>(
+  checkpoints: readonly T[],
+  isAttested: (checkpoint: T) => boolean
+): T | undefined {
+  return checkpoints.find((c) => c.attest !== 'narrative' && !isAttested(c));
+}
 
 /**
  * The delivery-side ceiling, in estimated tokens, derived from the registry's
@@ -305,8 +326,10 @@ function cursorLine(
   // is the one the gateway will refuse this capability's tools until it sees.
   // A naive first-unattested would name a narrative checkpoint that nothing can
   // ever attest, and the model would be told to clear a gate that does not
-  // exist — every turn, forever.
-  const next = checkpoints.find((c) => !c.attested && !narrative.includes(c.id));
+  // exist — every turn, forever. WP-20e lifted the rule into
+  // `nextGatedCheckpoint` so the render seam names the same checkpoint this
+  // sentence does.
+  const next = nextGatedCheckpoint(checkpoints, (c) => c.attested);
 
   const parts = [`Attested: ${done.length ? done.join(', ') : 'none yet'}.`];
   if (denied.length) {
