@@ -3946,3 +3946,38 @@ loading the addon in Local.
   .worktrees/wp-13 .worktrees/wp-14 .worktrees/wp-17 .worktrees/wp-18`
   (one at a time if the multi-arg form complains) + `git branch -d` the
   merged branches; `nexus sites stop nexus-e2e-test@local` if wanted.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-15; WAVE 2 CLOSED (appended by the architect
+session, 2026-08-17).**
+
+- **WP-15 ACCEPTED.** Merge 684b7a99. All three decisions RATIFIED, the
+  first as standing doctrine: **"a read that writes produces events at a
+  rate driven by how often someone looks, which isn't a fact about the
+  fleet"** — the read-side principle now has its canonical sentence, and
+  the packet's own "optionally emit" was correctly overridden by it. The
+  `worst !== 'OK'` reading preserves the never-observed doctrine against
+  the packet's literal wording — correct; both directions pinned. The
+  'unknown'-flow ruling is satisfied as implemented (the union exists for
+  producers that genuinely can't determine flow; WP-14's seam can, so it
+  says so). No producer-side change wanted.
+- Findings adopted: row-shape-is-contract (a widened read row is an output
+  change — the failing toEqual was right); enforcement lists live in the
+  test, never exported from production; the ts-jest cache lesson is now in
+  the protocol (--no-cache cross-check both directions); the plugins_only
+  early-return gap (code-in-sync copy says nothing about being 60 days
+  behind on content) is recorded as a small follow-up for the M3 reader
+  pass — disclosed, not hidden, correct.
+
+════════════════════════════════════════════════════════════════════
+**WAVE 2 CLOSED, 2026-08-17.** WP-17 → WP-14 ∥ WP-18 → WP-15, all
+merged, all adjudicated. The three-layer substrate is real: lineage
+recorded (the ledger as the ONLY durable record), divergence per flow in
+the user's words, the pipeline monitoring itself and warning when
+degraded. Remaining on the roadmap: M3 remainder (task frame,
+instruments, WP-19 gateway, WP-20 procedure, surfaces B/C/D, hub),
+backlog (WP-04d, plugins_only gap, AgentRegistry capture instruction
+still standing, headless CHAT_SEND seam), and the milestone cadence
+(surface review + eval sitting when M3's language lands).
+════════════════════════════════════════════════════════════════════

@@ -29,6 +29,12 @@ When comparing runs, diff the **skipped** count as well as failures; a
 skipped-count change explains a test-count delta that would otherwise read
 as a regression or a phantom gain.
 
+**A worktree test result that the primary checkout cannot reproduce is
+suspect in BOTH directions** (WP-15 finding): a poisoned ts-jest cache
+reported a failure that did not exist. Before diagnosing a
+worktree-only failure as real, re-run the suite with `--no-cache`; before
+trusting a worktree-only green, likewise.
+
 **Before creating the worktree, confirm the intelligence layer is
 actually tracked**: `git status` in the primary checkout must not show
 `src/intelligence/` or `docs/intelligence/` as untracked — if it does, stop

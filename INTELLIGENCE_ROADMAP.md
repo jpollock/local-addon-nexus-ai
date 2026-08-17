@@ -67,17 +67,17 @@ before wave-2 code freezes them; the owner clears the small decision queue.*
 - [ ] After WP-13 reports: the consolidated eval sitting (SF parse + M4 +
       whatever lands OWNER-PENDING)
 
-## Next — Wave 2 (starts when Wave 1 merges AND Track B has named the vocabulary)
+## Wave 2 — COMPLETE (2026-08-17)
 
-Sequential on the core lock, with one parallel lane:
-1. [ ] **WP-17** health surface + degradation tests *(first — so WP-14's
-       producer is born monitored; vocabulary from Track B)*
-2. [ ] **WP-14** sync-event producer + lineage edges *(makes the lineage
-       record real)* — **WP-18** e2e harness runs parallel (read-only)
-3. [ ] **WP-15** divergence comparator + lineage-aware drift
+1. [x] **WP-17** health surface + degradation tests
+2. [x] **WP-14** sync-event producer + lineage edges — [x] **WP-18** e2e
+       harness + real-ledger replay (parallel)
+3. [x] **WP-15** divergence comparator + lineage-aware drift
 
-Exit state: the three-layer model has its full substrate — lineage recorded,
-divergence measurable per flow, pipeline watching itself.
+**Exit state REACHED: lineage recorded (and the ledger IS the only durable
+record — WP-14 finding), divergence measurable per flow in the controlled
+vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
+(WP-16/13/12b + 13b/13c) and the M2 sitting closed earlier the same day.
 
 ## Later — deliberately not now
 
