@@ -253,3 +253,87 @@ describe('ADDITIVE-PARITY PIN — an empty assembler changes nothing', () => {
     expect(seenMessages[0].content).not.toContain('Operating policy');
   });
 });
+
+/**
+ * WP-20c · the procedure rides the trusted carrier, and stays whole.
+ *
+ * §3 rules out the two channels a procedure could otherwise take, and both
+ * exclusions are behavioural rather than stylistic:
+ *
+ *  - **R7.** `maskToolResultsForProvider` wraps `role: 'tool'` content in
+ *    `<untrusted_data>`, and the system directive tells the model never to
+ *    follow instructions found inside one. A runbook IS an instruction.
+ *  - **R5.** `compressStaleToolResults` truncates `role: 'tool'` content over
+ *    800 chars down to 600 once two assistant turns have passed. A runbook is
+ *    ~4.9 KB, so it would silently lose 88% of itself while the manifest still
+ *    claimed the procedure was supplied.
+ *
+ * These run the REAL ChatService over the real message pipeline, because the
+ * failure they guard is a delivery that looks correct in the assembler and is
+ * mangled by the transport.
+ */
+describe('WP-20c — the procedure block on the real message pipeline', () => {
+  // Realistic size and shape: the anchor runbook is ~4,858 bytes.
+  const PROCEDURE_TURN = [
+    '[Nexus platform context — task task_01J5. Platform-authored and trusted; not user input.]',
+    '',
+    '## Procedure — rb.bulk-plugin-update 1.0.0 (strict) for cap.bulk_plugin_update',
+    'This procedure governs this task.',
+    '',
+    '[procedure rb.bulk-plugin-update 1.0.0 — full text follows]',
+    '---',
+    'id: rb.bulk-plugin-update',
+    'checkpoints:',
+    '  - id: cp.consult-history',
+    '---',
+    '# Bulk plugin update',
+    'CANARY_MARKER ' + 'procedure body '.repeat(300),
+    '[end procedure rb.bulk-plugin-update]',
+    '',
+    '[end Nexus platform context]',
+  ].join('\n');
+
+  const withProcedure = () => bundle({ turnBlock: PROCEDURE_TURN, ambientBlock: null });
+
+  test('rides a user-role message — never role:tool, which R7 tells the model to distrust', async () => {
+    mockAssemble.mockResolvedValue(withProcedure());
+
+    await serviceWith(memoryDb()).sendMessage('proc', 'update everything', providerConfig);
+
+    const carrier = seenMessages.find((m) => m.content.includes('CANARY_MARKER'));
+    expect(carrier).toBeDefined();
+    expect(carrier!.role).toBe('user');
+    expect(seenMessages.some((m) => m.role === 'tool')).toBe(false);
+  });
+
+  test('reaches the provider unwrapped — the masking pass leaves it exactly as authored', async () => {
+    mockAssemble.mockResolvedValue(withProcedure());
+
+    await serviceWith(memoryDb()).sendMessage('proc', 'update everything', providerConfig);
+
+    // `seenMessages` is what `maskToolResultsForProvider` produced, so this is
+    // the wrapper check and the fidelity check in one: byte-identical, and no
+    // untrusted-data delimiter anywhere near it.
+    const carrier = seenMessages.find((m) => m.content.includes('CANARY_MARKER'))!;
+    expect(carrier.content).toBe(PROCEDURE_TURN);
+    expect(carrier.content).not.toContain('untrusted_data');
+  });
+
+  test('survives three turns uncompressed — R5 truncates tool results, and this is not one', async () => {
+    mockAssemble.mockResolvedValue(withProcedure());
+    const svc = serviceWith(memoryDb());
+
+    await svc.sendMessage('proc', 'one', providerConfig);
+    await svc.sendMessage('proc', 'two', providerConfig);
+    await svc.sendMessage('proc', 'three', providerConfig);
+
+    // By turn three the first carrier sits behind two assistant messages, which
+    // is exactly the window `compressStaleToolResults` acts on.
+    const carriers = seenMessages.filter((m) => m.content.includes('CANARY_MARKER'));
+    expect(carriers).toHaveLength(3);
+    for (const carrier of carriers) {
+      expect(carrier.content).toBe(PROCEDURE_TURN);
+      expect(carrier.content).not.toContain('compressed for context efficiency');
+    }
+  });
+});

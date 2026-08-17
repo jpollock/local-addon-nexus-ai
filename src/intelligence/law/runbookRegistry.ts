@@ -39,10 +39,16 @@
  * whole file) and what the delivered payload actually is: for these runbooks the
  * obligations that make a procedure a procedure (checkpoints, aborts,
  * communication) live in the frontmatter, and a ceiling that ignores them
- * measures the smaller half of what rides the turn. This reproduces the ruled
- * outcome exactly — three loaded, `rb.incident-response` and
- * `rb.staging-promotion` refused — and it is the reading recorded in the
- * WP-20a packet notes for ratification.
+ * measures the smaller half of what rides the turn. RATIFIED at the WP-20a
+ * adjudication, and corrected at source in ADR-17's third amendment.
+ *
+ * At WP-20a this reading refused two of the five shipped runbooks —
+ * `rb.incident-response` (15,853 bytes) and `rb.staging-promotion` (10,453) —
+ * which is the outcome the phase-1 ruling predicted. **WP-20c split both**, so
+ * the shipped set is now seven documents and none of them is refused; the
+ * ceiling's behaviour is unchanged and is pinned over fixtures rather than over
+ * the shipped set (`runbookRegistry.test.ts`, and the delivery-side guard in
+ * `assemble/procedure.ts`).
  *
  * The ceiling applies to `strictness: strict` only, per the note's own
  * qualifier. Consequence, measured and stated so it is not a surprise: the two
@@ -277,6 +283,7 @@ export class RunbookRegistry {
       toolScope: fm.tool_scope ?? 'advisory',
       ...(armsOn ? { armsOn } : {}),
       body: doc.body,
+      canonicalText: doc.canonicalText,
       frontmatter: doc.frontmatter,
     };
 

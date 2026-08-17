@@ -57,6 +57,14 @@ export interface LawDocument {
   hash: string;
   /** Byte length of that same canonical text. The runbook ceiling measures this. */
   canonicalBytes: number;
+  /**
+   * That same canonical text itself (WP-20c). The hash pins it, the ceiling
+   * measures it, and the turn carrier DELIVERS it — one string for all three,
+   * because a payload that is not the thing the hash covers is a payload no
+   * grant authorised. Reconstructing it from `body` + `frontmatter` at delivery
+   * time would re-serialise the YAML and break that identity silently.
+   */
+  canonicalText: string;
 }
 
 /* ------------------------------------------------------------------ *
@@ -156,8 +164,10 @@ export interface Runbook {
   tools: RunbookTool[];
   toolScope: ToolScope;
   armsOn?: RunbookArmingPredicate;
-  /** Markdown prose after the frontmatter block — the procedure a turn carries. */
+  /** Markdown prose after the frontmatter block. */
   body: string;
+  /** The canonical whole document — what the hash covers and what a turn carries (WP-20c). */
+  canonicalText: string;
   /** The raw frontmatter, kept for fields no packet models yet. */
   frontmatter: Record<string, unknown>;
 }

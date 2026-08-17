@@ -21,6 +21,8 @@ import {
   AssembleRequest,
   ContextBundle,
   EntityRef,
+  ProcedureOutcome,
+  ProcedureRequest,
   SemanticHit,
   TaskFrame,
 } from '../../intelligence';
@@ -50,6 +52,16 @@ export interface ChatAssemblyRequest {
    * rides there, so the per-turn carrier re-asserts by hash alone (ADR-20).
    */
   buildingSystemPrompt: boolean;
+  /**
+   * WP-20c. The grants this actor holds and the capability armed for this turn.
+   *
+   * **WP-20b owns everything that decides those two things** — the
+   * `capabilityGrants` setting, `armFor()`, and the mid-turn injection for a
+   * model-requested procedure. This packet owns only what happens once one of
+   * them says a capability is armed. Absent (every caller today) ⇒ no procedure
+   * section, no index, and a turn block byte-identical to the pre-WP-20 build.
+   */
+  procedure?: ProcedureRequest;
 }
 
 export interface ChatAssemblyResult {
@@ -69,6 +81,12 @@ export interface ChatAssemblyResult {
    * would silently strip every tool from the chat model.
    */
   grants: string[] | undefined;
+  /**
+   * WP-20c: what the procedure plane did this turn — delivered, refused, or
+   * `null` for "nothing armed". The turn block already carries the prose; this
+   * is the structured half, for the §7 render shapes and for WP-20d's cursor.
+   */
+  procedure: ProcedureOutcome | null;
 }
 
 /**
@@ -81,9 +99,26 @@ export interface ChatAssemblyResult {
  */
 const sessionPolicyHash = new Map<string, string>();
 
-/** Drop a session's remembered policy assertion (chat clear / session delete). */
+/**
+ * WP-20c: the same memory, for procedure (ADR-20 extended, §3's cadence).
+ *
+ * Host state for the same ADR-10 reason as the policy map above. Two rules make
+ * it correct rather than merely present:
+ *
+ *  - It records the hash of the DOCUMENT that rode, not the capability, so a
+ *    second capability arming in the same session re-delivers in full (its hash
+ *    differs), and an edited runbook re-delivers in full (same).
+ *  - It is CLEARED whenever a turn does not deliver — a disarm, a refusal, a
+ *    turn with nothing armed. The next arming turn then re-asserts the whole
+ *    document rather than assuming the actor still carries a procedure it was
+ *    told to stop following.
+ */
+const sessionProcedureHash = new Map<string, string>();
+
+/** Drop a session's remembered assertions (chat clear / session delete). */
 export function forgetChatAssemblySession(sessionId: string): void {
   sessionPolicyHash.delete(sessionId);
+  sessionProcedureHash.delete(sessionId);
 }
 
 export async function assembleForChatTurn(
@@ -118,10 +153,12 @@ export async function assembleForChatTurn(
       task: { id: taskId, intent: req.userMessage },
       targets,
       ...(frame ? { frame } : {}),
+      ...(req.procedure ? { procedure: req.procedure } : {}),
       surface: CHAT_SURFACE,
       policyDivergences,
       context: {
         policyVersionHash: sessionPolicyHash.get(req.sessionId),
+        procedureHash: sessionProcedureHash.get(req.sessionId),
         rebuildingDurableContext: req.buildingSystemPrompt,
       },
       retrieval: { semanticLimit: SEMANTIC_LIMIT },
@@ -129,6 +166,9 @@ export async function assembleForChatTurn(
 
     const bundle = await assemble(request, {
       law: core.law?.registry,
+      // WP-20a built this index at bootstrap; 20c reads it rather than opening
+      // the law directory a second time.
+      runbooks: core.law?.runbooks,
       ledger: core.ledger,
       twins: core.twins,
       semantic: semanticPortFor(req.services),
@@ -136,6 +176,11 @@ export async function assembleForChatTurn(
     });
 
     if (bundle.ambient) sessionPolicyHash.set(req.sessionId, bundle.ambient.versionHash);
+    if (bundle.procedure?.status === 'delivered') {
+      sessionProcedureHash.set(req.sessionId, bundle.procedure.hash);
+    } else {
+      sessionProcedureHash.delete(req.sessionId);
+    }
 
     emitManifest(core, bundle, targets);
 
@@ -145,6 +190,7 @@ export async function assembleForChatTurn(
       turnBlock: bundle.blocks.turn,
       // See ChatAssemblyResult.grants — [] must never become a filter.
       grants: bundle.tools.length > 0 ? bundle.tools.map((t) => t.name) : undefined,
+      procedure: bundle.procedure,
     };
   } catch {
     return null; // swallow everything: a chat turn is never broken by this layer

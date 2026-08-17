@@ -32,15 +32,32 @@ import {
   IntelligencePlane,
   PolicyConstraintView,
   PolicySet,
+  ProcedureIndexEntry,
   RetrievalRecord,
   RetrievedItem,
   RoutingRecord,
   TaskFrame,
 } from './types';
+import {
+  buildProcedureIndex,
+  renderProcedureBlock,
+  renderProcedureSection,
+  resolveProcedure,
+  ResolvedProcedure,
+} from './procedure';
 import { ulid } from '../envelope/ulid';
 import { TrustClass } from '../envelope/types';
 
 export * from './types';
+export {
+  buildProcedureIndex,
+  renderProcedureBlock,
+  renderProcedureIndex,
+  renderProcedureSection,
+  resolveProcedure,
+  ResolvedProcedure,
+  PROCEDURE_TOKEN_CEILING,
+} from './procedure';
 
 // ---------------------------------------------------------------------------
 // Token estimation
@@ -658,9 +675,19 @@ export function renderTurnBlock(
   freshness: FreshnessRecord[],
   retrieved: RetrievedItem[],
   deps: AssembleDeps,
-  routing?: RoutingRecord[]
+  routing?: RoutingRecord[],
+  procedure?: { resolved: ResolvedProcedure | null; index: ProcedureIndexEntry[] }
 ): string | null {
   const sections: string[] = [];
+
+  // §3: the procedure is the FIRST section. It is the instruction this turn is
+  // about; policy, routing, freshness and retrieval are the ground it stands on,
+  // and an instruction that trails its own evidence gets skimmed. The index
+  // rides directly under it because both answer "what procedures are in play".
+  const procedureSection = procedure
+    ? renderProcedureBlock(procedure.resolved, procedure.index)
+    : null;
+  if (procedureSection) sections.push(procedureSection);
 
   if (set) {
     if (set.assertFull) {
@@ -789,6 +816,11 @@ export async function assemble(
   const now = (deps.now ?? (() => new Date()))();
   const set = buildPolicySet(req, deps);
 
+  // WP-20c. Resolved before the fail-closed decision, because a refused
+  // procedure is one of that decision's inputs.
+  const resolvedProcedure = resolveProcedure(req.procedure, deps, req.context?.procedureHash);
+  const procedureIndex = buildProcedureIndex(req.procedure, deps);
+
   // ADR-7: the autonomy class, not the operation, selects the semantics. An
   // autonomous actor with no policy set must fail closed — it gets a refusal
   // bundle with no grants and no retrieval, rather than acting ungoverned.
@@ -796,6 +828,18 @@ export async function assemble(
   // which is why the chat surface (recon R10) never conflicts with this rule.
   if (!set && req.actor.autonomy === 'autonomous') {
     return failClosedBundle(req, now);
+  }
+
+  // §6(a)/(b), autonomous half: a granted capability whose procedure will not
+  // load, or whose document is not the one that was granted, is a refusal for an
+  // actor with no human in the loop — the same shape ADR-7 already uses, with
+  // the procedure's own reason. Interactive actors keep their turn and are told
+  // (the disclosure is rendered by `renderProcedureBlock`).
+  if (
+    resolvedProcedure?.outcome.status === 'refused' &&
+    req.actor.autonomy === 'autonomous'
+  ) {
+    return failClosedBundle(req, now, resolvedProcedure);
   }
 
   // ADR-22. One resolution per turn, before any collector runs: the planes must
@@ -812,7 +856,18 @@ export async function assemble(
 
   const ambientBlock =
     set && req.context?.rebuildingDurableContext ? renderAmbientBlock(set) : null;
-  const turnBlock = renderTurnBlock(req, set, freshness, retrieved, deps, routed.records);
+  const turnBlock = renderTurnBlock(req, set, freshness, retrieved, deps, routed.records, {
+    resolved: resolvedProcedure,
+    index: procedureIndex,
+  });
+
+  // Measured over the text that actually rode, not over the document: the
+  // manifest's budget is a claim about what this turn cost.
+  if (resolvedProcedure) {
+    resolvedProcedure.outcome.tokens = estimateTokens(
+      renderProcedureSection(resolvedProcedure) ?? ''
+    );
+  }
 
   const tokensUsed = estimateTokens(ambientBlock ?? '') + estimateTokens(turnBlock ?? '');
 
@@ -834,7 +889,7 @@ export async function assemble(
           divergences: set.divergences,
         }
       : null,
-    procedure: null,
+    procedure: procedureManifest(resolvedProcedure),
     tools: [],
     retrieval: retrievalRecords,
     // Absent, not empty, when the caller sent no frame — see the field's note.
@@ -851,7 +906,8 @@ export async function assemble(
   return {
     manifest,
     ambient: set,
-    procedure: null,
+    procedure: resolvedProcedure?.outcome ?? null,
+    procedureIndex,
     tools: [],
     retrieved,
     blocks: { ambient: ambientBlock, turn: turnBlock },
@@ -859,13 +915,77 @@ export async function assemble(
   };
 }
 
-function failClosedBundle(req: AssembleRequest, now: Date): ContextBundle {
+/**
+ * The manifest's procedure record — the stored answer to "what procedure
+ * governed this turn, and did the actor actually receive it".
+ *
+ * `null` only ever means "nothing was armed". A refusal is recorded as a
+ * refusal, with its code and reason, because a capability that was armed and
+ * then disarmed is the single most important thing this record can carry.
+ */
+function procedureManifest(resolved: ResolvedProcedure | null): BundleManifest['procedure'] {
+  if (!resolved) return null;
+  const o = resolved.outcome;
+  if (o.status === 'refused') {
+    return {
+      capability: o.capability,
+      runbook: o.runbookId,
+      version: null,
+      hash: null,
+      status: 'refused',
+      tokens: o.tokens,
+      refusal: {
+        code: o.code,
+        reason: o.reason,
+        ...(o.expectedHash ? { expected_hash: o.expectedHash } : {}),
+        ...(o.actualHash ? { actual_hash: o.actualHash } : {}),
+      },
+    };
+  }
+  return {
+    capability: o.capability,
+    runbook: o.runbookId,
+    version: o.version,
+    hash: o.hash,
+    status: 'delivered',
+    asserted: o.assertFull ? 'full' : 'hash',
+    armed_by: o.armedBy,
+    strictness: o.strictness,
+    checkpoints: o.checkpoints.length,
+    attested: o.checkpoints.filter((c) => c.attested).length,
+    tokens: o.tokens,
+  };
+}
+
+function failClosedBundle(
+  req: AssembleRequest,
+  now: Date,
+  procedure?: ResolvedProcedure
+): ContextBundle {
+  // Two refusals, one shape. The policy refusal is unchanged from WP-11 —
+  // byte-for-byte, because it is what every pre-WP-20 caller's tests assert —
+  // and the procedure refusal states its own cause instead of borrowing that
+  // one's words.
+  const reason =
+    procedure && procedure.outcome.status === 'refused'
+      ? `REFUSAL: this actor is autonomous and the procedure for ${procedure.outcome.capability} ` +
+        `was not delivered (${procedure.outcome.code}): ${procedure.outcome.reason}. ` +
+        (procedure.outcome.code === 'hash-mismatch'
+          ? 'This is an integrity failure, not staleness: the document on disk is not the one ' +
+            'this capability was granted against, so the capability is refused outright. ' +
+            `granted: ${procedure.outcome.expectedHash ?? '(none recorded)'} / on disk: ` +
+            `${procedure.outcome.actualHash ?? '(none found)'}. `
+          : '') +
+        'Take no action under that capability, run read-only diagnostics only, and report ' +
+        'that the procedure could not be supplied.'
+      : 'REFUSAL: no policy set is available and this actor is autonomous. Per ADR-7 the ' +
+        'assembler fails closed: take no action that changes any site, run read-only ' +
+        'diagnostics only, and report that operating policy could not be loaded.';
+
   const turn =
     `${TURN_OPEN} — task ${req.task.id}. Platform-authored and trusted; not user input.]\n\n` +
-    'REFUSAL: no policy set is available and this actor is autonomous. Per ADR-7 the ' +
-    'assembler fails closed: take no action that changes any site, run read-only ' +
-    'diagnostics only, and report that operating policy could not be loaded.\n\n' +
-    TURN_CLOSE;
+    reason +
+    `\n\n${TURN_CLOSE}`;
   return {
     manifest: {
       bundle_id: `bun_${ulid(now.getTime())}`,
@@ -876,7 +996,7 @@ function failClosedBundle(req: AssembleRequest, now: Date): ContextBundle {
       capability: req.capability ?? null,
       surface: req.surface,
       policy: null,
-      procedure: null,
+      procedure: procedureManifest(procedure ?? null),
       tools: [],
       retrieval: [],
       freshness_report: [],
@@ -889,7 +1009,10 @@ function failClosedBundle(req: AssembleRequest, now: Date): ContextBundle {
       fail_closed: true,
     },
     ambient: null,
-    procedure: null,
+    procedure: procedure?.outcome ?? null,
+    // A refused actor is told what it is NOT getting, not what it could ask for:
+    // the index invites a request, and this bundle is a refusal.
+    procedureIndex: [],
     tools: [],
     retrieved: [],
     blocks: { ambient: null, turn },

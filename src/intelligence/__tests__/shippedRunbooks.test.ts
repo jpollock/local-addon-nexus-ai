@@ -17,6 +17,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { documentHash } from '../law/hash';
 import { loadLawDirectory } from '../law/loader';
 import { RunbookRegistry, STRICT_RUNBOOK_CEILING_BYTES } from '../law/runbookRegistry';
 
@@ -27,8 +28,10 @@ const AUTHORED_DIR = path.join(REPO_ROOT, 'docs', 'intelligence', 'anchor-slice'
 const RUNBOOK_FILES = [
   'bulk-plugin-update.md',
   'diagnose-site.md',
-  'incident-response.md',
-  'staging-promotion.md',
+  'incident-containment.md',
+  'incident-remediation.md',
+  'promotion-execute.md',
+  'promotion-preflight.md',
   'wpe-pull.md',
 ];
 
@@ -38,44 +41,70 @@ describe('the shipped law/ directory', () => {
     return { documents, loaderErrors: errors, registry: RunbookRegistry.build({ documents }) };
   };
 
-  it('ships all five runbooks beside the policy set', () => {
+  it('ships all seven runbooks beside the policy set', () => {
     const { documents, loaderErrors } = load();
 
     expect(loaderErrors).toEqual([]);
     expect(documents.filter((d) => d.kind === 'runbook').map((d) => d.id).sort()).toEqual([
       'rb.bulk-plugin-update',
       'rb.diagnose-site',
-      'rb.incident-response',
-      'rb.staging-promotion',
+      'rb.incident-containment',
+      'rb.incident-remediation',
+      'rb.promotion-execute',
+      'rb.promotion-preflight',
       'rb.wpe-pull',
     ]);
     expect(documents.some((d) => d.id === 'pol.ops-default')).toBe(true);
   });
 
-  it('loads the three runbooks within the ceiling', () => {
+  it('serves every one of them — WP-20c split the two that did not fit', () => {
     const { registry } = load();
 
     expect(registry.runbooks().map((r) => r.id)).toEqual([
       'rb.bulk-plugin-update',
       'rb.diagnose-site',
+      'rb.incident-containment',
+      'rb.incident-remediation',
+      'rb.promotion-execute',
+      'rb.promotion-preflight',
       'rb.wpe-pull',
     ]);
   });
 
-  it('refuses the two over-ceiling runbooks, naming the ceiling and the split remedy', () => {
+  it('refuses nothing, and the two documents that were refused are gone by name', () => {
     const { registry } = load();
 
-    const refusals = registry.errors();
-    expect(refusals.map((e) => e.runbookId).sort()).toEqual(['rb.incident-response', 'rb.staging-promotion']);
-    for (const refusal of refusals) {
-      expect(refusal.code).toBe('over-ceiling');
-      expect(refusal.reason).toContain(String(STRICT_RUNBOOK_CEILING_BYTES));
-      expect(refusal.reason).toMatch(/split/i);
-    }
-    // …and they are genuinely absent from the lookup surface, so nothing can
-    // deliver half of one.
+    // An empty refusal list is a CLAIM about the shipped set, not an absence of
+    // machinery: `runbookRegistry.test.ts` pins the refusal paths over fixtures,
+    // and this pin is what fails the day an authored edit pushes a strict
+    // runbook back over the ceiling.
+    expect(registry.errors()).toEqual([]);
     expect(registry.byId('rb.incident-response')).toBeUndefined();
+    expect(registry.byId('rb.staging-promotion')).toBeUndefined();
     expect(registry.byCapability('cap.incident_response')).toBeUndefined();
+  });
+
+  it('keeps every strict runbook inside the ceiling that the turn carrier delivers', () => {
+    const { registry } = load();
+
+    for (const rb of registry.runbooks({ strictness: 'strict' })) {
+      expect({ id: rb.id, over: rb.canonicalBytes > STRICT_RUNBOOK_CEILING_BYTES }).toEqual({
+        id: rb.id,
+        over: false,
+      });
+    }
+  });
+
+  it('carries the canonical text the hash covers — one string for pin, ceiling and delivery', () => {
+    const { registry } = load();
+
+    for (const rb of registry.runbooks()) {
+      expect(documentHash(rb.canonicalText)).toBe(rb.hash);
+      expect(Buffer.byteLength(rb.canonicalText, 'utf8')).toBe(rb.canonicalBytes);
+      // The obligations live in the frontmatter, so the delivered text must
+      // contain them — a body-only payload would ship prose and drop contract.
+      expect(rb.canonicalText).toContain(`capability: ${rb.capability}`);
+    }
   });
 
   it('serves the anchor capability B-03 grants', () => {
@@ -142,15 +171,19 @@ describe('the shipped law/ directory', () => {
 
     expect(bytes).toEqual({
       'rb.bulk-plugin-update': 4858,
-      'rb.diagnose-site': 8967,
-      'rb.incident-response': 15853,
-      'rb.staging-promotion': 10453,
-      'rb.wpe-pull': 8359,
+      'rb.diagnose-site': 8970,
+      'rb.incident-containment': 8054,
+      'rb.incident-remediation': 8104,
+      'rb.promotion-execute': 6353,
+      'rb.promotion-preflight': 7573,
+      'rb.wpe-pull': 8361,
     });
-    // The two refused are the two strict ones over 8 KB. diagnose-site and
-    // wpe-pull are ALSO over it and load anyway, because they are guided and
-    // the ruling scoped the ceiling to strict — see the note in
-    // runbookRegistry.ts.
+    // diagnose-site and wpe-pull are over 8 KB and load anyway, because they are
+    // GUIDED and the ruling scoped the ceiling to strict (WP-20a adjudication,
+    // ruling 2 — a registered exception, not a loophole). Every strict document
+    // is under it, and the two incident halves clear it by 138 and 88 bytes:
+    // recorded because that is the margin a future edit will spend without
+    // noticing.
     expect(STRICT_RUNBOOK_CEILING_BYTES).toBe(8192);
   });
 });

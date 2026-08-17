@@ -5833,3 +5833,253 @@ and 20c are CLEAR TO LAUNCH in parallel (prompts already delivered
 verbatim; 20c's agent must read this adjudication's inheritance block —
 it is referenced in the prompt's standing instruction to read the packet
 record first). 20d's prompt is owed by the architect when 20c merges.
+
+---
+
+### [ ] WP-20c · Delivery  *(phase 2 of WP-20, sub-packet 3 of 5)*
+
+**ANNOUNCED 2026-08-17 — CORE LOCK TAKEN** (`src/intelligence/assemble/`, plus
+`src/intelligence/law/` where the delivered payload's definition lives — the
+canonical text the hash and the ceiling already measure). Worktree
+`.worktrees/wp-20c`, branch `wp-20c`, base `poc/nexintelligence` @ `a580025c`
+(WP-20a merged, adjudication recorded). `src/main/intelligence-host/chatAssembly.ts`
+is host-side wiring on the same owner-lock. **The integration lock is NOT taken:**
+`src/main/index.ts` and `ipc-handlers.ts` are untouched — `assembleForChatTurn`
+already reaches the running process, and `core.law.runbooks` was exposed by 20a
+for exactly this. **`ChatService.ts` is NOT edited** — R7's trusted channel
+(`ChatService.ts:203-205`) is already built; 20c rides it.
+
+**Two-packets-one-seam, resolved by announcement.** WP-20b (grants and arming)
+is not announced and not merged as of this writing. 20c therefore builds against
+its **§9 interface**, not its implementation: the assembler takes the grant set
+and the armed capability as REQUEST INPUT (`AssembleRequest.procedure`), typed
+structurally so 20b's own `CapabilityGrant` objects satisfy it without an
+import. 20b keeps ownership of `capabilityGrants`, `UpdateSettingsSchema`,
+`control.grant.issued` and `armFor()`; 20c owns nothing that decides WHETHER a
+capability is armed. **Merge order: either, independently.** With no grants
+supplied — every caller today, including the wired chat surface — the turn is
+byte-identical, which is the parity pin.
+
+Scope per §9-20c: `ContextBundle.procedure` stops being `null`;
+`AssembleRequest.context.procedureHash` and the ADR-20 cadence extended to
+procedure (full canonical document once per task, hash + checkpoint cursor
+thereafter); `renderProcedureBlock` as the first section of the turn block;
+the always-on procedure index; `BundleManifest.procedure` widened in place
+inside `context.assembled/1` per escalation 1's ratified ruling; the four
+delivery-side P6 outcomes each rendering distinctly (not-armed ≠ can't-load ≠
+over-ceiling-refused ≠ hash-mismatch-refused). **Ruling-bound scope addition:**
+the two over-ceiling strict runbooks are SPLIT at checkpoint-coherent seams,
+authored in `docs/intelligence/anchor-slice/runbooks/` first and re-copied into
+`law/runbooks/` per inheritance (4), with the split parts held for OWNER REVIEW
+before merge (WP-09 precedent — runbooks bind agents).
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code captured
+before any pipe) — recorded in the outcome note below.
+
+---
+
+**WP-20c OUTCOME — implementation complete, HELD FOR OWNER REVIEW before merge
+(branch `wp-20c`).** A granted, armed capability now puts its runbook in front
+of the model, on the trusted per-turn carrier, whole once and by hash
+thereafter — and the four ways that can fail each say something different.
+
+Jest, compiled worktree, tree held still, exit code captured before any pipe.
+Baseline at `a580025c`: **545 suites / 6,968 tests / 12 skipped**, with one
+FLAKE (see finding 8). Branch: **548 suites / 7,021 passed / 12 skipped / 0
+failed, exit 0**. Delta **+3 suites, +53 tests, skipped unchanged.**
+`npx tsc -p . --noEmit` clean; eslint clean on every changed file, the nested
+`src/intelligence` seam rule included (`procedure.ts` imports nothing but the
+core's own types). **Mutation battery 24/24 killed by their named witness**
+(three needed a type-clean rewrite first — WP-20a finding 8 reproduced exactly:
+`if (false)` and an out-of-union comparison are BUILD-ERRORs, not kills).
+
+### What was built
+
+`assemble/procedure.ts` — resolution and rendering, the only place the delivery
+decision is made. `ContextBundle.procedure` stops being `null`;
+`BundleManifest.procedure` widens IN PLACE inside `context.assembled/1` per
+escalation 1's ratified ruling; `AssembleRequest.procedure` (grants, armed
+capability, cursor) and `context.procedureHash` are the inputs;
+`renderProcedureBlock` is the FIRST section of the turn block, with the
+always-on index directly under it.
+
+**What rides is the canonical whole document.** `LawDocument.canonicalText` is
+new: the loader already computed the hash and the ceiling over that exact
+string, and now it keeps it, so pin, bound and payload are ONE string. Rebuilding
+the delivered text from `body` + `frontmatter` would re-serialise the YAML and
+silently break the identity the hash exists to assert — pinned by M20 and by
+`shippedRunbooks.test.ts`'s recompute-the-hash-from-the-delivered-text case.
+
+### The seam with WP-20b, and the merge order
+
+20b is not announced and not merged. 20c therefore consumes its **§9 interface**
+as request input: `ProcedureGrantRef` is structural and deliberately smaller
+than 20b's `CapabilityGrant` (capability + runbookId + runbookHash — identity
+and the pin; scope and `enabled` are 20b's business, not the delivery layer's).
+Nothing in this packet decides whether a capability is armed.
+
+**Merge order is free.** With no grants supplied — every caller today, including
+the wired chat surface — the turn block is byte-identical and
+`manifest.procedure` is `null`. `ChatAssemblyRequest.procedure` is the one
+field 20b has to start filling; `ChatService.ts` is untouched, because R7's
+trusted carrier was already built there at WP-11.
+
+### OWNER REVIEW — the four split runbooks (this is the pause point)
+
+Ruling-bound scope: the two over-ceiling strict runbooks are split at
+checkpoint-coherent seams. Authored in `docs/intelligence/anchor-slice/runbooks/`
+first and re-copied into `law/runbooks/`, per inheritance (4).
+
+| was | becomes | checkpoints | canonical bytes |
+|---|---|---|---|
+| `rb.incident-response` (15,853) | `rb.incident-containment` · `cap.incident_containment` | cp.triage → cp.entry-vector (5) | 8,054 |
+| | `rb.incident-remediation` · `cap.incident_remediation` | cp.cleanup-plan → cp.post-mortem (6) | 8,104 |
+| `rb.staging-promotion` (10,453) | `rb.promotion-preflight` · `cap.promotion_preflight` | cp.resolve-endpoints → cp.preflight-diff (4) | 7,573 |
+| | `rb.promotion-execute` · `cap.promote_environment` | cp.backup → cp.report (5) | 6,353 |
+
+**The seam is where the authority changes, not where the prose got long.**
+Incident: everything before the first destructive act is one capability
+(containment reads, isolates and preserves), everything that removes or rotates
+is another — which is the runbook's own doctrine ("evidence outranks speed")
+turned into two grants. Promotion: everything before the destination is written
+is one (resolve, grant-check, history, diff), the overwrite and its verification
+the other.
+
+**Capability naming rule, applied and offered for ratification: the name follows
+the write it authorises.** `cap.promote_environment` stays on the execute half,
+because that half *is* what the name meant. The incident split gets two new
+names, because neither half is "incident response" whole. (Q1 below.)
+
+**Conservation is pinned, not asserted** — `splitRunbooks.test.ts` transcribes
+each original's contract as it stood at `a580025c` and checks the union of the
+parts against it: every checkpoint id, in the original order, once; every abort
+id; every communication obligation **verbatim** (a reworded obligation is a
+different obligation, and the B-03 checks quote them). Plus: each part is
+strict, servable, under the ceiling, and carries `split_from` / `hands_off_to` /
+`follows` so an actor handed half a procedure can find the other half. A
+separate case pins that no runbook references a document that no longer exists
+— `rb.diagnose-site` pointed at `rb.incident-response` and `rb.wpe-pull` at
+`rb.staging-promotion`; both now point at the entry half.
+
+**What the conservation pin does NOT cover, disclosed because that is what a
+review is for.** Body prose was CONDENSED to fit the ceiling, and the
+non-conserved frontmatter blocks were split and shortened:
+
+| block | incident-response | promotion |
+|---|---|---|
+| `review_triggers` | 4 → 2 + 3 | 4 → 3 + 3 |
+| `requires_sources` | 10 → 6 + 5 | 6 → 6 + 4 |
+| `preconditions` | 4 → 4 + 4 (new: `pre.containment-complete`, `pre.snapshot-verified`) | 4 → 4 + 3 (new: `pre.preflight-complete`, `pre.overwrite-stated`) |
+
+No guidance was dropped wholesale; sentences lost clauses. The new preconditions
+are the handoff made enforceable — remediation cannot begin without a verified
+snapshot, and execute cannot begin without the preflight's output.
+
+**Two questions back:**
+
+- **Q1 — capability naming.** Is "the name follows the write" the rule, and is
+  `cap.promote_environment` the right survivor? The alternative is four new
+  names and `cap.promote_environment` retired, which costs the §2 fixture and
+  the B-03 premise their existing vocabulary.
+- **Q2 — the ceiling is TIGHT for contract-heavy runbooks, and this is the real
+  finding of the split.** The incident halves clear 8,192 bytes by **138 and 88
+  bytes**. That is a margin the next authored sentence spends. The options are
+  (a) accept and treat the ceiling as an authoring budget with a lint, (b) raise
+  the strict ceiling to ~10 KB (2.5k tokens on an arming turn — still an order
+  of magnitude under R4's real cost), or (c) split the incident procedure three
+  ways, which buys headroom at the price of a third grant for one incident. **I
+  recommend (b) with the register entry kept**: the ceiling's job is to stop a
+  600-line runbook eating the window, and 10 KB does that without forcing the
+  contract to be written thinner than it wants to be.
+
+### Findings
+
+1. **§3's "FIRST section of `blocks.turn`" is implemented literally, which puts
+   procedure ahead of the POLICY re-assert.** The note argues ordering against
+   routing/freshness/retrieval and does not mention policy. Implemented as
+   written, and named here because it is arguable in the other direction: law
+   outranks procedure in authority, and a reader could expect the policy set
+   first. Cheap to flip (one `sections.push`), pinned either way by the
+   FIRST-section case.
+2. **WP-20a finding 6 resolved the honest way.** Nothing ships `applies_when:`,
+   so the index line is built from id + capability + strictness + checkpoint
+   count — the note's own stated fallback. **And the index deliberately does not
+   advertise `nexus_load_procedure`**: that tool is 20b's, and naming a tool
+   that may not exist is the same class of lie as ticking an unverified
+   checkpoint. 20b adds the sentence when it adds the tool.
+3. **Guided runbooks are named and summarised, never delivered whole — and that
+   pin IS ruling 2's exemption.** The ceiling exempts guided documents because
+   nothing obliges a turn to carry one in full; both shipped guided runbooks are
+   over 8 KB, so the day something gives them a full-body path the exemption
+   dies. `procedure.ts` therefore rides the body for `strictness: strict` only,
+   and `procedureDelivery.test.ts` fails if that changes.
+4. **The delivery-side token ceiling is unreachable through the shipped
+   registry, and is kept anyway.** The registry refuses over-size strict
+   runbooks first, so nothing over-size ever reaches delivery — which made the
+   guard untestable until a stub port supplied a runbook a *leniently built*
+   registry would have admitted. That is the only scenario it exists for (a
+   registry built with a different bound), it is now pinned, and M07 proves the
+   pin bites.
+5. **`procedure: null` means "nothing was armed" and nothing else.** A refusal
+   is recorded AS a refusal, with its code, reason and both hashes. The
+   distinction is the whole point of §6: a capability that armed and then
+   disarmed is the single most important thing the manifest can carry, and a
+   `null` there would make it indistinguishable from an ordinary turn.
+6. **A turn that does not deliver CLEARS the session's procedure memory**
+   (`chatAssembly.ts`). Otherwise a disarm followed by a re-arm would re-assert
+   by hash — telling the model "the procedure you are carrying remains in
+   effect" one turn after telling it to stop following that procedure. Pinned
+   by M18.
+7. **Two authoring traps in runbook YAML, both hit while splitting.** A `: `
+   inside a folded `do:` block scalar makes js-yaml read a mapping and reject
+   the document (`bad indentation of a mapping entry`) — twice, on
+   "…how the attacker got in: a compromise…" and "…on a first run: the
+   defaults…". The loader records it as a load error rather than silently
+   mangling it, so the failure mode is honest, but it fires at load time, on a
+   document a human already reviewed. If runbook authoring becomes a routine
+   activity this wants a pre-commit parse.
+8. **The baseline carried one FLAKE, and it is the base's, not this packet's.**
+   `src/main/mcp/modules/fleet/__tests__/detectDrift.test.ts` — "a stale index
+   keeps its legacy warning last" — hit the 30s per-test timeout under
+   full-suite parallel load at `a580025c`, and passes standalone in **1.4s**
+   (`--no-cache`, verified). It did not recur on either branch run. Recorded per
+   the protocol's both-directions rule: a worktree-only failure is suspect, and
+   this one is load-induced, not real. If it recurs it wants its own packet, not
+   a retry loop.
+9. **Prose in three architect-owned documents still names the pre-split
+   runbooks** — `reconciliation-site-environment-model.md` (×2),
+   `ux-brief-response.md`, `eval-stress-test-set.md` (D-02). Not edited: they
+   are architect-owned and the references are conceptual rather than
+   load-bearing. Listed so they can be corrected at source, as ADR-17 was.
+10. **ADR-20's text describes the re-assert mechanism for POLICY only.** The
+    procedure cadence is a second instance of the same mechanism with a
+    different key (`context.procedureHash`) and a different re-assert payload
+    (hash + checkpoint cursor). Worth an amendment naming both, by the same
+    hand that corrected ADR-17.
+
+### Judgement calls taken inside 20c's scope, each pinned and each cheap to reverse
+
+- **Arming a capability with no grant behind it REFUSES** (`not-loaded`) rather
+  than serving the runbook unpinned. Without a grant there is no hash to check
+  the document against, and an unpinned procedure has exactly the authority
+  §6(b) refuses to lend an unreviewed one.
+- **A grant naming a different runbook id than the registry serves for that
+  capability is `hash-mismatch`, not `not-loaded`.** It is an integrity failure
+  in the same sense: the document about to ride is not the document that was
+  reviewed.
+- **The fail-closed bundle carries no procedure index.** A refused actor is told
+  what it is not getting; the index invites a request, and that bundle is a
+  refusal.
+- **No cursor renders as "the platform is not attesting checkpoints", never as
+  "none attested yet".** Those are different facts — one is about the platform,
+  the other about the run — and until WP-20d folds the cursor only the first is
+  true. All eight anchor checkpoints are `narrative` today, so nothing in the
+  rendered block may read as verified.
+
+### ABI state on exit: SYSTEM NODE (this session ran `npm test`)
+
+`better-sqlite3` is built for the shell's Node (measured 25.9.0 → ABI 141;
+`.nvmrc`/CI is 22.16.0 → 127). **Local cannot load the addon until
+`npm run rebuild`** (Electron 42.2.0 → ABI 146). No real-app pass was run: the
+delivery path is dormant in production until 20b arms something, so there is
+nothing a running Local would show that the wired-path suite does not.

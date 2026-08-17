@@ -36,7 +36,7 @@ aborts:
     on: the task as understood would write to WP Engine (push, promote, install create/delete)
     do: stop. This runbook has no WP Engine write grant and must not acquire one mid-run.
         Say what was asked, say that it is the inverse operation, and hand off to
-        rb.staging-promotion (environment→environment) or to the push procedure with its
+        rb.promotion-preflight (environment→environment) or to the push procedure with its
         own grant and approval.
   - id: ab.destination-not-startable
     on: the local destination cannot be started, or starting it is refused
