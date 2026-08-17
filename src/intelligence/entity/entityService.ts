@@ -188,12 +188,100 @@ export class EntityService {
       .run(fromEntity, toEntity, kind, confidence, establishedBy, at ?? new Date().toISOString());
   }
 
+  /**
+   * A link kind of which `fromEntity` may hold exactly ONE — write it and
+   * retire the others.
+   *
+   * WP-14 found that plain `link()` does NOT do this. The PK is
+   * (from_entity, to_entity, kind), so re-pulling from the SAME environment
+   * upserts (the timestamp advances, which looks correct), while pulling from
+   * a DIFFERENT one INSERTS — leaving a copy that claims its content came from
+   * production and staging at once. Only one of those can be true: the second
+   * pull overwrote the first's database. A pointer that only moves when it does
+   * not need to is not a pointer.
+   *
+   * `user_link` edges are never retired. A human assertion outranks an
+   * observation here exactly as it does in `link()` and `addAlias()`; silently
+   * deleting one to satisfy an inferred exclusivity would invert that rule.
+   */
+  linkExclusive(
+    fromEntity: string,
+    toEntity: string,
+    kind: string,
+    confidence: number,
+    establishedBy: EstablishedBy,
+    at?: string
+  ): void {
+    const db = this.ledger.raw();
+    const tx = db.transaction(() => {
+      db.prepare(
+        `DELETE FROM entity_links
+          WHERE from_entity = ? AND kind = ? AND to_entity != ? AND established_by != 'user_link'`
+      ).run(fromEntity, kind, toEntity);
+      this.link(fromEntity, toEntity, kind, confidence, establishedBy, at);
+    });
+    tx();
+  }
+
   environmentsOf(siteEntity: string): Array<{ entityId: string; confidence: number; establishedBy: string }> {
     const rows = this.ledger
       .raw()
       .prepare(
         `SELECT to_entity, confidence, established_by FROM entity_links
          WHERE from_entity = ? AND kind = 'has_environment' ORDER BY confidence DESC`
+      )
+      .all(siteEntity) as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      entityId: String(r.to_entity),
+      confidence: Number(r.confidence),
+      establishedBy: String(r.established_by),
+    }));
+  }
+
+  /**
+   * The logical Site an environment or working copy belongs to — the reverse
+   * traversal WP-16 found missing and deferred here ("there is no env→Site
+   * traversal in the entity service yet, so the role is OMITTED rather than
+   * fabricated ... The env→Site reverse lookup is WP-14/WP-15 work").
+   *
+   * Load-bearing for the id freeze. Without it a producer holding only a Local
+   * site id derives `local.site_id.logical`, which for a MIRRORED site is a
+   * DIFFERENT entity from the `wpe.site_id` Site the mirror established — a
+   * silent split of exactly the history the lineage record exists to join.
+   *
+   * A read: it registers nothing and returns nothing when no edge exists.
+   * Both containment kinds are searched because a copy carries both.
+   */
+  siteOf(entityId: string): string | undefined {
+    const row = this.ledger
+      .raw()
+      .prepare(
+        `SELECT l.from_entity FROM entity_links l JOIN entities e ON e.id = l.from_entity
+          WHERE l.to_entity = ? AND l.kind IN ('has_working_copy', 'has_environment')
+            AND e.type = 'site'
+          ORDER BY l.confidence DESC LIMIT 1`
+      )
+      .get(entityId) as { from_entity: string } | undefined;
+    return row?.from_entity;
+  }
+
+  /**
+   * The Site's working copies (WP-14, audit A6) — the Layer-3 traversal
+   * `environmentsOf` could not express.
+   *
+   * ADR-21: layer membership is RELATIONAL, never encoded in the id. A working
+   * copy's entity id still carries the opaque legacy `ent_env_` prefix and the
+   * `local.site_id` namespace, and must never be re-derived to "fix" that; the
+   * only thing that makes it a working copy is this edge. So a copy appears in
+   * BOTH traversals — `has_environment` is kept for every shipped reader, and
+   * `has_working_copy` is written alongside it.
+   */
+  workingCopiesOf(siteEntity: string): Array<{ entityId: string; confidence: number; establishedBy: string }> {
+    const rows = this.ledger
+      .raw()
+      .prepare(
+        `SELECT to_entity, confidence, established_by FROM entity_links
+         WHERE from_entity = ? AND kind = 'has_working_copy' ORDER BY confidence DESC`
       )
       .all(siteEntity) as Array<Record<string, unknown>>;
     return rows.map((r) => ({

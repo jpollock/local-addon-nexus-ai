@@ -2496,7 +2496,7 @@ Method note: audits ran on a staged snapshot — one finding (mirror unwired)
 was a stale-snapshot false positive, excluded after live verification.
 Packets registered below.
 
-### [ ] WP-14 · Sync-event producer + lineage edges  *(M3 opener; makes the lineage record real — audit A4/A6)*
+### [x] WP-14 · Sync-event producer + lineage edges  **(DELIVERED 2026-08-17 — outcome + findings below)**
 No pull/push/promotion emits any ledger event today; `OperationTracker`
 observes exactly these ops and is not connected to the core; `pull_lineage`
 (EstablishedBy) ships dormant. Build: (1) a producer tapping OperationTracker
@@ -2512,6 +2512,167 @@ alongside the kept `has_environment`; (4) `workingCopiesOf()` beside
 are pre-ruled (this entry IS the ruling — three-segment, validator-clean);
 anything else schema-shaped escalates. ADR-21's id-freeze ruling governs:
 NEVER re-derive ids.
+
+**ANNOUNCED 2026-08-17 — core lock held (worktree `wp-14`, branch `wp-14`,
+base b5d3896f). Baseline in-worktree BEFORE any change: 514 suites / 6493
+passed / 12 skipped / 6505 total / 0 failed.**
+
+#### SCOUT — seam verdict: OperationTracker, enriched by the tool handlers
+
+The packet asked which seam observes ALL sync operations most cleanly. Neither
+candidate does on its own, and the tie is broken by *coverage*, because a
+lineage record that is silently partial is worse than one that is absent —
+WP-15 anchors divergence on "since the last sync at T", so a missing pull makes
+a copy that was refreshed this morning read as weeks behind.
+
+Measured against Local's own source (`flywheel-local`, not assumed):
+
+- **`OperationTracker` sees everything.** `sendIPCEvent` is
+  `ipcMain.emit(channel, null, ...args)` (`app/shared/helpers/send-ipc-event.ts:36`),
+  and Local's `WPEPullService`/`WPEPushService` are the single funnel for BOTH
+  UI-initiated syncs (Connect drawer → `WPE_PULL_SERVICE.PULL` ipc) and
+  addon-initiated ones (`services.localServices.wpePull.pull()` IS that same
+  method). The tracker's `ipcMain.on` tap is live — `operationTracker.start()`
+  is called at `src/main/index.ts:418`.
+- **The tool handlers see a minority.** `wpe-pull.ts` / `wpe-push.ts` cover the
+  MCP + GraphQL paths only; Local's own drawer and `WPE_PULL_TO_LOCAL`
+  (`WpeAutoPullService`, which calls `wpePull.pull` directly) both bypass them.
+  Choosing this seam would bias the ledger toward agent-driven syncs while
+  looking complete.
+- **But the tracker knows almost nothing.** The IPC stream carries only a
+  status string and progress labels — no upstream install, no `includeSql`, no
+  flow. The handlers know all of it.
+
+**Verdict: tap `OperationTracker`, and let the handlers enrich the
+`register()` call they already make** (additive optional argument). One seam,
+full coverage, authoritative detail where a caller had it.
+
+Three findings the scout produced, all of which changed the design:
+
+1. **A failed sync is indistinguishable from a successful one at the status
+   level.** `WPEBaseService.errorHandler` emits the SAME
+   `updateSiteStatus → 'running'` the success path does
+   (`WPEBaseService.ts:107`), so the tracker's existing `status: 'completed'`
+   means *finished*, not *worked*. The only structural discriminator is the
+   banner id — `site-pulled` / `site-pushed` vs `pulling-error` /
+   `pushing-error`. The producer therefore taps `showSiteBanner` and emits only
+   on success: a failed pull moved no content, and moving the lineage pointer
+   for one would be the worst available fabrication.
+2. **Local persists NO sync history for the WPE flow.** The reconciliation
+   doc §2 says "Local's sync history already records these operations —
+   *outside* the ledger"; for pull/push there is no durable record at all
+   (banner + status only, and `autoload.sql` is deleted after import,
+   `WPEPullService.ts:230`). The IPC stream is the *only* evidence and it is
+   live-only — unobserved, it is gone. That strengthens the tracker choice and
+   should amend §2 alongside A4's existing correction.
+3. **`includes_db` is not observable at any seam for a UI-initiated sync** —
+   except through Local's own phase label. Both services emit a
+   `updateSiteMessage` label under a strict `if (includeSql)` guard
+   (`'Downloading and importing database'` / `'Dumping and pushing database'`),
+   and no other label in either service contains the word. So a `/database/i`
+   match over the operation's phase labels has **no false-positive path**; only
+   a false negative is possible, and only if WP Engine changes that copy. The
+   inference is used ONLY to set `includes_db` true, never to clear a
+   caller-declared value, and the uncertain direction is the conservative one
+   (a missed DB pull leaves the content pointer where it was, so the copy reads
+   staler than it is rather than fresher). Declared beats inferred always.
+   **Owner question, flagged not decided (schema-shaped, so not taken):** the
+   ruled payload has no way to say *"the flow could not be determined"*. If you
+   would rather see that than a conservative `code`, that is a `flow` union
+   addition and wants your ruling.
+
+#### OUTCOME — delivered, all four steps, plus two things the packet's premise got wrong
+
+`syncProducer.ts` (new) emits `episodic.sync.pulled` / `episodic.sync.pushed`
+(`schema: sync.observed/1`, `source.system: 'sync:wpe'`) with
+`entity: { site, environment, working_copy }` and payload
+`{ flow, direction, includes_db }`, and upserts the `content_pulled_from`
+pointer. `.promoted` was NOT emitted: promotion is not observable at this seam
+(Local's WPE services implement pull and push only), and inventing it from
+nothing would have been the fabrication the packet warns against.
+
+**Two corrections to the packet's own premises, both found by a failing pin
+rather than by reading:**
+
+1. **"The PK upserts, so the pointer MOVES" is false in the case that
+   matters.** `entity_links`'s PK is `(from_entity, to_entity, kind)`
+   (`migrations.ts:68`). Re-pulling from the SAME environment upserts — which
+   looks right — but pulling from a DIFFERENT one **INSERTS**, leaving a copy
+   asserting it pulled its content from production AND staging simultaneously.
+   Only one can be true; the second pull overwrote the first's database. A
+   pointer that only moves when it does not need to is not a pointer. Fixed by
+   `EntityService.linkExclusive()`, which retires the copy's other edges of
+   that kind as it writes — except `user_link` edges, because a human's
+   assertion is not retired by an observation (same precedence rule as `link`
+   and `addAlias`). Audit A4 states the same false mechanism and should be
+   amended.
+2. **The `site` role could not be stamped without breaking the id freeze.**
+   `siteEntityId()` derives `local.site_id.logical`, but for a MIRRORED site
+   the mirror keyed the Site by `wpe.site_id` — so deriving would have minted
+   a second Site beside the real one on the very first pull. This is audit
+   A7's defect reappearing in the packet built to prevent it, and the
+   `COUNT(*) FROM entities` pin caught it on the first run. Fixed with
+   `EntityService.siteOf()` — the env→Site reverse traversal **WP-16
+   explicitly deferred to WP-14** ("the env→Site reverse lookup is
+   WP-14/WP-15 work"). Traverse first, derive last; the derivation survives
+   only for an unmirrored site, where it is the same id every other producer
+   for that site already stamps, so nothing diverges. `verify_site_live` can
+   now stop omitting its `site` role — a WP-15 follow-up, not taken here.
+
+**Also delivered:** `workingCopiesOf()` and `siteOf()` beside
+`environmentsOf()`; `has_working_copy` written by `siteLinkMirror` ALONGSIDE
+the kept `has_environment` at both write sites (parity pinned, and re-running
+the mirror still adds zero rows); the pull/push handlers enrich the
+`register()` call they already made; `episodic.sync.*` has its liveness line
+in WP-17's health surface (`sync:wpe`, 30-day SLO — syncs are user-initiated
+and a machine with no WP Engine link never produces one, so anything tighter
+is noise; never-observed keeps `countsTowardWorst: false`, pinned).
+
+**Deliberately NOT done, with reasons** (rather than silently):
+
+- **`tracks_content` / `tracks_code` edges** (mentioned in audit A6, not in
+  this packet's step 3). Code lineage is a branch/sha, and A4 already
+  established that a sha is not an entity — there is no code-lineage producer
+  and no `code_ref` source at this seam, so the edges would have had nothing
+  to point at. `code_ref` is likewise absent from the payload for the same
+  reason.
+- **A push does not move `content_pulled_from`.** The copy's content lineage
+  is "the environment it was pulled FROM, at that time" (model §2); pushing
+  sends content upward and does not change where the copy's content came from.
+  Pinned.
+- **`nexusHostAdd`-style audit coverage** was not touched — this producer
+  mutates only ledger state, like every other producer on this seam.
+
+**Verification.** Baseline in a fresh `wp-14` worktree BEFORE any change:
+**514 suites / 6493 passed / 12 skipped / 6505 total / 0 failed**. After:
+**517 suites / 6520 passed / 12 skipped / 6532 total / 0 failed** — +3 suites,
++27 tests, **skipped count unchanged**, no legacy suite broken.
+`npx tsc -p . --noEmit` and `npx tsc -p tsconfig.test.json --noEmit` both
+clean; `npx eslint` clean on every changed file (the ADR-16 seam rule is
+untouched — `entityService.ts` gained no imports).
+
+**Mutation battery: 27/27 caught**, each anchored to a production line with a
+named witness. The ones worth recording: "a failed pull emits anyway",
+"`link` instead of `linkExclusive`" (the pointer stops moving), "derive the
+`site` role instead of traversing" (the id freeze), "derive an entity from an
+unresolved install name" (A7's defect), "`observed_at` = start instead of
+finish", "the failure banner reads as success", "the database-phase regex is
+too broad", "a listener's throw propagates into the sync", "the mirror's
+`has_environment` write is dropped" (parity), "the health SLO's `system`
+stops matching what the producer stamps" (the table silently going out of
+date — WP-17's own failure mode), and "`linkExclusive` retires a `user_link`".
+
+**Residual risk, stated rather than buried:** for a UI-initiated sync,
+`includes_db` rests on Local's phase label. It cannot produce a false
+positive (no other label in either service contains the word, and both are
+strictly `if (includeSql)`-guarded), and a false negative leaves the content
+pointer where it was — the copy reads staler than it is, never fresher. If WP
+Engine changes that copy, the tell is a `full` flow becoming `code` on pulls
+that clearly carried a database. The owner question about a "flow unknown"
+value is in the scout note above.
+
+**ABI state: better-sqlite3 is built for SYSTEM NODE** (jest ran here). Run
+`npm run rebuild` before loading Local.
 
 ### [ ] WP-15 · Divergence comparator + lineage-aware drift unification  *(M3; depends WP-14 — audit A5)*
 Cross-entity divergence (copy twins vs upstream twins) is a new READ-side

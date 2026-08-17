@@ -123,7 +123,13 @@ export function runSiteLinkMirror(
         if (row) {
           // The sandbox is an environment of the install's logical Site; the
           // site_link's own evidence is what attaches it.
-          entities.link(siteEntityFor(entities, row), localEnv, 'has_environment', mapped.confidence, mapped.establishedBy, at);
+          const siteEntity = siteEntityFor(entities, row);
+          entities.link(siteEntity, localEnv, 'has_environment', mapped.confidence, mapped.establishedBy, at);
+          // WP-14/audit A6: ALSO say what it actually is. Additive — the
+          // has_environment edge above is kept verbatim, because every shipped
+          // reader traverses it and losing them is not a migration, it is a
+          // regression.
+          entities.link(siteEntity, localEnv, 'has_working_copy', mapped.confidence, mapped.establishedBy, at);
         } else {
           // Install unknown to the graph (not yet synced, or soft-deleted):
           // mint the env from the install id, attach it under the LOCAL
@@ -134,6 +140,7 @@ export function runSiteLinkMirror(
           }
           const siteEntity = entities.ensure('site', 'local.site_id.logical', link.localSiteId);
           entities.link(siteEntity, localEnv, 'has_environment', 1.0, 'derivation');
+          entities.link(siteEntity, localEnv, 'has_working_copy', 1.0, 'derivation');
           entities.link(siteEntity, wpeEnv, 'has_environment', mapped.confidence, mapped.establishedBy, at);
         }
         mirrored++;

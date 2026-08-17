@@ -59,6 +59,7 @@ import { scheduleGraphBackfill } from './intelligence-host/graphBackfill';
 import { setIntelligenceCore } from './intelligence-host/coreRegistry';
 import { collectIntelligenceHealth, formatHealthLogLine } from './intelligence-host/health';
 import { runSiteLinkMirror } from './intelligence-host/siteLinkMirror';
+import { createSyncObserver } from './intelligence-host/syncProducer';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
 import { WPESyncService } from './events/WPESyncService';
 import { RemoteContentExtractor } from './content/RemoteContentExtractor';
@@ -416,6 +417,29 @@ export default function main(context: any): void {
   // Start operation tracker — intercepts Local's IPC events for push/pull/export
   const operationTracker = new OperationTracker();
   operationTracker.start();
+
+  // WP-14: the sync producer taps the tracker, so a pull started from Local's
+  // own UI is recorded exactly like one started by a tool. Nothing else in the
+  // process observes these operations, and Local keeps no durable record of
+  // them — unobserved, they are gone.
+  if (intelligenceCore) {
+    operationTracker.onSync(
+      createSyncObserver({
+        core: intelligenceCore,
+        logger: localLogger,
+        getHostConnection: (siteId: string) => {
+          const raw = localServicesBridge.resolveSiteObject(siteId) as any;
+          const conn = raw?.hostConnections
+            ? Object.values(raw.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
+            : undefined;
+          return conn
+            ? { wpeSiteId: (conn as any).remoteSiteId, environment: (conn as any).remoteSiteEnv }
+            : undefined;
+        },
+        getDb: () => graphService.getDb() as never,
+      }),
+    );
+  }
 
   // Credential manager — owns OAuth connection lifecycle, token refresh, PKCE flows
   const credentialManager = new CredentialManager({
