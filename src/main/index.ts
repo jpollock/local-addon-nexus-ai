@@ -57,7 +57,11 @@ import { initIntelligenceCore } from './intelligence-host/bootstrap';
 import { tapGraphService } from './intelligence-host/graphServiceTap';
 import { scheduleGraphBackfill } from './intelligence-host/graphBackfill';
 import { setIntelligenceCore } from './intelligence-host/coreRegistry';
-import { collectIntelligenceHealth, formatHealthLogLine } from './intelligence-host/health';
+import {
+  collectIntelligenceHealth,
+  formatHealthLogLine,
+  healthLogLevel,
+} from './intelligence-host/health';
 import { runSiteLinkMirror } from './intelligence-host/siteLinkMirror';
 import { createSyncObserver } from './intelligence-host/syncProducer';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
@@ -361,8 +365,15 @@ export default function main(context: any): void {
   // init used to say so once and leave nothing a later session could read.
   // `grep '\[Intelligence\] health'` now answers "was the layer alive?" from
   // the log alone. Guarded: the health check must never break startup.
+  // WP-15 (WP-18 finding 2): at WARN when something that counts is degraded.
+  // Local's main log shows warn and error only, so the one line proving the
+  // layer was alive at boot was invisible in the log people actually read.
+  // `warn` is optional on NexusLogger; a logger without it still gets the line.
   try {
-    localLogger.info(formatHealthLogLine(collectIntelligenceHealth({ core: intelligenceCore })));
+    const health = collectIntelligenceHealth({ core: intelligenceCore });
+    const line = formatHealthLogLine(health);
+    if (healthLogLevel(health) === 'warn' && localLogger.warn) localLogger.warn(line);
+    else localLogger.info(line);
   } catch (err) {
     localLogger.error(`[Intelligence] health check failed (non-fatal): ${(err as Error).message}`);
   }

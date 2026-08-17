@@ -14,6 +14,7 @@ import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import {
   collectIntelligenceHealth,
   formatHealthLogLine,
+  healthLogLevel,
   FOLD_LAG_SLO_EVENTS,
   PRODUCER_LIVENESS_SLOS,
 } from '../health';
@@ -331,6 +332,42 @@ describe('the check itself', () => {
     expect(lineFor(overdue, 'producer:sync:wpe').verdict).toBe('STALE');
     // Never listed as an unmonitored "other source".
     expect(overdue.lines.find((l) => l.key === 'producers:unlisted')?.value ?? '').not.toContain('sync:wpe');
+    core.close();
+  });
+
+  /**
+   * WP-18 finding 2, folded into WP-15: the startup summary was written at
+   * INFO, and Local's main log shows warn and error only — so the one line
+   * proving the layer was alive at boot was invisible in the log people
+   * actually read, which is the M1 incident's shape with a better line in it.
+   *
+   * The judgment call, recorded because it is not what a literal reading of
+   * "warn when any line is not OK" would give: the level follows
+   * `report.worst`, which EXCLUDES `countsTowardWorst: false` lines. A
+   * developer with no WP Engine account has permanently-DARK producer lines
+   * (never observed ≠ degraded — WP-17's ratified doctrine), and warning at
+   * them on every boot forever is exactly how a monitor gets ignored.
+   */
+  test('the startup summary warns when something that counts is degraded, and not otherwise', () => {
+    const { core } = makeCore();
+    tapPlugin(core, 'site-a', '9.9.1');
+
+    const healthy = collectIntelligenceHealth({ core, now: new Date() });
+    expect(healthy.worst).toBe('OK');
+    expect(healthLogLevel(healthy)).toBe('info');
+
+    // A never-observed producer is DARK but does not count — still info.
+    expect(
+      healthy.lines.some((l) => l.verdict === 'DARK' && l.countsTowardWorst === false),
+    ).toBe(true);
+
+    // Move past every SLO: the producers that DO count go stale.
+    const degraded = collectIntelligenceHealth({ core, now: new Date(Date.now() + 60 * DAY) });
+    expect(degraded.worst).not.toBe('OK');
+    expect(healthLogLevel(degraded)).toBe('warn');
+
+    // A core that never started is the loudest case of all.
+    expect(healthLogLevel(collectIntelligenceHealth({ now: new Date() }))).toBe('warn');
     core.close();
   });
 

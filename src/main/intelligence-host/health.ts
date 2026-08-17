@@ -210,6 +210,25 @@ export function collectIntelligenceHealth(
  * `grep '\[Intelligence\] health'` answers "was the layer alive at boot" from
  * a log file alone, which is precisely what the M1 incident had no way to do.
  */
+/**
+ * WP-15 (folding WP-18's finding 2) · what level that line goes out at.
+ *
+ * The line existed and nobody could see it: Local's main log carries warn and
+ * error, so a summary written at INFO was invisible in the log people actually
+ * read — the M1 incident's exact shape, with a better line in it. Degradation
+ * now announces itself where it will be found.
+ *
+ * The level follows `report.worst`, which excludes `countsTowardWorst: false`
+ * lines, rather than "any line whose verdict is not OK". Those lines are the
+ * never-observed producers, and a machine with no WP Engine account has them
+ * permanently — warning at that user on every boot forever is precisely how a
+ * monitor earns the right to be ignored, which costs more than the line is
+ * worth (WP-17's ratified doctrine: never-observed is not degradation).
+ */
+export function healthLogLevel(report: IntelligenceHealthReport): 'info' | 'warn' {
+  return report.worst === 'OK' ? 'info' : 'warn';
+}
+
 export function formatHealthLogLine(report: IntelligenceHealthReport): string {
   const parts = report.lines.map((l) => `${l.key}=${l.verdict}(${l.value})`);
   const errs = report.errors.length ? ` [${report.errors.length} check error(s)]` : '';
