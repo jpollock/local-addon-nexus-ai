@@ -4568,3 +4568,39 @@ touches the dispatch module WP-19 just instrumented, so rebase on current.
   build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
   ABI 127). `npm run rebuild` is required before loading Local again.** The
   shared `node_modules` every worktree symlinks through is affected.
+
+  **WP-04d INTEGRATION REPORT — merged 2026-08-17 as `9d6675a4`.**
+
+  Receipts (`git diff --stat <merge>^1 <merge>`):
+
+  ```
+   docs/intelligence/WORK_PACKETS.md          | 172 ++++++++++++++++++++++++++++-
+   src/main/ipc-handlers.ts                   |  38 +++++--
+   tests/unit/ipc/site-finder-filters.test.ts | 146 ++++++++++++++++++++++--
+   3 files changed, 336 insertions(+), 20 deletions(-)
+  ```
+
+  Three notes on the integration itself:
+
+  - **The base had advanced under me** — WP-12b merged (`0e0ad001`) and was
+    adjudicated (`4df1e20f`) after this worktree was cut. The primary checkout
+    held **no** uncommitted architect work this time, so the
+    commit-verbatim-first step did not apply. The only conflict was
+    `WORK_PACKETS.md`, where both sides had appended to an append-only file;
+    resolved by keeping both, WP-12b's note and the architect's WP-12b
+    adjudication first, this packet's note last, so the file still reads in
+    chronological order. No `src/` conflict — WP-12b was tests-only and touched
+    no chain.
+  - **The integration lock is RELEASED** as of this note. `ipc-handlers.ts` is
+    free for the next packet.
+  - **Post-merge full suite on the integrated tree: 532 suites, 6,739 passed,
+    2 skipped, 6,741 total, exit 0**; `npm run typecheck` clean. The skipped
+    count reads **2** here against **12** in the worktree, and the suite count
+    **532** against **533** — neither is this change: the primary checkout has
+    an untracked `models/all-MiniLM-L6-v2-quantized` that the fresh worktree
+    lacks (ten artifact-gated tests run here and `describe.skip` there), and
+    WP-12b deleted a suite on the base after the worktree was cut. Comparing
+    totals across two checkouts is invalid, as the protocol warns; the
+    load-bearing comparison is the same-environment one recorded above —
+    in-worktree 6,719 → 6,726 passed with skipped unchanged at 12, a delta of
+    exactly the 7 new pins.
