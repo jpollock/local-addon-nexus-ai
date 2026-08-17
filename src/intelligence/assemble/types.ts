@@ -88,8 +88,13 @@ export interface AssembleRequest {
    */
   policyDivergences?: number;
   retrieval?: {
-    /** Topic prefix for the episodic slice. Default `state.`. */
-    episodicTopicPrefix?: string;
+    /**
+     * Topic prefix(es) for the episodic slice — one query per prefix, per
+     * target. Default `['state.', 'episodic.']` (WP-16b): a surface that asks
+     * for neither must still be able to consult the incident history, which
+     * lives under `episodic.*`. A string narrows to exactly that family.
+     */
+    episodicTopicPrefix?: string | string[];
     episodicLimit?: number;
     semanticLimit?: number;
     /** Max freshness rows rendered before the tail is summarised as a count. */

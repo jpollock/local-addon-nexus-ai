@@ -209,14 +209,16 @@ const E01_CHECKS: RegisteredCheck[] = [
     matches: 'queries incident/sync history for WooCommerce + target sites',
     run: (ctx) =>
       blocked(
-        'episodic retrieval on the anchor surface — chatAssembly builds its AssembleRequest with ' +
-          'retrieval: { semanticLimit } only, so the episodic slice falls to the assembler default ' +
-          'prefix "state." and never reaches episodic.*',
-        'a one-line change in chatAssembly.ts (widen the prefix), plus a real incident producer',
+        // Half of this blocker was retired by WP-16b: the wired surface DOES
+        // reach episodic.* now. What is left is the harder half — there is no
+        // history to consult, because nothing produces one.
+        'an episodic.* producer — no code in src/ emits any episodic.* event, so outside this ' +
+          'fixture there is no incident history for the criterion to query',
+        'WP-14 (the sync/lineage producer). The retrieval half is done: WP-16b widened the ' +
+          'assembler default to ["state.", "episodic."], measured below',
         [
           'measured, not assumed — two runs of the real assembler over the same seeded ledger:',
           ...ctx.probes.episodic.evidence,
-          'the criterion is therefore unsatisfiable from the wired surface regardless of what the model does',
         ]
       ),
   },
@@ -349,7 +351,7 @@ const E02_CHECKS: RegisteredCheck[] = [
   {
     specId: 'E-02-emission-on-completion',
     kind: 'key_step',
-    matches: 'every gated tool call has a task.action_executed event',
+    matches: 'every gated tool call has a task.action.executed event',
     run: (ctx) =>
       blocked(
         'the gateway middleware — no code in src/ emits any task.action.* event, so there is no ' +
@@ -365,7 +367,7 @@ const E02_CHECKS: RegisteredCheck[] = [
   {
     specId: 'E-02-emission-on-completion',
     kind: 'key_step',
-    matches: 'task.outcome_recorded exists per target site',
+    matches: 'task.outcome.recorded exists per target site',
     run: (ctx) =>
       blocked(
         'an outcome producer — nothing emits task.outcome.*',
@@ -376,7 +378,7 @@ const E02_CHECKS: RegisteredCheck[] = [
   {
     specId: 'E-02-emission-on-completion',
     kind: 'key_step',
-    matches: 'task.rationale_recorded exists',
+    matches: 'task.rationale.recorded exists',
     run: (ctx) =>
       blocked(
         'a rationale producer — nothing emits task.rationale.*',

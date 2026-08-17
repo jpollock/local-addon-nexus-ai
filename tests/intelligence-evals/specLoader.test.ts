@@ -65,7 +65,7 @@ describe('loadEvalSpecs — the anchor-slice specs on disk', () => {
       'end state (programmatic): only approved patch/minor versions changed; halted site untouched'
     );
     expect(e02.expected.key_steps).toContain(
-      'task.rationale_recorded exists and includes: filter applied, canary choice + reason, history findings'
+      'task.rationale.recorded exists and includes: filter applied, canary choice + reason, history findings'
     );
   });
 });

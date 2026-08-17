@@ -123,11 +123,19 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     expect(evidence).toContain('manifest.procedure = null');
   });
 
-  it('E-01 history is in the ledger and unreachable from the wired surface', () => {
+  it('E-01 history is now REACHABLE from the wired surface, and still has no producer', () => {
+    // Was: "in the ledger and unreachable". WP-16b fixed the retrieval half —
+    // the assembler's default episodic prefixes are ["state.", "episodic."], so
+    // the docked panel reaches the planted history. The criterion stays BLOCKED
+    // on the half that remains: nothing in src/ produces episodic.* at all.
     const result = results.find((r) => r.criterion.text.includes('queries incident/sync history'))!;
     expect(result.verdict).toBe('BLOCKED');
-    expect(result.evidence.join(' ')).toMatch(/retrieved 0 incident item\(s\)/);
-    expect(result.evidence.join(' ')).toMatch(/episodicTopicPrefix="episodic\." retrieved 2 ledger item/);
+    expect(result.evidence.join(' ')).toMatch(/WIRED defaults.*retrieved 1 incident item\(s\)/);
+    // One planted event for this site, retrieved once — not once per role. The
+    // request carries both the environment and the Site target (WP-16's A3
+    // fix), and the dedupe is what keeps that from reading as two incidents.
+    expect(result.evidence.join(' ')).toMatch(/episodicTopicPrefix="episodic\." retrieved 1 ledger item/);
+    expect(result.missing).toMatch(/episodic\.\* producer/);
   });
 
   it('the task.* families E-02 needs are measurably empty', () => {
@@ -210,7 +218,10 @@ describe('honesty invariants — the rules that keep the report worth reading', 
 
   it('carries the spec-level escalations, so they cannot be lost in chat', () => {
     const defects = report.specs.flatMap((s) => s.findings.filter((f) => f.kind === 'SPEC-DEFECT'));
-    expect(defects).toHaveLength(2);
+    // One, not two: E-02's respell finding was RULED and APPLIED, so it was
+    // retired from SPEC_FINDINGS rather than left standing against a spec that
+    // no longer says what it complained about (WP-16b).
+    expect(defects).toHaveLength(1);
     for (const defect of defects) {
       expect(defect.specFix).toBeTruthy();
       expect(defect.detail.length).toBeGreaterThan(0);
@@ -220,8 +231,16 @@ describe('honesty invariants — the rules that keep the report worth reading', 
   it('the specs still say what the escalations claim they say', () => {
     // Pins the SPEC-DEFECT findings to the file on disk: when the owner applies
     // a fix, this fails and the finding must be retired rather than left to rot.
+    // That is exactly what happened to E-02 — so what is pinned here now is the
+    // APPLIED fix (three-segment topics, no finding), and B-03's finding, which
+    // is still standing.
     const e02 = report.specs.find((s) => s.spec.id === 'E-02-emission-on-completion')!;
-    expect(e02.spec.expected.key_steps.join(' ')).toContain('task.action_executed');
-    expect(e02.spec.expected.key_steps.join(' ')).toContain('task.rationale_recorded');
+    expect(e02.spec.expected.key_steps.join(' ')).toContain('task.action.executed');
+    expect(e02.spec.expected.key_steps.join(' ')).toContain('task.rationale.recorded');
+    expect(e02.spec.expected.key_steps.join(' ')).not.toContain('task.action_executed');
+    expect(e02.findings.filter((f) => f.kind === 'SPEC-DEFECT')).toHaveLength(0);
+
+    const b03 = report.specs.find((s) => s.spec.id === 'B-03-runbook-push-with-capability')!;
+    expect(b03.findings.filter((f) => f.kind === 'SPEC-DEFECT')).toHaveLength(1);
   });
 });

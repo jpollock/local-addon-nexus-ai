@@ -137,11 +137,13 @@ export async function probeEpisodicRetrieval(fixture: EvalFixture): Promise<Prob
     ok: wiredIncidents > 0,
     evidence: [
       `ledger holds ${plantedCount} planted "${INCIDENT_TOPIC}" event(s) for the gateway-X / flagged sites`,
-      `assemble() with the WIRED defaults (chatAssembly passes no episodicTopicPrefix; the ` +
-        `assembler default is "state.") retrieved ${wiredIncidents} incident item(s)`,
+      `assemble() with the WIRED defaults (chatAssembly still passes no episodicTopicPrefix; the ` +
+        `assembler default is now ["state.", "episodic."] — WP-16b) retrieved ${wiredIncidents} incident item(s)`,
       `assemble() with episodicTopicPrefix="episodic." retrieved ${episodicIncidents} ledger item(s)`,
-      `so the core CAN retrieve the history; the anchor surface (chat.docked-panel) does not ask for it`,
-      `src/main/intelligence-host/chatAssembly.ts sets retrieval: { semanticLimit } only`,
+      `so retrieval is no longer the blocker: the anchor surface (chat.docked-panel) now reaches ` +
+        `episodic.* through the default`,
+      `what remains missing is a PRODUCER — no code in src/ emits any episodic.* event, so this ` +
+        `history exists only because the fixture planted it (WP-13 finding 5 → WP-14)`,
     ],
   };
 }

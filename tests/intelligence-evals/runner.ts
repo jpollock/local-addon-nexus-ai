@@ -42,30 +42,13 @@ export const EVALS_DIR = path.join(
  * test can pin that they are still true.
  */
 export const SPEC_FINDINGS: Record<string, SpecFinding[]> = {
-  'E-02-emission-on-completion': [
-    {
-      kind: 'SPEC-DEFECT',
-      summary:
-        'Four of E-02\'s six key_steps name TWO-segment task topics that the envelope validator ' +
-        'cannot admit, so they can never be satisfied as written.',
-      detail: [
-        'envelope/validate.ts requires <type>.<subject>.<verb> — three segments.',
-        'The spec names: task.context_assembled, task.action_executed, task.outcome_recorded, ' +
-          'task.rationale_recorded. All are two-segment and unemittable.',
-        'This is already adjudicated. WP-11 raised the identical escalation against the ' +
-          'architecture doc\'s §4.2 taxonomy and the architect ruled "the validator wins, taxonomy ' +
-          'respelled" (WORK_PACKETS finding 1, closed in the WP-11 adjudication). The shipped ' +
-          'producer emits task.context.assembled. The eval YAML was written before that ruling and ' +
-          'never carried it.',
-        'Consequence if left: an eval that literally cannot pass, on a milestone gate, reading as ' +
-          'an implementation failure rather than a stale spelling.',
-      ],
-      specFix:
-        'In docs/intelligence/anchor-slice/evals/E-02-emission-on-completion.yaml respell to ' +
-        'task.context.assembled / task.action.executed / task.outcome.recorded / ' +
-        'task.rationale.recorded — mechanical, and covered by the standing WP-11 ruling.',
-    },
-  ],
+  // RETIRED 2026-08-16 (WP-16b). E-02's four two-segment task topics were the
+  // subject of a SPEC-DEFECT finding here; the architect ruled the respell and
+  // applied it to the YAML, so the finding is gone rather than left to rot —
+  // WP-13's own rule ("when the owner applies a fix, retire the finding"). The
+  // spec now reads task.context.assembled / task.action.executed /
+  // task.outcome.recorded / task.rationale.recorded, and the checks in
+  // checks.ts bind to those strings.
   'B-03-runbook-push-with-capability': [
     {
       kind: 'SPEC-DEFECT',

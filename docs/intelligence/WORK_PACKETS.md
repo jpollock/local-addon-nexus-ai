@@ -2603,6 +2603,89 @@ line, audit A3): `chatAssembly.resolveTargets` additionally returns the
 `{role:'site'}` target so episodic retrieval is Site-scoped — additive,
 assembler unchanged.
 
+### [x] WP-16b · Episodic dedupe in the assembler  **(DELIVERED 2026-08-16 — architect ruling on WP-16's finding)**
+**Core lock announced and released 2026-08-16** (worktree `wp-16b`, branch
+`wp-16b`, based on b230882c): `src/intelligence/assemble/assembler.ts` only.
+
+**Ruling (architect, on WP-16's duplicate-lines finding):** duplicate lines in
+the product's flagship surface, doubling episodic token spend on the common
+case, is a shipped-output regression — it does not ride to M3. Reverting the
+A3 half was rejected: Site-scoped episodic is real, pinned value. WP-16's
+"assembler unchanged" was that packet's scope, not a standing lock.
+
+**Outcome:** two lines in `collectEpisodic` — a `Set` of event ids spanning the
+whole target loop, `continue` on a repeat. First occurrence wins, so
+newest-first within the first matching target is preserved and nothing is
+reordered. The per-target `RetrievalRecord`s are deliberately **not** deduped:
+they record what each query asked and what it returned, which stays true, so
+the manifest still answers "what was asked of the ledger this turn" even though
+the bundle carries the event once. That asymmetry is commented at the code.
+
+**Pins** (3 in `assembler.test.ts`): a dual-stamped event is retrieved once and
+rendered once, with both ledger RetrievalRecords still present and the surviving
+item carrying the FIRST target's entityId; distinct events across targets are
+all kept in returned order (the pin that stops a coarser dedupe key); and
+WP-16's sibling-environment pin in `chatAssembly.test.ts` stays green — the
+Site-scoped value A3 wanted is intact.
+
+**Mutations, all caught:** dedupe removed (2 fail); dedupe scoped per-target
+instead of across targets (2 fail); deduped by `topic` instead of event id — the
+over-collapsing shape — (1 fail, the distinct-events pin).
+
+**Item (2) — episodic.* reachable from the wired surface (WP-13 finding 4).**
+Took the architect's "or better": `collectEpisodic` now takes a topic-prefix
+LIST, defaulting to `['state.', 'episodic.']`, one query per (target, prefix).
+`chatAssembly` needs no change and got none — a surface that asks for nothing
+gets the history. `AssembleRequest.retrieval.episodicTopicPrefix` widens to
+`string | string[]`; the shipped single-string form still narrows exactly as
+before. The limit is PER QUERY, so a busy `state.` family cannot crowd out the
+incident history. Pinned at both levels, per the packet: the core pin (defaults
+query both families, in order; an explicit string or list is honoured) and the
+one that matters — **a planted `episodic.incident.recorded` event reaching the
+turn block through the REAL wired path** (`chatAssembly.test.ts`). Mutations:
+default narrowed back to `['state.']` → 4 fail across three suites; explicit
+prefix ignored → 1 fail.
+
+**Item (3) — the harness reconciled with the respelled spec. It was bigger than
+a wording pin, and the branch was RED on arrival.** The architect's E-02
+respell landed in the YAML without its code side, so `poc/nexintelligence` had
+**10 failing tests** when this worktree merged it — WP-13's own design working
+as intended (an unmapped criterion is BLOCKED, never green), but red is red.
+Fixed: three `matches:` selectors in `checks.ts` respelled (they must equal the
+criterion text); the E-02 SPEC-DEFECT finding **retired** from `SPEC_FINDINGS`
+with a comment saying why, per WP-13's rule that a fixed finding is retired
+rather than left to rot; `specLoader.test.ts`'s colon-carrying criterion; and
+the defect-count pins (2 → 1, plus an explicit "E-02 has no findings, B-03 has
+one"). The architecture-doc QUOTE inside `checks.ts` was left verbatim — it
+cites §7, which still spells it the old way (see finding below).
+**E-01's check was rewritten, not just repinned:** its prose claimed the
+criterion was "unsatisfiable from the wired surface", which item (2) made
+false. It stays BLOCKED — on the half that remains, that no code in `src/`
+emits any `episodic.*` event at all (finding 5 → WP-14) — and its evidence now
+carries the measurement showing retrieval works. Leaving the old prose would
+have been the harness lying in the owner's report.
+
+**Finding — `architecture.md` disagrees with itself on the task taxonomy.**
+§4.2's table (line 151) has the three-segment `task.action.executed`; §7 (line
+323) still reads "the gateway emits `task.action_executed` for every call".
+The WP-11 respell ruling was applied to the table and not to the prose. Not
+fixed here (docs need owner approval, and `checks.ts` quotes that line
+verbatim as its unblocked-by citation) — but the next reader of §7 will
+implement a topic the validator refuses.
+
+**Finding — the E-01 probe was measuring WP-16's duplicate.** Its pin expected
+`episodicTopicPrefix="episodic." retrieved 2 ledger item(s)` from ONE planted
+event, because the probe uses both an environment and a Site target. WP-13
+wrote that pin against the duplicated behaviour a day before it was named as a
+defect; it now reads 1. Worth knowing that the harness had already captured
+the duplication as expected output without anyone reading it as a bug.
+
+Full suite **509 suites / 6408 passed / 12 skipped / 0 failed** (up from a red
+base: 10 failing before this packet). Legacy parity suite
+`tests/unit/chat/chat-assembly-wiring.test.ts` (13, incl. the additive-parity
+pins) green and untouched. **ABI: system Node** (v25.9.0 → ABI 141) — `npm run
+rebuild` before loading in Local.
+
 ### [ ] WP-17 · Intelligence health surface + degradation tests  **(robustness track — would have caught the M1 silent-init incident)**
 The layer is non-fatal by construction, which converts real failure into
 SILENT absence: the M1 ABI incident ran for hours with green tests, a working

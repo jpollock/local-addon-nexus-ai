@@ -23,6 +23,30 @@ const NOW = new Date('2026-08-15T12:00:00.000Z');
 const HOUR = 3600_000;
 
 const ENV = 'ent_env_0123456789ABCDEFGHJKMNPQRS';
+const SITE = 'ent_site_0123456789ABCDEFGHJKMNPQ';
+const EVT = 'evt_01J5AAAAAAAAAAAAAAAAAAAAAA';
+
+/** What `chatAssembly.resolveTargets` sends today: the copy AND its Site. */
+const DUAL_TARGETS = [
+  { role: 'environment' as const, id: ENV, label: 'acme-local' },
+  { role: 'site' as const, id: SITE, label: 'acme-local' },
+];
+
+/** One ledger event, `agedHours` old. */
+function event(id: string, agedHours: number) {
+  return {
+    id,
+    recorded_at: NOW.toISOString(),
+    observed_at: new Date(NOW.getTime() - agedHours * HOUR).toISOString(),
+    topic: 'state.plugin.observed',
+    schema: 'plugin.observed/1',
+    entity: { site: SITE, environment: ENV },
+    actor: { id: 'act_x', kind: 'system', via: 'sat_x' },
+    source: { class: 'platform', system: 'wp-cli', trust: 'observed' },
+    access: { tenant: 'local' },
+    payload: { slug: 'advanced-custom-fields', version: '6.2.0' },
+  };
+}
 
 function constraint(over: Partial<PolicyConstraintView> = {}) {
   return {
@@ -250,6 +274,94 @@ describe('assemble — retrieval', () => {
     expect(b.blocks.turn).toContain('3h ago — state.plugin.observed — advanced-custom-fields');
     expect(b.blocks.turn).toContain('via wp-cli, trust: observed');
     expect(b.blocks.turn).not.toContain('6.2.0');
+  });
+
+  /**
+   * WP-16b. Targets carry more than one role (`environment` + the logical
+   * `site`), and `Ledger.query`'s entity filter matches ANY role — so one
+   * dual-stamped event, which every producer writes, comes back once per
+   * matching target. It is ONE thing that happened: rendering it per target
+   * doubled the episodic block and read as two events.
+   */
+  test('a dual-stamped event is retrieved once, not once per matching target', async () => {
+    const b = await assemble(request({ targets: DUAL_TARGETS }), deps());
+
+    const episodic = b.retrieved.filter((i) => i.store === 'ledger');
+    expect(episodic).toHaveLength(1);
+    expect(episodic[0].id).toBe(EVT);
+    expect(episodic[0].entityId).toBe(ENV); // first occurrence wins, so the first target's
+    expect(b.blocks.turn!.match(new RegExp(EVT, 'g'))).toHaveLength(1);
+    // Provenance is NOT deduped: every query really ran and every one is
+    // recorded — one per target per topic prefix — so the manifest still
+    // answers "what was asked of the ledger this turn".
+    const ledgerRecords = b.manifest.retrieval.filter((r) => r.store === 'ledger');
+    expect(ledgerRecords).toHaveLength(DUAL_TARGETS.length * 2); // × state. and episodic.
+    expect(ledgerRecords.every((r) => r.ids.includes(EVT))).toBe(true);
+  });
+
+  test('distinct events across targets are all kept, in the order they were returned', async () => {
+    const b = await assemble(
+      request({ targets: DUAL_TARGETS }),
+      deps({
+        ledger: {
+          query: (opts: Record<string, unknown>) =>
+            [
+              event(`${EVT}1`, 1),
+              ...(opts.entityId === SITE ? [event(`${EVT}2`, 4)] : []),
+            ] as never[],
+        },
+      })
+    );
+
+    const episodic = b.retrieved.filter((i) => i.store === 'ledger');
+    // The shared event once, then the Site-only one — newest-first inside each
+    // target, target order preserved. Dedupe must not reorder.
+    expect(episodic.map((i) => i.id)).toEqual([`${EVT}1`, `${EVT}2`]);
+  });
+
+  /**
+   * WP-16b item 2 (WP-13 finding 4). Episodic memory is what "consult the
+   * history before you act" runs on, and the only wired surface never asked
+   * for it: the default prefix was `state.` alone, so `episodic.*` — the
+   * family the incident history lives in — was unreachable through the real
+   * chat path no matter what the model did. The default is a LIST now.
+   */
+  test('the episodic slice covers episodic.* as well as state.* on the defaults', async () => {
+    const asked: string[] = [];
+    const b = await assemble(
+      request(),
+      deps({
+        ledger: {
+          query: (opts: Record<string, unknown>) => {
+            asked.push(String(opts.topicPrefix));
+            return [opts.topicPrefix === 'episodic.' ? event(`${EVT}9`, 2) : event(`${EVT}1`, 1)] as never[];
+          },
+        },
+      })
+    );
+
+    expect(asked).toEqual(['state.', 'episodic.']);
+    expect(b.retrieved.filter((i) => i.store === 'ledger').map((i) => i.id)).toEqual([
+      `${EVT}1`,
+      `${EVT}9`,
+    ]);
+  });
+
+  test('an explicit prefix is honoured, as a string or as a list', async () => {
+    const asked: string[] = [];
+    const ledger = {
+      query: (opts: Record<string, unknown>) => {
+        asked.push(String(opts.topicPrefix));
+        return [] as never[];
+      },
+    };
+
+    await assemble(request({ retrieval: { episodicTopicPrefix: 'episodic.' } }), deps({ ledger }));
+    expect(asked).toEqual(['episodic.']); // the shipped single-string form still works
+
+    asked.length = 0;
+    await assemble(request({ retrieval: { episodicTopicPrefix: ['a.', 'b.'] } }), deps({ ledger }));
+    expect(asked).toEqual(['a.', 'b.']);
   });
 
   test('retrieved content is wrapped as untrusted data (R7)', async () => {
