@@ -350,11 +350,38 @@ describe('grantedRunbooks — the join WP-20c and WP-20d read', () => {
     expect(rbs[0].body).toContain('Bulk plugin update'); // the real document, not a stub
   });
 
+  test('refuses to hand over a document whose hash is not the one the grant pins', () => {
+    // The pin is re-checked at the point of use, not only at resolution: this
+    // function is what the delivery path and the gate read, and a grant must
+    // never yield a document other than the one it was reviewed against (§6b).
+    const stale = {
+      capability: ANCHOR,
+      runbookId: 'rb.bulk-plugin-update',
+      runbookHash: 'sha256:thedocumentthatwasreviewed',
+      strictness: 'strict' as const,
+      scope: {},
+      source: 'settings' as const,
+    };
+    expect(grantedRunbooks(core.law!.runbooks, [stale])).toEqual([]);
+  });
+
   test('with every grant switched off it returns nothing — the additive-parity floor', () => {
     const { grants } = resolve([{ capability: ANCHOR, enabled: false }]);
     expect(grantedRunbooks(core.law!.runbooks, grants)).toEqual([]);
   });
 });
+
+/** A core whose ledger refuses every write. */
+function brokenEmitter(): IntelligenceCore {
+  return {
+    ...core,
+    emitter: {
+      emit: () => {
+        throw new Error('the record cannot be written');
+      },
+    },
+  } as unknown as IntelligenceCore;
+}
 
 describe('the parity floor', () => {
   test('a capabilityGrants key does not perturb the permissions mirror', () => {
@@ -377,18 +404,47 @@ describe('the parity floor', () => {
   });
 
   test('an emitter that throws costs the record, never the caller', () => {
-    const broken = {
+    expect(() =>
+      syncCapabilityGrants({ core: brokenEmitter(), storage: storage(), logger: silent })
+    ).not.toThrow();
+  });
+
+  test('a grant whose announcement failed is RETRIED, not marked as announced', () => {
+    // The marker is what suppresses re-issuance, so writing an entry for a grant
+    // whose event never landed would leave a live grant that the record cannot
+    // explain — and no later boot would try again.
+    kv.delete(GRANTS_STORAGE_KEY);
+    kv.set('__reset__', true); // keeps the map non-empty; irrelevant to the read
+    syncCapabilityGrants({ core: brokenEmitter(), storage: storage(), logger: silent });
+
+    const afterFailure = kv.get(GRANTS_STORAGE_KEY) as { grants: unknown[] } | undefined;
+    expect(afterFailure?.grants ?? []).toEqual([]);
+
+    // The next sync, with a working emitter, announces it.
+    sync();
+    expect(events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === ANCHOR).length)
+      .toBeGreaterThan(0);
+  });
+
+  test("one grant's failed announcement does not stop the next grant's", () => {
+    // Per-event guarding, not one try around the loop: two grants, the first
+    // one's emission throws, and the second must still be recorded.
+    kv.delete(GRANTS_STORAGE_KEY);
+    writeSettings([{ capability: 'cap.wpe_pull' }]);
+    const selective = {
       ...core,
       emitter: {
-        emit: () => {
-          throw new Error('ledger is a stone');
+        emit: (draft: { payload: { capability?: string } }) => {
+          if (draft.payload.capability === ANCHOR) throw new Error('this one fails');
+          return core.emitter.emit(draft as never);
         },
       },
     } as unknown as IntelligenceCore;
 
-    expect(() =>
-      syncCapabilityGrants({ core: broken, storage: storage(), logger: silent })
-    ).not.toThrow();
+    syncCapabilityGrants({ core: selective, storage: storage(), logger: silent });
+
+    const issued = events(GRANT_ISSUED_TOPIC).map((e) => e.payload.capability);
+    expect(issued).toContain('cap.wpe_pull');
   });
 
   test('unreadable storage costs the marker, never the caller', () => {

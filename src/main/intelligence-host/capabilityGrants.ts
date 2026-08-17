@@ -389,16 +389,20 @@ function emitChanges(
       },
     });
 
-    next.push({
-      capability: grant.capability,
-      runbookId: grant.runbookId,
-      runbookHash: grant.runbookHash,
-      // An emission that failed leaves no id to chain to. Keeping the prior id
-      // (or an empty string) is honest: the marker says what is granted, and a
-      // revocation with nothing to chain to is still a revocation.
-      eventId: id ?? prior?.eventId ?? '',
-      issuedAt: now.toISOString(),
-    });
+    // An emission that FAILED leaves this grant out of the marker on purpose,
+    // so the next sync announces it again. Recording it as announced would
+    // suppress the retry forever and leave a live grant with no record of ever
+    // having been issued — the trail would then be unable to explain where the
+    // ceremony came from, which is the one thing these events are for.
+    if (id) {
+      next.push({
+        capability: grant.capability,
+        runbookId: grant.runbookId,
+        runbookHash: grant.runbookHash,
+        eventId: id,
+        issuedAt: now.toISOString(),
+      });
+    }
   }
 
   // Whatever the marker still holds was granted and is not live any more.
