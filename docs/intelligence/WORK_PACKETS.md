@@ -6364,7 +6364,7 @@ flight; its merge order stays free.
 
 ---
 
-### [ ] WP-20b · Grants and arming  *(phase 2 of WP-20, sub-packet 2 of 5)*
+### [x] WP-20b · Grants and arming  *(phase 2 of WP-20, sub-packet 2 of 5)*
 
 **ANNOUNCED 2026-08-17 — INTEGRATION LOCK TAKEN** (`src/main/index.ts` and
 `src/main/mcp/modules/fleet/index.ts`, which the ownership map serializes under
@@ -6396,3 +6396,216 @@ designer's own cycle.
 before any pipe): **545 suites / 6968 passed / 12 skipped / 0 failed, exit 0** —
 identical to the figure WP-20a recorded on merge, so the base is where the last
 packet left it.
+
+---
+
+**WP-20b OUTCOME — done (branch `wp-20b`, merge `e3d43f9b`).** A capability now
+arrives with a procedure attached: five grants are materialized from shipped law
+on this machine, the ledger records why each one exists, and the chat turn that
+would run one carries the procedure index that names it.
+
+Receipt (`git diff --stat e3d43f9b^1 e3d43f9b`, 26 files, +2489/−11):
+
+    docs/intelligence/WORK_PACKETS.md                       |  35 +
+    src/common/types.ts                                     |  34 +
+    src/common/schemas.ts                                   |  24 +
+    src/intelligence/law/arming.ts                          | 178 +
+    src/intelligence/index.ts                               |  15 +
+    src/main/intelligence-host/capabilityGrants.ts          | 493 +
+    src/main/intelligence-host/procedureArming.ts           | 129 +
+    src/main/mcp/modules/fleet/load-procedure.ts            | 153 +
+    src/main/intelligence-host/bootstrap.ts                 |  13 +-
+    src/main/intelligence-host/chatAssembly.ts              |  10 +-
+    src/main/intelligence-host/health.ts                    |  26 +-
+    src/main/index.ts                                       |  11 +
+    src/main/mcp/safety.ts                                  |   6 +
+    src/main/mcp/modules/fleet/index.ts                     |   2 +
+    src/intelligence/__tests__/arming.test.ts               | 278 +
+    intelligence-host/__tests__/capabilityGrants.test.ts    | 514 +
+    intelligence-host/__tests__/procedureArmingWiring.test.ts | 251 +
+    intelligence-host/__tests__/bootstrapGrants.test.ts     |  67 +
+    fleet/__tests__/loadProcedure.test.ts                   | 152 +
+    tests/unit/common/schemas-settings.test.ts              |  46 +
+    intelligence-host/__tests__/{health,wiring,degradation,procedureTurnCarrier}.test.ts | 25/8/4/9 ±
+    tests/intelligence-evals/probes.test.ts                 |  12 +-
+    tests/main/fleet-tools.test.ts                          |   5 +-
+
+Jest, every figure on a compiled worktree with the tree held still and the exit
+code taken before any pipe. Baseline at the announced base `a580025c`:
+**545 suites / 6968 passed / 12 skipped / 0 failed**. The base then moved TWICE
+mid-flight (20c's adjudication docs, then WP-20c itself); after merging it in,
+the branch measures **553 / 7113 / 12 / 0, exit 0** against the post-20c base's
+own **552 / 7102 / 12 / 0** — delta **+1 suite, +11 tests** over a base that had
+already absorbed this packet's other +3 suites' worth of work. `npx tsc -p .
+--noEmit` clean; eslint clean on every changed file (the nested
+`src/intelligence` seam rule included — `arming.ts` imports nothing but its own
+types). **Mutation battery 50/50 caught by their named witness**, after three
+that did not (findings 3, 4, 8).
+
+**The integration lock was taken and is RELEASED.** `src/main/index.ts` gains
+**11 lines** (one import, one guarded call in `onSettingsUpdated`);
+`src/main/mcp/modules/fleet/index.ts` gains 2; `safety.ts` gains a
+`TIER_OVERRIDES` one-liner with its reason. `ipc-handlers.ts` was not touched at
+all. Per WP-22b's lesson about a hub's transitive import graph, the dependent
+suites were run, not just this packet's: `tests/unit/main/agent-settings-cache`,
+`tests/unit/ipc/`, `tests/unit/chat/` and the full suite are green.
+
+**The shape of the grant.** Two layers produce the live set, and neither writes
+to settings: shipped law supplies a grant for every STRICT runbook the registry
+serves (enabled — P2's inversion: with no grant a chat model can already call
+`bulk_plugin_update` with no ceremony, so shipping it off would make the safe
+path opt-in), and `NexusSettings.capabilityGrants` is the override layer where
+only `capability` is required. Three disarms, each with the reason a user acts
+on: `disabled-by-settings`, `hash-mismatch`, `runbook-unavailable`. **Strict-only
+is a default, not a ban** — an explicit settings grant for a guided capability is
+honoured; nothing ships one, because ruling 2 gave guided runbooks no mandatory
+full-body ride and both shipped ones were over the old ceiling.
+
+**Why the arming code is boring on purpose.** `armByPredicate` /
+`armByRequest` / `armAtGate` are pure functions of text and the runbooks a grant
+covers. Exact whole-token matching, authored inflections, no stemming: an
+under-firing predicate is ruled-tolerable (paths B and C remain) while a
+predicate that guesses is a gate nobody can reproduce. Ambiguity arms NEITHER
+and names both. A model's explicit request outranks the predicate, because a
+request is evidence and a lexical match is an inference.
+
+**Eleven findings.**
+
+1. **A sibling packet's merge is testable BEFORE it lands, and this one was.**
+   WP-20c merged while this packet was in flight. Rather than wait, 20c's four
+   split runbooks and its raised ceiling were checked out into this worktree, the
+   suites run, and the tree reverted. That trial found two real breaks that would
+   otherwise have landed as someone else's red: every shipped-set census
+   assertion (the set grows from one capability to five when two strict runbooks
+   become four), and a `Runbook` fixture that broke the moment 20c added a
+   required `canonicalText`. Both fixed before the merge — assertions are now
+   anchor-scoped, and the fixture carries a documented cast, because a fixture
+   must not break when a parallel packet adds a field it never reads.
+2. **Emitting at boot nearly retired a health signal, and the fix is a
+   population, not a suppression.** `initIntelligenceCore` now records
+   `control.grant.issued`, so `ledger=OK(1 event)` would have been true on a
+   brand-new install whose every producer was dead — the WP-17 line whose whole
+   job is catching that install. The ledger line now counts OBSERVATIONS
+   (`topic NOT LIKE 'control.%'`), computed in the same single GROUP BY, and the
+   grant producer is still DISCLOSED by name in "Other sources" (verified live).
+   This is the same defect class CLAUDE.md records for `calculateStability`: a
+   constant awarded for having no data.
+3. **M28 SURVIVED, and the honest fix was a design change, not a test.** The
+   marker recorded a grant with an empty event id when emission threw, which
+   suppressed the retry forever and left a live grant the record could not
+   explain. Now the marker carries only grants actually announced, so the next
+   sync re-announces; and the per-event guard is pinned by a case where one
+   grant's emission fails and the next still lands.
+4. **M50 SURVIVED on a vacuous assertion.** "A caller that supplies its own
+   procedure request is not overridden" asserted a null procedure outcome —
+   true whether the caller was honoured or silently replaced, because nothing
+   arms on that turn either way. Re-pinned on the INDEX, which differs.
+5. **A first producer changes what other tests can use as an example of
+   absence.** `tests/intelligence-evals/probes.test.ts` used `control.` as its
+   empty-topic-family case, precisely because nothing emitted it. It now uses
+   `procedure.` (still producerless) and gained a case asserting `control.grant.`
+   IS populated — the churn turned into coverage.
+6. **The scope-vocabulary question 20a raised is answered by refusing to
+   guess.** A grant carries the runbook's own `scope.environments` tokens
+   verbatim (`local`, `wpe_staging`, `wpe_development` — never coerced to the
+   three remote environments, which would silently widen a grant to every
+   external staging host). A runbook whose scope uses a different vocabulary
+   carries NO environments rather than a mapped guess: live, `cap.promote_
+   environment` and `cap.promotion_preflight` both resolve to `scope: {}`.
+   Nothing gates on scope in v0, so absence costs nothing and a wrong mapping
+   would have cost correctness later.
+7. **The shipped-grant rule auto-grants whatever the next packet authors, and
+   the architect should see that named.** WP-20c's split took the live set from
+   one capability to FIVE — including `cap.incident_remediation` and
+   `cap.promote_environment`, whose declared scopes name production. Under P2
+   that is the safe direction (a grant adds ceremony and removes no reach), and
+   the index is now 5 lines ≈ the 125 tokens §3 itself budgeted for five
+   runbooks. But the ceremony surface grows silently with authoring, and on the
+   day WP-20f makes a capability REQUIRED that growth becomes load-bearing.
+8. **Three mutations were BUILD-ERRORs before they were kills** (WP-20a finding
+   8, reproduced): `&& false` and `|| true` are rejected by ts-jest's
+   diagnostics, and one guard turned out to be TYPE-enforced — `if (id)` narrows
+   `id` for `eventId: id`, so the defect could only be expressed by also
+   restoring the `?? ''` the fix removed. That is a guard the type system helps
+   hold, and worth knowing before assuming a SURVIVED verdict.
+9. **The tool handler has no task or session id, and the queue says so.**
+   `McpToolHandler.execute` is `(args, services)`; `ToolRegistry.call` keeps the
+   task moment to itself. So the arming-request queue is process-wide, bounded at
+   8, and drained by its reader — with the consequence stated in the module
+   rather than discovered: two concurrent chats asking for procedures in the same
+   second cannot be told apart. Threading identity means opening audit
+   chokepoint one, which 20d can do when it has a reason.
+10. **An absolute path is not a worktree path.** The first test file of this
+    packet was written into the PRIMARY checkout, because the absolute path
+    started at the repo root rather than at `.worktrees/wp-20b/`. Jest caught it
+    ("0 matches" against a file that plainly existed) and it was moved before any
+    commit, but the failure mode is silent in the other direction: an edit to a
+    file that exists in both trees would have modified the wrong one. Worth a
+    protocol line — in a worktree packet, every write path begins with
+    `.worktrees/<packet>/`.
+11. **I used `git stash` once, which the protocol warns against, and got lucky.**
+    One `push`/`pop` pair to check whether an eslint warning predated my change;
+    it was LIFO-safe and a sibling worktree's stash entry was untouched, but the
+    protocol's own remedy (`git diff > /tmp/<packet>.patch` + `git checkout`) was
+    right there. Recorded because the near-miss is the evidence.
+
+**Two judgement calls taken inside 20b's scope, each cheap to reverse.** A grant
+naming a runbook id the registry does not serve for that capability is classed
+`hash-mismatch`, not `runbook-unavailable` — the word the 20c gate adjudication
+ratified, and the mechanism that kills a standing grant across a runbook split
+rather than letting it arm half a procedure by name coincidence. And
+`grantedRunbooks` re-checks the pin at the point of use, not only at resolution,
+because that function is what the delivery path and (at 20d) the gate read.
+
+**What this packet did NOT wire, stated so it is not assumed.**
+
+- **Path C is not at the gate.** `armAtGate` and `renderLateArmRefusal` are
+  built, exported and pinned (the refusal names the tool, the procedure, its
+  first checkpoint and how to arm it, and carries no runbook prose). The
+  `ToolRegistry.call` guard that calls them is WP-20d's, per the lock map.
+- **No runbook authors `arms_on:` yet**, so Path A cannot fire on the shipped
+  set: the predicate is exercised against a registry authored in the test.
+  Authoring it (with `attest:`/`tools:`, including §5's `NEEDS_RUNNING_SITE` fix)
+  edits the `docs/intelligence/anchor-slice` originals first and re-copies — the
+  fidelity pin fires on direct edits by design.
+- **Ambiguity has no dedicated disclosure.** "Deliver both index lines, arm
+  neither, say so" is met today by the index naming both; the sentence that says
+  so is a surface, and surfaces are 20e's.
+- **No UI.** The grant surface reaches Settings on the designer's own cycle;
+  `getCapabilityGrants()` / `getDisarmedCapabilityGrants()` are the read
+  surface it will need, disarm reasons included.
+
+**A live-surface change, named rather than buried: the always-on procedure index
+now rides every chat turn.** That is §3's ruled behaviour ("every turn, always,
+armed or not") and it is not byte-identical to the pre-WP-20 turn block — the
+parity floor is *no grants*, which is where P2's additive-only ruling always
+meant to read, and it is pinned in both directions. WP-20c's own parity test was
+re-pointed to construct the empty-grants case for the same reason.
+
+**The real-app pass — the first `control.grant.*` events anywhere, from the
+running process.** Local was rebuilt and relaunched twice (`./dev-reload.sh`) on
+the merged tree. First boot, 21:45:15Z: `runbook registry: 7 runbook(s) loaded,
+0 refused, 0 near ceiling`, and the health line's own disclosure grew a producer:
+
+    producers:unlisted=OK(3 (graph-backfill, law:capability-grants, live-recheck:local))
+
+The ledger, read directly, holds exactly five issuances with the system actor,
+the authored source class and the satellite `via`:
+
+    control.grant.issued|cap.bulk_plugin_update|materialized|expertise|act_grant_materializer
+    control.grant.issued|cap.incident_containment|…
+    control.grant.issued|cap.incident_remediation|…
+    control.grant.issued|cap.promote_environment|…
+    control.grant.issued|cap.promotion_preflight|…
+
+Second boot, 21:46:46Z: **still five.** The storage marker round-trips through
+Local's real `userData`, so the ledger records the grant once rather than once
+per launch — the change-not-repetition rule, verified in the app rather than only
+against a `Map` in a test.
+
+**ABI state on exit: ELECTRON (146) — Local is loadable as it stands.** This
+session ran `npm test` six times plus a 50-mutation battery, which leaves
+`better-sqlite3` built for the shell's Node (measured 25.9.0 → ABI 141;
+`.nvmrc`/CI is 22.16.0 → 127), and then `./dev-reload.sh` rebuilt it to Electron
+42.2.0 for the two passes above. **To run jest again: `npm test`** (the `pretest`
+hook flips it back), never bare `npx jest`.

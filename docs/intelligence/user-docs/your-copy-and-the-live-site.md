@@ -145,6 +145,28 @@ must never leak.
 | where-am-I status | **site status** / "where am I?" | task frame, working context |
 | health verdicts (WP-17, if ever user-visible) | **OK / needs a check / not reporting** | OK/STALE/DARK (internal only) |
 
+### v1.1 additions (2026-08-17 — WP-20 procedure surfaces + the designer-v5 copy sweep)
+
+The v1 table predates the procedure surfaces; these rows extend it. Rulings,
+not drift — each was found in use (prototype v5 / §5b copy) and sanctioned
+deliberately:
+
+| Concept (internal) | User-facing term | Never say |
+|---|---|---|
+| strict runbook (ADR-17) | **runbook** — named, versioned, "marked strict" | procedure (as a noun of art), law document, capability doc |
+| checkpoint (gateway-sequenced) | **checkpoint** — "7 of 7 checkpoints attested" | step (for STRICT runbooks — reserved: guided runbooks have steps, strict have checkpoints, per ADR-17 am. 2) |
+| attestation record | **attested** — recorded against the checkpoint | *verified* — NEVER for checkpoints. "Verify" belongs to the live check alone; a narrative attestation is recorded, not checked, and no checkpoint renders a verified tick |
+| runbook-added step badge | **"runbook added this"** + a reason line | policy-injected, procedure-mandated |
+| canary | **canary** — "updates one site first as a canary" | pilot, probe site |
+| WPE inventory unit | **install** — ONLY inside WP Engine-labeled contexts (Connections, grants quoting WPE: "one named install") | using *install* as the Nexus count noun |
+| Nexus count noun | **environments** — "203 sites · 367 environments" | installs (outside WPE-labeled contexts), envs |
+| WPE account inventory refresh | **synced** — "last synced 2 hours ago", the account/install catalog only | *synced* for site reads (those are **checked**) or content (that is **pulled**) — three acts, three verbs |
+
+Confirmed by the same sweep, no change needed: "may be out of date" was
+already the v1 fact-level freshness phrase (it composes with the status
+level: "checked 3 days ago · ⚠ may be out of date · Check it now"), and the
+prototype's usage conforms.
+
 ## PRESSURE-TEST FINDINGS (№2)
 
 1. **The model survived the harder test.** Every future behavior was
