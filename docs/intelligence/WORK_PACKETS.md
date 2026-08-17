@@ -4267,7 +4267,7 @@ Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).
   QUEUED for the next sitting — batch it with WP-20's eventual criteria and
   the M3 surface review; no separate ceremony.
 
-### [ ] WP-19b · AgentDispatcher timer leak on the throw path  *(pre-existing legacy defect, from WP-19 finding 4; tiny, parallel-safe)*
+### [x] WP-19b · AgentDispatcher timer leak on the throw path  *(pre-existing legacy defect, from WP-19 finding 4; tiny, parallel-safe)* — **DONE 2026-08-17, see outcome at the end of this file**
 `AgentDispatcher` clears its 5-minute handler timeout only on the success
 path — a throwing handler leaks the timer. Fix + pin (throwing handler:
 timer cleared, no unhandled rejection). Not intelligence scope; any tier;
@@ -5047,3 +5047,121 @@ units, never item counts (docs finding №3). Vocabulary v1: "pulled from <sourc
 - **WP-22b** (content-age chip — needs one IPC channel, integration lock)
   accepted as registered by the agent; correctly excluded from this
   packet's file scope.
+
+---
+
+**WP-19b OUTCOME — done (branch `wp-19b`, worktree `.worktrees/wp-19b`, Opus).**
+Two files: `src/main/agent-runtime/AgentDispatcher.ts` and its existing suite
+`tests/unit/agent-runtime/agentDispatcher.test.ts`. No new file, no new suite,
+nothing under `src/intelligence/` — the packet's "not intelligence scope" holds
+exactly. WP-19 confirmed an ancestor of the base (`git merge-base
+--is-ancestor wp-19 poc/nexintelligence`) before starting, so the instrumented
+dispatcher is the one that was fixed.
+
+**Verification.** Worktree baseline BEFORE any change: **539 suites (538
+passed, 1 failed), 6,837 passed, 12 skipped, 6,853 total**, exit 1. AFTER:
+**539 suites (538/1), 6,844 passed, 12 skipped, 6,860 total**, exit 1. Suites
+unchanged; tests **+7**, exactly the 7 new pins; **skipped unchanged at 12**, so
+the delta is not an artifact-gated suite appearing. The 1 failing suite is the
+same one before and after, with the same 4 failures (below). `npm run typecheck`
+clean; `npx eslint` clean on both touched files. Mutation battery **7/7 caught**
+(run twice — 6/7 the first time; see finding 2).
+
+**The change.** `clearTimeout(timeoutHandle)` moved into a `finally` in both
+`dispatchFunction` and `dispatchRun`. That deleted the async IIFE in each, which
+existed only to hold the clear after the `await`, so `Promise.race` now takes
+`handler(args, ctx)` / `def.run(ctx)` directly. Behaviour on every other path is
+byte-identical: same error strings, same result shapes, same 5-minute budget.
+
+**Four findings.**
+
+1. **The leak was worse in one specific shape than the packet describes, and
+   the fix creates that shape deliberately.** With the IIFE, a *synchronously*
+   throwing handler became a rejection that `Promise.race` was already
+   subscribed to, so the abandoned timeout promise's later rejection was
+   consumed — a leaked timer, but no unhandled rejection. Without the IIFE, a
+   synchronous throw never reaches `Promise.race` at all, so the timeout promise
+   has **no subscriber**: if its timer were left armed it would reject into
+   nothing five minutes later and crash-or-warn depending on Node's flags. The
+   `finally` clears it before that can happen. This is why the packet's
+   "no unhandled rejection" pin is load-bearing for the NEW shape rather than
+   for the old defect — against the old code that assertion passes. Stated
+   plainly because a pin that holds in both directions is otherwise a vacuous
+   guard: the pin that actually falsifies the defect is `jest.getTimerCount()`,
+   which reads 1 against the original line and 0 against the fix.
+
+2. **The mutation battery found a hole in this packet's own pins.** Deleting
+   `timeoutPromise` from `dispatchRun`'s race — i.e. removing the five-minute
+   budget from the `run()` path entirely — left all 23 tests green. The budget
+   was pinned for `dispatchFunction` and had never been pinned for
+   `dispatchRun`, in a packet whose diff restructures both. A seventh pin ("the
+   timeout still fires for a `run()` that never settles") closes it; the battery
+   then went 7/7. Recording the SURVIVED because the survivor, not the score, is
+   the finding: the pins were written for the throw path, and the path the
+   throw-path fix could have *broken* was the one left uncovered.
+
+3. **The 4 known-red `AgentRegistry.test.ts` tests DO reproduce here** — the
+   standing capture instruction (open since WP-12, where they did not reproduce)
+   is discharged. Same 4, in the worktree, on the clean pre-change tree, and
+   also in isolation (`npx jest tests/unit/agent-runtime/AgentRegistry.test.ts`
+   → 4 failed / 7 passed in 1.5s), so this is not contention from the other
+   agents' concurrent jest runs. Every one is the same symptom — `registry.load()`
+   registers nothing from a temp dir:
+
+       ● AgentRegistry › load() discovers and registers a valid agent
+         expect(received).toHaveLength(expected)
+         Expected length: 1
+         Received length: 0
+         Received array:  []
+           > 44 |     expect(registry.list()).toHaveLength(1);
+
+       ● AgentRegistry › get() returns the agent by name
+         Expected: "test-agent"
+         Received: undefined
+           > 53 |     expect(agent?.name).toBe('test-agent');
+
+       ● AgentRegistry › skips subdirectories without agent.ts or agent.js
+       ● AgentRegistry › skips agents that fail to load (logs error, continues)
+         (both: Expected length 1, Received length 0)
+
+   The fixtures write `agent.ts`, whose load depends on the ts-node
+   registration `AgentRegistry` installs; a worktree whose `node_modules` is a
+   symlink is the obvious suspect and is NOT verified here — out of scope for
+   this packet, but it wants a packet of its own, because "the agent registry
+   loads zero agents" is not a failure mode anyone should have to know is
+   expected.
+
+4. **`git stash` is shared across every worktree, and the protocol does not say
+   so.** Establishing a clean BEFORE baseline meant stashing; between the stash
+   and the pop, the `wp-21b` agent stashed too, and a bare `git stash pop` in
+   THIS worktree applied THEIR work into it and dropped their entry. Recovered
+   in full — their files reverted out of this tree, their stash restored to
+   `stash@{0}` by SHA with its original message (`git stash store -m … b0a6d0bb`),
+   same commit object, so nothing of theirs was lost and their own worktree was
+   never touched. **Protocol amendment proposed** (owner's call, `docs/` is
+   owner-approval): in a multi-agent worktree setup, never `git stash pop`/`apply`
+   by index — resolve the entry by SHA first
+   (`git stash list --format='%H %gs' | grep <your-marker>`) and drop that SHA.
+   Better still, don't stash: commit a WIP on your own branch and reset it after.
+
+**Two smaller notes on measurement**, both of which produced a wrong number
+before producing a right one:
+
+- **`npm test | tail` masks jest's exit code** — the pipeline reports `tail`'s
+  status, so a run with 4 real failures reported exit 0. It also loses the
+  `Test Suites:`/`Tests:` summary entirely when console output from the suites
+  outruns the tail window. Redirect to a file and grep it; do not pipe.
+- **A baseline started before the edits is not a baseline.** The first full run
+  here was launched and then the tree was edited underneath it, so suites read
+  the file in whichever state they happened to reach it in. Killed and discarded
+  rather than reported. Three full runs were needed for two honest numbers.
+
+**Receipt** — `git diff --stat <merge>^1 <merge>` is in the integration report;
+the packet's own change is:
+
+    src/main/agent-runtime/AgentDispatcher.ts        |  36 +++---
+    tests/unit/agent-runtime/agentDispatcher.test.ts | 174 ++++++++++++++++++++++
+
+**ABI state on exit: system Node (jest).** `better-sqlite3` is built for the
+developer shell's Node 25.9.0 (ABI 141) — this session ran jest repeatedly.
+**Run `npm run rebuild` before loading the addon in Local.**
