@@ -6361,3 +6361,38 @@ exercises — remediation begun without the verified snapshot is a FAIL).
 PARALLEL_PROTOCOL amended twice as above. WP-20d's prompt delivered to
 the owner with this entry, per the standing sequence. 20b remains in
 flight; its merge order stays free.
+
+---
+
+### [ ] WP-20b · Grants and arming  *(phase 2 of WP-20, sub-packet 2 of 5)*
+
+**ANNOUNCED 2026-08-17 — INTEGRATION LOCK TAKEN** (`src/main/index.ts` and
+`src/main/mcp/modules/fleet/index.ts`, which the ownership map serializes under
+the same lock; plus the `safety.ts` `TIER_OVERRIDES` one-liner that a new tool
+needs). Confirmed free first: WP-22b took and released it in one session, and
+WP-20a explicitly did not take it. Worktree `.worktrees/wp-20b`, branch
+`wp-20b`, base `poc/nexintelligence` @ `a580025c` (the WP-20a adjudication
+commit).
+
+**Also taken, narrowly: NEW FILES ONLY under `src/intelligence/law/`.** §9-20b
+says "no lock on the core", and §1's smallest-implementation places
+`armFor()` in `src/intelligence/law/`. Both are satisfied by adding files and
+touching none: WP-20c holds the core lock on `src/intelligence/assemble/`, and
+this packet does not open that directory, `chatAssembly.ts`, or
+`law/runbooks/` (which 20c re-authors — inheritance 4).
+
+Scope per §9-20b, governed by P1 and P2 as ratified: the `capabilityGrants`
+model + storage (**+ `UpdateSettingsSchema`**, the `.strict()` trap); the
+shipped grant set materialized from the runbook registry at bootstrap;
+`control.grant.issued` / `control.grant.revoked` as their first producer
+anywhere; the three P1 arming paths as pure deterministic functions
+(`arms_on` predicate, the Tier-1 `nexus_load_procedure` tool, the late-arm at
+the gate rendering an instructive refusal). **No delivery, no sequencing, no
+UI** — 20c carries the procedure on the turn, 20d owns the cursor and the
+`ToolRegistry.call` guard, and the grant surface reaches Settings on the
+designer's own cycle.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code taken
+before any pipe): **545 suites / 6968 passed / 12 skipped / 0 failed, exit 0** —
+identical to the figure WP-20a recorded on merge, so the base is where the last
+packet left it.

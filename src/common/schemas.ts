@@ -55,6 +55,29 @@ const RemoteSiteExceptionSchema = z.object({
   }),
 });
 
+/**
+ * WP-20b · a capability grant override. Only `capability` is required: the grant
+ * SET comes from shipped law, and this array switches one off or pins it to the
+ * document version that was reviewed.
+ *
+ * `scope.environments` is `z.string()`, not the three remote environments:
+ * `rb.bulk-plugin-update` declares `[local, wpe_staging, wpe_development]`, and
+ * coercing `wpe_staging` to `staging` would silently widen a grant to every
+ * external staging host (WP-20a finding 5).
+ */
+const CapabilityGrantSchema = z.object({
+  capability: z.string().min(1),
+  enabled: z.boolean().optional(),
+  runbookId: z.string().min(1).optional(),
+  runbookHash: z.string().min(1).optional(),
+  scope: z
+    .object({
+      environments: z.array(z.string().min(1)).optional(),
+      targetRefs: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
+});
+
 export const UpdateSettingsSchema = z.object({
   autoIndex: z.boolean().optional(),
   excludedSiteIds: z.array(SiteIdSchema).optional(),
@@ -79,6 +102,7 @@ export const UpdateSettingsSchema = z.object({
   wpeSiteExceptions: z.array(WpeSiteExceptionSchema).nullable().optional(),
   remoteOperationPermissions: WpeOperationPermissionsSchema,
   remoteSiteExceptions: z.array(RemoteSiteExceptionSchema).nullable().optional(),
+  capabilityGrants: z.array(CapabilityGrantSchema).nullable().optional(),
   wpeAllowedEnvironments: z.array(z.string()).optional(), // legacy — kept for migration
   wpeBannerDismissed: z.boolean().optional(),
   wpeNotConnectedBannerDismissed: z.boolean().optional(),

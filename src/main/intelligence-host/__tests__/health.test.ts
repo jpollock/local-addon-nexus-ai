@@ -430,3 +430,28 @@ describe('the check itself', () => {
     core.close();
   });
 });
+
+describe('the ledger line counts observations, not configuration (WP-20b)', () => {
+  test('a capability grant recorded at boot does not make a dead tap look alive', () => {
+    // `initIntelligenceCore` materializes the shipped grant set and records
+    // `control.grant.issued`. If that counted here, "nothing has been recorded
+    // yet" would be unreachable on a fresh install — the one install this line
+    // exists for.
+    const { core } = makeCore();
+    expect(core.ledger.count()).toBeGreaterThan(0); // the grant IS in the ledger
+    const line = lineFor(collectIntelligenceHealth({ core, now: new Date() }), 'ledger');
+    expect(line.value).toBe('0 event(s)');
+    expect(line.verdict).toBe('STALE');
+    core.close();
+  });
+
+  test('the grant producer is still DISCLOSED as a source with no liveness expectation', () => {
+    // Excluded from the count, never hidden: an unmonitored producer that no
+    // line names is invisible exactly when it misbehaves.
+    const { core } = makeCore();
+    const report = collectIntelligenceHealth({ core, now: new Date() });
+    const unlisted = report.lines.find((l) => l.key === 'producers:unlisted');
+    expect(unlisted?.value).toContain('law:capability-grants');
+    core.close();
+  });
+});

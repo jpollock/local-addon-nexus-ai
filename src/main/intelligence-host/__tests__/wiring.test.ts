@@ -25,7 +25,13 @@ test('bootstrap + tap: wp plugin event lands in ledger and twin', async () => {
   core.tap('abc123', 'post_updated', { post_id: 7, post_type: 'page', title: 'Pricing', status: 'publish' });
   core.tap('abc123', 'bogus_event', {});
   await new Promise((r) => setTimeout(r, 700)); // let the debounced fold run
-  expect(core.ledger.count()).toBe(2); // bogus ignored
+  // Observations only: `initIntelligenceCore` also records the shipped capability
+  // grant (`control.grant.issued`, WP-20b), so a bare total would count a
+  // configuration record as a webhook event and stop testing the tap.
+  const observations = core.ledger
+    .query({ limit: 100 })
+    .filter((e) => !e.topic.startsWith('control.'));
+  expect(observations).toHaveLength(2); // bogus ignored
   const facts = core.twins.forEntity(core.ledger.query({ topicPrefix: 'state.plugin.' })[0].entity.environment);
   expect(facts).toHaveLength(1);
   expect(facts[0].fact).toBe('plugin:woocommerce');

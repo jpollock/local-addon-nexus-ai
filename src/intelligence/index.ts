@@ -90,6 +90,21 @@ export {
   RUNBOOK_NEAR_CEILING_BYTES,
 } from './law/runbookRegistry';
 export {
+  // Arming (WP-20b, P1) — three deterministic paths, no model call anywhere.
+  // 20c reads the predicate path, 20d reads the gate path and its refusal.
+  armAtGate,
+  armByPredicate,
+  armByRequest,
+  armsOnMatches,
+  claimsTool,
+  renderLateArmRefusal,
+  tokenizeTurnText,
+  ArmedBy,
+  ArmedProcedure,
+  ArmingOutcome,
+  ArmingRefusalReason,
+} from './law/arming';
+export {
   assemble,
   estimateTokens,
   policyVersionHash,

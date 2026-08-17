@@ -164,7 +164,9 @@ describe('a throwing entity service', () => {
         is_active: true,
       });
       expect(pipeline.delivered).toEqual(['plugin_updated']);
-      expect(core.ledger.count()).toBe(1);
+      // The webhook event, counted as an observation — the boot-time capability
+      // grant record (WP-20b) is in the ledger too and is not what this asserts.
+      expect(core.ledger.query({ topicPrefix: 'state.', limit: 100 })).toHaveLength(1);
 
       const report = collectIntelligenceHealth({
         core,

@@ -335,6 +335,37 @@ export interface WpeSiteException {
   };
 }
 
+/**
+ * One capability grant, as it is CONFIGURED (WP-20b, design note §2).
+ *
+ * Deliberately NOT `remoteSiteExceptions` wearing a new name: those rule on the
+ * five remote operations against three environments, and folding a
+ * procedure-bearing grant into them would change `wpeOperationPermissions`
+ * semantics — a stop-and-ask escalation whose answer was NO.
+ *
+ * `capability` is the only required field, because in v0 the grant SET is
+ * materialized from shipped law (every strict runbook the registry serves) and
+ * this array is the override layer: switch one off, or pin one to the document
+ * version you reviewed. A pin that stops matching disarms the capability rather
+ * than upgrading it silently (§6b — integrity is not staleness).
+ *
+ * v0 grants are ADDITIVE: holding one adds a procedure and its sequencing over
+ * that capability's own tools. Not holding one leaves today's tool reach exactly
+ * as it is. Making a capability *required* to reach its tools is WP-20f.
+ */
+export interface CapabilityGrantSetting {
+  /** e.g. 'cap.bulk_plugin_update'. The key an override matches on. */
+  capability: string;
+  /** Absent = enabled. The shipped grant ships ON — shipping it off would leave the unceremonious path as the default. */
+  enabled?: boolean;
+  /** The runbook this grant was reviewed against. Absent = whichever runbook serves the capability. */
+  runbookId?: string;
+  /** `sha256:…` over the canonical document. Absent = pinned to whatever ships. */
+  runbookHash?: string;
+  /** Absent = the runbook's own declared scope. Tokens are the runbook's vocabulary, never coerced. */
+  scope?: { environments?: string[]; targetRefs?: string[] };
+}
+
 export interface NexusSettings {
   autoIndex: boolean;
   excludedSiteIds: string[];
@@ -369,6 +400,9 @@ export interface NexusSettings {
   remoteOperationPermissions?: RemoteOperationPermissions;
   /** Per-target, per-environment overrides for individual operations. */
   remoteSiteExceptions?: RemoteSiteException[];
+  /** Procedure-bearing capability grants (WP-20b). A separate axis from the
+   *  operation permissions above — see CapabilityGrantSetting. */
+  capabilityGrants?: CapabilityGrantSetting[];
   /** Hours between scheduled local site content index runs. 0 or undefined = manual only. */
   localContentIndexIntervalHours?: number;
   /** Whether the opportunistic content indexer is enabled. Default: false. */

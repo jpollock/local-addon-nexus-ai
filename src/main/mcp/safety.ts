@@ -189,6 +189,12 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   // time someone asked whether recording was working — audit volume for a
   // question that cannot mutate anything.
   nexus_intelligence_health: 1,
+  // Asks which procedure governs a capability and gets an acknowledgement back.
+  // It reads the shipped law and records that the model asked; it cannot reach a
+  // site. Tier 2 (the default for an absent entry) would write a durable
+  // operation-audit.log line for a question — and the grant changes themselves
+  // are already recorded as `control.grant.*` events.
+  nexus_load_procedure: 1,
   // "Where am I?" — reads the records and renders four sentences. Tier 2 (the
   // default for an absent entry) would write a durable audit line every time
   // someone asked where they were standing.
