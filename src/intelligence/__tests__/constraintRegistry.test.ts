@@ -15,6 +15,10 @@ const doc = (over: Partial<LawDocument> = {}): LawDocument => ({
   path: 'policy/test.md',
   body: '',
   frontmatter: {},
+  // WP-20a: the loader stamps these from the raw bytes; a hand-built document
+  // carries placeholders, since nothing in this suite reads them.
+  hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+  canonicalBytes: 0,
   constraints: [
     {
       id: 'c.gateway-rule',

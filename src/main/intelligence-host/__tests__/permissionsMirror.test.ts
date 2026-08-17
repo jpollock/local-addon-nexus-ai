@@ -173,6 +173,51 @@ describe('initLawRegistry', () => {
     expect(handle!.registry.byId('c.permissions-mirror')).toBeDefined();
   });
 
+  it('hands the caller the runbook registry beside the constraint registry', () => {
+    const logger = makeLogger();
+    const handle = initLawRegistry({ storage: storageWith({}), logger, lawDir: REPO_LAW_DIR });
+
+    // The three within the ceiling; the two over it are refused, not served.
+    expect(handle!.runbooks.runbooks().map((r) => r.id)).toEqual([
+      'rb.bulk-plugin-update',
+      'rb.diagnose-site',
+      'rb.wpe-pull',
+    ]);
+    expect(handle!.runbooks.byCapability('cap.bulk_plugin_update')?.hash).toMatch(/^sha256:/);
+  });
+
+  it('reports a refused runbook in its own list and in the log, without polluting loadErrors', () => {
+    const logger = makeLogger();
+    const handle = initLawRegistry({ storage: storageWith({}), logger, lawDir: REPO_LAW_DIR });
+
+    // The loader loaded all five documents — the refusal is the runbook
+    // contract's, and conflating the two lists would read as a corrupt law file.
+    expect(handle!.loadErrors).toEqual([]);
+    expect(handle!.runbookErrors.map((e) => e.runbookId).sort()).toEqual([
+      'rb.incident-response',
+      'rb.staging-promotion',
+    ]);
+
+    const logged = logger.lines.info.join('\n');
+    expect(logged).toContain('rb.incident-response');
+    expect(logged).toMatch(/refused/i);
+    // Counts both ways round: a reader must not have to infer the refusals from
+    // a loaded count that looks plausible on its own.
+    expect(logged).toMatch(/3 runbook\(s\) loaded, 2 refused/);
+  });
+
+  it('a missing law directory yields an empty runbook registry rather than undefined', () => {
+    const logger = makeLogger();
+    const handle = initLawRegistry({
+      storage: storageWith({}),
+      logger,
+      lawDir: path.join(REPO_LAW_DIR, 'does-not-exist'),
+    });
+
+    expect(handle!.runbooks.runbooks()).toEqual([]);
+    expect(handle!.runbookErrors).toEqual([]);
+  });
+
   it('a throwing storage never throws out of init', () => {
     const logger = makeLogger();
     const handle = initLawRegistry({

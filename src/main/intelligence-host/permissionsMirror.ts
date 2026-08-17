@@ -29,6 +29,8 @@ import {
   PermissionsSnapshotException,
   RemoteEnv,
   RemoteOperation,
+  RunbookLoadError,
+  RunbookRegistry,
 } from '../../intelligence';
 import * as path from 'path';
 import {
@@ -81,6 +83,22 @@ export interface LawRegistryHandle {
   /** Documents the loader rejected (path + reason); empty when the shipped law/ is intact. */
   loadErrors: LawLoadError[];
   /**
+   * WP-20a: the procedure index, over the same documents. 20b (grants/arming)
+   * and 20c (delivery) read it from here rather than re-loading the law
+   * directory — one read, one set of refusals, one place a grant's pin comes
+   * from.
+   */
+  runbooks: RunbookRegistry;
+  /**
+   * Runbooks that loaded as documents but were refused as procedures — over the
+   * strict ceiling, or a contract that could not be honoured. Deliberately NOT
+   * merged into `loadErrors`: the loader accepted these files, and a refusal is
+   * not a corrupt-law-file report. Two entries are EXPECTED on the shipped set
+   * today (`rb.incident-response`, `rb.staging-promotion` are over the 8 KB
+   * ceiling and are split in WP-20c).
+   */
+  runbookErrors: RunbookLoadError[];
+  /**
    * The v0 tripwire: rebuild a fresh snapshot from the settings and compare
    * it with what the registry mirrored at build time. Divergence should be
    * impossible in v0 — any hit is a mirror bug or settings changing beneath
@@ -122,6 +140,27 @@ export function initLawRegistry(options: {
         `${registry.constraints().length} constraint(s), permissions mirrored from live settings`
     );
 
+    // WP-20a: the procedure index over the same documents. A refused runbook is
+    // logged with its reason — a granted capability whose procedure did not load
+    // is exactly the state §6(a) obliges the platform to disclose rather than
+    // improvise past, and it must not be inferable only from a plausible-looking
+    // loaded count.
+    const runbooks = RunbookRegistry.build({ documents });
+    const runbookErrors = runbooks.errors();
+    for (const err of runbookErrors) {
+      // The ID first, because that is what a grant names and therefore what
+      // someone asking "why is this capability unavailable" greps for; the path
+      // follows, because that is what they then have to open.
+      logger.info(
+        `[Intelligence] runbook refused ${err.runbookId ?? '(unidentified)'} ` +
+          `[${err.path}] (${err.code}): ${err.reason}`
+      );
+    }
+    logger.info(
+      `[Intelligence] runbook registry: ${runbooks.runbooks().length} runbook(s) loaded, ` +
+        `${runbookErrors.length} refused`
+    );
+
     const verifyMirror = (): MirrorDivergence[] => {
       try {
         const divergences = comparePermissionMirror(registry, buildPermissionsSnapshot(storage));
@@ -138,7 +177,7 @@ export function initLawRegistry(options: {
       }
     };
 
-    return { registry, loadErrors: errors, verifyMirror };
+    return { registry, loadErrors: errors, runbooks, runbookErrors, verifyMirror };
   } catch (err) {
     const message = (err as Error).message;
     logger.error(`[Intelligence] law registry init failed: ${message}`);
