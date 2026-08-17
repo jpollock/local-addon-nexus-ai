@@ -161,6 +161,7 @@ deliberately:
 | WPE inventory unit | **install** — ONLY inside WP Engine-labeled contexts (Connections, grants quoting WPE: "one named install") | using *install* as the Nexus count noun |
 | Nexus count noun | **environments** — "203 sites · 367 environments" | installs (outside WPE-labeled contexts), envs |
 | WPE account inventory refresh | **synced** — "last synced 2 hours ago", the account/install catalog only | *synced* for site reads (those are **checked**) or content (that is **pulled**) — three acts, three verbs |
+| a site's manifestation at a place | **locative phrasing: "this site, at staging" / "at WP Engine" / "on this Mac"** — the site is one thing manifested in several places | "the staging environment" as a noun-of-place users must open; also dissolves the dev-collision finding (№2 item 6) |
 
 Confirmed by the same sweep, no change needed: "may be out of date" was
 already the v1 fact-level freshness phrase (it composes with the status

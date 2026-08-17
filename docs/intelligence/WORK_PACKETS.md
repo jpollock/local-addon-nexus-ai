@@ -6609,3 +6609,75 @@ session ran `npm test` six times plus a 50-mutation battery, which leaves
 `.nvmrc`/CI is 22.16.0 → 127), and then `./dev-reload.sh` rebuilt it to Electron
 42.2.0 for the two passes above. **To run jest again: `npm test`** (the `pretest`
 hook flips it back), never bare `npx jest`.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-20b (2026-08-17).** Merge `e3d43f9b`
+accepted. Receipt verified on the tree (26 files, +2,489/−11); the
+architect's WP-20c acceptance docs were committed verbatim-attributed at
+`64f7ee53` per protocol — fidelity spot-checked, correct; integration
+lock taken and released cleanly (+11/+2/+1 across the three locked files,
+`ipc-handlers.ts` untouched); 50/50 mutations by named witness; the live
+pass's second-boot-adds-nothing is the storage-marker round-trip proven
+the right way. The three decisions, ruled:
+
+**Decision 1 — the always-on index on every chat turn: RATIFIED, parity
+re-point included.** This is §3's ruled behaviour arriving, not scope
+creep: the index is derived from the registry (derived-never-authored,
+seven documents, id + capability + strictness + checkpoint count — a
+bounded, small payload), and the parity floor moving from "no arming" to
+"no grants" is the honest restatement now that grants exist and ship
+enabled. The floor is still real — a user who empties `capabilityGrants`
+gets byte-identical turns — and the re-pointed 20c parity test says
+exactly what is true now rather than what was true last week. Correct to
+re-point it rather than preserve a pin that had gone vacuous.
+
+**Decision 2 — the shipped set auto-granting 20c's split: RATIFIED for
+v0, and the worry is converted into a registered gate.** Under
+additive-only, an enabled grant opens nothing that
+`wpeOperationPermissions` does not separately gate — production writes
+are off by default at the operations layer, which remains the real gate;
+the grant layer today determines what ARMS, not what executes. So five
+shipped-enabled capabilities, two production-scoped, is safe as built.
+But the report's phrase "load-bearing the day WP-20f flips" is exactly
+right, so it is now load-bearing IN THE REGISTER: **WP-20f's agenda
+gains a mandatory owner ruling — the deny-by-default flip must NOT
+inherit shipped-enabled for production-scoped capabilities
+(cap.promote_environment, cap.incident_remediation) without an explicit
+decision.** A default that was safe under one regime does not get to
+survive into the opposite regime by inertia.
+
+**Decision 3 — the health ledger line counting observations only (topic
+NOT LIKE 'control.%'): RATIFIED, and the distinction is worth stating
+once properly.** Control-plane events record the platform configuring
+itself; observations record the world and the work. "Nothing has been
+recorded yet" is a claim about observational coverage, and boot-time
+grant issuance would have made it unreachable — a health surface that
+can never again say "nothing yet" has lost a state it needs. Counting
+non-control topics while disclosing the producer by name keeps both
+truths. This distinction (control.* = platform self-configuration,
+excluded from coverage claims) is doctrine for future control.* topics,
+not a one-off.
+
+**Also ratified:** revocation chained to the issuance it answers, with
+user-driven revocation as a human act on elicited intent and a changed
+document explicitly NOT one — that is the elicited-intent doctrine
+applied correctly at the first place it could have been fumbled;
+`nexus_load_procedure` acknowledging but never carrying the body (R7 —
+the body rides only the trusted carrier); the three P1 paths as pure
+deterministic functions. **Two notes:** ABI state on exit was implied
+(ELECTRON, from the dev-reload boots ending the session) but not stated —
+future reports state it explicitly per protocol, even when inferable.
+The two near-misses: the stash rule already existed and was knowingly
+risked — noted without amendment, the rule stands; the absolute-path
+test-file miss is now a protocol line (new files land where `pwd` is —
+check the primary checkout's `git status` before your first commit).
+
+**State and next:** Path C (late-arm at the gate) is built and pinned,
+wired by 20d's guard — correct lock discipline. `arms_on:` remains
+unauthored on the shipped set (Path A exercised against a fixture);
+authoring rides 20c-style through the docs/ originals when a packet needs
+it. 20d is in flight; **20e's prompt is owed by the architect at 20d's
+merge report.** After 20e: the B-03 sitting needs `NEXUS_EVAL_API_KEY`
+(seven OWNER-PENDING criteria), and the first-real-pull smoke remains
+available — ABI is ELECTRON right now, so Local is loadable today.
