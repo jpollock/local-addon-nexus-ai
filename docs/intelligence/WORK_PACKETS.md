@@ -6904,3 +6904,41 @@ Figures after taking the base forward: **556 suites / 7,155 passed / 12 skipped
 12 / 7,080.) Typecheck clean; eslint reports zero errors and two pre-existing
 `no-inner-declarations` warnings in `mcp/modules/wpe/` files this packet never
 touched.
+
+---
+
+**WP-20d MERGED (2026-08-17)** — merge `f3a3fdac`, 16 files, **+1,896/−27**.
+
+    docs/intelligence/WORK_PACKETS.md                            | 223 +
+    law/runbooks/bulk-plugin-update.md                           |  27 +-
+    docs/intelligence/anchor-slice/runbooks/bulk-plugin-update.md |  27 +-
+    src/main/intelligence-host/procedureCursor.ts                | 241 +
+    src/main/intelligence-host/sequenceGuard.ts                  | 175 +
+    src/main/intelligence-host/chatAssembly.ts                   |  74 +-
+    src/main/mcp/tool-registry.ts                                |  26 +
+    src/main/agent-runtime/AgentDispatcher.ts                    |  24 +
+    src/intelligence/assemble/procedure.ts                       |  34 +-
+    src/intelligence/assemble/types.ts                           |  14 +
+    src/main/intelligence-host/__tests__/procedureCursor.test.ts | 357 +
+    src/main/intelligence-host/__tests__/sequenceGuard.test.ts   | 297 +
+    src/main/intelligence-host/__tests__/sequenceGuardWiring.test.ts | 264 +
+    src/main/intelligence-host/__tests__/procedureTurnCarrier.test.ts |  62 +-
+    src/intelligence/__tests__/shippedRunbooks.test.ts           |  62 +-
+    src/main/mcp/modules/fleet/__tests__/loadProcedure.test.ts   |  16 +-
+
+**Re-measured baseline on the merged `poc/nexintelligence`** (`npm test` in the
+primary checkout, compiled, exit code captured before any pipe): **exit 0 ·
+556 suites passed · 7,165 passed · 2 skipped · 7,167 total · 0 failed.**
+
+Read the skipped column first, as the protocol now says twice: the branch
+measured 7,155 passed / **12** skipped over the same **7,167** total. Ten
+embedding tests gate on model files the primary checkout has and a worktree does
+not — same total, different split, and the third packet in a row to see it.
+
+**ABI state on exit: SYSTEM NODE (141).** This session ran `npm test` five
+times plus a 25-mutation battery; `better-sqlite3` is built for the shell's Node
+(measured 25.9.0 → 141; `.nvmrc`/CI is 22.16.0 → 127). **`npm run rebuild`
+before loading Local** (Electron 42.2.0 → 146). No real-app pass: with WP-20b
+merged the arming paths are live, but a live pass would need a chat turn that
+arms `cap.bulk_plugin_update` against a real fleet, which is WP-20e's sitting
+territory rather than a smoke test.
