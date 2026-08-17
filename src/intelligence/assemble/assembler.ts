@@ -216,6 +216,19 @@ function collectEpisodic(
   const topicPrefix = req.retrieval?.episodicTopicPrefix ?? DEFAULT_EPISODIC_PREFIX;
   const limit = req.retrieval?.episodicLimit ?? DEFAULT_EPISODIC_LIMIT;
   const items: RetrievedItem[] = [];
+  /**
+   * WP-16b. A request's targets carry more than one role — the physical copy
+   * and the logical Site it belongs to — and `Ledger.query`'s entity filter
+   * matches ANY role, so an event stamped with both (which every producer
+   * writes) comes back once per matching target. It is ONE thing that
+   * happened; rendering it per target doubles the episodic block and reads as
+   * two events. First occurrence wins, so newest-first inside the first target
+   * that matched is preserved and nothing is reordered.
+   *
+   * The per-target RetrievalRecords below are deliberately NOT deduped: they
+   * record what each query asked and what it returned, which stays true.
+   */
+  const seen = new Set<string>();
 
   for (const target of req.targets) {
     // order:'desc' is load-bearing — an ascending query that hits its limit
@@ -228,6 +241,8 @@ function collectEpisodic(
       ) ?? [];
 
     for (const e of events) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
       items.push({
         store: 'ledger',
         id: e.id,

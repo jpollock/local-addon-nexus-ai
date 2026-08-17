@@ -23,6 +23,30 @@ const NOW = new Date('2026-08-15T12:00:00.000Z');
 const HOUR = 3600_000;
 
 const ENV = 'ent_env_0123456789ABCDEFGHJKMNPQRS';
+const SITE = 'ent_site_0123456789ABCDEFGHJKMNPQ';
+const EVT = 'evt_01J5AAAAAAAAAAAAAAAAAAAAAA';
+
+/** What `chatAssembly.resolveTargets` sends today: the copy AND its Site. */
+const DUAL_TARGETS = [
+  { role: 'environment' as const, id: ENV, label: 'acme-local' },
+  { role: 'site' as const, id: SITE, label: 'acme-local' },
+];
+
+/** One ledger event, `agedHours` old. */
+function event(id: string, agedHours: number) {
+  return {
+    id,
+    recorded_at: NOW.toISOString(),
+    observed_at: new Date(NOW.getTime() - agedHours * HOUR).toISOString(),
+    topic: 'state.plugin.observed',
+    schema: 'plugin.observed/1',
+    entity: { site: SITE, environment: ENV },
+    actor: { id: 'act_x', kind: 'system', via: 'sat_x' },
+    source: { class: 'platform', system: 'wp-cli', trust: 'observed' },
+    access: { tenant: 'local' },
+    payload: { slug: 'advanced-custom-fields', version: '6.2.0' },
+  };
+}
 
 function constraint(over: Partial<PolicyConstraintView> = {}) {
   return {
@@ -250,6 +274,46 @@ describe('assemble — retrieval', () => {
     expect(b.blocks.turn).toContain('3h ago — state.plugin.observed — advanced-custom-fields');
     expect(b.blocks.turn).toContain('via wp-cli, trust: observed');
     expect(b.blocks.turn).not.toContain('6.2.0');
+  });
+
+  /**
+   * WP-16b. Targets carry more than one role (`environment` + the logical
+   * `site`), and `Ledger.query`'s entity filter matches ANY role — so one
+   * dual-stamped event, which every producer writes, comes back once per
+   * matching target. It is ONE thing that happened: rendering it per target
+   * doubled the episodic block and read as two events.
+   */
+  test('a dual-stamped event is retrieved once, not once per matching target', async () => {
+    const b = await assemble(request({ targets: DUAL_TARGETS }), deps());
+
+    const episodic = b.retrieved.filter((i) => i.store === 'ledger');
+    expect(episodic).toHaveLength(1);
+    expect(episodic[0].id).toBe(EVT);
+    expect(episodic[0].entityId).toBe(ENV); // first occurrence wins, so the first target's
+    expect(b.blocks.turn!.match(new RegExp(EVT, 'g'))).toHaveLength(1);
+    // Provenance is NOT deduped: both queries really ran and both are recorded,
+    // so the manifest still answers "what was asked of the ledger this turn".
+    expect(b.manifest.retrieval.filter((r) => r.store === 'ledger')).toHaveLength(2);
+  });
+
+  test('distinct events across targets are all kept, in the order they were returned', async () => {
+    const b = await assemble(
+      request({ targets: DUAL_TARGETS }),
+      deps({
+        ledger: {
+          query: (opts: Record<string, unknown>) =>
+            [
+              event(`${EVT}1`, 1),
+              ...(opts.entityId === SITE ? [event(`${EVT}2`, 4)] : []),
+            ] as never[],
+        },
+      })
+    );
+
+    const episodic = b.retrieved.filter((i) => i.store === 'ledger');
+    // The shared event once, then the Site-only one — newest-first inside each
+    // target, target order preserved. Dedupe must not reorder.
+    expect(episodic.map((i) => i.id)).toEqual([`${EVT}1`, `${EVT}2`]);
   });
 
   test('retrieved content is wrapped as untrusted data (R7)', async () => {

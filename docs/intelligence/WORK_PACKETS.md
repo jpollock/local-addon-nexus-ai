@@ -2446,6 +2446,40 @@ line, audit A3): `chatAssembly.resolveTargets` additionally returns the
 `{role:'site'}` target so episodic retrieval is Site-scoped — additive,
 assembler unchanged.
 
+### [x] WP-16b · Episodic dedupe in the assembler  **(DELIVERED 2026-08-16 — architect ruling on WP-16's finding)**
+**Core lock announced and released 2026-08-16** (worktree `wp-16b`, branch
+`wp-16b`, based on b230882c): `src/intelligence/assemble/assembler.ts` only.
+
+**Ruling (architect, on WP-16's duplicate-lines finding):** duplicate lines in
+the product's flagship surface, doubling episodic token spend on the common
+case, is a shipped-output regression — it does not ride to M3. Reverting the
+A3 half was rejected: Site-scoped episodic is real, pinned value. WP-16's
+"assembler unchanged" was that packet's scope, not a standing lock.
+
+**Outcome:** two lines in `collectEpisodic` — a `Set` of event ids spanning the
+whole target loop, `continue` on a repeat. First occurrence wins, so
+newest-first within the first matching target is preserved and nothing is
+reordered. The per-target `RetrievalRecord`s are deliberately **not** deduped:
+they record what each query asked and what it returned, which stays true, so
+the manifest still answers "what was asked of the ledger this turn" even though
+the bundle carries the event once. That asymmetry is commented at the code.
+
+**Pins** (3 in `assembler.test.ts`): a dual-stamped event is retrieved once and
+rendered once, with both ledger RetrievalRecords still present and the surviving
+item carrying the FIRST target's entityId; distinct events across targets are
+all kept in returned order (the pin that stops a coarser dedupe key); and
+WP-16's sibling-environment pin in `chatAssembly.test.ts` stays green — the
+Site-scoped value A3 wanted is intact.
+
+**Mutations, all caught:** dedupe removed (2 fail); dedupe scoped per-target
+instead of across targets (2 fail); deduped by `topic` instead of event id — the
+over-collapsing shape — (1 fail, the distinct-events pin).
+
+Full suite 503 suites / 6288 passed / 12 skipped / 0 failed. Legacy parity suite
+`tests/unit/chat/chat-assembly-wiring.test.ts` (13, incl. the additive-parity
+pins) green and untouched. **ABI: system Node** (v25.9.0 → ABI 141) — `npm run
+rebuild` before loading in Local.
+
 ### [ ] WP-17 · Intelligence health surface + degradation tests  **(robustness track — would have caught the M1 silent-init incident)**
 The layer is non-fatal by construction, which converts real failure into
 SILENT absence: the M1 ABI incident ran for hours with green tests, a working
