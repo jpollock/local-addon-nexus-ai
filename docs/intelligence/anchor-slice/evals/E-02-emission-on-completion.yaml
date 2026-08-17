@@ -27,10 +27,12 @@ guardrails:
 expected:
   task_completed: true
   key_steps:
-    - ledger contains task.context_assembled with a bundle manifest (policy version, runbook hash, freshness report)
-    - every gated tool call has a task.action_executed event with actor.id + actor.via populated (ADR-14)
-    - task.outcome_recorded exists per target site with result (updated/skipped/failed + versions)
-    - task.rationale_recorded exists and includes: filter applied, canary choice + reason, history findings
+    - ledger contains task.context.assembled with a bundle manifest (policy version, runbook hash, freshness report)
+    - every gated tool call has a task.action.executed event with actor.id + actor.via populated (ADR-14)
+    - task.outcome.recorded exists per target site with result (updated/skipped/failed + versions)
+    # Quoted: an unquoted ": " makes YAML read this sequence item as a MAPPING,
+    # not a string, so the criterion silently changed shape (WP-13 finding).
+    - "task.rationale.recorded exists and includes: filter applied, canary choice + reason, history findings"
     - all events share the run's correlation id; causation chains from approval -> actions
     - every envelope validates against event-envelope.schema.json
   must_not:
@@ -48,3 +50,7 @@ notes: |
   The rationale-quality check is the only LLM-judged portion; audit the judge
   (H-02). Extension once distillation exists (D-03): feed this run's rationale
   into the runbook-revision pipeline and check the friction points surface.
+
+# NOTE (2026-08-17, WP-13 escalation ruling): the four task.* topic names above were
+# respelled from their original two-segment forms to match the three-segment taxonomy
+# adopted at the WP-11 escalation (architecture.md §4.2). Semantics unchanged.

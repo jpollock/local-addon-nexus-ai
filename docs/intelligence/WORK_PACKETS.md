@@ -2308,7 +2308,7 @@ The owner must run `npm run rebuild` before loading the addon in Local.
   (below). M2 is code-complete; the milestone closes when WP-13's runner
   executes those three evals green against the real ledger.
 
-### [ ] WP-13 · Eval spec runner + milestone verification  **(the M2 close-out gate)**
+### [x] WP-13 · Eval spec runner + milestone verification  **(the M2 close-out gate)**
 The anchor-slice eval specs (`docs/intelligence/anchor-slice/evals/*.yaml`,
 incl. B-03/E-01/E-02) have no runner: nothing in `src/` or `tests/` loads
 them, and `tests/eval/` is an unrelated chat-quality harness. Build the
@@ -2326,6 +2326,163 @@ instructions), executed against a ledger seeded by the real producers.
 Parallel-safe (new tree + read-only on everything else). Any spec found
 unimplementable as written is a WP-11-style escalation — the spec gets
 fixed in the record, not worked around.
+
+**WP-13 CLOSE-OUT — runner built and run. M2 does NOT close, and not because
+anything is broken.** The runner executes; the specs assume a platform M2 did
+not ship. Full report: `npx ts-node --project tsconfig.test.json
+tests/intelligence-evals/run.ts`.
+
+**Result over the 27 criteria of the three specs:**
+
+| | B-03 | E-01 | E-02 | total |
+|---|---|---|---|---|
+| PASS | 0 | 0 | 2 | **2** |
+| FAIL | 0 | 0 | 0 | **0** |
+| BLOCKED | 11 | 1 | 7 | **19** |
+| OWNER-PENDING | 0 | 6 | 0 | **6** |
+| spec-level SPEC-DEFECT | 1 | — | 1 | **2** |
+
+Zero FAIL is the important number: nothing here is a code regression.
+
+**What is genuinely green** (executed against a real core on a temp ledger
+seeded by the real webhook producer, real folds, real assembler, and the real
+`chatAssembly` manifest producer — 10 events across `state.plugin.observed`,
+`episodic.incident.recorded` and `task.context.assembled`):
+
+- **E-02 "every envelope validates against event-envelope.schema.json"** — 10/10,
+  validated against the JSON file on disk, not the zod schema the events were
+  already admitted by. The interchange contract and the in-process contract
+  agree on this corpus. Validation uses a purpose-built draft-2020-12 **subset**
+  validator (`jsonSchemaCheck.ts`, ~120 lines, zero new dependencies — `ajv` is
+  present only transitively, at v6/draft-07, and depending on a transitive
+  package is the packaging defect the owner just fixed for js-yaml). Any keyword
+  it does not implement **throws**: a validator that silently ignores what it
+  does not understand always passes.
+- **E-02 "observed_at/recorded_at not conflated or missing"** — both fields
+  present and correctly ordered on 10/10; 2 events carry a genuinely historical
+  `observed_at`, proving source time survives emission rather than being
+  flattened to "now". "Conflated" is deliberately not read as "equal": the
+  webhook producer legitimately stamps both at once and says why.
+
+**Five findings.**
+
+1. **TWO OF THE THREE SPECS DID NOT PARSE.** B-03 `key_steps[6]` and E-02
+   `key_steps[3]` each carry an unquoted `": "` inside a sequence item, which
+   YAML reads as a **mapping**, not a string — so those criteria were objects.
+   The house runner (`tests/evals/runner/run-eval.ts`) types `key_steps` as
+   `string[]` and never validates, so this had been invisible since the specs
+   were written. **FIXED IN THE RECORD** (quoted, text byte-identical, comment
+   added), because the packet's deliverable is unmeetable while 2 of 3 specs
+   cannot load. Flagged here rather than folded in silently: `docs/intelligence/`
+   is owner-approval territory, and this is the WP-11 `pii.ts` shape — a
+   mechanical fix whose substance I expect to be ratified, where a one-line
+   pre-escalation would have been preferred. Revert is one `git revert` of the
+   two YAML hunks. `specLoader.test.ts` now guards the class.
+2. **ESCALATION — B-03 is circular and cannot be an M2 gate.** WP-11's
+   adjudication (above) says M2 closes when B-03 runs green.
+   `src/intelligence/assemble/types.ts:16-18` says procedure and tools are
+   "inert in v0 (always null / []) … **gated on eval B-03**". So B-03 cannot
+   pass until procedure distribution ships, and procedure distribution is gated
+   on B-03. All eleven B-03 criteria are BLOCKED on that circle, and the runner
+   **measures** it rather than asserting it: it calls the real `assemble()`
+   under B-03's own grant and reports `manifest.capability =
+   "cap.bulk_plugin_update"` (the grant IS recorded) alongside
+   `bundle.procedure = null`, `bundle.tools = []` — the runbook is authored
+   (`anchor-slice/runbooks/bulk-plugin-update.md`, strict, 8 checkpoints) and
+   never delivered. **Owner ruling needed** on one of: **(a)** B-03 leaves the
+   M2 close-out set and becomes the procedure packet's acceptance eval —
+   recommended, it matches the assembler's own contract and leaves M2 gated on
+   E-01/E-02; or **(b)** M2 stays open until procedure distribution ships, which
+   makes M2 much larger than "code-complete" implies.
+3. **ESCALATION — E-02 names four topics the validator cannot admit.**
+   `task.context_assembled`, `task.action_executed`, `task.outcome_recorded`,
+   `task.rationale_recorded` are all TWO-segment; `envelope/validate.ts` requires
+   three. This is the identical escalation WP-11 raised against §4.2 and the
+   architect already ruled on ("the validator wins, taxonomy respelled"); the
+   eval YAML predates the ruling and never carried it. **NOT fixed here** — four
+   semantic renames in an owner-owned doc want the owner's hand, unlike finding 1
+   which was a parse defect. Patch: respell to `task.context.assembled` /
+   `task.action.executed` / `task.outcome.recorded` / `task.rationale.recorded`.
+   `runner.test.ts` pins the specs' current wording, so when the fix lands that
+   test fails and the finding must be retired rather than left to rot.
+4. **E-01's history is in the ledger and unreachable from the wired surface.**
+   Measured with two runs of the real assembler over the same ledger:
+   `episodicTopicPrefix="episodic."` retrieves the 2 planted incidents;
+   the **wired** defaults retrieve **0**, because `chatAssembly.ts` builds its
+   `AssembleRequest` with `retrieval: { semanticLimit }` only and the assembler's
+   default prefix is `state.`. So the chat surface cannot consult incident
+   history no matter what the model does — and any historical incident it cites
+   there is necessarily fabricated, which the runner flags in the evidence for
+   E-01's `must_not` "cite history it did not retrieve". Fix is roughly one line
+   in `chatAssembly.ts`, but it is a behaviour change on the anchor surface, so
+   it is recorded here rather than done under a runner packet. **Re-verified
+   after merging WP-16**, which lands audit A3 (`resolveTargets` additionally
+   returns the `{role:'site'}` target): A3 widens the SCOPE of the episodic
+   query, not its TOPIC, so `retrieval: { semanticLimit }` still leaves the
+   prefix at `state.` and the finding is unchanged. The probe already passed
+   both roles, so it was measuring WP-16's shape before WP-16 merged.
+5. **No production producer emits any `episodic.*` event.** The only topics any
+   code in `src/` emits are the six `state.*`, `semantic.content.changed`, and
+   `task.context.assembled`. E-01's fixture therefore cannot be built by a
+   producer; the runner plants it through the real `Emitter` under
+   `source.system = "fixture:e01-incident"` and says so in the evidence of every
+   criterion that leans on it. WP-14 starts filling this plane; an incident
+   producer proper is not yet a registered packet.
+
+**What the six OWNER-PENDING criteria need** (all E-01, all judged per H-02 —
+plan quality and register, never automated): each prints its verbatim prompt,
+the seeding command (`run.ts --seed-dir <path>`, which materialises the fixture
+ledger for a development build — never seed over a real ledger), the single
+thing to judge, and H-01's pass^3 requirement. Ready for the consolidated owner
+sitting the roadmap already schedules.
+
+**Design decisions worth carrying forward:**
+
+- **Five verdicts, and `BLOCKED` outranks `OWNER-PENDING`.** You cannot hand an
+  owner a prompt to judge a run whose premise cannot be constructed; filing that
+  as "pending" parks a platform gap in a human's queue forever. E-02's
+  boilerplate-rationale criterion is the worked example — it is the spec's only
+  LLM-judged criterion and it is BLOCKED, not pending, because no rationale
+  producer exists to produce a subject.
+- **A BLOCKED verdict is a measurement, not a claim.** Every one carries a probe
+  that demonstrates the absence (assembler output, ledger topic counts) rather
+  than an assertion that it is absent.
+- **An unmapped criterion is BLOCKED, never PASS**, and the check registry binds
+  by criterion TEXT rather than index, so a spec edit that orphans a check fails
+  the suite instead of silently dropping an obligation. Both pinned.
+- **The runner is a library + CLI, not a jest suite.** A jest run must be green
+  or red; an eval sitting needs a printed prompt. Folding them together forces
+  every judged criterion into a fake boolean. `jest tests/intelligence-evals`
+  runs the deterministic half and the honesty tests.
+- **New tree was correct.** `tests/evals/runner/` is the same YAML dialect but a
+  transcript scorer for a human — it executes nothing and validates nothing.
+  Different job. `jest.config.js`'s `/eval/` ignore pattern does NOT match
+  `tests/intelligence-evals/` (checked, not assumed), so this tree is in
+  `npm test` with no config change.
+
+**Verification.** Baseline in a fresh wp-13 worktree BEFORE any change:
+503 suites / 6279 passed / **12 skipped** / 6291 total / 0 failed — identical to
+WP-11's recorded figure. After, before merging the base: **509 suites / 6396
+passed / 12 skipped / 6408 total / 0 failed** — +6 suites, +117 tests, skipped
+count unchanged, no legacy suite touched. After merging the advanced base
+(WP-16): **509 / 6403 / 12 skipped / 6415 / 0 failed** — the +7 is WP-16's own
+tests, and the eval suites are green against its `chatAssembly` change.
+`npx tsc -p tsconfig.test.json --noEmit` clean (note: `tsc -p .`
+does not cover `tests/`, so the DoD's typecheck command alone would not have
+seen these files). **Mutation battery: 14/14 caught**, each anchored to a
+production line with an observable witness — including "unmapped criterion
+scores PASS", "BLOCKED no longer blocks the milestone verdict", "missing
+evidence renders as nothing", "incident history stamped now", "unsupported
+schema keyword ignored", and "the episodic probe uses the episodic prefix for
+both runs" (which would have manufactured finding 4 out of nothing).
+
+One real bug was found by the harness during development and fixed: the JSON
+Schema validator treated the ledger row mapper's `correlation: undefined` as a
+present-but-wrongly-typed property and failed all 10 envelopes. A key whose
+value is `undefined` is not a JSON property.
+
+**ABI state: better-sqlite3 is built for SYSTEM NODE** (jest ran here). Run
+`npm run rebuild` before loading Local.
 
 ---
 
@@ -2521,3 +2678,70 @@ every drift event well-formed. Run manually / pre-release; document the
 one-liner. Parallel-safe; no production code changes (WP-17's tool is a
 dependency for one journey — sequence after it or mark that journey
 pending).
+
+---
+
+**ARCHITECT ADJUDICATION — WP-16 (appended by the architect session).**
+
+- **WP-16 ACCEPTED.** Merge 74872669: receipt matches scope (assembler.ts
+  untouched per constraint). Both beyond-the-letter extensions are ratified:
+  the external-target fix is exactly the "same shape" clause doing its job,
+  and **omit-rather-than-fabricate for the site role is endorsed as
+  doctrine** — it is the honest-null principle applied to identity. The
+  resolve-before-derive ladder (sanctioned aliases → twin name-match →
+  derivation, only the last rung writes) is the reference shape for any
+  future reader that must map a user-supplied name to an entity.
+- **Episodic-dup escalation ruled: Option 2 — dedupe now (WP-16b, below).**
+  Duplicate lines in the product's flagship surface with doubled token
+  spend on the COMMON case is a shipped-output regression, not cosmetics;
+  the fix is one keyed pass; M3's routing subsumes it later without
+  conflict. Option 3 rejected — Site-scoped episodic is real, pinned value.
+
+### [ ] WP-16b · Dedupe episodic retrieval by event id  *(micro-packet, core lock; from WP-16 escalation)*
+`collectEpisodic` iterates targets; dual-stamped events (all producers
+dual-stamp) are retrieved once per matching target and render twice. Fix in
+`src/intelligence/assemble/assembler.ts`: dedupe the episodic result set by
+event id across targets (preserve newest-first order; first occurrence
+wins). Pins: (1) a dual-stamped event renders exactly once; (2) the
+sibling-environment event still reaches the turn (WP-16's pin stays green);
+(3) additive parity (null/empty bundle) untouched. Announce the core lock;
+smallest possible diff; suitable for the WP-16 agent as a continuation.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-13 + two escalation rulings (appended by the
+architect session).**
+
+- **WP-13 ACCEPTED.** Merge 75f5f06b. The five-verdict design with
+  "unmapped criterion is BLOCKED, never green" is endorsed as the harness's
+  founding rule; the YAML quoting fix is ratified per the pii.ts precedent
+  (spec text byte-identical, revert is two hunks); the mid-flight
+  correlation:undefined fix and the two self-skeptical mutations
+  (manufactured-finding guards) are noted as exemplary.
+- **ESCALATION 1 RULED — B-03 exits the M2 gate.** The circularity is real:
+  WP-11 gated procedure/tool population ON B-03 while its adjudication made
+  B-03 an M2 gate — both cannot hold, and the runner proved it empirically.
+  B-03 becomes the ACCEPTANCE EVAL of the future procedure-population
+  packet (deferred surface, post-M3 task frame). **M2's close is redefined
+  as: the runner merged (done) + E-01/E-02's executable criteria PASS +
+  the owner sitting clearing the 6 OWNER-PENDING criteria.** The WP-11
+  adjudication's milestone-DoD line is superseded on this point.
+- **ESCALATION 2 RULED + EXECUTED — E-02's four task.* topics respelled**
+  to the three-segment forms (context.assembled, action.executed,
+  outcome.recorded, rationale.recorded), same principle as the WP-11
+  ruling; note appended in the spec file. runner.test.ts's wording pin
+  will need the matching one-line update — fold into WP-16b (below).
+- **Finding 4 (E-01 history unreachable from the wired surface) → folded
+  into WP-16b:** chatAssembly passes no episodic retrieval config, so the
+  wired default prefix ('state.') can never retrieve episodic.* history.
+  WP-16b gains item (2): include episodic.* in wired retrieval (pass
+  episodicTopicPrefix from chatAssembly, or better: teach collectEpisodic
+  to take a topic-prefix LIST defaulting to ['state.','episodic.']) with a
+  pin that a planted episodic event reaches the turn block through the
+  REAL wired path; plus item (3): update runner.test.ts's E-02 wording pin
+  for the respell. Same core lock, same sitting.
+- Finding 5 (no episodic.* producer) is already WP-14's charter —
+  no action.
+- Housekeeping commits a3abcae2 / 42a58f26 / b230882c verified attributed —
+  the protocol's verbatim-commit practice, third exercise, working as
+  written.
