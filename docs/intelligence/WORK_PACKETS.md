@@ -3982,7 +3982,7 @@ still standing, headless CHAT_SEND seam), and the milestone cadence
 (surface review + eval sitting when M3's language lands).
 ════════════════════════════════════════════════════════════════════
 
-### [ ] WP-21 · Assembler task frame — per-type routing made real  *(M3; ADR-22's implementation; core lock; AFTER WP-19)*
+### [x] WP-21 · Assembler task frame — per-type routing made real  *(M3; ADR-22's implementation; core lock; AFTER WP-19)*
 The reconciliation §7 row 1, now buildable on Wave 2's substrate.
 `AssembleRequest` gains an optional `frame?: { site?, workingCopy?,
 production?, routing? }` (audit F3's shape); absent ⇒ current behavior
@@ -4261,3 +4261,202 @@ Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).
 path — a throwing handler leaks the timer. Fix + pin (throwing handler:
 timer cleared, no unhandled rejection). Not intelligence scope; any tier;
 touches the dispatch module WP-19 just instrumented, so rebase on current.
+
+---
+
+**WP-21 ANNOUNCEMENT (worktree `wp-21`, 2026-08-17) — core-lock seams claimed:
+`src/intelligence/assemble/{types,assembler}.ts`, `src/intelligence/compare/
+divergence.ts` (one exported read, no behaviour change), `src/intelligence/
+index.ts` (exports), `src/main/intelligence-host/{chatAssembly,taskFrame,
+siteStatus}.ts`, plus the integration-lock one-liners in `src/main/mcp/modules/
+fleet/index.ts` and `src/main/mcp/safety.ts`. Sequenced after WP-19 per the
+architect's note; WP-19's ChatService seams are untouched by this packet.**
+
+---
+
+**WP-21 OUTCOME — delivered. The routing table is code, and "where am I?" has an
+answer for the first time.**
+
+**Shape delivered**
+
+- `AssembleRequest.frame?: { workingCopy?, site?, production?, routing? }`
+  (audit F3's shape) + `BundleManifest.routing?: RoutingRecord[]`. The frame is
+  per-turn and never persisted — no new topic, no schema, no storage marker.
+- `assemble()` applies ADR-22's §4 table via `ROUTING_TABLE` and `routePlane()`:
+  state → workingCopy, episodic → site, semantic → production (flow-canonical
+  for content), audience → production. **Absent frame ⇒ every collector reads
+  `req.targets`, byte-identically**; the three collectors now take their targets
+  as a parameter instead of reading `req.targets` themselves, which is what made
+  the parity pin checkable as a query fingerprint rather than a claim.
+- The turn block gained one section — where each type came from, in the user
+  vocabulary, placed BEFORE the facts it explains (S2: the answer names its
+  source, and the model can only name what it was told).
+- `intelligence-host/taskFrame.ts` — `buildTaskFrame()` (read-only; never
+  `ensure()`) and `describeEnvironmentsFor()`, the graph-row describer.
+- `intelligence-host/siteStatus.ts` — S3's four lines, and the first consumer of
+  the frame: frame + `divergence()` (WP-15) + the lineage edges.
+- `nexus_where_am_i` (fleet module, Tier 1, `readOnlyHint`) — see finding 1 for
+  why the name is not the packet's `nexus_site_status`.
+- `chatAssembly` builds the frame per turn and passes it; `ChatService` is
+  untouched (no new call sites at all this time).
+
+**Judgment calls, recorded because none is forced by the packet text**
+
+1. **The tool is `nexus_where_am_i`.** `nexus_site_status` is a LIVE shipped tool
+   (`modules/site-context/site-status.ts` — twin completeness and freshness),
+   called by name from two GraphQL resolvers, the CLI, and pinned in
+   `tests/main/mcp-tools.test.ts`. Registering a second handler under that name
+   would have replaced it. The vocabulary table gives this concept two names —
+   "site status" *or* "where am I?" — and the second was free; it is also what a
+   model matches on when a user types the question. The recon anticipated this
+   ("surfaces as a tool first, `site_status`-adjacent").
+2. **Site scope for episodic is the Site id UNIONED with the copy's.** Routing
+   episodic at the Site id alone is a REGRESSION, not an improvement:
+   `intelligence-host/bootstrap.ts` emits `state.drift.detected` stamped
+   `{ environment }` with no `site` role, and events already on disk can never be
+   re-stamped. The union is what "threaded across environments" can honestly mean
+   until audit A9's stamping discipline lands — and, for the old rows, after it
+   does. Pinned with that producer's exact envelope shape as the witness.
+3. **The frame's `site` slot is the id events are STAMPED with, not
+   `entities.siteOf()`.** For a mirrored WPE site the mirror establishes a
+   `wpe.site_id` Site and links the copy under it, while every producer in this
+   process stamps `local.site_id.logical`. Routing episodic at the relational
+   Site would query an id no event carries, and a turn's own history would go
+   dark. `buildTaskFrame` takes the caller's Site id and uses the links only to
+   resolve production. Pinned in the chat suite with the two ids disagreeing.
+4. **`production` is evidence, never inference.** Being the only other place a
+   copy could be compared against is not evidence of carrying an audience. The
+   slot is set only when the host says `kind === 'production'`, and **declines on
+   more than one** such place — a disagreement inside the graph's own data must
+   not be resolved by taking the first row. Consequence, accepted: on a machine
+   whose WPE rows have never synced, audience and semantic disclose the fallback
+   rather than routing at a guess.
+5. **A LOCAL graph row's `environment` is never an environment kind.**
+   `GraphService` backfills `environment = 'development' WHERE host = 'local'`, so
+   every Local site claims to be one. Carrying that through would have rendered
+   "development (at WP Engine)" for a user's own copy — precisely the collision
+   docs finding №6 exists to prevent. Only `wpe`/`external` rows may name a kind,
+   and only a `wpe` one is ever "at WP Engine".
+6. **Audience never falls back.** Every other plane degrades to the copy; a copy
+   has no visitors, ever, so serving audience from it would fabricate the one
+   number a user acts on. It resolves to production or to nothing, and says
+   "no instrument source connected" either way (instruments are M4).
+7. **The code line is omitted, not faked.** Nothing produces `code_ref` yet.
+   "Code: not recorded" on every site forever is noise; the line renders the day a
+   producer stamps `code_ref.branch`, and that is pinned now so the reader cannot
+   rot before the producer arrives. A payload with a sha and no branch says
+   nothing about a branch and is skipped rather than guessed from.
+8. **Four content states, not two.** pulled / no-recorded-sync / more-than-one-
+   possible-source / nothing-on-record. The third is new relative to WP-15's
+   comparator rendering and earns its place: it is the only one with a settleable
+   question behind it. The guarantee line also varies — with nothing on record to
+   reach, "nothing you do here touches the live site" would imply a live site is
+   connected, so the honest sentence is about this computer.
+9. **`resolveLineage()` exported from the comparator rather than reimplemented.**
+   The lineage-then-links-then-decline precedence is one rule; this repo already
+   documents three cases where the same rule kept in two places cost a silent
+   disagreement. `divergence()` now calls it, with no behaviour change.
+10. **Routing records live in the manifest, not only in the prose.** Routing
+    nobody can see is indistinguishable from no routing; the manifest is the audit
+    artifact, so "which entity served which plane" is now a stored answer — and
+    `routing` is ABSENT, not empty, for a caller that sent no frame.
+
+**Findings**
+
+1. **`nexus_site_status` is taken** — see judgment call 1. The packet text names a
+   tool that already exists with a different meaning. Worth correcting in the
+   packet line if these notes are ever squashed into a spec.
+2. **`bootstrap.ts:203` stamps `{ environment }` with no `site` role** — audit A9's
+   stamping discipline, unimplemented, now with a concrete consumer. NOT fixed
+   here (a producer change is out of this packet's scope, and old rows would stay
+   unstamped anyway); the routing union compensates, and the compensation is
+   documented at the code that needs it. A one-line producer fix would still be
+   worth doing on its own.
+3. **`FreshnessRecord.served` did NOT need widening.** Audit A9 predicted
+   "`served: 'twin'` cannot express routed-from-another-entity provenance — widen
+   the union + optional `sourceEntityId` when routing lands." It landed and the
+   need did not appear: the state plane routes to the entity being touched, by
+   the table, so a freshness row's entity IS its source. If instruments ever make
+   audience served from a twin, that prediction comes back.
+4. **`procedural` and `policy` are deliberately absent from
+   `IntelligencePlane`.** Both are Site-level by the §4 table and neither is
+   per-target in this codebase (the policy set is global; the procedure plane is
+   inert in v0), so a routing row for either would record a decision nothing acts
+   on. If the procedure packet makes runbook selection per-environment, the plane
+   joins the enum then.
+5. **The `plugins_only` early-return gap (WP-15 disclosure) is still open** and
+   was NOT touched — not adjacent enough to fold in. Worth noting that
+   `nexus_where_am_i` now covers the *user-facing* half of that gap from the other
+   side: a code-in-sync copy that is 60 days behind on content will say so in its
+   status even while `detect_drift` stays quiet.
+6. **The status renders long durations ("11 days ago") where the fleet tools
+   render compact ones ("11d ago").** Deliberate — this sentence is relayed aloud
+   by the model — but it IS a second age vocabulary in the same subsystem. If a
+   third appears, they want one helper.
+
+**Pattern note — a ledger-ONLY reader is a shape `reader-migration` does not
+cover.** That pattern assumes a cache-reading tool gains twin enrichment, so its
+spine is legacy parity: `cp.enrich` wraps the addition in `try/catch` so the old
+path stands alone, and `cp.drift-hint` surfaces ledger-vs-cache disagreement.
+`nexus_where_am_i` has no legacy path — nothing in this codebase answered "where
+am I?" before — so parity is vacuous, `cp.drift-hint` has no counterpart, and the
+`try/catch` becomes the WHOLE tool rather than a block inside it. The two
+checkpoints that do transfer were followed: `cp.entity-join` (ids derived from the
+resolved site id via `provisionalEnvironmentId`, never from a display name) and
+`cp.test`'s "assert the enrichment actually renders". Suggested for the pattern
+when the owner next touches it: name the ledger-only variant and say that its
+degraded rendering must be a DIFFERENT sentence from its no-data rendering — the
+distinction this packet's tool test pins ("not recording" vs "no recorded sync").
+
+**Acceptance — the packet's pins, and where each one lives**
+
+| pin | where |
+|---|---|
+| frame-absent parity, BOTH directions | `frameRouting.test.ts` "the frame is optional" — the no-frame case is asserted as a QUERY FINGERPRINT (which entity, which prefix, in order, per plane) plus "no `routing` key"; the with-frame case asserts the key appears |
+| per-plane routing observable through the REAL wired path | `chatAssembly.test.ts` "per-plane routing (ADR-22)" — reads the `task.context.assembled` manifest the turn actually emitted, and the rendered turn block |
+| episodic-routed-to-Site pinned EXPLICITLY | `frameRouting.test.ts` "episodic routes to the Site", `chatAssembly.test.ts` sibling-environment + stamped-id tests |
+| four lines in vocabulary, three distinct honest outputs | `siteStatus.test.ts` — linked+pulled, unlinked, linked-no-sync (plus a fourth: more-than-one-possible-source), each asserted as the WHOLE line array |
+| the vocabulary is a gate | `siteStatus.test.ts` scans every branch for 13 forbidden words and any `ent_` id; `frameRouting.test.ts` scans the routing section |
+| reads never `ensure()` | row-count pins in `taskFrame.test.ts`, `siteStatus.test.ts` and `whereAmI.test.ts` across `entities`/`entity_aliases`/`entity_links`/`events`/`twin_facts` |
+
+**Test results.** Baseline in this worktree before any change: **533 suites /
+6719 passed / 12 skipped**. After: ****537 suites / 6776 passed / 12 skipped****, zero failures (skipped count
+unchanged, so the delta is real coverage rather than a gating artifact). New
+suites: `frameRouting.test.ts` (16), `taskFrame.test.ts` (16),
+`siteStatus.test.ts` (12), `whereAmI.test.ts` (6); `chatAssembly.test.ts` gained
+7. `npx tsc -p . --noEmit` clean; eslint clean on every touched file and over the
+whole `src/intelligence/**` tree, so the ADR-16 seam rule is verified to still
+fire (the core gained no host import — the frame arrives resolved).
+
+**Mutation battery: 39/39 caught**, each mutating a PRODUCTION line with a named
+witness. Coverage: all four table rows; the Site-scope union (both directions);
+audience's no-fallback rule and its reason string; both `servedBy` records; the
+parity guard and the manifest-key guard; the routing override; the rendered
+disclosure (silent, and id-instead-of-label); `production`-is-evidence (two live
+sites, staging-is-not-live); the local-row backfill trap; the external/`wpe`
+distinction; the caller-supplied Site id; a planted `ensure()` on the read path;
+the shared lineage precedence; all four content states; the guarantee-line
+variants; the pull-vs-push rule; singular/plural; finding №6's qualifier;
+`code_ref` branch-vs-sha and newest-vs-oldest; the tier entry; the registration;
+the not-recording-vs-no-sync distinction; and three chat-wiring points.
+
+Two did not fall on the first pass and both are worth recording:
+`fallback.phrase.dropped` reported ANCHOR-BAD (0 matches — my anchor's
+indentation was wrong; the WP-19 lesson held, the script now REFUSES to score a
+mutation whose `from` does not appear exactly once), and after repair it genuinely
+**SURVIVED**: nothing asserted the "(nothing on record names a live site for this
+one)" clause, i.e. the disclosure I had argued for in a comment was untested. Pin
+added, re-run, caught. The second, `chat.frame.without.a.site`, survived because
+the guard it removed was one of TWO — the inner guard in `buildFrame` still held,
+so the mutation was equivalent code rather than a test gap; re-aimed at the
+effective guard, caught.
+
+**ABI state: better-sqlite3 is built for SYSTEM NODE (jest), not Electron.**
+Run `npm run rebuild` before loading this in Local. Measured this session: Node
+**25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).
+
+**Proposed CLAUDE.md amendment (not applied — owner territory).** The
+intelligence-layer section's invariant list could gain one line: *"Routing lives
+in `assemble()` and nowhere else (ADR-22). A reader that picks its own entity per
+intelligence type is the drift the task frame removed; pass a frame."* And the
+tool inventory now includes `nexus_where_am_i` beside `nexus_intelligence_health`.

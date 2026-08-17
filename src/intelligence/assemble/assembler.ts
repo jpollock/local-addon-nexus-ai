@@ -26,11 +26,16 @@ import {
   AssembleRequest,
   BundleManifest,
   ContextBundle,
+  EntityRef,
   FreshnessRecord,
+  FrameSlot,
+  IntelligencePlane,
   PolicyConstraintView,
   PolicySet,
   RetrievalRecord,
   RetrievedItem,
+  RoutingRecord,
+  TaskFrame,
 } from './types';
 import { ulid } from '../envelope/ulid';
 import { TrustClass } from '../envelope/types';
@@ -88,6 +93,147 @@ export const FRESHNESS_DISCLOSURE_CONTRACT =
   'in your reply, state how old the observation is. For any fact marked PAST SLO: ' +
   'tell the user it is stale, and re-check it live with the relevant tool before ' +
   'acting on it. Never present a cached fact as the site\'s current state.';
+
+// ---------------------------------------------------------------------------
+// Routing — ADR-22's table, applied HERE and nowhere else
+// ---------------------------------------------------------------------------
+
+/**
+ * The §4 routing table of `reconciliation-site-environment-model.md`, normative
+ * per ADR-22. "Routing intelligence lives in exactly one place — `assemble()` —
+ * so a hundred actors stay simple because one function is smart."
+ *
+ *   state     the entity being touched: a copy's state is its OWN, always
+ *             age-labeled. Reading the Site's twins for a question about the
+ *             copy would answer about a different machine.
+ *   episodic  the Site, threaded across environments. The valuable entries are
+ *             the edges — promotions, pulls, the push that broke the live site —
+ *             and they belong to the Site's story, not to one version of it.
+ *   semantic  the flow's canonical source. Content is authored on the live site
+ *             and flows down, so the live site is canonical for it.
+ *   audience  production, ALWAYS. A sandbox has no visitors, ever; reality is
+ *             only measured where the audience is.
+ */
+export const ROUTING_TABLE: Record<IntelligencePlane, FrameSlot> = {
+  state: 'workingCopy',
+  episodic: 'site',
+  semantic: 'production',
+  audience: 'production',
+};
+
+/**
+ * The audience plane's honest answer in v0. Instruments are M4: nothing in this
+ * process observes a visitor, so the plane resolves, retrieves nothing, and says
+ * why. Silence would be read as "this site has no traffic" — an answer, and a
+ * false one — which is exactly the failure the routing table is meant to end.
+ */
+export const NO_INSTRUMENT_SOURCE = 'no instrument source connected';
+
+const PLANE_ORDER: IntelligencePlane[] = ['state', 'episodic', 'semantic', 'audience'];
+
+interface PlaneRoute {
+  targets: EntityRef[];
+  record: RoutingRecord;
+}
+
+function slotRef(frame: TaskFrame, slot: FrameSlot): EntityRef | undefined {
+  if (slot === 'workingCopy') return frame.workingCopy;
+  if (slot === 'site') return frame.site;
+  return frame.production;
+}
+
+/**
+ * One plane's read scope, plus the record of how it was chosen.
+ *
+ * Two rules are load-bearing and neither is obvious:
+ *
+ * **Site scope INCLUDES the copy.** `Ledger.query`'s entity filter is an exact
+ * id match against any role, and not every shipped producer dual-stamps the
+ * `site` role — `intelligence-host/bootstrap.ts` emits drift as
+ * `{ environment }` alone — while events already on disk can never be
+ * re-stamped. So a Site-scoped episodic read that queried the Site id alone
+ * would silently lose that producer's history, which is a regression dressed as
+ * a routing improvement. The union IS the Site scope until every producer
+ * conforms (audit A9's stamping discipline) and even then, for the old rows.
+ *
+ * **Audience never falls back.** Every other plane degrades to the copy or to
+ * the request's flat target list, because reading the nearest available thing is
+ * better than reading nothing. Audience is the opposite: a copy has no visitors,
+ * so serving audience from it would fabricate the one number a user would act
+ * on. It resolves to production or to nothing.
+ */
+function routePlane(plane: IntelligencePlane, req: AssembleRequest): PlaneRoute {
+  const frame = req.frame ?? {};
+  const slot = frame.routing?.[plane] ?? ROUTING_TABLE[plane];
+
+  if (plane === 'audience') {
+    const production = frame.production;
+    return {
+      targets: [],
+      record: {
+        plane,
+        slot,
+        entityIds: production ? [production.id] : [],
+        unavailable: NO_INSTRUMENT_SOURCE,
+      },
+    };
+  }
+
+  const own = slotRef(frame, slot);
+  if (own) {
+    const targets = [own];
+    if (plane === 'episodic' && slot === 'site' && frame.workingCopy && frame.workingCopy.id !== own.id) {
+      targets.push(frame.workingCopy);
+    }
+    return { targets, record: { plane, slot, entityIds: targets.map((t) => t.id) } };
+  }
+
+  const copy = slot === 'workingCopy' ? undefined : frame.workingCopy;
+  if (copy) {
+    return {
+      targets: [copy],
+      record: { plane, slot, entityIds: [copy.id], servedBy: 'workingCopy' },
+    };
+  }
+
+  return {
+    targets: req.targets,
+    record: {
+      plane,
+      slot,
+      entityIds: req.targets.map((t) => t.id),
+      servedBy: 'targets',
+    },
+  };
+}
+
+interface Routing {
+  state: EntityRef[];
+  episodic: EntityRef[];
+  semantic: EntityRef[];
+  /** Absent when the request carried no frame — see BundleManifest.routing. */
+  records?: RoutingRecord[];
+}
+
+/**
+ * With no frame, every plane reads `req.targets` and nothing is recorded: the
+ * pre-frame behaviour, byte-identical, which is what lets the frame land as a
+ * pure addition on a wired surface.
+ */
+function routeAll(req: AssembleRequest): Routing {
+  if (!req.frame) {
+    return { state: req.targets, episodic: req.targets, semantic: req.targets };
+  }
+  const routes = new Map<IntelligencePlane, PlaneRoute>(
+    PLANE_ORDER.map((plane) => [plane, routePlane(plane, req)])
+  );
+  return {
+    state: routes.get('state')!.targets,
+    episodic: routes.get('episodic')!.targets,
+    semantic: routes.get('semantic')!.targets,
+    records: PLANE_ORDER.map((plane) => routes.get(plane)!.record),
+  };
+}
 
 const UNTRUSTED_FALLBACK_NOTE =
   '(Retrieved context was omitted this turn: no untrusted-data wrapper was ' +
@@ -171,13 +317,13 @@ function normalizeRule(rule: string): string {
 const DEFAULT_FRESHNESS_LIMIT = 12;
 
 function collectFreshness(
-  req: AssembleRequest,
+  targets: EntityRef[],
   deps: AssembleDeps,
   now: Date
 ): FreshnessRecord[] {
   if (!deps.twins) return [];
   const out: FreshnessRecord[] = [];
-  for (const target of req.targets) {
+  for (const target of targets) {
     const facts = safely(() => deps.twins!.forEntity(target.id), []) ?? [];
     for (const fact of facts) {
       const f = safely(() => deps.twins!.freshness(fact, now), undefined);
@@ -215,11 +361,12 @@ const DEFAULT_SEMANTIC_LIMIT = 5;
 
 function collectEpisodic(
   req: AssembleRequest,
+  targets: EntityRef[],
   deps: AssembleDeps,
   now: Date,
   records: RetrievalRecord[]
 ): RetrievedItem[] {
-  if (!deps.ledger || req.targets.length === 0) return [];
+  if (!deps.ledger || targets.length === 0) return [];
   const asked = req.retrieval?.episodicTopicPrefix ?? DEFAULT_EPISODIC_PREFIXES;
   const prefixes = typeof asked === 'string' ? [asked] : asked;
   const limit = req.retrieval?.episodicLimit ?? DEFAULT_EPISODIC_LIMIT;
@@ -238,7 +385,7 @@ function collectEpisodic(
    */
   const seen = new Set<string>();
 
-  for (const target of req.targets) {
+  for (const target of targets) {
     for (const topicPrefix of prefixes) {
       // order:'desc' is load-bearing — an ascending query that hits its limit
       // silently drops the NEWEST events, which reads as "nothing happened
@@ -391,13 +538,14 @@ function truncate(text: string, max: number): string {
 
 async function collectSemantic(
   req: AssembleRequest,
+  targets: EntityRef[],
   deps: AssembleDeps,
   records: RetrievalRecord[]
 ): Promise<RetrievedItem[]> {
   const query = req.task.intent.trim();
   if (!deps.semantic || !query) return [];
   const limit = req.retrieval?.semanticLimit ?? DEFAULT_SEMANTIC_LIMIT;
-  const entityIds = req.targets.map((t) => t.id);
+  const entityIds = targets.map((t) => t.id);
 
   let hits;
   try {
@@ -453,12 +601,61 @@ export function renderAmbientBlock(set: PolicySet): string {
   return lines.join('\n');
 }
 
+/**
+ * Plane names as the asker's own words, not as the taxonomy's.
+ *
+ * S2: "reads route silently; the answer names its target." The model cannot name
+ * a source it was not told, so the provenance rides the turn as prose it can
+ * quote — the same model-must-relay ruling the freshness contract runs on.
+ */
+const PLANE_LABEL: Record<IntelligencePlane, string> = {
+  state: 'Current state and freshness',
+  episodic: 'What has happened here before',
+  semantic: 'Indexed content',
+  audience: 'Visitor and audience numbers',
+};
+
+/** Controlled Vocabulary v1: the five phrases a user is allowed to hear. */
+const SLOT_PHRASE: Record<FrameSlot, string> = {
+  workingCopy: 'your copy',
+  site: 'this whole site, wherever things happened',
+  production: 'the live site',
+};
+
+function routingPhrase(record: RoutingRecord, frame: TaskFrame): string {
+  if (record.unavailable) {
+    return `${record.unavailable} — say so if you are asked, and never estimate it`;
+  }
+  if (record.servedBy === 'targets') return 'the site you have selected';
+
+  const servedSlot: FrameSlot = record.servedBy ?? record.slot;
+  const ref = slotRef(frame, servedSlot);
+  const named = `${SLOT_PHRASE[servedSlot]}${ref?.label ? ` — ${ref.label}` : ''}`;
+  // A fallback states itself. Presenting copy-sourced content as though it were
+  // the canonical source is the disclosure failure the routing table exists to
+  // prevent — the answer would be right about the words and wrong about where
+  // they came from.
+  return record.servedBy && record.slot === 'production'
+    ? `${named} (nothing on record names a live site for this one)`
+    : named;
+}
+
+export function renderRoutingBlock(records: RoutingRecord[], frame: TaskFrame): string | null {
+  if (records.length === 0) return null;
+  return [
+    "Where this turn's information comes from — chosen per type by the platform, " +
+      'not by whoever asked. Name the source when you use it:',
+    ...records.map((r) => `- ${PLANE_LABEL[r.plane]}: ${routingPhrase(r, frame)}`),
+  ].join('\n');
+}
+
 export function renderTurnBlock(
   req: AssembleRequest,
   set: PolicySet | null,
   freshness: FreshnessRecord[],
   retrieved: RetrievedItem[],
-  deps: AssembleDeps
+  deps: AssembleDeps,
+  routing?: RoutingRecord[]
 ): string | null {
   const sections: string[] = [];
 
@@ -473,6 +670,11 @@ export function renderTurnBlock(
       );
     }
   }
+
+  // Before the facts, not after: it says where each of the sections below came
+  // from, and a provenance note that trails its own evidence gets skipped.
+  const routingSection = routing ? renderRoutingBlock(routing, req.frame ?? {}) : null;
+  if (routingSection) sections.push(routingSection);
 
   const freshnessSection = renderFreshness(req, freshness);
   if (freshnessSection) sections.push(freshnessSection);
@@ -593,16 +795,21 @@ export async function assemble(
     return failClosedBundle(req, now);
   }
 
+  // ADR-22. One resolution per turn, before any collector runs: the planes must
+  // agree about where they read from, and a per-collector lookup would let them
+  // drift apart silently.
+  const routed = routeAll(req);
+
   const retrievalRecords: RetrievalRecord[] = [];
-  const freshness = collectFreshness(req, deps, now);
+  const freshness = collectFreshness(routed.state, deps, now);
   const retrieved = [
-    ...collectEpisodic(req, deps, now, retrievalRecords),
-    ...(await collectSemantic(req, deps, retrievalRecords)),
+    ...collectEpisodic(req, routed.episodic, deps, now, retrievalRecords),
+    ...(await collectSemantic(req, routed.semantic, deps, retrievalRecords)),
   ];
 
   const ambientBlock =
     set && req.context?.rebuildingDurableContext ? renderAmbientBlock(set) : null;
-  const turnBlock = renderTurnBlock(req, set, freshness, retrieved, deps);
+  const turnBlock = renderTurnBlock(req, set, freshness, retrieved, deps, routed.records);
 
   const tokensUsed = estimateTokens(ambientBlock ?? '') + estimateTokens(turnBlock ?? '');
 
@@ -627,6 +834,8 @@ export async function assemble(
     procedure: null,
     tools: [],
     retrieval: retrievalRecords,
+    // Absent, not empty, when the caller sent no frame — see the field's note.
+    ...(routed.records ? { routing: routed.records } : {}),
     freshness_report: freshness,
     budget: {
       tokens_used: tokensUsed,

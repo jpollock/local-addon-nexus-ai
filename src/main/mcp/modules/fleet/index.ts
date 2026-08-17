@@ -8,6 +8,7 @@ import { fleetSummaryHandler } from './fleet-summary';
 import { detectDriftHandler } from './detect-drift';
 import { pairingProposalsHandler } from './pairing-proposals';
 import { intelligenceHealthHandler } from './intelligence-health';
+import { whereAmIHandler } from './where-am-i';
 
 /**
  * Fleet module — cross-site aggregation and comparison tools.
@@ -24,4 +25,5 @@ export function registerFleetTools(registry: ToolRegistry): void {
   registry.register(detectDriftHandler);
   registry.register(pairingProposalsHandler);
   registry.register(intelligenceHealthHandler);
+  registry.register(whereAmIHandler);
 }

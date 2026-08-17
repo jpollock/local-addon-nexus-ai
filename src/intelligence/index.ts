@@ -33,6 +33,7 @@ export {
 } from './entity/entityService';
 export {
   divergence,
+  resolveLineage,
   compareNumericVersions,
   DivergenceDeps,
   DivergenceReport,
@@ -67,6 +68,9 @@ export {
   policyVersionHash,
   renderAmbientBlock,
   renderTurnBlock,
+  renderRoutingBlock,
+  ROUTING_TABLE,
+  NO_INSTRUMENT_SOURCE,
   FRESHNESS_DISCLOSURE_CONTRACT,
   TOKEN_ESTIMATOR_METHOD,
   TOKEN_ESTIMATOR_SCOPE,
@@ -79,13 +83,17 @@ export {
   BundleManifest,
   ContextBundle,
   EntityRef,
+  FrameSlot,
   FreshnessRecord,
+  IntelligencePlane,
   PolicySet,
   PolicyConstraintView,
   RetrievalRecord,
   RetrievedItem,
+  RoutingRecord,
   SemanticHit,
   SemanticPort,
+  TaskFrame,
   ToolGrant,
 } from './assemble/types';
 export {
