@@ -161,12 +161,24 @@ export const wpePullHandler: McpToolHandler = {
     }
 
     try {
-      // Register with tracker before firing (tracker also picks up Local's IPC events)
-      services.operationTracker?.register(site.id, site.name, 'pull');
+      const dbOnly = args.database_only === true;
+
+      // Register with tracker before firing (tracker also picks up Local's IPC events).
+      // WP-14: the detail is what this handler knows and Local's IPC stream
+      // never carries — the sync producer taps the tracker (so it also sees
+      // UI-initiated pulls) and uses these declared facts in preference to
+      // anything it can infer.
+      services.operationTracker?.register(site.id, site.name, 'pull', {
+        installName,
+        installId,
+        wpeSiteId: remoteSiteId,
+        environment,
+        includesDb: dbOnly || args.include_database === true,
+        databaseOnly: dbOnly,
+      });
 
       // Fire-and-forget: wpePull.pull() is a long-running operation.
       // Return immediately and let the user poll local_operation_status.
-      const dbOnly = args.database_only === true;
       const pullPromise = services.localServices.wpePull.pull({
         includeSql: dbOnly || args.include_database === true,
         wpengineInstallName: installName,

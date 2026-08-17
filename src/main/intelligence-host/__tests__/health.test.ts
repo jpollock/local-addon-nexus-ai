@@ -290,6 +290,50 @@ describe('the check itself', () => {
     core.close();
   });
 
+  /**
+   * WP-14 · born monitored. Two failure modes this pins:
+   *
+   *   1. an SLO whose `system` does not match what the producer actually
+   *      stamps — the line then reads "nothing yet" forever while the producer
+   *      runs fine, and the table silently goes out of date, which is the exact
+   *      failure WP-17 exists to prevent;
+   *   2. a machine that has simply never synced reading as degradation. Nobody
+   *      is obliged to own a WP Engine account, and a monitor that cries wolf
+   *      at them is a monitor that gets ignored.
+   */
+  test('WP-14: the sync SLO matches the emitted source.system, and never-synced is not degradation', () => {
+    const { core } = makeCore();
+    const slo = PRODUCER_LIVENESS_SLOS.find((s) => s.system === 'sync:wpe')!;
+    expect(slo).toBeTruthy();
+
+    const never = collectIntelligenceHealth({ core, now: new Date() });
+    const dark = lineFor(never, 'producer:sync:wpe');
+    expect(dark.verdict).toBe('DARK');
+    expect(dark.countsTowardWorst).toBe(false);
+    expect(dark.detail).toMatch(/not in use on this machine/);
+
+    // A real sync event, stamped exactly as the producer stamps it. If the SLO
+    // and the producer ever disagree on this string, this line stays DARK.
+    core.emitter.emit({
+      observed_at: new Date().toISOString(),
+      topic: 'episodic.sync.pulled',
+      schema: 'sync.observed/1',
+      entity: { working_copy: provisionalEnvironmentId('site-a') },
+      actor: { id: 'act_local_sync', kind: 'system' },
+      source: { class: 'platform', system: 'sync:wpe', trust: 'observed' },
+      payload: { flow: 'full', direction: 'down', includes_db: true },
+    });
+
+    const now = new Date();
+    expect(lineFor(collectIntelligenceHealth({ core, now }), 'producer:sync:wpe').verdict).toBe('OK');
+    // ...and it does go STALE once it is genuinely overdue.
+    const overdue = collectIntelligenceHealth({ core, now: new Date(now.getTime() + 31 * DAY) });
+    expect(lineFor(overdue, 'producer:sync:wpe').verdict).toBe('STALE');
+    // Never listed as an unmonitored "other source".
+    expect(overdue.lines.find((l) => l.key === 'producers:unlisted')?.value ?? '').not.toContain('sync:wpe');
+    core.close();
+  });
+
   test('every producer in the SLO table gets a line, and each line carries value + threshold + verdict', () => {
     const { core } = makeCore();
     const report = collectIntelligenceHealth({ core, now: new Date() });

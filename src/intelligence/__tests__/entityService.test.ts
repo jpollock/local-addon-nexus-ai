@@ -160,3 +160,61 @@ describe('entity service wiring contracts (WP-07)', () => {
     ledger.close();
   });
 });
+
+/**
+ * WP-14 · the Layer-3 traversals and the exclusive link.
+ *
+ * ADR-21 froze the ids and put layer membership on the EDGES, so these three
+ * methods are the only thing that can distinguish a working copy from an
+ * environment. `workingCopiesOf` must not answer with environments, `siteOf`
+ * must find the Site from either containment edge, and `linkExclusive` must
+ * actually retire the pointer it replaces — plain `link()` does not.
+ */
+test('WP-14: working-copy traversal, reverse site lookup, and an exclusive pointer', () => {
+  const ledger = new Ledger(':memory:');
+  const entities = new EntityService(ledger);
+
+  const site = entities.ensure('site', 'wpe.site_id', 'site-uuid');
+  const copy = entities.ensure('env', 'local.site_id', 'local-1');
+  const prod = entities.ensure('env', 'graph.site_row', 'row-prod');
+  const stage = entities.ensure('env', 'graph.site_row', 'row-stage');
+
+  entities.link(site, prod, 'has_environment', 0.95, 'host_connection');
+  entities.link(site, stage, 'has_environment', 0.95, 'host_connection');
+  // The copy carries BOTH edges — additive, per audit A6.
+  entities.link(site, copy, 'has_environment', 1.0, 'user_link');
+  entities.link(site, copy, 'has_working_copy', 1.0, 'user_link');
+
+  // Every shipped reader still sees all three; only the new traversal narrows.
+  expect(entities.environmentsOf(site).map((e) => e.entityId).sort()).toEqual([copy, prod, stage].sort());
+  expect(entities.workingCopiesOf(site).map((e) => e.entityId)).toEqual([copy]);
+
+  // Reverse: from a copy AND from a plain environment.
+  expect(entities.siteOf(copy)).toBe(site);
+  expect(entities.siteOf(prod)).toBe(site);
+  expect(entities.siteOf('ent_env_ZZZZZZZZZZZZZZZZZZZZZZZZZZ')).toBeUndefined();
+
+  // An env→env edge must never be mistaken for a Site (the type filter).
+  entities.link(prod, copy, 'content_pulled_from', 1.0, 'pull_lineage');
+  expect(entities.siteOf(copy)).toBe(site);
+
+  // linkExclusive MOVES the pointer; plain link would have left both.
+  entities.linkExclusive(copy, prod, 'content_pulled_from', 1.0, 'pull_lineage', '2026-08-17T00:00:00.000Z');
+  entities.linkExclusive(copy, stage, 'content_pulled_from', 1.0, 'pull_lineage', '2026-08-18T00:00:00.000Z');
+  const pointers = ledger
+    .raw()
+    .prepare(`SELECT to_entity, created_at FROM entity_links WHERE from_entity = ? AND kind = 'content_pulled_from'`)
+    .all(copy) as Array<{ to_entity: string; created_at: string }>;
+  expect(pointers).toEqual([{ to_entity: stage, created_at: '2026-08-18T00:00:00.000Z' }]);
+
+  // A human's assertion is never retired by an observation.
+  entities.link(copy, prod, 'content_pulled_from', 1.0, 'user_link');
+  entities.linkExclusive(copy, stage, 'content_pulled_from', 1.0, 'pull_lineage');
+  const withUserLink = ledger
+    .raw()
+    .prepare(`SELECT to_entity FROM entity_links WHERE from_entity = ? AND kind = 'content_pulled_from' ORDER BY to_entity`)
+    .all(copy) as Array<{ to_entity: string }>;
+  expect(withUserLink.map((r) => r.to_entity).sort()).toEqual([prod, stage].sort());
+
+  ledger.close();
+});

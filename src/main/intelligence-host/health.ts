@@ -93,6 +93,24 @@ export const PRODUCER_LIVENESS_SLOS: readonly ProducerLivenessSlo[] = [
     sloSeconds: 30 * DAYS,
   },
   {
+    // WP-14 · pulls and pushes. Two properties set this SLO, and they pull in
+    // the same direction: syncs are USER-INITIATED (nothing schedules one, so
+    // silence is a statement about the person, not the pipeline), and a
+    // machine whose sites are not linked to WP Engine can never produce one at
+    // all. Both make a tight bound pure noise. 30 days is where "nobody on
+    // this machine has pulled or pushed anything in a month" stops being an
+    // ordinary quiet stretch and starts being worth a look — the same
+    // reasoning, and the same value, as the drift line above.
+    //
+    // The never-observed case is NOT degradation and must not read as one:
+    // `producerLine` returns countsTowardWorst:false for a producer that has
+    // never been seen, so a developer who has never linked a site to WP Engine
+    // does not get a permanently-degraded layer. Pinned in health.test.ts.
+    system: 'sync:wpe',
+    label: 'Pulls and pushes',
+    sloSeconds: 30 * DAYS,
+  },
+  {
     // One manifest per docked-panel chat turn — the only producer a user
     // drives directly, which makes it the sharpest signal in the table: if
     // chat has been used this week and no manifest exists, assembly is

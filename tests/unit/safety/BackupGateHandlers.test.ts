@@ -143,4 +143,51 @@ describe('BackupGate - Handler Integration (I4)', () => {
       expect(mockServices.localServices.wpePush.push).toHaveBeenCalled();
     });
   });
+
+  /**
+   * WP-14 · the handler half of the sync seam.
+   *
+   * The producer taps `OperationTracker` (so it also sees pulls started from
+   * Local's own UI), and the handlers enrich the `register()` call they already
+   * made with what the IPC stream cannot carry: which install, which
+   * environment, and whether the database came along. Without this the
+   * tool-initiated path degrades to the same inference the UI path uses — and
+   * `database_only`, which Local never signals at all, becomes unobservable.
+   */
+  describe('sync detail passed to the operation tracker (WP-14)', () => {
+    beforeEach(() => {
+      mockServices.localServices.exportSite.mockResolvedValue('/tmp/backup.zip');
+    });
+
+    it('a full pull declares the install, the environment and the database', async () => {
+      await wpePullHandler.execute({ site: 'test-site', include_database: true }, mockServices);
+
+      expect(mockServices.operationTracker.register).toHaveBeenCalledWith(
+        'test-site',
+        'Test Site',
+        'pull',
+        {
+          installName: 'testsite',
+          installId: 'install-uuid',
+          wpeSiteId: 'remote-uuid',
+          environment: 'production',
+          includesDb: true,
+          databaseOnly: false,
+        },
+      );
+    });
+
+    it('a files-only pull declares includesDb false — not merely absent', async () => {
+      await wpePullHandler.execute({ site: 'test-site' }, mockServices);
+      const detail = mockServices.operationTracker.register.mock.calls[0][3];
+      expect(detail.includesDb).toBe(false);
+      expect(detail.databaseOnly).toBe(false);
+    });
+
+    it('a database-only pull is declared as such — Local never signals it', async () => {
+      await wpePullHandler.execute({ site: 'test-site', database_only: true }, mockServices);
+      const detail = mockServices.operationTracker.register.mock.calls[0][3];
+      expect(detail).toMatchObject({ includesDb: true, databaseOnly: true });
+    });
+  });
 });

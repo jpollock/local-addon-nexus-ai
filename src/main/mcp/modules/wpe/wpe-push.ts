@@ -138,8 +138,15 @@ export const wpePushHandler: McpToolHandler = {
     services.logger.info(`[local_wpe_push] Remote backup verified: ${backupResult.backup.type === 'remote' ? backupResult.backup.backupId : 'unknown'}`);
 
     try {
-      // Register with tracker before firing (tracker also picks up Local's IPC events)
-      services.operationTracker?.register(site.id, site.name, 'push');
+      // Register with tracker before firing (tracker also picks up Local's IPC events).
+      // WP-14: see the note on the pull handler — declared facts beat inferred.
+      services.operationTracker?.register(site.id, site.name, 'push', {
+        installName,
+        installId,
+        wpeSiteId: remoteSiteId,
+        environment,
+        includesDb: args.include_database === true,
+      });
 
       // Fire-and-forget: wpePush.push() is a long-running operation (1-5 min).
       // Return immediately and let the user poll local_operation_status.
