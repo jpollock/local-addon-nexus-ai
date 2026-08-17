@@ -6186,3 +6186,76 @@ baseline in the report. ABI is SYSTEM NODE on the worktree — the owner
 runs `npm run rebuild` before loading Local. 20d's prompt is owed by the
 architect at 20c's merge report, per the standing sequence. 20b remains
 free to merge in either order — the parity pin holds the seam.
+
+---
+
+**WP-20c — GATE CHANGES APPLIED (2026-08-17).** Both required changes landed,
+plus the near-ceiling WARN, which was cheap enough to ride rather than be
+registered as a micro. The architect's uncommitted adjudication and ADR
+amendments were committed VERBATIM in the primary checkout first
+(`d1f2b96c`, attributed) and merged into the branch (`22f34f9d`, both the
+packet note and the adjudication kept in order) — flagged for fidelity
+verification per protocol.
+
+**1 · Ceiling 8,192 → 10,240** (`STRICT_RUNBOOK_CEILING_BYTES`), with the
+rationale recorded at the constant rather than only in the ADR. Margins on the
+shipped strict set, measured after the raise:
+
+| runbook | canonical bytes | margin |
+|---|---|---|
+| `rb.bulk-plugin-update` | 4,858 | 5,382 |
+| `rb.promotion-execute` | 6,353 | 3,887 |
+| `rb.promotion-preflight` | 7,573 | 2,667 |
+| `rb.incident-containment` | 8,054 | 2,186 |
+| `rb.incident-remediation` | 8,104 | 2,136 |
+
+`PROCEDURE_TOKEN_CEILING` follows it through the estimator (2,048 → 2,560), so
+the delivery-side guard and the registry still mean the same thing by "too big".
+
+**2 · The §3 ordering FLIPPED**: policy re-assert, then procedure, then routing,
+freshness, retrieval. One `sections.push` moved; the pin moved with it and now
+asserts BOTH boundaries (policy before procedure, procedure before the evidence
+sections) over a bundle carrying all three, so neither half can drift alone.
+ADR-20's amendment and the code comment say the same thing for the same reason:
+law outranks procedure, and the reading order mirrors the authority order.
+
+**3 · The near-ceiling WARN shipped** (9,216 bytes = 90%). Three decisions
+inside it, each pinned:
+
+- **A third list, not a third error.** `RunbookRegistry.warnings()` is separate
+  from `errors()` for the reason `runbookErrors` is separate from `loadErrors`:
+  these documents WORK, and a margin report folded into a failure list reads as
+  a failure. `initLawRegistry` logs them at warn level and the handle carries
+  `runbookWarnings`; the boot line now reads
+  `N runbook(s) loaded, N refused, N near ceiling`.
+- **Scoped to strict**, like the ceiling itself — warning a guided runbook about
+  a margin it does not have is noise about a rule that never applies to it.
+- **Only ADMITTED documents warn.** An over-ceiling runbook is refused and NOT
+  also warned about: two reports of one document read as two documents, and the
+  refusal is the louder, truer one.
+
+Nothing in the shipped set warns today, and that is pinned as a claim rather
+than left as an absence — the pin is what notices the day a runbook stops having
+room.
+
+**Findings from applying the gate**
+
+11. **Ruling 2's guided exemption is now VACUOUS IN FACT while still live in
+    rule.** At 8,192 the exemption did real work: `rb.diagnose-site` (8,970) and
+    `rb.wpe-pull` (8,361) were both over it. At 10,240 both are under it, so
+    "no guided runbook is over ceiling" is now true for a reason that has
+    nothing to do with the exemption. Recorded at the constant and pinned in
+    `shippedRunbooks.test.ts`, because the next reader will otherwise take it as
+    evidence that scoping the ceiling to strict stopped mattering. It has not:
+    the day a guided runbook grows, the exemption is the only thing loading it.
+12. **The poisoned ts-jest cache reproduced a FOURTH time**, same signature as
+    WP-15 and WP-20a: `tests/intelligence-evals/sitting.test.ts` alone failing
+    to parse ("Jest encountered an unexpected token"), everything else green,
+    and passing after `npx jest --clearCache`. It is now four occurrences across
+    four packets; the protocol note is right and could stand to be more
+    prominent than a parenthetical.
+13. **Mutation battery re-run and extended: 28/28 killed by their named
+    witness.** Four new: M25 (the ordering flip — pushing the procedure ahead of
+    policy again), M26/M28 (the WARN's threshold and its strict scope), M27
+    (`warnings()` returning nothing). M12's anchor moved with the flipped
+    ordering and was re-anchored.

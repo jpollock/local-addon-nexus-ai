@@ -19,7 +19,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { documentHash } from '../law/hash';
 import { loadLawDirectory } from '../law/loader';
-import { RunbookRegistry, STRICT_RUNBOOK_CEILING_BYTES } from '../law/runbookRegistry';
+import {
+  RunbookRegistry,
+  RUNBOOK_NEAR_CEILING_BYTES,
+  STRICT_RUNBOOK_CEILING_BYTES,
+} from '../law/runbookRegistry';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const LAW_DIR = path.join(REPO_ROOT, 'law');
@@ -91,6 +95,21 @@ describe('the shipped law/ directory', () => {
       expect({ id: rb.id, over: rb.canonicalBytes > STRICT_RUNBOOK_CEILING_BYTES }).toEqual({
         id: rb.id,
         over: false,
+      });
+    }
+  });
+
+  it('warns about nothing today — every shipped runbook is clear of the 90% line', () => {
+    // A claim, not an absence. The WARN exists so an author learns the margin
+    // while authoring; an empty list here means the shipped set has room, and
+    // this is the pin that notices the day one of them stops having it.
+    const { registry } = load();
+
+    expect(registry.warnings()).toEqual([]);
+    for (const rb of registry.runbooks({ strictness: 'strict' })) {
+      expect({ id: rb.id, near: rb.canonicalBytes > RUNBOOK_NEAR_CEILING_BYTES }).toEqual({
+        id: rb.id,
+        near: false,
       });
     }
   });
@@ -178,12 +197,19 @@ describe('the shipped law/ directory', () => {
       'rb.promotion-preflight': 7573,
       'rb.wpe-pull': 8361,
     });
-    // diagnose-site and wpe-pull are over 8 KB and load anyway, because they are
-    // GUIDED and the ruling scoped the ceiling to strict (WP-20a adjudication,
-    // ruling 2 — a registered exception, not a loophole). Every strict document
-    // is under it, and the two incident halves clear it by 138 and 88 bytes:
-    // recorded because that is the margin a future edit will spend without
-    // noticing.
-    expect(STRICT_RUNBOOK_CEILING_BYTES).toBe(8192);
+    // The ceiling was raised 8,192 → 10,240 at the WP-20c gate, on the evidence
+    // this table carries: the two incident halves cleared 8,192 by 138 and 88
+    // bytes, and what sits at that size is contract, not prose. At 10,240 the
+    // margins are 2,186 and 2,136 — and the near-ceiling WARN below is what
+    // stops the next author spending them silently.
+    expect(STRICT_RUNBOOK_CEILING_BYTES).toBe(10240);
+    expect(RUNBOOK_NEAR_CEILING_BYTES).toBe(9216);
+    // The guided pair is now UNDER the strict ceiling, so ruling 2's exemption
+    // is currently vacuous in fact while still live in rule. Recorded, because
+    // "no guided runbook is over ceiling" is not evidence the scoping stopped
+    // mattering — it is evidence the ceiling moved.
+    for (const id of ['rb.diagnose-site', 'rb.wpe-pull']) {
+      expect({ id, over: bytes[id] > STRICT_RUNBOOK_CEILING_BYTES }).toEqual({ id, over: false });
+    }
   });
 });

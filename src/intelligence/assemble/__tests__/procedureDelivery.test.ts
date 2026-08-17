@@ -85,7 +85,7 @@ checkpoints:
 
 # Fixture oversize
 
-${'padding padding padding padding padding padding padding padding\n'.repeat(140)}
+${'padding padding padding padding padding padding padding padding\n'.repeat(200)}
 `;
 
 function docOf(text: string, path: string): LawDocument {
@@ -191,20 +191,32 @@ describe('delivery — the full document, once', () => {
     expect(bundle.blocks.turn).toContain('Update the fixture fleet, carefully.');
   });
 
-  test('the procedure is the FIRST section of the turn block (§3)', async () => {
+  test('the procedure follows the POLICY re-assert and precedes everything else', async () => {
+    // ADR-20's amendment (WP-20c gate): law outranks procedure, so the standing
+    // policy is read first and the procedure is read in its light. Everything
+    // below the procedure — routing, freshness, retrieval — is evidence FOR it,
+    // which is §3's original argument and is unchanged.
     const constraints = [
       { id: 'c.one', rule: 'no production writes', enforcement: 'gateway' as const, origin: 'expertise' as const, docId: 'pol.x', docVersion: '1', scope: 'tenant' },
     ];
     const bundle = await assemble(
-      armedRequest(),
+      armedRequest({
+        targets: [{ role: 'environment', id: 'ent_env_1', label: 'acme' }],
+      }),
       depsWith(strictReg(), {
         law: { constraints: () => constraints, documents: () => [{ id: 'pol.x', version: '1' }] },
+        twins: {
+          forEntity: () => [{ entityId: 'ent_env_1', fact: 'plugin:acf', observedAt: new Date(0).toISOString() } as never],
+          freshness: () => ({ ageSeconds: 100, sloSeconds: 50, fresh: false }) as never,
+        },
       })
     );
 
     const turn = bundle.blocks.turn!;
-    expect(turn).toContain('Operating policy'); // the policy set rode too
-    expect(turn.indexOf('rb.fixture-update')).toBeLessThan(turn.indexOf('Operating policy'));
+    expect(turn).toContain('Operating policy');
+    expect(turn).toContain('Cached-data freshness');
+    expect(turn.indexOf('Operating policy')).toBeLessThan(turn.indexOf('rb.fixture-update'));
+    expect(turn.indexOf('rb.fixture-update')).toBeLessThan(turn.indexOf('Cached-data freshness'));
   });
 
   test('a second turn re-asserts by hash and cursor, not by body (ADR-20 extended)', async () => {
@@ -285,7 +297,7 @@ describe('delivery — the full document, once', () => {
   test('a delivered procedure is inside the token ceiling the registry enforces', async () => {
     const bundle = await assemble(armedRequest(), depsWith(strictReg()));
 
-    expect(PROCEDURE_TOKEN_CEILING).toBe(2048);
+    expect(PROCEDURE_TOKEN_CEILING).toBe(2560);
     expect(bundle.manifest.procedure!.tokens).toBeLessThanOrEqual(PROCEDURE_TOKEN_CEILING);
   });
 });

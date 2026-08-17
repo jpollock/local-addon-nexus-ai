@@ -24,6 +24,13 @@
  *    delivers that text: one string, so "the actor received the document the
  *    grant authorised" is a claim the hash can actually support.
  *
+ * 2b. **It rides AFTER the policy re-assert and before everything else.** §3
+ *    originally placed it first in the block; the WP-20c gate flipped it and
+ *    ADR-20's amendment records the flipped order as normative — law outranks
+ *    procedure, so a procedure is read in the light of standing law rather than
+ *    ahead of it. It still precedes routing, freshness and retrieval, which are
+ *    the evidence for it.
+ *
  * 3. **Full body once per task, hash + cursor thereafter (ADR-20).** The full
  *    document is ≈1.2k tokens for the anchor runbook and the re-assert is ≈30.
  *    Against ~190 tool schemas re-sent up to 25 times a turn, one is noise and

@@ -70,7 +70,10 @@ export {
   RunbookRefusalCode,
   RunbookStrictness,
   RunbookTool,
+  RunbookWarning,
+  RunbookWarningCode,
   RUNBOOK_REFUSAL_CODES,
+  RUNBOOK_WARNING_CODES,
   RUNBOOK_STRICTNESS,
   ToolMode,
   ToolScope,
@@ -80,7 +83,12 @@ export {
 export { loadLawDirectory, parseLawDocument } from './law/loader';
 export { canonicalDocumentText, canonicalByteLength, documentHash } from './law/hash';
 export { ConstraintRegistry, ConstraintFilter, LawDocumentMeta } from './law/registry';
-export { RunbookRegistry, RunbookFilter, STRICT_RUNBOOK_CEILING_BYTES } from './law/runbookRegistry';
+export {
+  RunbookRegistry,
+  RunbookFilter,
+  STRICT_RUNBOOK_CEILING_BYTES,
+  RUNBOOK_NEAR_CEILING_BYTES,
+} from './law/runbookRegistry';
 export {
   assemble,
   estimateTokens,

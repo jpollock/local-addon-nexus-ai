@@ -203,7 +203,7 @@ describe('initLawRegistry', () => {
     // refused before WP-20c were split, and if a future edit pushes one back
     // over the ceiling this is where it surfaces.
     expect(handle!.runbookErrors).toEqual([]);
-    expect(logger.lines.info.join('\n')).toMatch(/7 runbook\(s\) loaded, 0 refused/);
+    expect(logger.lines.info.join('\n')).toMatch(/7 runbook\(s\) loaded, 0 refused, 0 near ceiling/);
   });
 
   it('reports a refused runbook in its own list and in the log, without polluting loadErrors', () => {
@@ -219,7 +219,7 @@ describe('initLawRegistry', () => {
       path.join(dir, 'runbooks', 'huge.md'),
       ['---', 'id: rb.huge', 'kind: runbook', 'version: 1.0.0', 'strictness: strict',
        'capability: cap.huge', 'checkpoints:', '  - id: cp.only', '---', '',
-       'x'.repeat(9000), ''].join('\n')
+       'x'.repeat(11000), ''].join('\n')
     );
     const logger = makeLogger();
     const handle = initLawRegistry({ storage: storageWith({}), logger, lawDir: dir });

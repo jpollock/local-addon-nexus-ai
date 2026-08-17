@@ -680,15 +680,6 @@ export function renderTurnBlock(
 ): string | null {
   const sections: string[] = [];
 
-  // §3: the procedure is the FIRST section. It is the instruction this turn is
-  // about; policy, routing, freshness and retrieval are the ground it stands on,
-  // and an instruction that trails its own evidence gets skimmed. The index
-  // rides directly under it because both answer "what procedures are in play".
-  const procedureSection = procedure
-    ? renderProcedureBlock(procedure.resolved, procedure.index)
-    : null;
-  if (procedureSection) sections.push(procedureSection);
-
   if (set) {
     if (set.assertFull) {
       sections.push(renderAmbientBlock(set));
@@ -700,6 +691,19 @@ export function renderTurnBlock(
       );
     }
   }
+
+  // AFTER the policy re-assert, BEFORE everything else (ADR-20's amendment, at
+  // the WP-20c gate). §3 first placed the procedure at the very top, ahead of
+  // policy; the gate flipped it, and the reason is the authority order rather
+  // than the reading order: law outranks procedure, and a procedure is read in
+  // the light of standing law, not before it. It still precedes routing,
+  // freshness and retrieval, which are the evidence FOR it — §3's original
+  // argument, unchanged. The index rides directly under it: both answer "what
+  // procedures are in play".
+  const procedureSection = procedure
+    ? renderProcedureBlock(procedure.resolved, procedure.index)
+    : null;
+  if (procedureSection) sections.push(procedureSection);
 
   // Before the facts, not after: it says where each of the sections below came
   // from, and a provenance note that trails its own evidence gets skipped.

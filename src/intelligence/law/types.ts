@@ -188,6 +188,24 @@ export interface RunbookLoadError extends LawLoadError {
   runbookId?: string;
 }
 
+export const RUNBOOK_WARNING_CODES = ['near-ceiling'] as const;
+export type RunbookWarningCode = (typeof RUNBOOK_WARNING_CODES)[number];
+
+/**
+ * A runbook that LOADED and is worth saying something about (WP-20c gate).
+ *
+ * Deliberately a third list, beside `loadErrors` ("not a law document") and
+ * `runbookErrors` ("loaded, contract unhonourable"). A warning folded into
+ * either would read as a failure, and this one is the opposite: the document
+ * works, and its author is being told how much margin is left.
+ */
+export interface RunbookWarning {
+  path: string;
+  runbookId: string;
+  code: RunbookWarningCode;
+  reason: string;
+}
+
 export interface LawLoadError {
   /** Path relative to the law directory root ('' when the directory itself is the problem). */
   path: string;

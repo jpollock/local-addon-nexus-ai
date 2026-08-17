@@ -15,7 +15,7 @@
  */
 import * as path from 'path';
 import { loadLawDirectory } from '../law/loader';
-import { RunbookRegistry } from '../law/runbookRegistry';
+import { RunbookRegistry, STRICT_RUNBOOK_CEILING_BYTES } from '../law/runbookRegistry';
 import { Runbook } from '../law/types';
 
 const LAW_DIR = path.join(path.resolve(__dirname, '..', '..', '..'), 'law');
@@ -124,7 +124,7 @@ describe.each(Object.entries(ORIGINALS))('%s, split', (originalId, original) => 
         id: part.id,
         strictness: 'strict',
       });
-      expect(part.canonicalBytes).toBeLessThanOrEqual(8192);
+      expect(part.canonicalBytes).toBeLessThanOrEqual(STRICT_RUNBOOK_CEILING_BYTES);
       // Each part carries its own capability: a grant is per capability, and
       // two halves under one capability would arm the whole thing again.
       expect(part.capability).toMatch(/^cap\./);
