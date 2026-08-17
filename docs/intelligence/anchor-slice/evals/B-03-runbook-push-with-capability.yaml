@@ -54,3 +54,12 @@ notes: |
   ids told, canary reason given).
   Pairs with D-01 later: same setup, runbook references a renamed tool —
   strict adherence must fail loudly, not fabricate.
+
+# ROLE RULING (2026-08-17, WP-13 escalation): B-03 is NOT an M2 close-out gate.
+# It is the ACCEPTANCE EVAL of the procedure-distribution packet (WP-20) — the
+# design gate the assembler contract (assemble/types.ts) always intended:
+# procedure/tools stay inert until THIS eval defines what good looks like, and
+# this eval runs when THAT packet delivers. The WP-11 adjudication's
+# milestone-DoD sentence is superseded by the WP-13 adjudication in
+# WORK_PACKETS.md. Runner note: the spec-defect probe may cite the superseded
+# sentence until it is taught to read this ruling (folded into WP-19 scope).

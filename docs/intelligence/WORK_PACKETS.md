@@ -2746,7 +2746,11 @@ pending).
   the fix is one keyed pass; M3's routing subsumes it later without
   conflict. Option 3 rejected — Site-scoped episodic is real, pinned value.
 
-### [ ] WP-16b · Dedupe episodic retrieval by event id  *(micro-packet, core lock; from WP-16 escalation)*
+### [x] WP-16b · Dedupe episodic retrieval by event id  *(micro-packet, core lock; from WP-16 escalation)*
+**DELIVERED before this stub was registered** — the packet was executed from
+the chat-relayed ruling; full outcome in the WP-16b entry earlier in this
+file (merge 7c7be587). This stub is retained per append-only discipline and
+ticked by the architect; the earlier entry is authoritative.
 `collectEpisodic` iterates targets; dual-stamped events (all producers
 dual-stamp) are retrieved once per matching target and render twice. Fix in
 `src/intelligence/assemble/assembler.ts`: dedupe the episodic result set by
@@ -2794,3 +2798,70 @@ architect session).**
 - Housekeeping commits a3abcae2 / 42a58f26 / b230882c verified attributed —
   the protocol's verbatim-commit practice, third exercise, working as
   written.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-16b (appended by the architect session).**
+
+- **WP-16b ACCEPTED**, on independent verification rather than the report's
+  word (code read at the cited lines; both mutations re-run against the
+  production lines with the tree restored clean; parity suite confirmed
+  untouched). All three ruled items present. The deliberately un-deduped
+  per-target RetrievalRecords (manifest keeps per-target accounting while
+  the rendered lines dedupe) is accepted as the right asymmetry — the
+  manifest is audit, the turn block is UX.
+- The duplicate-registration inconsistency was the architect's own (the
+  packet was executed from the chat-relayed ruling before the stub landed);
+  stub ticked with a pointer, earlier entry authoritative. Process note:
+  a chat-relayed ruling IS a registration — the doc stub is confirmatory,
+  and a delivered packet beats a pending stub.
+- **M2 status: all code gates met.** Remaining: the eval report run
+  (`npx ts-node tests/intelligence-evals/run.ts`) + the owner sitting over
+  its OWNER-PENDING criteria. M2 closes at the sitting's conclusion.
+
+---
+
+**ARCHITECT NOTE — first full eval report adjudicated (2026-08-17).**
+Report tally 2 PASS / 0 FAIL / 19 BLOCKED / 6 OWNER-PENDING / 1 spec-defect.
+Zero regressions; WP-16b's fix is VISIBLE in the report (wired retrieval
+reaches planted episodic history — measured, not assumed). The one
+spec-defect is the already-ruled B-03 circularity; the B-03 spec now carries
+the ruling inline, and the probe update is folded into WP-19.
+**M2 close-out, final definition:** zero FAIL (met) + the owner sitting
+clears the 6 OWNER-PENDING criteria + every BLOCKED criterion maps to a
+REGISTERED packet. The last condition required two registrations (below):
+the report's "gateway packet" and "procedure packet" were load-bearing
+names with no packet behind them. With WP-19/WP-20 registered, the BLOCKED
+map is total: 11 → WP-20 · 7 → WP-19 (one shared with WP-18) · 1 → WP-14.
+Also noted for the backlog: an incident producer proper (episodic.incident.*
+from sentinel/diagnose flows) has no packet; candidate to fold into WP-19's
+outcome emission or register separately when M3 planning firms.
+
+### [ ] WP-19 · Gateway emission — task.action/outcome/rationale events  *(M3; unblocks 7 E-02 criteria)*
+Architecture §7's "the gateway emits task.action_executed for every call",
+made real against the respelled taxonomy. Scope: (1) emit
+`task.action.executed` at the `ToolRegistry.call` chokepoint for gated
+(Tier 2+) calls — actor.id + actor.via per ADR-14, correlation = the turn's
+TaskId (thread it from chatAssembly's manifest; scout the cleanest seam) —
+AND cover the contributed-tools bypass (`agent__*` dispatch skips the
+registry; recon-ask-tell.md documents the gap); (2) `task.outcome.recorded`
+per completed gated action (result, per-target where applicable); (3)
+`task.rationale.recorded` v0 — the approval-card text + tool args as the
+minimal honest rationale, upgraded when the procedure packet lands; (4)
+causation chaining approval → actions where the approval flow allows; (5)
+update the eval runner's B-03 spec-defect probe to recognize the recorded
+ruling (spec annotation + WP-13 adjudication). Core-lock-adjacent
+(ChatService/registry seams) — announce. The E-02 BLOCKED criteria are the
+acceptance evals: re-run the runner and report the flips.
+
+### [ ] WP-20 · Procedure distribution — runbook rides the capability  *(M3/M4; B-03 is its acceptance eval)*
+Populate `ContextBundle.procedure` (runbook at the hash pinned on the
+grant, ADR-17 format from `law/`'s loader — runbook kind already loads) and
+`ContextBundle.tools` (ToolGrant[] scoped per the runbook, NexusToolProvider
+allow-list shape per recon §2.4) for granted capabilities. Fail-closed per
+ADR-7 where the actor is autonomous. Gated design questions (capability
+recognition, grant surface) go through the owner BEFORE build — this packet
+starts with a design note, not code. **B-03's eleven criteria are the
+acceptance evals**; the anchor-slice DoD completes when they pass at
+pass^3. Depends: WP-19 (its events are half of B-03's evidence), the M3
+task frame recommended first.
