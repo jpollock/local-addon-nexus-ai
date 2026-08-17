@@ -164,3 +164,79 @@ describe('SiteContextStrip — the picker list', () => {
     expect(findAll(inst.render(), 'button')).toHaveLength(1); // just the affordance
   });
 });
+
+/**
+ * WP-22b · the content-age chip on the band.
+ *
+ * The model test pins the string; these pin that the band renders it, that it is
+ * ABSENT in every state that is not `pulled`, and — the one that matters most — that
+ * a strip with no content status at all is byte-for-byte the band WP-22 shipped. The
+ * chip is detail on a disclosure; it must never be able to take the disclosure down.
+ */
+describe('SiteContextStrip — the content-age chip', () => {
+  const pulled = { state: 'pulled' as const, sourceName: 'the live site', behindSeconds: 11 * 86_400 };
+
+  function stripWith(content: any, overrides: Partial<any> = {}) {
+    const inst: any = new SiteContextStrip({
+      mode: overrides.mode ?? 'viewed',
+      siteName: overrides.siteName ?? 'cedarvale',
+      viewedSiteName: overrides.viewedSiteName ?? 'cedarvale',
+      sites: SITES,
+      content,
+      onPick: jest.fn(),
+      onClear: jest.fn(),
+    } as any);
+    spySetState(inst);
+    return inst;
+  }
+
+  /** The chip's own element, found by the attribute that marks it. */
+  function chipNode(node: any): any {
+    if (!node || typeof node !== 'object') return null;
+    if (Array.isArray(node)) return node.map(chipNode).find(Boolean) ?? null;
+    if (node.props?.['data-nexus-content-age']) return node;
+    return chipNode(node.props?.children);
+  }
+
+  it('renders the age beside the site it belongs to', () => {
+    const inst = stripWith(pulled);
+    const tree = inst.render();
+    expect(textOf(tree)).toContain('Currently in: cedarvale — your copy');
+    expect(textOf(chipNode(tree))).toBe('Pulled from the live site 11 days ago');
+  });
+
+  it('renders it in the override state too, beside the pinned site', () => {
+    const tree = stripWith(pulled, { mode: 'override', siteName: 'alpine-outfitters' }).render();
+    expect(textOf(chipNode(tree))).toBe('Pulled from the live site 11 days ago');
+    expect(textOf(tree)).toContain("You're viewing cedarvale");
+  });
+
+  it('is absent for each absence, and for a core that is not recording', () => {
+    for (const content of [
+      { state: 'no-sync' as const, sourceName: 'the live site' },
+      { state: 'ambiguous' as const },
+      { state: 'unlinked' as const },
+      null,
+      undefined,
+    ]) {
+      const tree = stripWith(content).render();
+      expect(chipNode(tree)).toBeNull();
+      // The band itself is untouched — a missing chip costs detail, never disclosure.
+      expect(textOf(tree)).toContain('Currently in: cedarvale — your copy');
+      expect(textOf(tree)).toContain('Change');
+      expect(textOf(tree)).not.toContain('unknown');
+    }
+  });
+
+  it('never renders a chip when no site is selected', () => {
+    const tree = stripWith(pulled, { mode: 'none', siteName: null, viewedSiteName: null }).render();
+    expect(chipNode(tree)).toBeNull();
+    expect(textOf(tree)).toContain('No site selected — answers will be fleet-wide');
+  });
+
+  it('does not add a control — the chip is a fact, not an affordance', () => {
+    // A second button in the band would be a second thing to click on a surface whose
+    // whole job is to be read at a glance.
+    expect(findAll(stripWith(pulled).render(), 'button')).toHaveLength(1);
+  });
+});
