@@ -2415,7 +2415,12 @@ seeded by the real webhook producer, real folds, real assembler, and the real
    there is necessarily fabricated, which the runner flags in the evidence for
    E-01's `must_not` "cite history it did not retrieve". Fix is roughly one line
    in `chatAssembly.ts`, but it is a behaviour change on the anchor surface, so
-   it is recorded here rather than done under a runner packet.
+   it is recorded here rather than done under a runner packet. **Re-verified
+   after merging WP-16**, which lands audit A3 (`resolveTargets` additionally
+   returns the `{role:'site'}` target): A3 widens the SCOPE of the episodic
+   query, not its TOPIC, so `retrieval: { semanticLimit }` still leaves the
+   prefix at `state.` and the finding is unchanged. The probe already passed
+   both roles, so it was measuring WP-16's shape before WP-16 merged.
 5. **No production producer emits any `episodic.*` event.** The only topics any
    code in `src/` emits are the six `state.*`, `semantic.content.changed`, and
    `task.context.assembled`. E-01's fixture therefore cannot be built by a
@@ -2457,9 +2462,12 @@ sitting the roadmap already schedules.
 
 **Verification.** Baseline in a fresh wp-13 worktree BEFORE any change:
 503 suites / 6279 passed / **12 skipped** / 6291 total / 0 failed — identical to
-WP-11's recorded figure. After: **509 suites / 6396 passed / 12 skipped / 6408
-total / 0 failed** — +6 suites, +117 tests, skipped count unchanged, no legacy
-suite touched. `npx tsc -p tsconfig.test.json --noEmit` clean (note: `tsc -p .`
+WP-11's recorded figure. After, before merging the base: **509 suites / 6396
+passed / 12 skipped / 6408 total / 0 failed** — +6 suites, +117 tests, skipped
+count unchanged, no legacy suite touched. After merging the advanced base
+(WP-16): **509 / 6403 / 12 skipped / 6415 / 0 failed** — the +7 is WP-16's own
+tests, and the eval suites are green against its `chatAssembly` change.
+`npx tsc -p tsconfig.test.json --noEmit` clean (note: `tsc -p .`
 does not cover `tests/`, so the DoD's typecheck command alone would not have
 seen these files). **Mutation battery: 14/14 caught**, each anchored to a
 production line with an observable witness — including "unmapped criterion
