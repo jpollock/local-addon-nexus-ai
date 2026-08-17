@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { z } from 'zod';
+import { canonicalByteLength, documentHash } from './hash';
 import {
   Constraint,
   CONSTRAINT_ORIGINS,
@@ -37,7 +38,14 @@ const frontmatterSchema = z
     id: z.string().min(1),
     kind: z.enum(['policy', 'runbook']),
     version: z.string().min(1),
-    scope: z.string().min(1).optional(),
+    // `scope` means two different things in the two kinds, and only the policy
+    // meaning is a string. A policy's scope is the namespace its constraints
+    // inherit ('tenant'); a runbook's is where the procedure applies, authored
+    // as a structured object — `{ environments: [...] }`, `{ reads, writes }`,
+    // `{ sources, destinations, excluded }`. Accept both shapes here and hold
+    // policy to the string below (WP-20a: requiring a string rejected all five
+    // shipped runbooks, which no test had ever loaded).
+    scope: z.union([z.string().min(1), z.record(z.unknown())]).optional(),
     owner: z.string().optional(),
     constraints: z.array(constraintSchema).optional(),
   })
@@ -87,7 +95,12 @@ export function parseLawDocument(relPath: string, raw: string): LawDocument | La
   }
 
   const fm = parsed.data;
-  const scope = fm.scope ?? 'tenant';
+  if (fm.kind === 'policy' && fm.scope !== undefined && typeof fm.scope !== 'string') {
+    return { path: relPath, reason: 'invalid frontmatter: scope: expected a string for a policy document' };
+  }
+  // A non-string scope is not a constraint namespace, so the document keeps the
+  // default; the authored object stays reachable on `frontmatter`.
+  const scope = typeof fm.scope === 'string' ? fm.scope : 'tenant';
   const constraints: Constraint[] = (fm.constraints ?? []).map((c) => ({
     id: c.id,
     // Folded YAML scalars keep their newlines; normalise to single-space so
@@ -110,6 +123,10 @@ export function parseLawDocument(relPath: string, raw: string): LawDocument | La
     constraints,
     body: split.body,
     frontmatter: data as Record<string, unknown>,
+    // WP-20a: the loader is the only code that sees the raw bytes, so the pin
+    // and its measurement are computed here and travel with the document.
+    hash: documentHash(raw),
+    canonicalBytes: canonicalByteLength(raw),
   };
 }
 

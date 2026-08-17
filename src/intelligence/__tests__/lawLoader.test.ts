@@ -157,6 +157,68 @@ describe('loadLawDirectory', () => {
     expect(result.documents[0].constraints).toEqual([]);
   });
 
+  it('accepts a runbook whose scope is the structured applicability object the shipped runbooks author', () => {
+    // WP-20a finding: `scope` means two different things in the two kinds. In a
+    // policy document it is a namespace string ('tenant'); in a runbook it is
+    // where the procedure applies — `{ environments: [...] }`,
+    // `{ reads: [...], writes: [...] }`, `{ sources, destinations, excluded }`.
+    // All five shipped runbooks use the object form, and requiring a string
+    // rejected every one of them. The loader had only ever been exercised
+    // against a synthetic runbook carrying no scope at all.
+    write(
+      'runbooks/scoped.md',
+      [
+        '---',
+        'id: rb.scoped',
+        'kind: runbook',
+        'version: 1.0.0',
+        'capability: cap.scoped',
+        'strictness: guided',
+        'scope:',
+        '  environments: [local, wpe_staging]',
+        '  writes: []',
+        '---',
+        'Prose.',
+        '',
+      ].join('\n')
+    );
+
+    const result = loadLawDirectory(dir);
+
+    expect(result.errors).toEqual([]);
+    expect(result.documents).toHaveLength(1);
+    // The structured value survives verbatim on frontmatter, where the runbook
+    // contract lives; the document's own scope falls back to the default rather
+    // than stringifying something that is not a namespace.
+    expect(result.documents[0].frontmatter.scope).toEqual({
+      environments: ['local', 'wpe_staging'],
+      writes: [],
+    });
+    expect(result.documents[0].scope).toBe('tenant');
+  });
+
+  it('still rejects a POLICY document whose scope is not a string', () => {
+    // The widening above must not cost the policy set its strictness: a policy
+    // scope is what constraints inherit, and 'tenant' silently substituted for a
+    // mistyped object would mislabel every constraint in the file.
+    write('policy/bad-scope.md', VALID_POLICY.replace('scope: tenant', 'scope:\n  environments: [local]'));
+
+    const result = loadLawDirectory(dir);
+
+    expect(result.documents).toEqual([]);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].reason).toMatch(/scope/);
+  });
+
+  it('stamps every document with a reproducible content hash and its canonical byte length', () => {
+    write('policy/test-policy.md', VALID_POLICY);
+
+    const doc = loadLawDirectory(dir).documents[0];
+
+    expect(doc.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(doc.canonicalBytes).toBe(Buffer.byteLength(VALID_POLICY, 'utf8'));
+  });
+
   it('returns an error for a missing directory rather than throwing', () => {
     const result = loadLawDirectory(path.join(dir, 'does-not-exist'));
 

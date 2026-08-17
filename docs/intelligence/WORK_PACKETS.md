@@ -5517,3 +5517,27 @@ then `./dev-reload.sh` rebuilt it back to Electron 42.2.0 for the real-app pass.
 - The zero-sync honesty is accepted as shipped-correct: the chip's first
   production appearance awaits the first real pull — which is also WP-14's
   producer's first production event. One action lights both.
+
+---
+
+### [ ] WP-20a · Runbook registry  *(phase 2 of WP-20, sub-packet 1 of 5)*
+
+**ANNOUNCED 2026-08-17 — CORE LOCK TAKEN** (`src/intelligence/law/` plus
+`src/main/intelligence-host/permissionsMirror.ts`, which is serialized with the
+core under the same owner-lock). Worktree `.worktrees/wp-20a`, branch `wp-20a`,
+base `poc/nexintelligence` @ `a570e90a`. The integration lock
+(`src/main/index.ts`, `ipc-handlers.ts`) is **not** needed and not taken:
+`initLawRegistry` is already called from `intelligence-host/bootstrap.ts`, so
+the runbook registry reaches the running process without an index.ts edit.
+
+Scope per §9-20a of `wp20-design-note.md`: the five runbooks copied verbatim
+into `law/runbooks/`; a `RunbookRegistry` keeping `body` and `frontmatter`
+(which `ConstraintRegistry` drops); zod validation of the four ADR-17-third-
+amendment fields; the content hash a grant pins; the 8 KB ceiling as a
+refusal; a small typed lookup surface for 20b/20c. **No delivery, no arming,
+no grants** — those are 20b/20c.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code taken
+before any pipe): **543 suites / 6912 passed / 12 skipped / 0 failed, exit 0** —
+identical to the figure WP-22b recorded at `a2a2645c`+merge, so the base is
+where the last packet left it.

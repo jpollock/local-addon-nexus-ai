@@ -59,9 +59,28 @@ export {
   LawDocument,
   LawLoadError,
   LawLoadResult,
+  // The runbook contract (WP-20a, ADR-17 third amendment) — 20b/20c read these.
+  ATTEST_CLASSES,
+  AttestClass,
+  Runbook,
+  RunbookArmingPredicate,
+  RunbookCheckpoint,
+  RunbookEvidence,
+  RunbookLoadError,
+  RunbookRefusalCode,
+  RunbookStrictness,
+  RunbookTool,
+  RUNBOOK_REFUSAL_CODES,
+  RUNBOOK_STRICTNESS,
+  ToolMode,
+  ToolScope,
+  TOOL_MODES,
+  TOOL_SCOPES,
 } from './law/types';
 export { loadLawDirectory, parseLawDocument } from './law/loader';
+export { canonicalDocumentText, canonicalByteLength, documentHash } from './law/hash';
 export { ConstraintRegistry, ConstraintFilter, LawDocumentMeta } from './law/registry';
+export { RunbookRegistry, RunbookFilter, STRICT_RUNBOOK_CEILING_BYTES } from './law/runbookRegistry';
 export {
   assemble,
   estimateTokens,
