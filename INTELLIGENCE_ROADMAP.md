@@ -39,7 +39,7 @@ sessions get their system prompt back).
 adoption); the id-freeze ruling; the implementation audit (A1–A9) proving the
 model adopts additively; the nine-layer testing strategy.
 
-## Now — three tracks, one page
+## Earlier waves — complete (see WORK_PACKETS for the record)
 
 *The rule for this phase: agents build what's already named; words get named
 before wave-2 code freezes them; the owner clears the small decision queue.*
@@ -78,6 +78,26 @@ before wave-2 code freezes them; the owner clears the small decision queue.*
 record — WP-14 finding), divergence measurable per flow in the controlled
 vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
 (WP-16/13/12b + 13b/13c) and the M2 sitting closed earlier the same day.
+
+## Now — Wave 3 (M3 opens)
+
+**Parallel, launch together:**
+- [ ] **WP-19** gateway emission — task.action/outcome/rationale events
+      *(unblocks 7 E-02 criteria; ChatService/registry seams)*
+- [ ] **WP-04d** phpVersions granularity unification *(ipc-handlers lock,
+      independent)*
+- [ ] **WP-12b** vacuous chat-history test port *(tests only; never ran in
+      Wave 1)*
+
+**Then, sequential on the core lock:**
+- [ ] **WP-21** assembler task frame + per-type routing (ADR-22 made real;
+      first consumer: the where-am-I `siteStatus()`)
+- [ ] **WP-20** procedure distribution *(B-03 is its acceptance eval; starts
+      with a design note to the owner, not code)*
+
+**Owner, standing:** worktree/branch housekeeping (wp-05/13/13b/13c/14/15/
+17/18); the AgentRegistry capture instruction; surface review when WP-21's
+user-visible language lands.
 
 ## Later — deliberately not now
 

@@ -3981,3 +3981,22 @@ backlog (WP-04d, plugins_only gap, AgentRegistry capture instruction
 still standing, headless CHAT_SEND seam), and the milestone cadence
 (surface review + eval sitting when M3's language lands).
 ════════════════════════════════════════════════════════════════════
+
+### [ ] WP-21 · Assembler task frame — per-type routing made real  *(M3; ADR-22's implementation; core lock; AFTER WP-19)*
+The reconciliation §7 row 1, now buildable on Wave 2's substrate.
+`AssembleRequest` gains an optional `frame?: { site?, workingCopy?,
+production?, routing? }` (audit F3's shape); absent ⇒ current behavior
+byte-identical (parity pin). `chatAssembly` builds the frame: workingCopy =
+the selected copy's entity; site via `siteOf()` (WP-14); production via the
+lineage/mirror edges where linked. Routing per ADR-22: freshness/state →
+workingCopy; episodic → site (already true, now explicit); semantic →
+flow-canonical where determinable; audience slots reserved (instruments are
+M4 — the routing table renders "no instrument source connected" honestly
+rather than pretending). The where-am-I data assembles here: the frame plus
+`divergence()` (WP-15) is everything S3's four-line status needs — expose a
+`siteStatus()` on the host module as the first consumer (chat answer path;
+UI later). Sequence AFTER WP-19 (both touch ChatService seams — the
+two-packets-one-file trigger, resolved by ordering). Pins: parity;
+per-plane routing observable through the real wired path; the four-line
+status renders in Controlled Vocabulary v1 exactly (docs finding №6:
+"development (at WP Engine)" on first session reference).
