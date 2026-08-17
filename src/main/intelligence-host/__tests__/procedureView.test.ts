@@ -160,6 +160,42 @@ describe('deriveCheckpointStates — a narrative checkpoint is never verified', 
     expect(consult.verified).toBe(true);
   });
 
+  it('isVerified refuses a hand-built state that claims a narrative checkpoint is attested', () => {
+    // The derivation cannot produce this. A surface CAN: a state assembled by
+    // hand, or replayed from an older payload, reaches `isVerified` directly —
+    // and that function is what a tick is rendered from, so it carries the rule
+    // itself rather than trusting its caller to have used the derivation.
+    expect(
+      isVerified({
+        id: 'cp.canary',
+        status: 'attested',
+        attest: 'narrative',
+        verified: true,
+        reason: null,
+        source: 'runbook',
+      })
+    ).toBe(false);
+    expect(
+      isVerified({
+        id: 'cp.approval',
+        status: 'attested',
+        attest: 'event',
+        verified: true,
+        reason: null,
+        source: 'runbook',
+      })
+    ).toBe(true);
+  });
+
+  it('nothing is ACTIVE in an aborted run, even before the abort point', () => {
+    // An abort at cp.backup with nothing attested: cp.consult-history is the
+    // first provable checkpoint and would otherwise be named as the next gate —
+    // inviting the actor to carry on with a run that has stopped.
+    const states = deriveCheckpointStates(runbook(), cursor(), { abortedAt: 'cp.backup' });
+    expect(states.filter((s) => s.status === 'active')).toHaveLength(0);
+    expect(states.find((s) => s.id === 'cp.backup')!.status).toBe('aborted');
+  });
+
   it('gives every narrative checkpoint the shipped "not verified" wording', () => {
     // The words are the ones nexus_load_procedure already tells the model. A
     // second vocabulary on the rail would let the transcript and the surface
@@ -456,6 +492,27 @@ describe('deriveAbortGroups', () => {
       { entityId: 'env_alpha', backupEventId: 'ev_backup_alpha' },
     ]);
   });
+
+  it('offers restore ONLY for sites whose backup is in the ledger', () => {
+    // "Restorable" is a promise, and the only thing that can support it is a
+    // backup act the gateway recorded. A done site with no backup event is
+    // still done — it just cannot be offered a restore it may not have.
+    const noBackup = [
+      action('ev_roll', 'bulk_plugin_update'),
+      outcome('ev_roll_alpha', 'ev_roll', 'bulk_plugin_update', 'success', 'env_alpha'),
+    ];
+    const groups = deriveAbortGroups({ events: noBackup, updateTool: 'bulk_plugin_update' });
+    expect(groups.done).toHaveLength(1);
+    expect(groups.done[0].backupEventId).toBeUndefined();
+
+    const notice = procedureAbortedEvent({
+      abortId: 'ab.mid-fleet-failure',
+      checkpointId: 'cp.roll-fleet',
+      reason: 'a site failed',
+      groups,
+    });
+    expect(notice.restore.perSite).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -478,5 +535,31 @@ describe('stream shapes', () => {
     expect(changed[0].status).toBe('attested');
     expect(changed[1].status).toBe('active');
     expect(diffCheckpointStates(after, after)).toEqual([]);
+  });
+
+  it('reports a checkpoint whose EVIDENCE changed even when its status did not', () => {
+    // The status is the same; what the platform can say about it is not. A diff
+    // that watched only `status` would leave a rail showing "attested from the
+    // ledger" after the event id behind it had been resolved.
+    const before = deriveCheckpointStates(runbook(), cursor({ attested: ['cp.consult-history'] }));
+    const after = deriveCheckpointStates(
+      runbook(),
+      cursor({
+        attested: ['cp.consult-history'],
+        evidence: { 'cp.consult-history': { eventId: 'ev_7', topic: 'task.context.assembled' } },
+      })
+    );
+    const changed = diffCheckpointStates(before, after);
+    expect(changed.map((c) => c.id)).toEqual(['cp.consult-history']);
+    expect(changed[0].status).toBe('attested');
+    expect(changed[0].evidence?.eventId).toBe('ev_7');
+  });
+
+  it('reports a checkpoint the previous state did not have at all', () => {
+    // A re-arm on an edited document, or a first render: every checkpoint is
+    // new, and a diff that treated "unknown before" as "unchanged" would render
+    // an empty rail.
+    const after = deriveCheckpointStates(runbook(), cursor());
+    expect(diffCheckpointStates([], after)).toHaveLength(after.length);
   });
 });
