@@ -148,13 +148,16 @@ function slotRef(frame: TaskFrame, slot: FrameSlot): EntityRef | undefined {
  * Two rules are load-bearing and neither is obvious:
  *
  * **Site scope INCLUDES the copy.** `Ledger.query`'s entity filter is an exact
- * id match against any role, and not every shipped producer dual-stamps the
- * `site` role — `intelligence-host/bootstrap.ts` emits drift as
- * `{ environment }` alone — while events already on disk can never be
- * re-stamped. So a Site-scoped episodic read that queried the Site id alone
- * would silently lose that producer's history, which is a regression dressed as
- * a routing improvement. The union IS the Site scope until every producer
- * conforms (audit A9's stamping discipline) and even then, for the old rows.
+ * id match against any role, and events already on disk can never be
+ * re-stamped. `intelligence-host/bootstrap.ts` emitted drift as
+ * `{ environment }` alone until WP-21b — every drift event written before it
+ * carries no `site` role, and a real ledger is mostly those rows. So a
+ * Site-scoped episodic read that queried the Site id alone would silently lose
+ * that history, which is a regression dressed as a routing improvement. WP-21b
+ * closed the PRODUCER gap (audit A9's stamping discipline: every producer now
+ * dual-stamps); the union stays until dual-stamped rows dominate, and it is a
+ * later packet's job to decide when that is. A dual-stamped event matched by
+ * both targets is deduped by event id below, so the union never doubles it.
  *
  * **Audience never falls back.** Every other plane degrades to the copy or to
  * the request's flat target list, because reading the nearest available thing is

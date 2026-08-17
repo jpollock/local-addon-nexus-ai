@@ -94,6 +94,11 @@ export function checkDriftEvent(event: unknown): string[] {
   if (typeof entity.environment !== 'string' || entity.environment === '') {
     say('entity.environment is missing — the drift is unattributed');
   }
+  // `entity.site` is deliberately NOT required. WP-21b started stamping it, but
+  // only where the graph knows the containment, and every drift event written
+  // before WP-21b lacks it — a real ledger is mostly those. Demanding it here
+  // would report a developer's whole drift history as broken, the same false
+  // red the schema-version awareness above exists to avoid.
 
   const actor = isRecord(event.actor) ? event.actor : {};
   if (typeof actor.id !== 'string' || !DRIFT_ACTOR_IDS.includes(actor.id)) {

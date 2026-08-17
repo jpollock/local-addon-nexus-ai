@@ -4865,7 +4865,7 @@ tool inventory now includes `nexus_where_am_i` beside `nexus_intelligence_health
   Vocabulary v1 in one sitting, batched with the pending OWNER-PENDING
   rationale criterion and WP-20's design note review.
 
-### [ ] WP-21b · Drift events gain the site role  *(micro; core-lock-adjacent; from WP-21 decision 2 / audit A9 finding)*
+### [x] WP-21b · Drift events gain the site role  *(micro; core-lock-adjacent; from WP-21 decision 2 / audit A9 finding)*
 `bootstrap.ts`'s drift emission stamps `entity: { environment }` only —
 the sole producer violating the dual-stamping discipline (A9). Add
 `site: siteOf(...)` where resolvable (omit-don't-fabricate where not —
@@ -4875,6 +4875,92 @@ construction; note this reasoning in a comment). Pin: new drift events
 carry both roles; old rows unaffected; `detect_drift` and the episodic
 union unchanged in output today (the union narrows in a LATER packet once
 dual-stamped rows dominate — do not narrow it here).
+
+**ANNOUNCE (core-lock-adjacent).** Worktree `wp-21b`, branch `wp-21b`, base
+`b267beaa`. Files held: `src/main/intelligence-host/bootstrap.ts` (the
+producer), `src/intelligence/assemble/assembler.ts` (comment only — its
+routing comment names bootstrap's old shape as the union's justification and
+would go stale the moment this lands), plus three test files. No other packet
+may hold `bootstrap.ts` concurrently.
+
+**WP-21b OUTCOME — done (branch `wp-21b`).** The last producer stamping a
+physical role alone now dual-stamps, and the union it forced is untouched.
+
+Receipt (`git diff --stat`, this branch against its base):
+
+    src/intelligence/assemble/assembler.ts                        | 17 ++--
+    src/intelligence/assemble/__tests__/frameRouting.test.ts       | 49 +++++-
+    src/main/intelligence-host/bootstrap.ts                        | 40 +++++-
+    src/main/intelligence-host/__tests__/driftStamping.test.ts     | 111 +++++++++
+    src/main/mcp/modules/fleet/__tests__/detectDrift.test.ts       | 56 +++++-
+    tests/e2e-intelligence/replay/invariants.ts                    |  5 +
+    6 files changed, 262 insertions(+), 16 deletions(-)
+
+**The change is six lines and one hoist.** `siteRoleFor(entityId)` wraps
+`entities?.siteOf(...)` in the producer's usual try/catch, and the emission
+becomes `entity: { environment: drift.entityId, ...(site ? { site } : {}) }`.
+The hoist is load-bearing and easy to miss: `let entities` was declared
+BELOW the fold that now closes over it, so leaving it there is a
+temporal-dead-zone throw waiting for the first fold tick, not a style point.
+
+**Three things this packet had to decide, none of them in the brief.**
+
+1. **Traversed, never derived — and the test proves the difference.**
+   `siteOf` is the only honest source. A derivation would mint
+   `local.site_id.logical`, which for a MIRRORED site is a DIFFERENT entity
+   from the Site `siteLinkMirror` established under `wpe.site_id`
+   (`siteEntityFor`, `siteLinkMirror.ts:173`) — the id-freeze split WP-14's
+   `resolveSite` exists to prevent. So the pin is a mirrored fixture: the
+   derived Site entity EXISTS as a row (the tap's own `ensure()` creates it)
+   and is the wrong answer. A derive-based implementation finds a plausible
+   id and fails the test.
+2. **The Site role does NOT double the episodic slice.** WP-16b's dedup by
+   event id already covers it (`collectEpisodic`, `seen`), so the union and
+   the new stamping compose correctly — but nothing pinned that interaction,
+   because before this packet no drift event could match both targets. It is
+   pinned now (`frameRouting.test.ts`), and mutation M08 confirms the dedup
+   is what does the work.
+3. **The replay invariant must NOT require the new role.** `checkDriftEvent`
+   runs against a developer's real ledger — 365 drift events measured at
+   WP-18, all pre-WP-21b — so requiring `entity.site` would report the whole
+   history as broken. Same false-red class the schema-version awareness there
+   already avoids; a comment now says so before someone "tightens" it.
+
+**What did NOT change, deliberately:** the payload and `drift.detected/2`
+(the packet's pre-ruling is right — `EntityRefs` is `Record<string, string>`
+and the validator's `entity` field is an open `z.record`, so an added role is
+extensible-by-construction, and the comment says exactly that); the
+Site ∪ copy union; `detect_drift`'s output, pinned by a two-core
+before/after comparison asserting byte-identical reports.
+
+**Test results.** Baseline measured IN the worktree, on a clean tree, before
+any change: **539 suites / 6841 passed / 12 skipped**. Final: **540 suites /
+6846 passed / 12 skipped**, zero failures — skipped UNCHANGED, so the delta
+(+1 suite, +5 tests: 3 in `driftStamping`, 1 each in `detectDrift` and
+`frameRouting`) is real coverage. `npx tsc -p . --noEmit` clean; eslint clean on every
+touched file and over the whole `src/intelligence/**` tree, so the ADR-16
+seam rule is verified to still fire.
+
+**Mutation battery: 8/8 caught** — role never stamped; unresolvable Site
+filled with the environment id (fabrication); physical role dropped for the
+logical one; try/catch removed (a faulty entity service taking the drift
+event with it); schema bumped to `/3`; `detect_drift` re-scoped onto the new
+role; the episodic union narrowed; the dedup removed.
+
+**A process finding worth keeping — PROPOSED protocol amendment, not applied
+(`PARALLEL_PROTOCOL.md` is owner territory).** Two traps in the same family as
+the `npx jest` one WP-22 added, both hit this session. The proposed text for
+the Test-environment section: *"Baseline before you edit, and keep the tree
+clean while the run is in flight — jest reads each suite file when it reaches
+it, so a tree edited mid-run yields a baseline that is partly pre-change and
+partly post-change, with nothing in the output saying which. And capture the
+whole run to a file: jest's totals go to stderr and interleave with the PASS
+lines, so `npm test | tail -N` can silently keep a stack-trace fragment
+instead of the summary — redirect, then grep `^Tests:`."* Both were real
+losses, not hypotheticals: the first baseline was discarded and re-measured
+with the work stashed; the second exited 0 and reported nothing, which is the
+worse failure, because a green exit code with no numbers reads as a
+successful measurement. The baseline quoted above is the third run.
 
 ### [x] WP-22 · Site context into the chat — wire it AND show it  *(from the owner's live where-am-I test; renderer + panel; the designer's "Currently in" strip)*
 Diagnosis (verified): `PanelChat.tsx:503` sends `siteId =
