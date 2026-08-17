@@ -184,7 +184,7 @@ Nothing in M1/M2 changes retroactively: the entity model already conforms
 (ADR-4, WP-07); this document adds the working-copy layer, the routing table,
 and the surface contract on top of shipped substrate.
 
-## 8. Candidate ADRs (for adoption into architecture.md)
+## 8. Candidate ADRs — **ADOPTED 2026-08-17** (now ADRs 21–23 in architecture.md; the versions there, which carry the audit's id-freeze ruling, are authoritative)
 
 - **ADR-21 · Three-layer identity: Site / Environment / Working copy.**
   Working copies are entities with stable identity and per-flow moving
