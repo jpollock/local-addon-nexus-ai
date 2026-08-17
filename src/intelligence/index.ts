@@ -31,6 +31,25 @@ export {
   ResolveCandidate,
   PairingProposal,
 } from './entity/entityService';
+export {
+  divergence,
+  compareNumericVersions,
+  DivergenceDeps,
+  DivergenceReport,
+  ContentDivergence,
+  ContentReason,
+  CodeDivergence,
+  CodeItem,
+  CodeItemSide,
+  CodeItemStatus,
+  CodeDirection,
+  SideObservation,
+  SyncAnchor,
+  SyncFlow,
+  SyncDirection,
+  UpstreamCandidate,
+  UpstreamVia,
+} from './compare/divergence';
 export { HostPorts, ClockPort, IdentityPort, StoragePort, systemClock } from './host/ports';
 export {
   Constraint,

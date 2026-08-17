@@ -61,7 +61,28 @@ export interface SyncProducerDeps {
   getDb: () => GraphDbLike | null | undefined;
 }
 
-export type SyncFlow = 'content' | 'code' | 'full';
+/**
+ * WP-14's owner question, RULED by the architect when adjudicating it: the
+ * union gains `'unknown'` so a sync whose contents could not be determined can
+ * say so rather than being filed under a conservative `'code'`. WP-15 renders
+ * it ("a sync happened; what it included couldn't be determined").
+ *
+ * `deriveSyncFacts` below does not currently produce it, and that is not an
+ * oversight — at THIS seam the flow genuinely is determined. WP-14's scouting
+ * established that Local emits the database phase label under a strict
+ * `if (includeSql)` guard and that no other label in either service contains
+ * the word, so an absent label means an absent database. The only failure mode
+ * is a false NEGATIVE, and only if WP Engine changes that copy. Emitting
+ * `'unknown'` for every files-only pull would throw away a sound inference to
+ * express a doubt the seam does not actually have.
+ *
+ * What WOULD produce it: a second observation seam with no equivalent tell (a
+ * different sync implementation, a coarser IPC stream), or this one after the
+ * label check starts failing. The reader handles the value today, which is
+ * also what lets it render an event from a future or foreign producer without
+ * guessing.
+ */
+export type SyncFlow = 'content' | 'code' | 'full' | 'unknown';
 
 /** The producer's decision, exposed for tests and for the lineage step. */
 export interface SyncFacts {

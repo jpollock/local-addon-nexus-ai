@@ -2674,7 +2674,181 @@ value is in the scout note above.
 **ABI state: better-sqlite3 is built for SYSTEM NODE** (jest ran here). Run
 `npm run rebuild` before loading Local.
 
-### [ ] WP-15 · Divergence comparator + lineage-aware drift unification  *(M3; depends WP-14 — audit A5)*
+### [x] WP-15 · Divergence comparator + lineage-aware drift unification  **(DELIVERED 2026-08-17 — outcome + findings below)**
+
+**ANNOUNCED 2026-08-17 — core lock held and released** (worktree `wp-15`,
+branch `wp-15`, base 57ef222a). Baseline in-worktree BEFORE any change:
+**527 suites / 6643 passed / 12 skipped / 6655 total / 0 failed.**
+
+#### OUTCOME — all three parts, plus both folded one-liners
+
+**1 · The comparator** — `src/intelligence/compare/divergence.ts`,
+`divergence(copyEntityId, {ledger, twins, entities?, now?})`. Resolves the
+upstream from the links, diffs `forEntity(copy)` against `forEntity(upstream)`
+by fact key, reports **per flow with per-side freshness**, anchored on the last
+`episodic.sync.*` event. `EntityService` gained two reads for it —
+`linksOf(from, kind)` and `linksOfKind(kind)`; `environmentsOf` /
+`workingCopiesOf` now delegate to the first and keep their published
+three-field shape (a shipped `toEqual` pin caught the widened row on the first
+run — parity is not only about tool output).
+
+**Units are per flow, structurally, not by convention.** `ContentDivergence`
+has no item field and `CodeDivergence` has no time field, so the docs' finding
+№3 cannot be violated by a later "helpful" unification without deleting a type.
+Content is an age because nothing in the twin substrate observes posts (finding
+№5, honestly); code is items because plugins, themes and the WordPress version
+are the things a pull or a push moves.
+
+**Pair resolution, in evidence order:** `content_pulled_from` (an OBSERVED
+pull, so it outranks any structural link however confident — a `user_link`
+says two things belong together, not that content came from one of them) →
+the Site's environments by `site_links` precedence, **minus the copy and minus
+every other working copy** (which is what WP-14's `has_working_copy` edge is
+for — `environmentsOf` alone would offer a colleague's sandbox as an upstream)
+→ **decline**. Two equally-confident candidates return nothing: an unordered
+first-row-wins over them is a coin toss whose losing side is a confident report
+about the wrong production install.
+
+**Three absences stay three answers** — no lineage at all, lineage but no
+recorded sync, and a sync whose contents could not be determined. Each renders
+differently because each has a different remedy; merging any pair discards the
+only thing the user could act on.
+
+**2 · The legacy enrichment** — `wpe_detect_drift` gains an APPENDED section
+(audit A5: right measurement, wrong substrate). Legacy output survives
+character for character, pinned with `startsWith`. The pair comes from the
+links, not from `hostConnections`: a copy whose recorded pull points at staging
+while Local's connection setting still names production is compared against
+**staging**, with the legacy half of the same report still showing production —
+the disagreement is the information. Copies the links know about that this
+tool's own population never covered are named, never merged in (the
+pattern's population-level drift-hint variant). Copy ids are derived PURELY
+(`provisionalEnvironmentId`), so the enrichment cannot mint what it joins on.
+
+**3 · The two folded one-liners.** The startup health summary logs at **WARN**
+when something that counts is degraded (`healthLogLevel`, one line in
+`index.ts`) — WP-18's finding 2: Local's main log shows warn and error only, so
+the line proving the layer was alive at boot was invisible in the log people
+read. And the Controlled Vocabulary is enforced **as a test**, scanning every
+rendered line in every branch for reserved and internal words.
+
+#### The judgment calls, recorded because they are not the literal reading
+
+1. **`state.divergence.detected` is NOT emitted.** The packet allows it; the
+   invariant "the comparator is read-side" forbids it. A read that writes
+   produces events at a rate driven by *how often someone looks*, which is not
+   a fact about the fleet — and the ledger records change, not observation. The
+   change gate cannot rescue that: it dedups repetition of a VALUE, while the
+   thing being repeated here is the act of asking. Consequence, stated so it is
+   not discovered later: there is no `divergence` liveness line in WP-17's
+   table, correctly, because there is no producer.
+2. **"WARN when any line is not OK" is implemented as `worst !== 'OK'`**, which
+   excludes `countsTowardWorst: false` lines. Taken literally, the packet's
+   wording would warn on every boot forever at any developer without a WP
+   Engine account, because their never-observed producer lines are permanently
+   DARK — inverting WP-17's ratified doctrine (never-observed ≠ degradation)
+   and teaching the user to ignore the summary, which is how silence gets
+   certified. Both directions are pinned, including a mutation that switches to
+   the literal reading.
+3. **The `'unknown'` flow ruling is delivered as a READER capability plus the
+   union widening — `deriveSyncFacts` still classifies as it did.** The union
+   in `syncProducer.ts` now carries `'unknown'` (the ruling's instruction) and
+   the comparator normalises any unrecognised or absent value to it. What was
+   NOT done, deliberately: making the producer emit it for an undeclared,
+   no-database-phase sync. At that seam the flow genuinely IS determined —
+   WP-14 established that the phase label is strictly `if (includeSql)`-guarded
+   with no false-positive path, so an absent label means an absent database.
+   Emitting `'unknown'` there would discard a sound inference to express a
+   doubt the seam does not have, and would relabel every ordinary files-only
+   pull as undetermined. The reader branch is not dead: it is what lets an
+   event from a future, foreign or truncated producer render without guessing.
+   **If the architect intended the producer half too, it is one line in
+   `deriveSyncFacts` plus its pin — flagged rather than taken.**
+
+#### Findings
+
+- **A shipped read's row shape is part of its contract.** Consolidating
+  `environmentsOf`/`workingCopiesOf` onto `linksOf` added an `at` field to
+  their rows — invisible to every consumer, fatal to `entityService.test.ts`'s
+  `toEqual`. The test was right: a widened row IS an output change. The two
+  named traversals now strip it.
+- **A forbidden-word list exported from production and imported by the test
+  that enforces it is not a gate.** Deleting a word from it makes the test
+  pass. The vocabulary list was moved INTO the test, which owns its own oracle.
+  Worth generalising: any test whose expectations are imported from the module
+  under test can only ever assert self-consistency.
+- **A poisoned ts-jest transform cache reported a failure that did not
+  exist.** `tests/intelligence-evals/sitting.test.ts` failed to parse in this
+  worktree (shebang in `sitting.ts` reaching the sandbox untransformed) while
+  passing in the primary checkout and passing here under `--no-cache`;
+  `npx jest --clearCache` fixed it permanently. Recording it because the
+  protocol tells agents to baseline counts in the worktree and diff them — and
+  this is a way for that diff to lie in BOTH directions. If a suite fails in a
+  fresh worktree and nothing you touched can explain it, clear the cache before
+  diagnosing a regression.
+- **One vacuous pin, caught by the battery and fixed.** The per-side freshness
+  assertion gave every fact on a side the same timestamp, so "stalest" and
+  "freshest" were the same value and inverting the reduction survived. The
+  fixture now holds two ages per side. (Fifth entry for the
+  `feedback_vacuous_guard_shapes` family: *a fixture in which two different
+  reductions cannot disagree*.)
+- **`plugins_only=true` with no plugin differences returns before the
+  enrichment.** The legacy tool early-returns "No drift detected across linked
+  sites"; the appended section therefore does not render on that path, so a
+  copy that is in sync on code and sixty days behind on content says nothing
+  there. Left as is: `plugins_only` is a request about plugins, and the default
+  path (every non-filtered call) always renders. Named rather than left to be
+  discovered. The same is true of the "No local sites are linked to WP Engine
+  installs" early return, where the links may know of pairs Local's own
+  settings do not.
+
+#### Pins
+
+**20** in `divergence.test.ts`, **10** in `divergenceReport.test.ts`, **5** in
+`detectDriftEnrichment.test.ts`, **+1** in `health.test.ts`. The ones that
+carry the packet: a comparison leaves `entities`, `entity_aliases`,
+`entity_links`, `events` and `twin_facts` row counts unmoved (including for an
+entity id the ledger has never seen — the case most likely to tempt a
+derivation); the newest sync is the anchor and a push never moves the content
+one; a files-only pull is not a content pull; the three absences render as
+three different sentences; content lineage outranks a more-confident structural
+link; a tie declines; a sibling working copy and a copy carrying only the
+pre-WP-14 `has_environment` edge are both excluded from candidates; an
+incomparable version pair is `changed`, never a direction; `site.core` is
+compared field by field so identity and PHP never read as code differences; the
+legacy report survives character for character; and no rendered line in any
+branch contains a reserved word or an entity id.
+
+**Mutation battery: 33/33 caught**, each anchored to a production line with a
+named witness (34 runs — M16 SURVIVED first, exposing the vacuous fixture
+above, and was re-run green after the fixture was fixed). Worth recording:
+"the comparator ensure()s while resolving" (the id freeze), "`link` ordering
+by confidence ASC" (site_links precedence inverted), "a tie picks the first
+row", "behind and ahead inverted", "the WordPress version compared as PHP",
+"the enrichment is prepended" (parity), "the compared site is named from the
+caller instead of from what was observed", and both directions of the health
+log level.
+
+**Unpinned by construction, disclosed:** the `src/main/index.ts` call site
+itself (no unit harness for `index.ts` — the same survivor WP-17 disclosed and
+WP-18's e2e journey owns; the decision it calls, `healthLogLevel`, is pinned
+both ways). Nothing else in this packet is unpinned.
+
+**Counts.** Baseline **527 suites / 6643 passed / 12 skipped / 6655 total / 0
+failed**. After: **530 suites / 6679 passed / 12 skipped / 6691 total / 0
+failed** — +3 suites, +36 tests, **skipped unchanged** (so the delta is new
+tests, not artifact-gated drift). `npx tsc -p . --noEmit` and
+`npx tsc -p tsconfig.test.json --noEmit` both clean; eslint clean on every
+changed file. The ADR-16 seam rule was probed live on the new core file
+(an `electron` import in `divergence.ts` produced the `no-restricted-imports`
+error, then reverted).
+
+**ABI: better-sqlite3 is built for SYSTEM NODE** (jest ran here, repeatedly).
+Run `npm run rebuild` before loading the addon in Local. Measured in this
+session: system Node **v25.9.0 → ABI 141** (`.nvmrc` still pins 22.16.0 → ABI
+127 for CI).
+
+*Original packet text:*
 Cross-entity divergence (copy twins vs upstream twins) is a new READ-side
 comparator, not a fold change: `divergence(copyEntityId)` resolves
 upstream(s) via WP-14's links, diffs `forEntity(A)` vs `forEntity(B)` by

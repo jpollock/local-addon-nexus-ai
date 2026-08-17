@@ -14,6 +14,9 @@
 import { McpToolHandler } from '../../types';
 import { requireLocalServices } from './helpers';
 import { compareVersions } from '../fleet/version-utils';
+import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
+import { provisionalEnvironmentId } from '../../../intelligence-host/provisionalEntity';
+import { buildDivergenceEnrichment } from '../../../intelligence-host/divergenceReport';
 
 interface PluginRow {
   slug: string;
@@ -23,6 +26,8 @@ interface PluginRow {
 }
 
 interface DriftSite {
+  /** Carried for the WP-15 enrichment only; nothing in the legacy output uses it. */
+  localId: string;
   localName: string;
   wpeName: string;
   local: { wp_version: string | null; php_version: string | null };
@@ -179,6 +184,7 @@ export const detectDriftHandler: McpToolHandler = {
       }
 
       results.push({
+        localId,
         localName,
         wpeName,
         local: { wp_version: localWp, php_version: null },
@@ -235,6 +241,33 @@ export const detectDriftHandler: McpToolHandler = {
     const drifted = results.length - inSync;
     lines.push(`---`);
     lines.push(`${results.length} linked site${results.length !== 1 ? 's' : ''} checked · ${drifted} with drift · ${inSync} fully in sync`);
+
+    // ── WP-15 · the comparator, APPENDED (audit A5) ────────────────────────
+    //
+    // The legacy report above answers the right question on the wrong
+    // substrate: it pairs a local site with an install by `hostConnections`
+    // NAME, which cannot see `site_links` precedence, cannot tell a pull from
+    // a push, and has no notion of which flow a difference belongs to. This
+    // block asks the same question of the lineage links and appends the
+    // answer — everything above it renders exactly as it did before, whether
+    // or not the core is up, which is what the parity pin asserts.
+    //
+    // The copy ids are derived PURELY. A read must never mint an entity
+    // (ADR-21's id freeze); `provisionalEnvironmentId` is the pure half of the
+    // same derivation the producers ensure() through, so it joins to existing
+    // history without being able to create any.
+    try {
+      const core = getIntelligenceCore();
+      if (core) {
+        const section = buildDivergenceEnrichment(
+          core,
+          results.map((r) => ({ entityId: provisionalEnvironmentId(r.localId), label: r.localName })),
+        );
+        if (section.length > 0) lines.push('', ...section);
+      }
+    } catch {
+      /* enrichment is optional — the legacy report stands alone */
+    }
 
     return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
   },

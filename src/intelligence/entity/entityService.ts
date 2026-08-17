@@ -223,19 +223,71 @@ export class EntityService {
     tx();
   }
 
-  environmentsOf(siteEntity: string): Array<{ entityId: string; confidence: number; establishedBy: string }> {
+  /**
+   * Every outbound link of one kind, strongest evidence first — the generic
+   * read the two named traversals below are specializations of.
+   *
+   * WP-15 needs it for `content_pulled_from`, and adding a third hand-copied
+   * SQL string for that would have been the drift this consolidates. `at` is
+   * carried because a lineage edge's timestamp IS the fact for a lineage
+   * reader (`linkExclusive` writes the pull time there); the two named
+   * traversals ignore it and keep their published shape.
+   */
+  linksOf(
+    fromEntity: string,
+    kind: string
+  ): Array<{ entityId: string; confidence: number; establishedBy: string; at: string }> {
     const rows = this.ledger
       .raw()
       .prepare(
-        `SELECT to_entity, confidence, established_by FROM entity_links
-         WHERE from_entity = ? AND kind = 'has_environment' ORDER BY confidence DESC`
+        `SELECT to_entity, confidence, established_by, created_at FROM entity_links
+         WHERE from_entity = ? AND kind = ? ORDER BY confidence DESC`
       )
-      .all(siteEntity) as Array<Record<string, unknown>>;
+      .all(fromEntity, kind) as Array<Record<string, unknown>>;
     return rows.map((r) => ({
       entityId: String(r.to_entity),
       confidence: Number(r.confidence),
       establishedBy: String(r.established_by),
+      at: String(r.created_at),
     }));
+  }
+
+  /**
+   * Every edge of one kind, fleet-wide — the population read.
+   *
+   * WP-15 needs it to answer "which copies have a recorded pull that this
+   * report never covered", which is the *population-level* ledger-vs-cache
+   * disagreement the reader-migration pattern asks each migrated tool to
+   * surface. A per-entity traversal structurally cannot see it: the whole
+   * point is the entities the caller never thought to ask about.
+   */
+  linksOfKind(
+    kind: string
+  ): Array<{
+    fromEntity: string;
+    entityId: string;
+    confidence: number;
+    establishedBy: string;
+    at: string;
+  }> {
+    const rows = this.ledger
+      .raw()
+      .prepare(
+        `SELECT from_entity, to_entity, confidence, established_by, created_at
+           FROM entity_links WHERE kind = ? ORDER BY from_entity`
+      )
+      .all(kind) as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      fromEntity: String(r.from_entity),
+      entityId: String(r.to_entity),
+      confidence: Number(r.confidence),
+      establishedBy: String(r.established_by),
+      at: String(r.created_at),
+    }));
+  }
+
+  environmentsOf(siteEntity: string): Array<{ entityId: string; confidence: number; establishedBy: string }> {
+    return this.linksOf(siteEntity, 'has_environment').map(withoutAt);
   }
 
   /**
@@ -277,18 +329,7 @@ export class EntityService {
    * `has_working_copy` is written alongside it.
    */
   workingCopiesOf(siteEntity: string): Array<{ entityId: string; confidence: number; establishedBy: string }> {
-    const rows = this.ledger
-      .raw()
-      .prepare(
-        `SELECT to_entity, confidence, established_by FROM entity_links
-         WHERE from_entity = ? AND kind = 'has_working_copy' ORDER BY confidence DESC`
-      )
-      .all(siteEntity) as Array<Record<string, unknown>>;
-    return rows.map((r) => ({
-      entityId: String(r.to_entity),
-      confidence: Number(r.confidence),
-      establishedBy: String(r.established_by),
-    }));
+    return this.linksOf(siteEntity, 'has_working_copy').map(withoutAt);
   }
 
   /**
@@ -345,6 +386,21 @@ export class EntityService {
     }
     return proposals.sort((x, y) => y.confidence - x.confidence);
   }
+}
+
+/**
+ * The two named traversals publish exactly three fields, and a shipped test
+ * deep-equals their rows. `linksOf` carries `at` for the lineage readers; the
+ * specializations drop it so their output stays byte-identical to before the
+ * consolidation — a widened row is still an output change.
+ */
+function withoutAt(r: {
+  entityId: string;
+  confidence: number;
+  establishedBy: string;
+  at: string;
+}): { entityId: string; confidence: number; establishedBy: string } {
+  return { entityId: r.entityId, confidence: r.confidence, establishedBy: r.establishedBy };
 }
 
 function normalizeDomain(d: string): string {
