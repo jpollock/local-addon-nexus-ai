@@ -46,8 +46,12 @@ working copy has:
   facts (correct: it diverges the moment it is touched).
 - **Per-flow upstream pointers, which MOVE** — pulled from production
   Tuesday, pushed to staging Thursday: same entity, different lineage edges
-  over time. Local's sync history already records these operations —
-  *outside* the ledger. **(Corrected per the 2026-08-16 implementation
+  over time. Local's sync history was BELIEVED to record these
+  operations outside the ledger — **WP-14's scouting corrected this too:
+  Local persists no durable sync history for the WPE flow at all. The
+  WP-14 producer's `episodic.sync.*` events are therefore the ONLY durable
+  lineage record — the ledger is not mirroring a record, it IS the
+  record.** **(Corrected per the 2026-08-16 implementation
   audit, `implementation-audit-three-layer.md` A4: no producer emits sync
   events yet — `OperationTracker` observes pull/push but is not connected to
   the core, and the `pull_lineage` EstablishedBy ships dormant. The ledger

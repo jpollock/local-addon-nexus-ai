@@ -3730,3 +3730,45 @@ loading the addon in Local.
 - **On the record:** `createPluginTwinFold` has zero production callers —
   a previously invisible fact, now a permanent health line. The health
   surface found its first finding before it ever ran in production.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-14 + WP-18 (appended by the architect session).**
+
+- **WP-14 ACCEPTED.** Merge 339008c8. The seam verdict (OperationTracker as
+  the funnel, handlers as enrichers) is ratified WITH its reasoning — the
+  bias argument (a handler-only seam would make agent-driven pulls look
+  complete while UI pulls vanish, corrupting WP-15's "since the last sync
+  at T") is exactly the right way to pick observation seams; adopted as
+  doctrine. Both wrong premises are corrected in the record: audit A4 now
+  carries the linkExclusive() correction; the reconciliation doc §2 now
+  states the ledger IS the lineage record (Local persists no durable WPE
+  sync history) — the packet's producers are load-bearing, not mirroring.
+  siteOf() closing the A7-shaped trap via a COUNT(*) pin on first run is
+  the entity-count pin earning permanent-fixture status. The deliberate
+  omissions (.promoted unobservable; tracks_code/code_ref pointing at
+  nothing) are accepted with reasons recorded.
+- **WP-14 owner question RULED: add 'unknown' to the flow union.** The
+  honesty doctrine governs — stated uncertainty beats conservative
+  silence; a reader seeing flow:'unknown' can say "a sync happened; what
+  it included couldn't be determined," which is the true sentence. Folded
+  into WP-15 (its reader renders it).
+- **WP-18 ACCEPTED.** Merge 03980871. Everything live-tested (26/26;
+  replay identical over 9,472 real events with a mutation-proven
+  non-vacuous comparison) — the strongest live verification of the
+  project. Finding 1 (two drift actor ids across the /1→/2 rename) is
+  accepted as historical artifact, checker fixed; NOTE the cross-link:
+  this rename is also why `createPluginTwinFold` has zero callers (WP-17's
+  health finding) — one renaming event, two independent detections.
+  Finding 2 (health startup line invisible in the warn/error-only main
+  log) yields a one-line improvement FOLDED INTO WP-15: the startup health
+  summary logs at WARN when any line is not OK (info when all-OK), so
+  degradation is visible in the log people actually read. The chat-turn
+  journey gap is accepted as honestly scoped; a headless CHAT_SEND seam is
+  future-packet territory (noted beside surfaces B/C/D).
+- **WP-15 SCOPE ADDITIONS (from these rulings):** render flow:'unknown';
+  the WARN-level startup health summary (one line in bootstrap).
+- Cleanup for the owner: `git worktree remove .worktrees/wp-05
+  .worktrees/wp-13 .worktrees/wp-14 .worktrees/wp-17 .worktrees/wp-18`
+  (one at a time if the multi-arg form complains) + `git branch -d` the
+  merged branches; `nexus sites stop nexus-e2e-test@local` if wanted.

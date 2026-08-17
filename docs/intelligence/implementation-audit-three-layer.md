@@ -68,8 +68,13 @@ emission sites: no producer emits any pull/push/promote/sync event.
 connected to the core; the `'pull_lineage'` EstablishedBy value is shipped
 but dormant — nothing passes it. Local's own sync history exists, but outside
 the layer. Content lineage FITS the shipped schema with zero change
-(`link(copy, prodEnv, 'content_pulled_from', 1.0, 'pull_lineage', at=pullTime)`
-— the PK upserts, so the pointer MOVES as the model requires). Code lineage
+(`link(copy, prodEnv, 'content_pulled_from', 1.0, 'pull_lineage', at=pullTime)`).
+**Corrected at WP-14: the "PK upserts, so the pointer MOVES" mechanism was
+half-false** — the PK is (from, to, kind), so re-pulling from the SAME
+environment upserts, but pulling from a DIFFERENT one inserts a second
+edge, leaving a copy claiming two content origins at once. WP-14 built
+`linkExclusive()` (which never retires a user_link) to make the pointer
+genuinely exclusive-move. Caught by a failing pin, not by reading. Code lineage
 (branch/sha) does not fit links (a sha is not an entity); it rides event
 payloads (`code_ref`) per the model, or a v3 `entity_links.detail` column.
 → **WP-14 registered** (the sync producer). The reconciliation doc §2 is
