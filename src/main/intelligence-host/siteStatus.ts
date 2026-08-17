@@ -161,7 +161,7 @@ export function renderSiteStatus(model: SiteStatusModel): string[] {
 
 function contentLine(content: SiteStatusModel['content']): string {
   if (content.state === 'pulled') {
-    return `Content: pulled from ${content.sourceName}, ${duration(content.behindSeconds ?? 0)} ago.`;
+    return `Content: pulled from ${content.sourceName}, ${durationPhrase(content.behindSeconds ?? 0)} ago.`;
   }
   if (content.state === 'no-sync') {
     return (
@@ -183,8 +183,14 @@ function contentLine(content: SiteStatusModel['content']): string {
  * A plain-English duration. Long form ("11 days"), not the fleet tools' compact
  * "11d", because this sentence is read aloud by the model in a reply — the two
  * surfaces render the same fact for different readers.
+ *
+ * Exported for WP-22b: the docked panel's content-age chip renders the same age in
+ * the same words, and the renderer bundle cannot import this one. Its copy lives in
+ * `renderer/components/DockedPanel/siteContextModel.ts` and the two are pinned
+ * together by a shared case table in `tests/unit/renderer/contentAgePhrase.test.ts`
+ * — the same duplicated-rule discipline as `localDay` and `resolveAgentCron`.
  */
-function duration(seconds: number): string {
+export function durationPhrase(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 3600) return 'less than an hour';
   if (seconds < 86_400) return plural(Math.round(seconds / 3600), 'hour');
   return plural(Math.round(seconds / 86_400), 'day');

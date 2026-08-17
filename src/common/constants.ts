@@ -14,6 +14,11 @@ export const IPC_CHANNELS = {
   // One row per site across Local, WP Engine and external SSH hosts, for the
   // Sites table. Distinct from GET_SITES, which is local-only.
   GET_SITE_ROWS: `${ADDON_PREFIX}:sites:rows`,
+  // WP-22b: what the record says about where a Local copy's content came from and
+  // how far behind it is. Read-only, one Local site id in. Distinct from every other
+  // site channel here, which carry INDEX ages (`created_at`, `content_indexed_at`) —
+  // when Nexus last read the site, not when the site last pulled from the live one.
+  GET_SITE_CONTENT_STATUS: `${ADDON_PREFIX}:site:content-status`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
   GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
   START_SITE: `${ADDON_PREFIX}:start-site`,

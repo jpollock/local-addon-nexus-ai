@@ -42,8 +42,25 @@ export interface StripCopy {
   primary: string;
   /** The disclosure line. Present only when there is something the user cannot see. */
   secondary?: string;
+  /** The content age. Present ONLY when a pull is on record — see `contentAgeChip`. */
+  chip?: string;
   /** What the affordance beside the line says. */
   actionLabel: string;
+}
+
+/**
+ * WP-22b · what the one IPC channel carries back, mirrored (`intelligence-host/
+ * siteContentStatus.ts` is the producer).
+ *
+ * `null` from that channel is a FOURTH state, not a fallback: it means Nexus AI is
+ * not recording, which is a fact about Nexus AI. The three states below are facts
+ * about the copy, each with its own remedy. The chip is silent for all four except
+ * `pulled`, but they arrive distinct so a later surface can still tell them apart.
+ */
+export interface SiteContentStatus {
+  state: 'pulled' | 'no-sync' | 'ambiguous' | 'unlinked';
+  sourceName?: string;
+  behindSeconds?: number;
 }
 
 /**
@@ -105,8 +122,11 @@ export function stripCopy(input: {
   siteName: string | null;
   /** The site on screen, when a site page is open. */
   viewedSiteName: string | null;
+  /** What the record says about this copy's content. Absent until the read answers. */
+  content?: SiteContentStatus | null;
 }): StripCopy {
   if (input.mode === 'none') {
+    // No site, so no copy, so no content age. There is nothing for a chip to be about.
     return {
       primary: 'No site selected — answers will be fleet-wide',
       actionLabel: 'Choose a site',
@@ -114,17 +134,91 @@ export function stripCopy(input: {
   }
 
   const primary = `Currently in: ${input.siteName} — your copy`;
+  const chip = contentAgeChip(input.content);
 
   if (input.mode === 'viewed') {
-    return { primary, actionLabel: 'Change' };
+    return { primary, ...(chip ? { chip } : {}), actionLabel: 'Change' };
   }
 
   const elsewhere = input.viewedSiteName && input.viewedSiteName !== input.siteName;
   return {
     primary,
+    ...(chip ? { chip } : {}),
     secondary: elsewhere
       ? `You're viewing ${input.viewedSiteName} — it stays on ${input.siteName} until you clear it.`
       : 'You chose this site — it stays until you clear it.',
     actionLabel: 'Clear',
   };
+}
+
+/**
+ * The IPC boundary's guard: anything that is not recognisably a content status
+ * becomes `null`, which is already a state this surface renders correctly.
+ *
+ * The chip's own conditions would refuse a malformed payload anyway; this exists so
+ * a shape nobody designed for cannot be carried around in component state and read
+ * by some later consumer as though the boundary had vouched for it.
+ */
+export function asContentStatus(value: unknown): SiteContentStatus | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as { state?: unknown; sourceName?: unknown; behindSeconds?: unknown };
+  if (
+    row.state !== 'pulled' &&
+    row.state !== 'no-sync' &&
+    row.state !== 'ambiguous' &&
+    row.state !== 'unlinked'
+  ) {
+    return null;
+  }
+  return {
+    state: row.state,
+    ...(typeof row.sourceName === 'string' && row.sourceName ? { sourceName: row.sourceName } : {}),
+    ...(typeof row.behindSeconds === 'number' && Number.isFinite(row.behindSeconds)
+      ? { behindSeconds: row.behindSeconds }
+      : {}),
+  };
+}
+
+/**
+ * WP-22b · the content-age chip, or nothing.
+ *
+ * Controlled Vocabulary v1: **"pulled from <source> <time> ago"**, and the unit is
+ * TIME (docs finding №3 — content is measured in time, code in items; a chip
+ * carrying an item count would be the other flow's fact in this one's words).
+ *
+ * **Omit, never "unknown"** (WP-16 doctrine). Three of the four things the read can
+ * say are absences with different remedies — no recorded sync, more than one place
+ * it could have come from, nothing on record at all — and a chip reading "content
+ * age unknown" would collapse them into one shrug while taking up the space where
+ * the answer goes. The prose form (`nexus_where_am_i`) is where those absences are
+ * explained; a five-word chip cannot do it and must not pretend to.
+ *
+ * An age with no source, or a source with no age, is likewise not rendered: half of
+ * this sentence is not a shorter sentence, it is a different claim.
+ */
+export function contentAgeChip(content: SiteContentStatus | null | undefined): string | null {
+  if (!content || content.state !== 'pulled') return null;
+  if (!content.sourceName) return null;
+  const seconds = content.behindSeconds;
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return null;
+  return `Pulled from ${content.sourceName} ${durationPhrase(seconds)} ago`;
+}
+
+/**
+ * The same plain-English duration `siteStatus.ts` renders into its prose line.
+ *
+ * It exists twice because main and renderer do not share a bundle — the same reason
+ * `localDay` and `resolveAgentCron` do — and the two copies are pinned together over
+ * a shared case table in `tests/unit/renderer/contentAgePhrase.test.ts`. Change one
+ * and that test fails; change neither and the chip and the "where am I?" answer can
+ * never disagree about how old the same copy is.
+ */
+function durationPhrase(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 3600) return 'less than an hour';
+  if (seconds < 86_400) return plural(Math.round(seconds / 3600), 'hour');
+  return plural(Math.round(seconds / 86_400), 'day');
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }

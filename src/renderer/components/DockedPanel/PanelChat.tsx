@@ -3,7 +3,7 @@ import { marked, Renderer } from 'marked';
 import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
 import { SiteContextStrip, type SiteChoice } from './SiteContextStrip';
-import type { SiteContextMode } from './siteContextModel';
+import type { SiteContextMode, SiteContentStatus } from './siteContextModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 
 const safeRenderer = new Renderer();
@@ -49,6 +49,9 @@ export interface SiteContextProps {
   siteName: string | null;
   viewedSiteName: string | null;
   sites: SiteChoice[];
+  /** WP-22b · the content age for the selected copy, or null. Optional: a caller
+   *  that has nothing to say about content still renders the band. */
+  content?: SiteContentStatus | null;
   onPick: (siteId: string) => void;
   onClear: () => void;
 }

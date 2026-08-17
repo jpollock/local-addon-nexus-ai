@@ -8,6 +8,8 @@ import {
   readViewedSiteId,
   resolveSiteContext,
   selectionSiteIds,
+  asContentStatus,
+  type SiteContentStatus,
 } from './siteContextModel';
 import { nexusStore } from '../../store/NexusStateManager';
 import { SessionsSidebar } from './SessionsSidebar';
@@ -43,6 +45,18 @@ interface ContainerState {
   siteOverride: string | null;
   /** Local's sites, for naming the current one and for the strip's picker. */
   siteChoices: SiteChoice[];
+  /**
+   * WP-22b · what the record says about the SELECTED site's content — where it was
+   * pulled from and how far behind it is.
+   *
+   * Null means "nothing to show", and covers three situations on purpose: the read
+   * has not answered yet, Nexus AI is not recording, or the read failed. None of them
+   * is a fact about the copy, and none of them may put a word on the band. The three
+   * facts that ARE about the copy (`no-sync`, `ambiguous`, `unlinked`) arrive as
+   * states and are still not rendered — the chip speaks only for `pulled` (WP-16
+   * doctrine: omit, never "unknown").
+   */
+  contentStatus: SiteContentStatus | null;
   streamingStatus: string | null;
   reflowMode: 'in-flow' | 'overlay';
   /** Sessions whose newest message is from the assistant and arrived unseen. */
@@ -85,6 +99,7 @@ const SITE_CONTEXT_DEFAULTS = {
   viewedSiteId: null as string | null,
   siteOverride: null as string | null,
   siteChoices: [] as SiteChoice[],
+  contentStatus: null as SiteContentStatus | null,
 };
 
 const SIGNAL_DEFAULTS = {
@@ -166,6 +181,10 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   /** True once `GET_SITES` has answered. Until then an unknown id means "not loaded
    *  yet", not "new site" — without this, mount fetches the list twice. */
   private siteChoicesLoaded = false;
+  /** The site the in-flight content read is FOR. A reply for anything else is stale
+   *  and dropped: one site's content age beside another site's name would be a
+   *  confident wrong answer, which is worse than the chip being absent. */
+  private contentRequestFor: string | null = null;
 
   constructor(props: ContainerProps) {
     super(props);
@@ -333,6 +352,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   private setupSiteContext(): void {
     this.refreshViewedSite();
     this.loadSiteChoices();
+    this.refreshContentStatus();
 
     try {
       window.addEventListener('hashchange', this.refreshViewedSite);
@@ -389,6 +409,40 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       this.siteFetchAttempted.add(next);
       this.loadSiteChoices();
     }
+    this.refreshContentStatus();
+  };
+
+  /**
+   * WP-22b · ask what the record says about the selected copy's content.
+   *
+   * Fire-and-forget, and deliberately so: the chip is detail on a band whose job is
+   * to say which site the chat is scoped to, and that job is already done from props
+   * the container holds. Nothing here is awaited, nothing gates the composer, and
+   * every failure path — no core, no channel, a throw, a shape we don't recognise —
+   * lands on the same `null`, which renders as the band exactly as WP-22 shipped it.
+   *
+   * Keyed on the SELECTED site (pin beats route, same rule as everything else here),
+   * so pinning a site re-reads for the site the answers are about, not the one on
+   * screen.
+   */
+  refreshContentStatus = (): void => {
+    const { siteId } = resolveSiteContext(this.state.viewedSiteId, this.state.siteOverride);
+    if (siteId === this.contentRequestFor) return;
+    this.contentRequestFor = siteId;
+    // Clear FIRST: the previous site's age must never sit under the new site's name
+    // for the length of a round trip.
+    if (this.state.contentStatus) this.setState({ contentStatus: null });
+    if (!siteId) return;
+
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.GET_SITE_CONTENT_STATUS, siteId)
+      .then((status: unknown) => {
+        if (this.contentRequestFor !== siteId) return; // answered for a site we left
+        this.setState({ contentStatus: asContentStatus(status) });
+      })
+      .catch(() => {
+        if (this.contentRequestFor === siteId) this.setState({ contentStatus: null });
+      });
   };
 
   /**
@@ -431,12 +485,14 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   /** Pin a site. Beats navigation until cleared. */
   pickSite = (siteId: string): void => {
     this.setState({ siteOverride: siteId });
+    this.refreshContentStatus();
     try { track(this.props.electron.ipcRenderer, 'nexus_panel_site_pinned', {}); } catch (_) {}
   };
 
   /** Drop the pin and follow the screen again. */
   clearSiteOverride = (): void => {
     this.setState({ siteOverride: null });
+    this.refreshContentStatus();
   };
 
   /** Drag the collapsed tab up and down its edge. Vertical only — it is anchored right. */
@@ -558,7 +614,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   render() {
-    const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, viewedSiteId, siteOverride, siteChoices, reflowMode } = this.state;
+    const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, viewedSiteId, siteOverride, siteChoices, contentStatus, reflowMode } = this.state;
 
     // ONE source, read twice: the ids that ride on CHAT_SEND and the band the user reads
     // are both derived from the same selection here, which is what stops the chat from
@@ -570,6 +626,10 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       siteName: this.siteNameFor(selection.siteId),
       viewedSiteName: this.siteNameFor(viewedSiteId),
       sites: siteChoices,
+      // The chip's fact comes from the same selection the band and the outgoing id
+      // do — a content age read for one site and shown beside another's name is the
+      // disagreement this whole module exists to make impossible.
+      content: contentStatus,
       onPick: this.pickSite,
       onClear: this.clearSiteOverride,
     };

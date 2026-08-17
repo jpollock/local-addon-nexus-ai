@@ -13,7 +13,15 @@
 // agent-settings.json via a runtime require('fs') — unmocked, every run here would
 // read and OVERWRITE the real file on whatever machine runs this suite. Mock it so
 // each test starts from an empty on-disk state and never touches anything real.
+//
+// The three overrides sit on top of the REAL module rather than replacing it (WP-22b).
+// `ipc-handlers.ts` is a hub: its transitive graph reaches better-sqlite3, whose
+// `backup.js` does `promisify(fs.access)` at import time, so a three-function stand-in
+// for the whole of `fs` failed the suite before any test ran — with a TypeError about
+// `promisify` that named neither this file nor the module that actually needed it. The
+// mock's job is to intercept three calls, not to assert what else the graph may use.
 jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
   readFileSync: jest.fn(() => { throw new Error('ENOENT (mocked — no real file in tests)'); }),
   writeFileSync: jest.fn(),
   mkdirSync: jest.fn(),

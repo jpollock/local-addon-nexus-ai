@@ -111,6 +111,7 @@ import { buildSiteRows } from './fleet/siteRows';
 import { createExternalBulkOps } from './bulk/externalBulkOps';
 import { collectSystemHealth } from './health/collectSystemHealth';
 import { enrichSiteFinderPlugins, summarizeSiteFinderTwins } from './intelligence-host/siteFinderTwins';
+import { readSiteContentStatus } from './intelligence-host/siteContentStatus';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -828,6 +829,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: false, rows: [], total: { count: 0, scope: '' } };
     }
   });
+
+  // WP-22b · the docked panel's content-age chip. Read-only, non-fatal: the module
+  // answers null for a dark core, an unknown id, or any failure at all, and the strip
+  // renders without its chip. Wiring only — the logic lives in siteContentStatus.ts,
+  // per the integration lock.
+  safeHandle(IPC_CHANNELS.GET_SITE_CONTENT_STATUS, (_event: any, siteId: string) =>
+    readSiteContentStatus({ siteData, nexusServices: deps.nexusServices }, siteId));
 
   safeHandle(IPC_CHANNELS.GET_FLEET_LIST, async () => {
     try {

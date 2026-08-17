@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import { UI_COLORS } from '../../../common/constants';
-import { stripCopy, type SiteContextMode } from './siteContextModel';
+import { stripCopy, type SiteContextMode, type SiteContentStatus } from './siteContextModel';
 
 export interface SiteChoice {
   id: string;
@@ -32,6 +32,15 @@ interface Props {
   viewedSiteName: string | null;
   /** Every site the user can pin. Empty while the list is still loading. */
   sites: SiteChoice[];
+  /**
+   * WP-22b · what the record says about this copy's content, or null.
+   *
+   * Null covers both "not recording" and "not answered yet": in either case the chip
+   * is absent and the band is exactly what it was before this packet. The read is
+   * fire-and-forget in the container, so nothing here ever waits on it — a strip that
+   * made the user wait to type would be worse than no strip.
+   */
+  content?: SiteContentStatus | null;
   /** Pin a site. Survives navigation until cleared. */
   onPick: (siteId: string) => void;
   /** Drop the pin and follow the screen again. */
@@ -85,6 +94,20 @@ const styles = {
     lineHeight: 1.35,
     color: 'var(--nxai-card-sub)',
     marginTop: 2,
+    overflowWrap: 'anywhere' as const,
+  },
+  // The chip is one fact, so it is one pill — sized to its text, wrapping with the
+  // band rather than clipping, for the same reason the two lines wrap: the clause
+  // that would be cut ("11 days ago") is the one carrying the meaning.
+  chip: {
+    display: 'inline-block',
+    marginTop: 3,
+    padding: '1px 6px',
+    borderRadius: 3,
+    border: '1px solid var(--nxai-card-border)',
+    fontSize: 10,
+    lineHeight: 1.35,
+    color: 'var(--nxai-card-sub)',
     overflowWrap: 'anywhere' as const,
   },
   action: {
@@ -212,8 +235,8 @@ export class SiteContextStrip extends React.Component<Props, State> {
   }
 
   render() {
-    const { mode, siteName, viewedSiteName } = this.props;
-    const copy = stripCopy({ mode, siteName, viewedSiteName });
+    const { mode, siteName, viewedSiteName, content } = this.props;
+    const copy = stripCopy({ mode, siteName, viewedSiteName, content });
 
     return React.createElement(
       'div',
@@ -223,6 +246,13 @@ export class SiteContextStrip extends React.Component<Props, State> {
         'div',
         { style: styles.lines },
         React.createElement('div', { style: styles.primary, title: copy.primary }, copy.primary),
+        copy.chip
+          ? React.createElement(
+              'div',
+              { style: styles.chip, title: copy.chip, 'data-nexus-content-age': true },
+              copy.chip,
+            )
+          : null,
         copy.secondary
           ? React.createElement('div', { style: styles.secondary, title: copy.secondary }, copy.secondary)
           : null,

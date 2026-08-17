@@ -37,13 +37,22 @@ function setLocalRoute(path: string): void {
   shell.setAttribute('data-location', path);
 }
 
+/** WP-22b: what the content-age read answers, per site id. */
+const CONTENT: Record<string, unknown> = {
+  'site-cedar': { state: 'pulled', sourceName: 'the live site', behindSeconds: 11 * 86_400 },
+  'site-alpine': { state: 'unlinked' },
+};
+
 function makeElectron() {
-  const invoke = jest.fn(async (channel: string) => {
+  const invoke = jest.fn(async (channel: string, arg?: unknown) => {
     if (channel === IPC_CHANNELS.GET_SITES) {
       return [
         { id: 'site-cedar', name: 'cedarvale' },
         { id: 'site-alpine', name: 'alpine-outfitters' },
       ];
+    }
+    if (channel === IPC_CHANNELS.GET_SITE_CONTENT_STATUS) {
+      return CONTENT[String(arg)] ?? null;
     }
     return null;
   });
@@ -273,5 +282,190 @@ describe('PanelChat — the id reaches the invoke call', () => {
     const call = await send([]);
     expect(call).toBeDefined();
     expect(call![SITE_ID_ARG]).toBeUndefined();
+  });
+});
+
+/**
+ * WP-22b · the one IPC read behind the content-age chip.
+ *
+ * The pins here are all about what must NOT happen: the read must not block the
+ * composer, must not answer for a site the user has left, and must not be able to take
+ * the band down when it fails. The chip is detail; the band is the disclosure.
+ */
+describe('DockedPanelContainer — reading the selected copy\'s content age', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.body.innerHTML = '';
+    jest.resetModules();
+  });
+
+  const contentCalls = (electron: any) =>
+    electron.ipcRenderer.invoke.mock.calls.filter(
+      (c: any[]) => c[0] === IPC_CHANNELS.GET_SITE_CONTENT_STATUS,
+    );
+
+  it('asks about the site on screen, and hands the answer to the strip', async () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { inst, electron } = makeContainer();
+    inst.refreshViewedSite();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(contentCalls(electron).map((c: any[]) => c[1])).toEqual(['site-cedar']);
+    expect(chatProps(inst).siteContext.content).toEqual({
+      state: 'pulled',
+      sourceName: 'the live site',
+      behindSeconds: 11 * 86_400,
+    });
+  });
+
+  it('asks about the PINNED site, not the one on screen', async () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { inst, electron } = makeContainer();
+    inst.refreshViewedSite();
+    inst.pickSite('site-alpine');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(contentCalls(electron).map((c: any[]) => c[1])).toEqual(['site-cedar', 'site-alpine']);
+    // 'unlinked' is a real answer and reaches the strip; the strip is what declines to
+    // render it. Flattening it to null here would lose a distinction the read made.
+    expect(chatProps(inst).siteContext.content).toEqual({ state: 'unlinked' });
+  });
+
+  it('asks nothing when no site is selected', async () => {
+    setLocalRoute('/main/nexus');
+    const { inst, electron } = makeContainer();
+    inst.refreshViewedSite();
+    await Promise.resolve();
+
+    expect(contentCalls(electron)).toHaveLength(0);
+    expect(chatProps(inst).siteContext.content).toBeNull();
+  });
+
+  it('does not re-ask for a site it is already showing', async () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { inst, electron } = makeContainer();
+    inst.refreshViewedSite();
+    await Promise.resolve();
+    await Promise.resolve();
+    inst.refreshViewedSite();
+    inst.refreshContentStatus();
+
+    expect(contentCalls(electron)).toHaveLength(1);
+  });
+
+  it('renders the band and the chat BEFORE the read answers', () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { inst } = makeContainer();
+    inst.refreshViewedSite();
+
+    // Nothing is awaited: the id the chat sends and the band the user reads are both
+    // already correct while the content read is still in flight.
+    const props = chatProps(inst);
+    expect(props.selectedSiteIds).toEqual(['site-cedar']);
+    expect(props.siteContext.siteName).toBe('site-cedar');
+    expect(props.siteContext.content).toBeNull();
+  });
+
+  it('drops an answer that arrives for a site the user has left', async () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
+
+    const pending: Array<{ siteId: string; resolve: (v: unknown) => void }> = [];
+    const electron = {
+      ipcRenderer: {
+        invoke: jest.fn((channel: string, arg?: unknown) => {
+          if (channel === IPC_CHANNELS.GET_SITE_CONTENT_STATUS) {
+            return new Promise((resolve) => pending.push({ siteId: String(arg), resolve }));
+          }
+          return Promise.resolve(null);
+        }),
+        on: jest.fn(),
+        send: jest.fn(),
+        removeListener: jest.fn(),
+      },
+    };
+    const inst: any = new DockedPanelContainer({ electron });
+    spySetState(inst);
+
+    inst.refreshViewedSite();                       // asks about cedar
+    setLocalRoute('/main/site-info/site-alpine');
+    inst.refreshViewedSite();                       // and now about alpine
+
+    // Cedar's answer lands late. It is one site's content age and the band now names
+    // another — the worst possible pairing, and the reason the request is keyed.
+    pending.find((p) => p.siteId === 'site-cedar')!.resolve({
+      state: 'pulled', sourceName: 'the live site', behindSeconds: 99 * 86_400,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(chatProps(inst).siteContext.content).toBeNull();
+  });
+
+  it('survives a channel that is not there at all', async () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
+    const electron = {
+      ipcRenderer: {
+        invoke: jest.fn(async () => { throw new Error('no handler registered'); }),
+        on: jest.fn(), send: jest.fn(), removeListener: jest.fn(),
+      },
+    };
+    const inst: any = new DockedPanelContainer({ electron });
+    spySetState(inst);
+    inst.refreshViewedSite();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The band is exactly what WP-22 shipped, and the chat still carries its site.
+    expect(chatProps(inst).siteContext.content).toBeNull();
+    expect(chatProps(inst).selectedSiteIds).toEqual(['site-cedar']);
+    expect(chatProps(inst).siteContext.mode).toBe('viewed');
+  });
+
+  it('refuses a payload it was not designed for', async () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
+    const electron = {
+      ipcRenderer: {
+        invoke: jest.fn(async (channel: string) =>
+          channel === IPC_CHANNELS.GET_SITE_CONTENT_STATUS ? { state: 'sort-of-pulled' } : null),
+        on: jest.fn(), send: jest.fn(), removeListener: jest.fn(),
+      },
+    };
+    const inst: any = new DockedPanelContainer({ electron });
+    spySetState(inst);
+    inst.refreshViewedSite();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(chatProps(inst).siteContext.content).toBeNull();
+  });
+});
+
+describe('DockedPanelContainer — the chip never outlives the site it describes', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.body.innerHTML = '';
+    jest.resetModules();
+  });
+
+  it('clears the previous site\'s age the moment the selection moves', async () => {
+    setLocalRoute('/main/site-info/site-cedar');
+    const { inst } = makeContainer();
+    inst.refreshViewedSite();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(chatProps(inst).siteContext.content).toBeTruthy();
+
+    // Navigating is instantaneous; the read is not. For the length of that round
+    // trip the band names the new site, so cedar's age must already be gone —
+    // "Currently in: alpine-outfitters" over "Pulled from the live site 11 days
+    // ago" would be a confident wrong answer about a site nobody asked about.
+    setLocalRoute('/main/site-info/site-nobody-knows');
+    inst.refreshViewedSite();
+    expect(chatProps(inst).siteContext.content).toBeNull();
   });
 });
