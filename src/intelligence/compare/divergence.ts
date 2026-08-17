@@ -189,13 +189,36 @@ const CODE_FACT_PREFIXES: readonly string[] = ['plugin:', 'theme:'];
  */
 const WP_VERSION_KEY = 'wp.version';
 
-export function divergence(copyEntityId: string, deps: DivergenceDeps): DivergenceReport {
-  const now = deps.now ?? new Date();
-  const entities = deps.entities;
-
+/**
+ * What this copy belongs to and what it tracks — the pair resolution, with no
+ * measurement attached.
+ *
+ * Exported because WP-21's task frame needs exactly this and nothing else: the
+ * frame answers "where am I standing", which is the same question the comparator
+ * asks before it can compare anything. A second implementation of the
+ * lineage-then-links-then-decline precedence would be a rule kept in two places,
+ * and this repo already carries three documented instances of that costing a
+ * silent disagreement.
+ */
+export function resolveLineage(
+  copyEntityId: string,
+  entities?: EntityService
+): { siteEntityId?: string } & ReturnType<typeof resolveUpstream> & {
+    candidates: UpstreamCandidate[];
+  } {
   const siteEntityId = safely(() => entities?.siteOf(copyEntityId));
   const candidates = resolveCandidates(entities, copyEntityId, siteEntityId);
-  const resolution = resolveUpstream(entities, copyEntityId, candidates);
+  return { siteEntityId, candidates, ...resolveUpstream(entities, copyEntityId, candidates) };
+}
+
+export function divergence(copyEntityId: string, deps: DivergenceDeps): DivergenceReport {
+  const now = deps.now ?? new Date();
+
+  const { siteEntityId, candidates, upstream, ambiguous } = resolveLineage(
+    copyEntityId,
+    deps.entities
+  );
+  const resolution = { upstream, ambiguous };
   const anchor = resolveAnchor(deps.ledger, copyEntityId, now);
 
   return {

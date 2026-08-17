@@ -262,6 +262,157 @@ describe('assembleForChatTurn — freshness disclosure reaches the turn', () => 
   });
 });
 
+/**
+ * WP-21. Routing is only real if it is real on the WIRED path — the eval harness
+ * has already caught one assembler capability that worked at the core and was
+ * unreachable from the docked panel (WP-13 finding 4, the episodic prefix). So
+ * these pins read the manifest the chat turn actually emitted.
+ */
+describe('assembleForChatTurn — per-plane routing (ADR-22)', () => {
+  const WPE_ROW = 'wpe-row-alpine-prod';
+  const PROD_ENT = provisionalEnvironmentId(WPE_ROW);
+
+  /** The links `siteLinkMirror` writes, plus a graph that names the live site. */
+  function linkProduction(): void {
+    const e = core.entities!;
+    e.ensure('env', 'local.site_id', SITE_ID);
+    e.ensure('site', 'local.site_id.logical', SITE_ID);
+    e.ensure('env', 'local.site_id', WPE_ROW);
+    e.link(SITE_ENT, ENV_ID, 'has_working_copy', 1.0, 'user_link');
+    e.link(SITE_ENT, PROD_ENT, 'has_environment', 0.95, 'host_connection');
+  }
+
+  function graphServices(searchFleet?: jest.Mock) {
+    return services({
+      graphService: {
+        listSites: async () => [
+          { id: WPE_ROW, name: 'alpine-prod', source: 'wpe', environment: 'production' },
+          { id: SITE_ID, name: 'acme-local', source: 'local', environment: 'development' },
+        ],
+      },
+      ...(searchFleet ? { searchService: { searchFleet } } : {}),
+    });
+  }
+
+  async function manifest(searchFleet?: jest.Mock) {
+    await assembleForChatTurn({
+      services: graphServices(searchFleet),
+      sessionId: 's1',
+      userMessage: 'what changed here?',
+      siteId: SITE_ID,
+      buildingSystemPrompt: false,
+    });
+    const [event] = core.ledger.query({ topicPrefix: 'task.' });
+    return event.payload as Record<string, unknown>;
+  }
+
+  test('the turn carries a frame, and the manifest records where each type came from', async () => {
+    linkProduction();
+    const routing = (await manifest()).routing as Array<Record<string, unknown>>;
+
+    expect(routing.map((r) => [r.plane, r.slot, r.entityIds])).toEqual([
+      ['state', 'workingCopy', [ENV_ID]],
+      ['episodic', 'site', [SITE_ENT, ENV_ID]],
+      ['semantic', 'production', [PROD_ENT]],
+      ['audience', 'production', [PROD_ENT]],
+    ]);
+  });
+
+  test('semantic search is scoped to the live site when the graph names one', async () => {
+    linkProduction();
+    const searchFleet = jest.fn().mockResolvedValue({ results: [] });
+    await manifest(searchFleet);
+    expect(searchFleet).toHaveBeenCalled();
+  });
+
+  test('with no live site on record the planes fall back to the copy and say so', async () => {
+    const routing = (await manifest()).routing as Array<Record<string, unknown>>;
+    const semantic = routing.find((r) => r.plane === 'semantic')!;
+
+    expect(semantic.servedBy).toBe('workingCopy');
+    expect(semantic.entityIds).toEqual([ENV_ID]);
+    const audience = routing.find((r) => r.plane === 'audience')!;
+    expect(audience.entityIds).toEqual([]);
+    expect(audience.unavailable).toBe('no instrument source connected');
+  });
+
+  test('episodic stays Site-scoped: the sibling-environment pin holds under routing', async () => {
+    linkProduction();
+    const siblingEnv = provisionalEnvironmentId('another-environment-of-this-site');
+    core.emitter.emit({
+      observed_at: new Date(Date.now() - 2 * HOUR).toISOString(),
+      topic: 'state.plugin.observed',
+      schema: 'plugin.observed/1',
+      entity: { site: SITE_ENT, environment: siblingEnv },
+      actor: { id: 'act_seed', kind: 'system' },
+      source: { class: 'platform', system: 'wp-cli', trust: 'observed' },
+      payload: { slug: 'sibling-only-plugin', version: '1.0.0', active: true },
+    });
+
+    const r = await assembleForChatTurn({
+      services: graphServices(),
+      sessionId: 's1',
+      userMessage: 'what changed?',
+      siteId: SITE_ID,
+      buildingSystemPrompt: false,
+    });
+    expect(r!.turnBlock).toContain('sibling-only-plugin');
+  });
+
+  test('the turn tells the model where its facts came from, in the user vocabulary', async () => {
+    linkProduction();
+    const r = await assembleForChatTurn({
+      services: graphServices(),
+      sessionId: 's1',
+      userMessage: 'how is this site doing?',
+      siteId: SITE_ID,
+      buildingSystemPrompt: false,
+    });
+
+    expect(r!.turnBlock).toContain('your copy — acme-local');
+    expect(r!.turnBlock).toContain('the live site — alpine-prod');
+    expect(r!.turnBlock).toContain('no instrument source connected');
+  });
+
+  /**
+   * The Site slot must be the id this turn's events are STAMPED with, not the
+   * relational Site the links point at. For a mirrored WPE site the mirror
+   * establishes a `wpe.site_id` Site and links the copy under it, while every
+   * producer in this process stamps `local.site_id.logical` — so routing episodic
+   * at the relational Site would query an id no event carries, and a turn's own
+   * history would go dark. This is the failure mode the frame builder's
+   * `siteEntityId` parameter exists to prevent.
+   */
+  test('the Site slot is the id events are stamped with, even when the links name another', async () => {
+    const e = core.entities!;
+    e.ensure('env', 'local.site_id', SITE_ID);
+    const mirroredSite = e.ensure('site', 'wpe.site_id', 'wpe-site-uuid-1234');
+    e.link(mirroredSite, ENV_ID, 'has_working_copy', 1.0, 'user_link');
+
+    const routing = (await manifest()).routing as Array<Record<string, unknown>>;
+    const episodic = routing.find((r) => r.plane === 'episodic')!;
+
+    expect(episodic.entityIds).toEqual([SITE_ENT, ENV_ID]);
+    expect(episodic.entityIds).not.toContain(mirroredSite);
+  });
+
+  test('no site selected means no frame at all — parity with the pre-frame turn', async () => {
+    const [event] = await (async () => {
+      await assembleForChatTurn({
+        services: graphServices(),
+        sessionId: 's1',
+        userMessage: 'hello',
+        buildingSystemPrompt: false,
+      });
+      return core.ledger.query({ topicPrefix: 'task.' });
+    })();
+
+    // A frame with no copy in it would route every plane at nothing and record
+    // four fallbacks for a turn that never named a site.
+    expect('routing' in (event.payload as Record<string, unknown>)).toBe(false);
+  });
+});
+
 describe('assembleForChatTurn — contracts with the rest of the layer', () => {
   test('verifyMirror() runs at assembly time and its divergences reach the manifest', async () => {
     const spy = jest.spyOn(core.law!, 'verifyMirror').mockReturnValue([

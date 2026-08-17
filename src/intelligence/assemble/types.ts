@@ -56,12 +56,86 @@ export interface EntityRef {
   label?: string;
 }
 
+/**
+ * The four planes the assembler routes. Named for the intelligence TYPES of
+ * the §4 table, not for the collectors that serve them: `state` is served by
+ * freshness disclosures today and by live tool grants later, and the table must
+ * outlive that change.
+ *
+ * `procedural` and `policy` are absent deliberately. Both are Site-level by the
+ * table and neither is per-target in this codebase — the policy set is global
+ * and the procedure plane is inert in v0 — so a routing row for either would
+ * record a decision nothing acts on.
+ */
+export type IntelligencePlane = 'state' | 'episodic' | 'semantic' | 'audience';
+
+/** The three layers a plane can resolve to (ADR-21). */
+export type FrameSlot = 'workingCopy' | 'site' | 'production';
+
+/**
+ * The task frame (ADR-22, audit F3) — WHERE the actor is standing, so the
+ * assembler can route each type to its own home without the actor choosing.
+ *
+ * Per-turn and never persisted: it is derived from the entity graph at assembly
+ * time, and a stored copy would be a second source of truth for something the
+ * links already say.
+ *
+ * Every slot is optional, and an absent slot is honest rather than fatal: a copy
+ * nothing has linked has no `production`, and the planes that would have routed
+ * there say so instead of pretending (see `RoutingRecord.servedBy`).
+ */
+export interface TaskFrame {
+  /** The copy the actor is standing in — Layer 3. */
+  workingCopy?: EntityRef;
+  /** The logical Site everything here is a version of — Layer 1. */
+  site?: EntityRef;
+  /**
+   * The environment carrying the audience's attention — Layer 2, and only when
+   * something on record SAYS it is that. Never inferred from being the only
+   * other place a copy could be compared with.
+   */
+  production?: EntityRef;
+  /**
+   * Per-plane overrides of the §4 table. Absent planes use the table, which is
+   * the normal case — ADR-22 says the assembler routes and actors never do, so
+   * this exists for a host that genuinely knows better (a Site-wide question
+   * asked of the semantic plane), not as a caller-facing knob.
+   */
+  routing?: Partial<Record<IntelligencePlane, FrameSlot>>;
+}
+
+/**
+ * What routing actually did, per plane — part of the manifest, because routing
+ * nobody can see is indistinguishable from no routing at all.
+ */
+export interface RoutingRecord {
+  plane: IntelligencePlane;
+  /** The slot the table (or an override) named for this plane. */
+  slot: FrameSlot;
+  /** The entities the plane was actually read from. Empty when nothing served it. */
+  entityIds: string[];
+  /**
+   * Present only when the plane's own slot was absent and something else stood
+   * in: another slot, or `targets` (the request's flat list — the pre-frame
+   * behaviour). A fallback that went unrecorded would read as a routed answer.
+   */
+  servedBy?: FrameSlot | 'targets';
+  /** Why the plane produced nothing. Present only when it produced nothing. */
+  unavailable?: string;
+}
+
 export interface AssembleRequest {
   actor: AssembleActor;
   /** The granted capability this task runs under. v0 chat has no grant: null. */
   capability?: string | null;
   task: { id: string; intent: string };
   targets: EntityRef[];
+  /**
+   * ADR-22's routing input. **Absent ⇒ every collector reads `targets`, exactly
+   * as it did before the frame existed** — the parity contract every shipped
+   * caller depends on, pinned in both directions by `frameRouting.test.ts`.
+   */
+  frame?: TaskFrame;
   budget?: { tokens?: number; toolCalls?: number };
   /** Names the actor surface for the manifest, e.g. 'chat.docked-panel'. */
   surface: string;
@@ -219,6 +293,12 @@ export interface BundleManifest {
   procedure: null;
   tools: string[];
   retrieval: RetrievalRecord[];
+  /**
+   * ADR-22, one row per plane. **Absent entirely when the request carried no
+   * frame** — an empty array would claim routing ran and found nothing, which is
+   * a different fact from "this caller predates the frame".
+   */
+  routing?: RoutingRecord[];
   freshness_report: FreshnessRecord[];
   budget: {
     tokens_used: number;

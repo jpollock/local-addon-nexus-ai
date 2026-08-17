@@ -22,9 +22,11 @@ import {
   ContextBundle,
   EntityRef,
   SemanticHit,
+  TaskFrame,
 } from '../../intelligence';
 import { getIntelligenceCore } from './coreRegistry';
 import { environmentEntityId, siteEntityId } from './provisionalEntity';
+import { buildTaskFrame, describeEnvironmentsFor } from './taskFrame';
 import { wrapUntrusted } from '../mcp/pii';
 import { resolveSite } from '../mcp/site-resolver';
 import type { NexusServices } from '../mcp/types';
@@ -92,7 +94,14 @@ export async function assembleForChatTurn(
     if (!core) return null; // core optional by contract — degrade silently
 
     const taskId = mintTaskId();
-    const targets = resolveTargets(req);
+    const resolved = resolveTargets(req);
+    const targets = resolved.targets;
+
+    // WP-21 · the task frame (ADR-22). Built only when a site is actually
+    // selected: a frame whose every slot is empty would route four planes at
+    // nothing and record four fallbacks for a turn that named no site, where
+    // today's behaviour — targets, unrouted — is exactly right.
+    const frame = resolved.copy ? await buildFrame(req, resolved) : undefined;
 
     // WP-08's tripwire, run at assembly time so a mirror that has drifted from
     // the live settings is disclosed on the turn it matters, not at startup.
@@ -108,6 +117,7 @@ export async function assembleForChatTurn(
       capability: null, // v0 chat runs under no capability grant
       task: { id: taskId, intent: req.userMessage },
       targets,
+      ...(frame ? { frame } : {}),
       surface: CHAT_SURFACE,
       policyDivergences,
       context: {
@@ -153,28 +163,70 @@ export async function assembleForChatTurn(
  * to a turn that is plainly about that Site. Additive: the assembler is
  * unchanged, twin facts key to the environment so freshness is untouched, and
  * the extra role makes the manifest's entity block honest about what was
- * retrieved. Per-plane routing (freshness→copy, episodic→Site) is M3's frame.
+ * retrieved. Per-plane routing over those ids is WP-21's frame, built below:
+ * `targets` stays the flat list every shipped path expects, and the frame is what
+ * tells the assembler which plane reads which of them.
  */
-function resolveTargets(req: ChatAssemblyRequest): EntityRef[] {
-  if (!req.siteId) return [];
+function resolveTargets(req: ChatAssemblyRequest): ResolvedTargets {
+  if (!req.siteId) return { targets: [] };
   try {
     const site = resolveSite(req.siteId, req.services.siteData);
-    if (!site) return [];
+    if (!site) return { targets: [] };
     const core = getIntelligenceCore();
-    return [
-      {
-        role: 'environment',
-        id: environmentEntityId(core?.entities, site.id),
-        label: site.name,
-      },
-      {
-        role: 'site',
-        id: siteEntityId(core?.entities, site.id),
-        label: site.name,
-      },
-    ];
+    const copy: EntityRef = {
+      role: 'environment',
+      id: environmentEntityId(core?.entities, site.id),
+      label: site.name,
+    };
+    const logicalSite: EntityRef = {
+      role: 'site',
+      id: siteEntityId(core?.entities, site.id),
+      label: site.name,
+    };
+    return { targets: [copy, logicalSite], copy, site: logicalSite };
   } catch {
-    return [];
+    return { targets: [] };
+  }
+}
+
+interface ResolvedTargets {
+  targets: EntityRef[];
+  /** The copy this turn is about, when a site was selected and resolved. */
+  copy?: EntityRef;
+  /** The Site role, which is ALSO the id this turn's events are stamped with. */
+  site?: EntityRef;
+}
+
+/**
+ * The turn's frame (WP-21 · ADR-22).
+ *
+ * The Site slot is the id `resolveTargets` derived, NOT `entities.siteOf()`.
+ * They can differ: for a mirrored WPE site the mirror establishes a
+ * `wpe.site_id` Site, while every producer in this process stamps the
+ * `local.site_id.logical` one — so routing episodic at the relational Site would
+ * query an id no event carries and the history would go dark. The frame routes at
+ * the id the history is keyed by; the links are still what resolve production,
+ * inside `buildTaskFrame`.
+ *
+ * Non-fatal like everything on this seam: a frame that cannot be built is simply
+ * absent, and the turn assembles exactly as it did before frames existed.
+ */
+async function buildFrame(
+  req: ChatAssemblyRequest,
+  resolved: ResolvedTargets
+): Promise<TaskFrame | undefined> {
+  try {
+    const core = getIntelligenceCore();
+    if (!core || !resolved.copy) return undefined;
+    return buildTaskFrame({
+      core,
+      copyEntityId: resolved.copy.id,
+      siteEntityId: resolved.site?.id,
+      label: resolved.copy.label ?? req.siteId ?? '',
+      describeEnvironment: await describeEnvironmentsFor(req.services),
+    }).frame;
+  } catch {
+    return undefined;
   }
 }
 

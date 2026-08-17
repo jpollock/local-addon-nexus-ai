@@ -189,6 +189,10 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   // time someone asked whether recording was working — audit volume for a
   // question that cannot mutate anything.
   nexus_intelligence_health: 1,
+  // "Where am I?" — reads the records and renders four sentences. Tier 2 (the
+  // default for an absent entry) would write a durable audit line every time
+  // someone asked where they were standing.
+  nexus_where_am_i: 1,
   find_outdated_sites: 1,
   find_sites_with_plugin: 1,
   find_sites_with_theme: 1,
