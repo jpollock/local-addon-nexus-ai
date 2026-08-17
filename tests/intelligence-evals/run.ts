@@ -23,6 +23,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createEvalFixture } from './fixture';
+import { nativeModuleRemedy } from './nativeModule';
 import { runEvals } from './runner';
 import { renderReport } from './report';
 import { tally } from './types';
@@ -33,6 +34,17 @@ async function main(): Promise<number> {
     const i = argv.indexOf(flag);
     return i >= 0 ? argv[i + 1] : undefined;
   };
+
+  // Every path below opens a real SQLite ledger. Without this, a tree left in
+  // the Electron ABI state fails deep inside `initIntelligenceCore` with a raw
+  // NODE_MODULE_VERSION stack trace naming a number the reader has no reason to
+  // connect to `npm run pretest` (WP-13c follow-up; the helper is shared with
+  // the sitting harness rather than copied).
+  const abi = nativeModuleRemedy();
+  if (abi) {
+    process.stderr.write(`${abi}\n`);
+    return 2;
+  }
 
   const seedDir = valueOf('--seed-dir');
   if (seedDir) {

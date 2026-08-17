@@ -136,6 +136,19 @@ export interface RetrievedItem {
   id: string;
   title: string;
   detail?: string;
+  /**
+   * WP-13c. What the event was ABOUT, in prose — bounded, composed from an
+   * explicit allow-list of payload fields, never a dump of the payload.
+   *
+   * A separate channel from `detail` on purpose. `detail` carries the fact KEY
+   * (`factKeyOf`), which is identity; this carries substance, which is
+   * rendering. WP-13b measured the cost of having only the first: a planted
+   * incident reached the model as topic + age + provenance + id, so "tell the
+   * user the specific historical finding" was unsatisfiable without
+   * fabrication. Widening `factKeyOf` instead would have leaked arbitrary
+   * payload keys into fact identity — the owner's ruling, not a preference.
+   */
+  summary?: string;
   /** Provenance — every item carries source and trust (§6.2 step 5). */
   source?: string;
   trust?: TrustClass;
