@@ -20,6 +20,10 @@
  *      could not answer the question. A distinct code because "we could not
  *      check" and "it failed" call for different responses.
  */
+// FIRST: maps `electron` and the Local host packages to the same stubs jest
+// uses, so the real production seams this runner drives can be required at
+// all. See hostShim.ts — it must precede every other import here.
+import './hostShim';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createEvalFixture } from './fixture';

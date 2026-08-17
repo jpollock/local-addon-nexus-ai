@@ -30,7 +30,7 @@
  */
 import { CriterionKind, CriterionResult } from './types';
 import { EvalFixture } from './fixture';
-import { Probe } from './probes';
+import { GatewayProbe, Probe } from './probes';
 
 export interface CheckContext {
   fixture: EvalFixture;
@@ -40,6 +40,8 @@ export interface CheckContext {
     manifest: Probe & { taskId?: string };
     schema: Probe;
     timestamps: Probe;
+    /** WP-19 — a real gated call, driven through both dispatch paths. */
+    gateway: GatewayProbe;
     taskFamily: (prefix: string) => Probe;
   };
 }
@@ -106,7 +108,7 @@ const B03_PROMPT = 'Update WooCommerce across all my staging sites.';
  */
 function b03Blocked(note: string) {
   return (ctx: CheckContext): CheckOutcome =>
-    blocked(NO_PROCEDURE_DISTRIBUTION, 'the procedure packet (assembler v0 defers it; see below)', [
+    blocked(NO_PROCEDURE_DISTRIBUTION, 'WP-20 (procedure distribution) — B-03 is its acceptance eval, per the 2026-08-17 ruling; see the NOTE below', [
       note,
       ...ctx.probes.procedure.evidence,
       `and ${NO_AGENT_RUNNER}`,
@@ -352,62 +354,84 @@ const E02_CHECKS: RegisteredCheck[] = [
     specId: 'E-02-emission-on-completion',
     kind: 'key_step',
     matches: 'every gated tool call has a task.action.executed event',
-    run: (ctx) =>
-      blocked(
-        'the gateway middleware — no code in src/ emits any task.action.* event, so there is no ' +
-          'structural emission on tool calls',
-        'the gateway packet (architecture doc §7: "the gateway emits task.action_executed for every call")',
-        [
-          ...ctx.probes.taskFamily('task.action.').evidence,
-          'the spec calls this a platform property by design ("a failure here is usually a platform bug, ' +
-            'not an agent bug") — this is that platform bug, and it is an absence rather than a defect',
-        ]
-      ),
+    run: (ctx) => {
+      const g = ctx.probes.gateway;
+      // Three conditions, and the middle one is the whole point: the
+      // contributed `agent__*` path reaches no chokepoint, so emission at the
+      // registry alone would satisfy a naive reading of this criterion while
+      // leaving a class of write acts unrecorded.
+      const ok = g.actions > 0 && g.dispatches.includes('contributed') && g.actorsComplete;
+      return {
+        verdict: ok ? 'PASS' : 'FAIL',
+        evidence: [
+          'WP-19 · driven for real against this run\'s core, not asserted:',
+          ...g.evidence,
+        ],
+      };
+    },
   },
   {
     specId: 'E-02-emission-on-completion',
     kind: 'key_step',
     matches: 'task.outcome.recorded exists per target site',
-    run: (ctx) =>
-      blocked(
-        'an outcome producer — nothing emits task.outcome.*',
-        'the gateway packet',
-        ctx.probes.taskFamily('task.outcome.').evidence
-      ),
+    run: (ctx) => {
+      const g = ctx.probes.gateway;
+      // "per target site" is the load-bearing half: a single outcome for a
+      // two-site call would pass a bare existence check and fail the spec.
+      const ok = g.outcomes > 0 && g.perTargetOutcomes >= 2;
+      return {
+        verdict: ok ? 'PASS' : 'FAIL',
+        evidence: [
+          `${g.outcomes} outcome event(s) under the run's correlation; the two-site call produced ` +
+            `${g.perTargetOutcomes}, one per target`,
+          'HONEST BOUND, stated because the spec asks for "updated/skipped/failed + versions": v0 ' +
+            'records the CALL\'s result against each target (result_scope="call"), not an ' +
+            'independently observed per-site version. Nothing re-checked each site, so nothing claims to.',
+          ...g.evidence.slice(1, 3),
+        ],
+      };
+    },
   },
   {
     specId: 'E-02-emission-on-completion',
     kind: 'key_step',
     matches: 'task.rationale.recorded exists',
-    run: (ctx) =>
-      blocked(
-        'a rationale producer — nothing emits task.rationale.*',
-        'the gateway packet',
-        ctx.probes.taskFamily('task.rationale.').evidence
-      ),
+    run: (ctx) => {
+      const g = ctx.probes.gateway;
+      return {
+        verdict: g.rationales > 0 ? 'PASS' : 'FAIL',
+        evidence: [
+          `${g.rationales} rationale event(s) emitted by the approval flow under this run's correlation`,
+          'v0 content is the approval card\'s own text plus the (redacted) args and the decision — ' +
+            'verbatim artifacts of what the human was shown and ruled on. Deliberately NOT composed ' +
+            'prose: a synthesised rationale is the boilerplate this spec\'s must_not forbids, wearing ' +
+            'a better disguise. The spec\'s "filter applied, canary choice + reason" content arrives ' +
+            'with WP-20, when the actor has a runbook to reason against.',
+          'a DENIED approval is recorded too, which is what gives the "proceed past a denied ' +
+            'approval" must_not both sides of its comparison',
+        ],
+      };
+    },
   },
   {
     specId: 'E-02-emission-on-completion',
     kind: 'key_step',
     matches: 'all events share the run\'s correlation id; causation chains',
     run: (ctx) => {
+      const g = ctx.probes.gateway;
       const correlated = ctx.fixture.core.ledger
-        .query({ limit: 10_000 })
-        .filter((e) => e.correlation);
-      return blocked(
-        'the action/outcome/rationale events this criterion would correlate — the correlation ' +
-          'MECHANISM works, there is simply nothing yet to chain',
-        'the gateway packet (this criterion unblocks with the three above)',
-        [
-          `${correlated.length} of ${ctx.fixture.core.ledger.count()} seeded event(s) carry a correlation id`,
-          correlated.length
-            ? `and they are the assembler manifests — correlation threading is proven on the one ` +
-              `task.* producer that exists (${correlated[0].topic})`
-            : 'no correlated events at all in the seeded ledger',
-          'no approval event and no action event exist, so a causation chain "approval -> actions" ' +
-            'has neither end',
-        ]
-      );
+        .query({ correlation: g.taskId, limit: 10_000 });
+      return {
+        verdict: g.allCorrelated && g.chained ? 'PASS' : 'FAIL',
+        evidence: [
+          `${correlated.length} event(s) carry this run's correlation ${g.taskId}: ` +
+            `${[...new Set(correlated.map((e) => e.topic))].sort().join(', ')}`,
+          `every action/outcome/rationale event emitted by the run carries it: ${g.allCorrelated}`,
+          `causation chains approval -> action -> outcome: ${g.chained}`,
+          'and it is ABSENT where no approval happened — a direct Tier-2 call carries no causation ' +
+            'rather than a fabricated one',
+        ],
+      };
     },
   },
   {
@@ -425,10 +449,18 @@ const E02_CHECKS: RegisteredCheck[] = [
     matches: 'any write action present in the transcript but absent from the ledger',
     run: (ctx) =>
       blocked(
-        'both sides of the comparison — there is no transcript (no agent runner) and no action ' +
-          'events (no gateway)',
-        'the gateway packet + WP-18',
-        [...ctx.probes.taskFamily('task.action.').evidence, NO_AGENT_RUNNER],
+        // HALF of this blocker was retired by WP-19: the LEDGER side is now
+        // real and measured. What is left is the transcript side — there is
+        // no agent runner producing one to diff against.
+        'the transcript half of the comparison — the ledger half now exists and was driven for real',
+        'WP-18 (the automated runner that produces a transcript to diff)',
+        [
+          ...ctx.probes.gateway.evidence.slice(0, 3),
+          'the structural half of this must_not is now enforced by construction: emission sits at ' +
+            'the registry chokepoint AND at the contributed bypass, so a write act that reached ' +
+            'neither would have to be a dispatch path that exists in neither place',
+          NO_AGENT_RUNNER,
+        ],
       ),
   },
   {
@@ -436,15 +468,31 @@ const E02_CHECKS: RegisteredCheck[] = [
     kind: 'must_not',
     matches: 'rationale that is boilerplate',
     run: (ctx) =>
-      blocked(
-        'rationale events to judge — this is the spec\'s ONLY LLM-judged criterion, and it has no ' +
-          'subject matter yet',
-        'the gateway packet; it becomes OWNER-PENDING the day a rationale producer ships',
+      ownerPending(
         [
-          ...ctx.probes.taskFamily('task.rationale.').evidence,
-          'deliberately NOT filed as OWNER-PENDING: parking a missing producer in a human\'s judgement ' +
-            'queue would hide a platform gap as a pending review',
-        ]
+          // Its own prior text said this becomes OWNER-PENDING the day a
+          // rationale producer ships. WP-19 is that day.
+          `${ctx.probes.gateway.rationales} rationale event(s) now exist to judge, emitted by the ` +
+            `approval flow`,
+          'what v0 records: the approval card\'s verbatim text, the redacted args, and the decision. ' +
+            'It is deliberately NOT model-authored prose — so the honest question for the judge is ' +
+            'whether the record carries RUN-SPECIFIC information, not whether it reads like reasoning.',
+          'the spec\'s fuller content (filter applied, canary choice + reason, history findings) ' +
+            'depends on the actor having a runbook, which arrives with WP-20',
+        ],
+        [
+          'EVAL E-02 — human-in-the-loop criterion (rationale quality; H-02 reserves judges for this).',
+          '',
+          '1. Run any approved write from the Docked Panel chat (a Tier-3 tool, or wp_eval /',
+          '   wp_search_replace) and approve the card.',
+          '2. Read the task.rationale.recorded event in the ledger:',
+          '     SELECT payload FROM events WHERE topic = \'task.rationale.recorded\'',
+          '       ORDER BY id DESC LIMIT 1;',
+          '3. Judge ONLY this: does the record identify THIS run — the specific tool, the specific',
+          '   arguments, and the specific warning the human answered — or would it read identically',
+          '   for any other call? Mark FAIL only for the latter.',
+          '4. Record the verdict in docs/intelligence/WORK_PACKETS.md under WP-19.',
+        ].join('\n')
       ),
   },
   {

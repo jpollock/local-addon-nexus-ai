@@ -3242,7 +3242,7 @@ Also noted for the backlog: an incident producer proper (episodic.incident.*
 from sentinel/diagnose flows) has no packet; candidate to fold into WP-19's
 outcome emission or register separately when M3 planning firms.
 
-### [ ] WP-19 · Gateway emission — task.action/outcome/rationale events  *(M3; unblocks 7 E-02 criteria)*
+### [x] WP-19 · Gateway emission — task.action/outcome/rationale events  *(M3; DELIVERED 2026-08-17 — outcome, judgment calls, findings below)*
 Architecture §7's "the gateway emits task.action_executed for every call",
 made real against the respelled taxonomy. Scope: (1) emit
 `task.action.executed` at the `ToolRegistry.call` chokepoint for gated
@@ -4000,3 +4000,236 @@ two-packets-one-file trigger, resolved by ordering). Pins: parity;
 per-plane routing observable through the real wired path; the four-line
 status renders in Controlled Vocabulary v1 exactly (docs finding №6:
 "development (at WP Engine)" on first session reference).
+
+---
+
+**WP-19 ANNOUNCEMENT (worktree `wp-19`, 2026-08-17) — core-lock-adjacent
+seams claimed: `src/main/mcp/tool-registry.ts` (`ToolRegistry.call`),
+`src/main/chat/ChatService.ts` (`runAgentLoop`/`executeToolCall`, the
+`agent__*` bypass), `src/main/intelligence-host/health.ts` (one producer
+liveness line), plus `tests/intelligence-evals/{probes,checks,runner}.ts`.
+WP-21 is sequenced after this by the architect's own note — same ChatService
+seam.**
+
+Design decided before code, so the record carries the reasoning rather than
+the diff:
+
+- **One producer module** (`intelligence-host/actionProducer.ts`), two call
+  sites, mirroring the audit chokepoint layout CLAUDE.md documents: the
+  registry chokepoint covers MCP/CLI/GraphQL/agent/chat, and the `agent__*`
+  contributed bypass is instrumented separately BECAUSE it reaches no
+  chokepoint (recon §2.2's note; the same class of gap the audit doc lists).
+  ChatService gains call sites and no logic (WP-11's ruling).
+- **Tier boundary: Tier 2+ only.** A Tier-1 read is not an act. The ledger is
+  an audit record, not a keystroke logger — and `task.*` is never deleted
+  (§4.4), so every Tier-1 read would be retained forever.
+- **A blocked Tier-3 gate emits NOTHING.** The call did not execute, so
+  `task.action.executed` would be false. A refusal belongs to the
+  `control.*` family and is out of scope here (noted for a later packet).
+- **Rationale v0 is verbatim, never synthesised**: the approval card's own
+  warning text, the tool name, and the redacted args, plus the human's
+  decision. No prose the actor did not produce. Emitted on BOTH decisions —
+  a denial is the record that makes "proceed past a denied approval"
+  checkable.
+- **Causation chains rationale → action → outcome** on the approval path,
+  and is ABSENT on the direct path, honestly: no approval happened there.
+- **Redaction rides the same walk as the audit sinks** (`redactParams` from
+  `mcp/audit.ts`). The ledger is a fourth durable sink; a new sink that
+  skipped `FREEFORM_FIELDS` would re-open every credential path the audit
+  work closed.
+- **Emission is after the act and cannot alter it.** The gate blocks; the
+  audit records. Every emission is individually wrapped, and the contributed
+  path emits-then-rethrows so a dispatcher failure keeps its exact
+  propagation.
+- `identity.actor()` (ports.ts) had zero consumers since WP-01; the session
+  actor is what ADR-14 asks for and this packet is where it is finally read.
+
+---
+
+**WP-19 OUTCOME — delivered. Every gated act now leaves an audit event, on
+BOTH dispatch paths, and the eval report says so with its own measurements.**
+
+**Acceptance evidence — `npx ts-node tests/intelligence-evals/run.ts`, before → after:**
+
+| | before | after |
+|---|---|---|
+| PASS | 2 | **6** |
+| FAIL | 0 | **0** |
+| BLOCKED | 19 | **14** |
+| OWNER-PENDING | 6 | **7** |
+| spec-level SPEC-DEFECT | 1 | **0** |
+
+E-02 alone went 2 PASS / 7 unresolved → **6 PASS / 2 BLOCKED / 1
+OWNER-PENDING**. The four flips are the packet's scope items:
+`task.action.executed` (with `actor.id` + `actor.via`, ADR-14),
+`task.outcome.recorded` per target site, `task.rationale.recorded`, and
+"all events share the run's correlation; causation chains from approval →
+actions". The two that remain BLOCKED are honest and belong to other packets:
+the manifest's **runbook hash** (WP-20 — nothing distributes a procedure yet)
+and the transcript half of "write action present in the transcript but absent
+from the ledger" (WP-18 — the ledger half is now real and driven). The one
+OWNER-PENDING is E-02's only judged criterion, *rationale that is boilerplate*,
+which its own prior text said would become OWNER-PENDING "the day a rationale
+producer ships"; its instructions are a ledger query, not a chat prompt.
+
+The report's evidence is DRIVEN, not asserted — `probeGatewayEmission` runs an
+approved `wp_plugin_update` through `ToolRegistry.call`, a two-site
+`bulk_plugin_update`, and a contributed `agent__` call through a REAL
+`AgentDispatcher`, all under one TaskId, then reads the ledger back. It also
+measures the negative: a Tier-1 read through the same registry emits nothing.
+
+**Shape delivered**
+
+- `src/main/intelligence-host/actionProducer.ts` (new) — `recordGatedAction`
+  and `recordApprovalRationale`. Two topics + one, schemas `action.executed/1`,
+  `outcome.recorded/1`, `rationale.recorded/1`; `source.system`
+  `gateway:tool-call` (class `work`, trust `emitted`) and `gateway:approval`
+  (class `intent`, trust `elicited` — an approval is elicited intent, not a
+  platform observation).
+- `ToolRegistry.call` gains an optional `task?: { id?, causation? }` (an
+  OBJECT, not two more positional strings after a boolean safety gate) and
+  emits on both the success and the catch path, after the audit write.
+- `AgentDispatcher.dispatch` gains the same optional `task` and emits there —
+  see judgment call 1.
+- `ChatService` threads the turn's TaskId (assembler → `runAgentLoop` →
+  `executeToolCall` → both dispatch paths) and records the approval decision.
+  It gained call sites and no logic, per WP-11's ruling.
+- `IntelligenceCore.identity` exposed; health gains one producer liveness line.
+- Eval harness: `probeGatewayEmission`, four flipped checks, the B-03
+  spec-defect retirement, and `hostShim.ts` (see finding 5).
+
+**Eight judgment calls, recorded because none is forced by the packet text**
+
+1. **Emission for contributed tools lives in `AgentDispatcher.dispatch`, not in
+   ChatService's `agent__*` branch.** The packet (and recon §2.2) point at
+   ChatService.ts:304-325 as "the bypass". It is not the only one:
+   `McpServer.ts:326` dispatches `agent__*` too, so instrumenting the chat
+   branch would have recorded a chat-driven contributed call and silently
+   dropped the identical call from an external MCP client — the exact
+   lies-by-omission shape this packet exists to close. Emitting at chokepoint
+   two also buys the tool's **declared** `permissionTier`, which the safety
+   table cannot answer for (`agent__*` names are absent from `TIER_OVERRIDES`,
+   so `getToolSafety` would have defaulted every contributed Tier-1 read to
+   Tier 2 and recorded reads the durable audit deliberately skips).
+2. **Tier 2+ only, and the floor is shared with the audit write.** A Tier-1
+   read is not an act; `task.*` is never deleted (§4.4), so recording reads
+   would make the audit substrate a permanent keystroke log. Both records now
+   cover the same population by construction, and the eval report carries the
+   measurement so a future change that started recording reads would show up
+   in the report itself.
+3. **A call REFUSED by the Tier-3 confirmation gate emits nothing.** It never
+   executed, so `task.action.executed` would be false. The refusal is a
+   `control.*` fact and wants its own packet — noted for the backlog rather
+   than smuggled in under a `task.` topic.
+4. **Rationale v0 is verbatim and covers BOTH decisions.** The approval card's
+   own warning text, the redacted args, the decision — nothing composed. A
+   synthesised explanation is the boilerplate E-02's must_not forbids, wearing
+   a better disguise. Recording the DENIAL is what gives "proceed past a denied
+   approval" both sides of its comparison.
+5. **One action per call; per-target outcomes; `result_scope: 'call'`.** A
+   two-site call emits one action and two outcomes. The action carries NO
+   entity refs when several targets resolved (naming one of two misattributes
+   the call); the outcomes carry them. Every outcome says `result_scope:
+   'call'` because v0 records the CALL's result against each target — nothing
+   re-checked each site, so nothing claims to. The eval evidence states that
+   bound out loud rather than letting "per target site" imply per-site
+   verification.
+6. **Causation chains approval → action → outcome, and is ABSENT on the direct
+   path.** A direct Tier-2 call carries no causation rather than a fabricated
+   one.
+7. **Redaction rides the shared walk** (`redactParams` / `maskSecretsInString`
+   from `mcp/audit.ts`). The ledger is a fourth durable sink; a new sink that
+   skipped `FREEFORM_FIELDS` would re-open every credential path the audit work
+   closed. Pinned three ways (arg, freeform `code`, `error`) — and the
+   approval-args pin exists because the mutation battery caught its absence.
+8. **`gateway:approval` gets no liveness SLO.** It fires only when a human
+   answers an approval card; many users never do, so a line for it would read
+   "nothing yet" forever on a healthy machine. `unlistedProducersLine` surfaces
+   it anyway — visible, without a liveness claim nobody can meet. The
+   `gateway:tool-call` line is 14 days, justified inline against the two
+   neighbours it sits between.
+
+**Findings**
+
+1. **The contributed bypass has TWO callers.** As above: `ChatService.ts` and
+   `McpServer.ts:326`. `recon-ask-tell.md` §2.2 and its evidence table both
+   name only the ChatService one; the recon is right that the bypass exists and
+   incomplete about where. Worth amending when that doc is next touched.
+2. **`IdentityPort.actor()` had ZERO consumers** from WP-01 until this packet —
+   a declared-but-unread port, the same silent-absence class CLAUDE.md warns
+   about for service handles. It is read now (the session actor is the CLI /
+   unknown-surface actor, and the human on an approval).
+3. **`architecture.md` §7 still says `task.action_executed`** (two-segment),
+   contradicting §4.2's three-segment table. WP-13 found this and left it; this
+   packet is the reader it warned about, and implemented §4.2's spelling (the
+   validator refuses the other). **Proposed one-line owner fix:** §7's last
+   bullet → "the gateway emits `task.action.executed` (+ `task.outcome.recorded`)
+   for every gated call." Not applied — `docs/intelligence/` prose is
+   owner-approval territory.
+4. **CLAUDE.md's "Three sinks, not one" is now FOUR.** The ledger is a durable
+   audit sink with its own redaction obligation. Proposed amendment (not
+   applied, same reason): add a row for `ledger.db` / `intelligence-host/
+   actionProducer.ts` and note that the two dispatch chokepoints now write to
+   both records under one tier rule.
+5. **The eval CLI could not load a real host module.** `AgentDispatcher` →
+   `ipc-handlers` → `electron`, which jest maps to a stub and `ts-node` does
+   not — and ts-node also type-checks, so it failed on the ambient module
+   declaration too (`src/types/electron.d.ts` reaches tsc through the
+   tsconfig's `include`, which ts-node does not read). Fixed by
+   `tests/intelligence-evals/hostShim.ts`: the same jest stubs, aliased through
+   `Module._resolveFilename`, plus a three-line `jest.fn` shim so ONE set of
+   stubs serves both runners. Candidate amendment for
+   `patterns/author-an-eval.md`: an eval that drives a real host seam needs
+   this shim imported first.
+6. **A pre-existing timer leak in `AgentDispatcher`** (not fixed, out of
+   scope): `dispatchFunction`/`dispatchRun` clear the 5-minute
+   `HANDLER_TIMEOUT_MS` handle only on the success path, so a handler that
+   THROWS leaves a pending timer for five minutes. Visible as a jest open
+   handle. One `clearTimeout` in each catch, whenever someone owns that file.
+7. **Two mutation-battery anchors silently hit the WRONG line.** Both were
+   short, indentation-only-distinct strings (`outcome: result.isError ? …`,
+   `tier: registered.permissionTier,`) whose 6/8-space form also matches INSIDE
+   a 12-space line above; `String.replace` takes the first. Both reported
+   SURVIVED — i.e. a mutation battery can report a *test* gap that is really an
+   *anchor* bug. **Anchor on two lines**, and treat any SURVIVED as
+   "reproduce it by hand before believing it" (both of these were false, one
+   was real).
+8. **Run ids do not reach the ledger.** `AgentDispatcher` mints a `runId` and
+   passes it to `operation-audit.log`; the envelope has no field for it, and
+   `correlation` (the task id) is the ledger's join. So the two records join to
+   each other only through the tool name and timestamps. Same shape as the
+   already-documented "run id reaches operation-audit.log from only one of
+   three writers" gap; noted, not solved.
+
+**Pattern note — a FIFTH producer shape.** `patterns/add-a-producer.md`
+cp.pick-shape lists four (event-driven, chokepoint tap, one-shot backfill,
+on-demand) and says escalate if none fits. This is a fifth: **gateway emission
+at a dispatch chokepoint**, which necessarily EDITS the dispatching module
+(unlike the tap shape's "no edits to the wrapped module") because what it
+records is an ACT, not a write to a store it can wrap. Its cp.dedup answer is
+"no change gate", for WP-14's reason: an act folds into no twin and has no
+current value, so two identical updates are two acts. Suggested for the
+pattern when the owner next touches it.
+
+**Test results.** Baseline in this worktree before any change: **530 suites /
+6679 passed / 12 skipped**. After: **533 suites / 6719 passed / 12 skipped**,
+zero failures (skipped count unchanged, so the delta is real coverage, not a
+gating artifact). New suites: `actionProducer.test.ts` (21),
+`gatewayEmission.test.ts` (11, covering both chokepoints),
+`chat-gateway-emission.test.ts` (6, end-to-end through `sendMessage`).
+`npx tsc -p . --noEmit` clean; eslint clean on every touched file (the
+`src/intelligence/` seam is untouched — this packet is entirely host-side).
+
+**Mutation battery: 34/34 caught**, each mutating a PRODUCTION line with a
+named witness. Coverage: the tier floor (both directions), all three redaction
+paths, entity fabrication, per-target fan-out, `result_scope`, both causation
+edges, correlation, both actor rules, verbatim rationale, denial recording,
+non-fatality (producer and both chokepoints), the registry write on both
+paths, the blocked-gate silence, the contributed emission (witnessed by the
+chat suite AND by the eval runner suite — the report itself notices the bypass
+going dark), the declared-tier rule, TaskId threading at four points, and the
+health SLO string.
+
+**ABI state: better-sqlite3 is built for SYSTEM NODE (jest), not Electron.**
+Run `npm run rebuild` before loading this in Local. Measured this session:
+Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).

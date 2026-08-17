@@ -19,6 +19,8 @@ import {
   PRODUCER_LIVENESS_SLOS,
 } from '../health';
 import { provisionalEnvironmentId } from '../provisionalEntity';
+import { setIntelligenceCore } from '../coreRegistry';
+import { recordGatedAction } from '../actionProducer';
 
 const DAY = 24 * 3600 * 1000;
 
@@ -368,6 +370,50 @@ describe('the check itself', () => {
 
     // A core that never started is the loudest case of all.
     expect(healthLogLevel(collectIntelligenceHealth({ now: new Date() }))).toBe('warn');
+    core.close();
+  });
+
+  /**
+   * WP-19 · born monitored, and pinned against the REAL producer rather than a
+   * hand-stamped envelope: the SLO's `system` and the string the gateway
+   * actually emits are the two halves of this line working, and a test that
+   * writes the envelope itself would pass while they disagreed.
+   */
+  test('WP-19: the gateway SLO matches what the producer stamps, and never-acted is not degradation', () => {
+    const { core } = makeCore();
+    const slo = PRODUCER_LIVENESS_SLOS.find((s) => s.system === 'gateway:tool-call')!;
+    expect(slo).toBeTruthy();
+
+    const never = collectIntelligenceHealth({ core, now: new Date() });
+    const dark = lineFor(never, 'producer:gateway:tool-call');
+    expect(dark.verdict).toBe('DARK');
+    // A user who only ever READS the fleet never produces one. That is not a
+    // broken pipeline, and a monitor that says it is gets ignored.
+    expect(dark.countsTowardWorst).toBe(false);
+
+    setIntelligenceCore(core);
+    try {
+      recordGatedAction({
+        toolName: 'wp_plugin_update',
+        args: { site: 'site-a' },
+        dispatch: 'registry',
+        outcome: 'success',
+      });
+    } finally {
+      setIntelligenceCore(undefined as never);
+    }
+
+    const now = new Date();
+    expect(lineFor(collectIntelligenceHealth({ core, now }), 'producer:gateway:tool-call').verdict).toBe('OK');
+    const overdue = collectIntelligenceHealth({
+      core,
+      now: new Date(now.getTime() + (slo.sloSeconds + 60) * 1000),
+    });
+    expect(lineFor(overdue, 'producer:gateway:tool-call').verdict).toBe('STALE');
+    // Monitored, so never listed among the unmonitored "other sources".
+    expect(overdue.lines.find((l) => l.key === 'producers:unlisted')?.value ?? '').not.toContain(
+      'gateway:tool-call'
+    );
     core.close();
   });
 

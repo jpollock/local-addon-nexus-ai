@@ -3,6 +3,7 @@ import { createLogger } from '../logging/Logger';
 import { getMetrics } from '../telemetry/MetricsCollector';
 import { CloudflareTransmitter, ErrorCategory } from '../telemetry/CloudflareTransmitter';
 import { getToolSafety, ConfirmationManager, checkTierThreeConfirmation } from './safety';
+import { recordGatedAction } from '../intelligence-host/actionProducer';
 import { parseTarget } from '../../common/target';
 import { findExternalSites } from './site-resolver';
 import { upsertExternalProfile } from '../external/externalSiteStore';
@@ -164,6 +165,10 @@ export class ToolRegistry {
    * @param accessMethod - 'mcp' if called from MCP server, 'cli' if called from CLI/GraphQL, 'agent' if called from an agent tool loop (NexusToolProvider, AiProxyServer)
    * @param requireConfirmation - defaults to true; pass false only when the caller has already obtained an equivalent human confirmation through its own interface (see checkTierThreeConfirmation's doc comment for the residual gap this leaves for accessMethod: 'agent')
    * @param runId - optional agent run identifier, joins operation-audit.log to the diagnostic log
+   * @param task - optional task moment (WP-19): the turn's TaskId becomes the ledger
+   *   `correlation`, and `causation` chains this act to the approval that authorised it. An
+   *   OBJECT rather than two more positional strings, because two adjacent optional strings
+   *   after a boolean gate is a transposition waiting to happen.
    */
   async call(
     name: string,
@@ -175,6 +180,7 @@ export class ToolRegistry {
     // where a `false` was meant. runId is appended instead.
     requireConfirmation: boolean = true,
     runId?: string,
+    task?: { id?: string; causation?: string },
   ): Promise<McpToolResult> {
     const startTime = Date.now();
     logger.debug(`call: name="${name}" via ${accessMethod || 'unknown'}`, { args });
@@ -261,6 +267,23 @@ export class ToolRegistry {
         }
       } catch { /* never throw from an audit path */ }
 
+      // WP-19 · the same act, on the episodic spine. Deliberately AFTER the
+      // execution and after the audit write, and with its own internal
+      // guarding: the gate blocks, the audit records. An emission that could
+      // prevent or alter a call would have inverted that order.
+      recordGatedAction({
+        toolName: name,
+        args,
+        services,
+        accessMethod,
+        dispatch: 'registry',
+        taskId: task?.id,
+        causation: task?.causation,
+        outcome: result.isError ? 'failure' : 'success',
+        error: result.isError ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+        durationMs: duration,
+      });
+
       await maybeUpsertExternalSite(
         args as Record<string, unknown>,
         !result.isError,
@@ -301,6 +324,23 @@ export class ToolRegistry {
           });
         }
       } catch { /* never throw from an audit path */ }
+
+      // WP-19 · the failure side. An act that threw mid-execution is the case
+      // an incident review needs most, and it is the one a success-path-only
+      // producer would silently omit — the same defect the audit write above
+      // was extended to cover.
+      recordGatedAction({
+        toolName: name,
+        args,
+        services,
+        accessMethod,
+        dispatch: 'registry',
+        taskId: task?.id,
+        causation: task?.causation,
+        outcome: 'failure',
+        error: message,
+        durationMs: duration,
+      });
 
       logger.error(`Error in handler "${name}"`, { message, stack: err instanceof Error ? err.stack : undefined });
       return {

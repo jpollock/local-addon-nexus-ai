@@ -18,6 +18,7 @@ import {
   catchUp,
   createStateTwinFold,
   Fold,
+  IdentityPort,
   ulid,
 } from '../../intelligence';
 import { draftFromWpEvent } from './wpEventProducer';
@@ -54,6 +55,13 @@ export interface IntelligenceCore {
    * the mirror, never the gate.
    */
   law?: LawRegistryHandle;
+  /**
+   * The session identity (ADR-14). Exposed at WP-19 because the gateway
+   * producer is the first consumer of `actor()` — every event before it was
+   * emitted by a named system actor, so only `via()` was ever read. OPTIONAL
+   * so a test double built from a partial core keeps working.
+   */
+  identity?: IdentityPort;
   tap: WpEventTap;
   /** Debounced fold catch-up — producers call this after emitting. */
   scheduleFolds: () => void;
@@ -170,16 +178,18 @@ export function initIntelligenceCore(options: {
       storage.set(SATELLITE_ID_KEY, satelliteId);
     }
 
+    const identity: IdentityPort = {
+      // v1 session identity: the OS user, until real session auth exists
+      // (architecture doc §11 watch item 4).
+      actor: () => ({ id: `act_${sanitize(os.userInfo().username)}`, kind: 'human' }),
+      via: () => satelliteId as string,
+      tenant: () => 'local', // ADR-11: single-tenant until the hub exists
+    };
+
     const emitter = createEmitter({
       ledger,
       clock: { now: () => new Date() },
-      identity: {
-        // v1 session identity: the OS user, until real session auth exists
-        // (architecture doc §11 watch item 4).
-        actor: () => ({ id: `act_${sanitize(os.userInfo().username)}`, kind: 'human' }),
-        via: () => satelliteId as string,
-        tenant: () => 'local', // ADR-11: single-tenant until the hub exists
-      },
+      identity,
     });
 
     // Drift observations are themselves events — the fold reports, the ledger remembers.
@@ -264,6 +274,7 @@ export function initIntelligenceCore(options: {
       folds: [stateFold],
       entities,
       law,
+      identity,
       tap,
       scheduleFolds,
       close: () => {

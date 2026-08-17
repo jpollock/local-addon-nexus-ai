@@ -1,0 +1,361 @@
+/**
+ * WP-19 · The gateway producer — architecture §7's "the gateway emits
+ * task.action_executed for every call", made real against the respelled
+ * taxonomy (§4.2: `task.action.executed`, `task.outcome.recorded`,
+ * `task.rationale.recorded`).
+ *
+ * WHY A PRODUCER AND NOT A LOG LINE. `operation-audit.log` already records
+ * every gated call, and this deliberately does not replace it: the audit file
+ * is the compliance record, flat and per-line; the ledger is the EPISODIC
+ * spine, where an act is joinable to the context that produced it
+ * (`WHERE correlation = <task id>` reaches the assembly manifest, the
+ * approval, the action and its outcome as one thread) and to the entities it
+ * touched. Two sinks, two questions. CLAUDE.md's "three sinks, not one" now
+ * reads four; this file is the fourth, and it obeys the same redaction rules
+ * as the other three for exactly that reason.
+ *
+ * FIVE RULES, each of which a reviewer should be able to check against the
+ * code below:
+ *
+ *   1. TIER BOUNDARY — Tier 2+ only. A Tier-1 read is not an act. `task.*`
+ *      events are NEVER deleted (architecture §4.4), so recording reads would
+ *      make the audit substrate a permanent keystroke log of every fleet
+ *      browse. The gate is the same `getToolSafety` the audit chokepoint
+ *      uses, so the two records cover the same population by construction.
+ *   2. NEVER FABRICATE — an outcome is the CALL's outcome, attached to each
+ *      target the layer could RESOLVE (never derive: audit A7). A target it
+ *      cannot identify produces no invented entity id, and the payload says
+ *      how many were unresolved rather than quietly dropping them.
+ *   3. RATIONALE IS VERBATIM — the approval card's own warning text, the tool,
+ *      and the redacted args. Nothing is composed here. Synthesising prose the
+ *      actor never produced would poison the one record an incident review
+ *      trusts most.
+ *   4. REDACTION AT THE WALK, NOT THE CALL SITE — `redactParams` /
+ *      `maskSecretsInString` from `mcp/audit.ts`, so `FREEFORM_FIELDS` and
+ *      every masking layer apply here too and a new call site cannot leak by
+ *      forgetting.
+ *   5. NON-FATAL, AND ORDERED AFTER THE ACT — the gate blocks; the audit
+ *      records. Emission happens after the call has already succeeded or
+ *      failed and is individually wrapped, so an audit fault can neither
+ *      prevent an act nor convert a successful call into an error.
+ *
+ * Out of scope, deliberately: a call REFUSED by the Tier-3 confirmation gate
+ * emits nothing here. It did not execute, so `task.action.executed` would be
+ * false; a refusal is a `control.*` fact and wants its own packet.
+ */
+import { getToolSafety } from '../mcp/safety';
+import { maskSecretsInString, redactParams } from '../mcp/audit';
+import { resolveSite } from '../mcp/site-resolver';
+import type { NexusServices } from '../mcp/types';
+import type { IntelligenceCore } from './bootstrap';
+import { getIntelligenceCore } from './coreRegistry';
+import { environmentEntityId, siteEntityId } from './provisionalEntity';
+
+/** Topics — architecture doc §4.2, three-segment spelling (WP-11 respell). */
+export const ACTION_EXECUTED_TOPIC = 'task.action.executed';
+export const OUTCOME_RECORDED_TOPIC = 'task.outcome.recorded';
+export const RATIONALE_RECORDED_TOPIC = 'task.rationale.recorded';
+
+export const ACTION_EXECUTED_SCHEMA = 'action.executed/1';
+export const OUTCOME_RECORDED_SCHEMA = 'outcome.recorded/1';
+export const RATIONALE_RECORDED_SCHEMA = 'rationale.recorded/1';
+
+/**
+ * The tier at which a tool call becomes an ACT. Same floor as the durable
+ * audit write in `ToolRegistry.call` — if you change one, the two records stop
+ * describing the same population.
+ */
+export const GATED_TIER_FLOOR = 2;
+
+/** `source.system` — one value, so liveness is one row in the health table. */
+export const GATEWAY_SYSTEM = 'gateway:tool-call';
+/** The approval card is a different source: a human's decision, not the layer's. */
+export const APPROVAL_SYSTEM = 'gateway:approval';
+
+/**
+ * Which dispatch path executed the call. Load-bearing, not decorative: the
+ * `agent__*` contributed path reaches NEITHER `ToolRegistry.call` nor its
+ * audit write (recon §2.2; CLAUDE.md's audit-chokepoint list says the same),
+ * so an audit record that could not distinguish them would be unable to show
+ * that the bypass is covered at all.
+ */
+export type DispatchPath = 'registry' | 'contributed';
+
+export interface GatedActionRecord {
+  toolName: string;
+  args: Record<string, unknown>;
+  /** For target resolution. Absent is fine — targets simply go unresolved. */
+  services?: NexusServices;
+  accessMethod?: string;
+  dispatch: DispatchPath;
+  /**
+   * The caller's authoritative tier, where it has one. Contributed agent tools
+   * DECLARE a permission tier (`ContributedToolRegistry`), and their MCP names
+   * are absent from `TIER_OVERRIDES` — so without this the safety table's
+   * default (2) would record a Tier-1 contributed read that the durable audit
+   * deliberately skips, and the two records would stop covering the same
+   * population.
+   */
+  tier?: number;
+  /** The turn's TaskId (chatAssembly). Absent on surfaces with no task frame. */
+  taskId?: string;
+  /** The approval event this act followed from, where one exists. */
+  causation?: string;
+  outcome: 'success' | 'failure';
+  error?: string;
+  durationMs?: number;
+}
+
+export interface ApprovalRationaleRecord {
+  toolName: string;
+  args: Record<string, unknown>;
+  /** The approval card's warning text, VERBATIM. Never composed here. */
+  cardText: string;
+  decision: 'approved' | 'denied';
+  taskId?: string;
+  services?: NexusServices;
+}
+
+/**
+ * Record one gated tool call: one `task.action.executed`, plus one
+ * `task.outcome.recorded` per resolved target (or exactly one when no target
+ * could be resolved — an act with an unknown target is still an act).
+ *
+ * Returns the action event's id so a caller can chain from it; `undefined`
+ * when nothing was recorded (no core, a Tier-1 read, or a fault — all three
+ * are silent by design).
+ */
+export function recordGatedAction(record: GatedActionRecord): string | undefined {
+  try {
+    const core = getIntelligenceCore();
+    if (!core) return undefined; // core optional by contract — degrade silently
+
+    const tier = record.tier ?? getToolSafety(record.toolName).tier;
+    if (tier < GATED_TIER_FLOOR) return undefined; // rule 1
+
+    const targets = resolveTargets(core, record.args, record.services);
+    const resolved = targets.filter((t) => t.refs);
+    // An entity map naming ONE of several targets would misattribute the call
+    // to that site. The per-target outcomes below carry the refs instead.
+    const actionEntity = resolved.length === 1 ? resolved[0].refs! : {};
+
+    // `observed_at`: a tool call is observed live — the fact ("this ran") is
+    // true at the moment the call returns, which is now. cp.observed-at's
+    // "now ONLY for genuinely live observation" case.
+    const observedAt = new Date().toISOString();
+
+    const action = core.emitter.emit({
+      observed_at: observedAt,
+      topic: ACTION_EXECUTED_TOPIC,
+      schema: ACTION_EXECUTED_SCHEMA,
+      entity: actionEntity,
+      actor: actorFor(core, record.accessMethod),
+      source: { class: 'work', system: GATEWAY_SYSTEM, trust: 'emitted' },
+      ...(record.taskId ? { correlation: record.taskId } : {}),
+      // Absent when no approval preceded this call — honest, not empty.
+      ...(record.causation ? { causation: record.causation } : {}),
+      payload: {
+        tool: record.toolName,
+        tier,
+        dispatch: record.dispatch,
+        access_method: record.accessMethod ?? 'unknown',
+        targets: targets.length,
+        targets_resolved: resolved.length,
+        args: redactParams(record.args),
+      },
+    });
+
+    const outcomeEntities = resolved.length ? resolved.map((t) => t.refs!) : [{}];
+    for (const entity of outcomeEntities) {
+      core.emitter.emit({
+        observed_at: observedAt,
+        topic: OUTCOME_RECORDED_TOPIC,
+        schema: OUTCOME_RECORDED_SCHEMA,
+        entity,
+        actor: actorFor(core, record.accessMethod),
+        source: { class: 'work', system: GATEWAY_SYSTEM, trust: 'emitted' },
+        ...(record.taskId ? { correlation: record.taskId } : {}),
+        causation: action.id,
+        payload: {
+          tool: record.toolName,
+          result: record.outcome,
+          // v0 records the CALL's result against each target, not an
+          // independently observed per-site one. Saying so is the difference
+          // between a record and a claim: nothing here re-checked each site,
+          // and a reader must not mistake fan-out for per-site verification.
+          result_scope: 'call',
+          ...(record.durationMs !== undefined ? { duration_ms: record.durationMs } : {}),
+          // Raw tool output — masked, exactly as the audit sinks mask `error`.
+          ...(record.error ? { error: maskSecretsInString(record.error) } : {}),
+        },
+      });
+    }
+
+    // NO CHANGE GATE, and this is not the pattern's cp.dedup being skipped —
+    // same reasoning WP-14 recorded for sync events. The gate compares a value
+    // against `twin_facts`; an act folds into no twin and HAS no current
+    // value. Two identical plugin updates are two acts, and collapsing them
+    // would erase exactly the record this packet exists to create.
+    core.scheduleFolds();
+    return action.id;
+  } catch {
+    // Rule 5. A record lost is a record lost; a call broken by its own audit
+    // would be a far worse failure than the gap it leaves.
+    return undefined;
+  }
+}
+
+/**
+ * Record the human's approval decision as `task.rationale.recorded` v0.
+ *
+ * v0 rationale is the minimal HONEST one: the card the human was shown and
+ * the arguments they approved, plus the decision. It is not an explanation —
+ * no actor produced one at this seam — and inventing one is precisely the
+ * "boilerplate rationale" the E-02 spec forbids, dressed up as content. A
+ * richer rationale becomes possible when the procedure packet (WP-20) gives
+ * the actor a runbook and steps to reason against.
+ *
+ * A DENIED decision is recorded too, and that is the point: without the
+ * denial in the ledger, "did it proceed past a denied approval?" has only one
+ * side of the comparison.
+ *
+ * Returns the event id, so the action that follows can chain its causation.
+ */
+export function recordApprovalRationale(record: ApprovalRationaleRecord): string | undefined {
+  try {
+    const core = getIntelligenceCore();
+    if (!core) return undefined;
+
+    const targets = resolveTargets(core, record.args, record.services);
+    const resolved = targets.filter((t) => t.refs);
+
+    const event = core.emitter.emit({
+      observed_at: new Date().toISOString(),
+      topic: RATIONALE_RECORDED_TOPIC,
+      schema: RATIONALE_RECORDED_SCHEMA,
+      entity: resolved.length === 1 ? resolved[0].refs! : {},
+      // The click IS a human act, even on a machine whose session actor is
+      // unknown — so the fallback keeps `kind: 'human'` and admits the id.
+      actor: core.identity?.actor() ?? { id: 'act_local_operator', kind: 'human' },
+      // Provenance: an approval is elicited intent, not a platform
+      // observation. Trust ranks it accordingly wherever it is read.
+      source: { class: 'intent', system: APPROVAL_SYSTEM, trust: 'elicited' },
+      ...(record.taskId ? { correlation: record.taskId } : {}),
+      payload: {
+        tool: record.toolName,
+        decision: record.decision,
+        prompt: record.cardText,
+        args: redactParams(record.args),
+        source: 'approval-card',
+      },
+    });
+
+    core.scheduleFolds();
+    return event.id;
+  } catch {
+    return undefined;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Actors (ADR-14: actor.id + actor.via)
+// ---------------------------------------------------------------------------
+
+/**
+ * `via` is filled by the emitter from the satellite identity — never set here.
+ * `id`/`kind` name WHO acted, as coarsely as the surface honestly allows:
+ * the chat/MCP model and the agent runtime are agents; anything else is the
+ * machine's session actor (the OS user, until real session auth exists —
+ * architecture §11 watch item 4). This is the first consumer of
+ * `IdentityPort.actor()`, which has existed unused since WP-01.
+ */
+function actorFor(
+  core: IntelligenceCore,
+  accessMethod: string | undefined
+): { id: string; kind: 'human' | 'agent' | 'ability' | 'system' } {
+  if (accessMethod === 'mcp') return { id: 'act_chat_agent', kind: 'agent' };
+  if (accessMethod === 'agent') return { id: 'act_agent_runtime', kind: 'agent' };
+  // 'cli' and unknown: a session on this machine drove it. An unknown session
+  // is 'system', never a fabricated human.
+  return core.identity?.actor() ?? { id: 'act_unknown_caller', kind: 'system' };
+}
+
+// ---------------------------------------------------------------------------
+// Targets
+// ---------------------------------------------------------------------------
+
+/**
+ * The argument names that carry a target across this codebase's tool surface.
+ * A tool whose target rides under some other name simply resolves nothing —
+ * which the payload reports as `targets_resolved: 0` rather than hiding.
+ */
+const TARGET_KEYS = ['site', 'site_id', 'site_ids', 'install_name', 'install_id', 'ssh_target'];
+
+/** WPE aliases the site-link mirror writes. RESOLVE-only; nothing is derived. */
+const REMOTE_NAMESPACES = ['wpe.install_id', 'wpe.install_name', 'graph.site_row'];
+
+interface TargetRef {
+  value: string;
+  refs?: Record<string, string>;
+}
+
+function resolveTargets(
+  core: IntelligenceCore,
+  args: Record<string, unknown>,
+  services: NexusServices | undefined
+): TargetRef[] {
+  const values: string[] = [];
+  for (const key of TARGET_KEYS) {
+    const raw = args?.[key];
+    if (typeof raw === 'string' && raw) values.push(raw);
+    else if (Array.isArray(raw)) values.push(...raw.filter((v): v is string => typeof v === 'string' && !!v));
+  }
+  return values.map((value) => ({ value, refs: entityRefsFor(core, value, services) }));
+}
+
+/**
+ * A target's entity refs, or nothing.
+ *
+ * Local sites go through the SAME derivation every other producer uses, so an
+ * action lands on the entity the ledger already holds for that site. Remote
+ * targets are RESOLVED through aliases the mirror wrote and never derived: a
+ * derived id for an install would mint a second entity beside the real one,
+ * which is audit A7's defect and the exact thing WP-14 fixed for lineage.
+ */
+function entityRefsFor(
+  core: IntelligenceCore,
+  value: string,
+  services: NexusServices | undefined
+): Record<string, string> | undefined {
+  try {
+    const local = services?.siteData ? resolveSite(value, services.siteData) : null;
+    if (local) {
+      return {
+        environment: environmentEntityId(core.entities, local.id),
+        site: siteEntityId(core.entities, local.id),
+      };
+    }
+
+    const entities = core.entities;
+    if (!entities) return undefined;
+    for (const namespace of REMOTE_NAMESPACES) {
+      const candidate = entities
+        .resolve(value, namespace)
+        .filter((c) => c.type === 'env')
+        .sort((a, b) => b.matchedAlias.confidence - a.matchedAlias.confidence)[0]?.entityId;
+      if (!candidate) continue;
+      // WP-16's dual stamp: the logical Site rides alongside the environment
+      // where the graph knows it, so a Site-scoped query sees this act too.
+      let site: string | undefined;
+      try {
+        site = entities.siteOf(candidate) ?? undefined;
+      } catch {
+        /* a faulty entity service must never break a producer */
+      }
+      return { environment: candidate, ...(site ? { site } : {}) };
+    }
+    return undefined;
+  } catch {
+    return undefined; // resolution is best-effort; absence is honest
+  }
+}

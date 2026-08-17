@@ -15,6 +15,7 @@ import { checkFor } from './checks';
 import {
   probeEnvelopeSchema,
   probeEpisodicRetrieval,
+  probeGatewayEmission,
   probeManifestEvent,
   probeProcedureDistribution,
   probeTimestampDiscipline,
@@ -49,29 +50,31 @@ export const SPEC_FINDINGS: Record<string, SpecFinding[]> = {
   // spec now reads task.context.assembled / task.action.executed /
   // task.outcome.recorded / task.rationale.recorded, and the checks in
   // checks.ts bind to those strings.
+  // RETIRED 2026-08-17 (WP-19). B-03's circularity — "gate on M2 AND gate on
+  // the feature it requires" — was a standing SPEC-DEFECT here until the owner
+  // RULED it at the WP-13 escalation: B-03 is not an M2 close-out gate, it is
+  // the acceptance eval of the procedure-distribution packet (WP-20). The
+  // ruling is recorded in TWO places, and this finding is retired rather than
+  // left to rot because BOTH now carry it — the spec file's own ROLE RULING
+  // block and the WP-13 adjudication in WORK_PACKETS.md. The NOTE below keeps
+  // the reasoning visible in the report (a retired defect that vanishes
+  // entirely reads as one that never existed) while no longer demanding a
+  // decision that has already been made.
   'B-03-runbook-push-with-capability': [
     {
-      kind: 'SPEC-DEFECT',
+      kind: 'NOTE',
       summary:
-        'B-03 is registered as a gate on M2 AND as the gate on the feature it requires. The two ' +
-        'cannot both hold; one of them has to move.',
+        'B-03 is WP-20\'s acceptance eval, not an M2 gate — ruled 2026-08-17. Its eleven BLOCKED ' +
+        'criteria are therefore EXPECTED, not a regression.',
       detail: [
-        'WORK_PACKETS.md (WP-11 adjudication): "M2 is code-complete; the milestone closes when ' +
-          'WP-13\'s runner executes those three evals green against the real ledger."',
-        'src/intelligence/assemble/types.ts:16-18: "procedure and tools are present but inert in v0 ' +
-          '(always null / []) — recon §4.3 defers both to the procedure packet, GATED ON EVAL B-03."',
-        'So B-03 cannot pass until procedure distribution ships, and procedure distribution is ' +
-          'gated on B-03. Every one of B-03\'s eleven criteria is BLOCKED on that circle, and the ' +
-          'probe in this report measures it rather than asserting it.',
-        'Reading the two statements together, the assembler\'s is the intended one: B-03 is a ' +
-          'DESIGN gate ("do not build procedure distribution until this eval says what good looks ' +
-          'like"), not an acceptance gate M2 could ever have met.',
+        'Was a SPEC-DEFECT here: the record had B-03 gating M2 while the assembler contract ' +
+          '(src/intelligence/assemble/types.ts:16-18) had procedure distribution gated on B-03.',
+        'Ruled at the WP-13 escalation and applied to the record: the spec file carries a ROLE ' +
+          'RULING block naming WP-20 as the packet B-03 accepts, and the WP-11 adjudication\'s ' +
+          'milestone-DoD sentence is superseded by the WP-13 adjudication in WORK_PACKETS.md.',
+        'Kept as a NOTE rather than deleted so the report still explains why every B-03 criterion ' +
+          'reads BLOCKED: the runbook is not delivered yet, by design, until WP-20 ships.',
       ],
-      specFix:
-        'Owner ruling needed on ONE of: (a) B-03 leaves the M2 close-out set and moves to the ' +
-        'procedure packet as its acceptance eval — recommended, it matches the assembler contract ' +
-        'and leaves M2 gated on E-01/E-02; or (b) M2 stays open until procedure distribution ships, ' +
-        'which makes M2 a much larger milestone than "code-complete" implies.',
     },
   ],
   'E-01-consult-before-risk': [
@@ -117,6 +120,11 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
       procedure: await probeProcedureDistribution(fixture),
       episodic: await probeEpisodicRetrieval(fixture),
       manifest: await probeManifestEvent(fixture),
+      // WP-19. Runs BEFORE the schema/timestamp probes below read the ledger,
+      // so those two validate the gateway's own envelopes rather than a corpus
+      // that predates them — a schema check that never sees the newest
+      // producer's output is a check with a blind spot.
+      gateway: await probeGatewayEmission(fixture),
       schema: probeEnvelopeSchema(fixture),
       timestamps: probeTimestampDiscipline(fixture),
       taskFamily: (prefix: string) => probeTopicFamily(fixture, prefix),

@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createEvalFixture, EvalFixture, INCIDENT_TOPIC } from './fixture';
-import { runEvals } from './runner';
+import { EVALS_DIR, runEvals } from './runner';
 import { CriterionResult, RunReport } from './types';
 
 jest.setTimeout(60_000);
@@ -138,12 +138,44 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     expect(result.missing).toMatch(/episodic\.\* producer/);
   });
 
-  it('the task.* families E-02 needs are measurably empty', () => {
-    for (const family of ['task.action.', 'task.outcome.', 'task.rationale.']) {
-      const result = results.find((r) => r.evidence.some((e) => e.includes(`topicPrefix="${family}"`)))!;
-      expect(result.verdict).toBe('BLOCKED');
-      expect(result.evidence.join(' ')).toContain(`topicPrefix="${family}" returned 0 event(s)`);
+  it('the task.* families E-02 needs are now PRODUCED, and by both dispatch paths', () => {
+    // Was: "measurably empty" — the three criteria were BLOCKED on the absent
+    // gateway producer. WP-19 built it, so what is pinned here now is the
+    // opposite claim, held to the same standard: driven for real, measured off
+    // the ledger, never asserted.
+    for (const text of [
+      'every gated tool call has a task.action.executed event',
+      'task.outcome.recorded exists per target site',
+      'task.rationale.recorded exists',
+    ]) {
+      const result = results.find((r) => r.criterion.text.includes(text))!;
+      expect(result.verdict).toBe('PASS');
     }
+
+    // The pin that matters: the contributed `agent__*` bypass reaches no
+    // chokepoint, so a producer wired only at the registry would satisfy a
+    // bare existence check while leaving those acts unrecorded.
+    const action = results.find((r) =>
+      r.criterion.text.includes('every gated tool call has a task.action.executed event')
+    )!;
+    expect(action.evidence.join(' ')).toContain('dispatch paths observed: contributed, registry');
+    expect(action.evidence.join(' ')).toContain('actor.id + actor.via populated on every action event (ADR-14): true');
+
+    const correlation = results.find((r) => r.criterion.text.includes("share the run's correlation"))!;
+    expect(correlation.verdict).toBe('PASS');
+    expect(correlation.evidence.join(' ')).toMatch(/causation chains approval -> action -> outcome: true/);
+  });
+
+  it('the tier boundary is part of the evidence, not just of the code', () => {
+    // A Tier-1 read emitting nothing is a claim about what the ledger is FOR.
+    // The report carries the measurement, so a future change that started
+    // recording reads would be visible in the report itself.
+    const action = results.find((r) =>
+      r.criterion.text.includes('every gated tool call has a task.action.executed event')
+    )!;
+    expect(action.evidence.join(' ')).toContain(
+      'a Tier-1 read (wp_plugin_list) through the same registry emitted nothing: true'
+    );
   });
 
   it('the one task.* producer that DOES exist was driven for real', () => {
@@ -173,12 +205,31 @@ describe('honesty invariants — the rules that keep the report worth reading', 
     expect(pending.length).toBeGreaterThan(0);
     for (const result of pending) {
       expect(result.ownerPrompt).toBeTruthy();
-      // The spec's verbatim prompt, the seeding command, and H-01's repetition
-      // requirement — without all three the "instructions" are decorative.
+      // Runnable means: it names the spec, and it says what to judge rather
+      // than asking for a general impression. Decorative instructions are the
+      // failure this guards.
+      expect(result.ownerPrompt).toMatch(/^EVAL [BE]-0\d/);
+      expect(result.ownerPrompt).toMatch(/Judge ONLY this|Judge ONLY/);
+    }
+
+    // E-01's sitting is a model-behaviour run, so it additionally needs the
+    // verbatim prompt, the seeding command and H-01's repetition rule —
+    // without all three those instructions cannot be executed.
+    const e01 = pending.filter((r) => r.criterion.specId === 'E-01-consult-before-risk');
+    expect(e01.length).toBeGreaterThan(0);
+    for (const result of e01) {
       expect(result.ownerPrompt).toContain('Update WooCommerce across the fleet.');
       expect(result.ownerPrompt).toContain('--seed-dir');
       expect(result.ownerPrompt).toMatch(/pass\^3/);
     }
+
+    // E-02's one judged criterion (rationale quality) became OWNER-PENDING the
+    // day the rationale producer shipped — its own prior text said it would.
+    // It judges a LEDGER RECORD rather than a transcript, so its instructions
+    // are a query, not a chat prompt.
+    const e02 = pending.filter((r) => r.criterion.specId === 'E-02-emission-on-completion');
+    expect(e02).toHaveLength(1);
+    expect(e02[0].ownerPrompt).toContain('task.rationale.recorded');
   });
 
   it('never fakes a judgement: no criterion is PASS on model behaviour', () => {
@@ -217,14 +268,22 @@ describe('honesty invariants — the rules that keep the report worth reading', 
   });
 
   it('carries the spec-level escalations, so they cannot be lost in chat', () => {
+    // ZERO now, and each zero was earned: E-02's respell finding was ruled and
+    // applied (WP-16b); B-03's circularity was ruled 2026-08-17 and retired
+    // here (WP-19). A retired finding leaves a NOTE behind rather than
+    // vanishing, so the report still explains the state it describes.
     const defects = report.specs.flatMap((s) => s.findings.filter((f) => f.kind === 'SPEC-DEFECT'));
-    // One, not two: E-02's respell finding was RULED and APPLIED, so it was
-    // retired from SPEC_FINDINGS rather than left standing against a spec that
-    // no longer says what it complained about (WP-16b).
-    expect(defects).toHaveLength(1);
+    expect(defects).toHaveLength(0);
     for (const defect of defects) {
       expect(defect.specFix).toBeTruthy();
       expect(defect.detail.length).toBeGreaterThan(0);
+    }
+
+    const notes = report.specs.flatMap((s) => s.findings.filter((f) => f.kind === 'NOTE'));
+    expect(notes.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note.summary).toBeTruthy();
+      expect(note.detail.length).toBeGreaterThan(0);
     }
   });
 
@@ -240,7 +299,16 @@ describe('honesty invariants — the rules that keep the report worth reading', 
     expect(e02.spec.expected.key_steps.join(' ')).not.toContain('task.action_executed');
     expect(e02.findings.filter((f) => f.kind === 'SPEC-DEFECT')).toHaveLength(0);
 
+    // B-03's SPEC-DEFECT is retired, and the retirement is pinned to the
+    // RECORD rather than to this file's word for it: the ruling has to be
+    // readable in the spec on disk, or the finding goes back.
     const b03 = report.specs.find((s) => s.spec.id === 'B-03-runbook-push-with-capability')!;
-    expect(b03.findings.filter((f) => f.kind === 'SPEC-DEFECT')).toHaveLength(1);
+    expect(b03.findings.filter((f) => f.kind === 'SPEC-DEFECT')).toHaveLength(0);
+    const b03Yaml = fs.readFileSync(
+      path.join(EVALS_DIR, 'B-03-runbook-push-with-capability.yaml'),
+      'utf-8'
+    );
+    expect(b03Yaml).toContain('ROLE RULING');
+    expect(b03Yaml).toContain('NOT an M2 close-out gate');
   });
 });
