@@ -6759,3 +6759,25 @@ delivered with this entry.** After 20e: the B-03 sitting needs
 remains standing. ABI on exit was not explicitly stated by the report —
 the merged base was re-measured with jest, so assume SYSTEM NODE:
 `npm run rebuild` before loading Local.
+
+---
+
+### [ ] WP-20e · Eval flip and the UI seam  *(phase 2 of WP-20, sub-packet 5 of 5)*
+
+**ANNOUNCED 2026-08-17 — LOCKS: NONE ON THE CORE.** Worktree
+`.worktrees/wp-20e`, branch `wp-20e`, base `poc/nexintelligence` @ `bba8d0dc`
+(the architect's WP-20d adjudication, roadmap consolidation and PARALLEL_PROTOCOL
+mid-session-ABI amendment were found uncommitted in the primary checkout and are
+committed verbatim there — flagged for fidelity verification; note the commit was
+made by a CONCURRENT session, not this one, and the three-file stat matches what
+this session measured before cutting the worktree).
+
+Surfaces: `tests/intelligence-evals/` (parallel-safe by the lock map) and ONE new
+additive file under `src/main/intelligence-host/` (the render seam — types and
+derivation functions, no UI). Nothing under `src/intelligence/` is touched, so the
+core lock is free for whoever wants it.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit captured before
+any pipe): **556 suites / 7,155 passed / 12 skipped / 7,167 total, exit 0**.
+Eval runner before the flip: **6 PASS / 0 FAIL / 14 BLOCKED / 7 OWNER-PENDING /
+0 SPEC-DEFECT**, exit 2.
