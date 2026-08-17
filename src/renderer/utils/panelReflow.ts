@@ -112,6 +112,15 @@ export function findLocalRoot(): HTMLElement | null {
 /**
  * Read the id of the site Local is currently showing, or null when not on a site screen.
  *
+ * **DEAD, AND WRONG — do not call it.** It has no callers: it was written for the
+ * collapsed tab's badge, that scoping was abandoned for an honest fleet-wide count (see
+ * `DockedPanelContainer.tabSignals`), and the regex below never matched anything anyway,
+ * because Local pushes `/main/site-info/<id>` and this looks for `/site-info/<id>`.
+ * The live parser is `readViewedSiteId` in
+ * `components/DockedPanel/siteContextModel.ts` (WP-22), which handles both forms and is
+ * pinned by tests. This one is kept only because the comment below documents where
+ * Local publishes its route, which is still the seam the live parser reads.
+ *
  * Local puts the active route on the shell as `data-location` (`MainPage.tsx` passes
  * `data-location={currentPath}` into `Window`), so the current site is a DOM attribute
  * rather than something we have to infer. This is what makes the collapsed tab's badge

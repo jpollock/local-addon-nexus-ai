@@ -2,6 +2,8 @@ import React from 'react';
 import { marked, Renderer } from 'marked';
 import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
+import { SiteContextStrip, type SiteChoice } from './SiteContextStrip';
+import type { SiteContextMode } from './siteContextModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 
 const safeRenderer = new Renderer();
@@ -34,10 +36,28 @@ interface UIMessage {
   }>;
 }
 
+/**
+ * What the "Currently in" strip needs, handed down whole.
+ *
+ * The container owns all of it — the strip is a rendering of the container's site
+ * context, not a second opinion about it. `selectedSiteIds` below is derived from the
+ * same selection, which is what keeps the band and the outgoing `siteId` from ever
+ * disagreeing: there is one source, read twice.
+ */
+export interface SiteContextProps {
+  mode: SiteContextMode;
+  siteName: string | null;
+  viewedSiteName: string | null;
+  sites: SiteChoice[];
+  onPick: (siteId: string) => void;
+  onClear: () => void;
+}
+
 interface Props {
   electron: any;
   sessionId: string | null;
   selectedSiteIds: string[];
+  siteContext: SiteContextProps;
   visible: boolean;
   onSessionCreated: (id: string) => void;
   onSessionSaved: (session: ChatSession, messages: ChatMessage[]) => void;
@@ -787,6 +807,11 @@ export class PanelChat extends React.Component<Props, State> {
           messages.map((m) => this.renderMessage(m)),
         ),
       ),
+      // Directly above the composer, and above BOTH branches below: which site the chat
+      // is scoped to is true whether or not the network is. It is also the disclosure
+      // that scope moved when the user navigates mid-session — no toast, no modal, the
+      // band just changes, and the next turn carries the new id.
+      React.createElement(SiteContextStrip, this.props.siteContext),
       offline
         ? React.createElement(
             'div',
