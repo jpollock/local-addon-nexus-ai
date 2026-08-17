@@ -1,7 +1,7 @@
 # Intelligence Layer — Roadmap
 
-*Branch: `poc/nexintelligence` · updated 2026-08-16 · Companion docs:
-[`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (ADRs 1–20 + candidates 21–23),
+*Branch: `poc/nexintelligence` · updated 2026-08-17 · Companion docs:
+[`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (ADRs 1–23, adopted),
 [`docs/intelligence/reconciliation-site-environment-model.md`](docs/intelligence/reconciliation-site-environment-model.md),
 [`docs/intelligence/implementation-audit-three-layer.md`](docs/intelligence/implementation-audit-three-layer.md),
 [`docs/intelligence/TESTING_STRATEGY.md`](docs/intelligence/TESTING_STRATEGY.md),
@@ -90,14 +90,50 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
 **Then, sequential on the core lock:**
 - [x] **WP-21** assembler task frame + per-type routing — DONE 2026-08-17
       (ADR-22 implemented; `nexus_where_am_i` ships the four-line status)
-- [ ] **WP-20** procedure distribution *(B-03 is its acceptance eval; starts
-      with a design note to the owner, not code)*
+- [x] **WP-20** procedure distribution — phase 1 (design note: 7 positions,
+      6 escalations, all ruled) + phase 2 four-fifths MERGED, all on
+      2026-08-17:
+  - [x] **20a** runbook registry (canonical-doc hash + ceiling; 3 loaded /
+        2 refused live; ceiling basis ratified at adjudication)
+  - [x] **20b** grants + arming (capabilityGrants additive v0; three P1
+        paths; `nexus_load_procedure`; first `control.grant.*` producer;
+        always-on index ratified — parity floor is now "no grants")
+  - [x] **20c** delivery (runbook rides the trusted turn — whole once,
+        hash+cursor after; four refusal vocabularies; **the two
+        over-ceiling strict runbooks SPLIT at authority seams**:
+        incident→containment+remediation, promotion→preflight+execute;
+        ceiling raised 8→10 KB at the gate, both originals still refuse)
+  - [x] **20d** attestation + sequencing (cursor folded from existing
+        topics — no new topic needed; guard at BOTH chokepoints;
+        narrative checkpoints named un-gateable; six judgement calls
+        ratified)
+  - [ ] **20e** eval flip + UI seam — **IN FLIGHT** (prompt delivered
+        2026-08-17: four B-03 criteria go programmatic, seven become
+        OWNER-PENDING on `NEXUS_EVAL_API_KEY`; §7 render shapes,
+        vocabulary v1.1-conformant)
 
-**Owner, standing:** worktree/branch housekeeping (many merged worktrees
-parked); surface review (in motion via the designer loop); the WP-20
-phase-2 sub-packets (20a–e, green-lit). AgentRegistry capture instruction
-DISCHARGED — root cause narrowed (lib/ fixture dependency; residual case
-→ WP-23).
+**Docs & design (Track B, same day):** designer loop v4/v5 fully
+reconciled — §6 capabilities answered 12/12, §7 questions 8/8, permissions
+matrix verified against the shipped model verbatim; Controlled Vocabulary
+**v1.1** (procedure rows, install/environments, synced, locative
+phrasing); **the site-at-places matrix ratified** (environment-detail page
+dies; divergence = comparator verdict, never cell inequality) — next
+designer cycle waits on 20e's seam. ADR-17 amended (10 KB
+canonical-document ceiling), ADR-20 amended (procedure re-assert instance,
+policy-before-procedure order).
+
+**Owner, standing:** commit cadence on `docs/intelligence/` (agents
+verbatim-commit anything uncommitted, verified md5-faithful twice);
+worktree/branch housekeeping (many merged worktrees parked);
+`NEXUS_EVAL_API_KEY` for the B-03 sitting (seven OWNER-PENDING once 20e
+lands); the first-real-pull live smoke (chip + sync producer + health
+line + where_am_i at once — needs ABI ELECTRON: `npm run rebuild` first,
+last measurement left the tree on system Node). **Registered, not now:**
+WP-20f deny-flip (MANDATORY ruling attached: shipped-enabled must not
+survive the flip for the two production-scoped capabilities), WP-20g,
+WP-23 (AgentRegistry fixture), guided-runbook ceiling (vacuous at 10 KB
+today, revived by any full-body guided delivery), pre-commit YAML parse
+for law docs, `arms_on:` authoring on the shipped set.
 
 ## Later — deliberately not now
 

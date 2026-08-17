@@ -101,6 +101,16 @@ Baseline with `npm test`, or run the pretest guard first. If your session ran je
 `npm run rebuild` before loading Local again. Never leave the ABI state
 undisclosed.
 
+**The tree can flip under you MID-SESSION** (WP-20d finding): `node_modules`
+is SHARED across every worktree via the symlink, so any `npm test` or
+`npm run rebuild` elsewhere on this machine rebuilds better-sqlite3 to a
+different ABI while your suite is running. A NODE_MODULE_VERSION failure on
+a suite that just passed is the environment, not your change — re-run
+`npm test` (the pretest hook re-flips it) and re-measure before believing
+the red. Same family as the poisoned cache: check the environment before
+diagnosing the code. During multi-agent operation, expect this whenever
+another session touches the repo.
+
 ## Ownership map (contention control)
 
 | Surface | Rule |
