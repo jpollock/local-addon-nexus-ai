@@ -2,7 +2,13 @@ import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { injectThemeVars } from '../../utils/theme';
 import { DockedPanel, PanelTab } from './DockedPanel';
-import { PanelChat } from './PanelChat';
+import { PanelChat, type SiteContextProps } from './PanelChat';
+import type { SiteChoice } from './SiteContextStrip';
+import {
+  readViewedSiteId,
+  resolveSiteContext,
+  selectionSiteIds,
+} from './siteContextModel';
 import { nexusStore } from '../../store/NexusStateManager';
 import { SessionsSidebar } from './SessionsSidebar';
 import {
@@ -22,7 +28,21 @@ interface ContainerState {
   activeSessionId: string | null;
   showSessions: boolean;
   sessionListVersion: number;
-  selectedSiteIds: string[];
+  /**
+   * The site page Local is currently showing, or null on every other screen. Read from
+   * Local's own shell, not stored — navigation is the source, so it is re-read rather
+   * than remembered.
+   */
+  viewedSiteId: string | null;
+  /**
+   * A site the user pinned explicitly. It BEATS the route and survives navigation until
+   * cleared — a user who pins a site and then walks around Local is still asking about
+   * the site they pinned. Deliberately not persisted: a pin that outlived the window
+   * would silently scope tomorrow's first question to a site nobody chose today.
+   */
+  siteOverride: string | null;
+  /** Local's sites, for naming the current one and for the strip's picker. */
+  siteChoices: SiteChoice[];
   streamingStatus: string | null;
   reflowMode: 'in-flow' | 'overlay';
   /** Sessions whose newest message is from the assistant and arrived unseen. */
@@ -51,6 +71,21 @@ const STORAGE_KEY = 'nexus-panel-state';
  */
 const RAIL_BOTTOM_DEFAULT = 88;
 const RAIL_POS_KEY = 'nexus-panel-rail-bottom';
+
+/**
+ * Site context starts EMPTY, not guessed.
+ *
+ * `viewedSiteId` is filled by `refreshViewedSite()` on mount, from Local's own shell,
+ * rather than read in the constructor: the constructor runs in tests with no DOM, and a
+ * container that reads the route at construction time is a container that cannot be
+ * built without one. React 16 flushes a `componentDidMount` setState before paint, so
+ * the empty first render is never seen.
+ */
+const SITE_CONTEXT_DEFAULTS = {
+  viewedSiteId: null as string | null,
+  siteOverride: null as string | null,
+  siteChoices: [] as SiteChoice[],
+};
 
 const SIGNAL_DEFAULTS = {
   unreadChats: null as number | null,
@@ -104,7 +139,7 @@ function readState(): ContainerState {
         activeSessionId: parsed.activeSessionId ?? null,
         showSessions: false,
         sessionListVersion: 0,
-        selectedSiteIds: [],
+        ...SITE_CONTEXT_DEFAULTS,
         streamingStatus: null,
         // Overlay is the fail-safe default: it reserves nothing, so a panel that renders
         // before applyReflow() runs draws correctly instead of assuming space it never got.
@@ -113,7 +148,7 @@ function readState(): ContainerState {
       };
     }
   } catch { /* ignore */ }
-  return { panelState: 'closed', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null, reflowMode: 'overlay', ...SIGNAL_DEFAULTS };
+  return { panelState: 'closed', activeTab: 'chat', activeSessionId: null, showSessions: false, sessionListVersion: 0, ...SITE_CONTEXT_DEFAULTS, streamingStatus: null, reflowMode: 'overlay', ...SIGNAL_DEFAULTS };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
@@ -124,6 +159,13 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   private storeUnsub: (() => void) | null = null;
   private railWasDragged = false;
   private resizeDebounceTimer: number | null = null;
+  private locationObserver: MutationObserver | null = null;
+  /** Ids we have already re-fetched the site list for, so a genuinely unknown id
+   *  costs one extra call rather than one per navigation back to it. */
+  private siteFetchAttempted = new Set<string>();
+  /** True once `GET_SITES` has answered. Until then an unknown id means "not loaded
+   *  yet", not "new site" — without this, mount fetches the list twice. */
+  private siteChoicesLoaded = false;
 
   constructor(props: ContainerProps) {
     super(props);
@@ -170,6 +212,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     injectThemeVars();
     this.setupReflow();
     this.setupSignals();
+    this.setupSiteContext();
     // Deep-link: open panel and activate a specific session from the Activity tab.
     // Receives from Activity tab "View chat →" link once activity events carry session_id.
     this.openSessionListener = (_: any, { sessionId }: { sessionId: string }) => {
@@ -180,6 +223,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
   componentWillUnmount() {
     this.teardownReflow();
+    this.teardownSiteContext();
     if (this.storeUnsub) {
       this.storeUnsub();
       this.storeUnsub = null;
@@ -271,6 +315,129 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       if (open !== this.state.overlayOpen) this.setState({ overlayOpen: open });
     });
   }
+
+  // ── Site context ───────────────────────────────────────────────────────────────
+  //
+  // The panel is mounted on `document.body`, OUTSIDE Local's router (see
+  // `renderer/index.tsx`), so there is no route prop to read and no history to
+  // subscribe to. Local publishes its current path on its own shell instead —
+  // `<div class="Window" data-location={currentPath}>` from `app/renderer/app/
+  // MainPage.tsx` — which makes the site on screen a DOM fact rather than an inference.
+  //
+  // Two listeners, because either one alone has a hole: the attribute mutation catches
+  // navigation WITHIN the main window (React updates the attribute in place), and
+  // `hashchange` catches the case where the shell element is replaced rather than
+  // updated (Local uses HashHistory, so every route change fires it). Both funnel into
+  // one idempotent re-read.
+
+  private setupSiteContext(): void {
+    this.refreshViewedSite();
+    this.loadSiteChoices();
+
+    try {
+      window.addEventListener('hashchange', this.refreshViewedSite);
+      this.locationObserver = new MutationObserver(this.refreshViewedSite);
+      this.locationObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-location'],
+        subtree: true,
+      });
+    } catch {
+      // No DOM to observe (or no MutationObserver). The strip then reports what it
+      // honestly knows — nothing — rather than the panel failing to mount.
+    }
+  }
+
+  private teardownSiteContext(): void {
+    window.removeEventListener('hashchange', this.refreshViewedSite);
+    if (this.locationObserver) {
+      this.locationObserver.disconnect();
+      this.locationObserver = null;
+    }
+  }
+
+  /**
+   * The route Local is showing.
+   *
+   * `querySelector` returns the FIRST match in document order, which is the outer shell:
+   * some screens (CreateSite, PullSite) render their own `Window` nested inside
+   * MainPage's, and the outer one is the one carrying the real current path.
+   *
+   * Falls back to the hash, which carries the same route, for the case where the shell
+   * has not rendered yet.
+   */
+  currentLocation(): string | null {
+    try {
+      const shell = document.querySelector('.Window[data-location]');
+      const attr = shell && shell.getAttribute('data-location');
+      if (attr) return attr;
+      return window.location.hash || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Re-read the route. Idempotent — both listeners call it, and so does mount. */
+  refreshViewedSite = (): void => {
+    const next = readViewedSiteId(this.currentLocation());
+    if (next === this.state.viewedSiteId) return;
+    this.setState({ viewedSiteId: next });
+    // A site created since the list was loaded has no name yet. One re-fetch per
+    // unknown id, so a name we will never learn does not become a fetch per keystroke
+    // of navigation.
+    if (next && this.siteChoicesLoaded && !this.siteFetchAttempted.has(next) && !this.state.siteChoices.some((s) => s.id === next)) {
+      this.siteFetchAttempted.add(next);
+      this.loadSiteChoices();
+    }
+  };
+
+  /**
+   * Local's sites, for the strip's name and its picker. Failure leaves the list empty.
+   *
+   * `GET_SITES` is deliberately the local-only channel, not `GET_SITE_ROWS` (the whole
+   * fleet). The band says "your copy", which is true of a Local site and false of a WP
+   * Engine install or an SSH host — offering those in this picker would put a sentence
+   * on screen that is not true of the thing the user just picked. A fleet-wide scope
+   * picker is a different surface with different words.
+   */
+  loadSiteChoices = (): void => {
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.GET_SITES)
+      .then((sites: unknown) => {
+        this.siteChoicesLoaded = true;
+        if (!Array.isArray(sites)) return;
+        const choices: SiteChoice[] = sites
+          .filter((s: any) => s && typeof s.id === 'string')
+          .map((s: any) => ({ id: s.id, name: typeof s.name === 'string' && s.name ? s.name : s.id }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        this.setState({ siteChoices: choices });
+      })
+      .catch(() => { /* leaves the list empty — the strip falls back to the id, never blocks */ });
+  };
+
+  /**
+   * The name to show for a site id.
+   *
+   * Falls back to the id rather than to a placeholder or an empty band: the id is ugly
+   * and true, and it appears only in the moment before the list arrives (or for a site
+   * Local's own store no longer lists). "Currently in: — your copy" would be worse.
+   */
+  siteNameFor(siteId: string | null): string | null {
+    if (!siteId) return null;
+    const match = this.state.siteChoices.find((s) => s.id === siteId);
+    return match ? match.name : siteId;
+  }
+
+  /** Pin a site. Beats navigation until cleared. */
+  pickSite = (siteId: string): void => {
+    this.setState({ siteOverride: siteId });
+    try { track(this.props.electron.ipcRenderer, 'nexus_panel_site_pinned', {}); } catch (_) {}
+  };
+
+  /** Drop the pin and follow the screen again. */
+  clearSiteOverride = (): void => {
+    this.setState({ siteOverride: null });
+  };
 
   /** Drag the collapsed tab up and down its edge. Vertical only — it is anchored right. */
   private startRailDrag = (e: React.MouseEvent): void => {
@@ -391,7 +558,21 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   render() {
-    const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, selectedSiteIds, reflowMode } = this.state;
+    const { panelState, activeTab, activeSessionId, showSessions, sessionListVersion, viewedSiteId, siteOverride, siteChoices, reflowMode } = this.state;
+
+    // ONE source, read twice: the ids that ride on CHAT_SEND and the band the user reads
+    // are both derived from the same selection here, which is what stops the chat from
+    // answering about one site while the strip names another.
+    const selection = resolveSiteContext(viewedSiteId, siteOverride);
+    const selectedSiteIds = selectionSiteIds(selection);
+    const siteContext: SiteContextProps = {
+      mode: selection.mode,
+      siteName: this.siteNameFor(selection.siteId),
+      viewedSiteName: this.siteNameFor(viewedSiteId),
+      sites: siteChoices,
+      onPick: this.pickSite,
+      onClear: this.clearSiteOverride,
+    };
 
     // Chat is the panel's only content now that Insights is gone.
     const panelContent = React.createElement(PanelChat, {
@@ -399,6 +580,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       electron: this.props.electron,
       sessionId: activeSessionId,
       selectedSiteIds,
+      siteContext,
       visible: panelState !== 'closed',
       onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
       onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
