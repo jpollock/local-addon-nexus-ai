@@ -1,0 +1,297 @@
+/**
+ * WP-20d · the sequence guard — an armed strict runbook's gated calls, refused
+ * out of order.
+ *
+ * The runbook under test is the SHIPPED `rb.bulk-plugin-update`, read through
+ * the real registry: a guard tested against a synthetic runbook would pass
+ * while the authored one claimed different tools at different checkpoints.
+ *
+ * Two properties are load-bearing and neither is obvious:
+ *
+ *  - **A narrative checkpoint cannot gate anything.** Four of the anchor's
+ *    eight are narrative, and nothing in the ledger can ever attest them. If
+ *    they were prerequisites, cp.roll-fleet would be unreachable forever — the
+ *    gate would not be strict, it would be broken. So the guard requires the
+ *    ATTESTABLE predecessors only, and the refusal says which ones those are.
+ *  - **A tool claimed by two checkpoints gates at the EARLIER one.**
+ *    `bulk_plugin_update` is both the canary act and the fleet roll, and no
+ *    ledger event distinguishes them. Gating at cp.canary's position enforces
+ *    backup-and-approval-before-any-update, which is the property the runbook
+ *    actually cares about.
+ */
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
+import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
+import { setIntelligenceCore } from '../coreRegistry';
+import {
+  ACTION_EXECUTED_TOPIC,
+  ACTION_EXECUTED_SCHEMA,
+  OUTCOME_RECORDED_TOPIC,
+  OUTCOME_RECORDED_SCHEMA,
+  RATIONALE_RECORDED_TOPIC,
+  RATIONALE_RECORDED_SCHEMA,
+} from '../actionProducer';
+import { CONTEXT_ASSEMBLED_TOPIC, CONTEXT_ASSEMBLED_SCHEMA } from '../chatAssembly';
+import { armProcedureRun, forgetProcedureRun, registerProcedureTurn } from '../procedureCursor';
+import { checkCheckpointSequence } from '../sequenceGuard';
+import { taskId as mintTaskId } from '../../../intelligence';
+
+const CAPABILITY = 'cap.bulk_plugin_update';
+
+let core: IntelligenceCore;
+let dir: string;
+let task: string;
+
+beforeEach(() => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'intel-guard-'));
+  const kv = new Map<string, unknown>();
+  core = initIntelligenceCore({
+    storage: { get: (k) => kv.get(k) ?? null, set: (k, v) => kv.set(k, v) },
+    logger: { info: () => {}, error: () => {} },
+    dataDir: dir,
+  })!;
+  setIntelligenceCore(core);
+  forgetProcedureRun('s1');
+  task = mintTaskId();
+});
+
+afterEach(() => {
+  core.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function arm(): void {
+  const runbook = core.law!.runbooks.byCapability(CAPABILITY)!;
+  armProcedureRun({
+    sessionId: 's1',
+    capability: CAPABILITY,
+    runbookId: runbook.id,
+    runbookHash: runbook.hash,
+  });
+  registerProcedureTurn({ sessionId: 's1', taskId: task });
+}
+
+function emitManifest(): void {
+  core.emitter.emit({
+    observed_at: new Date().toISOString(),
+    topic: CONTEXT_ASSEMBLED_TOPIC,
+    schema: CONTEXT_ASSEMBLED_SCHEMA,
+    entity: {},
+    actor: { id: 'act_chat_assembler', kind: 'system' },
+    source: { class: 'work', system: 'assembler:chat', trust: 'emitted' },
+    correlation: task,
+    payload: { task, retrieval: [{ store: 'ledger', query: 'q', returned: 1 }] },
+  });
+}
+
+function emitRationale(decision: 'approved' | 'denied'): void {
+  core.emitter.emit({
+    observed_at: new Date().toISOString(),
+    topic: RATIONALE_RECORDED_TOPIC,
+    schema: RATIONALE_RECORDED_SCHEMA,
+    entity: {},
+    actor: { id: 'act_local_operator', kind: 'human' },
+    source: { class: 'intent', system: 'gateway:approval', trust: 'elicited' },
+    correlation: task,
+    payload: { tool: 'bulk_plugin_update', decision, prompt: 'card', source: 'approval-card' },
+  });
+}
+
+function emitAction(tool: string, outcome: 'success' | 'failure' = 'success'): void {
+  const action = core.emitter.emit({
+    observed_at: new Date().toISOString(),
+    topic: ACTION_EXECUTED_TOPIC,
+    schema: ACTION_EXECUTED_SCHEMA,
+    entity: {},
+    actor: { id: 'act_chat_agent', kind: 'agent' },
+    source: { class: 'work', system: 'gateway:tool-call', trust: 'emitted' },
+    correlation: task,
+    payload: { tool, tier: 2, dispatch: 'registry', targets: 1, targets_resolved: 1 },
+  });
+  core.emitter.emit({
+    observed_at: new Date().toISOString(),
+    topic: OUTCOME_RECORDED_TOPIC,
+    schema: OUTCOME_RECORDED_SCHEMA,
+    entity: {},
+    actor: { id: 'act_chat_agent', kind: 'agent' },
+    source: { class: 'work', system: 'gateway:tool-call', trust: 'emitted' },
+    correlation: task,
+    causation: action.id,
+    payload: { tool, result: outcome, result_scope: 'call' },
+  });
+}
+
+/** Everything the anchor runbook can attest before an update may run. */
+function attestPrerequisites(): void {
+  emitManifest();
+  emitRationale('approved');
+  emitAction('wpe_backup_and_verify');
+}
+
+// ---------------------------------------------------------------------------
+
+describe('parity — an unsequenced call is not touched', () => {
+  test('no armed run: every tool passes, including the runbook’s own', () => {
+    expect(checkCheckpointSequence('bulk_plugin_update', task)).toBeNull();
+    expect(checkCheckpointSequence('wpe_backup_and_verify', task)).toBeNull();
+  });
+
+  test('no task id at all: passes (CLI, agents, every pre-WP-20 surface)', () => {
+    arm();
+    expect(checkCheckpointSequence('bulk_plugin_update', undefined)).toBeNull();
+  });
+
+  test('armed, but the tool belongs to no checkpoint: passes', () => {
+    arm();
+    // The fleet-browsing workhorses must keep working mid-procedure, or the
+    // gate becomes a tool-set narrowing this packet deliberately does not do.
+    expect(checkCheckpointSequence('nexus_list_sites', task)).toBeNull();
+    expect(checkCheckpointSequence('wp_plugin_list', task)).toBeNull();
+  });
+});
+
+describe('the refusal, and what it names', () => {
+  test('an update with nothing attested is refused at the first unmet checkpoint', () => {
+    arm();
+
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+
+    expect(refusal).not.toBeNull();
+    expect(refusal.checkpoint).toBe('cp.consult-history');
+    expect(refusal.runbookId).toBe('rb.bulk-plugin-update');
+    expect(refusal.capability).toBe(CAPABILITY);
+  });
+
+  test('the message names the runbook, the checkpoint, and WHAT WOULD ATTEST IT', () => {
+    arm();
+    emitManifest();
+
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+
+    // Instructive-refusal doctrine: a refusal that does not say what would
+    // clear it teaches the model to retry, not to comply.
+    expect(refusal.checkpoint).toBe('cp.approval');
+    expect(refusal.message).toContain('rb.bulk-plugin-update');
+    expect(refusal.message).toContain('cp.approval');
+    expect(refusal.message).toContain('task.rationale.recorded');
+    expect(refusal.message).toMatch(/approved/);
+    expect(refusal.message).toContain('bulk_plugin_update');
+  });
+
+  test('backup before approval is refused — the runbook’s own order, enforced', () => {
+    arm();
+    emitManifest();
+
+    const refusal = checkCheckpointSequence('wpe_backup_and_verify', task)!;
+
+    expect(refusal.checkpoint).toBe('cp.approval');
+  });
+
+  test('with every attestable predecessor attested, the update proceeds', () => {
+    arm();
+    attestPrerequisites();
+
+    expect(checkCheckpointSequence('bulk_plugin_update', task)).toBeNull();
+  });
+
+  test('a FAILED backup does not clear the gate — ab.backup-failed is not waivable', () => {
+    arm();
+    emitManifest();
+    emitRationale('approved');
+    emitAction('wpe_backup_and_verify', 'failure');
+
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+    expect(refusal.checkpoint).toBe('cp.backup');
+  });
+
+  test('the narrative checkpoints are named as un-gateable rather than silently skipped', () => {
+    arm();
+
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+
+    // Four of eight cannot be proven by anything. A gate that stayed quiet
+    // about them would imply it was enforcing all eight.
+    expect(refusal.message).toMatch(/cp\.dry-run/);
+    expect(refusal.message).toMatch(/narrative|cannot verify|not verified/i);
+  });
+});
+
+describe('M4 — proceeding past a denied approval, made impossible', () => {
+  test('a denial refuses the update and says the approval was DENIED, not missing', () => {
+    arm();
+    emitManifest();
+    emitRationale('denied');
+
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+
+    expect(refusal.checkpoint).toBe('cp.approval');
+    expect(refusal.message).toMatch(/denied/i);
+    // "Missing" invites asking again; "denied" says the answer exists.
+    expect(refusal.message).not.toMatch(/has not happened yet/i);
+  });
+
+  test('approved, then denied, then attempted: still refused', () => {
+    arm();
+    emitManifest();
+    emitRationale('approved');
+    emitAction('wpe_backup_and_verify');
+    emitRationale('denied');
+
+    expect(checkCheckpointSequence('bulk_plugin_update', task)!.checkpoint).toBe('cp.approval');
+  });
+});
+
+describe('integrity outranks sequencing', () => {
+  test('a run armed against a different document is not sequenced — 20c\u2019s refusal governs', () => {
+    const runbook = core.law!.runbooks.byCapability(CAPABILITY)!;
+    armProcedureRun({
+      sessionId: 's1',
+      capability: CAPABILITY,
+      runbookId: runbook.id,
+      runbookHash: 'sha256:' + '9'.repeat(64), // the document changed under the run
+    });
+    registerProcedureTurn({ sessionId: 's1', taskId: task });
+
+    // WP-20c already disarms the capability and says so on the turn carrier,
+    // naming both hashes. Refusing tools here as well would punish the same
+    // fault twice, in a message that names the wrong problem — and the
+    // checkpoints attested against the old text do not describe the new one.
+    expect(checkCheckpointSequence('bulk_plugin_update', task)).toBeNull();
+  });
+});
+
+describe('the sequencer’s own failure — blast radius of one capability', () => {
+  test('an unreadable ledger refuses the sequenced tool and nothing else', () => {
+    arm();
+    const broken = { ...core, ledger: { query: () => { throw new Error('ledger down'); } } };
+    setIntelligenceCore(broken as never);
+
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+    expect(refusal.message).toMatch(/could not be read|unreadable/i);
+    // Every unclaimed tool still works: the fault is scoped to the capability
+    // that opted into sequencing, which is the whole of §4's fail-behaviour.
+    expect(checkCheckpointSequence('nexus_list_sites', task)).toBeNull();
+    expect(checkCheckpointSequence('wp_plugin_list', task)).toBeNull();
+  });
+
+  test('no intelligence core: the guard is not in the path at all', () => {
+    arm();
+    setIntelligenceCore(undefined as never);
+
+    expect(checkCheckpointSequence('bulk_plugin_update', task)).toBeNull();
+  });
+
+  test('a guard fault never throws into the caller', () => {
+    arm();
+    const hostile = {
+      get law() {
+        throw new Error('registry exploded');
+      },
+    };
+    setIntelligenceCore(hostile as never);
+
+    expect(() => checkCheckpointSequence('bulk_plugin_update', task)).not.toThrow();
+    expect(checkCheckpointSequence('bulk_plugin_update', task)).toBeNull();
+  });
+});

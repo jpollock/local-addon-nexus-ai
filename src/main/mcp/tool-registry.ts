@@ -4,6 +4,7 @@ import { getMetrics } from '../telemetry/MetricsCollector';
 import { CloudflareTransmitter, ErrorCategory } from '../telemetry/CloudflareTransmitter';
 import { getToolSafety, ConfirmationManager, checkTierThreeConfirmation } from './safety';
 import { recordGatedAction } from '../intelligence-host/actionProducer';
+import { checkCheckpointSequence } from '../intelligence-host/sequenceGuard';
 import { parseTarget } from '../../common/target';
 import { findExternalSites } from './site-resolver';
 import { upsertExternalProfile } from '../external/externalSiteStore';
@@ -229,6 +230,31 @@ export class ToolRegistry {
         return gate.response!;
       }
       handlerArgs = gate.cleanedArgs!;
+    }
+
+    // WP-20d · the checkpoint sequence gate, for a tool an ARMED STRICT runbook
+    // claims. Placed with the Tier-3 gate and before execution, because it is a
+    // gate: the gate blocks, the audit records, and the order between them is
+    // the doctrine WP-19 wrote down. Returns null for every call on every
+    // surface until a capability is armed, so the unarmed path below is
+    // instruction-for-instruction what it was.
+    const sequence = checkCheckpointSequence(name, task?.id);
+    if (sequence) {
+      // Same convention as the blocked Tier-3 attempt above: a refused gated
+      // call leaves a durable trail, or the compliance record shows only the
+      // calls that were allowed to happen.
+      try {
+        services.operationAuditLog?.log({
+          operation: name,
+          target: String(args.site ?? args.install_id ?? args.install_name ?? args.ssh_target ?? 'unknown'),
+          parameters: { ...args, _tier: safety.tier, _accessMethod: accessMethod ?? 'unknown' },
+          outcome: 'failure',
+          error: sequence.message,
+        });
+      } catch { /* never throw from an audit path */ }
+      // Deliberately NO `task.action.executed`: the call did not execute, and
+      // WP-19's producer says a refusal is not an act.
+      return { content: [{ type: 'text', text: sequence.message }], isError: true };
     }
 
     // Execute handler (Tier 3 confirmation, if required, already gated above)

@@ -6361,3 +6361,197 @@ exercises — remediation begun without the verified snapshot is a FAIL).
 PARALLEL_PROTOCOL amended twice as above. WP-20d's prompt delivered to
 the owner with this entry, per the standing sequence. 20b remains in
 flight; its merge order stays free.
+
+---
+
+### [ ] WP-20d · Attestation and sequencing  *(phase 2 of WP-20, sub-packet 4 of 5)*
+
+**ANNOUNCED 2026-08-17 — LOCKS TAKEN.** Worktree `.worktrees/wp-20d`, branch
+`wp-20d`, base `poc/nexintelligence` @ `64f7ee53` (WP-20c merged at `c11878f5`;
+the architect's merge-acceptance entry and the three post-merge doc corrections
+were found uncommitted in the primary checkout and committed VERBATIM,
+attributed, at `64f7ee53` before this worktree was cut — flagged for fidelity
+verification).
+
+Locks: **core-lock-adjacent** (`ToolRegistry.call`, `AgentDispatcher.dispatch`),
+**core** (`assemble/procedure.ts`'s cursor rendering — free since 20c merged),
+and the anchor runbook's authored frontmatter. The integration lock
+(`src/main/index.ts`, `ipc-handlers.ts`) is **not** taken.
+
+**Seam with WP-20b (in flight, unmerged).** Measured: 20b touches neither
+`law/` nor `docs/intelligence/anchor-slice/`, so the runbook authoring is
+uncontended. The one shared file is `chatAssembly.ts`, where 20b replaces the
+`procedure:` spread with its `procedureRequestForTurn(...)` call and 20d
+attaches the cursor to whatever that returns — **the same three lines**.
+Resolved by announcement, per the 20c precedent: whichever merges second
+re-applies a one-line change, and 20d consumes arming purely as request input
+(nothing here decides whether a capability is armed).
+
+**Measured before designing — trust no fact table (WP-20a finding 1):**
+
+- All eight anchor checkpoints are `attest: narrative` today, `tools: []`,
+  `tool_scope: advisory`, no `arms_on`. Nothing is authored; the design note's
+  §4 table is a plan, not a description.
+- `bulk_plugin_update` is absent from `TIER_OVERRIDES` and therefore Tier 2 by
+  default; `wpe_backup_and_verify` is Tier 2 explicitly. Both clear WP-19's
+  `GATED_TIER_FLOOR`, so both are gated calls the sequencer can see.
+- `ToolRegistry.call` already receives `task?: { id, causation }` (WP-19), and
+  `AgentDispatcher.dispatch` receives the same. The guard has a correlation to
+  work with at both chokepoints without new plumbing.
+
+**The finding that shapes the packet, stated up front because it changes the
+design:** `correlation` is the **per-TURN** TaskId (`chatAssembly` mints one per
+call to `assembleForChatTurn`), while a procedure spans many turns. A cursor
+folded by a single correlation would see only the turn it was asked about —
+cp.approval on turn 3 would be invisible to the guard on turn 4. The fold is
+therefore scoped to the **procedure run** (the set of turn TaskIds since the
+capability armed), held host-side exactly as 20c's `sessionProcedureHash` is,
+and derived — no new topic, no new envelope field, nothing stored. §4's "nothing
+new is stored: the cursor is derived" survives; what changes is the key.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code before
+any pipe) — recorded in the outcome note below. Expect a skipped-count
+difference against the merged base's 548/7,036/2: this worktree holds one
+embedding model, the primary holds two.
+
+---
+
+**WP-20d OUTCOME — done (branch `wp-20d`).** A gated call belonging to an armed
+strict runbook is now refused unless the ledger can show the checkpoints before
+it happened. The cursor is folded, not stored; the refusal names the checkpoint,
+the remedy and the four things the platform *cannot* verify; and M4 — "proceeded
+past a denied approval" — is a programmatic query for the first time.
+
+Jest, compiled worktree, tree held still, exit code captured before any pipe.
+Baseline at `64f7ee53`: **548 suites / 7,026 passed / 12 skipped / 7,038 total,
+exit 0**. Branch: **551 / 7,068 / 12 / 7,080, exit 0**. Delta **+3 suites, +42
+tests, skipped unchanged** (the worktree's twelve are the ten embedding tests
+plus two others; the merged base reports two because the primary checkout holds
+both model files — the protocol's both-ways rule, exercised as predicted).
+`npx tsc -p . --noEmit` clean; eslint clean across `src/intelligence`,
+`src/main/intelligence-host`, `tool-registry.ts` and `AgentDispatcher.ts`.
+**Mutation battery 25/25 killed by their named witness** (two needed a rewrite —
+see finding 7).
+
+### The escalation, pre-answered — and it does NOT fire
+
+`task.checkpoint.attested` is **not needed and not added**. §4's "nothing new is
+stored: the cursor is derived" survives contact with the implementation: the
+fold reads `task.context.assembled`, `task.rationale.recorded`,
+`task.action.executed` and `task.outcome.recorded` — all four already emitted by
+WP-11 and WP-19 — and computes the cursor at read time, the way twins are
+computed. No new topic, no new envelope field, no new storage marker, no
+`wpeOperationPermissions` semantics touched. Nothing here needs a gate hold, so
+this packet merged.
+
+A refusal likewise emits nothing: WP-19's producer is explicit that a refused
+call did not execute, so `task.action.executed` would be false. Refusals ARE
+written to `operation-audit.log` at both chokepoints, mirroring the blocked-
+Tier-3 convention, so the compliance record shows attempts that were stopped.
+
+### What was built
+
+`procedureCursor.ts` (the fold + the run registry), `sequenceGuard.ts` (the
+decision), guard calls at **both** dispatch chokepoints, the anchor runbook's
+`attest:`/`evidence:`/`tools:` authored, and 20c's re-assert line taught to
+distinguish "not yet attested" from "cannot be attested".
+
+### Findings
+
+1. **`correlation` is the per-TURN TaskId, and a procedure spans many turns.**
+   `chatAssembly` mints a TaskId per call. §4 says to fold "by correlation", and
+   a literal reading would have folded one turn: an approval given on turn 3
+   would be invisible to the backup gate on turn 4, forever. The fold is keyed
+   to the **procedure run** — the turn ids since arming, held host-side exactly
+   as 20c's `sessionProcedureHash` is, for the same ADR-10 reason. Still derived,
+   still nothing stored; only the key changed. This is the finding the packet's
+   design turns on and it is pinned by its own case (`spans the turns of one
+   run`) and by M01.
+2. **A narrative checkpoint cannot gate anything, and saying so is load-bearing.**
+   Four of the anchor's eight have no attesting event and never will. Had they
+   been prerequisites, cp.roll-fleet would be permanently unreachable — the gate
+   would not be strict, it would be broken. So the guard requires the
+   ATTESTABLE predecessors only, **and the refusal names the narrative ones as
+   un-gateable**. A gate silent about its own reach implies a reach it does not
+   have, which is the same failure as a green tick over an unchecked step.
+3. **A tool claimed by two checkpoints gates at the EARLIER one — and for THIS
+   runbook the choice is currently unobservable.** `bulk_plugin_update` is both
+   cp.canary and cp.roll-fleet, and no event distinguishes them. Gating at
+   cp.canary enforces approval-and-backup-before-any-update. Measured while
+   building the battery: because everything between the two claims is narrative,
+   the attestable-prerequisite set is identical either way, so no test can tell
+   them apart today. The rule is still the safe one and is stated in code; a
+   runbook with an event-attested checkpoint between two claims would make it
+   visible.
+4. **cp.consult-history attests only when an episodic query actually ran.** The
+   manifest attestation reads `manifest.retrieval[]` for a `store: 'ledger'`
+   record. Measured live in the carrier suite: with no site selected the
+   assembler runs no episodic query, so the manifest cannot attest consultation
+   — correctly. `returned: 0` DOES attest (the query ran; an empty history is a
+   finding, not a failure to consult). B-03's K1 should be read with that
+   distinction in hand.
+5. **A denial is not an absence.** The fold reports `denied` separately from
+   unattested, and the latest decision per tool governs: approved-then-denied
+   does NOT attest. A `.some(approved)` implementation would let a run proceed
+   after a denial because an earlier turn had approved something — precisely
+   what `ab.approval-denied` forbids. Pinned in both directions (M03).
+6. **The shared `node_modules` flipped ABI under this session.** Mid-packet, a
+   suite that had just passed failed with `NODE_MODULE_VERSION 146` — Electron's
+   — because `node_modules` is symlinked into every worktree and something else
+   on this machine rebuilt better-sqlite3 while WP-20d was running. `npm run
+   pretest` restored it and everything passed again. **The protocol's "bare
+   `npx jest` skips the pretest hook" note needs a second half: with parallel
+   agents the ABI can flip *while you work*, so a sudden mass-native failure is
+   the shared tree, not your change.** Same class as the poisoned cache: check
+   the environment before believing the red.
+7. **Two mutations had to be rewritten, and one of them exposed something real.**
+   `if (x && false)` is a BUILD-ERROR under ts-jest (WP-20a finding 8, third
+   sighting). And the guard's outer `catch` — deliberate, rule 4 — makes some
+   internal-logic mutations unobservable: dropping the unclaimed-tool early
+   return let execution fall through, throw, and get caught, producing exactly
+   the same `null`. The mutation was re-aimed at an observably-wrong behaviour
+   (claiming an unclaimed tool at a later checkpoint) and then killed. Worth
+   knowing generally: a catch-all that returns the safe default absorbs mutants,
+   so a battery over guarded code must mutate to a WRONG ANSWER, not to a crash.
+8. **WP-20a's "all eight narrative" pin is now false by design.** It has been
+   replaced, not deleted: `shippedRunbooks.test.ts` now pins the authored 4/4
+   ratio, every event checkpoint's exact ledger selector, and that the update
+   tool is `bulk_plugin_update` and never `wp_plugin_update` (§5's finding — the
+   latter is in `NEEDS_RUNNING_SITE` and would start a halted site without the
+   model choosing to, failing B-03's must_not #3 on its behalf).
+
+### Judgement calls, each pinned, each cheap to reverse
+
+- **Narrative checkpoints are not prerequisites** (finding 2).
+- **Earliest-claimer gating** for a tool named by several checkpoints (finding 3).
+- **A run armed against a different document hash is NOT sequenced.** WP-20c
+  already disarms the capability and names both hashes; refusing tools here too
+  would punish one fault twice with a message naming the wrong problem, and the
+  checkpoints attested against the old text do not describe the new one.
+- **The derived cursor overrides a caller-supplied one.** An attestation a
+  caller can hand in is a claim, and P4's whole content is that an attestation
+  is never a claim. (This changed a WP-20c test, which now emits real events
+  instead of supplying a cursor — strictly the better pin.)
+- **cp.canary stays narrative** even though an update act is observable:
+  cardinality is provable, the CHOICE of a low-risk site is not, and `event`
+  would render a verified tick over the unprovable half.
+- **A ledger fault refuses the sequenced capability and renders no cursor.** An
+  empty cursor would say "nothing attested yet"; an unreadable ledger says
+  nothing of the kind.
+
+### The seam with WP-20b (still in flight)
+
+Unchanged from the announcement: `chatAssembly.ts`'s procedure spread is the one
+shared region, and 20d now wraps whatever request reaches it in `withCursor(...)`.
+Whichever packet merges second re-applies a one-line change. Nothing in 20d
+decides whether a capability is armed, and with nothing armed — production today
+— the guard returns `null` for every call on every surface, which is the parity
+pin (`PARITY: with nothing armed, a claimed tool runs exactly as before`).
+
+### What WP-20e inherits
+
+M4 is now a real query: `foldProcedureCursor(...).denied` contains `cp.approval`
+exactly when the latest decision was a denial. K3 (backup before update) and K5
+(ordering) are enforced rather than observed. K1 is manifest-verifiable on the
+supply side, with finding 4's caveat. The four narrative criteria still need a
+live model, unchanged.

@@ -103,11 +103,43 @@ describe('the anchor runbook across a multi-turn session', () => {
   });
 
   test('a cursor turns the re-assert into progress: attested, and what is next', async () => {
-    await turn(armed());
-    const second = await turn(armed({ cursor: { attested: ['cp.consult-history', 'cp.dry-run'] } }));
+    // WP-20d: the cursor is DERIVED from the ledger, not supplied — an
+    // attestation a caller could hand in would be a claim, which is the one
+    // thing P4 says an attestation can never be. So the progress here comes
+    // from a real approval event on a real earlier turn.
+    const first = await turn(armed());
+    // The assembler's own manifest attests cp.consult-history only when it
+    // actually ran an episodic query — which needs a resolved target, and this
+    // harness selects no site. So the consultation is emitted explicitly here,
+    // standing in for a turn that named one. (Measured, not assumed: without
+    // this the cursor correctly reports cp.consult-history unattested.)
+    core.emitter.emit({
+      observed_at: new Date().toISOString(),
+      topic: 'task.context.assembled',
+      schema: 'context.assembled/1',
+      entity: {},
+      actor: { id: 'act_chat_assembler', kind: 'system' },
+      source: { class: 'work', system: 'assembler:chat', trust: 'emitted' },
+      correlation: first!.taskId,
+      payload: { task: first!.taskId, retrieval: [{ store: 'ledger', query: 'q', returned: 1 }] },
+    });
+    core.emitter.emit({
+      observed_at: new Date().toISOString(),
+      topic: 'task.rationale.recorded',
+      schema: 'rationale.recorded/1',
+      entity: {},
+      actor: { id: 'act_local_operator', kind: 'human' },
+      source: { class: 'intent', system: 'gateway:approval', trust: 'elicited' },
+      correlation: first!.taskId,
+      payload: { tool: 'bulk_plugin_update', decision: 'approved', prompt: 'card', source: 'approval-card' },
+    });
 
-    expect(second!.turnBlock).toContain('Attested: cp.consult-history, cp.dry-run.');
-    expect(second!.turnBlock).toContain('Next: cp.approval.');
+    const second = await turn(armed());
+
+    expect(second!.turnBlock).toContain('Attested: cp.consult-history, cp.approval.');
+    expect(second!.turnBlock).toContain('Next gated checkpoint: cp.backup');
+    // The four the platform cannot prove are named as such, every turn.
+    expect(second!.turnBlock).toContain('cannot verify cp.dry-run, cp.canary, cp.verify-canary, cp.report');
   });
 
   test('clearing the session re-delivers in full — a forgotten actor carries nothing', async () => {
@@ -128,6 +160,28 @@ describe('the anchor runbook across a multi-turn session', () => {
     // The actor was told nothing this turn, so it cannot be assumed to still
     // carry the document: the next arming turn ships it whole.
     expect((rearmed!.procedure as ProcedureDelivery).assertFull).toBe(true);
+  });
+
+  test('a disarmed turn ends the RUN as well as the memory — attestations do not carry over', async () => {
+    const first = await turn(armed());
+    core.emitter.emit({
+      observed_at: new Date().toISOString(),
+      topic: 'task.rationale.recorded',
+      schema: 'rationale.recorded/1',
+      entity: {},
+      actor: { id: 'act_local_operator', kind: 'human' },
+      source: { class: 'intent', system: 'gateway:approval', trust: 'elicited' },
+      correlation: first!.taskId,
+      payload: { tool: 'bulk_plugin_update', decision: 'approved', prompt: 'card', source: 'approval-card' },
+    });
+
+    await turn({ procedure: { grants: [grant] } }); // disarmed turn
+    const rearmed = await turn(armed());
+
+    // The approval belonged to a run the actor was told had stopped. Carrying
+    // it into the next arming would let a procedure inherit consent that was
+    // given for a different one.
+    expect(rearmed!.turnBlock).not.toContain('Attested: cp.approval');
   });
 
   test('a stale pin refuses on the wired path too, naming both hashes', async () => {

@@ -14,6 +14,7 @@ import { getAgentSetting } from '../ipc-handlers';
 import type { EventLog } from '../logging/eventLog';
 import { newRunId } from '../logging/runId';
 import { recordGatedAction } from '../intelligence-host/actionProducer';
+import { checkCheckpointSequence } from '../intelligence-host/sequenceGuard';
 
 // Ban consecutive underscores so the __ MCP delimiter is unambiguous.
 const VALID_AGENT_NAME = /^[a-z0-9](?:[a-z0-9]|_(?!_)|-)*[a-z0-9]$|^[a-z0-9]$/;
@@ -88,6 +89,29 @@ export class AgentDispatcher {
         content: [{ type: 'text', text: `Tool ${agentName}/${toolName} not found` }],
         isError: true,
       };
+    }
+
+    // WP-20d · chokepoint TWO gets the same sequence gate as chokepoint one.
+    // No shipped runbook claims a contributed tool today, so this refuses
+    // nothing — and that is exactly why it is here: `McpServer`'s `tools/call`
+    // routes `agent__*` names straight past `ToolRegistry.call`, so a guard
+    // wired only there would be a guard with a documented bypass. The name is
+    // the QUALIFIED one, matching what the audit and the ledger record, so a
+    // runbook claiming a contributed tool must name it the same way.
+    const sequence = checkCheckpointSequence(`${agentName}/${toolName}`, task?.id);
+    if (sequence) {
+      try {
+        this.services.operationAuditLog?.log({
+          operation: `${agentName}/${toolName}`,
+          target: args && typeof args === 'object'
+            ? String((args as Record<string, unknown>).site ?? 'unknown')
+            : 'unknown',
+          parameters: args && typeof args === 'object' ? (args as Record<string, unknown>) : {},
+          outcome: 'failure',
+          error: sequence.message,
+        });
+      } catch { /* never throw from an audit path */ }
+      return { content: [{ type: 'text', text: sequence.message }], isError: true };
     }
 
     // Mint a run id so this dispatch is discoverable in the event log, and thread it through

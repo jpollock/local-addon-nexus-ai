@@ -27,6 +27,13 @@ import {
   TaskFrame,
 } from '../../intelligence';
 import { getIntelligenceCore } from './coreRegistry';
+import {
+  armProcedureRun,
+  foldProcedureCursor,
+  forgetProcedureRun,
+  registerProcedureTurn,
+  runForTask,
+} from './procedureCursor';
 import { environmentEntityId, siteEntityId } from './provisionalEntity';
 import { buildTaskFrame, describeEnvironmentsFor } from './taskFrame';
 import { wrapUntrusted } from '../mcp/pii';
@@ -119,6 +126,9 @@ const sessionProcedureHash = new Map<string, string>();
 export function forgetChatAssemblySession(sessionId: string): void {
   sessionPolicyHash.delete(sessionId);
   sessionProcedureHash.delete(sessionId);
+  // WP-20d: and the checkpoint run, which is the same kind of "what has this
+  // actor already done" state, held for the same ADR-10 reason.
+  forgetProcedureRun(sessionId);
 }
 
 export async function assembleForChatTurn(
@@ -153,7 +163,11 @@ export async function assembleForChatTurn(
       task: { id: taskId, intent: req.userMessage },
       targets,
       ...(frame ? { frame } : {}),
-      ...(req.procedure ? { procedure: req.procedure } : {}),
+      // WP-20d attaches the checkpoint cursor to whatever procedure request
+      // reaches here (20b decides arming; this packet decides nothing about
+      // it). Absent when nothing is armed, which is what keeps an unarmed turn
+      // byte-identical.
+      ...(req.procedure ? { procedure: withCursor(req.procedure, req.sessionId, taskId) } : {}),
       surface: CHAT_SURFACE,
       policyDivergences,
       context: {
@@ -180,6 +194,10 @@ export async function assembleForChatTurn(
       sessionProcedureHash.set(req.sessionId, bundle.procedure.hash);
     } else {
       sessionProcedureHash.delete(req.sessionId);
+      // A turn that delivers nothing ends the run: the checkpoints attested
+      // against a procedure the actor was told to stop following must not carry
+      // into the next arming. Same reasoning as the hash above (WP-20c f6).
+      forgetProcedureRun(req.sessionId);
     }
 
     emitManifest(core, bundle, targets);
@@ -194,6 +212,58 @@ export async function assembleForChatTurn(
     };
   } catch {
     return null; // swallow everything: a chat turn is never broken by this layer
+  }
+}
+
+/**
+ * WP-20d · the cursor, attached to this turn's procedure request.
+ *
+ * Arming registers the turn with the run FIRST, so the fold covers this turn as
+ * well as the earlier ones: `correlation` is per-turn and the run is not, which
+ * is the measurement this whole packet turns on. Nothing here decides whether a
+ * capability is armed — that is WP-20b's, and an absent `armed` means no run,
+ * no cursor, and a request identical to the one 20c already handles.
+ *
+ * Non-fatal like everything on this seam: a fold that cannot run leaves the
+ * request without a cursor, and 20c renders "the platform is not attesting
+ * checkpoints", which is then exactly true.
+ */
+function withCursor(
+  procedure: ProcedureRequest,
+  sessionId: string,
+  taskId: string
+): ProcedureRequest {
+  try {
+    const armed = procedure.armed;
+    if (!armed) return procedure;
+
+    const core = getIntelligenceCore();
+    const runbook = core?.law?.runbooks.byCapability(armed.capability);
+    if (!core || !runbook) return procedure;
+
+    armProcedureRun({
+      sessionId,
+      capability: armed.capability,
+      runbookId: runbook.id,
+      runbookHash: runbook.hash,
+    });
+    registerProcedureTurn({ sessionId, taskId });
+    const run = runForTask(taskId);
+    if (!run) return procedure;
+
+    const state = foldProcedureCursor(run, runbook.checkpoints, core.ledger);
+    // A fault is NOT rendered as an empty cursor: an empty cursor says "nothing
+    // attested yet", and an unreadable ledger says nothing of the kind. The
+    // guard refuses this capability's calls in that state; the carrier stays
+    // silent rather than claiming progress it could not read.
+    if (state.fault) return procedure;
+
+    return {
+      ...procedure,
+      cursor: { attested: state.attested, narrative: state.narrative, denied: state.denied },
+    };
+  } catch {
+    return procedure;
   }
 }
 
