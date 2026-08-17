@@ -19,6 +19,7 @@ const doc = (over: Partial<LawDocument> = {}): LawDocument => ({
   // carries placeholders, since nothing in this suite reads them.
   hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
   canonicalBytes: 0,
+  canonicalText: '',
   constraints: [
     {
       id: 'c.gateway-rule',

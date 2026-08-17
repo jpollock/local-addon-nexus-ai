@@ -57,6 +57,14 @@ export interface LawDocument {
   hash: string;
   /** Byte length of that same canonical text. The runbook ceiling measures this. */
   canonicalBytes: number;
+  /**
+   * That same canonical text itself (WP-20c). The hash pins it, the ceiling
+   * measures it, and the turn carrier DELIVERS it — one string for all three,
+   * because a payload that is not the thing the hash covers is a payload no
+   * grant authorised. Reconstructing it from `body` + `frontmatter` at delivery
+   * time would re-serialise the YAML and break that identity silently.
+   */
+  canonicalText: string;
 }
 
 /* ------------------------------------------------------------------ *
@@ -156,8 +164,10 @@ export interface Runbook {
   tools: RunbookTool[];
   toolScope: ToolScope;
   armsOn?: RunbookArmingPredicate;
-  /** Markdown prose after the frontmatter block — the procedure a turn carries. */
+  /** Markdown prose after the frontmatter block. */
   body: string;
+  /** The canonical whole document — what the hash covers and what a turn carries (WP-20c). */
+  canonicalText: string;
   /** The raw frontmatter, kept for fields no packet models yet. */
   frontmatter: Record<string, unknown>;
 }
@@ -176,6 +186,24 @@ export interface RunbookLoadError extends LawLoadError {
   code: RunbookRefusalCode;
   /** The runbook's declared id, when it got far enough to have one. */
   runbookId?: string;
+}
+
+export const RUNBOOK_WARNING_CODES = ['near-ceiling'] as const;
+export type RunbookWarningCode = (typeof RUNBOOK_WARNING_CODES)[number];
+
+/**
+ * A runbook that LOADED and is worth saying something about (WP-20c gate).
+ *
+ * Deliberately a third list, beside `loadErrors` ("not a law document") and
+ * `runbookErrors` ("loaded, contract unhonourable"). A warning folded into
+ * either would read as a failure, and this one is the opposite: the document
+ * works, and its author is being told how much margin is left.
+ */
+export interface RunbookWarning {
+  path: string;
+  runbookId: string;
+  code: RunbookWarningCode;
+  reason: string;
 }
 
 export interface LawLoadError {

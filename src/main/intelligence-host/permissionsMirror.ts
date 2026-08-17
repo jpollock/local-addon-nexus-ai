@@ -30,6 +30,7 @@ import {
   RemoteEnv,
   RemoteOperation,
   RunbookLoadError,
+  RunbookWarning,
   RunbookRegistry,
 } from '../../intelligence';
 import * as path from 'path';
@@ -99,6 +100,12 @@ export interface LawRegistryHandle {
    */
   runbookErrors: RunbookLoadError[];
   /**
+   * WP-20c gate: strict runbooks that LOADED within 10% of the ceiling. Not
+   * failures — a margin report, logged at build so an author learns it while
+   * authoring rather than when a document that used to load stops loading.
+   */
+  runbookWarnings: RunbookWarning[];
+  /**
    * The v0 tripwire: rebuild a fresh snapshot from the settings and compare
    * it with what the registry mirrored at build time. Divergence should be
    * impossible in v0 — any hit is a mirror bug or settings changing beneath
@@ -156,9 +163,16 @@ export function initLawRegistry(options: {
           `[${err.path}] (${err.code}): ${err.reason}`
       );
     }
+    const runbookWarnings = runbooks.warnings();
+    for (const warning of runbookWarnings) {
+      warn(
+        `[Intelligence] runbook near ceiling ${warning.runbookId} ` +
+          `[${warning.path}]: ${warning.reason}`
+      );
+    }
     logger.info(
       `[Intelligence] runbook registry: ${runbooks.runbooks().length} runbook(s) loaded, ` +
-        `${runbookErrors.length} refused`
+        `${runbookErrors.length} refused, ${runbookWarnings.length} near ceiling`
     );
 
     const verifyMirror = (): MirrorDivergence[] => {
@@ -177,7 +191,7 @@ export function initLawRegistry(options: {
       }
     };
 
-    return { registry, loadErrors: errors, runbooks, runbookErrors, verifyMirror };
+    return { registry, loadErrors: errors, runbooks, runbookErrors, runbookWarnings, verifyMirror };
   } catch (err) {
     const message = (err as Error).message;
     logger.error(`[Intelligence] law registry init failed: ${message}`);

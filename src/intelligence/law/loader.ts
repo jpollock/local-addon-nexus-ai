@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { z } from 'zod';
-import { canonicalByteLength, documentHash } from './hash';
+import { canonicalByteLength, canonicalDocumentText, documentHash } from './hash';
 import {
   Constraint,
   CONSTRAINT_ORIGINS,
@@ -127,6 +127,7 @@ export function parseLawDocument(relPath: string, raw: string): LawDocument | La
     // and its measurement are computed here and travel with the document.
     hash: documentHash(raw),
     canonicalBytes: canonicalByteLength(raw),
+    canonicalText: canonicalDocumentText(raw),
   };
 }
 

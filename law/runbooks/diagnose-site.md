@@ -45,7 +45,7 @@ aborts:
   - id: ab.compromise-suspected
     on: evidence of intrusion — unexplained admin accounts, file-manager or unknown plugins,
         obfuscated code, modified core files
-    do: stop this procedure and hand off to rb.incident-response. Do not delete, clean, or
+    do: stop this procedure and hand off to rb.incident-containment. Do not delete, clean, or
         "just remove" anything — the evidence is the entry-vector investigation's input, and
         an ad-hoc cleanup destroys it. Report what was seen, where, and when it appeared.
   - id: ab.evidence-unavailable
