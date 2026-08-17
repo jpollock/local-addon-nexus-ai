@@ -6878,3 +6878,33 @@ jest repeatedly; `better-sqlite3` is built for the shell's Node.
 run at any point in this session, so no other worktree's suite was flipped under
 it — the one experiment that would have flipped the shared tree was deliberately
 simulated with a stub instead.
+
+**WP-23 ADDENDUM — the mid-session ABI flip happened DURING the merge
+verification, and it refines the signature above.** Merge `9f09961c`. The first
+post-merge run of `tests/unit/agent-runtime/` came back **4 suites failed / 26
+tests failed**, with `NODE_MODULE_VERSION 146 … requires 141` — another session
+rebuilt `better-sqlite3` for Electron under the shared `node_modules` while this
+one was measuring. Per the protocol paragraph the architect added this morning:
+re-run through `npm test` (the `pretest` hook re-flips) before believing the red.
+Re-measured: **31 suites / 259 tests passed, exit 0.**
+
+Worth recording because the mixed result is a THIRD signature, distinct from the
+two above:
+
+| signature | cause |
+|---|---|
+| exactly 4 AgentRegistry tests red, rest of suite green | no `lib/` (fixed by this packet) |
+| suite fails to import, **0 tests run** | steady wrong ABI |
+| **some** better-sqlite3 suites red, others green, in one run | the tree flipped **mid-run** |
+
+The third is the one that misleads, because partial greenness reads as a real,
+localised regression. The tell is that the failures cluster on native-module
+suites (`AgentStateStore`, `AgentDbManager`, `DaemonManager`, `agent-state-store`)
+and cross the boundary of what any single change touched.
+`AgentRegistry.test.ts` itself PASSED in that run — it had already loaded the
+binding before the rebuild replaced it — which is precisely why "did my change
+break this?" is the wrong first question.
+
+**Consequence for whoever rebuilt: the tree is back on SYSTEM NODE (141).** The
+re-measure ran the `pretest` guard, which rebuilt `better-sqlite3` for the
+shell's Node. If you were mid-`npm run rebuild` for a Local load, run it again.
