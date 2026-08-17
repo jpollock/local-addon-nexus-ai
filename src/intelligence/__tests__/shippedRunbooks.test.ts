@@ -150,15 +150,61 @@ describe('the shipped law/ directory', () => {
     ]);
   });
 
-  it('reports every one of those checkpoints as narrative, because none declares attest yet', () => {
-    // The four event/manifest attestations of design note §4 are AUTHORING that
-    // 20b/20c own. Until they are declared, the honest answer for all eight is
-    // "the platform heard about it" — and this is the pin that stops a UI from
-    // ticking them as verified in the meantime.
+  it('declares FOUR attestable checkpoints and FOUR narrative ones — the §4 ratio, authored', () => {
+    // WP-20d authored these. The ratio is the single most important fact about
+    // this runbook: half of it is provable and half of it is not, and a surface
+    // that ticked all eight the same way would be claiming verification the
+    // platform does not have.
     const rb = load().registry.byCapability('cap.bulk_plugin_update')!;
 
-    expect(rb.checkpoints.every((c) => c.attest === 'narrative')).toBe(true);
-    expect(rb.checkpoints.every((c) => c.evidence === undefined)).toBe(true);
+    expect(rb.checkpoints.map((c) => `${c.id}:${c.attest}`)).toEqual([
+      'cp.consult-history:manifest',
+      'cp.dry-run:narrative',
+      'cp.approval:event',
+      'cp.backup:event',
+      'cp.canary:narrative',
+      'cp.verify-canary:narrative',
+      'cp.roll-fleet:event',
+      'cp.report:narrative',
+    ]);
+  });
+
+  it('gives every event-attested checkpoint a ledger selector, and every narrative one none', () => {
+    const rb = load().registry.byCapability('cap.bulk_plugin_update')!;
+
+    // The registry already refuses `attest: event` with no topic (WP-20a); this
+    // pins the authored selectors themselves, because a wrong topic is a
+    // checkpoint that can never attest and a gate that never opens.
+    expect(rb.checkpoints.find((c) => c.id === 'cp.approval')!.evidence).toEqual({
+      topic: 'task.rationale.recorded',
+      decision: 'approved',
+    });
+    expect(rb.checkpoints.find((c) => c.id === 'cp.backup')!.evidence).toEqual({
+      topic: 'task.action.executed',
+      tool: 'wpe_backup_and_verify',
+      perTarget: true,
+    });
+    expect(rb.checkpoints.find((c) => c.id === 'cp.roll-fleet')!.evidence).toEqual({
+      topic: 'task.action.executed',
+      tool: 'bulk_plugin_update',
+    });
+    for (const c of rb.checkpoints.filter((x) => x.attest === 'narrative')) {
+      expect({ id: c.id, evidence: c.evidence }).toEqual({ id: c.id, evidence: undefined });
+    }
+  });
+
+  it('names bulk_plugin_update as the update tool — never wp_plugin_update, which auto-starts', () => {
+    // §5's finding, authored: wp_plugin_update is in NEEDS_RUNNING_SITE, so the
+    // platform would start a halted site without the model ever choosing to —
+    // violating B-03's must_not #3 on the model's behalf.
+    const rb = load().registry.byCapability('cap.bulk_plugin_update')!;
+    const claimed = rb.checkpoints.flatMap((c) => c.tools.map((t) => t.name));
+
+    expect(claimed).toContain('bulk_plugin_update');
+    expect(claimed).not.toContain('wp_plugin_update');
+    expect(rb.checkpoints.find((c) => c.id === 'cp.backup')!.tools.map((t) => t.name)).toEqual([
+      'wpe_backup_and_verify',
+    ]);
   });
 
   it('keeps the guided runbooks’ steps as steps, with no checkpoints', () => {
@@ -189,7 +235,7 @@ describe('the shipped law/ directory', () => {
     );
 
     expect(bytes).toEqual({
-      'rb.bulk-plugin-update': 4858,
+      'rb.bulk-plugin-update': 6369,
       'rb.diagnose-site': 8970,
       'rb.incident-containment': 8054,
       'rb.incident-remediation': 8104,

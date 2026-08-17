@@ -167,6 +167,20 @@ export interface ProcedureCursor {
   attested: string[];
   /** The abort taken, when the run aborted. */
   aborted?: string;
+  /**
+   * WP-20d: checkpoints nothing in the ledger can ever attest. Reported
+   * separately because "the platform cannot verify this" and "this has not
+   * happened yet" are different facts, and the second is what an unattested
+   * narrative checkpoint would otherwise be read as. Four of the anchor
+   * runbook's eight are in here.
+   */
+  narrative?: string[];
+  /**
+   * WP-20d: checkpoints whose attesting evidence exists and says NO — an
+   * approval that was denied and not superseded. Distinct from unattested for
+   * the same reason: one invites asking again, the other forbids it.
+   */
+  denied?: string[];
 }
 
 /** The procedure half of a request: what the actor holds, and what is armed now. */

@@ -88,11 +88,17 @@ test('the acknowledgement lists the checkpoints in order, and says which are ver
   // Order is the sequence; a rail rendered out of order would misstate the procedure.
   expect(text.indexOf('cp.consult-history')).toBeLessThan(text.indexOf('cp.dry-run'));
   expect(text.indexOf('cp.dry-run')).toBeLessThan(text.indexOf('cp.approval'));
-  // Every shipped checkpoint is narrative today (WP-20a finding 7), and the
-  // words must say so: a rail that ticks all eight the same way is a product
-  // that lies (design note §7, CheckpointState.attest).
-  expect(text).toContain('not verified');
-  expect(text).not.toMatch(/\bverified from records\b/);
+  // WP-20d authored the attestations, so the anchor now carries BOTH classes —
+  // and the words must keep them apart per checkpoint. A rail that rendered all
+  // eight the same way would be a product that lies (design note §7), and that
+  // is as true of a uniformly-cautious rail as of a uniformly-green one.
+  expect(text).toMatch(/`cp\.approval` — verified from records/);
+  expect(text).toMatch(/`cp\.backup` — verified from records/);
+  expect(text).toMatch(/`cp\.roll-fleet` — verified from records/);
+  expect(text).toMatch(/`cp\.consult-history` — verified as supplied/);
+  for (const narrative of ['cp.dry-run', 'cp.canary', 'cp.verify-canary', 'cp.report']) {
+    expect(text).toMatch(new RegExp(`\`${narrative.replace('.', '\\.')}\` — your account only, not verified`));
+  }
 });
 
 test('THE PROCEDURE IS NOT IN THE RESULT — R7: the body never rides a tool result', async () => {

@@ -296,12 +296,38 @@ function cursorLine(
   if (cursor.aborted) {
     return `This run ABORTED at ${cursor.aborted}. Do not continue the procedure; report the abort and the current world state.`;
   }
+
   const done = checkpoints.filter((c) => c.attested).map((c) => c.id);
-  const next = checkpoints.find((c) => !c.attested);
-  return (
-    `Attested: ${done.length ? done.join(', ') : 'none yet'}. ` +
-    (next ? `Next: ${next.id}.` : 'All checkpoints attested.')
+  const narrative = cursor.narrative ?? [];
+  const denied = cursor.denied ?? [];
+
+  // WP-20d. "Next" is the next checkpoint the platform can PROVE, because that
+  // is the one the gateway will refuse this capability's tools until it sees.
+  // A naive first-unattested would name a narrative checkpoint that nothing can
+  // ever attest, and the model would be told to clear a gate that does not
+  // exist — every turn, forever.
+  const next = checkpoints.find((c) => !c.attested && !narrative.includes(c.id));
+
+  const parts = [`Attested: ${done.length ? done.join(', ') : 'none yet'}.`];
+  if (denied.length) {
+    parts.push(
+      `DENIED: ${denied.join(', ')} — the decision exists and it was no. Do not re-propose it in this session.`
+    );
+  }
+  parts.push(
+    next
+      ? `Next gated checkpoint: ${next.id} — this capability's tools are refused until it is attested.`
+      : 'Every checkpoint the platform can verify is attested.'
   );
+  if (narrative.length) {
+    // The single most important sentence in this block: a rail that showed all
+    // eight the same way would be claiming verification it does not have (§7).
+    parts.push(
+      `The platform cannot verify ${narrative.join(', ')} — narrative checkpoints, still required ` +
+        'of you, still yours to perform in order, and not gated.'
+    );
+  }
+  return parts.join(' ');
 }
 
 function renderDelivered(resolved: ResolvedProcedure): string {
