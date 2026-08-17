@@ -5088,7 +5088,7 @@ session, which left it at system Node, and `./dev-reload.sh` rebuilt it back for
 Local. To run jest again: `npm test` (the `pretest` hook handles it), never
 `npx jest` alone — see finding 3.
 
-### [ ] WP-22b · The content-age chip needs one IPC channel  *(micro; integration lock; from WP-22's not-built list)*
+### [x] WP-22b · The content-age chip needs one IPC channel  *(micro; integration lock; from WP-22's not-built list)*
 `siteStatus()` (`intelligence-host/siteStatus.ts`) already returns a structured
 `SiteStatusModel` with `content.state`, `content.sourceName` and
 `content.behindSeconds` — the exact inputs the "Currently in" band's chip wants,
@@ -5251,3 +5251,134 @@ the packet's own change is:
 **ABI state on exit: system Node (jest).** `better-sqlite3` is built for the
 developer shell's Node 25.9.0 (ABI 141) — this session ran jest repeatedly.
 **Run `npm run rebuild` before loading the addon in Local.**
+
+---
+
+**WP-22b OUTCOME — done (branch `wp-22b`).** The band above the composer now says
+how old the copy's content is: *Pulled from the live site 11 days ago.*
+
+**ANNOUNCED 2026-08-17 — integration lock TAKEN and RELEASED in one session**
+(worktree `.worktrees/wp-22b`, base b267beaa). The lock was confirmed free
+first: WP-04d released it at its own note and nothing had taken it since. The
+edit to `src/main/ipc-handlers.ts` is **8 lines** — one import, one
+`safeHandle`, and the comment saying why the logic is not here.
+`src/main/index.ts` was not touched at all. **`ipc-handlers.ts` is free for the
+next packet.**
+
+Receipt (`git diff --stat poc/nexintelligence...wp-22b`, 15 files, +1134/-9):
+
+    src/common/constants.ts                            |   5 +
+    src/main/intelligence-host/siteContentStatus.ts    |  94 +
+    src/main/intelligence-host/siteStatus.ts           |  10 +-
+    src/main/ipc-handlers.ts                           |   8 +
+    DockedPanel/DockedPanelContainer.tsx               |  62 +-
+    DockedPanel/PanelChat.tsx                          |   5 +-
+    DockedPanel/SiteContextStrip.tsx                   |  36 +-
+    DockedPanel/siteContextModel.ts                    |  96 +-
+    intelligence-host/__tests__/siteContentStatus.test.ts | 200 +
+    tests/unit/ipc/site-content-status.test.ts         | 146 +
+    tests/unit/renderer/contentAgePhrase.test.ts       |  57 +
+    tests/unit/renderer/docked-panel-site-context.test.ts | 196 +-
+    tests/unit/renderer/site-context-model.test.ts     | 144 +
+    tests/unit/renderer/site-context-strip.test.tsx    |  76 +
+    tests/unit/main/agent-settings-cache.test.ts       |   8 +
+
+Jest, both figures measured on a COMPILED worktree (see finding 3): baseline at
+the merged base `a2a2645c` **540 suites / 6853 passed / 12 skipped / 0 failed**;
+branch after merging that base **543 / 6912 / 12 / 0**. Delta **+3 suites, +59
+tests, skipped unchanged**. `npx tsc -p . --noEmit` clean, eslint clean on every
+changed source file. Mutation battery **19/19 caught** (18/19 on the first run —
+finding 2).
+
+**The shape of the read.** `intelligence-host/siteContentStatus.ts` returns the
+`content` slice of `siteStatus()`'s model and nothing else — no site name, no
+entity id, no rendered lines. `null` is a FOURTH answer, kept distinct from the
+three the model already distinguishes: a dark core means Nexus AI is not
+recording (a fact about Nexus AI, with its own remedy), while `no-sync`,
+`ambiguous` and `unlinked` are facts about the copy. The chip renders only
+`pulled` and omits everything else — never "unknown" — but the boundary carries
+all four, because a boundary that flattens them cannot be un-flattened by a
+later surface. Pinned both ways: `keeps the three absences distinct` in the
+renderer's guard, and `carries nothing beyond the content slice` on the producer.
+
+**Where the vocabulary lives now.** The chip's string comes from `stripCopy()`
+like every other string on the band, so the vocabulary is still asserted in one
+place; `contentAgeChip()` is that string's rule. Two consequences worth
+recording:
+
+- **`durationPhrase` now exists twice** — `intelligence-host/siteStatus.ts`
+  (exported for this) and `DockedPanel/siteContextModel.ts` — because main and
+  renderer share no bundle. `tests/unit/renderer/contentAgePhrase.test.ts` runs
+  both over one case table, exactly as `localDay` and `resolveAgentCron` are
+  pinned. The failure it prevents is specific: a user reading "11 days ago" on
+  the band while the assistant says "12 days ago" in the same minute has been
+  given two facts, not one.
+- **The source name crosses the boundary already translated.** `sourceName` is
+  "the live site" / "development (at WP Engine)", never an environment id, so no
+  renderer can re-derive a bare "development" (finding №6) and no entity id can
+  reach a rendered line.
+
+**Three findings.**
+
+1. **A hub's transitive import graph is part of its interface, and the
+   integration lock does not bound it.** The 8-line wiring edit pulled
+   `siteContentStatus → siteStatus → src/intelligence → ledger →
+   better-sqlite3` into `ipc-handlers.ts`'s module graph. That broke
+   `tests/unit/main/agent-settings-cache.test.ts`, which mocks `fs` with three
+   functions: better-sqlite3's `backup.js` does `promisify(fs.access)` at import
+   time, so the suite failed to run with `TypeError: The "original" argument
+   must be of type function` — an error naming neither the test's mock nor the
+   module that needed it. **"Minimal import + call" bounds the DIFF, not what
+   the import drags in.** Fixed in the test, not around it: the mock now layers
+   over `jest.requireActual('fs')`, which is what it always meant. The
+   production import stayed static and idiomatic — in the main process
+   better-sqlite3 is already loaded, so the coupling costs nothing at runtime;
+   it costs only suites that stub a core module wholesale. Check the graph, not
+   just the line count, when taking this lock.
+2. **The mutation battery found a guard that was real and unpinned** (M01
+   SURVIVED, first run). `contentAgeChip` gates on `state === 'pulled'` AND on
+   the fields being present; because the producer never puts an age on a
+   `no-sync` status, deleting the state check broke nothing. The state check is
+   not redundant — `asContentStatus` will pass a `{state:'no-sync', sourceName,
+   behindSeconds}` payload through, and the chip would then say "pulled from the
+   live site" over a status meaning no pull is on record. Pinned by a test that
+   feeds exactly that shape. **A guard reachable only through a payload the
+   producer never emits is still a guard, if anything downstream can construct
+   the payload.**
+3. **The baseline lied AGAIN — a third shape, and a self-inflicted fourth.**
+   (a) A fresh worktree with no `lib/` fails `AgentRegistry.test.ts` (1 suite,
+   4 tests): the fixture agent `require`s `lib/main/agent-sdk` at RUNTIME, so
+   the protocol's `npm run compile` step is load-bearing for that suite, not
+   just for typecheck. A baseline taken before compiling reads as 4 real reds.
+   (b) My first baseline attempt ran `npm test` WHILE I was editing source
+   files; jest reads each suite as it starts, so mid-run edits contaminated the
+   result and reported failures that did not exist. Same family as WP-19b's
+   shared-stash hazard: **never let an edit and a measurement share a worktree
+   in time.** Both baselines quoted above were taken in a separate, compiled,
+   untouched worktree.
+
+**The chip cannot be seen against real data on this machine, and that is not a
+defect.** The ledger holds **zero** `episodic.sync.*` events, so every Local
+site is `unlinked` or `ambiguous` today and the band renders exactly as WP-22
+shipped it. The producer that lights this up already exists and is wired
+(WP-14's `createSyncObserver`, tapped onto `OperationTracker` in
+`src/main/index.ts`): the first WP Engine → Local pull writes
+`episodic.sync.pulled`, and the chip appears with no further change. The visual
+was therefore verified in a 380px harness reproducing the band's own styles —
+screenshots cover viewed+chip, a long source name, override+chip+disclosure, and
+the degraded band.
+
+**Design note for the surface review.** The chip sits between the primary line
+and the override disclosure, as a pill sized to its text. It WRAPS, for WP-22's
+reason: at 380px "Pulled from development (at WP Engine) less than an hour ago"
+takes two lines, and the clause an ellipsis would eat is the age itself. The
+band now measures ~50px in the viewed state with a chip (WP-22 measured ~34px
+without) and ~66px in the override state with both chip and disclosure — the
+designer's 52px is met in the ordinary case and exceeded only where three facts
+are genuinely present. No new control: the chip is a fact, not an affordance,
+pinned by a test that counts exactly one button in the band.
+
+**ABI state on exit: SYSTEM NODE (jest).** `better-sqlite3` is built for this
+shell's Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127); this session
+ran `npm test` five times. **Run `npm run rebuild` before loading the addon in
+Local.**
