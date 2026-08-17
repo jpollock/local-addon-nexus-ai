@@ -2125,7 +2125,11 @@ session, 2026-08-16).**
   WP-04b pattern — a test file defining its own local copy of the logic it
   claims to pin.
 
-### [ ] WP-12b · chat-service-history.test.ts is vacuous — port or delete
+### [x] WP-12b · chat-service-history.test.ts is vacuous — port or delete
+**DONE 2026-08-17** — six ported cases added to
+`tests/unit/chat/chat-service-rehydration.test.ts` (10 tests total, the
+original 4 untouched); the copy is deleted; 5/5 mutations caught with named
+witnesses plus one declared no-op proven. Notes at the end of this file.
 Registered from WP-12 finding. `tests/unit/chat/chat-service-history.test.ts`
 defines its own local `reconstructHistory` and imports nothing from `src/` —
 it passed unchanged through both the R1 bug and its fix, which is the proof
@@ -4261,3 +4265,108 @@ Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).
 path — a throwing handler leaks the timer. Fix + pin (throwing handler:
 timer cleared, no unhandled rejection). Not intelligence scope; any tier;
 touches the dispatch module WP-19 just instrumented, so rebase on current.
+
+---
+
+- 2026-08-17 · **WP-12b — the vacuous `chat-service-history.test.ts` ported onto
+  the real restore path** (branch `wp-12b`, Opus). Tests only: one file
+  extended, one deleted. `src/main/chat/ChatService.ts` and
+  `src/main/ipc/chat-sessions.ts` were READ, and were temporarily mutated
+  during the mutation battery and restored — the commit contains no `src/`
+  change.
+
+  **Verification.** Worktree baseline BEFORE any change: **533 suites, 6,719
+  passed, 12 skipped, 6,731 total**, exit 0. AFTER: **532 suites, 6,722 passed,
+  12 skipped, 6,734 total**, exit 0. Suites **−1** (the copy deleted, the ports
+  went into an existing file); tests **+3**, which is exactly 6 new minus the
+  copy's 3; **skipped unchanged at 12**, so no artifact-gated suite appeared or
+  vanished. `npm run typecheck` clean; `npx eslint` clean on the touched file.
+  Touched-area legacy suites green together (`tests/main/chat-service`,
+  `tests/unit/chat/**`, `tests/unit/ipc/chat-sessions`,
+  `gatewayEmission`, `operationAuditLog.wiring`) — 20 suites / 140 tests.
+  **The 4 "known-red" `AgentRegistry.test.ts` tests do not reproduce here**
+  either: this worktree's baseline had ZERO failures, matching WP-11's report
+  and not WP-12's. The standing instruction to capture their failure text
+  therefore could not be discharged — there was nothing to capture.
+
+  **Location.** The ports live in `tests/unit/chat/chat-service-rehydration.test.ts`
+  (WP-12's suite), not a new file: it already stands up the real `ChatService`
+  with a recording provider and an in-memory session DB, which is precisely the
+  harness the copy avoided. A second file would have meant a second copy of
+  that harness — the failure mode this packet exists to remove.
+
+  **Classification of the copy's 7 semantics** (3 `it()` blocks, but the accept
+  bar is per semantic, per WP-04b):
+  - **(a) portable — 5**: user rows map to role+content; assistant rows likewise
+    (both in one case); output order; the streaming filter; the empty-input case.
+  - **(b) waived — 1**: *persisted `system` rows are KEPT*. **Inverted by
+    production, deliberately**: the restore branch drops them (WP-12, adjudicated
+    load-bearing per R3 — Anthropic/Google keep the FIRST system message, so a
+    stale row would win over the fresh prompt). Already pinned in the opposite
+    direction by the existing *"a legacy session that persisted a system row does
+    not end up with two"*. Porting it would have re-created the bug as a pin.
+  - **(c) unreachable as written, ported behaviourally — 1**: the whitelist
+    dropped every role outside `{user, assistant, system}`. `ChatMessage.role`
+    admits only those three, so no typed writer can produce a fourth — but
+    `chat_messages.role` is a TEXT column and `getSession` does not validate it,
+    so the filter is the only guard. Ported by writing a `tool` row through the
+    table and pinning that it does not reach the provider.
+  - **1 NEW case** the copy's fixture concealed (see finding 2).
+  - Result: **6 tests** = 5 ported (one of them behavioural) + 1 new.
+
+  **Three findings.**
+
+  1. **The copy pinned a field that does not exist at the persistence
+     boundary.** Its fixture set `streaming: true` (cast `as any` — the field is
+     not on `ChatMessage`). `streaming` is renderer-only state;
+     `PanelChat.persistSession` maps it to `incomplete`, which is the column and
+     the thing `ChatService` actually filters. A copy is free to invent the
+     schema it tests against; that is the vacuity, stated concretely.
+  2. **The copy's one fixture conflated two production filters.** Its "streaming"
+     message was `{content: '', streaming: true}` — a shape that would be caught
+     by `!m.incomplete` OR by `m.content !== ''`, so neither was actually pinned.
+     Ported as two cases with disjoint fixtures: a mid-stream row with **non-empty**
+     content (the reachable shape — the panel closed mid-answer), and an empty-content
+     row that is **not** incomplete (reachable because `persistSession` filters empty
+     ASSISTANT rows only, so an empty USER row does reach the table). Both mutations
+     below kill exactly one case each, which is the evidence they are now separate.
+  3. **One of the copy's three cases has no branch to pin, and it is labelled so
+     in the file.** `reconstructHistory([]) === []` maps, through the handler, to a
+     persisted session holding zero message rows — and there the two branches
+     CONVERGE: `messages.length > 0` sends it to the fresh-session branch, which
+     builds the same prompt the restore branch would from an empty history.
+     Mutation M6 (`> 0` → `>= 0`) leaves the whole suite green, by design. Ported
+     anyway as an observable (a stored-but-empty session behaves like a new one),
+     declared as unpinned-by-mutation rather than dressed up as a kill.
+
+  **Mutation battery — 5/5 CAUGHT + 1 declared no-op, each with its witness.**
+  Committed first (the pattern's rule), every substitution anchored across **two
+  adjacent lines** (the chained `.filter(...)` calls are near-identical, so a
+  single-line anchor would land on the wrong one), applied through a runner that
+  refuses any anchor without exactly one match and prints the sha before/after,
+  and each kill verified by the *specific* expected test appearing among the
+  failures — never a non-zero exit alone.
+
+  | mutation | production line | witness |
+  |---|---|---|
+  | `!m.incomplete` → always true | `ChatService.ts` restore branch | **1** failed: "[S5] a mid-stream (incomplete) assistant row is not restored" |
+  | `m.content !== ''` → `!== undefined` | same chain, next line | **1** failed: "[S5, second half] an empty-content row is not restored" |
+  | role whitelist → `m.role !== 'system'` | same chain, next line | **1** failed: "[S6] a row whose role is neither user nor assistant is dropped" |
+  | `content: m.content` → `content: String(m.role)` | the `.map` | 6 failed, incl. "[S1/S2] user and assistant rows reach the provider as role+content pairs" |
+  | `ORDER BY timestamp ASC` → `DESC` | `chat-sessions.ts` `getSession` | 5 failed, incl. "[S4] history is restored in timestamp order, not insertion order" |
+  | `messages.length > 0` → `>= 0` | restore-vs-fresh gate | **10 passed — declared no-op**, see finding 3 |
+
+  The first three kills are single-test kills on adjacent lines of one chain:
+  that is the evidence the three filters are pinned separately rather than
+  collectively, which the copy's shared fixture could not have shown.
+
+  **Process note.** The first baseline run was started in the background and
+  overlapped the edit that added the ported cases — it was killed and discarded,
+  not reported, and the baseline re-measured from a stashed (pristine) tree.
+  Same rule as WP-04b's, one step earlier in the packet: a full-suite number
+  measured while the tree is being edited is not a baseline.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
+  ABI 127). `npm run rebuild` is required before loading Local again.** The
+  shared `node_modules` every worktree symlinks through is affected.
