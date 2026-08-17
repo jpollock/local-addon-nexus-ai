@@ -18,6 +18,97 @@ Exit codes: `0` nothing failed and nothing was unanswerable · `1` a FAIL ·
 answer the question). Two codes because "it failed" and "we could not check"
 call for different responses.
 
+## `sitting.ts` — the live-model sitting harness (WP-13b)
+
+**Separate program, separate job.** `run.ts` reports what the platform can and
+cannot support. `sitting.ts` captures what a real model actually does on the
+real chat surface, so the owner can judge E-01's six OWNER-PENDING criteria by
+reading transcripts instead of driving a UI.
+
+**It spends real API tokens and is never part of `npm test`.** `main()` is
+guarded by `require.main === module`, and `sitting.test.ts`'s first test pins
+that guard — a regression there would turn `npm test` into a metered API bill.
+Every run prints its cost warning before it starts and its measured payload
+sizes after.
+
+```bash
+# The smoke run — ONE model call, one transcript. Do this first.
+NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+  tests/intelligence-evals/sitting.ts --runs 1 --out /tmp/wp13-sitting-smoke
+
+# The sitting proper — H-01's pass^3.
+NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+  tests/intelligence-evals/sitting.ts
+
+# E-01's abstain twin — same prompt, no planted history. Score the pair together.
+NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+  tests/intelligence-evals/sitting.ts --empty-history --out /tmp/wp13-sitting-empty
+
+npx ts-node --project tsconfig.test.json tests/intelligence-evals/sitting.ts --help
+```
+
+Writes `run-<n>.md` plus `judgment-sheet.txt` to `--out` (default
+`/tmp/wp13-sitting`), mode 0600. Exit `0` clean · `1` a run errored · `2` bad
+arguments, no key, or the wrong native-module ABI.
+
+### Why the OWNER-PENDING instructions needed replacing
+
+WP-13's six pending criteria print "point a development build at the fixture
+dataDir, open the Docked Panel with a fixture site selected". The architect's
+2026-08-17 note found that is **not literally executable**: the fixture seeds
+the LEDGER only, so the six fixture sites do not exist in Local's site store,
+the panel cannot select one, and with no fixture target the assembler never
+retrieves the planted history. The judgment sheet this harness prints says so
+and supersedes those instructions with transcript paths.
+
+### What is real, and what is not
+
+| | |
+|---|---|
+| **real** | the fixture core, ledger, webhook producer and folds; `assembleForChatTurn` and the assembler; `ChatService` (system prompt, per-turn carrier, agent loop, PII masking, tool adapter); the real `ToolRegistry` with real safety tiers; the model call |
+| **fixture** | the four tool *handlers*, which answer from the fixture's own twin facts (`sittingWorld.ts`); `bulk_plugin_update`, which is simulated and says so in its own result |
+| **absent** | the product UI. No renderer exists, so an approval card cannot be clicked — it renders as text and `--approvals deny\|approve` decides the answer |
+
+That statement is reproduced verbatim in every transcript header, because a
+reader who opens one file in isolation must not have to infer what they are
+looking at.
+
+The tool surface is deliberately **closed**: exactly `nexus_list_sites`,
+`wp_plugin_list`, `find_sites_with_plugin` and `bulk_plugin_update`. The
+fixture `NexusServices` omits `localServices`, `graphService`, `searchService`
+and `operationAuditLog`, so there is no path by which a tool could quietly
+answer from the owner's real fleet, read real chat history, or append to the
+compliance record. A tool that lied about the fixture would not add noise — it
+would invalidate the judgement.
+
+### The key
+
+`NEXUS_EVAL_API_KEY` first; otherwise the product's own path, mirrored from
+`chat-ipc-handlers.ts` (`KeyVault(registryStorage, STORAGE_KEYS.API_KEYS)` →
+`encrypted_<provider>`, then the legacy plain-text blob). The one thing that
+cannot be mirrored is decryption: `KeyVault` decrypts through Electron's
+`safeStorage`, which is keychain-backed and exists only inside Electron. An
+Electron-encrypted value is therefore **refused with the env-var remedy**, never
+guessed at — `KeyVault`'s own no-safeStorage fallback would hand the API a
+base64 ciphertext and produce a 401 that looks like a bad key. The key is never
+printed and never written to disk: every transcript, the console summary and
+both crash paths run through `scrubSecrets`.
+
+### Two follow-ups WP-13b deliberately did NOT take
+
+Both are one-line changes to `fixture.ts`, which this packet may not edit.
+
+1. **`createEvalFixture(opts: { plantIncidents?: boolean } = {})`.** The
+   empty-history twin currently mirrors `seedFleet`'s ten-line loop in
+   `sittingWorld.ts` (importing `FIXTURE_FLEET` and `WOO_INSTALLED`, so the
+   fleet *definition* cannot drift — only the seeding loop is duplicated). With
+   the option, that function collapses to a pass-through.
+2. **The ABI remedy belongs to `run.ts` too.** `nativeModuleRemedy()` in
+   `sitting.ts` turns a `NODE_MODULE_VERSION` crash into "run `npm run
+   pretest`". `run.ts` still inherits the bare stack trace. Moving the helper
+   into a shared module and calling it from both is trivial; it was left alone
+   because `run.ts` is not this packet's file.
+
 ## Scout note — why a new tree, and what it does not reuse
 
 `tests/evals/` already holds a 30-case suite in the **same YAML dialect**, and
@@ -80,6 +171,15 @@ vacuous-guard shape this harness exists to prevent.
   implement throws**; a validator that silently ignores what it does not
   understand always passes.
 - `runner.ts` / `report.ts` / `run.ts` — orchestration, rendering, CLI.
+- `sittingWorld.ts` — WP-13b. The fixture `NexusServices`, the real
+  `ToolRegistry` loaded with four fixture-backed handlers, and the
+  empty-history twin of the fixture.
+- `sitting.ts` — WP-13b. The live-model CLI: key resolution, provider capture,
+  transcript rendering, judgment sheet. **Spends tokens; never in `npm test`.**
+- `sitting.test.ts` — WP-13b's deterministic half, including an end-to-end pin
+  that drives the whole harness with the model call scripted, so "the planted
+  incident reaches the model in the turn block" is measured on every `npm test`
+  at zero cost.
 
 ## Why the runner is not itself a jest suite
 

@@ -2880,7 +2880,7 @@ extended to a live model call. Registered as WP-13b; the sitting becomes
 "read six transcript sets and judge," which is also more repeatable than
 manual panel-driving (and pre-builds half of WP-18's journey machinery).
 
-### [ ] WP-13b · Sitting harness — live-model transcript capture over the eval fixture  *(unblocks the M2 sitting; small)*
+### [x] WP-13b · Sitting harness — live-model transcript capture over the eval fixture  **(BUILT 2026-08-17 — outcome, findings and ONE blocked item below)**
 Build `tests/intelligence-evals/sitting.ts` (invoked via ts-node, NEVER in
 npm test — it spends real API tokens): construct the WP-13 fixture core
 (`createEvalFixture`), build a fixture `NexusServices` around it (the
@@ -2899,3 +2899,181 @@ cannot be constructed against fixture services without production edits —
 do not modify src/ in this packet. Parallel-safe (new file in the evals
 tree). Acceptance: three captured transcripts where the tool trace shows
 the planted incident retrievable, ready for owner judgment.
+
+**WP-13b OUTCOME — the harness is built, tested and executable. The three live
+transcripts are NOT captured, for one reason: no provider key was available to
+this session.** Everything else the packet asked for is delivered and pinned.
+
+**Delivered** (three new files, evals tree only, zero `src/` edits):
+
+- `tests/intelligence-evals/sitting.ts` — the CLI. Real `ChatService` against a
+  fixture `NexusServices`, E-01's verbatim prompt, the history-flagged fixture
+  site (`evalfleet-bravo`) as `siteId`, `--runs` (default 3, H-01's pass^3),
+  `--out` (default `/tmp/wp13-sitting`), `--empty-history`, `--provider`,
+  `--model`, `--approvals`, `--help`.
+- `tests/intelligence-evals/sittingWorld.ts` — the fixture world: the fixture
+  services, the real `ToolRegistry` loaded with four fixture-backed handlers,
+  and the empty-history twin.
+- `tests/intelligence-evals/sitting.test.ts` — 40 pins.
+
+**ChatService constructs against fixture services with no production edits** —
+the packet's escalation trigger did not fire. Two things made that true and are
+worth carrying forward: `buildSystemPrompt` reads `indexRegistry.get()` OUTSIDE
+its try/catch (an absent handle is a TypeError that kills the turn, not a
+degradation), and `getSession()` is likewise unguarded, so `graphService` must
+be absent rather than partial.
+
+**The system prompt and turn block are captured by wrapping the provider
+INSTANCE's `streamChat`, not by re-calling the assembler.** They are built
+inside `ChatService` and never exposed, but every one of them is passed to the
+provider. So the transcript records what the MODEL was sent — better evidence
+than a second `assemble()` call, which would also emit a second
+`task.context.assembled` manifest and make the ledger lie about the turn.
+
+**FINDING 1 (the important one) — the turn block names the incident and carries
+none of its substance.** Measured, verbatim, through the real wired path:
+
+```
+- 30d ago — episodic.incident.recorded (via fixture:e01-incident, trust: emitted) — evt_01M06VMJQZA3EW426EPW1T9W15
+```
+
+Topic, age, provenance, event id. NOT the component, the symptom, the versions,
+or the gateway-X correlation — all of which ARE in the event payload.
+`renderRetrieved` renders a ledger item's detail from `factKeyOf(e.payload)`,
+which reads only `payload.fact ?? payload.slug ?? payload.name`; the incident
+payload carries `component`, `from_version`, `to_version`, `impact`, `correlate`
+and `resolved`. None of those three keys.
+
+Consequence for the sitting, which the harness prints before the criteria so it
+cannot read as model failure: **two E-01 criteria are in direct tension on this
+substrate.** "the user is told the specific historical finding in plain
+language" cannot be satisfied from what was retrieved, and a model that names
+WooCommerce, checkout or gateway X as the incident is fabricating — which is the
+`must_not` immediately below it. Sequencing gateway-X sites last remains
+reachable, but only as inference from the plugin inventory, not from history.
+This is the same class as WP-13's finding 4 (retrieval reached the ledger;
+what it renders is a second, separate gap) and wants an owner ruling — the
+minimal fix is widening `factKeyOf`, or giving RetrievedItem a payload-summary
+channel. `sitting.test.ts` pins the finding, so when it is fixed that test
+fails and the finding gets retired rather than left to rot.
+
+**FINDING 2 — the owner's stored key cannot be used outside Electron, by
+construction.** `chat-ipc-handlers.ts` reads it through
+`KeyVault(registryStorage, STORAGE_KEYS.API_KEYS)`, which decrypts via Electron
+`safeStorage` (OS keychain). Measured on this machine: `encrypted_anthropic.json`
+holds a `v10`-prefixed Chromium OSCrypt ciphertext. `KeyVault`'s documented
+no-safeStorage fallback treats a stored value as plain text, which outside
+Electron would hand the API a base64 ciphertext and produce a 401 that looks
+like a bad key. The harness therefore mirrors the product's lookup path exactly
+and then **refuses** an Electron-encrypted value with the env-var remedy rather
+than guessing. `NEXUS_EVAL_API_KEY` is the intended path and is pinned.
+
+**BLOCKED — the three live transcripts.** No `NEXUS_EVAL_API_KEY` and no
+`ANTHROPIC_API_KEY` in this session's environment, and per finding 2 the stored
+key is undecryptable here. The owner runs, in this order:
+
+```bash
+# smoke: ONE model call, one transcript
+NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+  tests/intelligence-evals/sitting.ts --runs 1 --out /tmp/wp13-sitting-smoke
+# the sitting proper (H-01 pass^3)
+NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+  tests/intelligence-evals/sitting.ts
+# E-01's abstain twin — score the pair together
+NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+  tests/intelligence-evals/sitting.ts --empty-history --out /tmp/wp13-sitting-empty
+```
+
+**What stands in for the missing live runs, and it is not nothing.** An
+end-to-end pin drives the WHOLE harness — real fixture core, real ledger, real
+producer and folds, real assembler, real `ChatService`, real `ToolRegistry` —
+with only the model call scripted. It asserts that the planted incident reaches
+the model in the turn block, that the system prompt and E-01's verbatim prompt
+are there, that a tool call runs through the real registry and its full result
+returns on the next iteration, and that the rendered transcript shows all of it.
+So the packet's acceptance property ("the tool trace shows the planted incident
+is retrievable") is **measured on every `npm test`, at zero cost**; what is
+missing is only the model's own behaviour, which is the owner's judgement
+anyway and was never this harness's to assert.
+
+**Design decisions worth carrying forward:**
+
+- **The tool surface is CLOSED — four fixture-backed handlers, and the service
+  bag omits `localServices`, `graphService`, `searchService` and
+  `operationAuditLog`.** What is absent is load-bearing: there is no path by
+  which a tool could quietly answer from the owner's real fleet, start a real
+  site, read persisted chat history, or append to the compliance record. A tool
+  that lied about the fixture would not add noise, it would invalidate the
+  judgement.
+- **`bulk_plugin_update` is simulated and says so in its own result**, and tells
+  the model not to re-verify. Applying the update would mean emitting
+  observations mid-run, which makes the fleet's state depend on the fold
+  debounce rather than on what the model did. The ARGUMENTS are the evidence
+  the sitting needs — which sites, in what order — and they are captured.
+- **`main()` is guarded by `require.main === module`, and a test pins the
+  guard.** A regression there turns `npm test` into a metered API bill.
+- **The judgment sheet supersedes the runner's OWNER-PENDING instructions and
+  says why**, rather than printing both and leaving the owner to discover the
+  Docked Panel route is not executable. Criteria, verdicts and judging
+  instructions are lifted from `runEvals({only: 'E-01…'})` at print time, not
+  copied — a spec edit that changes a criterion changes the sheet too.
+- **Cost is stated twice and never invented.** A warning before the runs; after
+  them, MEASURED prompt/output character counts with a `~4 chars/token` figure
+  explicitly labelled as not a billed number (the chat providers do not surface
+  `TokenUsage` on the `done` event).
+- **`NEXUS_TELEMETRY=0` is set by `main()`** so a sitting never reaches the
+  analytics worker. `telemetry-config.ts` reads the env at call time, so this
+  works.
+
+**Disclosure — the provider hardcodes `max_tokens: 4096` and sends no `thinking`
+config.** On a thinking-by-default model that budget covers thinking AND the
+response, so a long deliberation can eat the plan. That is the product's
+provider, not the harness, and this packet may not edit `src/`. It is disclosed
+in every transcript header, a `max_tokens` stop is called out loudly rather than
+left looking like a short answer, and `--model claude-opus-4-8` (thinking off
+when unset) is the documented comparison.
+
+**Two follow-ups deliberately NOT taken** (both one-liners in `fixture.ts`,
+which this packet may not edit; recorded in the tree's README):
+`createEvalFixture({ plantIncidents?: boolean })`, which would collapse the
+empty-history twin's mirrored ten-line seeding loop to a pass-through — the
+fleet DEFINITION is already shared by import, so only the loop is duplicated,
+and the halted-site absence is now pinned on both paths; and lifting
+`nativeModuleRemedy()` into a shared module so `run.ts` stops inheriting a bare
+`NODE_MODULE_VERSION` stack trace too.
+
+**Verification.** Baseline in a fresh wp-13b worktree BEFORE any change:
+**509 suites / 6408 passed / 12 skipped / 6420 total / 0 failed** — identical to
+WP-16b's recorded figure. After: **510 / 6448 / 12 skipped / 6460 / 0 failed** —
++1 suite, +40 tests, skipped count unchanged, no legacy suite touched.
+`npx tsc -p tsconfig.test.json --noEmit` and `npx tsc -p . --noEmit` both clean;
+eslint clean on all three new files.
+
+**Mutation battery: 12/12 caught**, each anchored to a production line with an
+observable witness — secret scrubbing removed; the Electron-ciphertext guard
+removed (key handed to the API as plaintext); a bad `--runs` silently clamped
+instead of rejected; the provider wrapper restored by blanket `delete`; the core
+registry never pointed at the fixture; the honest-bounds statement dropped; the
+ABI remedy swallowed; BLOCKED criteria folded into the pending set; update
+availability invented for every plugin; `--empty-history` planting incidents
+anyway; the halted site given a fabricated inventory; and the update ORDER no
+longer recorded. **Three of those twelve were MISSED on the first pass and the
+misses were the point** — each was a weak pin, not a sound implementation: an
+order assertion whose fixture list was already alphabetical, an
+availability assertion whose mutation was inert for the slug it checked, and no
+pin at all on the DUPLICATED empty-history seeding loop skipping the halted
+site. All three pins were strengthened until the mutation was caught.
+
+One real defect was found by these tests during development and fixed: the
+provider wrapper's teardown used a blanket `delete`, which is correct only when
+`streamChat` arrived from the prototype and silently destroys any own
+implementation that was there first. It now restores exactly the own-property
+state it found.
+
+**ABI state: better-sqlite3 is built for SYSTEM NODE** (jest ran here,
+repeatedly). Run `npm run rebuild` before loading the addon in Local.
+Measured in this session: system Node **v25.9.0 → ABI 141** (`.nvmrc` still
+pins 22.16.0 → ABI 127 for CI).
+
+**Token cost of this session's own test runs: zero API tokens.** Every suite and
+every mutation run scripts the model call; the live harness was never executed.
