@@ -7452,3 +7452,34 @@ moved out of `nexus_load_procedure` into the seam and imported back.
   That was the design note's honest acceptance statement (§9) and it still
   stands: what WP-20 can deliver is that they stop being BLOCKED and become
   runnable, which they now are.
+
+**WP-20e MERGED (2026-08-17)** — merge `44b32985`, 19 files, **+3,366/−158**.
+`git diff --stat 44b32985^1 44b32985` is the receipt above; the merge resolved
+one conflict, in `WORK_PACKETS.md` alone, where WP-23's outcome note and this
+packet's had both appended to the end of the file — both kept, in landing order.
+
+**Two verbatim commits flagged for fidelity verification.** `bba8d0dc` (the
+architect's WP-20d adjudication, roadmap consolidation and the mid-session-ABI
+protocol paragraph) was made by a CONCURRENT session minutes before this one cut
+its worktree — this session measured the same three-file stat before it appeared
+and can confirm the content matches what it read, but did not author the commit.
+`3c403e1e` (the architect's WP-23 adjudication, roadmap update and protocol
+amendment, found uncommitted in the primary checkout at merge time) WAS made by
+this session, verbatim and unedited, per the protocol's standing rule.
+
+**Post-merge verification on `poc/nexintelligence`**: `npm test` →
+**557 suites / 7,214 passed / 2 skipped / 7,216 total, exit 0**. Note the
+skipped-count split against this packet's own worktree figure (12 skipped,
+7,204 passed, same 7,216 total): the primary checkout holds both embedding model
+files where the worktree holds one, so ten tests move from skipped to passed
+across that boundary — the protocol's both-ways rule, read correctly rather than
+as a phantom gain.
+
+`npx ts-node tests/intelligence-evals/run.ts --only B-03-runbook-push-with-capability`
+on the merged base: **4 PASS / 0 FAIL / 0 BLOCKED / 7 OWNER-PENDING / 0
+SPEC-DEFECT, exit 0.**
+
+**ABI state on exit: SYSTEM NODE.** This session ran `npm test` repeatedly plus
+two mutation batteries, so `better-sqlite3` is built for the shell's Node
+(measured this machine: 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 → 127).
+**`npm run rebuild` is required before loading the addon in Local.**
