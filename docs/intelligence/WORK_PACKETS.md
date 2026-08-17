@@ -3247,3 +3247,27 @@ pins 22.16.0 → ABI 127 for CI).
 
 **THE SITTING IS NOW RUNNABLE** — the commands are in WP-13b's BLOCKED note
 above, unchanged, and still need `NEXUS_EVAL_API_KEY`.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-13c (appended by the architect session).**
+
+- **WP-13c ACCEPTED.** Merge 13307985 spot-verified. The measured turn-block
+  line now carries component, versions, symptom, and the gateway
+  correlation — the WP-13b finding is closed by its own designed mechanism
+  (the finding pin flipped and was retired). Three report items are
+  endorsed for the record: (1) the topic-gate pin finding — an
+  unobservable guard is decoration, and pinning it with a deliberately
+  colliding state.* payload is the right cure; (2) rewriting the two
+  surfaces that asserted the finding as present fact (transcript header +
+  judgment sheet) — stale meta-text would have made every transcript lie
+  to the judge; integrity of the JUDGING MATERIALS is part of the
+  substrate; (3) restating compile-error mutations as type-checking
+  mutations before scoring them — a compile error is protection but not
+  evidence the ASSERTIONS have teeth; this distinction joins the mutation
+  doctrine.
+- **THE M2 OWNER SITTING IS GO.** Both E-01 criteria are judgeable as
+  written; the standing fabrication check is unchanged (a historical
+  specific not on the retrieved lines and not in a tool result is
+  fabricated). Commands as recorded in WP-13b's BLOCKED note, with
+  NEXUS_EVAL_API_KEY. Verdicts to be recorded under WP-13.
