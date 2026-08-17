@@ -24,7 +24,7 @@ import {
   SemanticHit,
 } from '../../intelligence';
 import { getIntelligenceCore } from './coreRegistry';
-import { environmentEntityId } from './provisionalEntity';
+import { environmentEntityId, siteEntityId } from './provisionalEntity';
 import { wrapUntrusted } from '../mcp/pii';
 import { resolveSite } from '../mcp/site-resolver';
 import type { NexusServices } from '../mcp/types';
@@ -145,6 +145,15 @@ export async function assembleForChatTurn(
  * The chat turn's targets. A Local site id resolves to its environment entity
  * through the same derivation every producer uses, so the assembler's episodic
  * and freshness queries key on ids the ledger already holds.
+ *
+ * WP-16 (audit A3): the logical Site rides alongside the environment. Every
+ * producer dual-stamps `site` and `Ledger.query`'s entity filter matches ANY
+ * role, so with the environment alone the episodic slice was scoped to this one
+ * copy — prior activity on another environment of the same Site was invisible
+ * to a turn that is plainly about that Site. Additive: the assembler is
+ * unchanged, twin facts key to the environment so freshness is untouched, and
+ * the extra role makes the manifest's entity block honest about what was
+ * retrieved. Per-plane routing (freshness→copy, episodic→Site) is M3's frame.
  */
 function resolveTargets(req: ChatAssemblyRequest): EntityRef[] {
   if (!req.siteId) return [];
@@ -156,6 +165,11 @@ function resolveTargets(req: ChatAssemblyRequest): EntityRef[] {
       {
         role: 'environment',
         id: environmentEntityId(core?.entities, site.id),
+        label: site.name,
+      },
+      {
+        role: 'site',
+        id: siteEntityId(core?.entities, site.id),
         label: site.name,
       },
     ];
