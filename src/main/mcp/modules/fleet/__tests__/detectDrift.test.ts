@@ -27,7 +27,7 @@ import * as path from 'path';
 import { initIntelligenceCore } from '../../../../intelligence-host/bootstrap';
 import { setIntelligenceCore } from '../../../../intelligence-host/coreRegistry';
 import { runGraphBackfill } from '../../../../intelligence-host/graphBackfill';
-import { provisionalEnvironmentId } from '../../../../intelligence-host/provisionalEntity';
+import { provisionalEnvironmentId, provisionalSiteId } from '../../../../intelligence-host/provisionalEntity';
 import { detectDriftHandler } from '../detect-drift';
 
 const H = 3600_000;
@@ -213,13 +213,18 @@ test('detect_drift: both detectors reported, labeled by origin, and reconciled',
  */
 function emitDrift(
   core: ReturnType<typeof newCore>,
-  o: { schema: string; fact: string; previous: unknown; observed: unknown; observedAt: number; previousObservedAt?: number },
+  o: {
+    schema: string; fact: string; previous: unknown; observed: unknown; observedAt: number;
+    previousObservedAt?: number;
+    /** WP-21b: the Site role, present on every drift event emitted from now on. */
+    site?: string;
+  },
 ): void {
   core.emitter.emit({
     observed_at: new Date(o.observedAt).toISOString(),
     topic: 'state.drift.detected',
     schema: o.schema,
-    entity: { environment: provisionalEnvironmentId('beta') },
+    entity: { environment: provisionalEnvironmentId('beta'), ...(o.site ? { site: o.site } : {}) },
     actor: { id: 'act_fold_state_twin', kind: 'system' },
     source: { class: 'platform', system: 'fold:state-twin', trust: 'derived' },
     payload: {
@@ -233,6 +238,51 @@ function emitDrift(
     },
   });
 }
+
+test('detect_drift: the WP-21b site role changes nothing this reader prints', async () => {
+  // WP-21b stamps a second role on every NEW drift event. This reader buckets
+  // by `ev.entity.environment ?? ev.entity.site`, so the added role must be
+  // inert here — the packet's pin is that today's output is byte-identical.
+  // The failure it guards against is not hypothetical: the Site id is a
+  // legitimate bucket key in that `??` chain, so a reader that preferred it,
+  // or that counted roles rather than environments, would silently re-scope or
+  // double-count the report the day dual-stamped rows arrived.
+  const seed = (core: ReturnType<typeof newCore>, site?: string) => {
+    emitDrift(core, {
+      schema: 'drift.detected/2', fact: 'plugin:woocommerce',
+      previous: { version: '9.5.0' }, observed: { version: '9.9.1' },
+      observedAt: NOW - 1 * H, previousObservedAt: NOW - 2 * H, site,
+    });
+    emitDrift(core, {
+      schema: 'drift.detected/2', fact: 'plugin:custom-thing',
+      previous: { version: '1.0' }, observed: { version: '1.1' },
+      observedAt: NOW - 25 * H, previousObservedAt: NOW - 30 * H, site,
+    });
+  };
+
+  const graphDb = makeGraph();
+  const services = makeServices(graphDb);
+
+  const before = newCore('intel-drift-role-before-');
+  setIntelligenceCore(before);
+  seed(before);
+  const withoutRole = (await detectDriftHandler.execute({ baseline_site: 'alpha' }, services)).content[0].text;
+  before.close();
+
+  const after = newCore('intel-drift-role-after-');
+  setIntelligenceCore(after);
+  // The mirrored shape, deliberately: the Site id is NOT the environment id,
+  // so a reader keying off the wrong role would drop these rows out of scope.
+  seed(after, provisionalSiteId('beta'));
+  const withRole = (await detectDriftHandler.execute({ baseline_site: 'alpha' }, services)).content[0].text;
+  after.close();
+
+  expect(withRole).toBe(withoutRole);
+  // Not a vacuous comparison of two empty reports — both really carry the rows.
+  expect(withRole).toMatch(/\| beta \| plugin:custom-thing \| 1\.0 → 1\.1 \|/);
+
+  graphDb.close();
+});
 
 test('detect_drift: a v1 drift event renders no duration rather than a fabricated one', async () => {
   // drift.detected/1 predates `previous_observed_at`. Those events are already

@@ -74,9 +74,12 @@ function twinsPort(cap: Captured) {
 
 /**
  * An event stamped with the COPY only — no `site` role. This is not a synthetic
- * edge case: `bootstrap.ts`'s drift emission stamps `{ environment }` alone, and
- * events already on disk can never be re-stamped, so Site-scoped episodic
- * retrieval that queried the Site id alone would go dark on that producer.
+ * edge case: `bootstrap.ts`'s drift emission stamped `{ environment }` alone
+ * until WP-21b, and events already on disk can never be re-stamped, so
+ * Site-scoped episodic retrieval that queried the Site id alone would go dark
+ * on every drift event a real ledger already holds. The producer dual-stamps
+ * from WP-21b on; this fixture keeps the OLD shape deliberately, because the
+ * old rows are what the union exists for.
  */
 function ledgerPort(cap: Captured) {
   return {
@@ -221,6 +224,46 @@ describe('ADR-22 · each type resolves to its own home', () => {
     // the turn through the Site, not by querying that environment directly.
     expect(episodicIds).not.toContain(PROD);
     expect(recordFor(bundle.manifest.routing, 'episodic')).toMatchObject({ slot: 'site' });
+  });
+
+  test('a WP-21b dual-stamped drift event reaches the turn ONCE, not once per target', async () => {
+    // The interaction WP-21b creates: from now on the producer stamps BOTH
+    // roles, so the same event answers the Site query AND the copy query that
+    // the union deliberately still makes. It is one thing that happened —
+    // rendering it twice would read as two changes, which is the shape a user
+    // acts on. The union is not narrowed to prevent this; dedup by event id is.
+    const cap = captured();
+    const dualStamped = {
+      id: 'evt_01J5CCCCCCCCCCCCCCCCCCCCCC',
+      recorded_at: NOW.toISOString(),
+      observed_at: new Date(NOW.getTime() - 3 * HOUR).toISOString(),
+      topic: 'state.drift.detected',
+      schema: 'drift.detected/2',
+      entity: { environment: COPY, site: SITE },
+      actor: { id: 'act_fold_state_twin', kind: 'system' },
+      source: { class: 'platform', system: 'fold:state-twin', trust: 'derived' },
+      access: { tenant: 'local' },
+      payload: { fact: 'plugin:acf', previous_observed_at: new Date(NOW.getTime() - 5 * HOUR).toISOString() },
+    };
+    const bundle = await assemble(
+      request({ frame: FRAME }),
+      deps(cap, {
+        ledger: {
+          query: (opts: { entityId?: string; topicPrefix?: string }) => {
+            cap.ledger.push({ entityId: opts.entityId, topicPrefix: opts.topicPrefix });
+            // Both roles match — exactly what `Ledger.query`'s any-role filter does.
+            return (opts.topicPrefix === 'state.' && (opts.entityId === COPY || opts.entityId === SITE)
+              ? [dualStamped]
+              : []) as never[];
+          },
+        },
+      })
+    );
+
+    // Both queries really were made — otherwise this pins nothing.
+    const asked = cap.ledger.filter((q) => q.topicPrefix === 'state.').map((q) => q.entityId);
+    expect(asked).toEqual(expect.arrayContaining([SITE, COPY]));
+    expect(bundle.retrieved.filter((i) => i.id === dualStamped.id)).toHaveLength(1);
   });
 
   test('semantic routes to the live site — content is canonical where it is authored', async () => {

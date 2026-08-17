@@ -253,15 +253,15 @@ export class AgentDispatcher {
           HANDLER_TIMEOUT_MS,
         );
       });
-      const result = await Promise.race([
-        (async () => {
-          const r = await handler(args, ctx);
-          clearTimeout(timeoutHandle);
-          return r;
-        })(),
-        timeoutPromise,
-      ]);
-      return { content: result.content, isError: result.isError };
+      // `finally`, not the resolve path: a handler that throws used to skip the
+      // clear and leave the 5-minute timer armed after dispatch had already
+      // returned.
+      try {
+        const result = await Promise.race([handler(args, ctx), timeoutPromise]);
+        return { content: result.content, isError: result.isError };
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
     } catch (err: any) {
       return {
         content: [{ type: 'text', text: `Error: ${err?.message ?? String(err)}` }],
@@ -307,16 +307,14 @@ export class AgentDispatcher {
           HANDLER_TIMEOUT_MS,
         );
       });
-      const runResult = await Promise.race([
-        (async () => {
-          const r = await def.run(ctx);
-          clearTimeout(timeoutHandle);
-          return r;
-        })(),
-        timeoutPromise,
-      ]);
-      const text = runResult?.findings ? JSON.stringify(runResult) : 'Run complete';
-      return { content: [{ type: 'text', text }] };
+      // Same `finally` as dispatchFunction — a throwing run() left the timer armed.
+      try {
+        const runResult = await Promise.race([def.run(ctx), timeoutPromise]);
+        const text = runResult?.findings ? JSON.stringify(runResult) : 'Run complete';
+        return { content: [{ type: 'text', text }] };
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
     } catch (err: any) {
       return {
         content: [{ type: 'text', text: `Run error: ${err?.message ?? String(err)}` }],

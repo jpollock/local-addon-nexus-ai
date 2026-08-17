@@ -415,4 +415,178 @@ describe('AgentDispatcher', () => {
       expect(call.fields.target).toBeUndefined();
     });
   });
+
+  describe('handler timeout — cleared on every path (WP-19b)', () => {
+    // The 5-minute handler/run timeout used to be cleared only where the
+    // handler RESOLVED (inside an async IIFE, after the await). A handler that
+    // threw skipped that line entirely, so the timer stayed armed for five
+    // minutes after the dispatch had already returned its error result —
+    // holding the context closure and the event loop open. Every failing
+    // contributed-tool call leaked one. Fake timers make the leak observable:
+    // `jest.getTimerCount()` is 1 against the defect and 0 against the fix.
+    const dirs: string[] = [];
+
+    const makeAgent = (body: string): string => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-timer-'));
+      dirs.push(dir);
+      fs.mkdirSync(path.join(dir, 'test-agent'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'test-agent', 'agent.js'), body);
+      return dir;
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+      for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('dispatchFunction clears the timeout when the handler rejects', async () => {
+      const dir = makeAgent(`module.exports = {
+        name: 'test-agent',
+        contributes: { tools: { greet: { handler: async () => { throw new Error('boom'); } } } },
+      };`);
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {} });
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      const r = await d.dispatch('test-agent', 'greet', {});
+
+      expect(r.isError).toBe(true);
+      expect(r.content[0].text).toContain('boom');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('dispatchFunction clears the timeout when the handler throws synchronously, with no unhandled rejection', async () => {
+      // A synchronous throw never reaches Promise.race, so the timeout promise
+      // has no subscriber at all — if its timer were left armed it would reject
+      // into nothing five minutes later. This is the case that makes the
+      // unhandled-rejection pin load-bearing rather than decorative.
+      const dir = makeAgent(`module.exports = {
+        name: 'test-agent',
+        contributes: { tools: { greet: { handler: () => { throw new Error('sync boom'); } } } },
+      };`);
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {} });
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      const rejections: unknown[] = [];
+      const onUnhandled = (reason: unknown) => rejections.push(reason);
+      process.on('unhandledRejection', onUnhandled);
+      try {
+        const r = await d.dispatch('test-agent', 'greet', {});
+        expect(r.isError).toBe(true);
+        expect(r.content[0].text).toContain('sync boom');
+        expect(jest.getTimerCount()).toBe(0);
+
+        // Push past the 5-minute budget, then hand the loop back to real time
+        // so Node can report any rejection nobody is listening for.
+        jest.advanceTimersByTime(600_000);
+        jest.useRealTimers();
+        await new Promise(resolve => setTimeout(resolve, 10));
+        expect(rejections).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+      }
+    });
+
+    it('dispatchRun clears the timeout when run() rejects', async () => {
+      const dir = makeAgent(`module.exports = {
+        name: 'test-agent',
+        run: async () => { throw new Error('run boom'); },
+      };`);
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {}, executionMode: 'run' });
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      const r = await d.dispatch('test-agent', 'greet', {});
+
+      expect(r.isError).toBe(true);
+      expect(r.content[0].text).toContain('run boom');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('still clears the timeout on the success path, and still returns the handler result', async () => {
+      const dir = makeAgent(`module.exports = {
+        name: 'test-agent',
+        contributes: { tools: { greet: { handler: async () => ({ content: [{ type: 'text', text: 'ok' }], isError: false }) } } },
+      };`);
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {} });
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      const r = await d.dispatch('test-agent', 'greet', {});
+
+      expect(r.isError).toBe(false);
+      expect(r.content[0].text).toBe('ok');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('still clears the timeout on the dispatchRun success path, and still returns the run result', async () => {
+      const dir = makeAgent(`module.exports = {
+        name: 'test-agent',
+        run: async () => ({ findings: [{ id: 'f1' }] }),
+      };`);
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {}, executionMode: 'run' });
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      const r = await d.dispatch('test-agent', 'greet', {});
+
+      expect(r.isError).toBeUndefined();
+      expect(JSON.parse(r.content[0].text!)).toEqual({ findings: [{ id: 'f1' }] });
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('the timeout still fires for a run() that never settles', async () => {
+      // dispatchRun's budget had no pin at all until the mutation battery
+      // deleted its timeoutPromise from the race and every test still passed.
+      const dir = makeAgent(`module.exports = {
+        name: 'test-agent',
+        run: () => new Promise(() => {}),
+      };`);
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {}, executionMode: 'run' });
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      const pending = d.dispatch('test-agent', 'greet', {});
+      await Promise.resolve();
+      jest.advanceTimersByTime(300_000);
+      const r = await pending;
+
+      expect(r.isError).toBe(true);
+      expect(r.content[0].text).toContain('timed out');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('the timeout still fires for a handler that never settles', async () => {
+      // The clear must not defeat the budget it exists to enforce.
+      const dir = makeAgent(`module.exports = {
+        name: 'test-agent',
+        contributes: { tools: { greet: { handler: () => new Promise(() => {}) } } },
+      };`);
+      const reg = new ContributedToolRegistry();
+      reg.register('test-agent', { name: 'greet', description: 'Test', inputSchema: {} });
+      const stubs = makeStubs();
+      const d = new AgentDispatcher(reg, stubs.toolRegistry, stubs.services, dir, stubs.resolvedProvider, stubs.stateStore);
+
+      const pending = d.dispatch('test-agent', 'greet', {});
+      await Promise.resolve();
+      jest.advanceTimersByTime(300_000);
+      const r = await pending;
+
+      expect(r.isError).toBe(true);
+      expect(r.content[0].text).toContain('timed out');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+  });
 });

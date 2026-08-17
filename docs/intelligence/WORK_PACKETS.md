@@ -4267,7 +4267,7 @@ Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).
   QUEUED for the next sitting — batch it with WP-20's eventual criteria and
   the M3 surface review; no separate ceremony.
 
-### [ ] WP-19b · AgentDispatcher timer leak on the throw path  *(pre-existing legacy defect, from WP-19 finding 4; tiny, parallel-safe)*
+### [x] WP-19b · AgentDispatcher timer leak on the throw path  *(pre-existing legacy defect, from WP-19 finding 4; tiny, parallel-safe)* — **DONE 2026-08-17, see outcome at the end of this file**
 `AgentDispatcher` clears its 5-minute handler timeout only on the success
 path — a throwing handler leaks the timer. Fix + pin (throwing handler:
 timer cleared, no unhandled rejection). Not intelligence scope; any tier;
@@ -4865,7 +4865,7 @@ tool inventory now includes `nexus_where_am_i` beside `nexus_intelligence_health
   Vocabulary v1 in one sitting, batched with the pending OWNER-PENDING
   rationale criterion and WP-20's design note review.
 
-### [ ] WP-21b · Drift events gain the site role  *(micro; core-lock-adjacent; from WP-21 decision 2 / audit A9 finding)*
+### [x] WP-21b · Drift events gain the site role  *(micro; core-lock-adjacent; from WP-21 decision 2 / audit A9 finding)*
 `bootstrap.ts`'s drift emission stamps `entity: { environment }` only —
 the sole producer violating the dual-stamping discipline (A9). Add
 `site: siteOf(...)` where resolvable (omit-don't-fabricate where not —
@@ -4875,6 +4875,92 @@ construction; note this reasoning in a comment). Pin: new drift events
 carry both roles; old rows unaffected; `detect_drift` and the episodic
 union unchanged in output today (the union narrows in a LATER packet once
 dual-stamped rows dominate — do not narrow it here).
+
+**ANNOUNCE (core-lock-adjacent).** Worktree `wp-21b`, branch `wp-21b`, base
+`b267beaa`. Files held: `src/main/intelligence-host/bootstrap.ts` (the
+producer), `src/intelligence/assemble/assembler.ts` (comment only — its
+routing comment names bootstrap's old shape as the union's justification and
+would go stale the moment this lands), plus three test files. No other packet
+may hold `bootstrap.ts` concurrently.
+
+**WP-21b OUTCOME — done (branch `wp-21b`).** The last producer stamping a
+physical role alone now dual-stamps, and the union it forced is untouched.
+
+Receipt (`git diff --stat`, this branch against its base):
+
+    src/intelligence/assemble/assembler.ts                        | 17 ++--
+    src/intelligence/assemble/__tests__/frameRouting.test.ts       | 49 +++++-
+    src/main/intelligence-host/bootstrap.ts                        | 40 +++++-
+    src/main/intelligence-host/__tests__/driftStamping.test.ts     | 111 +++++++++
+    src/main/mcp/modules/fleet/__tests__/detectDrift.test.ts       | 56 +++++-
+    tests/e2e-intelligence/replay/invariants.ts                    |  5 +
+    6 files changed, 262 insertions(+), 16 deletions(-)
+
+**The change is six lines and one hoist.** `siteRoleFor(entityId)` wraps
+`entities?.siteOf(...)` in the producer's usual try/catch, and the emission
+becomes `entity: { environment: drift.entityId, ...(site ? { site } : {}) }`.
+The hoist is load-bearing and easy to miss: `let entities` was declared
+BELOW the fold that now closes over it, so leaving it there is a
+temporal-dead-zone throw waiting for the first fold tick, not a style point.
+
+**Three things this packet had to decide, none of them in the brief.**
+
+1. **Traversed, never derived — and the test proves the difference.**
+   `siteOf` is the only honest source. A derivation would mint
+   `local.site_id.logical`, which for a MIRRORED site is a DIFFERENT entity
+   from the Site `siteLinkMirror` established under `wpe.site_id`
+   (`siteEntityFor`, `siteLinkMirror.ts:173`) — the id-freeze split WP-14's
+   `resolveSite` exists to prevent. So the pin is a mirrored fixture: the
+   derived Site entity EXISTS as a row (the tap's own `ensure()` creates it)
+   and is the wrong answer. A derive-based implementation finds a plausible
+   id and fails the test.
+2. **The Site role does NOT double the episodic slice.** WP-16b's dedup by
+   event id already covers it (`collectEpisodic`, `seen`), so the union and
+   the new stamping compose correctly — but nothing pinned that interaction,
+   because before this packet no drift event could match both targets. It is
+   pinned now (`frameRouting.test.ts`), and mutation M08 confirms the dedup
+   is what does the work.
+3. **The replay invariant must NOT require the new role.** `checkDriftEvent`
+   runs against a developer's real ledger — 365 drift events measured at
+   WP-18, all pre-WP-21b — so requiring `entity.site` would report the whole
+   history as broken. Same false-red class the schema-version awareness there
+   already avoids; a comment now says so before someone "tightens" it.
+
+**What did NOT change, deliberately:** the payload and `drift.detected/2`
+(the packet's pre-ruling is right — `EntityRefs` is `Record<string, string>`
+and the validator's `entity` field is an open `z.record`, so an added role is
+extensible-by-construction, and the comment says exactly that); the
+Site ∪ copy union; `detect_drift`'s output, pinned by a two-core
+before/after comparison asserting byte-identical reports.
+
+**Test results.** Baseline measured IN the worktree, on a clean tree, before
+any change: **539 suites / 6841 passed / 12 skipped**. Final: **540 suites /
+6846 passed / 12 skipped**, zero failures — skipped UNCHANGED, so the delta
+(+1 suite, +5 tests: 3 in `driftStamping`, 1 each in `detectDrift` and
+`frameRouting`) is real coverage. `npx tsc -p . --noEmit` clean; eslint clean on every
+touched file and over the whole `src/intelligence/**` tree, so the ADR-16
+seam rule is verified to still fire.
+
+**Mutation battery: 8/8 caught** — role never stamped; unresolvable Site
+filled with the environment id (fabrication); physical role dropped for the
+logical one; try/catch removed (a faulty entity service taking the drift
+event with it); schema bumped to `/3`; `detect_drift` re-scoped onto the new
+role; the episodic union narrowed; the dedup removed.
+
+**A process finding worth keeping — PROPOSED protocol amendment, not applied
+(`PARALLEL_PROTOCOL.md` is owner territory).** Two traps in the same family as
+the `npx jest` one WP-22 added, both hit this session. The proposed text for
+the Test-environment section: *"Baseline before you edit, and keep the tree
+clean while the run is in flight — jest reads each suite file when it reaches
+it, so a tree edited mid-run yields a baseline that is partly pre-change and
+partly post-change, with nothing in the output saying which. And capture the
+whole run to a file: jest's totals go to stderr and interleave with the PASS
+lines, so `npm test | tail -N` can silently keep a stack-trace fragment
+instead of the summary — redirect, then grep `^Tests:`."* Both were real
+losses, not hypotheticals: the first baseline was discarded and re-measured
+with the work stashed; the second exited 0 and reported nothing, which is the
+worse failure, because a green exit code with no numbers reads as a
+successful measurement. The baseline quoted above is the third run.
 
 ### [x] WP-22 · Site context into the chat — wire it AND show it  *(from the owner's live where-am-I test; renderer + panel; the designer's "Currently in" strip)*
 Diagnosis (verified): `PanelChat.tsx:503` sends `siteId =
@@ -5047,3 +5133,121 @@ units, never item counts (docs finding №3). Vocabulary v1: "pulled from <sourc
 - **WP-22b** (content-age chip — needs one IPC channel, integration lock)
   accepted as registered by the agent; correctly excluded from this
   packet's file scope.
+
+---
+
+**WP-19b OUTCOME — done (branch `wp-19b`, worktree `.worktrees/wp-19b`, Opus).**
+Two files: `src/main/agent-runtime/AgentDispatcher.ts` and its existing suite
+`tests/unit/agent-runtime/agentDispatcher.test.ts`. No new file, no new suite,
+nothing under `src/intelligence/` — the packet's "not intelligence scope" holds
+exactly. WP-19 confirmed an ancestor of the base (`git merge-base
+--is-ancestor wp-19 poc/nexintelligence`) before starting, so the instrumented
+dispatcher is the one that was fixed.
+
+**Verification.** Worktree baseline BEFORE any change: **539 suites (538
+passed, 1 failed), 6,837 passed, 12 skipped, 6,853 total**, exit 1. AFTER:
+**539 suites (538/1), 6,844 passed, 12 skipped, 6,860 total**, exit 1. Suites
+unchanged; tests **+7**, exactly the 7 new pins; **skipped unchanged at 12**, so
+the delta is not an artifact-gated suite appearing. The 1 failing suite is the
+same one before and after, with the same 4 failures (below). `npm run typecheck`
+clean; `npx eslint` clean on both touched files. Mutation battery **7/7 caught**
+(run twice — 6/7 the first time; see finding 2).
+
+**The change.** `clearTimeout(timeoutHandle)` moved into a `finally` in both
+`dispatchFunction` and `dispatchRun`. That deleted the async IIFE in each, which
+existed only to hold the clear after the `await`, so `Promise.race` now takes
+`handler(args, ctx)` / `def.run(ctx)` directly. Behaviour on every other path is
+byte-identical: same error strings, same result shapes, same 5-minute budget.
+
+**Four findings.**
+
+1. **The leak was worse in one specific shape than the packet describes, and
+   the fix creates that shape deliberately.** With the IIFE, a *synchronously*
+   throwing handler became a rejection that `Promise.race` was already
+   subscribed to, so the abandoned timeout promise's later rejection was
+   consumed — a leaked timer, but no unhandled rejection. Without the IIFE, a
+   synchronous throw never reaches `Promise.race` at all, so the timeout promise
+   has **no subscriber**: if its timer were left armed it would reject into
+   nothing five minutes later and crash-or-warn depending on Node's flags. The
+   `finally` clears it before that can happen. This is why the packet's
+   "no unhandled rejection" pin is load-bearing for the NEW shape rather than
+   for the old defect — against the old code that assertion passes. Stated
+   plainly because a pin that holds in both directions is otherwise a vacuous
+   guard: the pin that actually falsifies the defect is `jest.getTimerCount()`,
+   which reads 1 against the original line and 0 against the fix.
+
+2. **The mutation battery found a hole in this packet's own pins.** Deleting
+   `timeoutPromise` from `dispatchRun`'s race — i.e. removing the five-minute
+   budget from the `run()` path entirely — left all 23 tests green. The budget
+   was pinned for `dispatchFunction` and had never been pinned for
+   `dispatchRun`, in a packet whose diff restructures both. A seventh pin ("the
+   timeout still fires for a `run()` that never settles") closes it; the battery
+   then went 7/7. Recording the SURVIVED because the survivor, not the score, is
+   the finding: the pins were written for the throw path, and the path the
+   throw-path fix could have *broken* was the one left uncovered.
+
+3. **The 4 known-red `AgentRegistry.test.ts` tests DO reproduce here** — the
+   standing capture instruction (open since WP-12, where they did not reproduce)
+   is discharged. Same 4, in the worktree, on the clean pre-change tree, and
+   also in isolation (`npx jest tests/unit/agent-runtime/AgentRegistry.test.ts`
+   → 4 failed / 7 passed in 1.5s), so this is not contention from the other
+   agents' concurrent jest runs. Every one is the same symptom — `registry.load()`
+   registers nothing from a temp dir:
+
+       ● AgentRegistry › load() discovers and registers a valid agent
+         expect(received).toHaveLength(expected)
+         Expected length: 1
+         Received length: 0
+         Received array:  []
+           > 44 |     expect(registry.list()).toHaveLength(1);
+
+       ● AgentRegistry › get() returns the agent by name
+         Expected: "test-agent"
+         Received: undefined
+           > 53 |     expect(agent?.name).toBe('test-agent');
+
+       ● AgentRegistry › skips subdirectories without agent.ts or agent.js
+       ● AgentRegistry › skips agents that fail to load (logs error, continues)
+         (both: Expected length 1, Received length 0)
+
+   The fixtures write `agent.ts`, whose load depends on the ts-node
+   registration `AgentRegistry` installs; a worktree whose `node_modules` is a
+   symlink is the obvious suspect and is NOT verified here — out of scope for
+   this packet, but it wants a packet of its own, because "the agent registry
+   loads zero agents" is not a failure mode anyone should have to know is
+   expected.
+
+4. **`git stash` is shared across every worktree, and the protocol does not say
+   so.** Establishing a clean BEFORE baseline meant stashing; between the stash
+   and the pop, the `wp-21b` agent stashed too, and a bare `git stash pop` in
+   THIS worktree applied THEIR work into it and dropped their entry. Recovered
+   in full — their files reverted out of this tree, their stash restored to
+   `stash@{0}` by SHA with its original message (`git stash store -m … b0a6d0bb`),
+   same commit object, so nothing of theirs was lost and their own worktree was
+   never touched. **Protocol amendment proposed** (owner's call, `docs/` is
+   owner-approval): in a multi-agent worktree setup, never `git stash pop`/`apply`
+   by index — resolve the entry by SHA first
+   (`git stash list --format='%H %gs' | grep <your-marker>`) and drop that SHA.
+   Better still, don't stash: commit a WIP on your own branch and reset it after.
+
+**Two smaller notes on measurement**, both of which produced a wrong number
+before producing a right one:
+
+- **`npm test | tail` masks jest's exit code** — the pipeline reports `tail`'s
+  status, so a run with 4 real failures reported exit 0. It also loses the
+  `Test Suites:`/`Tests:` summary entirely when console output from the suites
+  outruns the tail window. Redirect to a file and grep it; do not pipe.
+- **A baseline started before the edits is not a baseline.** The first full run
+  here was launched and then the tree was edited underneath it, so suites read
+  the file in whichever state they happened to reach it in. Killed and discarded
+  rather than reported. Three full runs were needed for two honest numbers.
+
+**Receipt** — `git diff --stat <merge>^1 <merge>` is in the integration report;
+the packet's own change is:
+
+    src/main/agent-runtime/AgentDispatcher.ts        |  36 +++---
+    tests/unit/agent-runtime/agentDispatcher.test.ts | 174 ++++++++++++++++++++++
+
+**ABI state on exit: system Node (jest).** `better-sqlite3` is built for the
+developer shell's Node 25.9.0 (ABI 141) — this session ran jest repeatedly.
+**Run `npm run rebuild` before loading the addon in Local.**
