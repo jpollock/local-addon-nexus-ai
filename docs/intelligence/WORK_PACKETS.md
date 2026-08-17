@@ -1968,7 +1968,14 @@ architect session; supersedes nothing, closes both packets).**
   chain, prompt line, and pins in one commit, or not at all) is adopted as
   Site Finder convention.
 
-### [ ] WP-04d · phpVersions granularity — unify on the prefix predicate
+### [x] WP-04d · phpVersions granularity — unify on the prefix predicate
+**DONE 2026-08-17** — all three chains now use the prefix predicate `wpVersions`
+uses (`v || startsWith(v + '.') || startsWith(v + '-')`); two WP-04c pins
+updated deliberately and marked `[WP-04d]` at the assertion, +7 new pins
+(53 → 60), 16 mutations with 14 named-witness kills and 2 disclosed expected
+survivors. No prompt change was needed, so `src/main/ai/` and `tests/evals/`
+are untouched. Measured live: a `{phpVersions:['8.2']}` query matched 1 of 37
+local rows before, 37 of 37 after. Notes at the end of this file.
 Registered from WP-04c finding. WPE rows store PHP as major.minor ("8.2");
 local/external store patch-level ("8.2.29"); the current exact-membership
 predicate therefore under-matches across sources depending on which
@@ -4398,3 +4405,166 @@ touches the dispatch module WP-19 just instrumented, so rebase on current.
   capture instruction stands; the red has not been seen since WP-12's
   baseline — if it stays unseen through Wave 3, it gets demoted to a
   historical note at the wave close.
+
+---
+
+- 2026-08-17 · **WP-04d — LOCK ANNOUNCEMENT + scope confirmation.** Branch
+  `wp-04d`, worktree `.worktrees/wp-04d`. **Holding the integration lock** for
+  `src/main/ipc-handlers.ts` (the `SITE_FINDER_APPLY` filter chains) from this
+  note until the packet's close-out. Nothing else should edit that file
+  meanwhile.
+
+  **Lock contention checked before taking it:** the four open packets are
+  WP-20 (procedure distribution), WP-21 (assembler task frame — core lock,
+  `AssembleRequest`/`chatAssembly`), WP-19b (`AgentDispatcher`) and WP-12b
+  (`tests/unit/chat-service-history.test.ts`). None names `ipc-handlers.ts`;
+  WP-19's announcement claimed `tool-registry.ts` / `ChatService.ts` /
+  `intelligence-host/health.ts` and is closed. No contention.
+
+  **WP-04d CLOSE-OUT — executed, verified, findings.**
+
+  **Verification.** Worktree baseline BEFORE any change: **533 suites, 6,719
+  passed, 12 skipped, 6,731 total**, exit 0. AFTER: **533 suites, 6,726 passed,
+  12 skipped, 6,738 total**, exit 0. Suites unchanged; tests **+7**, exactly the
+  7 new pins; **skipped unchanged at 12**, so the delta is not an artifact-gated
+  suite appearing or vanishing. A third full run after the mutation battery is
+  byte-identical to the AFTER run (6,726/12/6,738), which is the evidence the
+  tree was restored. `npm run typecheck` clean; `npx eslint` clean on both
+  touched files. The WP-04b/04c suite went 53 → 60 with **two pins updated
+  deliberately** (below) and nothing else in it moved. Touched-area legacy
+  suites green together — `site-finder-soft-delete`, `parse-accuracy`,
+  `siteFinderTwins`: 3 suites / 40 tests, **no expectation changed**.
+
+  **The change.** All three chains now use the prefix predicate `wpVersions`
+  already uses a few lines away in each of them — `v || startsWith(v + '.') ||
+  startsWith(v + '-')` — inlined per chain, exactly as `wpVersions` is. No
+  prompt change was needed (see finding 4), so the parse layer is untouched and
+  the ruling's escalation trigger did not fire.
+
+  **What it is worth, measured live on the developer's `graph.db`
+  2026-08-17** (re-measured for this packet, not copied):
+
+  | source | active rows | php granularity |
+  |---|---|---|
+  | local | 40 | 36 patch-level (`8.2.29` ×34, `8.2.27`, `8.2.30`), **1** major.minor (`8.2`), 3 NULL |
+  | wpe | 343 | **293 all major.minor**, 50 NULL |
+  | external | 0 in this DB | patch-level from `wp --info` (CLAUDE.md) |
+
+  So `{phpVersions:['8.2']}` — the exact shape the prompt documents and the
+  parser emits — matched **1 of 37** local rows carrying a version before this
+  change and matches **37 of 37** after. That is the packet in one number.
+
+  **The two pins updated on purpose** (both marked `[WP-04d]` at the assertion,
+  with the old expectation named in the comment, in
+  `tests/unit/ipc/site-finder-filters.test.ts`):
+
+  1. *"filters the WPE chain, whose stored version is major.minor"* —
+     `not.toContain('myloop')` → `toContain('myloop')`. `{phpVersions:['8.2']}`
+     now matches the local site stored as `8.2.29`.
+  2. *"matches across the WPE and external chains at once"* —
+     `not.toContain('newsite')` → `toContain('newsite')`. Same change, `8.3` vs
+     `8.3.1`.
+
+  Both were WP-04c pins recording exact membership. Nothing else in the file
+  changed direction; the file header carries a WP-04d block stating the new
+  semantic and that these two moved.
+
+  **Seven new pins**, one per chain plus the boundaries: LOCAL prefix (the
+  behaviour change, asserted as the whole local bucket), WPE prefix, EXTERNAL
+  prefix, the patch-level query that must **not** widen upward (`8.2.29` must
+  not start matching rows stored `8.2`), the version-prefix-not-string-prefix
+  guard (`8.2.2` ↛ `8.2.29`, plus an `8.` query that must match nothing **on
+  all three chains**), the hyphen arm, and NULL exclusion.
+
+  **Fixture:** two changes, both to make a real shape representable —
+  `wpe-nophp` (php_version NULL, the live-common WPE shape: 50 of 343 active
+  rows) and `ext-normal`'s version becomes `8.3.6-1~deb12u1` (what `wp --info`
+  reports on a distro-packaged PHP, where `PHP_VERSION` itself carries the
+  packaging suffix). Every pre-existing assertion about `ext-normal` still
+  holds — it is still an 8.3.x staging host with 2 admins.
+
+  **Mutation battery — 16 mutations, 14 CAUGHT by their named witness, 2
+  EXPECTED SURVIVORS, disclosed below.** Committed first (the pattern's rule),
+  run strictly between the two full-suite runs. Each substitution is anchored
+  on **two lines** — the chain's distinguishing line (`const cached =
+  metadataCache?.get?.(siteId)` / `wpeSite.php_version` /
+  `externalSite.php_version`) plus the predicate — because the three chains
+  contain byte-identical predicate lines; the harness asserts the anchor
+  matches exactly once, that the file hash changed, that the **named** witness
+  is among the failures, and that the tree restores to the original hash.
+
+  | # | mutation | chain | witness |
+  |---|---|---|---|
+  | M1–M3 | `phpVersions` branch disabled (restores the pre-WP-04c defect) | local / wpe / external | that chain's prefix pin |
+  | M4–M6 | drop `startsWith(v + '.')` (back to WP-04c exact membership) | local / wpe / external | that chain's prefix pin |
+  | M7 | drop the `=== v` arm | local | "LOCAL: a major.minor query matches patch-level rows" |
+  | M8 | drop the `=== v` arm | wpe | "filters the WPE chain, whose stored version is major.minor" |
+  | M9 | drop the `=== v` arm | external | "filters the EXTERNAL chain in isolation" |
+  | M10 | drop `startsWith(v + '-')` | external | "matches a distro-packaged build through the hyphen arm" |
+  | M11 | drop `startsWith(v + '-')` | local | **SURVIVED — expected, see finding 3** |
+  | M12 | drop `startsWith(v + '-')` | wpe | **SURVIVED — expected, see finding 3** |
+  | M13–M15 | `startsWith(v + '.')` → `startsWith(v)` | local / wpe / external | "is a version prefix, not a string prefix" |
+  | M16 | NULL php_version read as "no constraint" instead of excluded | wpe | "a NULL php_version matches nothing" |
+
+  Twelve of the sixteen are per-chain kills on lines whose two siblings were
+  left untouched — the evidence that "all three chains" is a property of the
+  pins and not of the comment above them.
+
+  ### Findings
+
+  1. **`if (false)` is not a valid branch-removal mutation in this repo, and it
+     fails in a way that looks like a kill.** The first battery run reported
+     M1–M3 as non-zero exits — but the failure was `Test suite failed to run`:
+     ts-jest's TypeScript diagnostics reject the now-unreachable block, so the
+     suite never built. A build failure is not behavioural evidence. The
+     harness caught it only because it requires the **named witness** among the
+     failures rather than accepting a non-zero exit (WP-04c's rule, earning its
+     keep). The type-clean way to disable a branch is to make its guard
+     unsatisfiable without making it constant — here
+     `validated.phpVersions.length > 0` → `> 999`. Worth adding to the mutation
+     memory beside "anchor on two lines".
+  2. **A whole-bucket equality assertion is only a kill if the expected set is a
+     PROPER subset of that chain's rows.** The first EXTERNAL pin asserted the
+     `['8']` bucket equals `[ext-host, ext-normal, ext-special]` — which is
+     every external row in the fixture, so a chain with **no** `phpVersions`
+     branch at all satisfies it. M3 exposed this. Fixed by adding a narrower
+     query (`['8.3']` → exactly two of the three) to the same test. The general
+     shape: when a filter's expected result is "all rows of this bucket", the
+     pin cannot distinguish *filtering correctly* from *not filtering*.
+  3. **Two mutations survive, and fabricating data to kill them would be the
+     worse trade.** The `startsWith(v + '-')` arm is pinned on the external
+     chain only, because a hyphenated PHP version is a real shape **there** —
+     `wp --info` reports `PHP_VERSION`, which on a distro-packaged PHP is
+     `8.1.2-1ubuntu2.14`. Local ships its own PHP builds (live: `8.2.29`,
+     `8.2.27`, `8.2.30` — no suffixes) and WP Engine's CAPI reports plain
+     major.minor (live: 293 of 293 non-NULL rows), so a hyphenated row on either
+     of those chains would be fiction, and this fixture's usefulness rests on
+     mirroring real shapes. The arm is kept on all three for uniformity with
+     `wpVersions` (where it catches WP prereleases like `7.0-RC1`); the two
+     survivors are the honest cost of not inventing data.
+  4. **The prompt needed no change, and that is a result, not an omission.** It
+     already documents the filter as major.minor (`["8.1", "8.2"]`). Before this
+     packet that documentation was accurate for WP Engine and wrong for the
+     other two sources; it is now accurate for all three. `src/main/ai/` and
+     `tests/evals/` are untouched (verified against the diff), and the only
+     PHP-related SF eval expectation is `phpEolOnly` (SF-03, SF-05) — a
+     different branch, unchanged by this packet. SF-01/05/06 expectations
+     therefore stand unchanged, as the packet required.
+  5. **NULL was unpinned before this packet and now is not.** WP-04c's
+     `!sitePhp || !includes(...)` excluded a NULL `php_version`, but no test
+     said so — 50 of 343 active WPE rows have no version at all, and reading
+     "unknown" as a match is exactly the failure CLAUDE.md's never-fabricate
+     rule exists to prevent. The rewrite keeps the guard explicit
+     (`!!sitePhp &&`) rather than coercing (`(sitePhp ?? '')`), because the
+     explicit form is what M16 mutates.
+  6. **Scope held: the three chains are still three chains.** A shared
+     `phpVersionMatches()` helper was considered and rejected on two grounds:
+     it is the deduplication the packet forbids, and it would collapse the
+     per-chain mutation anchors that are this suite's only evidence that each
+     chain is really wired. Inlining also matches how `wpVersions` — the
+     predicate being adopted — already appears three times in this same handler.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
+  ABI 127). `npm run rebuild` is required before loading Local again.** The
+  shared `node_modules` every worktree symlinks through is affected.
