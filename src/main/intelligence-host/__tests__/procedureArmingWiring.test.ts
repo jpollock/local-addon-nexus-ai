@@ -209,6 +209,10 @@ describe('assembleForChatTurn reaches the procedure plane', () => {
       procedure: { grants: [] },
     });
 
+    // Asserted on the INDEX, not on `procedure`: nothing arms on this turn
+    // either way, so a null outcome would be true whether the caller was
+    // honoured or silently replaced by the live grant set.
+    expect(result!.turnBlock ?? '').not.toContain('Procedures granted to this actor:');
     expect(result!.procedure).toBeNull();
   });
 });
