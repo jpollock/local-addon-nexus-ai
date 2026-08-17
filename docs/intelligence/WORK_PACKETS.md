@@ -4830,3 +4830,48 @@ intelligence-layer section's invariant list could gain one line: *"Routing lives
 in `assemble()` and nowhere else (ADR-22). A reader that picks its own entity per
 intelligence type is the drift the task frame removed; pass a frame."* And the
 tool inventory now includes `nexus_where_am_i` beside `nexus_intelligence_health`.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-21 (appended by the architect session).**
+
+- **WP-21 ACCEPTED.** Merge 1be9dfce. ADR-22 is implemented: routing lives
+  in `assemble()` alone, the core gained no host import (the frame arrives
+  resolved — the seam held), and the first consumer exists. All three
+  decisions are RATIFIED, none overruled:
+  1. **`nexus_where_am_i`** — the packet's `nexus_site_status` name is a
+     LIVE SHIPPED TOOL with two GraphQL resolver callers and CLI usage; a
+     second registration would have replaced it. The collision check
+     before naming a tool is now expected practice; the vocabulary blesses
+     both phrasings of the concept.
+  2. **Episodic scope Site ∪ copy** — bootstrap's drift emission stamps
+     `{environment}` with no site role, and shipped rows can't be
+     re-stamped; Site-only routing would have silently dropped every
+     drift event from the thread ("a regression wearing an improvement's
+     clothes" — quoted into the record). The producer fix is WP-21b,
+     below; when its dual-stamped rows dominate, the union narrows
+     naturally.
+  3. **Production is evidence-only and declines on ambiguity** — the
+     honest-null principle applied to routing; the fallback is stated in
+     prose the model relays.
+- Mutation notes adopted: the ANCHOR-BAD refusal (exactly-one-match) is
+  now a GUARD in the battery script rather than a habit — WP-19's memory
+  made mechanical; and the fallback-phrase survivor is the parity
+  principle's converse proven again: a disclosure argued for in a comment
+  is untested until pinned.
+- **The surface review is now DUE** (milestone cadence): Wave 3
+  introduced user-visible language — the four-line status, divergence
+  phrasing, health verdicts — all to be read against Controlled
+  Vocabulary v1 in one sitting, batched with the pending OWNER-PENDING
+  rationale criterion and WP-20's design note review.
+
+### [ ] WP-21b · Drift events gain the site role  *(micro; core-lock-adjacent; from WP-21 decision 2 / audit A9 finding)*
+`bootstrap.ts`'s drift emission stamps `entity: { environment }` only —
+the sole producer violating the dual-stamping discipline (A9). Add
+`site: siteOf(...)` where resolvable (omit-don't-fabricate where not —
+WP-16 doctrine). Schema stays `drift.detected/2` (an added entity ROLE is
+not a payload schema change — the envelope's entity block is open by
+construction; note this reasoning in a comment). Pin: new drift events
+carry both roles; old rows unaffected; `detect_drift` and the episodic
+union unchanged in output today (the union narrows in a LATER packet once
+dual-stamped rows dominate — do not narrow it here).

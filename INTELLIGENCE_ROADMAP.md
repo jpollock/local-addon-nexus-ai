@@ -88,8 +88,8 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
 - [x] **WP-12b** vacuous chat-history test port — DONE 2026-08-17 (copy deleted; 6 ported; the R1-recreating pin waived)
 
 **Then, sequential on the core lock:**
-- [ ] **WP-21** assembler task frame + per-type routing (ADR-22 made real;
-      first consumer: the where-am-I `siteStatus()`)
+- [x] **WP-21** assembler task frame + per-type routing — DONE 2026-08-17
+      (ADR-22 implemented; `nexus_where_am_i` ships the four-line status)
 - [ ] **WP-20** procedure distribution *(B-03 is its acceptance eval; starts
       with a design note to the owner, not code)*
 
