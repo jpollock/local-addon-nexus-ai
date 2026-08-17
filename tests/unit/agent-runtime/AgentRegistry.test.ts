@@ -15,8 +15,17 @@ function writeAgent(dir: string, name: string, code: string) {
   fs.writeFileSync(path.join(agentDir, 'agent.js'), code);
 }
 
+// The fixture agent is written to a temp dir and loaded by AgentRegistry's own
+// `require()`, which runs inside jest — so it resolves through jest's transform.
+// Point it at the SDK SOURCE, not `lib/main/agent-sdk`: a compiled-tree path made
+// these four tests fail in any worktree that had not run `npm run compile`, which
+// read as a phantom agent-runtime regression and burned three packets (WP-19b,
+// WP-20 phase 1, WP-22b — see WP-23). `__dirname`-relative, not cwd-relative, so
+// the jest invocation directory cannot move it either.
+const AGENT_SDK_SOURCE = path.resolve(__dirname, '..', '..', '..', 'src', 'main', 'agent-sdk');
+
 const validAgentCode = `
-const { defineAgent, cron } = require('${path.resolve('lib/main/agent-sdk')}');
+const { defineAgent, cron } = require('${AGENT_SDK_SOURCE}');
 module.exports = { default: defineAgent({ name: 'test-agent', version: '1.0.0', triggers: [cron('* * * * *')], run: async () => {} }) };
 `;
 
