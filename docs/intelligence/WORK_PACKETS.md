@@ -3271,3 +3271,17 @@ above, unchanged, and still need `NEXUS_EVAL_API_KEY`.
   specific not on the retrieved lines and not in a tool result is
   fabricated). Commands as recorded in WP-13b's BLOCKED note, with
   NEXUS_EVAL_API_KEY. Verdicts to be recorded under WP-13.
+
+---
+
+**ANNOUNCEMENT — WP-17 HOLDS THE CORE LOCK from 2026-08-17 (released on
+merge).** Worktree `.worktrees/wp-17`, branch `wp-17`. Files claimed:
+`src/main/intelligence-host/bootstrap.ts`, `permissionsMirror.ts`, the new
+`health.ts` (+ `__tests__/health.test.ts`, `__tests__/degradation.test.ts`);
+under the integration lock, the minimal registration edits to
+`src/main/mcp/modules/fleet/index.ts`, `src/main/mcp/safety.ts` and
+`src/main/index.ts`; parallel-safe, the new
+`src/main/mcp/modules/fleet/intelligence-health.ts` + its test; and the
+count line in the legacy `tests/main/fleet-tools.test.ts`.
+Baseline in the fresh worktree BEFORE any change: **511 suites / 6462 passed
+/ 12 skipped / 6474 total / 0 failed**. No AgentRegistry reds were present.

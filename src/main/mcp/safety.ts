@@ -184,6 +184,11 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   detect_drift: 1,
   compare_sites: 1,
   nexus_pairing_proposals: 1, // read-only: proposals are information, linking stays in nexus_link_site (Tier 2)
+  // Measures the intelligence layer and changes nothing. Tier 2 (the default
+  // for an absent entry) would also write an operation-audit.log line every
+  // time someone asked whether recording was working — audit volume for a
+  // question that cannot mutate anything.
+  nexus_intelligence_health: 1,
   find_outdated_sites: 1,
   find_sites_with_plugin: 1,
   find_sites_with_theme: 1,
