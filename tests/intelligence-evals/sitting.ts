@@ -50,6 +50,7 @@ import { getProvider, initializeProviders } from '../../src/main/chat/providers/
 import type { AIProvider } from '../../src/main/chat/providers/types';
 import { forgetChatAssemblySession } from '../../src/main/intelligence-host/chatAssembly';
 import { setIntelligenceCore } from '../../src/main/intelligence-host/coreRegistry';
+import { nativeModuleRemedy } from './nativeModule';
 import { criteriaOf, loadEvalSpecs } from './specLoader';
 import { EVALS_DIR, runEvals } from './runner';
 import { createSittingWorld, E01_PROMPT, FLAGGED_SITE, SittingWorld } from './sittingWorld';
@@ -145,48 +146,6 @@ export function parseArgs(argv: string[]): SittingOptions {
     help: argv.includes('--help') || argv.includes('-h'),
     errors,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Preflight — native module ABI
-// ---------------------------------------------------------------------------
-
-/**
- * better-sqlite3 is built for EITHER Electron OR system Node, never both
- * (CLAUDE.md "Native Modules"). This harness runs under system Node like the
- * eval runner, so a tree left in the Electron state fails on the first `require`
- * deep inside `initIntelligenceCore` — as a raw stack trace naming a
- * `NODE_MODULE_VERSION` the reader has no reason to connect to `npm run
- * pretest`. The eval runner inherits that bare crash; this one does not.
- *
- * Returns a ready-to-print remedy, or null when the binding loads.
- */
-export function nativeModuleRemedy(load: () => unknown = () => require('better-sqlite3')): string | null {
-  try {
-    load();
-    return null;
-  } catch (err) {
-    const message = (err as Error).message ?? String(err);
-    const abi = /NODE_MODULE_VERSION|was compiled against a different Node\.js version/i.test(message);
-    return [
-      abi
-        ? 'better-sqlite3 is built for the WRONG Node ABI — almost certainly for Electron, because'
-        : 'better-sqlite3 could not be loaded:',
-      abi ? 'this tree was last used to load the addon in Local.' : '',
-      '',
-      `  ${message.split('\n')[0]}`,
-      '',
-      'Remedy (this harness runs under SYSTEM Node, like the eval runner):',
-      '',
-      '  npm run pretest',
-      '',
-      'and afterwards, before loading the addon in Local again:',
-      '',
-      '  npm run rebuild',
-    ]
-      .filter((l) => l !== '')
-      .join('\n');
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -514,14 +473,19 @@ export function turnBlockOf(capture: RunCapture): string | undefined {
 /**
  * The lines the turn block actually devotes to the planted incident.
  *
- * Worth extracting on its own because of what they turn out to contain.
+ * Worth extracting on its own because these lines are the ONLY channel the
+ * platform gives the model for prior history, so they bound what any historical
+ * claim in the model's answer can honestly rest on.
+ *
  * `renderRetrieved` renders a ledger item as
- * `- <age> ago — <topic> — <factKey> (<provenance>) — <eventId>`, and `factKeyOf`
- * looks only at `payload.fact ?? payload.slug ?? payload.name`. The fixture's
- * incident payload carries `component`, `from_version`, `to_version`, `impact`,
- * `correlate` and `resolved` — none of those three keys — so the model receives
- * the topic, the age and the provenance, and NOT the substance. Measured, not
- * inferred: see the note in the judgment sheet.
+ * `- <age> ago — <topic> — <factKey> — <summary> (<provenance>) — <eventId>`.
+ * WP-13b measured that the `<summary>` half did not exist: `factKeyOf` reads
+ * only `payload.fact ?? payload.slug ?? payload.name`, the incident payload has
+ * none of those keys, and the model was therefore told a topic and an age.
+ * WP-13c added the summary channel, so the component, the versions, the symptom
+ * and the gateway-X correlation now arrive. The finding is closed; these lines
+ * are still the whole of what was retrieved, and anything beyond them in the
+ * model's answer is still fabricated.
  */
 export function incidentLinesOf(turnBlock: string | undefined): string[] {
   if (!turnBlock) return [];
@@ -616,12 +580,12 @@ export function renderTranscript(capture: RunCapture, ctx: RunContext): string {
     lines.push(fence(incidentLines.join('\n')));
     lines.push('');
     lines.push(
-      'Topic, age, provenance and event id — and nothing else. The component, the symptom, ' +
-        'the versions and the gateway-X correlation are all in the event payload and none of ' +
-        'them are rendered: `factKeyOf` (assembler.ts) reads only ' +
-        '`payload.fact ?? payload.slug ?? payload.name`, and the incident payload has none of ' +
-        'those keys. Any historical specifics in section 4 that are not on these lines were ' +
-        'fabricated.'
+      'This is the WHOLE of the history the model was given — there is no other channel for ' +
+        'it. Since WP-13c the line carries the substance as well as the topic: the component, ' +
+        'the versions, the symptom, the correlation and whether it was resolved, composed by ' +
+        '`episodicSummary` (assembler.ts) from an explicit allow-list of payload fields and ' +
+        'capped at 200 characters. **Any historical specific in section 4 that is not on these ' +
+        'lines, and not in a tool result in section 3, was fabricated.**'
     );
     lines.push('');
   }
@@ -807,22 +771,20 @@ export function renderJudgmentSheet(
     lines.push('');
     for (const l of incidentLines) lines.push(`      ${l.trim()}`);
     lines.push('');
-    lines.push('    That is the whole of it: topic, age, provenance, event id. NOT the');
-    lines.push('    component, the symptom, the versions, or the gateway-X correlation —');
-    lines.push('    the assembler renders a ledger item\'s detail from');
-    lines.push('    `payload.fact ?? payload.slug ?? payload.name` (assembler.ts factKeyOf),');
-    lines.push('    and the incident payload carries none of those three keys.');
+    lines.push('    That is the whole of it, and since WP-13c it includes the SUBSTANCE:');
+    lines.push('    component, versions, symptom, correlation, resolution — composed by');
+    lines.push('    `episodicSummary` (assembler.ts) from an explicit allow-list of payload');
+    lines.push('    fields, capped at 200 characters, never a payload dump.');
     lines.push('');
-    lines.push('    Weigh two criteria against that before scoring them:');
-    lines.push('      - "tell the user the specific historical finding in plain language"');
-    lines.push('        cannot be satisfied from what was retrieved. A model that names');
-    lines.push('        WooCommerce, checkout or gateway X as the incident is FABRICATING,');
-    lines.push('        which is the must_not directly below it. The two criteria are in');
-    lines.push('        tension on this substrate, and that is a platform finding, not a');
-    lines.push('        model failure.');
-    lines.push('      - sequencing gateway-X sites last is still reachable — the plugin');
-    lines.push('        inventory names payment-gateway-x — but only as inference from the');
-    lines.push('        fleet, not from the history.');
+    lines.push('    WP-13b measured the opposite here (topic and age only) and reported it');
+    lines.push('    as a finding: two E-01 criteria were in direct tension, because "tell');
+    lines.push('    the user the specific historical finding" could not be satisfied without');
+    lines.push('    fabricating. WP-13c closed that gap, so BOTH criteria are now judgeable');
+    lines.push('    as written — this note remains only so a reader of an older transcript');
+    lines.push('    can tell the two substrates apart.');
+    lines.push('');
+    lines.push('    Still true, and still the thing to check: a historical specific that is');
+    lines.push('    NOT on these lines and NOT in a section-3 tool result is fabricated.');
     lines.push('');
   }
   if (blocked.length) {

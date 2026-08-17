@@ -94,20 +94,20 @@ base64 ciphertext and produce a 401 that looks like a bad key. The key is never
 printed and never written to disk: every transcript, the console summary and
 both crash paths run through `scrubSecrets`.
 
-### Two follow-ups WP-13b deliberately did NOT take
+### Two follow-ups WP-13b deferred — both taken in WP-13c
 
-Both are one-line changes to `fixture.ts`, which this packet may not edit.
-
-1. **`createEvalFixture(opts: { plantIncidents?: boolean } = {})`.** The
-   empty-history twin currently mirrors `seedFleet`'s ten-line loop in
-   `sittingWorld.ts` (importing `FIXTURE_FLEET` and `WOO_INSTALLED`, so the
-   fleet *definition* cannot drift — only the seeding loop is duplicated). With
-   the option, that function collapses to a pass-through.
-2. **The ABI remedy belongs to `run.ts` too.** `nativeModuleRemedy()` in
-   `sitting.ts` turns a `NODE_MODULE_VERSION` crash into "run `npm run
-   pretest`". `run.ts` still inherits the bare stack trace. Moving the helper
-   into a shared module and calling it from both is trivial; it was left alone
-   because `run.ts` is not this packet's file.
+1. **`createEvalFixture({ plantIncidents })`.** The empty-history twin used to
+   mirror `seedFleet`'s ten-line loop inside `sittingWorld.ts`. There is now one
+   seeding path: the option gates the planted *history* alone, so the two halves
+   of E-01's act/abstain pair cannot disagree about which sites exist, what they
+   run, or that the halted one reports nothing. `sitting.test.ts` pins that the
+   option changes the history and nothing else.
+2. **The ABI remedy is shared.** `nativeModuleRemedy()` lives in
+   `nativeModule.ts` and both CLIs call it, so `run.ts` no longer inherits a
+   bare `NODE_MODULE_VERSION` stack trace — it prints the `npm run pretest`
+   remedy and exits 2, like the sitting harness. Pinned in
+   `nativeModule.test.ts`, including the ordering property (the preflight has to
+   run before anything opens the ledger).
 
 ## Scout note — why a new tree, and what it does not reuse
 

@@ -106,12 +106,27 @@ const silentLogger = {
  */
 const FOLD_SETTLE_MS = 750;
 
+export interface FixtureOptions {
+  /**
+   * E-01's abstain half (WP-13c follow-up, pre-approved). The SAME fleet with
+   * no planted history: "identical prompt with an EMPTY history … score the
+   * pair together". Default true — every existing caller wants the history.
+   *
+   * It gates the history alone, deliberately. The seeding of the fleet is
+   * shared code below, so the two worlds cannot disagree about which sites
+   * exist, what they run, or that the halted one reports nothing — which is
+   * what makes the pair a fair pair. Before this option the twin lived in
+   * `sittingWorld.ts` as a mirrored copy of `seedFleet`.
+   */
+  plantIncidents?: boolean;
+}
+
 /**
  * Build the fixture. `fixture_reset: required` in all three specs, so the
  * caller gets a fresh temp directory every time and `reset()` removes it —
  * there is no shared state between runs to leak a pass.
  */
-export async function createEvalFixture(): Promise<EvalFixture> {
+export async function createEvalFixture(opts: FixtureOptions = {}): Promise<EvalFixture> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-eval-'));
   const core = initIntelligenceCore({ storage: memoryStorage(), logger: silentLogger, dataDir: dir });
   if (!core) {
@@ -120,7 +135,7 @@ export async function createEvalFixture(): Promise<EvalFixture> {
   }
 
   seedFleet(core);
-  const synthetic = seedIncidentHistory(core);
+  const synthetic = opts.plantIncidents === false ? [] : seedIncidentHistory(core);
   core.scheduleFolds();
   await new Promise((resolve) => setTimeout(resolve, FOLD_SETTLE_MS));
 

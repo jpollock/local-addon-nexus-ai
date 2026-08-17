@@ -10,7 +10,8 @@
  * fixture world's tools (they must answer from the fixture and never invent
  * data), secret scrubbing (a leaked key is unrecoverable), key resolution
  * (an Electron-encrypted value must be refused, not handed to the API as
- * plaintext), argument parsing, transcript rendering, and the ABI remedy.
+ * plaintext), argument parsing, and transcript rendering. (The ABI remedy moved to
+ * `nativeModule.test.ts` with the helper itself — WP-13c.)
  */
 import * as path from 'path';
 import {
@@ -18,7 +19,6 @@ import {
   defaultUserDataDir,
   judgeLineOf,
   looksElectronEncrypted,
-  nativeModuleRemedy,
   parseArgs,
   renderJudgmentSheet,
   renderTranscript,
@@ -34,7 +34,14 @@ import {
 import { getProvider, initializeProviders } from '../../src/main/chat/providers/index';
 import type { ProviderStreamEvent } from '../../src/common/chat-types';
 import { createSittingWorld, E01_PROMPT, FLAGGED_SITE } from './sittingWorld';
-import { WOO_AVAILABLE_MINOR, WOO_INSTALLED, FIXTURE_FLEET } from './fixture';
+import {
+  createEvalFixture,
+  EvalFixture,
+  FIXTURE_FLEET,
+  INCIDENT_TOPIC,
+  WOO_AVAILABLE_MINOR,
+  WOO_INSTALLED,
+} from './fixture';
 import type { CriterionResult } from './types';
 
 jest.setTimeout(30_000);
@@ -180,31 +187,6 @@ describe('argument parsing', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('native-module preflight', () => {
-  test('a loadable binding produces no remedy', () => {
-    expect(nativeModuleRemedy(() => ({}))).toBeNull();
-  });
-
-  test('an ABI mismatch names npm run pretest, not a bare stack trace', () => {
-    const remedy = nativeModuleRemedy(() => {
-      throw new Error(
-        'The module was compiled against a different Node.js version using NODE_MODULE_VERSION 146.'
-      );
-    })!;
-    expect(remedy).toMatch(/npm run pretest/);
-    expect(remedy).toMatch(/npm run rebuild/);
-    expect(remedy).toMatch(/WRONG Node ABI/);
-  });
-
-  test('a non-ABI load failure is still surfaced with the remedy rather than swallowed', () => {
-    const remedy = nativeModuleRemedy(() => {
-      throw new Error('Cannot find module');
-    })!;
-    expect(remedy).toMatch(/could not be loaded/);
-    expect(remedy).toMatch(/npm run pretest/);
-  });
-});
-
 // ---------------------------------------------------------------------------
 
 describe('the fixture world — every tool answers from the fixture', () => {
@@ -315,10 +297,13 @@ describe('the fixture world — every tool answers from the fixture', () => {
       expect(await plugins(withoutHistory)).toBe(await plugins(withHistory));
       expect(withoutHistory.fixture.syntheticTopics).toEqual([]);
 
-      // The empty-history world mirrors fixture.ts's seedFleet in a second
-      // place, so the halted site's ABSENCE has to be pinned on BOTH paths —
-      // otherwise the copy can drift into inventing an inventory for a site
-      // that has never reported one, and only the with-history suite notices.
+      // The halted site's ABSENCE is pinned on BOTH paths. WP-13b needed this
+      // because the empty-history world mirrored fixture.ts's seedFleet in a
+      // second place and the copy could drift into inventing an inventory for
+      // a site that has never reported one. WP-13c collapsed the duplication
+      // (`createEvalFixture({ plantIncidents: false })`) and the pin stays: it
+      // is what would catch the new option being wired to the seeding loop
+      // instead of to the history.
       const halted = async (w: typeof withHistory) =>
         (await w.registry.call('wp_plugin_list', { site: 'evalfleet-foxtrot' }, w.services, 'mcp'))
           .content[0].text;
@@ -327,6 +312,47 @@ describe('the fixture world — every tool answers from the fixture', () => {
     } finally {
       withHistory.reset();
       withoutHistory.reset();
+    }
+  });
+
+  /**
+   * WP-13c follow-up 1 (pre-approved). `createEvalFixture` grew
+   * `{ plantIncidents }` so the empty-history twin stops mirroring
+   * `seedFleet`'s loop in a second file. The property that matters is that the
+   * option changes ONLY the history: the seeded fleet must be byte-identical,
+   * halted site included, or the act/abstain pair stops being a fair pair.
+   */
+  test('plantIncidents: false changes the history and NOTHING else about the fleet', async () => {
+    const planted = await createEvalFixture();
+    const bare = await createEvalFixture({ plantIncidents: false });
+    try {
+      const incidents = (f: EvalFixture) =>
+        f.core.ledger.query({ topicPrefix: INCIDENT_TOPIC }).length;
+      expect(incidents(planted)).toBeGreaterThan(0);
+      expect(incidents(bare)).toBe(0);
+      expect(bare.syntheticTopics).toEqual([]);
+      expect(planted.syntheticTopics).toEqual([INCIDENT_TOPIC]);
+
+      // Every live observation, compared as a set. Entity ids are per-fixture
+      // (each gets its own temp core), so compare by SITE, via the fixture's
+      // own derivation helper — not by raw entity id.
+      const observations = (f: EvalFixture) => {
+        const bySite = new Map<string, string>();
+        for (const site of FIXTURE_FLEET) bySite.set(f.environmentIdOf(site.siteId), site.siteId);
+        return f.core.ledger
+          .query({ topicPrefix: 'state.' })
+          .map((e) => `${bySite.get(e.entity.environment ?? '') ?? '?'} ${e.topic} ${e.payload?.slug}`)
+          .sort();
+      };
+
+      expect(observations(bare)).toEqual(observations(planted));
+      expect(observations(bare).length).toBeGreaterThan(0);
+      // The halted site reported nothing on either path — the absence IS the
+      // fixture's shape, and an option that seeded it would be a silent lie.
+      expect(observations(bare).some((o) => o.startsWith('evalfleet-foxtrot'))).toBe(false);
+    } finally {
+      planted.reset();
+      bare.reset();
     }
   });
 });
@@ -620,18 +646,23 @@ describe('end-to-end capture with the model call scripted (no tokens spent)', ()
       expect(md).toContain('Here is the plan.');
       expect(md).toMatch(/\| turn block names the incident \| yes \|/);
 
-      // 7. THE FINDING, pinned so it cannot silently stop being true: the block
-      //    names the incident but carries none of its substance, because
-      //    factKeyOf reads only payload.fact/slug/name and the incident payload
-      //    has component/impact/correlate instead. If a future change makes the
-      //    payload reachable, THIS test fails and the finding gets retired
-      //    rather than left to rot (WP-13's own rule).
+      // 7. WP-13b's FINDING IS CLOSED, and this is the pin that closed it.
+      //    It used to assert the opposite — that the block named the incident
+      //    and carried none of its substance — written to fail the moment the
+      //    gap was fixed rather than be left to rot (WP-13's own rule). WP-13c
+      //    gave RetrievedItem a summary channel, so the substance now arrives:
+      //    the component, the symptom, the versions and the gateway-X
+      //    correlation, measured here from the far end of the real chat path,
+      //    not from a second assemble() call.
       const incidentLines = incidentLinesOf(turnBlock);
       expect(incidentLines).toHaveLength(1);
       expect(incidentLines[0]).toContain('fixture:e01-incident');
       for (const substance of ['woocommerce', 'checkout', 'payment-gateway-x', '9.3.0', '9.4.1']) {
-        expect(incidentLines[0].toLowerCase()).not.toContain(substance);
+        expect(incidentLines[0].toLowerCase()).toContain(substance);
       }
+      // Still ONE line: the summary rides the existing item, it does not add a
+      // second entry or a paragraph of its own.
+      expect(incidentLines[0]).not.toContain('\n');
       expect(md).toContain('read before judging');
     } finally {
       restore();

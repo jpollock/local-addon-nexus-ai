@@ -253,11 +253,13 @@ function collectEpisodic(
       for (const e of events) {
         if (seen.has(e.id)) continue;
         seen.add(e.id);
+        const summary = episodicSummary(e.topic, e.payload);
         items.push({
           store: 'ledger',
           id: e.id,
           title: e.topic,
           ...(factKeyOf(e.payload) ? { detail: factKeyOf(e.payload) } : {}),
+          ...(summary ? { summary } : {}),
           source: e.source?.system,
           trust: e.source?.trust as TrustClass,
           observedAt: e.observed_at,
@@ -287,6 +289,104 @@ function factKeyOf(payload: Record<string, unknown> | undefined): string | undef
   if (!payload) return undefined;
   const key = payload.fact ?? payload.slug ?? payload.name;
   return typeof key === 'string' ? key : undefined;
+}
+
+/**
+ * Which events get a summary — the family an event BELONGS to, not the family
+ * that was queried. Deliberately independent of `DEFAULT_EPISODIC_PREFIXES`
+ * above: a caller may narrow its query to `episodic.incident.` or widen it, and
+ * either way a `state.` event must not acquire a summary and an `episodic.` one
+ * must not lose it.
+ */
+const EPISODIC_TOPIC_PREFIX = 'episodic.';
+
+/**
+ * Caps on a composed summary, and on any one field inside it.
+ *
+ * 200 chars is ~50 estimated tokens per item. The episodic slice is bounded at
+ * `DEFAULT_EPISODIC_LIMIT` (8) per query, so a full slice adds at most ~1.6k
+ * chars to the turn block — the same order as the freshness section, not a new
+ * dominant cost, and well inside the ±25% honesty of the token estimator.
+ *
+ * The per-field cap is not redundant with it. With only a total cap, ONE
+ * verbose field (an `impact` pasted from a stack trace) consumes the whole
+ * budget and silently drops everything after it — including `correlate`, which
+ * is the field a fleet-wide sequencing decision actually turns on. Bounding
+ * each field first means a long symptom costs the reader detail about itself,
+ * never the existence of the other facts.
+ *
+ * Both truncate with an ellipsis: a sentence that merely stops reads as the
+ * whole of what was recorded, which is the same class of lie as a fabricated
+ * default.
+ */
+const EPISODIC_SUMMARY_MAX_CHARS = 200;
+const EPISODIC_SUMMARY_FIELD_MAX_CHARS = 80;
+
+/**
+ * The substance of an episodic event, composed from an EXPLICIT allow-list.
+ *
+ * WP-13c, per the WP-13b ruling. `factKeyOf` above answers "which fact was this
+ * about" and must stay a KEY; substance rides here instead, because fact-keying
+ * and rendering are different jobs and conflating them would leak arbitrary
+ * payload keys into fact identity.
+ *
+ * Why an allow-list rather than a walk over the payload: this string enters the
+ * model's context. The envelope is schema-validated, but its payload VALUES
+ * originated outside this process — a plugin name, a WP-CLI error, a webhook
+ * body — so iterating unknown keys would let anything that can get an event
+ * emitted put arbitrary text in front of the model. That is the R7 injection
+ * surface the retrieved plane is wrapped for, and the discipline applies to
+ * COMPOSITION as much as to delivery: named fields only, in a fixed order,
+ * strings only, whitespace collapsed to a single line so no value can fake a
+ * second retrieved item or a platform-authored line, and hard caps.
+ *
+ * Deliberately NOT applied to `state.*`: those events are what the freshness
+ * plane discloses, and rendering their payload here would copy state into the
+ * bundle through the episodic door (§6.2 step 4).
+ */
+function episodicSummary(
+  topic: string,
+  payload: Record<string, unknown> | undefined
+): string | undefined {
+  if (!payload || !topic.startsWith(EPISODIC_TOPIC_PREFIX)) return undefined;
+
+  const parts: string[] = [];
+
+  const component = summaryField(payload.component);
+  const from = summaryField(payload.from_version);
+  const to = summaryField(payload.to_version);
+  // A lone version is rendered with its direction: a bare "9.3.0" beside a
+  // component name reads as the version it moved TO, which inverts the fact.
+  const versions = from && to ? `${from} → ${to}` : from ? `from ${from}` : to ? `to ${to}` : undefined;
+  const head = [component, versions].filter(Boolean).join(' ');
+  if (head) parts.push(head);
+
+  const impact = summaryField(payload.impact) ?? summaryField(payload.symptom);
+  if (impact) parts.push(impact);
+
+  const correlate = summaryField(payload.correlate);
+  if (correlate) parts.push(`correlates with ${correlate}`);
+
+  // Booleans only. A string "true" is a producer bug, and guessing at its
+  // meaning would put a resolution claim in front of the model that nothing
+  // recorded.
+  if (typeof payload.resolved === 'boolean') {
+    parts.push(payload.resolved ? 'resolved' : 'UNRESOLVED');
+  }
+
+  if (parts.length === 0) return undefined;
+  return truncate(parts.join('; '), EPISODIC_SUMMARY_MAX_CHARS);
+}
+
+/** One allow-listed value: strings only, one line, bounded. */
+function summaryField(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const flat = value.replace(/\s+/g, ' ').trim();
+  return flat ? truncate(flat, EPISODIC_SUMMARY_FIELD_MAX_CHARS) : undefined;
+}
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
 async function collectSemantic(
@@ -434,7 +534,8 @@ function renderRetrieved(items: RetrievedItem[], deps: AssembleDeps): string | n
         .join(', ');
       lines.push(
         `- ${humanAge(i.ageSeconds ?? 0)} ago — ${i.title}` +
-          `${i.detail ? ` — ${i.detail}` : ''}${provenance ? ` (${provenance})` : ''} — ${i.id}`
+          `${i.detail ? ` — ${i.detail}` : ''}${i.summary ? ` — ${i.summary}` : ''}` +
+          `${provenance ? ` (${provenance})` : ''} — ${i.id}`
       );
     }
   }

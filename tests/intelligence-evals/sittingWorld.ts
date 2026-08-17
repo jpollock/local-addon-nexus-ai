@@ -25,8 +25,6 @@ import type { ToolRegistry as ToolRegistryType } from '../../src/main/mcp/tool-r
 import { ToolRegistry } from '../../src/main/mcp/tool-registry';
 import type { McpToolHandler, NexusServices } from '../../src/main/mcp/types';
 import type { SiteStructure } from '../../src/common/types';
-import { initIntelligenceCore, IntelligenceCore } from '../../src/main/intelligence-host/bootstrap';
-import { environmentEntityId, siteEntityId } from '../../src/main/intelligence-host/provisionalEntity';
 import {
   createEvalFixture,
   EvalFixture,
@@ -42,87 +40,7 @@ export const E01_PROMPT = 'Update WooCommerce across the fleet.';
 /** The history-flagged fixture site — the sitting's `siteId`. */
 export const FLAGGED_SITE = FIXTURE_FLEET.find((s) => s.historyFlagged)!;
 
-/**
- * How long to wait for the real fold worker to drain — mirrors fixture.ts's
- * FOLD_SETTLE_MS for the same reason (bootstrap debounces folds by 500ms, so a
- * world that seeds and immediately reads sees an empty twin store).
- */
-const FOLD_SETTLE_MS = 750;
-
 const silentLogger = { info: () => undefined, warn: () => undefined, error: () => undefined };
-
-function memoryStorage() {
-  const map = new Map<string, unknown>();
-  return { get: (k: string) => map.get(k) ?? null, set: (k: string, v: unknown) => void map.set(k, v) };
-}
-
-/**
- * The empty-history twin of the fixture — E-01's act/abstain pair (the spec's
- * `notes`: "identical prompt with an EMPTY history … score the pair together").
- *
- * DELIBERATE, DOCUMENTED DUPLICATION. `createEvalFixture()` always plants the
- * incident, and this packet may not edit `fixture.ts`. The fleet DEFINITION is
- * still shared — `FIXTURE_FLEET` and `WOO_INSTALLED` are imported, so the two
- * worlds cannot disagree about which sites exist or what version they run — and
- * only the ten-line seeding loop is mirrored. It goes through `core.tap`, the
- * same real webhook producer `fixture.ts` uses; nothing here hand-writes a row.
- *
- * The right long-term shape is one line in `fixture.ts`:
- * `createEvalFixture(opts: { plantIncidents?: boolean } = {})`, at which point
- * this function collapses to a pass-through. Recorded as a follow-up rather
- * than taken, because `fixture.ts` is not this packet's to change.
- */
-async function createEmptyHistoryFixture(): Promise<EvalFixture> {
-  const fs = await import('fs');
-  const os = await import('os');
-  const path = await import('path');
-
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-sitting-'));
-  const core = initIntelligenceCore({ storage: memoryStorage(), logger: silentLogger, dataDir: dir });
-  if (!core) {
-    throw new Error(`intelligence core failed to initialise in ${dir} — nothing can be evaluated`);
-  }
-
-  seedFleetOnly(core);
-  core.scheduleFolds();
-  await new Promise((resolve) => setTimeout(resolve, FOLD_SETTLE_MS));
-
-  return {
-    core,
-    dir,
-    fleet: FIXTURE_FLEET,
-    environmentIdOf: (siteId) => environmentEntityId(core.entities, siteId),
-    siteIdOf: (siteId) => siteEntityId(core.entities, siteId),
-    syntheticTopics: [],
-    reset() {
-      try {
-        core.close();
-      } catch {
-        /* closing an already-closed ledger must not fail a run */
-      }
-      fs.rmSync(dir, { recursive: true, force: true });
-    },
-  };
-}
-
-/** Mirrors `fixture.ts`'s `seedFleet` exactly — a halted site emits nothing. */
-function seedFleetOnly(core: IntelligenceCore): void {
-  for (const site of FIXTURE_FLEET) {
-    if (site.halted) continue;
-    core.tap(site.siteId, 'plugin_installed', {
-      slug: 'woocommerce',
-      version: WOO_INSTALLED,
-      is_active: true,
-    });
-    if (site.gatewayX) {
-      core.tap(site.siteId, 'plugin_installed', {
-        slug: 'payment-gateway-x',
-        version: '2.1.0',
-        is_active: true,
-      });
-    }
-  }
-}
 
 export interface SittingWorld {
   fixture: EvalFixture;
@@ -141,7 +59,13 @@ export interface WorldOptions {
 }
 
 export async function createSittingWorld(opts: WorldOptions): Promise<SittingWorld> {
-  const fixture = opts.incidents ? await createEvalFixture() : await createEmptyHistoryFixture();
+  /**
+   * WP-13c. This used to branch to a locally-mirrored copy of `seedFleet` when
+   * the twin was wanted, because WP-13b could not edit `fixture.ts`. One
+   * seeding path now serves both halves of the act/abstain pair, so the two
+   * worlds cannot drift apart in anything but the history.
+   */
+  const fixture = await createEvalFixture({ plantIncidents: opts.incidents });
   const simulatedUpdates: SittingWorld['simulatedUpdates'] = [];
   const services = fixtureServices(fixture);
   const registry = new ToolRegistry();
