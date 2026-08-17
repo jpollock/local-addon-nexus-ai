@@ -5457,6 +5457,17 @@ was therefore verified in a 380px harness reproducing the band's own styles —
 screenshots cover viewed+chip, a long source name, override+chip+disclosure, and
 the degraded band.
 
+**What the real-app pass could and could not check.** Local was rebuilt and
+relaunched (`./dev-reload.sh`) on the merged tree: the addon loads, the IPC
+surface registers (a throw in `registerIpcHandlers` would take the whole surface
+down), and the scheduled agents ran their next cycle normally — verified in
+`nexus-2026-08-17.log`, not assumed. A screenshot of the running app was NOT
+taken: this session's shell has no screen-recording permission, so
+`screencapture` fails outright. The band's visual evidence is the harness above,
+which is the pass that matters for the truncation class of bug (380px, real
+styles); the live band would in any case render the degraded state, since this
+machine has no pull on record.
+
 **Design note for the surface review.** The chip sits between the primary line
 and the override disclosure, as a pill sized to its text. It WRAPS, for WP-22's
 reason: at 380px "Pulled from development (at WP Engine) less than an hour ago"
@@ -5467,7 +5478,9 @@ designer's 52px is met in the ordinary case and exceeded only where three facts
 are genuinely present. No new control: the chip is a fact, not an affordance,
 pinned by a test that counts exactly one button in the band.
 
-**ABI state on exit: SYSTEM NODE (jest).** `better-sqlite3` is built for this
-shell's Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127); this session
-ran `npm test` five times. **Run `npm run rebuild` before loading the addon in
-Local.**
+**ABI state on exit: ELECTRON (146) — Local is loadable as it stands.** This
+session ran `npm test` five times, which leaves `better-sqlite3` built for the
+shell's Node (measured **25.9.0 → ABI 141**; `.nvmrc`/CI is 22.16.0 → 127), and
+then `./dev-reload.sh` rebuilt it back to Electron 42.2.0 for the real-app pass.
+**To run jest again: `npm test`** (the `pretest` hook flips it back), never bare
+`npx jest`.
