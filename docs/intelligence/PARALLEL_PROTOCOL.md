@@ -41,6 +41,24 @@ treating branch work as stalled prior art, run
 agent-site-picker branch's content was live in the tree while its branch
 name sat in the worktree list looking abandoned.
 
+**`git stash` is ONE STACK shared by every worktree** (WP-19b incident:
+a `stash pop` applied a sibling packet's stash and dropped its entry —
+recovered by SHA). During multi-agent operation, never use bare
+`git stash`/`pop` for baselines: take the baseline BEFORE editing, or
+save your delta with `git diff > /tmp/<packet>.patch` + `git checkout`.
+
+**A baseline is only a baseline if the tree held still** (WP-21b): jest
+reads each suite as it reaches it, so a run spanning your own edits is
+part-pre, part-post, with nothing saying which. And `npm test | tail`
+reports TAIL's exit code — a 4-failure run can print exit 0; capture the
+exit code before the pipe (`npm test > log; echo $?`) or use pipefail.
+
+**An uncompiled worktree fails exactly four AgentRegistry tests** (root
+cause found at WP-20 phase 1: the fixture `path.resolve`s into
+`lib/main/agent-sdk`) — the protocol's compile step is not optional, and
+this is what skipping it costs. If those four are red, compile first;
+if still red after compiling (WP-19b observed this), see WP-23.
+
 **Before creating the worktree, confirm the intelligence layer is
 actually tracked**: `git status` in the primary checkout must not show
 `src/intelligence/` or `docs/intelligence/` as untracked — if it does, stop

@@ -5251,3 +5251,79 @@ the packet's own change is:
 **ABI state on exit: system Node (jest).** `better-sqlite3` is built for the
 developer shell's Node 25.9.0 (ABI 141) — this session ran jest repeatedly.
 **Run `npm run rebuild` before loading the addon in Local.**
+
+---
+
+**ARCHITECT ADJUDICATION — WP-20 PHASE 1 + WP-19b + WP-21b (appended by the
+architect session; the WP-20 rulings were delivered in chat during the
+device-auth outage and are recorded here as the durable copy).**
+
+**WP-20 phase 1 ACCEPTED — all seven positions ratified, none overruled:**
+P1 deterministic recognition (three paths; refusal-not-improvisation at the
+gate; the structural rejection of gate-time arming — "the first three
+checkpoints all precede any gated write" — is the sentence of the packet).
+P2 `capabilityGrants` as its own object, additive-only in v0; the flip to
+required is WP-20f, registered below. P3 turn-carrier delivery, full body
+once per task + hash/cursor re-assert; ceiling with refusal-not-trimming.
+P4 gateway enforces sequence and presence, never quality; attestation is a
+ledger event or it is nothing; **doctrinal refinement recorded: staleness
+and integrity are different failures — hash mismatch refuses on BOTH actor
+classes** (ADR-7 governs age, not authority). P5 additive tool disclosure,
+`exclusive` shipped dark. P6 four failures, three rules. P7
+`CheckpointState.attest` — supplied/quoted applied to procedure.
+**Escalations ruled:** (1) widen `context.assembled/1` in place — populating
+a declared-null field ≠ adding an absent one (the drift-/2 precedent
+distinguished, not contradicted); (2) first `control.grant.*` emission
+approved; (3) `intelligence_grants_*` marker approved + CLAUDE.md list
+amended; (4) the four ADR-17 fields + 8 KB ceiling adopted (ADR-17 third
+amendment, applied); (5) ceiling 8 KB + SPLIT the two oversized runbooks in
+20c, split seams owner-reviewed per the WP-09 precedent; (6) WP-20f out of
+scope, stub below. Both burn-findings acknowledged: the NEEDS_RUNNING_SITE
+auto-start (fix = `tools:` frontmatter line, phase 2) and the missing
+dry_run (WP-20g stub below). **Phase 2 GREEN-LIT per §9 (20a→20e).**
+Acceptance bound accepted as stated: WP-20 un-BLOCKs all eleven B-03
+criteria, greens four programmatically, and leaves seven runnable-with-key.
+
+**WP-19b ACCEPTED.** Merge a2a2645. The finding-1 honesty (the requested
+pin passes against the buggy code; `jest.getTimerCount()` is the assertion
+that falsifies the defect) and finding-2 (the battery finding a hole in the
+packet's own pins) are the doctrine working. The stash incident's recovery
+(by SHA, sibling worktree untouched) was exemplary; the amendment is
+applied to the protocol. The `npm test | tail` exit-code trap likewise.
+**AgentRegistry: the capture instruction (open since WP-12) is DISCHARGED**
+— failure text captured; root cause narrowed to the `lib/main/agent-sdk`
+fixture dependency (WP-20 datapoint) with one residual observation
+(WP-19b reproduced post-compile) → **WP-23 registered below** to reconcile
+the two datapoints and fix the fixture properly.
+
+**WP-21b ACCEPTED.** Merge 631622bc. The traversed-vs-derived pin (a
+mirrored fixture where the derived Site id EXISTS as a row and is the
+wrong answer — a derive-based implementation finds a plausible id and
+fails) is the sharpest identity test in the tree; noted as the reference
+shape. Finding 2 (the WP-16b dedup guard was untested against the case it
+now faces — pinned, M08 proves dedup does the work) and finding 3 (the
+replay invariant must NOT require the new role — false-red protection
+commented in place) are both the additive discipline holding. Fidelity of
+a880634b VERIFIED byte-for-byte (5205/3264) against the architect's
+originals.
+
+### [ ] WP-20f · Capability required to reach gated tools  *(stub; breaking; own eval; out of WP-20 scope by ruling)*
+Making a capability REQUIRED removes reach from today's tool surface —
+needs its own eval family and a deliberate breaking-change process. Do not
+fold into any 20a–e sub-packet.
+
+### [ ] WP-20g · bulk_plugin_update gains dry_run + completion poll  *(stub; unblocks event-attested cp.dry-run / cp.verify-canary)*
+Named at WP-20 phase 1: the tool is fire-and-forget with no dry_run, which
+is WHY two checkpoints are narrative. Adding both converts them to
+event-attested. Tool-surface change; parallel-safe; sequence after 20d so
+the attestation consumes it.
+
+### [ ] WP-23 · AgentRegistry fixture environment — reconcile and fix  *(from WP-19b finding 3 + WP-20 housekeeping; small)*
+Two verified datapoints: an uncompiled worktree fails the four (fixture
+`path.resolve('lib/main/agent-sdk')` — WP-20, verified both directions);
+WP-19b reproduced them in a worktree that HAD compiled (symptom:
+`registry.list()` returns []; suspect ts-node registration under symlinked
+node_modules). Reconcile (does `npm run compile` actually produce
+`lib/main/agent-sdk`?), then fix the fixture to be environment-independent
+or skip-with-LOUD-reason per TESTING_STRATEGY (never a silent artifact
+gate). Discharges the last thread of the oldest open mystery.
