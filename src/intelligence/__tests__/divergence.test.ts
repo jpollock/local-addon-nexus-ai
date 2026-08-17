@@ -295,9 +295,13 @@ describe('divergence — code flow is measured in ITEMS', () => {
     observePlugin(w, w.copy, 'campaign-tools', '1.0.0', hoursAgo(1));
     // Behind: only the upstream has it.
     observePlugin(w, w.production, 'wpe-cache', '2.0.0', hoursAgo(30));
-    // Same on both sides — must not be reported at all.
-    observePlugin(w, w.copy, 'akismet', '5.0', hoursAgo(1));
-    observePlugin(w, w.production, 'akismet', '5.0', hoursAgo(30));
+    // Same on both sides — must not be reported at all. Observed at DIFFERENT
+    // ages from their siblings on purpose: with every fact on a side sharing
+    // one timestamp, "stalest" and "freshest" are the same value and the
+    // assertion below cannot tell them apart (a mutation to the reduction
+    // survived exactly this fixture before it was fixed).
+    observePlugin(w, w.copy, 'akismet', '5.0', hoursAgo(5));
+    observePlugin(w, w.production, 'akismet', '5.0', hoursAgo(12));
     fold(w);
 
     const report = divergence(w.copy, w.deps);
@@ -313,10 +317,13 @@ describe('divergence — code flow is measured in ITEMS', () => {
     expect(report.code.items.find((i) => i.fact === 'plugin:campaign-tools')?.status).toBe(
       'only_on_copy',
     );
-    // Per-side freshness: the STALEST observation on each side, as compare_sites does.
-    expect(report.code.copy?.ageSeconds).toBe(3600);
+    // Per-side freshness: the STALEST observation on each side, as
+    // compare_sites does — a comparison is only as good as its oldest input.
+    // The copy holds facts at 1h and 5h; the upstream at 12h and 30h.
+    expect(report.code.copy?.ageSeconds).toBe(5 * 3600);
     expect(report.code.upstream?.ageSeconds).toBe(30 * 3600);
-    expect(report.code.upstream?.fresh).toBe(false); // plugin SLO is 8h
+    expect(report.code.copy?.fresh).toBe(true); // 5h, inside the 8h plugin SLO
+    expect(report.code.upstream?.fresh).toBe(false); // 30h, past it
     w.close();
   });
 
