@@ -6872,3 +6872,35 @@ it. 20d is in flight; **20e's prompt is owed by the architect at 20d's
 merge report.** After 20e: the B-03 sitting needs `NEXUS_EVAL_API_KEY`
 (seven OWNER-PENDING criteria), and the first-real-pull smoke remains
 available — ABI is ELECTRON right now, so Local is loadable today.
+
+**WP-20d ADDENDUM — WP-20b merged under this packet; base taken forward.**
+`e3d43f9b` (WP-20b) landed while 20d was in flight, so the base moved and the
+branch merged it. The architect's WP-20b adjudication, the protocol amendment
+and the designer matrix ruling were found uncommitted in the primary checkout
+and committed VERBATIM, attributed, at `7412828f` before the merge — flagged for
+fidelity verification.
+
+**The announced seam resolved exactly as announced, in three lines.** 20b's
+`procedureRequestForTurn(...)` now feeds 20d's `withCursor(...)`:
+
+    ...(procedureRequest
+      ? { procedure: withCursor(procedureRequest, req.sessionId, taskId) }
+      : {}),
+
+20b decides what the procedure plane is owed; 20d attaches what the ledger can
+prove about it. Neither decides the other's question.
+
+**One inherited pin re-pointed, not deleted.** 20b's `loadProcedure.test.ts`
+asserted that every shipped checkpoint reads as narrative, citing WP-20a finding
+7 — true when it was written, false the moment 20d authored the attestations. It
+now pins each checkpoint against its OWN words: three read "verified from
+records", cp.consult-history reads "verified as supplied", and the four
+narrative ones read "your account only, not verified". That is a stronger pin
+than either version: a rail rendered uniformly is a product that lies, and that
+is as true of a uniformly-cautious rail as of a uniformly-green one.
+
+Figures after taking the base forward: **556 suites / 7,155 passed / 12 skipped
+/ 7,167 total, exit 0.** (Pre-merge, 20d alone on the old base: 551 / 7,068 /
+12 / 7,080.) Typecheck clean; eslint reports zero errors and two pre-existing
+`no-inner-declarations` warnings in `mcp/modules/wpe/` files this packet never
+touched.
