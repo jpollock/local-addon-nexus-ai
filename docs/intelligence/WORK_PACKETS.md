@@ -5833,3 +5833,109 @@ and 20c are CLEAR TO LAUNCH in parallel (prompts already delivered
 verbatim; 20c's agent must read this adjudication's inheritance block —
 it is referenced in the prompt's standing instruction to read the packet
 record first). 20d's prompt is owed by the architect when 20c merges.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-20c GATE (2026-08-17).** Branch `wp-20c` @
+`7192cb06`, held pre-merge for the split-runbook review, per the
+ruling-bound scope. The split is APPROVED, both gate questions are ruled
+below, and two small changes are required on the branch before merge. The
+seams were reviewed on the branch (frontmatter, handoff fields, new
+preconditions): containment ends where the first destructive act begins,
+remediation opens on `pre.containment-complete` + `pre.snapshot-verified`,
+execute opens on `pre.preflight-complete` + `pre.overwrite-stated` — the
+handoff is enforceable, not narrative, which is exactly what "divide the
+CONTRACT" meant. The conservation pin (every checkpoint id in order, every
+abort id, every communication obligation verbatim, dangling references
+re-pointed) is the right shape, and the disclosure of what it does NOT
+cover — condensed prose, split review_triggers/requires_sources — is the
+report behaving the way reports here are supposed to.
+
+**Gate ruling 1 — capability naming: RATIFIED.** "The name follows the
+write it authorises" is now doctrine. `cap.promote_environment` survives
+on the execute half because that half IS the write the name always meant;
+preflight takes a NEW name because it authorises less, and stale authority
+under a familiar name is the failure mode. The incident split takes two
+new names because neither half is "incident response" whole — and the
+deeper reason to prefer new names on an authority split: a standing grant
+to the old capability must not silently arm half a procedure nobody
+reviewed in its split form. The agent's own judgement call already closes
+that hole mechanically (a grant naming a runbook id the registry does not
+serve for that capability is `hash-mismatch` — ratified below), so old
+grants die at the integrity check rather than surviving by name
+coincidence. That the §2 fixture and the B-03 premise keep their
+vocabulary is a welcome side effect, not the reason.
+
+**Gate ruling 2 — the ceiling: option (b) RATIFIED. Strict ceiling raised
+8,192 → 10,240 bytes** (10 KB — ~2.5k tokens on the arming turn, an order
+of magnitude under R4's real cost). Reasons, in order of weight: (1) the
+ceiling's job is to stop a sprawling procedure eating the window and to
+force splits at authority seams — it has now DONE that job, and what
+remains at 8,054/8,104 bytes is contract, not prose; a bound that forces
+the contract itself to be written thinner than it wants is bounding the
+wrong thing. (2) Option (c) — a three-way incident split — is REJECTED by
+the seam doctrine itself: incident response has exactly one authority
+change (observe/preserve → remove/rotate); a third cut would land where
+the prose got long, which the ruled seam principle forbids. (3) The
+integrity check on the raise: both pre-split originals still refuse at
+10,240 (15,853 and 10,453), so the raise does not retroactively make the
+split cosmetic. And stated explicitly against the obvious skeptic's
+reading — staging-promotion at 10,453 is only 213 bytes over the new
+ceiling, but the promotion split STANDS ON AUTHORITY GROUNDS regardless:
+it separates a read-only capability from the write capability, which is
+least-privilege made real; trimming 213 bytes to re-merge two authorities
+into one grant would be a regression bought with a ceiling raise.
+Conditions attached: (a) the register discipline stays — the guided
+oversizes and the incident halves' proximity to ceiling remain registered;
+(b) option (a)'s lint instinct is adopted as a **near-ceiling WARN at 90%
+(9,216 bytes) at registry build** — authors learn the margin at load time,
+not at refusal in production. In 20c if cheap; registered as an immediate
+micro otherwise.
+
+**Required on the branch before merge (both small, both in scope):**
+(1) the ceiling constant → 10,240, with the mutation battery's witnesses
+updated to match — note the delivery-side guard (finding 4) keeps its
+stub-port test at the new number; (2) **the §3 ordering FLIPS: the policy
+re-assert precedes the procedure block on the carrier.** Law outranks
+procedure; a procedure is read in the light of standing law, not before
+it; the reading order mirrors the authority order. One `sections.push`
+plus the FIRST-section pin, exactly as the report priced it. ADR-20's
+amendment (below) records the flipped order as normative, so the governing
+text and the implementation land agreeing with each other.
+
+**Ratified, the four judgement calls:** grant-less arming REFUSES
+(`not-loaded` — no grant means no pinned hash, and an unpinned procedure
+has the authority §6(b) refuses to lend; note that once 20b merges this
+path should be unreachable, so its appearance in a manifest thereafter
+indicates a platform bug, not a user condition); grant/registry runbook-id
+mismatch is `hash-mismatch` (P6 integrity, correctly classed — the
+document about to ride is not the document that was reviewed); the
+fail-closed bundle carries NO procedure index (an invitation inside a
+refusal is incoherent); no cursor renders as "the platform is not
+attesting checkpoints", never "none attested yet" (two different facts,
+and until 20d only the first is true). Also ratified: finding 6's
+clear-on-non-delivery (a re-assert across a disarm would tell the model a
+stopped procedure remains in effect — M18 pins the fix), and finding 3's
+strict-only body delivery as the live form of ruling 2's exemption.
+
+**Architect actions taken with this entry:** ADR-17's amendment text now
+carries the 10,240 ceiling with the gate rationale and the authority-seam
+rule; ADR-20 now names the second re-assert instance (procedure: whole
+canonical document once per task, hash + cursor thereafter, cleared on
+non-delivery, policy-before-procedure order). Registered: the pre-commit
+YAML parse for law documents (finding 7's `: `-in-block-scalar trap fired
+twice on human-reviewed documents; if runbook authoring becomes routine
+the parse belongs before commit, not at load); the near-ceiling WARN if
+it does not ride 20c; the detectDrift 30s flake (finding 8 — watched, not
+chased; recurrence buys it a packet). The three architect-owned documents
+naming pre-split runbooks (`reconciliation-site-environment-model.md` ×2,
+`ux-brief-response.md`, `eval-stress-test-set.md` D-02) will be corrected
+at source by the architect AFTER the merge lands, when the new names are
+true in the tree.
+
+**State and next:** merge when the two required changes are green, with
+receipts (`git diff --stat <merge>^1 <merge>`) and the re-measured
+baseline in the report. ABI is SYSTEM NODE on the worktree — the owner
+runs `npm run rebuild` before loading Local. 20d's prompt is owed by the
+architect at 20c's merge report, per the standing sequence. 20b remains
+free to merge in either order — the parity pin holds the seam.
