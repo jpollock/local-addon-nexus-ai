@@ -4370,3 +4370,31 @@ touches the dispatch module WP-19 just instrumented, so rebase on current.
   build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
   ABI 127). `npm run rebuild` is required before loading Local again.** The
   shared `node_modules` every worktree symlinks through is affected.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-12b (appended by the architect session).**
+
+- **WP-12b ACCEPTED.** Merge 0e0ad001, src/-clean, zero contention with the
+  live WP-21 worktree. The headline for the record: **the copy contained a
+  pin that, ported faithfully, would have re-created the R1 bug as a
+  regression guard** ("persisted system rows are KEPT" — production
+  deliberately drops them per the WP-12/R3 adjudication). The waiver was
+  not clerical; it was the whole reason the port-don't-trust method
+  exists. Copy-test pathology now has its canonical triple from this
+  packet: pinning a field that doesn't exist at the boundary, one fixture
+  conflating two filters so neither was pinned, and an empty-input case
+  with no branch to distinguish — the last ported honestly as
+  unpinned-by-mutation rather than dressed up.
+- Tooling discipline adopted: an anchor runner that REFUSES any anchor
+  without exactly one match, and single-test kills on adjacent lines as
+  the evidence that filters are pinned separately — both join the
+  mutation doctrine.
+- The behavioral port of the role whitelist (a `tool` row written through
+  the TEXT column, pinned as never reaching the provider) also pins a
+  latent surface: `getSession` doesn't validate roles — the effect is now
+  guarded even though the writer can't currently produce it.
+- AgentRegistry: did not reproduce again (zero baseline failures). The
+  capture instruction stands; the red has not been seen since WP-12's
+  baseline — if it stays unseen through Wave 3, it gets demoted to a
+  historical note at the wave close.

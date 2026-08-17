@@ -86,8 +86,7 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
       *(unblocks 7 E-02 criteria; ChatService/registry seams)*
 - [ ] **WP-04d** phpVersions granularity unification *(ipc-handlers lock,
       independent)*
-- [ ] **WP-12b** vacuous chat-history test port *(tests only; never ran in
-      Wave 1)*
+- [x] **WP-12b** vacuous chat-history test port — DONE 2026-08-17 (copy deleted; 6 ported; the R1-recreating pin waived)
 
 **Then, sequential on the core lock:**
 - [ ] **WP-21** assembler task frame + per-type routing (ADR-22 made real;
