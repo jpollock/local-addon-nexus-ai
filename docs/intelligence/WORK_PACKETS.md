@@ -6259,3 +6259,69 @@ room.
     policy again), M26/M28 (the WARN's threshold and its strict scope), M27
     (`warnings()` returning nothing). M12's anchor moved with the flipped
     ordering and was re-anchored.
+
+---
+
+**WP-20c MERGED (2026-08-17)** — merge `c11878f5`, 34 files, **+3,439/−858**.
+
+    docs/intelligence/WORK_PACKETS.md                      | 320 +
+    law/runbooks/incident-containment.md                   | 132 +
+    law/runbooks/incident-remediation.md                   | 136 +
+    law/runbooks/promotion-execute.md                      | 101 +
+    law/runbooks/promotion-preflight.md                    | 114 +
+    law/runbooks/incident-response.md                      | 233 -
+    law/runbooks/staging-promotion.md                      | 159 -
+    law/runbooks/{diagnose-site,wpe-pull}.md               |   2 +-   (re-pointed)
+    docs/intelligence/anchor-slice/runbooks/…              |  (same seven, mirrored)
+    src/intelligence/assemble/procedure.ts                 | 438 +
+    src/intelligence/assemble/types.ts                     | 198 +
+    src/intelligence/assemble/assembler.ts                 | 149 +
+    src/intelligence/law/{runbookRegistry,types,loader}.ts |  85/30/3 +
+    src/intelligence/index.ts                              |  30 +
+    src/main/intelligence-host/chatAssembly.ts             |  48 +
+    src/main/intelligence-host/permissionsMirror.ts        |  18 +
+    src/intelligence/assemble/__tests__/procedureDelivery.test.ts   | 536 +
+    src/main/intelligence-host/__tests__/procedureTurnCarrier.test.ts | 207 +
+    src/intelligence/__tests__/splitRunbooks.test.ts       | 171 +
+    src/intelligence/__tests__/{shippedRunbooks,runbookRegistry}.test.ts | 111/55 +
+    src/main/intelligence-host/__tests__/permissionsMirror.test.ts  |  55 +
+    tests/unit/chat/chat-assembly-wiring.test.ts           |  84 +
+    src/intelligence/__tests__/constraintRegistry.test.ts  |   1 +
+
+**Re-measured baseline on the merged `poc/nexintelligence`** (`npm test` in the
+primary checkout, compiled, exit code captured before any pipe): **exit 0 ·
+548 suites passed · 7,036 passed · 2 skipped · 7,038 total · 0 failed.**
+
+**Read the skipped column before reading the passed column.** The branch run
+measured 7,026 passed / **12** skipped over the same **7,038** total. The delta
+is not a gain: `tests/main/embedding-service.test.ts` gates two `describe`s on
+model files being present, the primary checkout has both
+(`all-MiniLM-L6-v2-quantized` and `bge-small-en-v1.5`) and the worktree has only
+one, so ten tests that were skipped there ran and passed here. Same total, ten
+moved columns — the WP-04 worktree-artifact finding, running in the opposite
+direction for once. **The number the next packet inherits as its baseline is
+548 / 7,036 / 2 in the primary checkout, and 548 / 7,026 / 12 in a fresh
+worktree**; a packet that compares across the two without diffing the skipped
+count will see a phantom regression of exactly ten.
+
+Pre-merge branch figures, for the record: 548 / 7,026 / 12 / 0, exit 0,
+measured twice identically before and after the gate changes. Typecheck clean,
+eslint clean across `src/intelligence` and `src/main/intelligence-host`,
+mutation battery **28/28** killed by named witness.
+
+**ABI state on exit: SYSTEM NODE.** This session ran `npm test` (five times),
+which leaves `better-sqlite3` built for the shell's Node — measured 25.9.0 →
+ABI 141; `.nvmrc`/CI is 22.16.0 → 127. **`npm run rebuild` before loading
+Local** (Electron 42.2.0 → ABI 146). No real-app pass was taken: the delivery
+path is dormant in production until WP-20b arms a capability, so a running Local
+would show the same law-registry boot lines WP-20a already recorded, plus
+`7 runbook(s) loaded, 0 refused, 0 near ceiling`.
+
+**What 20d inherits.** `ProcedureCursor` is a declared input the assembler
+already renders — `{ attested: string[], aborted?: string }` on
+`AssembleRequest.procedure.cursor` — and its ABSENCE is rendered as "the
+platform is not attesting checkpoints", so wiring the fold is a substitution,
+not a new surface. `ChatAssemblyResult.procedure` carries the structured
+outcome for the sequencer and for §7's render shapes. All eight anchor
+checkpoints are still `narrative`: nothing may tick until 20d's four
+event/manifest attestations are authored.
