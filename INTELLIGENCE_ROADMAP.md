@@ -93,9 +93,11 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
 - [ ] **WP-20** procedure distribution *(B-03 is its acceptance eval; starts
       with a design note to the owner, not code)*
 
-**Owner, standing:** worktree/branch housekeeping (wp-05/13/13b/13c/14/15/
-17/18); the AgentRegistry capture instruction; surface review when WP-21's
-user-visible language lands.
+**Owner, standing:** worktree/branch housekeeping (many merged worktrees
+parked); surface review (in motion via the designer loop); the WP-20
+phase-2 sub-packets (20a–e, green-lit). AgentRegistry capture instruction
+DISCHARGED — root cause narrowed (lib/ fixture dependency; residual case
+→ WP-23).
 
 ## Later — deliberately not now
 
