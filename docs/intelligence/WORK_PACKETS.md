@@ -5541,3 +5541,171 @@ no grants** — those are 20b/20c.
 before any pipe): **543 suites / 6912 passed / 12 skipped / 0 failed, exit 0** —
 identical to the figure WP-22b recorded at `a2a2645c`+merge, so the base is
 where the last packet left it.
+
+---
+
+**WP-20a OUTCOME — done (branch `wp-20a`).** The five shipped runbooks now load
+at runtime, three of them are servable, and the two that are not say so by name.
+
+Receipt (`git diff --stat poc/nexintelligence...wp-20a`, 17 files,
++2160/-3):
+
+    docs/intelligence/WORK_PACKETS.md                     |  24 +
+    law/runbooks/bulk-plugin-update.md                    | 109 +
+    law/runbooks/diagnose-site.md                         | 139 +
+    law/runbooks/incident-response.md                     | 233 +
+    law/runbooks/staging-promotion.md                     | 159 +
+    law/runbooks/wpe-pull.md                              | 132 +
+    src/intelligence/law/hash.ts                          |  43 +
+    src/intelligence/law/runbookRegistry.ts               | 308 +
+    src/intelligence/law/types.ts                         | 127 +
+    src/intelligence/law/loader.ts                        |  21 +-
+    src/intelligence/index.ts                             |  19 +
+    src/main/intelligence-host/permissionsMirror.ts       |  41 +-
+    src/intelligence/__tests__/runbookRegistry.test.ts    | 541 +
+    src/intelligence/__tests__/shippedRunbooks.test.ts    | 156 +
+    src/intelligence/__tests__/lawLoader.test.ts          |  62 +
+    src/main/intelligence-host/__tests__/permissionsMirror.test.ts | 45 +
+    src/intelligence/__tests__/constraintRegistry.test.ts |   4 +
+
+Jest, all figures on a compiled worktree with the tree held still: baseline
+`a570e90a` **543 suites / 6912 passed / 12 skipped / 0 failed**; branch
+**545 / 6968 / 12 / 0**, re-measured identically after the mutation battery.
+Delta **+2 suites, +56 tests, skipped unchanged**. `npx tsc -p . --noEmit`
+clean; eslint clean on every changed file (the nested `src/intelligence`
+seam rule included — the registry imports zod and `crypto`, nothing else).
+**Mutation battery 22/22 caught by their named witness** (2 needed a
+type-clean rewrite first — see finding 8). **No integration lock taken:**
+`src/main/index.ts` and `ipc-handlers.ts` are untouched, because
+`initLawRegistry` is already called from `intelligence-host/bootstrap.ts`.
+
+**The shape of the surface.** `RunbookRegistry.build({ documents })` over the
+`kind: 'runbook'` documents `loadLawDirectory` already returns, keeping `body`
+and `frontmatter` (which `ConstraintRegistry` drops). Four methods, matching
+`ConstraintRegistry`'s size: `byId`, `byCapability`, `runbooks(filter?)`,
+`errors()`. `initLawRegistry`'s handle carries `runbooks` and `runbookErrors`
+so 20b/20c consume one read of the law directory rather than opening it again.
+
+**The pin, stated exactly, because a pin nobody can recompute is not a pin.**
+`law/hash.ts` is the only place the input is defined: the WHOLE canonical
+document — `---` fences, frontmatter and body — with `\r\n` and lone `\r`
+normalised to `\n`, sha256 over its UTF-8 bytes, `sha256:` prefixed. Not the
+body alone: for these runbooks the obligations that make a procedure a
+procedure (checkpoints, aborts, communication) live IN the frontmatter, so a
+body-only pin would let the reviewed contract be rewritten without the hash
+noticing — pinned by a mutation (M18). The same canonical text is what the
+ceiling measures, which is why both are platform-independent (M17).
+
+**Where the refusals live, and why not in the loader.** The runbook contract is
+validated in the registry, not in `loadLawDirectory`. That is the structural
+form of §9-20a's pin that a malformed runbook must not take out the policy set:
+the two lists stay separate, `loadErrors` keeps meaning "this file is not a law
+document", and `runbookErrors` means "this document loaded and its contract
+cannot be honoured". On the shipped set today `loadErrors` is empty and
+`runbookErrors` has exactly two entries.
+
+**Eight findings.**
+
+1. **The loader rejected all five shipped runbooks, and the design note's fact
+   table said it wouldn't.** §0 records "The loader already accepts
+   `kind: runbook` and passes unknown frontmatter through → No loader change
+   needed to *read* a runbook." Measured: `frontmatterSchema.scope` is
+   `z.string()`, and every authored runbook uses `scope:` as a structured
+   object — `{environments}`, `{reads, writes}`, `{sources, destinations,
+   excluded}`. All five failed with `invalid frontmatter: scope: Expected
+   string, received object`. The claim was true of the only runbook anyone had
+   ever loaded: `lawLoader.test.ts`'s synthetic three-field fixture, which
+   carries no scope at all. This is the memory's "spec factual claims
+   propagate" failure exactly — and it would have propagated into 20b and 20c,
+   whose fixtures would have inherited the synthetic shape. Fixed by accepting
+   string-or-object and holding POLICY documents to the string (their
+   constraints inherit that scope; 'tenant' silently substituted for a mistyped
+   object would mislabel every constraint in the file). Both directions pinned,
+   both mutated (M19, M20).
+2. **The ceiling is a "body ceiling" in the text and a whole-file ceiling in
+   the evidence, and only one of those reproduces the ruling.** Measured on the
+   tree: bodies are 2,597 / 4,188 / 7,828 / 4,496 / 3,784 bytes — **every one
+   under 8 KB**, including both runbooks the note names as exceeding the
+   ceiling (it cites their 15.8 KB and 10.5 KB FILE sizes). Read literally as
+   body-only, the ceiling refuses nothing, and escalation 5's ruling ("8 KB +
+   split those two in 20c") would have nothing behind it. Implemented over the
+   canonical WHOLE document, which (a) reproduces the ruled outcome exactly —
+   three loaded, `rb.incident-response` and `rb.staging-promotion` refused —
+   (b) matches the note's own token arithmetic, which prices the anchor
+   runbook's arming turn at 1,215 tokens = 4,858 bytes / 4 = its file size, and
+   (c) measures what actually rides the turn. **Recorded for ratification, not
+   assumed**; the reasoning is in `runbookRegistry.ts`'s header and the choice
+   is pinned by M05.
+3. **Both GUIDED runbooks are over 8 KB as whole documents (8,967 and 8,359)
+   and load only because the ceiling is scoped to strict.** That scope is the
+   note's own qualifier ("8 KB … for `strictness: strict`"), so it is
+   implemented and pinned (M04) — but it means four of the five shipped
+   runbooks exceed 8 KB and two of them are served. If the ceiling was meant to
+   bound what rides a turn regardless of ceremony, this wants a ruling, and it
+   is a bigger authoring job than the two already named.
+4. **For 20c, before the split is designed: `rb.incident-response`'s
+   FRONTMATTER ALONE is 8,016 bytes — 176 bytes under the whole ceiling.** Any
+   split part that carries the shared contract verbatim (review_triggers,
+   scope, ten `requires_sources` lines, four preconditions, seven aborts, eight
+   communication obligations) is at the ceiling before a single line of prose.
+   The split has to divide the frontmatter, not just the body — which means
+   deciding which obligations belong to which capability, and that is a
+   design question, not a text-splitting one. (`rb.staging-promotion`: 5,948
+   frontmatter / 4,496 body, comfortable by comparison.)
+5. **For 20b: `scope.environments` is not universal.** §2's `CapabilityGrant`
+   derives its scope from "the runbook's own `scope.environments`". Three of
+   the five declare that key; `rb.staging-promotion` declares
+   `sources`/`destinations`/`excluded` and `rb.wpe-pull` declares
+   `reads`/`writes`. Left deliberately untyped on `frontmatter` here — modelling
+   four shapes would be a guess, and picking one would quietly make the other
+   two ungratable. 20b needs a ruling on the scope vocabulary; the raw object
+   is preserved for it either way.
+6. **For 20c: nothing carries the index's `applies_when` one-liner.** §3's
+   always-on procedure index is "id, version, strictness, and its
+   `applies_when` one-liner"; no runbook has such a field and `arms_on` is a
+   lexical predicate, not prose. Either a fifth additive field (a fourth ADR-17
+   amendment) or the index line is built from id + capability + strictness
+   alone. Not absorbed here — the four adopted fields are the ruled set.
+7. **The four new fields are declared in the schema and authored in NO
+   runbook, and the authoring seam has a trap.** All eight of
+   `rb.bulk-plugin-update`'s checkpoints are therefore `narrative` today, and
+   that is pinned as such (`shippedRunbooks.test.ts`) precisely so no surface
+   can tick them as verified before §4's four event/manifest attestations are
+   authored. The trap: `law/runbooks/` is pinned **byte-identical** to
+   `docs/intelligence/anchor-slice/runbooks/`, which is architect-owned. So
+   authoring `attest:`/`tools:`/`arms_on:` (including §5's
+   `NEEDS_RUNNING_SITE` fix) means editing the docs original first and
+   re-copying — editing `law/runbooks/` directly fires the fidelity pin, by
+   design. That pin is the cheapest available form of the lint §9-20a asks for
+   in place of a third copy.
+8. **Two mutations were BUILD-ERRORs before they were kills, exactly as WP-04d
+   warned.** `if (holder && false)` and `for (const err of [])` are rejected by
+   ts-jest's diagnostics (unreachable / `never` element type), so the suite
+   never built — a non-zero exit that is not behavioural evidence. The harness
+   caught both because it requires the NAMED witness among the failing test
+   titles and reports a run with zero executed tests as BUILD-ERROR. Rewritten
+   type-clean (`.get(capability + '-never')`, `.slice(0, 0)`) and both then
+   killed. Also reproduced, third time on this branch: **the poisoned ts-jest
+   cache** (WP-15) — `tests/intelligence-evals/sitting.test.ts` failed to parse
+   its own shebang with the cache and passed with `--no-cache`, reproducibly in
+   both directions; `npx jest --clearCache` cleared it and the full suite has
+   been 545/545 since. A packet that sees exactly one unrelated suite fail on a
+   parse error should clear the cache before believing it.
+
+**Three contract rules taken inside 20a's scope that are judgement, not
+transcription** — each pinned and mutated, each cheap to reverse:
+`attest: event` with no `evidence.topic` is REFUSED (an event attestation with
+no ledger topic is a verification claim with no query behind it — the shape
+that renders a green tick over an unchecked step); a GUIDED runbook declaring
+`checkpoints:` is REFUSED (ADR-17 amendment 2 reserves the word for
+gateway-sequenced execution, and the sequencer would otherwise read it as
+sequenceable); a duplicate `capability:` is first-wins with the later document
+recorded as an error, following the loader's own duplicate-id precedent over
+the arming doctrine's refuse-to-pick — load order is deterministic
+(depth-first, alphabetical), and refusing both would strand a capability
+because someone added a draft.
+
+**ABI state on exit: system Node (jest).** This session ran `npm test` four
+times, so `better-sqlite3` is built for the shell's Node (measured 25.9.0 →
+ABI 141; `.nvmrc`/CI is 22.16.0 → 127). **Run `npm run rebuild` before loading
+the addon in Local.**
