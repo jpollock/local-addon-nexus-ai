@@ -24,8 +24,10 @@ six migrated readers + `verify_site_live`; Site Finder provenance; jest/CI
 wiring; review sweep. User-visible: answers carry observation age and trust,
 disclose staleness, and offer the live re-check.
 
-**Milestone 2 — governance + assembly** *(code-complete; formal close = WP-13
-evals).* Entity service wired as `site_links` consumer; policy & runbook repo
+**Milestone 2 — governance + assembly** *(CLOSED 2026-08-17 — owner sitting
+judged: 5 of 6 E-01 criteria at pass³, the sixth recorded as standing
+evidence for WP-20; zero FAIL across the eval corpus; every blocked
+criterion owned by a registered packet).* Entity service wired as `site_links` consumer; policy & runbook repo
 v0 (law loader, permissions mirror — translation, not enforcement); four
 owner-reviewed runbooks; Ask/Tell recon; **context assembler v0 live in the
 Docked Panel** — every chat turn mints a TaskId and writes a
