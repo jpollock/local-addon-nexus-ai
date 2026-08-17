@@ -5731,3 +5731,105 @@ shell's Node (measured 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 → 127), and
 then `./dev-reload.sh` rebuilt it to Electron 42.2.0 for the pass above.
 **To run jest again: `npm test`** (the `pretest` hook flips it back), never
 bare `npx jest`.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-20a (2026-08-17).** Merge 31d68424 accepted.
+Receipts verified: 17 files +2160/−3, no integration lock taken (bootstrap
+already calls `initLawRegistry` — correct that no index.ts edit was needed),
+baseline 543/6912/12 → 545/6968/12 with skipped unchanged and the tree held
+still, 22/22 mutations killed by named witness, live pass showing
+`3 runbook(s) loaded, 2 refused` by name in Local's verbose log. Both
+requested rulings follow, then the ratifications and the 20c inheritances.
+
+**Ruling 1 — the ceiling's measurement basis: RATIFIED as the canonical
+whole document.** The agent implemented the only reading that survives
+contact with the governing text's own evidence, and the ratification is not
+a coin-flip between two defensible readings — the literal "body ceiling" is
+self-refuting three ways: (a) every shipped body is under 8 KB, including
+both runbooks the phase-1 note names as over-ceiling, so a body-only
+ceiling refuses nothing and escalation 5's ruling would have no behavior
+behind it; (b) the note's own token arithmetic prices the anchor runbook's
+arming turn at 1,215 tokens = 4,858 bytes = the FILE, not the body; (c) the
+turn-carrier delivers the full canonical document (P3 ruled it "full body
+once per task, hash + cursor" — where "body" was always shorthand for the
+document the hash covers), and a ceiling that doesn't measure what rides
+the turn bounds nothing real. The deeper coherence argument seals it: for
+these runbooks the obligations that make a procedure a procedure —
+checkpoints, aborts, communication, attest — live IN the frontmatter. A
+body-only ceiling plus a whole-document hash would let the reviewed
+contract grow without the ceiling noticing while the hash churned; ceiling
+and hash measuring the SAME canonical text is the invariant worth pinning,
+and M05/M17/M18 pin it. The governing text is corrected at source:
+ADR-17's third amendment now reads "8 KB ceiling measured over the
+canonical whole document" with the correction note inline — the
+contradiction is closed in architecture.md, not just annotated here. The
+design note's §"body ceiling" phrasing stands as historical record; this
+entry is its amendment.
+
+**Ruling 2 — the guided runbooks over 8 KB: strict-only scope STANDS; the
+oversize is recorded, not silently accepted.** The ceiling's purpose (per
+the phase-1 note and P3) is to bound the mandatory arming payload — the
+document the turn-carrier MUST deliver in full, hash-pinned, before a
+strict run may proceed. Guided runbooks have no such mandatory ride:
+nothing gateway-sequences them, no arming turn is obliged to carry them
+whole, and the assembler may summarize or excerpt them like any other
+retrieved item. Refusing them at 8 KB would drop shipped, working
+capability (wpe-pull and diagnose-site are two of the three servable
+documents) to enforce a bound whose rationale doesn't reach them. So: the
+strict scope is confirmed as the rule, not the loophole. BUT a bound whose
+rationale doesn't reach them today may reach them later — if 20e or any
+successor gives guided runbooks a full-body delivery path, the exemption
+dies that day, and both documents are at that point over ceiling. Recorded
+disposition: (a) the two guided oversizes are a REGISTERED exception,
+named here and in the ADR-17 amendment text; (b) WP-20c's split work is
+scoped to the two strict runbooks only — do NOT expand 20c; (c) a
+guided-ceiling decision (separate number, separate bound, or a split) is
+parked with WP-20f/20g as a candidate, to be forced open by whichever
+packet first proposes full-body guided delivery. Silent growth is the
+failure mode; the register entry is the guard.
+
+**Ratifications, batched.** (1) The loader `scope:` fix — string-or-object
+for runbooks, string held for policy documents — is ratified with its
+asymmetry: a mistyped structured scope on a policy doc silently coerced
+would mislabel every constraint in the file, so policy stays strict.
+Finding 1 is also a design-note erratum: §0's "no loader change needed" was
+true only of the synthetic three-field fixture — the only runbook ever
+loaded before this packet. The fact-table lesson ("spec factual claims
+propagate; measure before asserting") joins the protocol's memory. (2) The
+three judgement calls inside 20a's scope are all ratified: `attest: event`
+without `evidence.topic` REFUSED (a verification claim with no query behind
+it is the green-tick-over-unchecked-step shape — exactly what P4/§5b
+forbid); guided `checkpoints:` REFUSED (amendment 2 reserves the word for
+gateway-sequenced execution; letting it through would hand the sequencer a
+document it must not sequence); duplicate `capability:` first-wins with the
+loser recorded as an error (deterministic load order + the loader's own
+duplicate-id precedent; refusing both would strand a capability because
+someone committed a draft). (3) The registry-not-loader placement of
+contract validation is ratified as the structural form of §9-20a's
+malformed-runbook pin: `loadErrors` keeps meaning "not a law document",
+`runbookErrors` means "loaded, contract unhonorable" — two lists, two
+meanings, policy set never collateral.
+
+**Inheritances for WP-20c (binding on its design):** (1) incident-response's
+frontmatter ALONE is 8,016 bytes — 176 under the ceiling — so the split
+must divide the CONTRACT, not just the prose; a split that copies the
+shared frontmatter verbatim into each part is at ceiling before its first
+body line. Expect the split seam to partition checkpoints/aborts/
+communication across parts, with the shared preamble slimmed or hoisted.
+(2) `scope.environments` is not universal across the shipped set — 20c's
+fixtures must not assume it. (3) Nothing shipped carries `applies_when:`;
+all eight anchor checkpoints are narrative today — so 20c's authoring of
+`attest:`/`tools:`/`arms_on:` starts from zero, and (4) it edits the
+docs/intelligence/anchor-slice originals FIRST and re-copies into
+`law/runbooks/`, because the fidelity pin fires on direct edits by design.
+(5) The poisoned ts-jest cache reproduced a third time — `--clearCache`
+before believing exactly-one-unrelated-suite parse failures is now
+protocol-grade advice.
+
+**State and next:** ABI is ELECTRON per the report — Local is loadable now;
+the first-real-pull smoke remains available at Jeremy's convenience. 20b
+and 20c are CLEAR TO LAUNCH in parallel (prompts already delivered
+verbatim; 20c's agent must read this adjudication's inheritance block —
+it is referenced in the prompt's standing instruction to read the packet
+record first). 20d's prompt is owed by the architect when 20c merges.
