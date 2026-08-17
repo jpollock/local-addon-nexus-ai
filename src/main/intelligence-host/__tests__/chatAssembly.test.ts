@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import { setIntelligenceCore } from '../coreRegistry';
-import { provisionalEnvironmentId } from '../provisionalEntity';
+import { provisionalEnvironmentId, provisionalSiteId } from '../provisionalEntity';
 import {
   assembleForChatTurn,
   forgetChatAssemblySession,
@@ -25,6 +25,7 @@ import type { NexusServices } from '../../mcp/types';
 
 const SITE_ID = 'local-acme';
 const ENV_ID = provisionalEnvironmentId(SITE_ID);
+const SITE_ENT = provisionalSiteId(SITE_ID);
 const HOUR = 3600_000;
 
 let core: IntelligenceCore;
@@ -104,7 +105,9 @@ describe('assembleForChatTurn — TaskId and the manifest event', () => {
     expect(event.topic).toBe(CONTEXT_ASSEMBLED_TOPIC);
     expect(event.topic).toBe('task.context.assembled');
     expect(event.schema).toBe(CONTEXT_ASSEMBLED_SCHEMA);
-    expect(event.entity).toEqual({ environment: ENV_ID });
+    // Both roles: the physical copy the turn is about, and the logical Site it
+    // belongs to (WP-16 / audit A3 — the Site role is what scopes episodic).
+    expect(event.entity).toEqual({ environment: ENV_ID, site: SITE_ENT });
     expect(event.source).toEqual({ class: 'work', system: 'assembler:chat', trust: 'emitted' });
   });
 
@@ -188,6 +191,37 @@ describe('assembleForChatTurn — freshness disclosure reaches the turn', () => 
     });
     expect(r!.turnBlock).toContain('state.plugin.observed');
     expect(r!.turnBlock).toContain('<untrusted_data');
+  });
+
+  /**
+   * WP-16 (audit A3). Episodic scope was the local COPY: an event recorded
+   * against another environment of the same logical Site — the WPE install the
+   * sandbox mirrors — was invisible to the turn, even though every producer
+   * dual-stamps the Site role and `Ledger.query` matches any role. The targets
+   * now carry the Site, so prior activity elsewhere on the same Site is in
+   * scope. Freshness is unaffected: twin facts key to the environment.
+   */
+  test('episodic retrieval is Site-scoped: activity on a sibling environment reaches the turn', async () => {
+    const siblingEnv = provisionalEnvironmentId('wpe-install-of-the-same-site');
+    core.emitter.emit({
+      observed_at: new Date(Date.now() - 2 * HOUR).toISOString(),
+      topic: 'state.plugin.observed',
+      schema: 'plugin.observed/1',
+      entity: { site: SITE_ENT, environment: siblingEnv },
+      actor: { id: 'act_seed', kind: 'system' },
+      source: { class: 'platform', system: 'wp-cli', trust: 'observed' },
+      payload: { slug: 'sibling-only-plugin', version: '1.0.0', active: true },
+    });
+
+    const r = await assembleForChatTurn({
+      services: services(), sessionId: 's1', userMessage: 'what changed?', siteId: SITE_ID,
+      buildingSystemPrompt: false,
+    });
+
+    expect(r!.turnBlock).toContain('sibling-only-plugin');
+    const [event] = core.ledger.query({ topicPrefix: 'task.' });
+    const queries = (event.payload.retrieval as Array<{ query: string }>).map((q) => q.query);
+    expect(queries.some((q) => q.includes(SITE_ENT))).toBe(true);
   });
 
   test('no site selected means no freshness section and no episodic query', async () => {
