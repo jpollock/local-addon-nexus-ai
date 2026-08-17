@@ -192,15 +192,49 @@ export function initIntelligenceCore(options: {
       identity,
     });
 
+    // Declared here, assigned below (WP-21b): the drift emitter closes over it
+    // to traverse the Site role, and the fold only ever runs from
+    // `scheduleFolds`, long after the assignment — but the declaration must
+    // precede the closure or that read is a temporal-dead-zone throw.
+    let entities: EntityService | undefined;
+
+    /**
+     * The logical Site this environment belongs to — TRAVERSED, never derived
+     * (WP-21b, audit A9's stamping discipline).
+     *
+     * `drift.entityId` is whichever role the observed event carried, and every
+     * shipped `state.*` producer stamps `environment`, so this is an
+     * environment id in practice. Deriving a Site from it is not an option:
+     * for a MIRRORED site the mirror keyed the Site by `wpe.site_id`, so a
+     * derivation would mint a second Site beside the real one and split the
+     * history the role exists to join (same reasoning as `syncProducer`'s
+     * `resolveSite`). No edge means no role — omitted, per WP-16 doctrine,
+     * because an absent role is honest and a guessed one is a claim.
+     */
+    const siteRoleFor = (entityId: string): string | undefined => {
+      try {
+        return entities?.siteOf(entityId);
+      } catch {
+        /* a faulty entity service must never break a producer */
+        return undefined;
+      }
+    };
+
     // Drift observations are themselves events — the fold reports, the ledger remembers.
     const stateFold: Fold = createStateTwinFold((drift) => {
+      const site = siteRoleFor(drift.entityId);
       emitter.emit({
         observed_at: drift.observedAt,
         topic: 'state.drift.detected',
         // v2 (WP-03 finding): carries previous_observed_at, so drift readers
         // can report how long the sides diverged, not just what changed.
+        //
+        // Still v2 after WP-21b: the added `site` role is NOT a payload schema
+        // change. `EntityRefs` is `Record<string, string>` and the envelope
+        // validator's `entity` field is an open `z.record` — the entity block
+        // is extensible by construction, and the payload below is untouched.
         schema: 'drift.detected/2',
-        entity: { environment: drift.entityId },
+        entity: { environment: drift.entityId, ...(site ? { site } : {}) },
         actor: { id: 'act_fold_state_twin', kind: 'system' },
         source: { class: 'platform', system: 'fold:state-twin', trust: 'derived' },
         causation: drift.causeEventId,
@@ -232,8 +266,8 @@ export function initIntelligenceCore(options: {
     // WP-07: the identity spine rides the same ledger (migrations v2 created
     // its tables). Wrapped separately from the core's own try/catch so a
     // faulty entity service degrades to provisional-id derivation instead of
-    // disabling the whole ledger.
-    let entities: EntityService | undefined;
+    // disabling the whole ledger. (Declared above the drift emitter, which
+    // closes over it — WP-21b.)
     try {
       entities = new EntityService(ledger);
     } catch (err) {
