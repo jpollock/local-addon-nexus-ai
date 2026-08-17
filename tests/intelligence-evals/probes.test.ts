@@ -53,9 +53,19 @@ describe('probeTimestampDiscipline', () => {
 
 describe('probeTopicFamily', () => {
   it('reports absence as absence, with the total for context', () => {
-    const probe = probeTopicFamily(fixture, 'control.');
+    // `procedure.` is the family with no producer anywhere (`procedure.runbook
+    // .published` is declared in the taxonomy and nothing emits it). This case
+    // used to use `control.`, which WP-20b filled: the shipped capability grant
+    // is recorded as `control.grant.issued` at bootstrap, so that family is no
+    // longer an example of absence — see the case below.
+    const probe = probeTopicFamily(fixture, 'procedure.');
     expect(probe.ok).toBe(false);
     expect(probe.evidence[0]).toMatch(/returned 0 event\(s\) of \d+ total/);
+  });
+
+  it('reports presence for control.grant, which WP-20b gave its first producer', () => {
+    const probe = probeTopicFamily(fixture, 'control.grant.');
+    expect(probe.ok).toBe(true);
   });
 
   it('reports presence for a family the real producers do fill', () => {

@@ -178,3 +178,49 @@ describe('external content-index settings survive the strict schema', () => {
     expect(() => UpdateSettingsSchema.parse({ externalContentIndexIntervalHours: 999 })).toThrow();
   });
 });
+
+describe('capabilityGrants survives the strict schema (WP-20b)', () => {
+  it('accepts a grant carrying only its capability — the rest comes from shipped law', () => {
+    const parsed = UpdateSettingsSchema.parse({
+      capabilityGrants: [{ capability: 'cap.bulk_plugin_update' }],
+    });
+    expect(parsed.capabilityGrants).toEqual([{ capability: 'cap.bulk_plugin_update' }]);
+  });
+
+  it('accepts the enable toggle and the reviewed-document pin', () => {
+    const parsed = UpdateSettingsSchema.parse({
+      capabilityGrants: [
+        {
+          capability: 'cap.bulk_plugin_update',
+          enabled: false,
+          runbookId: 'rb.bulk-plugin-update',
+          runbookHash: 'sha256:abc',
+        },
+      ],
+    });
+    expect(parsed.capabilityGrants?.[0].enabled).toBe(false);
+    expect(parsed.capabilityGrants?.[0].runbookHash).toBe('sha256:abc');
+  });
+
+  it("keeps the runbook's own scope vocabulary, which is not the three remote environments", () => {
+    // `wpe_staging` is not `staging`: coercing it would widen a grant to every
+    // external staging host (WP-20a finding 5).
+    const parsed = UpdateSettingsSchema.parse({
+      capabilityGrants: [
+        {
+          capability: 'cap.bulk_plugin_update',
+          scope: { environments: ['local', 'wpe_staging'], targetRefs: ['wpe:mystore'] },
+        },
+      ],
+    });
+    expect(parsed.capabilityGrants?.[0].scope).toEqual({
+      environments: ['local', 'wpe_staging'],
+      targetRefs: ['wpe:mystore'],
+    });
+  });
+
+  it('rejects a grant with no capability — the key an override matches on', () => {
+    expect(() => UpdateSettingsSchema.parse({ capabilityGrants: [{ enabled: true }] })).toThrow();
+    expect(() => UpdateSettingsSchema.parse({ capabilityGrants: [{ capability: '' }] })).toThrow();
+  });
+});
