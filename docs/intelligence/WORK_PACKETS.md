@@ -1968,7 +1968,14 @@ architect session; supersedes nothing, closes both packets).**
   chain, prompt line, and pins in one commit, or not at all) is adopted as
   Site Finder convention.
 
-### [ ] WP-04d · phpVersions granularity — unify on the prefix predicate
+### [x] WP-04d · phpVersions granularity — unify on the prefix predicate
+**DONE 2026-08-17** — all three chains now use the prefix predicate `wpVersions`
+uses (`v || startsWith(v + '.') || startsWith(v + '-')`); two WP-04c pins
+updated deliberately and marked `[WP-04d]` at the assertion, +7 new pins
+(53 → 60), 16 mutations with 14 named-witness kills and 2 disclosed expected
+survivors. No prompt change was needed, so `src/main/ai/` and `tests/evals/`
+are untouched. Measured live: a `{phpVersions:['8.2']}` query matched 1 of 37
+local rows before, 37 of 37 after. Notes at the end of this file.
 Registered from WP-04c finding. WPE rows store PHP as major.minor ("8.2");
 local/external store patch-level ("8.2.29"); the current exact-membership
 predicate therefore under-matches across sources depending on which
@@ -2125,7 +2132,11 @@ session, 2026-08-16).**
   WP-04b pattern — a test file defining its own local copy of the logic it
   claims to pin.
 
-### [ ] WP-12b · chat-service-history.test.ts is vacuous — port or delete
+### [x] WP-12b · chat-service-history.test.ts is vacuous — port or delete
+**DONE 2026-08-17** — six ported cases added to
+`tests/unit/chat/chat-service-rehydration.test.ts` (10 tests total, the
+original 4 untouched); the copy is deleted; 5/5 mutations caught with named
+witnesses plus one declared no-op proven. Notes at the end of this file.
 Registered from WP-12 finding. `tests/unit/chat/chat-service-history.test.ts`
 defines its own local `reconstructHistory` and imports nothing from `src/` —
 it passed unchanged through both the R1 bug and its fix, which is the proof
@@ -4261,6 +4272,365 @@ Node **25.9.0 → ABI 141** (`.nvmrc`/CI is 22.16.0 → 127).
 path — a throwing handler leaks the timer. Fix + pin (throwing handler:
 timer cleared, no unhandled rejection). Not intelligence scope; any tier;
 touches the dispatch module WP-19 just instrumented, so rebase on current.
+
+---
+
+- 2026-08-17 · **WP-12b — the vacuous `chat-service-history.test.ts` ported onto
+  the real restore path** (branch `wp-12b`, Opus). Tests only: one file
+  extended, one deleted. `src/main/chat/ChatService.ts` and
+  `src/main/ipc/chat-sessions.ts` were READ, and were temporarily mutated
+  during the mutation battery and restored — the commit contains no `src/`
+  change.
+
+  **Verification.** Worktree baseline BEFORE any change: **533 suites, 6,719
+  passed, 12 skipped, 6,731 total**, exit 0. AFTER: **532 suites, 6,722 passed,
+  12 skipped, 6,734 total**, exit 0. Suites **−1** (the copy deleted, the ports
+  went into an existing file); tests **+3**, which is exactly 6 new minus the
+  copy's 3; **skipped unchanged at 12**, so no artifact-gated suite appeared or
+  vanished. `npm run typecheck` clean; `npx eslint` clean on the touched file.
+  Touched-area legacy suites green together (`tests/main/chat-service`,
+  `tests/unit/chat/**`, `tests/unit/ipc/chat-sessions`,
+  `gatewayEmission`, `operationAuditLog.wiring`) — 20 suites / 140 tests.
+  **The 4 "known-red" `AgentRegistry.test.ts` tests do not reproduce here**
+  either: this worktree's baseline had ZERO failures, matching WP-11's report
+  and not WP-12's. The standing instruction to capture their failure text
+  therefore could not be discharged — there was nothing to capture.
+
+  **Location.** The ports live in `tests/unit/chat/chat-service-rehydration.test.ts`
+  (WP-12's suite), not a new file: it already stands up the real `ChatService`
+  with a recording provider and an in-memory session DB, which is precisely the
+  harness the copy avoided. A second file would have meant a second copy of
+  that harness — the failure mode this packet exists to remove.
+
+  **Classification of the copy's 7 semantics** (3 `it()` blocks, but the accept
+  bar is per semantic, per WP-04b):
+  - **(a) portable — 5**: user rows map to role+content; assistant rows likewise
+    (both in one case); output order; the streaming filter; the empty-input case.
+  - **(b) waived — 1**: *persisted `system` rows are KEPT*. **Inverted by
+    production, deliberately**: the restore branch drops them (WP-12, adjudicated
+    load-bearing per R3 — Anthropic/Google keep the FIRST system message, so a
+    stale row would win over the fresh prompt). Already pinned in the opposite
+    direction by the existing *"a legacy session that persisted a system row does
+    not end up with two"*. Porting it would have re-created the bug as a pin.
+  - **(c) unreachable as written, ported behaviourally — 1**: the whitelist
+    dropped every role outside `{user, assistant, system}`. `ChatMessage.role`
+    admits only those three, so no typed writer can produce a fourth — but
+    `chat_messages.role` is a TEXT column and `getSession` does not validate it,
+    so the filter is the only guard. Ported by writing a `tool` row through the
+    table and pinning that it does not reach the provider.
+  - **1 NEW case** the copy's fixture concealed (see finding 2).
+  - Result: **6 tests** = 5 ported (one of them behavioural) + 1 new.
+
+  **Three findings.**
+
+  1. **The copy pinned a field that does not exist at the persistence
+     boundary.** Its fixture set `streaming: true` (cast `as any` — the field is
+     not on `ChatMessage`). `streaming` is renderer-only state;
+     `PanelChat.persistSession` maps it to `incomplete`, which is the column and
+     the thing `ChatService` actually filters. A copy is free to invent the
+     schema it tests against; that is the vacuity, stated concretely.
+  2. **The copy's one fixture conflated two production filters.** Its "streaming"
+     message was `{content: '', streaming: true}` — a shape that would be caught
+     by `!m.incomplete` OR by `m.content !== ''`, so neither was actually pinned.
+     Ported as two cases with disjoint fixtures: a mid-stream row with **non-empty**
+     content (the reachable shape — the panel closed mid-answer), and an empty-content
+     row that is **not** incomplete (reachable because `persistSession` filters empty
+     ASSISTANT rows only, so an empty USER row does reach the table). Both mutations
+     below kill exactly one case each, which is the evidence they are now separate.
+  3. **One of the copy's three cases has no branch to pin, and it is labelled so
+     in the file.** `reconstructHistory([]) === []` maps, through the handler, to a
+     persisted session holding zero message rows — and there the two branches
+     CONVERGE: `messages.length > 0` sends it to the fresh-session branch, which
+     builds the same prompt the restore branch would from an empty history.
+     Mutation M6 (`> 0` → `>= 0`) leaves the whole suite green, by design. Ported
+     anyway as an observable (a stored-but-empty session behaves like a new one),
+     declared as unpinned-by-mutation rather than dressed up as a kill.
+
+  **Mutation battery — 5/5 CAUGHT + 1 declared no-op, each with its witness.**
+  Committed first (the pattern's rule), every substitution anchored across **two
+  adjacent lines** (the chained `.filter(...)` calls are near-identical, so a
+  single-line anchor would land on the wrong one), applied through a runner that
+  refuses any anchor without exactly one match and prints the sha before/after,
+  and each kill verified by the *specific* expected test appearing among the
+  failures — never a non-zero exit alone.
+
+  | mutation | production line | witness |
+  |---|---|---|
+  | `!m.incomplete` → always true | `ChatService.ts` restore branch | **1** failed: "[S5] a mid-stream (incomplete) assistant row is not restored" |
+  | `m.content !== ''` → `!== undefined` | same chain, next line | **1** failed: "[S5, second half] an empty-content row is not restored" |
+  | role whitelist → `m.role !== 'system'` | same chain, next line | **1** failed: "[S6] a row whose role is neither user nor assistant is dropped" |
+  | `content: m.content` → `content: String(m.role)` | the `.map` | 6 failed, incl. "[S1/S2] user and assistant rows reach the provider as role+content pairs" |
+  | `ORDER BY timestamp ASC` → `DESC` | `chat-sessions.ts` `getSession` | 5 failed, incl. "[S4] history is restored in timestamp order, not insertion order" |
+  | `messages.length > 0` → `>= 0` | restore-vs-fresh gate | **10 passed — declared no-op**, see finding 3 |
+
+  The first three kills are single-test kills on adjacent lines of one chain:
+  that is the evidence the three filters are pinned separately rather than
+  collectively, which the copy's shared fixture could not have shown.
+
+  **Process note.** The first baseline run was started in the background and
+  overlapped the edit that added the ported cases — it was killed and discarded,
+  not reported, and the baseline re-measured from a stashed (pristine) tree.
+  Same rule as WP-04b's, one step earlier in the packet: a full-suite number
+  measured while the tree is being edited is not a baseline.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
+  ABI 127). `npm run rebuild` is required before loading Local again.** The
+  shared `node_modules` every worktree symlinks through is affected.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-12b (appended by the architect session).**
+
+- **WP-12b ACCEPTED.** Merge 0e0ad001, src/-clean, zero contention with the
+  live WP-21 worktree. The headline for the record: **the copy contained a
+  pin that, ported faithfully, would have re-created the R1 bug as a
+  regression guard** ("persisted system rows are KEPT" — production
+  deliberately drops them per the WP-12/R3 adjudication). The waiver was
+  not clerical; it was the whole reason the port-don't-trust method
+  exists. Copy-test pathology now has its canonical triple from this
+  packet: pinning a field that doesn't exist at the boundary, one fixture
+  conflating two filters so neither was pinned, and an empty-input case
+  with no branch to distinguish — the last ported honestly as
+  unpinned-by-mutation rather than dressed up.
+- Tooling discipline adopted: an anchor runner that REFUSES any anchor
+  without exactly one match, and single-test kills on adjacent lines as
+  the evidence that filters are pinned separately — both join the
+  mutation doctrine.
+- The behavioral port of the role whitelist (a `tool` row written through
+  the TEXT column, pinned as never reaching the provider) also pins a
+  latent surface: `getSession` doesn't validate roles — the effect is now
+  guarded even though the writer can't currently produce it.
+- AgentRegistry: did not reproduce again (zero baseline failures). The
+  capture instruction stands; the red has not been seen since WP-12's
+  baseline — if it stays unseen through Wave 3, it gets demoted to a
+  historical note at the wave close.
+
+---
+
+- 2026-08-17 · **WP-04d — LOCK ANNOUNCEMENT + scope confirmation.** Branch
+  `wp-04d`, worktree `.worktrees/wp-04d`. **Holding the integration lock** for
+  `src/main/ipc-handlers.ts` (the `SITE_FINDER_APPLY` filter chains) from this
+  note until the packet's close-out. Nothing else should edit that file
+  meanwhile.
+
+  **Lock contention checked before taking it:** the four open packets are
+  WP-20 (procedure distribution), WP-21 (assembler task frame — core lock,
+  `AssembleRequest`/`chatAssembly`), WP-19b (`AgentDispatcher`) and WP-12b
+  (`tests/unit/chat-service-history.test.ts`). None names `ipc-handlers.ts`;
+  WP-19's announcement claimed `tool-registry.ts` / `ChatService.ts` /
+  `intelligence-host/health.ts` and is closed. No contention.
+
+  **WP-04d CLOSE-OUT — executed, verified, findings.**
+
+  **Verification.** Worktree baseline BEFORE any change: **533 suites, 6,719
+  passed, 12 skipped, 6,731 total**, exit 0. AFTER: **533 suites, 6,726 passed,
+  12 skipped, 6,738 total**, exit 0. Suites unchanged; tests **+7**, exactly the
+  7 new pins; **skipped unchanged at 12**, so the delta is not an artifact-gated
+  suite appearing or vanishing. A third full run after the mutation battery is
+  byte-identical to the AFTER run (6,726/12/6,738), which is the evidence the
+  tree was restored. `npm run typecheck` clean; `npx eslint` clean on both
+  touched files. The WP-04b/04c suite went 53 → 60 with **two pins updated
+  deliberately** (below) and nothing else in it moved. Touched-area legacy
+  suites green together — `site-finder-soft-delete`, `parse-accuracy`,
+  `siteFinderTwins`: 3 suites / 40 tests, **no expectation changed**.
+
+  **The change.** All three chains now use the prefix predicate `wpVersions`
+  already uses a few lines away in each of them — `v || startsWith(v + '.') ||
+  startsWith(v + '-')` — inlined per chain, exactly as `wpVersions` is. No
+  prompt change was needed (see finding 4), so the parse layer is untouched and
+  the ruling's escalation trigger did not fire.
+
+  **What it is worth, measured live on the developer's `graph.db`
+  2026-08-17** (re-measured for this packet, not copied):
+
+  | source | active rows | php granularity |
+  |---|---|---|
+  | local | 40 | 36 patch-level (`8.2.29` ×34, `8.2.27`, `8.2.30`), **1** major.minor (`8.2`), 3 NULL |
+  | wpe | 343 | **293 all major.minor**, 50 NULL |
+  | external | 0 in this DB | patch-level from `wp --info` (CLAUDE.md) |
+
+  So `{phpVersions:['8.2']}` — the exact shape the prompt documents and the
+  parser emits — matched **1 of 37** local rows carrying a version before this
+  change and matches **37 of 37** after. That is the packet in one number.
+
+  **The two pins updated on purpose** (both marked `[WP-04d]` at the assertion,
+  with the old expectation named in the comment, in
+  `tests/unit/ipc/site-finder-filters.test.ts`):
+
+  1. *"filters the WPE chain, whose stored version is major.minor"* —
+     `not.toContain('myloop')` → `toContain('myloop')`. `{phpVersions:['8.2']}`
+     now matches the local site stored as `8.2.29`.
+  2. *"matches across the WPE and external chains at once"* —
+     `not.toContain('newsite')` → `toContain('newsite')`. Same change, `8.3` vs
+     `8.3.1`.
+
+  Both were WP-04c pins recording exact membership. Nothing else in the file
+  changed direction; the file header carries a WP-04d block stating the new
+  semantic and that these two moved.
+
+  **Seven new pins**, one per chain plus the boundaries: LOCAL prefix (the
+  behaviour change, asserted as the whole local bucket), WPE prefix, EXTERNAL
+  prefix, the patch-level query that must **not** widen upward (`8.2.29` must
+  not start matching rows stored `8.2`), the version-prefix-not-string-prefix
+  guard (`8.2.2` ↛ `8.2.29`, plus an `8.` query that must match nothing **on
+  all three chains**), the hyphen arm, and NULL exclusion.
+
+  **Fixture:** two changes, both to make a real shape representable —
+  `wpe-nophp` (php_version NULL, the live-common WPE shape: 50 of 343 active
+  rows) and `ext-normal`'s version becomes `8.3.6-1~deb12u1` (what `wp --info`
+  reports on a distro-packaged PHP, where `PHP_VERSION` itself carries the
+  packaging suffix). Every pre-existing assertion about `ext-normal` still
+  holds — it is still an 8.3.x staging host with 2 admins.
+
+  **Mutation battery — 16 mutations, 14 CAUGHT by their named witness, 2
+  EXPECTED SURVIVORS, disclosed below.** Committed first (the pattern's rule),
+  run strictly between the two full-suite runs. Each substitution is anchored
+  on **two lines** — the chain's distinguishing line (`const cached =
+  metadataCache?.get?.(siteId)` / `wpeSite.php_version` /
+  `externalSite.php_version`) plus the predicate — because the three chains
+  contain byte-identical predicate lines; the harness asserts the anchor
+  matches exactly once, that the file hash changed, that the **named** witness
+  is among the failures, and that the tree restores to the original hash.
+
+  | # | mutation | chain | witness |
+  |---|---|---|---|
+  | M1–M3 | `phpVersions` branch disabled (restores the pre-WP-04c defect) | local / wpe / external | that chain's prefix pin |
+  | M4–M6 | drop `startsWith(v + '.')` (back to WP-04c exact membership) | local / wpe / external | that chain's prefix pin |
+  | M7 | drop the `=== v` arm | local | "LOCAL: a major.minor query matches patch-level rows" |
+  | M8 | drop the `=== v` arm | wpe | "filters the WPE chain, whose stored version is major.minor" |
+  | M9 | drop the `=== v` arm | external | "filters the EXTERNAL chain in isolation" |
+  | M10 | drop `startsWith(v + '-')` | external | "matches a distro-packaged build through the hyphen arm" |
+  | M11 | drop `startsWith(v + '-')` | local | **SURVIVED — expected, see finding 3** |
+  | M12 | drop `startsWith(v + '-')` | wpe | **SURVIVED — expected, see finding 3** |
+  | M13–M15 | `startsWith(v + '.')` → `startsWith(v)` | local / wpe / external | "is a version prefix, not a string prefix" |
+  | M16 | NULL php_version read as "no constraint" instead of excluded | wpe | "a NULL php_version matches nothing" |
+
+  Twelve of the sixteen are per-chain kills on lines whose two siblings were
+  left untouched — the evidence that "all three chains" is a property of the
+  pins and not of the comment above them.
+
+  ### Findings
+
+  1. **`if (false)` is not a valid branch-removal mutation in this repo, and it
+     fails in a way that looks like a kill.** The first battery run reported
+     M1–M3 as non-zero exits — but the failure was `Test suite failed to run`:
+     ts-jest's TypeScript diagnostics reject the now-unreachable block, so the
+     suite never built. A build failure is not behavioural evidence. The
+     harness caught it only because it requires the **named witness** among the
+     failures rather than accepting a non-zero exit (WP-04c's rule, earning its
+     keep). The type-clean way to disable a branch is to make its guard
+     unsatisfiable without making it constant — here
+     `validated.phpVersions.length > 0` → `> 999`. Worth adding to the mutation
+     memory beside "anchor on two lines".
+  2. **A whole-bucket equality assertion is only a kill if the expected set is a
+     PROPER subset of that chain's rows.** The first EXTERNAL pin asserted the
+     `['8']` bucket equals `[ext-host, ext-normal, ext-special]` — which is
+     every external row in the fixture, so a chain with **no** `phpVersions`
+     branch at all satisfies it. M3 exposed this. Fixed by adding a narrower
+     query (`['8.3']` → exactly two of the three) to the same test. The general
+     shape: when a filter's expected result is "all rows of this bucket", the
+     pin cannot distinguish *filtering correctly* from *not filtering*.
+  3. **Two mutations survive, and fabricating data to kill them would be the
+     worse trade.** The `startsWith(v + '-')` arm is pinned on the external
+     chain only, because a hyphenated PHP version is a real shape **there** —
+     `wp --info` reports `PHP_VERSION`, which on a distro-packaged PHP is
+     `8.1.2-1ubuntu2.14`. Local ships its own PHP builds (live: `8.2.29`,
+     `8.2.27`, `8.2.30` — no suffixes) and WP Engine's CAPI reports plain
+     major.minor (live: 293 of 293 non-NULL rows), so a hyphenated row on either
+     of those chains would be fiction, and this fixture's usefulness rests on
+     mirroring real shapes. The arm is kept on all three for uniformity with
+     `wpVersions` (where it catches WP prereleases like `7.0-RC1`); the two
+     survivors are the honest cost of not inventing data.
+  4. **The prompt needed no change, and that is a result, not an omission.** It
+     already documents the filter as major.minor (`["8.1", "8.2"]`). Before this
+     packet that documentation was accurate for WP Engine and wrong for the
+     other two sources; it is now accurate for all three. `src/main/ai/` and
+     `tests/evals/` are untouched (verified against the diff), and the only
+     PHP-related SF eval expectation is `phpEolOnly` (SF-03, SF-05) — a
+     different branch, unchanged by this packet. SF-01/05/06 expectations
+     therefore stand unchanged, as the packet required.
+  5. **NULL was unpinned before this packet and now is not.** WP-04c's
+     `!sitePhp || !includes(...)` excluded a NULL `php_version`, but no test
+     said so — 50 of 343 active WPE rows have no version at all, and reading
+     "unknown" as a match is exactly the failure CLAUDE.md's never-fabricate
+     rule exists to prevent. The rewrite keeps the guard explicit
+     (`!!sitePhp &&`) rather than coercing (`(sitePhp ?? '')`), because the
+     explicit form is what M16 mutates.
+  6. **Scope held: the three chains are still three chains.** A shared
+     `phpVersionMatches()` helper was considered and rejected on two grounds:
+     it is the deduplication the packet forbids, and it would collapse the
+     per-chain mutation anchors that are this suite's only evidence that each
+     chain is really wired. Inlining also matches how `wpVersions` — the
+     predicate being adopted — already appears three times in this same handler.
+
+  **ABI STATE: this session ran jest — better-sqlite3 is on the system-Node
+  build (this machine's shell Node 25.9.0 → ABI 141; `.nvmrc`/CI is 22.16.0 →
+  ABI 127). `npm run rebuild` is required before loading Local again.** The
+  shared `node_modules` every worktree symlinks through is affected.
+
+  **WP-04d INTEGRATION REPORT — merged 2026-08-17 as `9d6675a4`.**
+
+  Receipts (`git diff --stat <merge>^1 <merge>`):
+
+  ```
+   docs/intelligence/WORK_PACKETS.md          | 172 ++++++++++++++++++++++++++++-
+   src/main/ipc-handlers.ts                   |  38 +++++--
+   tests/unit/ipc/site-finder-filters.test.ts | 146 ++++++++++++++++++++++--
+   3 files changed, 336 insertions(+), 20 deletions(-)
+  ```
+
+  Three notes on the integration itself:
+
+  - **The base had advanced under me** — WP-12b merged (`0e0ad001`) and was
+    adjudicated (`4df1e20f`) after this worktree was cut. The primary checkout
+    held **no** uncommitted architect work this time, so the
+    commit-verbatim-first step did not apply. The only conflict was
+    `WORK_PACKETS.md`, where both sides had appended to an append-only file;
+    resolved by keeping both, WP-12b's note and the architect's WP-12b
+    adjudication first, this packet's note last, so the file still reads in
+    chronological order. No `src/` conflict — WP-12b was tests-only and touched
+    no chain.
+  - **The integration lock is RELEASED** as of this note. `ipc-handlers.ts` is
+    free for the next packet.
+  - **Post-merge full suite on the integrated tree: 532 suites, 6,739 passed,
+    2 skipped, 6,741 total, exit 0**; `npm run typecheck` clean. The skipped
+    count reads **2** here against **12** in the worktree, and the suite count
+    **532** against **533** — neither is this change: the primary checkout has
+    an untracked `models/all-MiniLM-L6-v2-quantized` that the fresh worktree
+    lacks (ten artifact-gated tests run here and `describe.skip` there), and
+    WP-12b deleted a suite on the base after the worktree was cut. Comparing
+    totals across two checkouts is invalid, as the protocol warns; the
+    load-bearing comparison is the same-environment one recorded above —
+    in-worktree 6,719 → 6,726 passed with skipped unchanged at 12, a delta of
+    exactly the 7 new pins.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-04d (appended by the architect session).**
+
+- **WP-04d ACCEPTED.** Merge 9d6675a4; ipc-handlers lock released. The
+  live-measured impact line is the packet's justification stated as a
+  number: `{phpVersions:['8.2']}` matched 1 of 37 local rows before, 37 of
+  37 after. Both deliberate pin flips are marked at the assertion with the
+  old expectation named — the update-pins-on-purpose discipline worked as
+  designed on its first real exercise.
+- Mutation doctrine gains two entries from the findings: **`if (false)` is
+  not a valid branch-removal mutation under ts-jest** (unreachable-code
+  diagnostics fail the build, which is not behavioral evidence — use a
+  type-clean unsatisfiable guard like `length > 999`); and **a whole-bucket
+  equality assertion kills only when the expected set is a proper subset
+  of the bucket** (an assertion satisfied by a chain with no filter pins
+  nothing — caught by its own mutation).
+- The two disclosed survivors (hyphen arm on local/wpe) are accepted as
+  labeled: those sources cannot produce hyphenated PHP versions, and
+  disclosure beats fabricated fixture data — the honest-null principle
+  applied to test fixtures. NULL php_version (50 of 343 WPE rows) is now
+  pinned for the first time.
+- Scope held under temptation (shared helper rejected as the forbidden
+  dedup — and for the better reason that it would collapse the per-chain
+  mutation anchors). The parse-layer escalation trigger correctly did not
+  fire.
 
 ---
 

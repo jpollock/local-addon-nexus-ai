@@ -51,7 +51,21 @@
  * `minAdminCount` blocks):
  *   1. `phpVersions` was applied on the local chain ONLY — a PHP-version query
  *      returned every WPE install and external host unfiltered. Now applied on
- *      all three, with the same exact-membership predicate the local chain uses.
+ *      all three. (WP-04c gave all three the local chain's exact-membership
+ *      predicate; **WP-04d replaced that with the prefix predicate** — see the
+ *      next block.)
+ *
+ * ── WP-04d — the predicate itself, unified on the prefix match ───────────────
+ * Exact membership under-matched across sources, because the three sources
+ * store different granularities (see the fixture's PHP column below): a
+ * `{phpVersions:['8.2']}` query was right for WP Engine and missed every local
+ * or external site actually running 8.2.29. All three chains now use the same
+ * prefix predicate `wpVersions` uses a few lines away in each chain —
+ * `v || startsWith(v + '.') || startsWith(v + '-')`.
+ *
+ * **This deliberately changed local-chain behaviour**, so two WP-04c pins were
+ * UPDATED rather than preserved; both are marked `[WP-04d]` at the assertion,
+ * naming the packet and the old expectation. Nothing else in this file moved.
  *   2. `wpeEnvironment` passed the `hasFilter` guard with no chain implementing
  *      it, so it alone returned the whole fleet — the exact outcome the guard
  *      exists to prevent. Now honoured on the WPE and external chains, and
@@ -119,20 +133,28 @@ const SETTINGS_NORMAL = {
  *     wpe-inact   WP 7.0  PHP 8.3    5 posts  0 users  -1d  production  — admins  ACF 5.0.1 INACTIVE
  *     wpe-special WP 7.0  PHP 8.3    8 posts  0 users  -2d  production  — admins  settings = SPECIAL
  *     wpe-normal  WP 7.0  PHP 8.3    9 posts  0 users  -2d  production  — admins  settings = NORMAL
+ *     wpe-nophp   WP 7.0  PHP NULL   7 posts  0 users -10d  production  — admins  [WP-04d]
  *   external:
  *     ssh:ext-host    WP 6.9 PHP 8.1  12 posts  4 users -20d  production  4 admins  ACF 6.0.0, no settings_json
  *     ssh:ext-special WP 7.0 PHP 8.3   5 posts  0 users  -2d  production  — admins  settings = SPECIAL
- *     ssh:ext-normal  WP 7.0 PHP 8.3   6 posts  0 users  -2d  STAGING     2 admins  settings = NORMAL
+ *     ssh:ext-normal  WP 7.0 PHP 8.3.6-1~deb12u1  6 posts 0 users -2d STAGING 2 admins  settings = NORMAL
  *
  * The PHP column is deliberately mixed-granularity, because the real data is:
  * WP Engine stores major.minor (`8.2`), Local and external SSH hosts store a
- * full patch version (`8.2.29`). The `phpVersions` predicate is exact
- * membership on all three chains, so the fixture must be able to tell those
- * apart — see the `phpVersions` block below.
+ * full patch version (`8.2.29`), a distro-packaged host reports a packaging
+ * suffix (`8.3.6-1~deb12u1`), and a never-refreshed WPE install stores NULL.
+ * WP-04d unified the predicate on the PREFIX match `wpVersions` already used
+ * in the same handler, so the fixture must be able to tell all four apart —
+ * see the `phpVersions` blocks below.
  */
 type SiteRow = {
   id: string; name: string; source: 'local' | 'wpe' | 'external'; domain: string;
-  wp: string; php: string; posts: number | null; users: number | null;
+  /**
+   * `php` is nullable because the real column is: 49 of 342 active WPE rows
+   * carry no `php_version` at all (never deep-refreshed). WP-04d pins that an
+   * unknown version never matches a `phpVersions` query — see `wpe-nophp`.
+   */
+  wp: string; php: string | null; posts: number | null; users: number | null;
   lastPost: number | null; settings?: Record<string, string>; env?: string;
   /**
    * Administrator count, written into `sites.user_count_by_role` as
@@ -159,12 +181,23 @@ const SITES: SiteRow[] = [
   { id: 'wpe-inact',   name: 'wpe-inact',   source: 'wpe', domain: 'inact.wpengine.com', wp: '7.0', php: '8.3', posts: 5,  users: null, lastPost: NOW - 1 * DAY,  env: 'production' },
   { id: 'wpe-special', name: 'wpe-special', source: 'wpe', domain: 'sp.wpengine.com',   wp: '7.0', php: '8.3', posts: 8,   users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_SPECIAL, env: 'production' },
   { id: 'wpe-normal',  name: 'wpe-normal',  source: 'wpe', domain: 'no.wpengine.com',   wp: '7.0', php: '8.3', posts: 9,   users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_NORMAL,  env: 'production' },
+  // [WP-04d] php_version NULL — never collected, the live-common WPE shape (49
+  // of 342 active rows). Every other column is deliberately unremarkable so it
+  // sits outside every existing pin's asserted set; it exists to prove that an
+  // unknown PHP version matches NO phpVersions query rather than being
+  // defaulted into one.
+  { id: 'wpe-nophp',   name: 'wpe-nophp',   source: 'wpe', domain: 'nophp.wpengine.com', wp: '7.0', php: null, posts: 7, users: null, lastPost: NOW - 10 * DAY, env: 'production' },
 
   { id: 'ssh:ext-host',    name: 'ext-host',    source: 'external', domain: 'ext.example.com',  wp: '6.9', php: '8.1', posts: 12, users: null, lastPost: NOW - 20 * DAY, env: 'production', admins: 4 },
   { id: 'ssh:ext-special', name: 'ext-special', source: 'external', domain: 'sp.example.com',   wp: '7.0', php: '8.3', posts: 5,  users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_SPECIAL, env: 'production' },
   // The one non-production external host: proves the external chain reads its
   // OWN environment label rather than defaulting every SSH host to production.
-  { id: 'ssh:ext-normal',  name: 'ext-normal',  source: 'external', domain: 'no.example.com',   wp: '7.0', php: '8.3', posts: 6,  users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_NORMAL,  env: 'staging', admins: 2 },
+  // [WP-04d] Its PHP version carries a distro packaging suffix — the shape
+  // `wp --info` reports on a Debian/Ubuntu-packaged PHP, where `PHP_VERSION`
+  // itself is e.g. `8.1.2-1ubuntu2.14`. It is the fixture's only hyphen case,
+  // and the only witness for the predicate's `startsWith(v + '-')` arm. Still
+  // an 8.3.x site, so every pre-WP-04d assertion about it is unchanged.
+  { id: 'ssh:ext-normal',  name: 'ext-normal',  source: 'external', domain: 'no.example.com',   wp: '7.0', php: '8.3.6-1~deb12u1', posts: 6,  users: null, lastPost: NOW - 2 * DAY,  settings: SETTINGS_NORMAL,  env: 'staging', admins: 2 },
 ];
 
 /** site_id -> number of rows in the `users` table (how WPE/external counts are read). */
@@ -642,7 +675,11 @@ describe('WP-04c: phpVersions filter — all three chains', () => {
     const results = await names({ phpVersions: ['8.2'] });
     expect(results).toContain('wpe-prod');     // wpe, stored '8.2'
     expect(results).toContain('neverposted');  // local, stored '8.2'
-    expect(results).not.toContain('myloop');   // local, '8.2.29' — exact, not prefix
+    // [WP-04d] UPDATED — this asserted `not.toContain('myloop')` under WP-04c's
+    // exact membership ('8.2' ≠ '8.2.29'). The prefix predicate matches it, and
+    // matching it is the point of the packet: a user asking for PHP 8.2 means
+    // the local site running 8.2.29 too.
+    expect(results).toContain('myloop');       // local, '8.2.29' — prefix, not exact
     expect(results).not.toContain('wpe-stg');  // 7.4
   });
 
@@ -659,8 +696,97 @@ describe('WP-04c: phpVersions filter — all three chains', () => {
     const results = await names({ phpVersions: ['8.3'] });
     expect(results).toContain('wpe-inact');
     expect(results).toContain('ext-special');
-    expect(results).toContain('ext-normal');
-    expect(results).not.toContain('newsite'); // local '8.3.1' — exact membership
+    expect(results).toContain('ext-normal');   // '8.3.6-1~deb12u1' — prefix
+    // [WP-04d] UPDATED — this asserted `not.toContain('newsite')` under WP-04c's
+    // exact membership ('8.3' ≠ '8.3.1'). Same deliberate change as above: the
+    // local chain no longer under-matches a major.minor query.
+    expect(results).toContain('newsite');      // local '8.3.1' — prefix
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-04d — the predicate is now the PREFIX match, uniformly. One test per
+// chain, each asserting its own bucket, so a chain whose predicate regresses
+// fails on its own witness and not on a sibling's.
+// ---------------------------------------------------------------------------
+
+describe('WP-04d: phpVersions is a prefix predicate on all three chains', () => {
+  it('LOCAL: a major.minor query matches patch-level rows — the behaviour WP-04d changed', async () => {
+    // The deliberate change, stated as data. Local stores a full patch version,
+    // so under WP-04c's exact membership this returned only the two rows
+    // literally stored as '8.2' and missed the three sites actually running
+    // 8.2.29 — i.e. it missed exactly the sites the user was asking about.
+    const res = await apply({ phpVersions: ['8.2'] });
+    expect(res.local.map((r: any) => r.name).sort())
+      .toEqual(['hiddensite', 'myloop', 'neverposted', 'partialset', 'regopen']);
+    // ...and does not widen past the queried minor: 8.3.1 and 7.4.33 are out.
+  });
+
+  it('WPE: a major-only query matches the stored major.minor', async () => {
+    // No fixture row is stored as '8', so under exact membership this bucket
+    // was empty — the assertion cannot pass on the old predicate.
+    const res = await apply({ phpVersions: ['8'] });
+    expect(res.wpe.map((r: any) => r.name).sort())
+      .toEqual(['wpe-inact', 'wpe-normal', 'wpe-prod', 'wpe-special']);
+    // wpe-stg (7.4) is out; wpe-nophp (NULL) is out — see the NULL pin below.
+  });
+
+  it('EXTERNAL: a major-only query matches both stored granularities', async () => {
+    const res = await apply({ phpVersions: ['8'] });
+    expect(res.external.map((r: any) => r.name).sort())
+      .toEqual(['ext-host', 'ext-normal', 'ext-special']);
+    // ...and a query that must EXCLUDE an external host, because the bucket
+    // above happens to be every external row: a chain with no phpVersions
+    // branch at all would satisfy the first assertion and fail this one.
+    const narrower = await apply({ phpVersions: ['8.3'] });
+    expect(narrower.external.map((r: any) => r.name).sort()).toEqual(['ext-normal', 'ext-special']);
+  });
+
+  it('a patch-level query still matches only that patch — the prefix widens down, never up', async () => {
+    // The other half of the semantic: '8.2.29' must not start matching the
+    // rows stored as plain '8.2'. A shorter stored value is not a match.
+    const res = await apply({ phpVersions: ['8.2.29'] });
+    expect(res.local.map((r: any) => r.name).sort()).toEqual(['hiddensite', 'myloop', 'regopen']);
+    expect(res.wpe).toHaveLength(0);
+    expect(res.external).toHaveLength(0);
+  });
+
+  it('is a version prefix, not a string prefix — "8.2.2" never matches "8.2.29"', async () => {
+    // This is why the predicate is `startsWith(v + '.')` and not
+    // `startsWith(v)`: 8.2.2 and 8.2.29 are different releases, and a bare
+    // string prefix would silently fold the second into a query for the first.
+    const res = await apply({ phpVersions: ['8.2.2'] });
+    expect(res.siteIds).toEqual([]);
+    // The same guard on ALL THREE chains at once: no row is stored as '8.',
+    // and none can start with '8..' or '8.-', so the correct predicate matches
+    // nothing. A bare `startsWith(v)` on any chain would return every 8.x site
+    // on that chain — local, WPE and external alike.
+    expect((await apply({ phpVersions: ['8.'] })).siteIds).toEqual([]);
+  });
+
+  it('matches a distro-packaged build through the hyphen arm — "8.3.6" matches "8.3.6-1~deb12u1"', async () => {
+    // ext-normal's stored value is what `wp --info` reports on a
+    // Debian/Ubuntu-packaged PHP. The `startsWith(v + '-')` arm is inherited
+    // from wpVersions (where it catches WP prereleases like "7.0-RC1") and is
+    // load-bearing here for external hosts, whose version comes from PHP_VERSION.
+    const res = await apply({ phpVersions: ['8.3.6'] });
+    expect(res.external.map((r: any) => r.name)).toEqual(['ext-normal']);
+    expect(res.local).toHaveLength(0);
+    expect(res.wpe).toHaveLength(0);
+  });
+
+  it('a NULL php_version matches nothing — unknown is excluded, never defaulted', async () => {
+    // Live, 49 of 342 active WPE rows have no php_version at all. The house
+    // rule (CLAUDE.md) is that an unknown version is never defaulted to a
+    // plausible one; here that means it can never satisfy a version query.
+    // Asserted over a major, a major.minor and a non-matching major so the pin
+    // cannot pass merely because the query happened to exclude everything.
+    for (const q of [['8'], ['8.2'], ['7']]) {
+      const res = await apply({ phpVersions: q });
+      expect([q, res.wpe.map((r: any) => r.name).includes('wpe-nophp')]).toEqual([q, false]);
+    }
+    // and the '7' query is not vacuous — it finds the row that does have 7.4:
+    expect((await names({ phpVersions: ['7'] }))).toContain('wpe-stg');
   });
 });
 
