@@ -83,8 +83,10 @@ already holds.
 **The cardinal hazard this table exists to prevent:** an eager "push it all
 live" that promotes a stale database over production's live content. Any
 plan that moves a working copy's changes upward MUST decompose into the two
-flows and treat them separately. `rb.staging-promotion` already treats the DB
-as a separate scope decision; that checkbox is this table, enforced.
+flows and treat them separately. The promotion runbooks (`rb.promotion-preflight`
+→ `rb.promotion-execute`, split from `rb.staging-promotion` at the authority
+seam in WP-20c) already treat the DB as a separate scope decision; that
+checkbox is this table, enforced.
 
 **Git-backed environments** are not a special kind: an environment's identity
 is stable; what varies is what is deployed onto it. State observations of
@@ -167,7 +169,8 @@ The model passes if ALL of the following hold:
 4. Content drafts are created in the working copy with its content-age known
    and disclosed when relevant (§3 content lineage).
 5. "Ship it" decomposes into the safe split (S4): code up through the
-   promotion runbook (gates + backup + approval per rb.staging-promotion);
+   promotion runbooks (gates + backup + approval per rb.promotion-preflight
+   → rb.promotion-execute — the WP-20c split of rb.staging-promotion);
    content published on production through its own gated path.
 6. At no point does she encounter the words entity, twin, lineage, upstream,
    or any term this document introduced. If a term leaks, the surface is

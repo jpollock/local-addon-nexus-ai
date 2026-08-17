@@ -6325,3 +6325,39 @@ not a new surface. `ChatAssemblyResult.procedure` carries the structured
 outcome for the sequencer and for §7's render shapes. All eight anchor
 checkpoints are still `narrative`: nothing may tick until 20d's four
 event/manifest attestations are authored.
+
+---
+
+**ARCHITECT — WP-20c MERGE ACCEPTED (2026-08-17).** Fidelity verified
+byte-for-byte: the committed adjudication section (`d1f2b96c`, merged at
+`22f34f9d`) is md5-identical to the architect's original, as are
+architecture.md and for-designer-v4-response.md; the conflict resolution
+(outcome note, then adjudication, both whole) was correct. The WARN's three
+decisions are RATIFIED as reported: `warnings()` as a third list (these
+documents WORK — the same reason runbookErrors is not loadErrors),
+strict-scoped like the ceiling it serves, and admitted-documents-only (a
+refused document warned about would be scolded twice for one offense).
+The estimator follow-through (PROCEDURE_TOKEN_CEILING 2,048 → 2,560) is
+noted as the kind of second constant that could have silently disagreed
+and didn't. The guided-exemption-now-vacuous record is exactly right and
+is re-stated here so it cannot be lost: at 10,240 no guided runbook is
+over ceiling, but that is an ARITHMETIC fact, not a policy one — the
+strict scoping remains the rule, and the register entry survives its own
+current irrelevance because the next authored guided paragraph can revive
+it. The skipped-column finding (ten embedding tests gate on model files;
+primary has two, worktrees have one; same 7,038 total, different split)
+and the FOURTH poisoned-cache occurrence are both promoted into
+PARALLEL_PROTOCOL with this entry — the cache note is now its own
+capitalized rule, not a parenthetical, per the report's request.
+
+**Architect post-merge actions, done with this entry:** the three
+architect-owned documents now name the split runbooks at source —
+`reconciliation-site-environment-model.md` (both references now name
+preflight → execute with the seam), `ux-brief-response.md` (A4's
+unwaivable-gate cite moved to `rb.promotion-execute ab.backup-failed`),
+`eval-stress-test-set.md` (D-02 re-scoped across containment →
+remediation with the enforceable handoff itself added to what the eval
+exercises — remediation begun without the verified snapshot is a FAIL).
+PARALLEL_PROTOCOL amended twice as above. WP-20d's prompt delivered to
+the owner with this entry, per the standing sequence. 20b remains in
+flight; its merge order stays free.

@@ -27,13 +27,27 @@ finding): some suites gate on untracked artifacts — e.g.
 model files — so a fresh worktree runs FEWER tests and still reports green.
 When comparing runs, diff the **skipped** count as well as failures; a
 skipped-count change explains a test-count delta that would otherwise read
-as a regression or a phantom gain.
+as a regression or a phantom gain. **This cuts BOTH ways** (WP-20c merge
+finding): the primary checkout can also gate-in tests the worktree skips —
+it holds both embedding model files where a worktree has one, so ten
+embedding tests move from skipped to passed across that boundary, and a
+comparison that reads only the passed column sees a phantom regression of
+exactly ten. Same total, different split; read the skipped column first.
 
 **A worktree test result that the primary checkout cannot reproduce is
 suspect in BOTH directions** (WP-15 finding): a poisoned ts-jest cache
 reported a failure that did not exist. Before diagnosing a
 worktree-only failure as real, re-run the suite with `--no-cache`; before
 trusting a worktree-only green, likewise.
+
+**THE POISONED ts-jest CACHE IS NOT A PARENTHETICAL — four packets, four
+occurrences** (WP-15, WP-20a, WP-20c ×2). The signature is always the same:
+EXACTLY ONE unrelated suite fails to parse (its own shebang, its own first
+line) while everything else is green, reproducibly with the cache and never
+without it. The move is `npx jest --clearCache`, THEN re-measure — before
+believing the red, before filing a finding, before touching the code it
+points at. A parse failure in one suite you did not edit is the cache until
+proven otherwise.
 
 **A "dormant" branch may have already shipped** (WP-22 finding): before
 treating branch work as stalled prior art, run

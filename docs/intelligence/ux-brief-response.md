@@ -33,7 +33,8 @@ instrument conductors when they are built. Registered as a candidate ADR for
 the instruments milestone.
 
 **A4 · "I won't offer to skip the backup."** That sentence is our
-unwaivable-gate doctrine (BackupGate, rb.staging-promotion ab.backup-failed)
+unwaivable-gate doctrine (BackupGate, rb.promotion-execute ab.backup-failed
+— the execute half of the WP-20c split of rb.staging-promotion)
 rendered in the first person. Keeping it verbatim.
 
 ## 2. Section 6, answered — the capability scorecard
