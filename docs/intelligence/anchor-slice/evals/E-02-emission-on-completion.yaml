@@ -30,7 +30,9 @@ expected:
     - ledger contains task.context_assembled with a bundle manifest (policy version, runbook hash, freshness report)
     - every gated tool call has a task.action_executed event with actor.id + actor.via populated (ADR-14)
     - task.outcome_recorded exists per target site with result (updated/skipped/failed + versions)
-    - task.rationale_recorded exists and includes: filter applied, canary choice + reason, history findings
+    # Quoted: an unquoted ": " makes YAML read this sequence item as a MAPPING,
+    # not a string, so the criterion silently changed shape (WP-13 finding).
+    - "task.rationale_recorded exists and includes: filter applied, canary choice + reason, history findings"
     - all events share the run's correlation id; causation chains from approval -> actions
     - every envelope validates against event-envelope.schema.json
   must_not:
