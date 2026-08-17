@@ -235,11 +235,17 @@ export function resolveCapabilityGrants(opts: {
     if (entry?.runbookId && entry.runbookId !== rb.id) {
       // A grant naming another document is not a grant for this one. Silently
       // re-pointing it at whatever serves the capability today would transfer
-      // an authority that was reviewed against a different file.
+      // an authority that was reviewed against a different file — which is
+      // exactly how a standing grant would survive a runbook SPLIT and arm half
+      // a procedure nobody reviewed in its split form (WP-20c gate ruling 1).
+      //
+      // Classed as INTEGRITY, not availability, and the word is the ruled one:
+      // a runbook does serve this capability, it is simply not the reviewed one.
+      // `runbook-unavailable` is reserved for "nothing serves this at all".
       disarmed.push({
         capability: rb.capability,
         runbookId: entry.runbookId,
-        reason: 'runbook-unavailable',
+        reason: 'hash-mismatch',
         detail: `the grant names ${entry.runbookId}; ${rb.capability} is served by ${rb.id}`,
       });
       return;

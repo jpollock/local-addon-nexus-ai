@@ -64,6 +64,26 @@ function events(topic: string): EventEnvelope[] {
   return core.ledger.query({ topicPrefix: topic, limit: 100 });
 }
 
+function issuedFor(capability: string): EventEnvelope[] {
+  return events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === capability);
+}
+
+/**
+ * Assertions are ANCHOR-SCOPED, never a census of the shipped set. The set grows
+ * whenever a strict runbook is added or split — WP-20c splits two runbooks into
+ * four — and a test that counted grants would go red on a change that is not a
+ * change to any rule here.
+ */
+function capabilitiesOf(grants: { capability: string }[]): string[] {
+  return grants.map((g) => g.capability);
+}
+
+function anchorGrant(grants: { capability: string }[]) {
+  return grants.find((g) => g.capability === ANCHOR) as ReturnType<
+    typeof resolveCapabilityGrants
+  >['grants'][number];
+}
+
 /** Settings live where every other reader finds them: registryStorage. */
 function writeSettings(grants?: CapabilityGrantSetting[]) {
   kv.set(STORAGE_KEYS.SETTINGS, grants ? { capabilityGrants: grants } : {});
@@ -96,9 +116,18 @@ describe('the shipped grant set', () => {
   test('covers the strict runbooks the registry SERVES, and nothing else', () => {
     const { grants } = resolve();
 
-    expect(grants.map((g) => g.capability)).toEqual([ANCHOR]);
-    expect(grants[0].runbookId).toBe('rb.bulk-plugin-update');
-    expect(grants[0].strictness).toBe('strict');
+    expect(capabilitiesOf(grants)).toContain(ANCHOR);
+    expect(anchorGrant(grants).runbookId).toBe('rb.bulk-plugin-update');
+    // Every grant, not just the anchor's: the shipped set grows whenever a
+    // strict runbook is added or split (WP-20c splits two into four), and the
+    // rule is what must hold — never the census.
+    for (const g of grants) expect(g.strictness).toBe('strict');
+    expect(capabilitiesOf(grants).sort()).toEqual(
+      core
+        .law!.runbooks.runbooks({ strictness: 'strict' })
+        .map((rb) => rb.capability)
+        .sort()
+    );
   });
 
   test('ships the guided runbooks UNGRANTED — nothing is obliged to carry them whole', () => {
@@ -106,14 +135,14 @@ describe('the shipped grant set', () => {
     // both shipped ones are over the strict ceiling as whole documents. A
     // shipped grant for them would hand a later delivery path an 8 KB+ payload.
     const { grants } = resolve();
-    expect(grants.map((g) => g.capability)).not.toContain('cap.wpe_pull');
-    expect(grants.map((g) => g.capability)).not.toContain('cap.diagnose_site');
+    expect(capabilitiesOf(grants)).not.toContain('cap.wpe_pull');
+    expect(capabilitiesOf(grants)).not.toContain('cap.diagnose_site');
   });
 
   test('pins the hash the registry computed, not one of its own', () => {
     const { grants } = resolve();
-    expect(grants[0].runbookHash).toBe(core.law!.runbooks.byCapability(ANCHOR)!.hash);
-    expect(grants[0].runbookHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(anchorGrant(grants).runbookHash).toBe(core.law!.runbooks.byCapability(ANCHOR)!.hash);
+    expect(anchorGrant(grants).runbookHash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
   test("carries the runbook's own scope tokens VERBATIM, never coerced to the three remote environments", () => {
@@ -122,7 +151,7 @@ describe('the shipped grant set', () => {
     // every external staging host (WP-20a finding 5: scope.environments is not
     // a universal vocabulary across the shipped set).
     const { grants } = resolve();
-    expect(grants[0].scope.environments).toEqual(['local', 'wpe_staging', 'wpe_development']);
+    expect(anchorGrant(grants).scope.environments).toEqual(['local', 'wpe_staging', 'wpe_development']);
   });
 });
 
@@ -134,7 +163,7 @@ describe('the settings overlay', () => {
   test('enabled: false disarms the capability and says why', () => {
     const { grants, disarmed } = resolve([{ capability: ANCHOR, enabled: false }]);
 
-    expect(grants).toEqual([]);
+    expect(capabilitiesOf(grants)).not.toContain(ANCHOR);
     expect(disarmed).toEqual([
       expect.objectContaining({ capability: ANCHOR, reason: 'disabled-by-settings' }),
     ]);
@@ -145,7 +174,7 @@ describe('the settings overlay', () => {
       { capability: ANCHOR, runbookHash: 'sha256:reviewedadifferentdocument' },
     ]);
 
-    expect(grants).toEqual([]);
+    expect(capabilitiesOf(grants)).not.toContain(ANCHOR);
     expect(disarmed[0].reason).toBe('hash-mismatch');
     // The remedy needs both hashes, per §6(b) — a mismatch message that names
     // neither cannot be acted on.
@@ -154,24 +183,29 @@ describe('the settings overlay', () => {
   });
 
   test('a grant for a capability nothing serves disarms, naming it rather than throwing', () => {
-    const { grants, disarmed } = resolve([{ capability: 'cap.incident_response' }]);
+    const { grants, disarmed } = resolve([{ capability: 'cap.nothing-serves-this' }]);
 
-    expect(grants.map((g) => g.capability)).toEqual([ANCHOR]); // the shipped one survives
+    expect(capabilitiesOf(grants)).toContain(ANCHOR); // the shipped ones survive
     expect(disarmed).toEqual([
-      expect.objectContaining({ capability: 'cap.incident_response', reason: 'runbook-unavailable' }),
+      expect.objectContaining({ capability: 'cap.nothing-serves-this', reason: 'runbook-unavailable' }),
     ]);
   });
 
   test('an explicit grant CAN cover a guided runbook — the shipped-set rule is a default, not a ban', () => {
     const { grants } = resolve([{ capability: 'cap.wpe_pull' }]);
-    expect(grants.map((g) => g.capability).sort()).toEqual([ANCHOR, 'cap.wpe_pull']);
+    expect(capabilitiesOf(grants)).toContain('cap.wpe_pull');
+    expect(capabilitiesOf(grants)).toContain(ANCHOR);
   });
 
   test('a grant naming a different runbook for the capability is disarmed, not silently re-pointed', () => {
+    // Classed as INTEGRITY (`hash-mismatch`), not availability: a runbook DOES
+    // serve the capability, it is not the one that was reviewed. This is the
+    // mechanism that kills a standing grant across a runbook split rather than
+    // letting it arm half a procedure by name coincidence (WP-20c gate ruling 1).
     const { grants, disarmed } = resolve([{ capability: ANCHOR, runbookId: 'rb.some-other-document' }]);
 
-    expect(grants).toEqual([]);
-    expect(disarmed[0].reason).toBe('runbook-unavailable');
+    expect(capabilitiesOf(grants)).not.toContain(ANCHOR);
+    expect(disarmed[0].reason).toBe('hash-mismatch');
     expect(disarmed[0].detail).toContain('rb.some-other-document');
   });
 });
@@ -188,7 +222,7 @@ describe('control.grant.* — the first producer of this family', () => {
   test('the shipped grant is issued once, with the capability, the runbook and its pin', () => {
     sync();
 
-    const issued = events(GRANT_ISSUED_TOPIC);
+    const issued = issuedFor(ANCHOR);
     expect(issued).toHaveLength(1);
     expect(issued[0].payload).toMatchObject({
       capability: ANCHOR,
@@ -202,7 +236,7 @@ describe('control.grant.* — the first producer of this family', () => {
 
   test('issuance is a platform act: a system actor, an authored source, and the satellite via ADR-14', () => {
     sync();
-    const [ev] = events(GRANT_ISSUED_TOPIC);
+    const [ev] = issuedFor(ANCHOR);
 
     expect(ev.actor.kind).toBe('system');
     expect(ev.actor.id).toMatch(/^act_[a-z0-9_-]+$/);
@@ -211,20 +245,21 @@ describe('control.grant.* — the first producer of this family', () => {
   });
 
   test('a second sync over an unchanged world emits nothing — change, not repetition', () => {
+    const before = events(GRANT_ISSUED_TOPIC).length;
     sync();
     sync();
-    expect(events(GRANT_ISSUED_TOPIC)).toHaveLength(1);
+    expect(events(GRANT_ISSUED_TOPIC)).toHaveLength(before);
     expect(events(GRANT_REVOKED_TOPIC)).toHaveLength(0);
   });
 
   test('switching a grant off emits a revocation chained to the issuance that granted it', () => {
     sync();
-    const issuedId = events(GRANT_ISSUED_TOPIC)[0].id;
+    const issuedId = issuedFor(ANCHOR)[0].id;
 
     writeSettings([{ capability: ANCHOR, enabled: false }]);
     sync();
 
-    const revoked = events(GRANT_REVOKED_TOPIC);
+    const revoked = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === ANCHOR);
     expect(revoked).toHaveLength(1);
     expect(revoked[0].payload).toMatchObject({ capability: ANCHOR, reason: 'disabled-by-settings' });
     // The chain is the point: "revoked" is only readable as an answer to a
@@ -237,7 +272,7 @@ describe('control.grant.* — the first producer of this family', () => {
     writeSettings([{ capability: ANCHOR, enabled: false }]);
     sync();
 
-    const [ev] = events(GRANT_REVOKED_TOPIC);
+    const [ev] = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === ANCHOR);
     expect(ev.actor.kind).toBe('human');
     expect(ev.actor.id).toBe(core.identity!.actor().id);
     expect(ev.source).toEqual({ class: 'intent', system: 'settings:capability-grants', trust: 'elicited' });
@@ -248,7 +283,7 @@ describe('control.grant.* — the first producer of this family', () => {
     writeSettings([{ capability: ANCHOR, runbookHash: 'sha256:not-what-shipped' }]);
     sync();
 
-    const [ev] = events(GRANT_REVOKED_TOPIC);
+    const [ev] = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === ANCHOR);
     expect(ev.payload).toMatchObject({ reason: 'hash-mismatch' });
     expect(ev.actor.kind).toBe('system');
     expect(ev.source.class).toBe('platform');
@@ -256,16 +291,18 @@ describe('control.grant.* — the first producer of this family', () => {
 
   test('re-pinning the same capability to a different document issues again, chained to the old grant', () => {
     sync();
-    const first = events(GRANT_ISSUED_TOPIC)[0];
+    const first = issuedFor(ANCHOR)[0];
 
     // The marker holds the old pin; the world now serves a different hash.
-    const marker = kv.get(GRANTS_STORAGE_KEY) as { grants: { runbookHash: string }[] };
-    marker.grants[0].runbookHash = 'sha256:whatwasgrantedbefore';
+    const marker = kv.get(GRANTS_STORAGE_KEY) as {
+      grants: { capability: string; runbookHash: string }[];
+    };
+    marker.grants.find((g) => g.capability === ANCHOR)!.runbookHash = 'sha256:whatwasgrantedbefore';
     kv.set(GRANTS_STORAGE_KEY, marker);
 
     sync();
 
-    const issued = events(GRANT_ISSUED_TOPIC);
+    const issued = issuedFor(ANCHOR);
     expect(issued).toHaveLength(2);
     expect(issued[1].payload).toMatchObject({
       reason: 'repinned',
@@ -291,11 +328,10 @@ describe('the storage marker', () => {
       grants: { capability: string; runbookHash: string; eventId: string }[];
     };
     expect(marker.version).toBe(1);
-    expect(marker.grants).toHaveLength(1);
-    expect(marker.grants[0]).toMatchObject({
+    expect(marker.grants.find((g) => g.capability === ANCHOR)).toMatchObject({
       capability: ANCHOR,
       runbookHash: core.law!.runbooks.byCapability(ANCHOR)!.hash,
-      eventId: events(GRANT_ISSUED_TOPIC)[0].id,
+      eventId: issuedFor(ANCHOR)[0].id,
     });
   });
 
@@ -331,9 +367,9 @@ describe('the storage marker', () => {
       dataDir: dir,
     })!;
 
-    expect(events(GRANT_ISSUED_TOPIC)).toHaveLength(0);
+    expect(issuedFor(ANCHOR)).toHaveLength(0);
     sync();
-    expect(events(GRANT_ISSUED_TOPIC)).toHaveLength(0);
+    expect(issuedFor(ANCHOR)).toHaveLength(0);
   });
 });
 
@@ -346,8 +382,8 @@ describe('grantedRunbooks — the join WP-20c and WP-20d read', () => {
     const { grants } = resolve();
     const rbs = grantedRunbooks(core.law!.runbooks, grants);
 
-    expect(rbs.map((r) => r.id)).toEqual(['rb.bulk-plugin-update']);
-    expect(rbs[0].body).toContain('Bulk plugin update'); // the real document, not a stub
+    expect(rbs.map((r) => r.id)).toContain('rb.bulk-plugin-update');
+    expect(rbs.find((r) => r.id === 'rb.bulk-plugin-update')!.body).toContain('Bulk plugin update');
   });
 
   test('refuses to hand over a document whose hash is not the one the grant pins', () => {
@@ -366,7 +402,11 @@ describe('grantedRunbooks — the join WP-20c and WP-20d read', () => {
   });
 
   test('with every grant switched off it returns nothing — the additive-parity floor', () => {
-    const { grants } = resolve([{ capability: ANCHOR, enabled: false }]);
+    const off = core.law!.runbooks
+      .runbooks({ strictness: 'strict' })
+      .map((rb) => ({ capability: rb.capability, enabled: false }));
+    const { grants } = resolve(off);
+    expect(grants).toEqual([]);
     expect(grantedRunbooks(core.law!.runbooks, grants)).toEqual([]);
   });
 });
@@ -422,8 +462,7 @@ describe('the parity floor', () => {
 
     // The next sync, with a working emitter, announces it.
     sync();
-    expect(events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === ANCHOR).length)
-      .toBeGreaterThan(0);
+    expect(issuedFor(ANCHOR).length).toBeGreaterThan(0);
   });
 
   test("one grant's failed announcement does not stop the next grant's", () => {
@@ -463,8 +502,12 @@ describe('the parity floor', () => {
 
   test('the process-wide accessor carries what the last sync resolved', () => {
     sync();
-    expect(getCapabilityGrants().map((g) => g.capability)).toEqual([ANCHOR]);
-    writeSettings([{ capability: ANCHOR, enabled: false }]);
+    expect(capabilitiesOf(getCapabilityGrants())).toContain(ANCHOR);
+    writeSettings(
+      core
+        .law!.runbooks.runbooks({ strictness: 'strict' })
+        .map((rb) => ({ capability: rb.capability, enabled: false }))
+    );
     sync();
     expect(getCapabilityGrants()).toEqual([]);
   });

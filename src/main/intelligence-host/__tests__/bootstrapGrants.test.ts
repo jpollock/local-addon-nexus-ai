@@ -21,6 +21,12 @@ import {
 
 const ANCHOR = 'cap.bulk_plugin_update';
 
+function issuedFor(core: { ledger: { query: (o: object) => { payload: Record<string, unknown> }[] } }, capability: string) {
+  return core.ledger
+    .query({ topicPrefix: GRANT_ISSUED_TOPIC, limit: 100 })
+    .filter((e) => e.payload.capability === capability);
+}
+
 function boot(kv: Map<string, unknown>, dir: string) {
   return initIntelligenceCore({
     storage: { get: (k) => kv.get(k) ?? null, set: (k, v) => kv.set(k, v) },
@@ -34,9 +40,11 @@ test('bootstrap materializes the shipped grant, records it, and remembers it', (
   const kv = new Map<string, unknown>();
   const core = boot(kv, dir);
 
-  expect(getCapabilityGrants().map((g) => g.capability)).toEqual([ANCHOR]);
+  expect(getCapabilityGrants().map((g) => g.capability)).toContain(ANCHOR);
 
-  const issued = core.ledger.query({ topicPrefix: GRANT_ISSUED_TOPIC, limit: 10 });
+  // Anchor-scoped, never a census: the shipped set grows whenever a strict
+  // runbook is added or split, and this suite is about the WIRING.
+  const issued = issuedFor(core, ANCHOR);
   expect(issued).toHaveLength(1);
   expect(issued[0].payload).toMatchObject({ capability: ANCHOR, reason: 'materialized' });
   expect(kv.get(GRANTS_STORAGE_KEY)).toBeDefined();
@@ -51,8 +59,8 @@ test('a second boot over the same storage issues nothing new — one grant, not 
   boot(kv, dir).close();
   const second = boot(kv, dir);
 
-  expect(second.ledger.query({ topicPrefix: GRANT_ISSUED_TOPIC, limit: 10 })).toHaveLength(1);
-  expect(getCapabilityGrants().map((g) => g.capability)).toEqual([ANCHOR]);
+  expect(issuedFor(second, ANCHOR)).toHaveLength(1);
+  expect(getCapabilityGrants().map((g) => g.capability)).toContain(ANCHOR);
 
   second.close();
   fs.rmSync(dir, { recursive: true, force: true });

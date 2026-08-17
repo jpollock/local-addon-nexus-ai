@@ -40,6 +40,10 @@ import { Runbook } from '../law/types';
  * suite already pins how a document becomes this shape.
  */
 function runbook(over: Partial<Runbook> = {}): Runbook {
+  // Cast, deliberately: arming reads six of this type's fields, and a fixture
+  // that must be exhaustive would break whenever a parallel packet adds a field
+  // it does not read (WP-20c adds `canonicalText`). The established `as never`
+  // partial-mock pattern in this subsystem, applied to a value type.
   return {
     id: 'rb.bulk-plugin-update',
     version: '1.0.0',
@@ -59,7 +63,7 @@ function runbook(over: Partial<Runbook> = {}): Runbook {
     body: '# Bulk plugin update\n\nCanary first.\n',
     frontmatter: {},
     ...over,
-  };
+  } as Runbook;
 }
 
 describe('tokenizeTurnText', () => {
