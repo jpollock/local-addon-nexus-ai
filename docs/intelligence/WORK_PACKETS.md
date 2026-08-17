@@ -5520,7 +5520,7 @@ then `./dev-reload.sh` rebuilt it back to Electron 42.2.0 for the real-app pass.
 
 ---
 
-### [ ] WP-20a · Runbook registry  *(phase 2 of WP-20, sub-packet 1 of 5)*
+### [x] WP-20a · Runbook registry  *(phase 2 of WP-20, sub-packet 1 of 5)*
 
 **ANNOUNCED 2026-08-17 — CORE LOCK TAKEN** (`src/intelligence/law/` plus
 `src/main/intelligence-host/permissionsMirror.ts`, which is serialized with the
