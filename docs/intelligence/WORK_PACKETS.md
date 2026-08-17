@@ -5484,3 +5484,36 @@ shell's Node (measured **25.9.0 → ABI 141**; `.nvmrc`/CI is 22.16.0 → 127), 
 then `./dev-reload.sh` rebuilt it back to Electron 42.2.0 for the real-app pass.
 **To run jest again: `npm test`** (the `pretest` hook flips it back), never bare
 `npx jest`.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-22b (appended by the architect session).**
+
+- **WP-22b ACCEPTED.** Merge d7864d35; integration lock taken and released
+  cleanly; the ipc edit is 8 lines as scoped. Two doctrinal entries from
+  the findings:
+  1. **"A hub's transitive import graph is part of its interface, and the
+     lock doesn't bound it"** — the 8-line wiring pulled better-sqlite3
+     into ipc-handlers.ts and broke an unrelated suite's three-function fs
+     mock at import time, with an error naming neither file. The fix
+     belongs in the mock (`jest.requireActual` spread), never around the
+     import. Future integration-lock packets: after wiring a hub, run the
+     hub's dependent suites, not just your own.
+  2. The M01 survivor: a guard that LOOKS redundant against today's
+     producer can be load-bearing against a pass-through shape — pinned
+     with exactly the payload that would have lied ("pulled from the live
+     site" over a no-sync status).
+- The four-state taxonomy is RATIFIED as vocabulary doctrine: `null` (core
+  dark) is a fact about Nexus AI; no-sync / ambiguous / unlinked are facts
+  about the copy — and the chip renders only the state it can stand
+  behind, omitting rather than saying "unknown."
+- **AgentRegistry datapoint three** (uncompiled → four red; compiling the
+  SAME worktree → all green) strengthens the lib-dependency root cause and
+  isolates WP-19b's post-compile reproduction as the single outlier WP-23
+  must explain. Also recorded, because it is true and humbling: **"a rule
+  added mid-flight reaches nobody already working"** — protocol amendments
+  protect future launches only; both of this packet's baseline traps hit
+  an agent whose worktree predated their entries.
+- The zero-sync honesty is accepted as shipped-correct: the chip's first
+  production appearance awaits the first real pull — which is also WP-14's
+  producer's first production event. One action lights both.
