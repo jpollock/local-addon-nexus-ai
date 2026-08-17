@@ -65,8 +65,15 @@ function claimingCheckpoint(runbook: Runbook, toolName: string): number {
   return runbook.checkpoints.findIndex((c) => c.tools.some((t) => t.name === toolName));
 }
 
-/** What the ledger would have to hold for this checkpoint to be attested. */
-function remedyFor(checkpoint: RunbookCheckpoint): string {
+/**
+ * What the ledger would have to hold for this checkpoint to be attested.
+ *
+ * Exported (WP-20e) because the audit view's SPEC column asks the same question
+ * this refusal answers: *what would prove this step happened?* Two answers to
+ * one question would let the refusal a model reads and the row a human reads
+ * disagree about the same checkpoint.
+ */
+export function attestationRemedy(checkpoint: RunbookCheckpoint): string {
   const evidence = checkpoint.evidence ?? {};
   if (checkpoint.attest === 'manifest') {
     return `a ${evidence.topic ?? 'task.context.assembled'} manifest recording that the episodic history was retrieved for this task`;
@@ -107,7 +114,7 @@ function refusal(
     ? ` ${checkpoint.id} was DENIED and no later approval was recorded. A denial ends the run: ` +
       'record it and stop — do not re-propose the same plan in this session, and do not reach ' +
       'the same effect through another tool.'
-    : ` What would attest it: ${remedyFor(checkpoint)}.`;
+    : ` What would attest it: ${attestationRemedy(checkpoint)}.`;
 
   return {
     capability,

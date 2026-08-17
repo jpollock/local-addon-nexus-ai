@@ -66,6 +66,15 @@ export interface ProcedureCursorState {
   denied: string[];
   /** True when the ledger could not be read. Fail-closed for the sequenced capability only. */
   fault: boolean;
+  /**
+   * WP-20e: the event that attested each attested checkpoint, by checkpoint id.
+   *
+   * The audit view's whole claim is "how do you know that?", and an attestation
+   * with no event id behind it answers that question with a shrug. Populated
+   * only for checkpoints in `attested` — never for narrative ones, which have no
+   * event by definition, and never for denied ones, whose evidence says no.
+   */
+  evidence?: Record<string, { eventId: string; topic: string }>;
 }
 
 /** Sessions → their current run. Host state, cleared on disarm or session end. */
@@ -173,14 +182,17 @@ export function foldProcedureCursor(
   // action it belongs to, and a FAILED outcome must not attest anything (the
   // anchor runbook's ab.backup-failed is "not waivable").
   const actionsById = new Map<string, string>(); // action event id → tool
-  const succeeded = new Set<string>(); // tool names with at least one successful outcome
+  const succeeded = new Map<string, string>(); // tool → the ACTION event id that proves it
   for (const event of events) {
     const payload = payloadOf(event);
     const tool = typeof payload.tool === 'string' ? payload.tool : undefined;
     if (event.topic === ACTION_TOPIC && tool) actionsById.set(event.id, tool);
     if (event.topic === OUTCOME_TOPIC && payload.result === 'success') {
       const actionTool = event.causation ? actionsById.get(event.causation) : undefined;
-      if (actionTool) succeeded.add(actionTool);
+      // The ACTION is what the checkpoint's `evidence.topic` names, so that is
+      // the id a reader should be able to open. The outcome is how we know it
+      // succeeded; it is the proof, not the subject.
+      if (actionTool && !succeeded.has(actionTool)) succeeded.set(actionTool, event.causation!);
     }
   }
 
@@ -188,11 +200,13 @@ export function foldProcedureCursor(
   // proceed after a denial simply because an earlier turn had approved
   // something — the exact shape ab.approval-denied forbids.
   const latestDecision = new Map<string, string>();
+  const decisionEvent = new Map<string, string>();
   for (const event of events) {
     if (event.topic !== RATIONALE_TOPIC) continue;
     const payload = payloadOf(event);
     if (typeof payload.tool === 'string' && typeof payload.decision === 'string') {
       latestDecision.set(payload.tool, payload.decision);
+      decisionEvent.set(payload.decision, event.id);
     }
   }
   const decisions = [...latestDecision.values()];
@@ -200,7 +214,7 @@ export function foldProcedureCursor(
   // The assembler's own retrieval — the SUPPLY side, which is all a manifest
   // attestation ever claims. `returned: 0` still attests: the query ran, and an
   // empty history is a finding rather than a failure to consult.
-  const ranEpisodicRetrieval = events.some((event) => {
+  const retrievalManifest = events.find((event) => {
     if (event.topic !== MANIFEST_TOPIC) return false;
     const retrieval = payloadOf(event).retrieval;
     return (
@@ -211,24 +225,35 @@ export function foldProcedureCursor(
 
   const attested: string[] = [];
   const denied: string[] = [];
+  const evidenceById: Record<string, { eventId: string; topic: string }> = {};
 
   for (const checkpoint of checkpoints) {
     if (checkpoint.attest === 'narrative') continue;
 
     if (checkpoint.attest === 'manifest') {
-      if (ranEpisodicRetrieval) attested.push(checkpoint.id);
+      if (retrievalManifest) {
+        attested.push(checkpoint.id);
+        evidenceById[checkpoint.id] = { eventId: retrievalManifest.id, topic: MANIFEST_TOPIC };
+      }
       continue;
     }
 
     const evidence = checkpoint.evidence ?? {};
     if (evidence.topic === RATIONALE_TOPIC) {
       const wanted = evidence.decision ?? 'approved';
-      if (decisions.includes(wanted)) attested.push(checkpoint.id);
-      else if (decisions.length > 0) denied.push(checkpoint.id);
+      if (decisions.includes(wanted)) {
+        attested.push(checkpoint.id);
+        const eventId = decisionEvent.get(wanted);
+        if (eventId) evidenceById[checkpoint.id] = { eventId, topic: RATIONALE_TOPIC };
+      } else if (decisions.length > 0) denied.push(checkpoint.id);
       continue;
     }
     if (evidence.topic === ACTION_TOPIC && evidence.tool) {
-      if (succeeded.has(evidence.tool)) attested.push(checkpoint.id);
+      const eventId = succeeded.get(evidence.tool);
+      if (eventId) {
+        attested.push(checkpoint.id);
+        evidenceById[checkpoint.id] = { eventId, topic: ACTION_TOPIC };
+      }
       continue;
     }
     // An `event` checkpoint whose evidence names a topic this fold cannot
@@ -237,5 +262,5 @@ export function foldProcedureCursor(
     // narrower case of a topic no reader implements yet.
   }
 
-  return { attested, narrative, denied, fault: false };
+  return { attested, narrative, denied, fault: false, evidence: evidenceById };
 }
