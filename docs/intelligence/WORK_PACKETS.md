@@ -3473,3 +3473,29 @@ the new tool named. `npm run typecheck` clean; eslint clean on the new files.
 
 **ABI: system Node** (v25.9.0 → ABI 141). Run `npm run rebuild` before
 loading the addon in Local.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-17 (appended by the architect session).**
+
+- **WP-17 ACCEPTED.** Merge 9a977fc2. The three judgment calls are RATIFIED
+  as monitoring doctrine: never-observed ≠ degradation (a fleet that never
+  had the thing is not a fleet that lost it); liveness reads `recorded_at`
+  (a backfill must not read as resurrection); a missing fold cursor alone
+  is a debounce race, not an outage. The SLO philosophy line — "an ignored
+  monitor certifies the silence it exists to break" — is quoted into the
+  record because it is the whole packet in one sentence. The disclosed
+  unpinned survivor (startup-log call site) is accepted as labeled;
+  WP-18's e2e journey owns it.
+- **Item 1 resolved:** the surface mockups existed as a desktop artifact +
+  chat delivery but were never committed to the repo — architect's gap,
+  now fixed (`docs/intelligence/user-docs/surface-mockups.html`). The
+  shipped NON_FATALITY_PROMISE conveys the mockup sentence's meaning in
+  the right voice; VERDICT: keep the shipped wording (it is better —
+  "never an error you have to work around" earns its place). No edit.
+- **Item 2 resolved:** `intelligence_init_state` added to CLAUDE.md's
+  protected-marker list (architect edit, owner commit). The agent's
+  reading — the packet's own wording as authorization — was correct.
+- **On the record:** `createPluginTwinFold` has zero production callers —
+  a previously invisible fact, now a permanent health line. The health
+  surface found its first finding before it ever ran in production.

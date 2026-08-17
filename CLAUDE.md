@@ -1082,7 +1082,9 @@ Invariants — violating any of these is a defect even if tests pass:
   records change, not repetition. New producers that skip the gate will
   flood the ledger on every sync cycle.
 - **Do not touch storage marker keys** (`intelligence_backfill_*`,
-  `intelligence_satellite_id`) except through the modules that own them.
+  `intelligence_satellite_id`, `intelligence_init_state`) except through the
+  modules that own them. (`intelligence_init_state` — WP-17: persisted init
+  outcomes; last failure is deliberately never cleared by a later success.)
 - **Everything on this seam is non-fatal by construction.** Intelligence-layer
   failures must never break the legacy event pipeline or any existing tool —
   wrap, log, degrade. If your change can throw into a caller that predates

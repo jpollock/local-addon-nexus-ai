@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus AI — Surface Concepts (Track B №3)</title>
+<style>
+  :root{
+    --bg:#f7f7f8; --surface:#ffffff; --surface2:#f1f1f3; --border:#e3e3e7;
+    --ink:#1a1a1f; --ink2:#55555e; --ink3:#8a8a94;
+    --accent:#2563eb; --accent-bg:#eff4ff;
+    --good:#1a7f4b; --good-bg:#e8f5ee;
+    --warn:#9a6700; --warn-bg:#fdf3d7;
+    --serious:#b3261e; --serious-bg:#fdeceb;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+    --radius:10px;
+  }
+  [data-theme="dark"]{
+    --bg:#131318; --surface:#1c1c23; --surface2:#24242c; --border:#33333d;
+    --ink:#ececf1; --ink2:#a8a8b3; --ink3:#71717c;
+    --accent:#7ba3f7; --accent-bg:#1e2942;
+    --good:#4ade80; --good-bg:#12291c;
+    --warn:#fbbf24; --warn-bg:#2e2510;
+    --serious:#f87171; --serious-bg:#31191b;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{font:15px/1.55 -apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--ink);padding:28px 20px 60px}
+  .wrap{max-width:860px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  h1{font-size:19px;font-weight:650}
+  .sub{color:var(--ink3);font-size:13px;margin-bottom:18px}
+  .theme-btn{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:13px;color:var(--ink2);cursor:pointer}
+  nav{display:flex;gap:6px;margin-bottom:22px;flex-wrap:wrap}
+  nav button{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:13.5px;color:var(--ink2);cursor:pointer}
+  nav button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  section{display:none}section.on{display:block}
+  .note{font-size:12.5px;color:var(--ink3);margin:14px 2px 26px;border-left:3px solid var(--border);padding-left:10px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;border-radius:14px;padding:2px 10px}
+  .pill.good{color:var(--good);background:var(--good-bg)}
+  .pill.warn{color:var(--warn);background:var(--warn-bg)}
+  .pill.serious{color:var(--serious);background:var(--serious-bg)}
+  .pill.info{color:var(--accent);background:var(--accent-bg)}
+  .muted{color:var(--ink2)} .faint{color:var(--ink3);font-size:13px}
+  .mono{font-family:var(--mono);font-size:13px}
+  .btn{border:none;border-radius:8px;padding:8px 18px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{background:var(--surface2);color:var(--ink2)}
+  .rowline{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)}
+  .rowline:last-child{border-bottom:none}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:var(--ink3);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:1px solid var(--border)}
+  td{padding:9px 10px;border-bottom:1px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  .statusgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:640px){.statusgrid{grid-template-columns:1fr}}
+  .kv{font-size:14px}.kv b{font-weight:600}
+  .split-col{border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-top:10px}
+  .split-col.up{border-left:3px solid var(--good)}
+  .split-col.hold{border-left:3px solid var(--warn)}
+  .site-group{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+  .site-head{background:var(--surface2);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:600}
+  .env-row{display:flex;justify-content:space-between;align-items:center;padding:9px 16px;border-top:1px solid var(--border);background:var(--surface);font-size:14px}
+  .env-name{display:flex;align-items:center;gap:8px}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .dot.live{background:var(--good)} .dot.env{background:var(--accent)} .dot.copy{background:var(--ink3)}
+</style>
+</head>
+<body data-theme="light">
+<div class="wrap">
+<header><h1>Nexus AI — surface concepts</h1>
+<button class="theme-btn" onclick="document.body.dataset.theme=document.body.dataset.theme==='light'?'dark':'light'">◐ theme</button></header>
+<div class="sub">Track B №3 · lo-fi concepts rendering Controlled Vocabulary v1 · for design review, not implementation</div>
+<nav>
+  <button class="on" data-t="s1" onclick="go(this)">1 · Site status</button>
+  <button data-t="s2" onclick="go(this)">2 · The safe split</button>
+  <button data-t="s3" onclick="go(this)">3 · Health</button>
+  <button data-t="s4" onclick="go(this)">4 · Sites list</button>
+</nav>
+
+<!-- ── 1 · WHERE AM I ─────────────────────────────── -->
+<section id="s1" class="on">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px">
+      <div><div style="font-size:16px;font-weight:650">Alpine Outfitters</div>
+      <div class="faint">your copy · on this Mac</div></div>
+      <span class="pill good">✓ safe to experiment</span>
+    </div>
+    <div class="rowline kv"><span class="muted">Code</span><span>the <span class="mono">campaign-acf</span> branch</span></div>
+    <div class="rowline kv"><span class="muted">Content</span><span>pulled from <b>the live site</b> · <span class="pill warn">⚠ 11 days ago</span></span></div>
+    <div class="rowline kv"><span class="muted">The live site</span><span class="muted">not affected by anything you do here</span></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn ghost">Refresh content from the live site</button>
+      <button class="btn ghost">What's changed there?</button>
+    </div>
+  </div>
+  <div class="note">S3's four-line answer as a card. The ⚠ rides the content AGE, not the copy itself — the copy is fine; its snapshot is old. Both actions are reads/pulls (safe); nothing here offers a push. Also renders inline in chat as plain text when asked "where am I?".</div>
+</section>
+
+<!-- ── 2 · SAFE SPLIT ─────────────────────────────── -->
+<section id="s2">
+  <div class="card">
+    <div style="font-weight:650;margin-bottom:4px">Ship these changes?</div>
+    <div class="faint" style="margin-bottom:6px">You asked to push your changes live. Here's the safe way to do it:</div>
+    <div class="split-col up">
+      <div style="font-weight:600;margin-bottom:6px"><span class="pill good">✓ can go up</span></div>
+      <div class="kv">Field group <b>campaign</b> · theme spacing change<br>
+      <span class="faint">→ through staging, with a backup of the live site first, then your approval</span></div>
+    </div>
+    <div class="split-col hold">
+      <div style="font-weight:600;margin-bottom:6px"><span class="pill warn">⚠ shouldn't go up</span></div>
+      <div class="kv">Your content copy<br>
+      <span class="faint">The live site has <b>11 days of newer content</b> a push would erase.
+      Your 3 draft pieces should be published on the live site instead.</span></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+      <button class="btn primary">Proceed with the split</button>
+      <button class="btn ghost">Set up publishing the drafts</button>
+      <span class="faint" style="margin-left:auto">need to overwrite live content? <u>separate decision</u></span>
+    </div>
+  </div>
+  <div class="note">ADR-23 as an offer, not a lecture. The two flows are visually distinct but ONE decision. "Set up publishing the drafts" is finding №4 from the docs pressure-test — this button dead-ends until that path is scoped. The overwrite escape hatch exists but is deliberately quiet.</div>
+</section>
+
+<!-- ── 3 · HEALTH ─────────────────────────────────── -->
+<section id="s3">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+      <div style="font-weight:650">Nexus AI — is the intelligence layer healthy?</div>
+      <span class="pill warn">⚠ 1 needs a check</span>
+    </div>
+    <div class="statusgrid">
+      <div class="card" style="margin:0"><div class="kv"><b>Core</b></div><div class="faint">started with the app · records since Aug 4</div><span class="pill good">✓ OK</span></div>
+      <div class="card" style="margin:0"><div class="kv"><b>Site sync</b></div><div class="faint">last new information 4 min ago</div><span class="pill good">✓ OK</span></div>
+      <div class="card" style="margin:0"><div class="kv"><b>In-site events</b></div><div class="faint">last heard from a site 26 h ago</div><span class="pill warn">⚠ needs a check</span></div>
+      <div class="card" style="margin:0"><div class="kv"><b>Assistant context</b></div><div class="faint">last conversation record 2 h ago</div><span class="pill good">✓ OK</span></div>
+      <div class="card" style="margin:0"><div class="kv"><b>Change detection</b></div><div class="faint">caught up, nothing pending</div><span class="pill good">✓ OK</span></div>
+      <div class="card" style="margin:0"><div class="kv"><b>Permissions mirror</b></div><div class="faint">matches your settings exactly</div><span class="pill good">✓ OK</span></div>
+    </div>
+    <div class="faint" style="margin-top:12px">If something says <b>not reporting</b>, answers still work — they just can't include the newest information, and they'll say so.</div>
+  </div>
+  <div class="note">WP-17's tool, user-rendered. Verdict words per the vocabulary: OK / needs a check / not reporting (never STALE/DARK). Status color never appears without icon + label. Producer names are translated ("wp-webhook" → "In-site events"). The closing line is the non-fatality promise, stated as a user benefit.</div>
+</section>
+
+<!-- ── 4 · SITES LIST ─────────────────────────────── -->
+<section id="s4">
+  <div class="site-group">
+    <div class="site-head"><span>Alpine Outfitters</span><span class="faint">3 environments · 1 copy</span></div>
+    <div class="env-row"><span class="env-name"><span class="dot live"></span>the live site</span><span class="faint">WooCommerce 10.9.4 · checked 2 h ago</span></div>
+    <div class="env-row"><span class="env-name"><span class="dot env"></span>staging</span><span class="faint">WooCommerce 10.9.4 · checked 2 h ago</span></div>
+    <div class="env-row"><span class="env-name"><span class="dot env"></span>development (at WP Engine)</span><span class="faint">WooCommerce 10.9.4 · checked 2 h ago</span></div>
+    <div class="env-row"><span class="env-name"><span class="dot copy"></span>your copy</span><span class="faint">WooCommerce 10.9.4 · content 11 days behind <span class="pill warn">⚠</span></span></div>
+  </div>
+  <div class="site-group">
+    <div class="site-head"><span>Golden eComm</span><span class="faint">2 environments · 1 copy</span></div>
+    <div class="env-row"><span class="env-name"><span class="dot live"></span>the live site</span><span class="faint">WooCommerce 11.0.0 · checked 1 h ago</span></div>
+    <div class="env-row"><span class="env-name"><span class="dot env"></span>staging</span><span class="faint">WooCommerce 10.7.0 · <span class="pill warn">⚠ behind the live site</span></span></div>
+    <div class="env-row"><span class="env-name"><span class="dot copy"></span>your copy</span><span class="faint">WooCommerce 10.9.1 · checked 1 d ago</span></div>
+  </div>
+  <div class="note">The post-M4 inversion, previewed: one Site, its environments, copies as tracked members — "3 sites have WooCommerce" becomes "Alpine Outfitters has it everywhere." The actionable fact surfaces per-Site (staging behind live), not as a fleet-wide flat count. "development (at WP Engine)" per docs finding №6.</div>
+</section>
+</div>
+<script>
+function go(b){document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+document.querySelectorAll('section').forEach(x=>x.classList.remove('on'));
+b.classList.add('on');document.getElementById(b.dataset.t).classList.add('on')}
+</script>
+</body>
+</html>
