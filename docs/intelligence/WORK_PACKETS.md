@@ -3123,3 +3123,12 @@ the two WP-13b follow-ups — `createEvalFixture({plantIncidents})`
 collapsing the empty-history twin's duplicated loop, and
 `nativeModuleRemedy()` shared so run.ts stops inheriting bare ABI crashes.
 Sequence: BEFORE WP-17 (both core lock); the sitting runs on its merge.
+
+**ANNOUNCEMENT — WP-13c holds the CORE LOCK from 2026-08-17.** Worktree
+`.worktrees/wp-13c`, branch `wp-13c`. Files claimed: `src/intelligence/
+assemble/assembler.ts` + `types.ts` (+ their `__tests__`), and in the evals
+tree `fixture.ts`, `sittingWorld.ts`, `sitting.ts`, `sitting.test.ts`,
+`run.ts`, `README.md`. No other packet may touch the assembler until this
+merges. Baseline in the fresh worktree BEFORE any change: **510 suites /
+6448 passed / 12 skipped / 6460 total / 0 failed** (identical to WP-13b's
+recorded post-merge figure).
