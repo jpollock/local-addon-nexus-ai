@@ -3108,7 +3108,7 @@ every mutation run scripts the model call; the live harness was never executed.
 - Key finding (safeStorage ciphertext refused rather than 401-ing) is the
   right behavior; NEXUS_EVAL_API_KEY is the documented sitting path.
 
-### [ ] WP-13c · Episodic items carry their substance into the turn block  *(micro-packet, core lock; GATES THE SITTING)*
+### [x] WP-13c · Episodic items carry their substance into the turn block  *(micro-packet, core lock; GATES THE SITTING)*  **(BUILT 2026-08-17 — outcome and findings below)**
 Fix per the ruling: `RetrievedItem` gains an optional `summary` field;
 `collectEpisodic` populates it for ledger items from a bounded, explicit
 payload rendering (for `episodic.*`: component, versions, impact/symptom,
@@ -3124,11 +3124,126 @@ collapsing the empty-history twin's duplicated loop, and
 `nativeModuleRemedy()` shared so run.ts stops inheriting bare ABI crashes.
 Sequence: BEFORE WP-17 (both core lock); the sitting runs on its merge.
 
-**ANNOUNCEMENT — WP-13c holds the CORE LOCK from 2026-08-17.** Worktree
-`.worktrees/wp-13c`, branch `wp-13c`. Files claimed: `src/intelligence/
-assemble/assembler.ts` + `types.ts` (+ their `__tests__`), and in the evals
-tree `fixture.ts`, `sittingWorld.ts`, `sitting.ts`, `sitting.test.ts`,
-`run.ts`, `README.md`. No other packet may touch the assembler until this
-merges. Baseline in the fresh worktree BEFORE any change: **510 suites /
-6448 passed / 12 skipped / 6460 total / 0 failed** (identical to WP-13b's
-recorded post-merge figure).
+**ANNOUNCEMENT — WP-13c held the CORE LOCK on 2026-08-17 (released on
+merge).** Worktree `.worktrees/wp-13c`, branch `wp-13c`. Files claimed:
+`src/intelligence/assemble/assembler.ts` + `types.ts` (+ their `__tests__`),
+and in the evals tree `fixture.ts`, `sittingWorld.ts`, `sitting.ts`,
+`sitting.test.ts`, `run.ts`, `README.md`. Baseline in the fresh worktree
+BEFORE any change: **510 suites / 6448 passed / 12 skipped / 6460 total /
+0 failed** (identical to WP-13b's recorded post-merge figure).
+
+**WP-13c OUTCOME — the gap is closed and the sitting is unblocked.** The
+substance now reaches the model through the REAL wired path. Measured, from
+the far end of `ChatService` (not from a second `assemble()` call):
+
+```
+- 30d ago — episodic.incident.recorded — woocommerce 9.3.0 → 9.4.1; checkout returned HTTP 500 after update; correlates with payment-gateway-x; resolved (via fixture:e01-incident, trust: emitted) — evt_01M07T0TCHV4WQXNY40QE8RJ3V
+```
+
+Compare WP-13b's measurement of the same line: topic, age, provenance, id.
+
+**Delivered, exactly the packet's scope:**
+
+- `RetrievedItem.summary?: string` (`types.ts`) — a channel of its own, next
+  to `detail`, never inside it.
+- `episodicSummary(topic, payload)` (`assembler.ts`) — gated on the
+  `episodic.` topic family, composed from an explicit allow-list in a fixed
+  order: `component`, `from_version → to_version`, `impact ?? symptom`,
+  `correlate`, `resolved`. Absent fields are skipped; **strings only**
+  (`resolved`: booleans only).
+- `renderRetrieved` renders it after the fact key, before provenance.
+- **`factKeyOf` is unchanged, byte for byte.**
+
+**Three composition decisions worth carrying forward:**
+
+- **The allow-list is the security property, and the discipline is about
+  COMPOSITION, not delivery.** The envelope is schema-validated but its
+  payload VALUES originated outside the process, and this string enters the
+  model's context — a walk over unknown keys would let anything that can get
+  an event emitted put arbitrary text in front of the model, inside a block
+  the model is told is platform-authored. Hence: named fields only, strings
+  only, **whitespace collapsed to one line** (a value carrying `\n- 0s ago —
+  …` would otherwise fake a second retrieved item), hard caps. R7 covers the
+  delivery; nothing covered the composing until now.
+- **Two caps, not one.** Total 200 chars (~50 estimated tokens; ×8 per query
+  it is the same order as the freshness section). Per field 80. The
+  per-field cap is not redundant: with only a total cap, ONE verbose field
+  consumes the budget and silently drops everything after it — including
+  `correlate`, the field a fleet-wide sequencing decision actually turns on.
+  A mutation proves it (#4 below): loosening the field cap alone loses the
+  correlation while the total cap still "holds".
+- **A lone version keeps its direction.** `from 9.3.0` / `to 9.5.0`, never a
+  bare `9.3.0` beside a component name — which reads as the version it moved
+  TO and inverts the fact.
+
+**The topic gate needed its own pin, and this is a finding.** Removing
+`topic.startsWith('episodic.')` was UNOBSERVABLE against the existing
+fixtures: today's `state.*` payloads carry `slug`/`version`, none of them
+allow-listed, so the gate changes nothing a test can see — until the day a
+producer adds a field with a colliding name and state starts leaking into
+the episodic block through a door §6.2 step 4 closed. The pin drives a
+`state.plugin.observed` event whose payload DOES carry `component`/`impact`
+and asserts no summary. Without it the gate would have been decoration.
+
+**The WP-13b finding is retired, and so is the prose that stated it.**
+`sitting.test.ts`'s pin failed on the first run after the fix — by its own
+design — and now asserts the substance arrives. Two further surfaces
+asserted the finding as present-tense fact and would have made every
+captured transcript lie to the owner: the transcript's "read before
+judging" section and the judgment sheet's two-criteria-in-tension note.
+Both are rewritten. **The tension is gone: both E-01 criteria are now
+judgeable as written**, and the standing check is unchanged — a historical
+specific that is not on those lines and not in a section-3 tool result is
+fabricated.
+
+**Both pre-approved follow-ups taken.** `createEvalFixture({ plantIncidents
+})` collapses the empty-history twin (`sittingWorld.ts` lost ~60 lines and
+four imports); the option gates the HISTORY alone, so the act/abstain pair
+cannot drift in the fleet, and the halted site's absence stays pinned on
+both paths. `nativeModuleRemedy()` moved to `nativeModule.ts`; `run.ts`
+calls it before anything opens a ledger and exits 2 with the `npm run
+pretest` remedy instead of a bare `NODE_MODULE_VERSION` stack trace. Its
+three behavioural tests moved with it; the run.ts ordering pin is
+**source-level and labelled as such** — `run.ts` calls `main()` at module
+scope, so importing it from jest would execute the whole eval suite, and
+making it importable is a separate change.
+
+**Verification.** Baseline 510 / 6448 passed / 12 skipped / 6460 / 0 failed
+→ after **511 / 6462 / 12 skipped / 6474 / 0 failed**: +1 suite
+(`nativeModule.test.ts`), +14 tests (12 assembler, +1 fixture option, +4
+ABI, −3 moved), **skipped count unchanged**. `npx tsc -p . --noEmit` and
+`npx tsc -p tsconfig.test.json --noEmit` both clean; eslint clean on every
+touched file (the ADR-16 seam rule included — this change adds no imports).
+Legacy suites covering the touched files (`grep -rl` →
+`chat-assembly-wiring`, `context-assembler`, `fleet-links`, plus
+`src/main/intelligence-host`): 11 suites / 91 tests, green.
+
+**Mutation battery: 14/14 caught, 0 survived**, each anchored to a code line
+(uniqueness asserted, checksum verified) with a witness regex on the failure
+output: correlate dropped · resolved unrecognised · total cap loosened ·
+per-field cap loosened · raw `JSON.stringify(payload)` instead of the
+composition · topic gate removed · whitespace collapse removed · string
+guard replaced by coercion · truncation without an ellipsis · lone version
+loses its direction · summary composed but never rendered · summary
+conflated into `detail` · `plantIncidents` ignored · run.ts preflight
+removed. **Two were re-run before they could be scored**: the first form of
+"resolved dropped" and "string guard removed" produced a TypeScript compile
+error rather than a test failure. A compile error is real protection, but it
+is not evidence the ASSERTIONS have teeth, so both were restated as
+mutations that type-check — and both were then caught behaviourally. A third
+(#11) had an anchor that never applied, and the harness reported it as
+unscored rather than as caught; it was re-run with a working anchor.
+
+**Additive parity untouched:** `with no law, no ledger and no twins the
+bundle renders NOTHING` and the `state.*` render-shape pins are green,
+unmodified.
+
+**ABI state: better-sqlite3 is built for SYSTEM NODE** (jest ran here
+repeatedly). Run `npm run rebuild` before loading the addon in Local.
+Measured in this session: system Node **v25.9.0 → ABI 141** (`.nvmrc` still
+pins 22.16.0 → ABI 127 for CI).
+
+**Token cost: zero API tokens.** The end-to-end pin scripts the model call.
+
+**THE SITTING IS NOW RUNNABLE** — the commands are in WP-13b's BLOCKED note
+above, unchanged, and still need `NEXUS_EVAL_API_KEY`.
