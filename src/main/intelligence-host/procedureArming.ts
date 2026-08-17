@@ -21,6 +21,9 @@
  * small, and `takeArmingRequests` empties it.
  */
 
+import { armByPredicate, armByRequest, ProcedureRequest, RunbookRegistry } from '../../intelligence';
+import { getCapabilityGrants, grantedRunbooks, ResolvedGrant } from './capabilityGrants';
+
 export interface ArmingRequest {
   capability: string;
   /** ISO 8601 — when the model asked. */
@@ -60,4 +63,67 @@ export function takeArmingRequests(): ArmingRequest[] {
 /** Test/`chat clear` hook: forget requests nobody will deliver. */
 export function clearArmingRequests(): void {
   pending = [];
+}
+
+/**
+ * What this turn's assembly is owed on the procedure plane — the decision WP-20c
+ * left to this packet in `ChatAssemblyRequest.procedure`'s own comment.
+ *
+ * Two P1 paths are resolved here, in this order:
+ *
+ *   B · a capability the model ASKED for by name (`nexus_load_procedure`) — it
+ *       outranks the predicate, because an explicit request is evidence and a
+ *       lexical match is an inference.
+ *   A · the runbook's own authored `arms_on:` predicate over the turn text.
+ *
+ * Path C (the late arm at the gate) is not here: it fires at a tool call, not at
+ * assembly, and WP-20d owns that guard.
+ *
+ * Returns `undefined` when no grant is live, and that is the parity floor P2's
+ * additive-only ruling rests on: no grants ⇒ no `procedure` field ⇒ no index, no
+ * section, and a turn block identical to the pre-WP-20 build.
+ *
+ * A request for a capability that is not granted arms nothing. The tool refuses
+ * to record one, so this is defence in depth — a queue is not an authority.
+ */
+export function procedureRequestForTurn(opts: {
+  runbooks?: RunbookRegistry;
+  userMessage: string;
+  /** Defaults to the live set. Injected by tests and by any caller holding its own. */
+  grants?: ResolvedGrant[];
+}): ProcedureRequest | undefined {
+  try {
+    const grants = opts.grants ?? getCapabilityGrants();
+    if (grants.length === 0) return undefined;
+
+    const request: ProcedureRequest = { grants };
+    const runbooks = opts.runbooks;
+    if (!runbooks) return request; // grants without a registry: index only
+
+    const granted = grantedRunbooks(runbooks, grants);
+
+    // Path B. Drained either way: a request that cannot be honoured must not sit
+    // in the queue arming some later, unrelated turn.
+    const asked = takeArmingRequests();
+    for (const req of [...asked].reverse()) {
+      const outcome = armByRequest(req.capability, granted);
+      if (outcome.armed) {
+        return { ...request, armed: { capability: outcome.armed.runbook.capability, armedBy: 'model-request' } };
+      }
+    }
+
+    // Path A. `armByPredicate` refuses to pick between two matches, and that
+    // refusal arrives here as "nothing armed" — the index still names both.
+    const byPredicate = armByPredicate(opts.userMessage, granted);
+    if (byPredicate.armed) {
+      return {
+        ...request,
+        armed: { capability: byPredicate.armed.runbook.capability, armedBy: 'predicate' },
+      };
+    }
+    return request;
+  } catch {
+    // Arming is additive: a fault here costs the procedure, never the turn.
+    return undefined;
+  }
 }
