@@ -23,6 +23,7 @@ import {
 } from '../../intelligence';
 import { draftFromWpEvent } from './wpEventProducer';
 import { initLawRegistry, LawRegistryHandle } from './permissionsMirror';
+import { syncCapabilityGrants } from './capabilityGrants';
 
 export type WpEventTap = (
   siteId: string,
@@ -301,7 +302,7 @@ export function initIntelligenceCore(options: {
     // Success is recorded too: without it, a persisted failure has no anchor —
     // the reader could not say whether it predates the running session.
     writeInitState(storage, { ...initState, last_success_at: new Date().toISOString() });
-    return {
+    const core: IntelligenceCore = {
       ledger,
       emitter,
       twins: new TwinStore(ledger),
@@ -321,6 +322,16 @@ export function initIntelligenceCore(options: {
         ledger.close();
       },
     };
+
+    // WP-20b: the shipped capability grants, derived from the law registry above
+    // — every strict runbook it SERVES gets a grant, and `control.grant.issued`
+    // records the ones that changed. Placed here rather than in `index.ts`
+    // because it is a function of the law registry, which is already built here
+    // (the same reasoning that kept `initLawRegistry` out of index.ts at WP-20a).
+    // Non-fatal by its own construction: it returns an empty set on any fault.
+    syncCapabilityGrants({ core, storage, logger });
+
+    return core;
   } catch (err) {
     logger.error(`[Intelligence] init failed (non-fatal): ${(err as Error).message}`);
     // The M1 lesson: a log line is not a record. Persist the reason so the

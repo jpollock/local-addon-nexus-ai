@@ -237,8 +237,13 @@ describe('the anchor runbook across a multi-turn session', () => {
     expect(procedure.tokens as number).toBeLessThan(200);
   });
 
-  test('a turn with no procedure input is what it was before this packet', async () => {
-    const plain = await turn();
+  test('a turn with NO GRANTS is what it was before this packet', async () => {
+    // Updated at WP-20b, which supplied the missing half of the seam: a caller
+    // that passes no `procedure` now gets the live grant set by default
+    // (`procedureRequestForTurn`), so the index rides — §3's ruled always-on
+    // line. The parity floor therefore reads on the GRANTS, which is where it
+    // always meant to read: no grant, no procedure text of any kind.
+    const plain = await turn({ procedure: { grants: [] } });
 
     expect(plain!.procedure).toBeNull();
     expect(plain!.turnBlock === null || !plain!.turnBlock.includes('Procedure')).toBe(true);

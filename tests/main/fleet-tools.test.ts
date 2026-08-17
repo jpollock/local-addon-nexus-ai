@@ -646,7 +646,7 @@ describe('detect_drift', () => {
 // ---------------------------------------------------------------------------
 
 describe('fleet tool registration', () => {
-  test('all 10 fleet tools are registered', () => {
+  test('all 11 fleet tools are registered', () => {
     const registry = new ToolRegistry();
     registerFleetTools(registry);
     const names = registry.allToolNames();
@@ -661,7 +661,8 @@ describe('fleet tool registration', () => {
     expect(names).toContain('nexus_pairing_proposals'); // WP-07: gap-filler beside nexus_link_site
     expect(names).toContain('nexus_intelligence_health'); // WP-17: the layer reports its own degradation
     expect(names).toContain('nexus_where_am_i'); // WP-21: the four-line "where am I?" status
-    expect(names.length).toBe(10);
+    expect(names).toContain('nexus_load_procedure'); // WP-20b: P1 path B — the model asks for a procedure
+    expect(names.length).toBe(11);
   });
 
   test('all fleet tools are always available (no isAvailable gate)', () => {

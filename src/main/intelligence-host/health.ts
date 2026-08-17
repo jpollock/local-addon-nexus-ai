@@ -194,6 +194,17 @@ export interface IntelligenceHealthReport {
 interface ProducerRow {
   system: string;
   events: number;
+  /**
+   * Events from this system that are OBSERVATIONS — everything except the
+   * `control.*` family, which is the platform recording its own configuration
+   * (WP-20b's `control.grant.*` is the first producer of it).
+   *
+   * The distinction exists for one line: `ledgerLine` asks "is anything being
+   * recorded?", and a grant issued at boot would answer yes on an install whose
+   * every producer is dead. A configuration record proves the layer can write;
+   * it proves nothing about the fleet being observed.
+   */
+  observations: number;
   lastRecordedAt: string | null;
 }
 
@@ -322,17 +333,24 @@ function producerRows(core: IntelligenceCore, errors: string[]): Map<string, Pro
         .prepare(
           `SELECT json_extract(source, '$.system') AS system,
                   COUNT(*)                         AS events,
+                  SUM(CASE WHEN topic LIKE 'control.%' THEN 0 ELSE 1 END) AS observations,
                   MAX(recorded_at)                 AS last_recorded_at
              FROM events
             GROUP BY system`
         )
-        .all() as Array<{ system: string | null; events: number; last_recorded_at: string | null }>;
+        .all() as Array<{
+        system: string | null;
+        events: number;
+        observations: number;
+        last_recorded_at: string | null;
+      }>;
       const map = new Map<string, ProducerRow>();
       for (const r of rows) {
         if (!r.system) continue;
         map.set(r.system, {
           system: r.system,
           events: r.events,
+          observations: r.observations ?? 0,
           lastRecordedAt: r.last_recorded_at,
         });
       }
@@ -352,7 +370,11 @@ function producerRows(core: IntelligenceCore, errors: string[]): Map<string, Pro
  * and only the user can tell those apart — so it is surfaced, not suppressed.
  */
 function ledgerLine(rows: Map<string, ProducerRow>): HealthLine {
-  const total = [...rows.values()].reduce((n, r) => n + r.events, 0);
+  // Observations only. A `control.*` record — a capability grant materialized at
+  // boot (WP-20b) — is the platform describing itself, so counting it here would
+  // hand this line a permanent "1 event" and retire the signal on exactly the
+  // install it was written for: a fresh one whose tap is wired and dead.
+  const total = [...rows.values()].reduce((n, r) => n + r.observations, 0);
   return {
     key: 'ledger',
     label: 'Recorded so far',

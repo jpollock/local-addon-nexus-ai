@@ -57,6 +57,7 @@ import { initIntelligenceCore } from './intelligence-host/bootstrap';
 import { tapGraphService } from './intelligence-host/graphServiceTap';
 import { scheduleGraphBackfill } from './intelligence-host/graphBackfill';
 import { setIntelligenceCore } from './intelligence-host/coreRegistry';
+import { syncCapabilityGrants } from './intelligence-host/capabilityGrants';
 import {
   collectIntelligenceHealth,
   formatHealthLogLine,
@@ -662,6 +663,16 @@ export default function main(context: any): void {
     if (eventLog) {
       const logSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
       eventLog.setMinLevel(resolveLogLevel(logSettings ?? undefined, process.env));
+    }
+
+    // WP-20b · re-materialize the capability grants. Also outside the pause
+    // branch, for a sharper reason than the log level's: a grant switched off is
+    // a permission change, and pausing background work must never leave a
+    // revoked procedure live. Emits only when something actually changed, so
+    // calling it on every settings write costs nothing; doing it only at boot
+    // would date-stamp the revocation hours after the click.
+    if (intelligenceCore) {
+      syncCapabilityGrants({ core: intelligenceCore, storage: intelligenceStorage, logger: localLogger });
     }
 
     const paused = isBackgroundWorkPaused();

@@ -27,6 +27,7 @@ import {
   TaskFrame,
 } from '../../intelligence';
 import { getIntelligenceCore } from './coreRegistry';
+import { procedureRequestForTurn } from './procedureArming';
 import {
   armProcedureRun,
   foldProcedureCursor,
@@ -157,17 +158,24 @@ export async function assembleForChatTurn(
       /* the tripwire must never break the turn it guards */
     }
 
+    const procedureRequest =
+      req.procedure ??
+      procedureRequestForTurn({ runbooks: core.law?.runbooks, userMessage: req.userMessage });
+
     const request: AssembleRequest = {
       actor: { id: 'act_chat_assembler', kind: 'system', autonomy: 'interactive' },
       capability: null, // v0 chat runs under no capability grant
       task: { id: taskId, intent: req.userMessage },
       targets,
       ...(frame ? { frame } : {}),
-      // WP-20d attaches the checkpoint cursor to whatever procedure request
-      // reaches here (20b decides arming; this packet decides nothing about
-      // it). Absent when nothing is armed, which is what keeps an unarmed turn
-      // byte-identical.
-      ...(req.procedure ? { procedure: withCursor(req.procedure, req.sessionId, taskId) } : {}),
+      // WP-20b decides what the procedure plane is owed (grants + the two
+      // assembly-time arming paths); a caller that supplies its own request
+      // stays authoritative, because the field is 20c's contract. WP-20d then
+      // attaches the checkpoint cursor to whatever that produced — it decides
+      // nothing about arming, and with nothing armed it changes nothing.
+      ...(procedureRequest
+        ? { procedure: withCursor(procedureRequest, req.sessionId, taskId) }
+        : {}),
       surface: CHAT_SURFACE,
       policyDivergences,
       context: {

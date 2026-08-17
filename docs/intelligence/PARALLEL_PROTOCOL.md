@@ -21,6 +21,13 @@ before diagnosing anything as a branch regression (WP-05 finding):
 symlink is ignored — it wasn't, and `git add -A` tracked it in WP-04.
 If you see the symlink in `git status`, do not commit it.)
 
+**New files go where your `pwd` is, not where your packet is** (WP-20b
+near-miss): an absolute path anchored at the repo root lands the file in
+the PRIMARY checkout, not your worktree — and jest there will run it
+against a tree you aren't editing. Before your first commit, run
+`git status` in the primary checkout too; anything of yours appearing
+there is in the wrong tree.
+
 **Baseline your test counts in the worktree, not from memory** (WP-04
 finding): some suites gate on untracked artifacts — e.g.
 `tests/main/embedding-service.test.ts` `describe.skip`s without the local
