@@ -4604,3 +4604,30 @@ touches the dispatch module WP-19 just instrumented, so rebase on current.
     load-bearing comparison is the same-environment one recorded above —
     in-worktree 6,719 → 6,726 passed with skipped unchanged at 12, a delta of
     exactly the 7 new pins.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-04d (appended by the architect session).**
+
+- **WP-04d ACCEPTED.** Merge 9d6675a4; ipc-handlers lock released. The
+  live-measured impact line is the packet's justification stated as a
+  number: `{phpVersions:['8.2']}` matched 1 of 37 local rows before, 37 of
+  37 after. Both deliberate pin flips are marked at the assertion with the
+  old expectation named — the update-pins-on-purpose discipline worked as
+  designed on its first real exercise.
+- Mutation doctrine gains two entries from the findings: **`if (false)` is
+  not a valid branch-removal mutation under ts-jest** (unreachable-code
+  diagnostics fail the build, which is not behavioral evidence — use a
+  type-clean unsatisfiable guard like `length > 999`); and **a whole-bucket
+  equality assertion kills only when the expected set is a proper subset
+  of the bucket** (an assertion satisfied by a chain with no filter pins
+  nothing — caught by its own mutation).
+- The two disclosed survivors (hyphen arm on local/wpe) are accepted as
+  labeled: those sources cannot produce hyphenated PHP versions, and
+  disclosure beats fabricated fixture data — the honest-null principle
+  applied to test fixtures. NULL php_version (50 of 343 WPE rows) is now
+  pinned for the first time.
+- Scope held under temptation (shared helper rejected as the forbidden
+  dedup — and for the better reason that it would collapse the per-chain
+  mutation anchors). The parse-layer escalation trigger correctly did not
+  fire.

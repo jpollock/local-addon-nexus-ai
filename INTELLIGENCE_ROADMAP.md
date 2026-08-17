@@ -84,8 +84,7 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
 **Parallel, launch together:**
 - [x] **WP-19** gateway emission — DONE 2026-08-17 (E-02: 2→6 PASS, 0 spec-defects remain)
       *(unblocks 7 E-02 criteria; ChatService/registry seams)*
-- [ ] **WP-04d** phpVersions granularity unification *(ipc-handlers lock,
-      independent)*
+- [x] **WP-04d** phpVersions granularity — DONE 2026-08-17 (local match 1/37 → 37/37; 2 pins flipped on purpose, 7 added)
 - [x] **WP-12b** vacuous chat-history test port — DONE 2026-08-17 (copy deleted; 6 ported; the R1-recreating pin waived)
 
 **Then, sequential on the core lock:**
