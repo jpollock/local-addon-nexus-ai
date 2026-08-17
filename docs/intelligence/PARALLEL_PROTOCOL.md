@@ -74,11 +74,17 @@ part-pre, part-post, with nothing saying which. And `npm test | tail`
 reports TAIL's exit code — a 4-failure run can print exit 0; capture the
 exit code before the pipe (`npm test > log; echo $?`) or use pipefail.
 
-**An uncompiled worktree fails exactly four AgentRegistry tests** (root
-cause found at WP-20 phase 1: the fixture `path.resolve`s into
-`lib/main/agent-sdk`) — the protocol's compile step is not optional, and
-this is what skipping it costs. If those four are red, compile first;
-if still red after compiling (WP-19b observed this), see WP-23.
+**An uncompiled worktree used to fail exactly four AgentRegistry tests**
+(root cause found at WP-20 phase 1: the fixture `path.resolve`d into
+`lib/main/agent-sdk`) — it burned three packets reading as a phantom
+agent-runtime regression. **Resolved by WP-23:** the fixture now requires
+the SDK source, `__dirname`-relative, and those four pass with `lib/`
+absent. The compile step remains non-optional for everything else, which
+is why this paragraph stays. If you now see four AgentRegistry reds, it
+is not this. Two other signatures to tell apart first: a suite that fails
+to import with 0 tests run is a wrong ABI, and native-module suites
+failing unevenly within one run is the tree flipping mid-run — see the
+mid-session flip paragraph in the Test environment section.
 
 **Before creating the worktree, confirm the intelligence layer is
 actually tracked**: `git status` in the primary checkout must not show
@@ -174,6 +180,14 @@ Each packet's work happens on its worktree; questions/decisions land as notes
 in the packet's section of `WORK_PACKETS.md` (append-only — it doubles as the
 episodic record of this project's engineering, which is fitting). Do not leave
 decisions only in chat transcripts.
+
+**A speculative cause and a measured observation must not share a
+paragraph** (WP-23 finding, and it cost a packet number): WP-19b recorded a
+real failure and a guess about why in one finding; downstream, the guess
+inherited the observation's authority and became "the outlier WP-23 must
+explain." Separate them typographically — observation first, then
+"UNVERIFIED HYPOTHESIS:" on its own line — so no later reader can cite the
+guess as a measurement. The check that dissolved this one was one `ls`.
 
 **Integration reports carry receipts:** any report of a merge into
 `poc/nexintelligence` must include `git diff --stat <merge>^1 <merge>` (the

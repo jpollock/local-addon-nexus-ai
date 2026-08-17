@@ -112,6 +112,11 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
         OWNER-PENDING on `NEXUS_EVAL_API_KEY`; §7 render shapes,
         vocabulary v1.1-conformant)
 
+- [x] **WP-23** AgentRegistry fixture — DONE 2026-08-17 (fixture reads
+      `src/` `__dirname`-relative; the uncompiled-worktree four-red trap is
+      retired; the "residual" was a documentation error, dissolved by one
+      `ls`)
+
 **Docs & design (Track B, same day):** designer loop v4/v5 fully
 reconciled — §6 capabilities answered 12/12, §7 questions 8/8, permissions
 matrix verified against the shipped model verbatim; Controlled Vocabulary
@@ -130,8 +135,7 @@ lands); the first-real-pull live smoke (chip + sync producer + health
 line + where_am_i at once — needs ABI ELECTRON: `npm run rebuild` first,
 last measurement left the tree on system Node). **Registered, not now:**
 WP-20f deny-flip (MANDATORY ruling attached: shipped-enabled must not
-survive the flip for the two production-scoped capabilities), WP-20g,
-WP-23 (AgentRegistry fixture), guided-runbook ceiling (vacuous at 10 KB
+survive the flip for the two production-scoped capabilities), WP-20g, guided-runbook ceiling (vacuous at 10 KB
 today, revived by any full-body guided delivery), pre-commit YAML parse
 for law docs, `arms_on:` authoring on the shipped set.
 

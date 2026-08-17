@@ -6364,6 +6364,200 @@ flight; its merge order stays free.
 
 ---
 
+### [ ] WP-20d · Attestation and sequencing  *(phase 2 of WP-20, sub-packet 4 of 5)*
+
+**ANNOUNCED 2026-08-17 — LOCKS TAKEN.** Worktree `.worktrees/wp-20d`, branch
+`wp-20d`, base `poc/nexintelligence` @ `64f7ee53` (WP-20c merged at `c11878f5`;
+the architect's merge-acceptance entry and the three post-merge doc corrections
+were found uncommitted in the primary checkout and committed VERBATIM,
+attributed, at `64f7ee53` before this worktree was cut — flagged for fidelity
+verification).
+
+Locks: **core-lock-adjacent** (`ToolRegistry.call`, `AgentDispatcher.dispatch`),
+**core** (`assemble/procedure.ts`'s cursor rendering — free since 20c merged),
+and the anchor runbook's authored frontmatter. The integration lock
+(`src/main/index.ts`, `ipc-handlers.ts`) is **not** taken.
+
+**Seam with WP-20b (in flight, unmerged).** Measured: 20b touches neither
+`law/` nor `docs/intelligence/anchor-slice/`, so the runbook authoring is
+uncontended. The one shared file is `chatAssembly.ts`, where 20b replaces the
+`procedure:` spread with its `procedureRequestForTurn(...)` call and 20d
+attaches the cursor to whatever that returns — **the same three lines**.
+Resolved by announcement, per the 20c precedent: whichever merges second
+re-applies a one-line change, and 20d consumes arming purely as request input
+(nothing here decides whether a capability is armed).
+
+**Measured before designing — trust no fact table (WP-20a finding 1):**
+
+- All eight anchor checkpoints are `attest: narrative` today, `tools: []`,
+  `tool_scope: advisory`, no `arms_on`. Nothing is authored; the design note's
+  §4 table is a plan, not a description.
+- `bulk_plugin_update` is absent from `TIER_OVERRIDES` and therefore Tier 2 by
+  default; `wpe_backup_and_verify` is Tier 2 explicitly. Both clear WP-19's
+  `GATED_TIER_FLOOR`, so both are gated calls the sequencer can see.
+- `ToolRegistry.call` already receives `task?: { id, causation }` (WP-19), and
+  `AgentDispatcher.dispatch` receives the same. The guard has a correlation to
+  work with at both chokepoints without new plumbing.
+
+**The finding that shapes the packet, stated up front because it changes the
+design:** `correlation` is the **per-TURN** TaskId (`chatAssembly` mints one per
+call to `assembleForChatTurn`), while a procedure spans many turns. A cursor
+folded by a single correlation would see only the turn it was asked about —
+cp.approval on turn 3 would be invisible to the guard on turn 4. The fold is
+therefore scoped to the **procedure run** (the set of turn TaskIds since the
+capability armed), held host-side exactly as 20c's `sessionProcedureHash` is,
+and derived — no new topic, no new envelope field, nothing stored. §4's "nothing
+new is stored: the cursor is derived" survives; what changes is the key.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code before
+any pipe) — recorded in the outcome note below. Expect a skipped-count
+difference against the merged base's 548/7,036/2: this worktree holds one
+embedding model, the primary holds two.
+
+---
+
+**WP-20d OUTCOME — done (branch `wp-20d`).** A gated call belonging to an armed
+strict runbook is now refused unless the ledger can show the checkpoints before
+it happened. The cursor is folded, not stored; the refusal names the checkpoint,
+the remedy and the four things the platform *cannot* verify; and M4 — "proceeded
+past a denied approval" — is a programmatic query for the first time.
+
+Jest, compiled worktree, tree held still, exit code captured before any pipe.
+Baseline at `64f7ee53`: **548 suites / 7,026 passed / 12 skipped / 7,038 total,
+exit 0**. Branch: **551 / 7,068 / 12 / 7,080, exit 0**. Delta **+3 suites, +42
+tests, skipped unchanged** (the worktree's twelve are the ten embedding tests
+plus two others; the merged base reports two because the primary checkout holds
+both model files — the protocol's both-ways rule, exercised as predicted).
+`npx tsc -p . --noEmit` clean; eslint clean across `src/intelligence`,
+`src/main/intelligence-host`, `tool-registry.ts` and `AgentDispatcher.ts`.
+**Mutation battery 25/25 killed by their named witness** (two needed a rewrite —
+see finding 7).
+
+### The escalation, pre-answered — and it does NOT fire
+
+`task.checkpoint.attested` is **not needed and not added**. §4's "nothing new is
+stored: the cursor is derived" survives contact with the implementation: the
+fold reads `task.context.assembled`, `task.rationale.recorded`,
+`task.action.executed` and `task.outcome.recorded` — all four already emitted by
+WP-11 and WP-19 — and computes the cursor at read time, the way twins are
+computed. No new topic, no new envelope field, no new storage marker, no
+`wpeOperationPermissions` semantics touched. Nothing here needs a gate hold, so
+this packet merged.
+
+A refusal likewise emits nothing: WP-19's producer is explicit that a refused
+call did not execute, so `task.action.executed` would be false. Refusals ARE
+written to `operation-audit.log` at both chokepoints, mirroring the blocked-
+Tier-3 convention, so the compliance record shows attempts that were stopped.
+
+### What was built
+
+`procedureCursor.ts` (the fold + the run registry), `sequenceGuard.ts` (the
+decision), guard calls at **both** dispatch chokepoints, the anchor runbook's
+`attest:`/`evidence:`/`tools:` authored, and 20c's re-assert line taught to
+distinguish "not yet attested" from "cannot be attested".
+
+### Findings
+
+1. **`correlation` is the per-TURN TaskId, and a procedure spans many turns.**
+   `chatAssembly` mints a TaskId per call. §4 says to fold "by correlation", and
+   a literal reading would have folded one turn: an approval given on turn 3
+   would be invisible to the backup gate on turn 4, forever. The fold is keyed
+   to the **procedure run** — the turn ids since arming, held host-side exactly
+   as 20c's `sessionProcedureHash` is, for the same ADR-10 reason. Still derived,
+   still nothing stored; only the key changed. This is the finding the packet's
+   design turns on and it is pinned by its own case (`spans the turns of one
+   run`) and by M01.
+2. **A narrative checkpoint cannot gate anything, and saying so is load-bearing.**
+   Four of the anchor's eight have no attesting event and never will. Had they
+   been prerequisites, cp.roll-fleet would be permanently unreachable — the gate
+   would not be strict, it would be broken. So the guard requires the
+   ATTESTABLE predecessors only, **and the refusal names the narrative ones as
+   un-gateable**. A gate silent about its own reach implies a reach it does not
+   have, which is the same failure as a green tick over an unchecked step.
+3. **A tool claimed by two checkpoints gates at the EARLIER one — and for THIS
+   runbook the choice is currently unobservable.** `bulk_plugin_update` is both
+   cp.canary and cp.roll-fleet, and no event distinguishes them. Gating at
+   cp.canary enforces approval-and-backup-before-any-update. Measured while
+   building the battery: because everything between the two claims is narrative,
+   the attestable-prerequisite set is identical either way, so no test can tell
+   them apart today. The rule is still the safe one and is stated in code; a
+   runbook with an event-attested checkpoint between two claims would make it
+   visible.
+4. **cp.consult-history attests only when an episodic query actually ran.** The
+   manifest attestation reads `manifest.retrieval[]` for a `store: 'ledger'`
+   record. Measured live in the carrier suite: with no site selected the
+   assembler runs no episodic query, so the manifest cannot attest consultation
+   — correctly. `returned: 0` DOES attest (the query ran; an empty history is a
+   finding, not a failure to consult). B-03's K1 should be read with that
+   distinction in hand.
+5. **A denial is not an absence.** The fold reports `denied` separately from
+   unattested, and the latest decision per tool governs: approved-then-denied
+   does NOT attest. A `.some(approved)` implementation would let a run proceed
+   after a denial because an earlier turn had approved something — precisely
+   what `ab.approval-denied` forbids. Pinned in both directions (M03).
+6. **The shared `node_modules` flipped ABI under this session.** Mid-packet, a
+   suite that had just passed failed with `NODE_MODULE_VERSION 146` — Electron's
+   — because `node_modules` is symlinked into every worktree and something else
+   on this machine rebuilt better-sqlite3 while WP-20d was running. `npm run
+   pretest` restored it and everything passed again. **The protocol's "bare
+   `npx jest` skips the pretest hook" note needs a second half: with parallel
+   agents the ABI can flip *while you work*, so a sudden mass-native failure is
+   the shared tree, not your change.** Same class as the poisoned cache: check
+   the environment before believing the red.
+7. **Two mutations had to be rewritten, and one of them exposed something real.**
+   `if (x && false)` is a BUILD-ERROR under ts-jest (WP-20a finding 8, third
+   sighting). And the guard's outer `catch` — deliberate, rule 4 — makes some
+   internal-logic mutations unobservable: dropping the unclaimed-tool early
+   return let execution fall through, throw, and get caught, producing exactly
+   the same `null`. The mutation was re-aimed at an observably-wrong behaviour
+   (claiming an unclaimed tool at a later checkpoint) and then killed. Worth
+   knowing generally: a catch-all that returns the safe default absorbs mutants,
+   so a battery over guarded code must mutate to a WRONG ANSWER, not to a crash.
+8. **WP-20a's "all eight narrative" pin is now false by design.** It has been
+   replaced, not deleted: `shippedRunbooks.test.ts` now pins the authored 4/4
+   ratio, every event checkpoint's exact ledger selector, and that the update
+   tool is `bulk_plugin_update` and never `wp_plugin_update` (§5's finding — the
+   latter is in `NEEDS_RUNNING_SITE` and would start a halted site without the
+   model choosing to, failing B-03's must_not #3 on its behalf).
+
+### Judgement calls, each pinned, each cheap to reverse
+
+- **Narrative checkpoints are not prerequisites** (finding 2).
+- **Earliest-claimer gating** for a tool named by several checkpoints (finding 3).
+- **A run armed against a different document hash is NOT sequenced.** WP-20c
+  already disarms the capability and names both hashes; refusing tools here too
+  would punish one fault twice with a message naming the wrong problem, and the
+  checkpoints attested against the old text do not describe the new one.
+- **The derived cursor overrides a caller-supplied one.** An attestation a
+  caller can hand in is a claim, and P4's whole content is that an attestation
+  is never a claim. (This changed a WP-20c test, which now emits real events
+  instead of supplying a cursor — strictly the better pin.)
+- **cp.canary stays narrative** even though an update act is observable:
+  cardinality is provable, the CHOICE of a low-risk site is not, and `event`
+  would render a verified tick over the unprovable half.
+- **A ledger fault refuses the sequenced capability and renders no cursor.** An
+  empty cursor would say "nothing attested yet"; an unreadable ledger says
+  nothing of the kind.
+
+### The seam with WP-20b (still in flight)
+
+Unchanged from the announcement: `chatAssembly.ts`'s procedure spread is the one
+shared region, and 20d now wraps whatever request reaches it in `withCursor(...)`.
+Whichever packet merges second re-applies a one-line change. Nothing in 20d
+decides whether a capability is armed, and with nothing armed — production today
+— the guard returns `null` for every call on every surface, which is the parity
+pin (`PARITY: with nothing armed, a claimed tool runs exactly as before`).
+
+### What WP-20e inherits
+
+M4 is now a real query: `foldProcedureCursor(...).denied` contains `cp.approval`
+exactly when the latest decision was a denial. K3 (backup before update) and K5
+(ordering) are enforced rather than observed. K1 is manifest-verifiable on the
+supply side, with finding 4's caveat. The four narrative criteria still need a
+live model, unchanged.
+
+---
+
 ### [x] WP-20b · Grants and arming  *(phase 2 of WP-20, sub-packet 2 of 5)*
 
 **ANNOUNCED 2026-08-17 — INTEGRATION LOCK TAKEN** (`src/main/index.ts` and
@@ -6684,6 +6878,76 @@ available — ABI is ELECTRON right now, so Local is loadable today.
 
 ---
 
+**WP-20d ADDENDUM — WP-20b merged under this packet; base taken forward.**
+`e3d43f9b` (WP-20b) landed while 20d was in flight, so the base moved and the
+branch merged it. The architect's WP-20b adjudication, the protocol amendment
+and the designer matrix ruling were found uncommitted in the primary checkout
+and committed VERBATIM, attributed, at `7412828f` before the merge — flagged for
+fidelity verification.
+
+**The announced seam resolved exactly as announced, in three lines.** 20b's
+`procedureRequestForTurn(...)` now feeds 20d's `withCursor(...)`:
+
+    ...(procedureRequest
+      ? { procedure: withCursor(procedureRequest, req.sessionId, taskId) }
+      : {}),
+
+20b decides what the procedure plane is owed; 20d attaches what the ledger can
+prove about it. Neither decides the other's question.
+
+**One inherited pin re-pointed, not deleted.** 20b's `loadProcedure.test.ts`
+asserted that every shipped checkpoint reads as narrative, citing WP-20a finding
+7 — true when it was written, false the moment 20d authored the attestations. It
+now pins each checkpoint against its OWN words: three read "verified from
+records", cp.consult-history reads "verified as supplied", and the four
+narrative ones read "your account only, not verified". That is a stronger pin
+than either version: a rail rendered uniformly is a product that lies, and that
+is as true of a uniformly-cautious rail as of a uniformly-green one.
+
+Figures after taking the base forward: **556 suites / 7,155 passed / 12 skipped
+/ 7,167 total, exit 0.** (Pre-merge, 20d alone on the old base: 551 / 7,068 /
+12 / 7,080.) Typecheck clean; eslint reports zero errors and two pre-existing
+`no-inner-declarations` warnings in `mcp/modules/wpe/` files this packet never
+touched.
+
+**WP-20d MERGED (2026-08-17)** — merge `f3a3fdac`, 16 files, **+1,896/−27**.
+
+    docs/intelligence/WORK_PACKETS.md                            | 223 +
+    law/runbooks/bulk-plugin-update.md                           |  27 +-
+    docs/intelligence/anchor-slice/runbooks/bulk-plugin-update.md |  27 +-
+    src/main/intelligence-host/procedureCursor.ts                | 241 +
+    src/main/intelligence-host/sequenceGuard.ts                  | 175 +
+    src/main/intelligence-host/chatAssembly.ts                   |  74 +-
+    src/main/mcp/tool-registry.ts                                |  26 +
+    src/main/agent-runtime/AgentDispatcher.ts                    |  24 +
+    src/intelligence/assemble/procedure.ts                       |  34 +-
+    src/intelligence/assemble/types.ts                           |  14 +
+    src/main/intelligence-host/__tests__/procedureCursor.test.ts | 357 +
+    src/main/intelligence-host/__tests__/sequenceGuard.test.ts   | 297 +
+    src/main/intelligence-host/__tests__/sequenceGuardWiring.test.ts | 264 +
+    src/main/intelligence-host/__tests__/procedureTurnCarrier.test.ts |  62 +-
+    src/intelligence/__tests__/shippedRunbooks.test.ts           |  62 +-
+    src/main/mcp/modules/fleet/__tests__/loadProcedure.test.ts   |  16 +-
+
+**Re-measured baseline on the merged `poc/nexintelligence`** (`npm test` in the
+primary checkout, compiled, exit code captured before any pipe): **exit 0 ·
+556 suites passed · 7,165 passed · 2 skipped · 7,167 total · 0 failed.**
+
+Read the skipped column first, as the protocol now says twice: the branch
+measured 7,155 passed / **12** skipped over the same **7,167** total. Ten
+embedding tests gate on model files the primary checkout has and a worktree does
+not — same total, different split, and the third packet in a row to see it.
+
+**ABI state on exit: SYSTEM NODE (141).** This session ran `npm test` five
+times plus a 25-mutation battery; `better-sqlite3` is built for the shell's Node
+(measured 25.9.0 → 141; `.nvmrc`/CI is 22.16.0 → 127). **`npm run rebuild`
+before loading Local** (Electron 42.2.0 → 146). No real-app pass: with WP-20b
+merged the arming paths are live, but a live pass would need a chat turn that
+arms `cap.bulk_plugin_update` against a real fleet, which is WP-20e's sitting
+territory rather than a smoke test.
+
+---
+
 **ARCHITECT ADJUDICATION — WP-20d (2026-08-17).** Merge `f3a3fdac`
 accepted. Fidelity of both verbatim commits verified by hash —
 `64f7ee53` and `7412828f` reproduce the architect's files md5-identically
@@ -6908,3 +7172,70 @@ break this?" is the wrong first question.
 **Consequence for whoever rebuilt: the tree is back on SYSTEM NODE (141).** The
 re-measure ran the `pretest` guard, which rebuilt `better-sqlite3` for the
 shell's Node. If you were mid-`npm run rebuild` for a Local load, run it again.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-23 (2026-08-17).** Merge `9f09961c` accepted
+— and this entry opens with the architect's own incident, because the
+record demands it before anything else.
+
+**The "WORK_PACKETS compaction" at `bba8d0dc` was not a compaction. It was
+an architect-side clobber, and it is now repaired.** The architect's 20d
+adjudication was written to disk from a STALE working copy — staged before
+the WP-20d agent's packet sections were committed, appended to, and
+written back without re-staging and without the mtime guard the bridge
+provides for exactly this. The write silently deleted the WP-20d packet
+record (announcement, outcome, findings, judgement calls, seam notes,
+addendum, merge receipt — 258 lines). The WP-23 agent then did precisely
+what the protocol instructs: committed what it found, verbatim,
+attributed, and FLAGGED the −268 for fidelity check — the protocol worked;
+the failure was upstream of it. Repair, completed with this entry: the
+deleted sections were recovered from `bba8d0dc^` and re-inserted at their
+original positions (+264 lines, pure insertions, `git diff --stat`
+confirms no deletions). Nothing was ever lost from git history; the
+working record is whole again. **Architect process rule, binding on the
+architect:** WORK_PACKETS is re-staged from disk immediately before every
+append, and every write-back carries the mtime guard. An append-only
+record's greatest threat was never the agents — it was an architect with
+a stale copy and an unguarded write.
+
+**The residual: retired, and the mea culpa is specific.** The
+"four-reds-after-compile" outlier that bought this packet its number
+originated in the ARCHITECT'S WP-23 registration, not in WP-19b's report —
+"post-compile" was the registration's paraphrase, and three measurements
+kill it (no `lib/` in the wp-19b worktree at all; no compile claim
+anywhere in the report; the report's own hypothesis names a file the
+fixture doesn't write). The agent's generalisable finding is adopted
+VERBATIM into the protocol's Communication section: **a speculative cause
+and a measured observation must not share a paragraph** — the guess
+inherited the observation's authority, propagated through an adjudication,
+and cost a packet number. The check that dissolved it was one `ls`. Noted
+with appreciation: the packet spent its budget proving what the defect
+was NOT (wrong-ABI gives 0 tests, never four reds; cache ruled out by
+four runs; races ruled out by racing) — that is what makes the retirement
+final rather than fashionable.
+
+**The fix: RATIFIED.** One line of substance — the fixture now requires
+the SDK source `__dirname`-relative, closing both the compile dependency
+and the latent cwd-resolution hole; no assertion touched, no stub
+substituted, and M3 (mutate `defineAgent` in `src/` while `lib/` sits
+pristine → 4 reds) is direct proof the fixture reads source. Baselines
+identical before/after including skipped — correct for a packet that adds
+no test. Acceptance criterion met literally: fresh worktree, `lib/`
+verified absent, 11/11.
+
+**Doc corrections, all done with this entry:** the proposed protocol
+replacement text is adopted verbatim (with its three-signature
+disambiguation: four AgentRegistry reds = not this anymore; 0-tests
+import failure = wrong ABI; uneven native-suite failures = mid-run flip);
+the CLAUDE.md reference the registration claimed does not exist —
+corrected count accepted, nothing to edit; INTELLIGENCE_ROADMAP moves
+WP-23 to done. The live third signature (the flip firing during the
+agent's own merge verification) is folded into the protocol text rather
+than a separate paragraph.
+
+**State:** the board is 20e in flight, then WP-20 phase 2 closes. The
+worktree/branch housekeeping backlog now includes `.worktrees/wp-23`.
+ABI: the WP-23 session ran `npm test` last (system Node) unless the
+pretest guard was flipped since — `npm run rebuild` before loading Local,
+as ever.
