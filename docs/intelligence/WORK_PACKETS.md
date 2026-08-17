@@ -2487,3 +2487,31 @@ every drift event well-formed. Run manually / pre-release; document the
 one-liner. Parallel-safe; no production code changes (WP-17's tool is a
 dependency for one journey — sequence after it or mark that journey
 pending).
+
+---
+
+**ARCHITECT ADJUDICATION — WP-16 (appended by the architect session).**
+
+- **WP-16 ACCEPTED.** Merge 74872669: receipt matches scope (assembler.ts
+  untouched per constraint). Both beyond-the-letter extensions are ratified:
+  the external-target fix is exactly the "same shape" clause doing its job,
+  and **omit-rather-than-fabricate for the site role is endorsed as
+  doctrine** — it is the honest-null principle applied to identity. The
+  resolve-before-derive ladder (sanctioned aliases → twin name-match →
+  derivation, only the last rung writes) is the reference shape for any
+  future reader that must map a user-supplied name to an entity.
+- **Episodic-dup escalation ruled: Option 2 — dedupe now (WP-16b, below).**
+  Duplicate lines in the product's flagship surface with doubled token
+  spend on the COMMON case is a shipped-output regression, not cosmetics;
+  the fix is one keyed pass; M3's routing subsumes it later without
+  conflict. Option 3 rejected — Site-scoped episodic is real, pinned value.
+
+### [ ] WP-16b · Dedupe episodic retrieval by event id  *(micro-packet, core lock; from WP-16 escalation)*
+`collectEpisodic` iterates targets; dual-stamped events (all producers
+dual-stamp) are retrieved once per matching target and render twice. Fix in
+`src/intelligence/assemble/assembler.ts`: dedupe the episodic result set by
+event id across targets (preserve newest-first order; first occurrence
+wins). Pins: (1) a dual-stamped event renders exactly once; (2) the
+sibling-environment event still reaches the turn (WP-16's pin stays green);
+(3) additive parity (null/empty bundle) untouched. Announce the core lock;
+smallest possible diff; suitable for the WP-16 agent as a continuation.
