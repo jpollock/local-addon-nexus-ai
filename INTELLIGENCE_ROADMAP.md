@@ -149,6 +149,27 @@ survive the flip for the two production-scoped capabilities), WP-20g, guided-run
 today, revived by any full-body guided delivery), pre-commit YAML parse
 for law docs, `arms_on:` authoring on the shipped set.
 
+## The design workstream (consolidated 2026-08-18)
+
+*Method docs: `moments-model.md` (the taxonomy, 1.3) ·
+`DESIGN_DECISIONS.md` (the register, XD-1..19) · `DESIGN_PROTOCOL.md`
+(how the loop runs) · journey evals J-Glance/J-Inspect/J-Act-small/
+J-Return/J-Refusal bound at designer §1 (+ J-Act-big=B-03,
+J-Investigate=D-02).*
+
+**Designer cycles:** 1 (NOW) — M4's two densities, RB-D/E harmonized to
+canonical, scope block at both heads split-state included · 2 (after
+WP-25) — needs-you/Return as triage against the consequence order,
+coalescing + reserved slot as constraints · 3 — the corroboration
+render (M5's center). Then the lineage session (explanation lines
+against real records).
+
+**Method instruments, near-term:** journey specs into the eval
+registry (packet, parallel-safe — BLOCKED-never-green applied to the
+experience); the first design sitting = the post-WP-31 t1/t2 replay
+run as J-Refusal's judged half; the walks fold (transitions, not
+states) when instrumentation is next touched.
+
 ## UX implementation — four phases (ruled 2026-08-18)
 
 **Governing frame (2026-08-18): the moments model** — six working
