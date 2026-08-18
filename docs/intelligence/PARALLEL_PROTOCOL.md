@@ -168,7 +168,11 @@ fail with yesterday, suspect the ABI before the code.
    position — the "mutation" compiled to nothing and the witness was invalid.
    Before crediting a kill, confirm the mutation actually changes emitted
    behavior; the honest witness restores the whole pre-fix construct (value
-   import AND the runtime use) and goes RED against that.
+   import AND the runtime use) and goes RED against that. **Second trap in
+   the same family** (WP-26): jest's `toEqual` treats an `undefined` array
+   element as equal to an absent one — a handler that ALWAYS pushed its
+   argument passed a test whose entire subject was absent-vs-present. When
+   presence itself is the assertion, assert length or use `toStrictEqual`.
 5. Diff reviewed against the pattern's exemplar for structural drift.
 6. Packet checklist updated in `WORK_PACKETS.md` (checkbox + one-line outcome
    note + anything learned that should amend a pattern), and the ABI state

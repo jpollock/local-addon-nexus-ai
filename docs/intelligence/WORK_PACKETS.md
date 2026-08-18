@@ -8301,3 +8301,271 @@ MEASURED and the trial merge was aborted — nothing merged.
   `procedureView` directly, WP-26 re-exports them through
   `common/chat-types` — is cosmetic and is a merge-time decision, not a
   defect in either.
+
+---
+
+### [x] WP-27 · Procedure surfaces in the Docked Panel — DONE
+
+**Branch `wp-27`, worktree `.worktrees/wp-27`. 8 files, renderer-additive.
+Lock as assigned: `src/renderer/components/DockedPanel/` only. Nothing
+under `src/main/intelligence-host/` was touched — WP-26 holds it — and
+`procedureView.ts` is consumed exactly as it exists on the base.**
+
+Four surfaces, all rendering data the seam derived, none computing a fact:
+the declared-procedure block (runbook id, version, "marked strict",
+`armedBy` phrase, the ordered checkpoint list), the RB-A2 collapsing
+checklist (attested folds to one line, a finished run folds to one row with
+the rail reachable), the "runbook added this" badges with `checkpointReason`
+lines, and the abort-groups panel (derived headline verbatim, four groups,
+per-site rows, restore as a launcher).
+
+**THE FINDING THAT SHAPED THE WHOLE PACKET — the renderer may not
+value-import `procedureView.ts`, and the reason is measurable.**
+`require('…/procedureView')` loads **77 modules, thirteen of them
+better-sqlite3**: the seam reaches `sequenceGuard` → `coreRegistry` → the
+intelligence core → a native module. Under jest that is invisible (the
+pretest hook keeps better-sqlite3 on the shell's ABI); in Local's renderer
+it is `NODE_MODULE_VERSION` thrown at panel load — an intelligence-layer
+failure breaking a surface that predates the intelligence layer, which is
+the one thing this seam may never do. **This is WP-24's electron-stub
+finding with the arrow reversed**: there, jest's electron mock hid a break
+in plain Node; here, jest's correct ABI hides a break in Electron. Same
+lesson, restated: *the environment that runs the tests is not the
+environment that runs the product, and a seam is exactly where they
+differ.*
+
+So: shapes cross as `import type` (elided), and the four values a surface
+needs — `ATTEST_WORDS`, `BADGE_LABEL`, the tick predicate, the badge
+builder — are **mirrored in `procedureModel.ts` and pinned to the originals
+by a shared case table** (15 rows, every status × attest). That is this
+repo's existing answer for one rule in two bundles that cannot share a
+runtime: `localDay`, `resolveAgentCron`/`effectiveCadenceExpression`. A
+third instance of the pattern; it should probably be named in CLAUDE.md as
+a pattern rather than as three separate facts.
+
+**The graph pin lives in its own suite, and the first version of it was
+worthless.** `procedureModel.isolation.test.ts` requires the renderer
+modules and asserts `require.cache` holds no better-sqlite3. Written
+initially beside the mirror tests — which import `procedureView` themselves
+— it measured its own imports and failed against correct code. *A graph
+assertion is worth exactly the isolation it has.* Same family as the
+vacuous-guard shapes already on this board.
+
+**The tick takes BOTH conditions.** `showsTick = state.verified === true &&
+isVerified(state)`. Inside the host those cannot disagree; a stream event is
+data that arrived from elsewhere, and a surface trusting either alone ticks
+a narrative checkpoint the day something upstream gets it wrong. Both
+conjuncts have their own witness (M2, M3 below).
+
+**Three honesty rules the render enforces, each with a witness:** a group
+the ledger cannot populate is NAMED with its `unavailable` reason and never
+rendered as an empty list ("0 skipped" is a claim nothing recorded); site
+outcomes carry **no version slot at all** plus a marked absence line, per
+the ABSENT-not-empty ruling (a dash reads as "unchanged", a third claim
+again); and a badge whose runbook authored no reason shows without one.
+
+**"Restore this site" is a launcher and provably not an actor** (v6 Q7).
+It takes no callback, reaches no IPC, and renders the instructive refusal
+the request would meet — "No restore runbook is loaded… this panel launches
+it, it does not perform it" — beside the platform's own `restore.note`. A
+pin asserts the rendered text never contains "restored".
+
+**`canary_policy` is not rendered at all.** The brief permitted a read-only
+default-labelled render; declined, because WP-26's approval card is that
+field's producer and ships with it. Less surface, and no chance of two
+packets rendering the same choice differently in the same week.
+
+**The parity pin is an artifact captured BEFORE the first line of code**
+(`tests/unit/renderer/__fixtures__/panelChat-parity-base.json`,
+`PanelChat.render()` serialized at base `9699d752`). A snapshot generated
+after the change pins the change to itself. The trap it closes is real and
+was one keystroke away: React children are positional, so a conditional
+`null` child is NOT the same tree as no child — rendering the band as
+`cond ? <band> : null` would have changed the panel for every user who has
+never run a procedure. It is spread from an array that is empty when
+nothing is armed (witness M11).
+
+**The one seam, one swap point.** `PanelChat.onStreamEvent` folds the three
+shapes through `applyProcedureEvent` off the stream it already consumes; a
+test drives the identical events through the fake emitter and by hand and
+asserts the rendered trees are equal. WP-26's emitter puts the same shapes
+on the same channel — the swap is the subscription and nothing below it.
+The reducer returns the SAME object for every other event (`token`,
+`tool_call_start`, …), so the rail is not rebuilt per character (M6).
+
+**Mutation battery — 12 witnesses, 12 RED, 0 survivors.** Each recreates a
+real pre-fix shape, not a syntactic shadow; M1–M3, M6 verified to fail on
+assertions with `compile-error=False`, since a kill by compiler is not a kill.
+
+| # | witness | dies on |
+|---|---|---|
+| M1 | the uniform rail — `status === 'attested' ? tick` (the exact "easy render" §7 names) | 3 tests |
+| M2 | trust the event's `verified` flag alone | 2 tests |
+| M3 | trust the declaration alone, ignoring whether the platform proved it | 1 |
+| M4 | recompute the denominator renderer-side instead of reading the armed one | 1 |
+| M5 | let a diff append a checkpoint the declaration never listed | 1 |
+| M6 | reducer answers every stream event with a new object | 1 |
+| M7 | a group with no producer renders as an empty list | 1 |
+| M8 | invent a badge reason when the runbook authored none | 1 |
+| M9 | the restore launcher never shows the refusal it would meet | 1 |
+| M10 | an attested checkpoint stays expanded (the 540px budget lost) | 1 |
+| M11 | the band as a conditional child instead of a spread (parity) | 1 |
+| M12 | the seam value-imported into the renderer — WHOLE pre-fix shape (value import AND runtime use, per WP-24's elision trap) | 3 |
+
+**A legacy pin caught a real defect in this packet's own code**, which is
+the DoD item "legacy suites covering files you touched" earning its place:
+`panel-theme.test.ts` pins every `--nxai-*` the panel references to one the
+container actually injects, and this packet invented
+`var(--nxai-mono, monospace)`. It would have *rendered fine* — the fallback
+works — while leaving a dangling variable reference behind it. Now plain
+`monospace`, with the reason in a comment so it is not "tidied" back.
+
+**Baselines** — same worktree, `npm test`, exit code captured BEFORE any
+pipe (`npm test > log; echo $?`):
+
+| | suites | passed | skipped | total | exit |
+|---|---|---|---|---|---|
+| before | 557 | 7207 | 12 | 7219 | 0 |
+| after | 561 | 7273 | 12 | 7285 | 0 |
+
+Delta **+66 tests, +4 suites** — exactly the four new suites (31 model + 3
+isolation + 26 surfaces + 6 parity). **Skipped column unmoved at 12**, so
+the delta is real and not a gating artefact. Zero FAIL lines in either run.
+`npm run typecheck` clean; `npx tsc -p tsconfig.test.json --noEmit` clean.
+`npm run lint`: 0 errors, 6 warnings, all pre-existing, none in a file this
+packet touched.
+
+**ABI state on exit: SYSTEM NODE.** Measured here, not quoted: `node -v` →
+**v25.9.0**, `node -p process.versions.modules` → **141**. `npm run rebuild`
+is required before loading Local.
+
+**Left for WP-26, deliberately untouched:** emission of all three events,
+the approval card, `canary_policy`'s producer. **Registered from this
+packet:** (a) the mirror-plus-shared-case-table pattern now has three
+instances and wants a name in CLAUDE.md rather than three separate entries;
+(b) `SiteOutcomeRow` renders the entity id because this surface has no name
+source — the row is honest but unreadable to a human, and whichever packet
+gives the panel a resolver should take it; (c) `data-*` attributes are this
+packet's test seam (`data-checkpoint`, `data-abort-group`, `data-restore`)
+— they ship to the DOM and are cheap, but if a later packet adds a real
+test id convention these should join it.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-27 (2026-08-18).** Merge `0d14db03`
+accepted. Fidelity of `edb30f80` verified by hash — the WP-25 design
+note is md5-identical (`9e5304…`) to the architect's original, and the
+agent quoting the hash IN the report is an improvement the practice
+should keep. +66 tests = exactly the four new suites; skipped unmoved in
+the worktree pair; 12/12 mutations with four re-verified as
+assertion-kills under compile-error=False — the doctrine, applied
+without being asked.
+
+**The finding that shaped the packet is RATIFIED and is bigger than the
+packet:** the renderer value-importing `procedureView.ts` loads 77
+modules including better-sqlite3 thirteen times over — invisible under
+jest (whose ABI is correct), fatal at panel load under Electron. WP-24's
+electron-stub finding with the arrow reversed, exactly as the report
+says: each runtime's test environment hides the OTHER runtime's break.
+The `import type` + mirrored-values + 15-row shared case table +
+isolation suite is the correct treatment — and the isolation pin's
+first-version failure (it imported the seam itself and measured its own
+imports) is candidly disclosed and correctly rebuilt: a graph pin that
+participates in the graph pins nothing. **Registered as a candidate
+micro:** this is the THIRD instance of the mirror-with-case-table
+pattern; at three, the underlying cause has earned a look — extracting
+the derivations into a renderer-safe pure module (no transitive core
+imports) would retire the mirror class entirely. Not demanded now; the
+mirror is pinned and honest.
+
+**Both judgment calls RATIFIED, one promoted to doctrine:** (1)
+`canary_policy` not rendered at all — right; one field, one producer,
+one renderer, and WP-26's card is all three; two packets rendering the
+same choice in the same week is how surfaces diverge. (2) "attested"
+over the brief's "proved" — right, and the PRECEDENCE is the doctrine:
+**Controlled Vocabulary v1.1 outranks the literal wording of an
+architect's prompt.** A prompt is instruction; the vocabulary is law;
+when they conflict, the agent follows the law and says so — which is
+exactly what happened. The architect's prompts will still err; the
+vocabulary is why it doesn't matter.
+
+**Also noted with appreciation:** the legacy theme pin rejecting the
+invented `var(--nxai-mono, monospace)` — a dangling variable reference
+that would have rendered fine on its fallback forever; legacy pins
+catching new code is the compact working as designed. And the swap
+point: `PanelChat.onStreamEvent` folds anything shaped like the three
+events, with a test proving fake-emitter and hand-fed events render
+identical trees — WP-26's wiring is a subscription, as scoped.
+
+**State:** phase 1 of the UX is half-landed — the surfaces exist and
+render from fixture streams; WP-26 (emission + approval card) completes
+it and holds at the gate for the `canary_policy` payload ratification.
+WP-25's design note awaits owner review. ABI note: the report does not
+state ABI on exit; the panel-load finding implies jest ran — assume
+SYSTEM NODE, `npm run rebuild` before loading Local.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-26 GATE (2026-08-18).** Branch `wp-26`,
+held pre-merge as instructed. Both ratifications ruled, the merge
+condition cleared, one small required addition before merge.
+
+**Ratification 1 — the `canary_policy` payload: RATIFIED as registered.**
+One optional field on `task.rationale.recorded`, no new topic, no schema
+version bump, no envelope field, no marker; the reader already looked
+for the key; validated at the producer, dropped on denial, never
+authored when nobody chose. This is the smallest honest widening the
+field could have had.
+
+**Ratification 2 — the approval card firing on the guard's cp.approval
+refusal: RATIFIED, with one required line of copy.** The gap it closes
+is real and embarrassing in the right way: the anchor capability was
+refused FOREVER in the product because nothing produced cp.approval —
+and it survived because WP-20e's probe supplied approvals itself,
+which is now the canonical example of a harness answering the question
+the product needed to ask. The added condition is correctly shaped: it
+fires only when the guard is ALREADY refusing on exactly that
+checkpoint, so it can only add a gate, never bypass one. On the stated
+worry — a card on an improvised call lets a human bless an unshown
+plan — the ruling is that this is the P4 boundary seen from a new
+angle, not a new hole: cp.dry-run is narrative BY RULING, so the
+platform verifying plan-was-shown before carding would claim a
+verification the ruled model says it cannot make. The honest treatment
+is the one this project always uses — SAY the boundary: **required
+before merge, one derived line on the card when the preceding narrative
+checkpoint is unattested-by-record: "The runbook requires a dry-run
+plan before this approval. The platform can't verify one was shown —
+read the plan above before approving."** (Wording may be tuned to
+v1.1; the semantic content — platform-can't-verify + read-the-plan —
+is the requirement. One string, one test.) The card ships reachable;
+the human is told exactly what the platform does and does not know.
+The sitting-behavior change (card fires → rubber-stamp approves →
+cp.approval attests → still refused at cp.backup) being pinned as
+three facts rather than allowed to pass for a new reason silently is
+exactly right.
+
+**The two-packets-one-file condition: MERGE CLEARED.** The agent did
+the protocol's stop-and-ask with measurements attached — PanelChat.tsx
+auto-merges in disjoint regions, the only conflict is the append-only
+WORK_PACKETS (resolved append-only per precedent), the trial-merged
+tree runs 129 suites green, and WP-27's native-import hazard was
+CHECKED rather than assumed (the widened union compiles to the
+__esModule preamble and nothing else). Merge on the trial-merge's
+terms; re-run the full suite on the merged tree before reporting.
+
+**Findings ratified:** stream folds after the manifest and agrees with
+the GATE, not the carrier (the card must arrive on the turn the gate
+demands the answer); the register-before-emit fix for the pending
+approval (a real latent race that production escaped only by IPC
+timing — found by a timeout, fixed at the cause); the
+`deriveAbortGroups` empty-`untouched` fix (an unexplained empty set is
+the claim its own skipped note refuses to make — WP-26 made it
+reachable, WP-26 fixed it). **The `toEqual`-ignores-undefined witness
+trap is promoted to protocol with this entry** (second member of the
+elision family: when presence is the assertion, `toStrictEqual` or
+assert length).
+
+**On merge:** report receipts as usual (`git diff --stat <merge>^1
+<merge>`), re-measured baseline on the merged tree, ABI on exit. Phase
+1 of the UX completes with this merge; the B-03 sitting's next run will
+exercise the card for real.
