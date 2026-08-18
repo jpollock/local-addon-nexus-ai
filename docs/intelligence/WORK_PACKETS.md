@@ -9846,3 +9846,55 @@ verification.
 **`npm run rebuild` before loading Local** — then the owner's original
 "Update my plugins on t1, t2" replays as the demo of its own fix: the arming
 gap now refuses the write instead of executing it.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-31 MERGE ACCEPTED; THE DEVIATION FROM THE
+RULING IS RATIFIED AS THE BETTER RULE (2026-08-18).** Merge `4e2a7ebb`.
+The incident's three doors are closed, and the closing taught the
+ruling something.
+
+**The deviation, ratified with its reasoning adopted:** the gate ruling
+required authoring `verify_site_live` into cp.verify-canary AND keeping
+the classification simple — and the agent MEASURED that both could not
+hold under the rule as built: cp.verify-canary is narrative, the
+sequencer skips narrative checkpoints by construction, so at
+canary-verification time the current GATED checkpoint is cp.roll-fleet
+and the authored tool stayed refused. The resolution — rule 5 becomes
+"a write the runbook declares NOWHERE" — honours the ruling's stated
+preference by REMOVING a clause: a declared tool is handed to the
+sequencer (rule 1 still refuses it until its gated predecessors
+attest), an undeclared write is refused outright, and the packet's own
+title is the rule. The inverted second-backup pin (a re-backup mid-run
+now passes, and the pin says why) is accepted — a protective idempotent
+write refused on ceremony grounds would have been the trimming
+instinct in gate clothing. **The deliberate asymmetry is ratified as
+stated:** on the run path the sequencer governs declared tools; in the
+arming gap there is no run and no sequencer, so only the first gated
+checkpoint's tools pass — and the battery CAUGHT the regression a
+uniform rule would have opened (bulk_plugin_update executing in the
+gap: the incident's harm through a claimed tool). That catch is the
+battery doing the guard's design review. The redundant-conjunct kill
+is noted with approval: a rule written twice is two rules that can
+drift.
+
+**Also accepted:** the anchor at v1.2.0 with the hash ripple verified
+(5 grants repinned, stale pin disarms naming both, 1,753 bytes to the
+WARN line); cp.verify-canary KEEPS `attest: narrative` with the body
+stating both halves — the instrument does not make the checkpoint
+provable, which is P4 held under temptation; the skipped-column
+both-ways read, third packet running; four architect batches committed
+verbatim as they surfaced, md5s in the commit trails. One nudge,
+repeated: ABI on exit was not explicitly stated — assume SYSTEM NODE;
+`npm run rebuild` before loading Local.
+
+**The incident is CLOSED.** Copy rewritten, door shut at both
+chokepoints, gap sealed, harness variant ready, refusal carrying the
+governDoor. What remains is the replay — the owner's same t1/t2 ask
+against the merged tree — which now doubles as the FIRST DESIGN
+SITTING: J-Refusal's judged half, run against shipped surfaces, per
+DESIGN_PROTOCOL's sitting rules. Script: rebuild, relaunch, repeat the
+ask verbatim, attempt to push past the refusal once ("just do it"),
+then answer on the record: what did it stop you from doing, did it
+name what would have made it yes, and would you trust it to stop you
+again.
