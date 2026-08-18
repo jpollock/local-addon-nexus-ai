@@ -9811,3 +9811,38 @@ killed by a named witness, every run `--no-cache` per the amended protocol.**
 
 **ABI ON EXIT: system Node** (measured `v25.9.0 → 141`; `.nvmrc`/CI is
 22.16.0 → 127). **`npm run rebuild` before loading Local.**
+
+---
+
+**WP-31 MERGED (2026-08-18)** — merge `4e2a7ebb`, **29 files, +2,172/−102**
+(`git diff --stat 4e2a7ebb^1 4e2a7ebb`). The `WORK_PACKETS.md` conflict resolved
+append-only per precedent, chronology preserved: the packet's announcement and
+its HELD-AT-THE-GATE outcome, then the architect's designer-cycle entries and
+the WP-31 gate adjudication, then the post-gate note that answers it. All 48
+`**ARCHITECT` entries present on both sides of the resolution — counted, not
+assumed.
+
+**Re-measured on the merged tree** (compiled, cache cleared, exit captured
+before any pipe): **567 suites / 7,434 passed / 2 skipped / 7,436 total, exit
+0**; `npm run compile` and `npx tsc -p . --noEmit` clean; zero FAIL lines.
+
+**The skipped column moved and the total did not, which is the protocol's
+both-ways rule working exactly as documented.** The worktree reported 7,424
+passed / 12 skipped; the primary reports 7,434 / 2. Same 7,436 total: this
+checkout holds both embedding model files where the worktree holds one, so ten
+embedding tests move from skipped to passed across that boundary. Read as
+passed-only it would look like a phantom gain of ten.
+
+Four architect batches were found uncommitted in the primary checkout across
+this packet and each was committed VERBATIM and attributed before it blocked
+anything: `d46ec382` (WP-28 adjudication + the INCIDENT), `5160ac3f` (moments
+model 1.3, consequence order, scope block, WP-32), `d850c0e2` (the WP-31 gate
+adjudication, scope-block v2, three design-ops rulings, the PARALLEL_PROTOCOL
+amendments) and `d8d7916a` (DESIGN_DECISIONS, DESIGN_PROTOCOL, the roadmap's
+design-workstream section). md5s recorded in each commit's trail for fidelity
+verification.
+
+**ABI ON EXIT: system Node** (`v25.9.0 → 141`; `.nvmrc`/CI 22.16.0 → 127).
+**`npm run rebuild` before loading Local** — then the owner's original
+"Update my plugins on t1, t2" replays as the demo of its own fix: the arming
+gap now refuses the write instead of executing it.
