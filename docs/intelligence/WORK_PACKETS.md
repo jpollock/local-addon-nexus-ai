@@ -9347,9 +9347,11 @@ clean; eslint clean across `src/intelligence`, `src/main/intelligence-host`,
 `load-procedure.ts`, `ChatService.ts`, `src/renderer/components/DockedPanel` and
 `tests/intelligence-evals`; the seam rule was PROBED (an `electron` import into
 `src/intelligence/law/runbookRegistry.ts` produced the ADR-16 error, then was
-reverted and re-linted clean). **Mutation battery 28/28 killed by a named
-witness**; two of them survived their first witness and both were real coverage
-gaps, closed with new tests rather than re-labelled — see findings 3 and 4.
+reverted and re-linted clean). **Mutation battery: 27 distinct mutations, 32 witness runs, ALL KILLED by a
+named witness**, every run under `--no-cache` (finding 6). Two survived their
+first witness and both were real coverage gaps, closed with new tests rather
+than re-labelled — findings 3 and 4. A third "survival" was a harness fault and
+is finding 7.
 
 ### What was built
 
