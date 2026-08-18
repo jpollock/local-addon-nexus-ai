@@ -40,6 +40,7 @@ function cp(
     verified: false,
     reason,
     source: 'runbook',
+    unrequested: false,
     evidence: { summary: over.status ? '' : ATTEST_SUMMARY[attest] },
     ...over,
   };
@@ -52,18 +53,25 @@ const ATTEST_SUMMARY: Record<CheckpointState['attest'], string> = {
   narrative: 'your account only, not verified',
 };
 
-/** The eight, in declared order. Reasons are the runbook's own `## cp.x — reason` tails. */
+/**
+ * The eight, in declared order. Reasons are the runbook's own `## cp.x — reason`
+ * tails, and `unrequested` is the runbook's own authored mark (WP-28): four of
+ * the eight, which is the set the shipped document marks. `cp.roll-fleet` is
+ * unmarked and `cp.canary` is marked although they name the same tool — the
+ * fixture keeps that pair because it is the one that proves the badge is read
+ * from the document rather than inferred from structure.
+ */
 function checkpoints(): CheckpointState[] {
   return [
-    cp('cp.consult-history', 'manifest', 'has this bitten us before?'),
-    cp('cp.dry-run', 'narrative', 'show what would change'),
+    cp('cp.consult-history', 'manifest', 'has this bitten us before?', { unrequested: true }),
+    cp('cp.dry-run', 'narrative', 'show what would change', { unrequested: true }),
     cp('cp.approval', 'event', 'explicit, informed consent'),
     cp('cp.backup', 'event', 'before anything writes'),
-    cp('cp.canary', 'narrative', 'one low-risk site first'),
-    cp('cp.verify-canary', 'narrative', 'prove it before scaling it'),
+    cp('cp.canary', 'narrative', 'one low-risk site first', { unrequested: true }),
+    cp('cp.verify-canary', 'narrative', 'prove it before scaling it', { unrequested: true }),
     cp('cp.roll-fleet', 'event', 'the rest, watching'),
     // No `## cp.report` heading in the runbook body: a runbook that authored no
-    // reason must not be given one, so the badge shows without a reason line.
+    // reason must not be given one.
     cp('cp.report', 'narrative', null),
   ];
 }
@@ -74,7 +82,7 @@ export function armedFixture(): ProcedureArmedEvent {
     procedure: {
       capability: 'cap.bulk_plugin_update',
       runbookId: 'rb.bulk-plugin-update',
-      version: '1.0.0',
+      version: '1.1.0',
       strictness: 'strict',
       hash: 'sha256:9f2c1a7d4e6b0c83a15f2d9e7b4c6081a3d5e7f9b2c4d6e8f0a1b3c5d7e9f1a3',
       armedBy: 'predicate',

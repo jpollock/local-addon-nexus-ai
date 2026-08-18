@@ -130,7 +130,9 @@ describe('the shipped law/ directory', () => {
     const rb = load().registry.byCapability('cap.bulk_plugin_update');
 
     expect(rb?.id).toBe('rb.bulk-plugin-update');
-    expect(rb?.version).toBe('1.0.0');
+    // 1.1.0 at WP-28: the `unrequested:` marks are an additive authoring change
+    // to a reviewed document, so the version moves and the hash with it.
+    expect(rb?.version).toBe('1.1.0');
     expect(rb?.strictness).toBe('strict');
     expect(rb?.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
@@ -167,6 +169,49 @@ describe('the shipped law/ directory', () => {
       'cp.roll-fleet:event',
       'cp.report:narrative',
     ]);
+  });
+
+  it('marks exactly the ruled set as unrequested — the badge is not on every step', () => {
+    // WP-28 · the phase-1 smoke's finding 1. Every checkpoint rendered "runbook
+    // added this", cp.approval and cp.backup included, because v0 derived the
+    // badge from "is declared". The designer's ruled set is history-check,
+    // dry-run and the canary pair; approval, backup, roll-fleet and report are
+    // NOT badged — the user asked for the roll-out, and consent, a backup and a
+    // report are what the platform does about any write.
+    const rb = load().registry.byCapability('cap.bulk_plugin_update')!;
+
+    expect(rb.checkpoints.filter((c) => c.unrequested).map((c) => c.id)).toEqual([
+      'cp.consult-history',
+      'cp.dry-run',
+      'cp.canary',
+      'cp.verify-canary',
+    ]);
+    // Stated in the other direction too: the exclusions are a ruling, so a
+    // future edit that marks one of them fails here rather than quietly
+    // restoring the uniform badge.
+    for (const id of ['cp.approval', 'cp.backup', 'cp.roll-fleet', 'cp.report']) {
+      expect({ id, marked: !!rb.checkpoints.find((c) => c.id === id)!.unrequested }).toEqual({
+        id,
+        marked: false,
+      });
+    }
+  });
+
+  it('marks SOME but never ALL of every strict runbook’s checkpoints', () => {
+    // The property the badge has to keep to mean anything, held across the
+    // shipped set rather than only on the anchor: a document that badges
+    // everything has said nothing, and one that badges nothing has an
+    // authoring gap rather than a procedure with no additions.
+    const { registry } = load();
+
+    for (const rb of registry.runbooks({ strictness: 'strict' })) {
+      const marked = rb.checkpoints.filter((c) => c.unrequested).length;
+      expect({ id: rb.id, some: marked > 0, all: marked === rb.checkpoints.length }).toEqual({
+        id: rb.id,
+        some: true,
+        all: false,
+      });
+    }
   });
 
   it('gives every event-attested checkpoint a ledger selector, and every narrative one none', () => {
@@ -234,13 +279,17 @@ describe('the shipped law/ directory', () => {
       documents.filter((d) => d.kind === 'runbook').map((d) => [d.id, d.canonicalBytes])
     );
 
+    // Re-measured 2026-08-18 after WP-28's `unrequested:` authoring: the five
+    // strict documents grew by 549–633 bytes each (the marks plus the comment
+    // that explains what a reader is looking at). The two guided ones are
+    // untouched and their numbers are the WP-20c ones, unchanged.
     expect(bytes).toEqual({
-      'rb.bulk-plugin-update': 6369,
+      'rb.bulk-plugin-update': 7002,
       'rb.diagnose-site': 8970,
-      'rb.incident-containment': 8054,
-      'rb.incident-remediation': 8104,
-      'rb.promotion-execute': 6353,
-      'rb.promotion-preflight': 7573,
+      'rb.incident-containment': 8673,
+      'rb.incident-remediation': 8714,
+      'rb.promotion-execute': 6902,
+      'rb.promotion-preflight': 8184,
       'rb.wpe-pull': 8361,
     });
     // The ceiling was raised 8,192 → 10,240 at the WP-20c gate, on the evidence

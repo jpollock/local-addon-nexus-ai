@@ -278,7 +278,8 @@ describe('a strict run standing at its approval checkpoint', () => {
     const card = events.find((e) => e.type === 'tool_call_approval_needed')! as any;
     expect(card.procedure).toEqual({
       runbookId: 'rb.bulk-plugin-update',
-      version: '1.0.0',
+      // 1.1.0 since WP-28 authored the `unrequested:` marks on the document.
+      version: '1.1.0',
       strictness: 'strict',
       checkpointId: 'cp.approval',
       offersCanaryPolicy: true,
@@ -309,10 +310,33 @@ describe('a strict run standing at its approval checkpoint', () => {
     expect(rationale.payload as Record<string, unknown>).not.toHaveProperty('canary_policy');
   });
 
+  test('the card text does not repeat the reference the styled block already shows', async () => {
+    // WP-28 finding 2. The card renders the runbook, its version and the
+    // checkpoint from `procedure` as its own styled block; the warning line
+    // beneath it used to open with the identical sentence, so the reference
+    // appeared twice on one card. The block is the single place it belongs.
+    armAtApproval();
+    mockProviderInstance = toolCallingProvider({ id: 'c1', name: GATED_TOOL, arguments: {} });
+    const { service, events } = harness(() => ({ approved: true }));
+
+    await send(service);
+
+    const card = events.find((e) => e.type === 'tool_call_approval_needed')! as any;
+    expect(card.warning).not.toContain('rb.bulk-plugin-update');
+    expect(card.warning).not.toContain('marked strict');
+    expect(card.warning).not.toContain('cp.approval');
+    // Still a card with something to say — dropping the duplicate must not
+    // leave the warning line empty.
+    expect(String(card.warning).length).toBeGreaterThan(0);
+  });
+
   test('the recorded prompt names the runbook the human was shown', async () => {
-    // `prompt` is "the card the human was shown", verbatim. The card leads with
-    // the plan reference, so a prompt that omitted it would make the ledger's
-    // own claim about itself untrue.
+    // `prompt` is "the card the human was shown", verbatim — the WHOLE card,
+    // including the styled reference block, which is why WP-28 dropped the
+    // duplicate from the warning LINE and not from the recorded text. A prompt
+    // that omitted the reference would make the ledger's own claim about itself
+    // untrue, and would leave a rationale event that cannot say which document
+    // the decision was taken under.
     armAtApproval();
     mockProviderInstance = toolCallingProvider({ id: 'c1', name: GATED_TOOL, arguments: {} });
     const { service } = harness(() => ({ approved: true }));

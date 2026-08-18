@@ -215,7 +215,9 @@ describe('the approval context the card is emitted with', () => {
 
     expect(procedureApprovalContext('s1')).toEqual({
       runbookId: 'rb.bulk-plugin-update',
-      version: '1.0.0',
+      // 1.1.0 since WP-28 authored `unrequested:` on the shipped document. This
+      // context is read from the real law/ directory, so the version moves with it.
+      version: '1.1.0',
       strictness: 'strict',
       checkpointId: 'cp.approval',
       offersCanaryPolicy: true,

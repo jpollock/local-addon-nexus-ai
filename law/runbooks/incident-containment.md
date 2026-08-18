@@ -1,7 +1,7 @@
 ---
 id: rb.incident-containment
 kind: runbook
-version: 1.0.0
+version: 1.1.0
 strictness: strict
 capability: cap.incident_containment
 owner: ops
@@ -31,11 +31,22 @@ preconditions:                   # gateway-verified before checkpoint 1
   - id: pre.sources-present
     check: requires_sources are reachable (ledger queryable, policy set fresh)
 checkpoints:                     # ordered; strict — gated calls out of sequence are refused
+  # unrequested: a step the user did not ask for — the surface badges it
+  # "runbook added this" (§5b). Authored, never derived. Consent, backups and a
+  # closing report are the platform's own ceremony and stay unmarked, per the
+  # anchor runbook's ruled set.
+  # Marked: isolate (taking the site out of service was not requested),
+  # snapshot (preserving the infected state before touching it), entry-vector
+  # (how they got in, which is work beyond "clean this up"). Triage and the
+  # integrity diff ARE the investigation that was asked for.
   - id: cp.triage
   - id: cp.isolate
+    unrequested: true
   - id: cp.snapshot         # evidence before cleanup, always
+    unrequested: true
   - id: cp.integrity-diff
   - id: cp.entry-vector
+    unrequested: true
 aborts:
   - id: ab.evidence-not-preserved
     on: cp.snapshot fails, or cannot be verified, and cleanup would proceed anyway

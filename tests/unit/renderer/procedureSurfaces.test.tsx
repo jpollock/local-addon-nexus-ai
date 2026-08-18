@@ -90,7 +90,7 @@ describe('the declared procedure', () => {
   it('names the runbook, its version, and that it is marked strict', () => {
     const out = text(render(MID_RUN()));
     expect(out).toContain('rb.bulk-plugin-update');
-    expect(out).toContain('1.0.0');
+    expect(out).toContain('1.1.0');
     expect(out).toContain('marked strict');
     expect(out).toContain('cap.bulk_plugin_update');
   });
@@ -158,22 +158,56 @@ describe('the declared procedure', () => {
 // ---------------------------------------------------------------------------
 
 describe('“runbook added this” badges', () => {
-  it('badges an unasked-for step with the runbook’s own reason', () => {
-    const rows = walk(render(MID_RUN())).filter((n) => n?.props?.['data-checkpoint']);
-    const backup = rows.find((n) => n.props['data-checkpoint'] === 'cp.backup');
-    expect(text(backup)).toContain(BADGE_LABEL);
-    expect(text(backup)).toContain('before anything writes');
+  const rowsOf = (state: any) =>
+    walk(render(state)).filter((n) => n?.props?.['data-checkpoint']);
+  const row = (state: any, id: string) =>
+    rowsOf(state).find((n) => n.props['data-checkpoint'] === id);
+
+  it('badges a step the runbook MARKED unrequested, with the runbook’s own reason', () => {
+    const canary = row(MID_RUN(), 'cp.canary');
+    expect(text(canary)).toContain(BADGE_LABEL);
+    expect(text(canary)).toContain('one low-risk site first');
   });
 
-  it('shows the badge without a reason when the runbook authored none', () => {
-    // `cp.report` has no `## cp.report — …` heading in the runbook body. Inventing
-    // a reason puts words in an author's mouth on a document whose whole authority
-    // is that a human reviewed it.
-    const rows = walk(render(MID_RUN())).filter((n) => n?.props?.['data-checkpoint']);
-    const report = rows.find((n) => n.props['data-checkpoint'] === 'cp.report');
+  it('badges nothing the runbook did not mark — WP-28, the uniform badge', () => {
+    // The live defect: every checkpoint said "runbook added this", cp.approval
+    // and cp.backup included, so the badge told a reader nothing. cp.roll-fleet
+    // is the sharp case — same tool as the badged cp.canary, and unmarked.
+    for (const id of ['cp.approval', 'cp.backup', 'cp.roll-fleet', 'cp.report']) {
+      const unmarked = row(MID_RUN(), id);
+      expect({ id, badged: text(unmarked).includes(BADGE_LABEL) }).toEqual({ id, badged: false });
+      expect({ id, reasons: walk(unmarked).filter((n) => n?.props?.['data-badge-reason']).length })
+        .toEqual({ id, reasons: 0 });
+    }
+  });
+
+  it('renders the badge on exactly the marked set, and only while a row is expanded', () => {
+    const badged = rowsOf(MID_RUN())
+      .filter((n) => text(n).includes(BADGE_LABEL))
+      .map((n) => n.props['data-checkpoint']);
+    // cp.consult-history is marked AND attested by this point, so it has folded
+    // to one line — the RB-A2 rule outranks the badge, which is why it is absent
+    // here and its absence is not a badge failure.
+    expect(badged).toEqual(['cp.dry-run', 'cp.canary', 'cp.verify-canary']);
+  });
+
+  it('shows a marked badge without a reason when the runbook authored none', () => {
+    // Marked-but-reasonless is a real authoring state (a checkpoint with no
+    // `## cp.x — …` heading). Inventing a reason puts words in an author's mouth
+    // on a document whose whole authority is that a human reviewed it.
+    const armed = armedFixture();
+    const marked = {
+      ...armed,
+      procedure: {
+        ...armed.procedure,
+        checkpoints: armed.procedure.checkpoints.map((c) =>
+          c.id === 'cp.report' ? { ...c, unrequested: true, reason: null } : c,
+        ),
+      },
+    };
+    const report = row(afterEvents(marked), 'cp.report');
     expect(text(report)).toContain(BADGE_LABEL);
-    const reasons = walk(report).filter((n) => n?.props?.['data-badge-reason']);
-    expect(reasons).toEqual([]);
+    expect(walk(report).filter((n) => n?.props?.['data-badge-reason'])).toEqual([]);
   });
 });
 
@@ -194,7 +228,16 @@ describe('the collapsing checklist', () => {
     const rows = walk(render(MID_RUN())).filter((n) => n?.props?.['data-checkpoint']);
     const active = rows.find((n) => n.props['data-checkpoint'] === 'cp.backup');
     expect(active.props['data-folded']).toBe(false);
-    expect(text(active)).toContain(BADGE_LABEL);
+    // Expanded means it still says what would attest it. It carries no badge:
+    // cp.backup is not a step the user did not ask for (WP-28).
+    expect(text(active)).toContain(ATTEST_WORDS.event);
+  });
+
+  it('folds a marked checkpoint too — attested outranks badged', () => {
+    const rows = walk(render(MID_RUN())).filter((n) => n?.props?.['data-checkpoint']);
+    const done = rows.find((n) => n.props['data-checkpoint'] === 'cp.consult-history');
+    expect(done.props['data-folded']).toBe(true);
+    expect(text(done)).not.toContain(BADGE_LABEL);
   });
 
   it('folds a finished run to one row, with the rail still reachable', () => {

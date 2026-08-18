@@ -42,8 +42,8 @@ import React from 'react';
 import { UI_COLORS } from '../../../common/constants';
 import {
   ATTEST_WORDS,
-  BADGE_LABEL,
   armedByPhrase,
+  checkpointBadge,
   checkpointMark,
   denominatorLine,
   foldsToOneLine,
@@ -211,17 +211,22 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
       if (state.evidence?.summary && state.evidence.summary !== ATTEST_WORDS[state.attest]) {
         body.push(React.createElement('div', { key: 'ev', style: styles.sub }, state.evidence.summary));
       }
-      // §5b: unasked-for steps are badged. v0's only source of steps is the
-      // runbook, so every declared checkpoint carries it.
-      body.push(React.createElement('span', { key: 'badge', style: styles.badge }, BADGE_LABEL));
-      if (state.reason) {
-        body.push(
-          React.createElement(
-            'div',
-            { key: 'reason', style: styles.sub, 'data-badge-reason': state.id },
-            state.reason,
-          ),
-        );
+      // §5b: unasked-for steps are badged — and ONLY those (WP-28). The badge and
+      // its reason line are one thing: `checkpointBadge` answers null for a step
+      // the reviewed document did not mark, and a reason line under no badge
+      // would be an explanation of a claim the surface is not making.
+      const badge = checkpointBadge(state);
+      if (badge) {
+        body.push(React.createElement('span', { key: 'badge', style: styles.badge }, badge.label));
+        if (badge.reason) {
+          body.push(
+            React.createElement(
+              'div',
+              { key: 'reason', style: styles.sub, 'data-badge-reason': state.id },
+              badge.reason,
+            ),
+          );
+        }
       }
     }
 
