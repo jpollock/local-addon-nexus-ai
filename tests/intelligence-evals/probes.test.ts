@@ -159,11 +159,20 @@ describe('probeRefusalPayload', () => {
 describe('probeRendererSurfaces', () => {
   const surfaces = probeRendererSurfaces();
 
-  it('finds nothing under src/renderer for any journey surface', () => {
-    for (const [token, counts] of Object.entries(surfaces.counts)) {
-      expect(`${token}: ${counts.renderer}`).toBe(`${token}: 0`);
-    }
-    expect(surfaces.ok).toBe(true);
+  it('reports which journey surfaces are still absent — and which have landed', () => {
+    // NOT a blanket "everything is zero". That assertion was true when WP-33
+    // was written and false eight hours later: WP-32 merged `scopeBlock` into
+    // the renderer. A probe whose test freezes today's absences turns into a
+    // tripwire against its own project's progress, so what is pinned is the
+    // per-token reading, token by token, with the reason each one matters.
+    expect(surfaces.counts.needsYou.renderer).toBe(0); // Glance's row, Return's triage
+    expect(surfaces.counts.siteAtPlaces.renderer).toBe(0); // Inspect's comparator
+    expect(surfaces.counts.sessionRegistry.renderer).toBe(0); // WP-30's fold
+    expect(surfaces.counts.capabilityGrants.renderer).toBe(0); // Govern's matrix
+    // …and the one that HAS landed, pinned as present so its BLOCKED criteria
+    // cannot quietly go on citing it as missing.
+    expect(surfaces.counts.scopeBlock.renderer).toBeGreaterThan(0); // WP-32, merged
+    expect(surfaces.ok).toBe(false);
   });
 
   it('the scanner can actually find a token — otherwise every absence is free', () => {

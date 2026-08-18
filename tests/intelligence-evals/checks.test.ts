@@ -426,7 +426,7 @@ describe('the journey checks (WP-33)', () => {
       '`needsYou`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
       '`capabilityGrants`: 0 file(s) under src/renderer, 14 under src/ — the surface that would render it does not exist',
       '`siteAtPlaces`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
-      '`scopeBlock`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
+      '`scopeBlock`: 2 file(s) under src/renderer, 4 under src/ — present',
       '`sessionRegistry`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
     ],
   };
@@ -474,12 +474,20 @@ describe('the journey checks (WP-33)', () => {
   it('the two adjudication-routed criteria name the packets that inherited them', () => {
     // The §1 adjudication made these acceptance criteria of specific packets;
     // a BLOCKED that named a vague "future UI" would lose that routing.
+    // J-Inspect's scope identity was routed to WP-32 — which MERGED on
+    // 2026-08-18, so the honest form of that routing is no longer "waiting on
+    // WP-32". The criterion stays BLOCKED on the comparator that would produce
+    // a selection, and the delivered half is stated rather than dropped: a
+    // BLOCKED that keeps naming a shipped packet is how a stale gap survives.
     const scope = checkFor(
       'J-Inspect-divergence-to-scoped-intent',
       'key_step',
       'The selection becomes the next act\'s scope with nothing retyped and nothing re-picked.'
     )!;
-    expect(scope.run(ctx()).unblockedBy).toContain('WP-32');
+    const scopeOutcome = scope.run(ctx());
+    expect(scopeOutcome.verdict).toBe('BLOCKED');
+    expect(scopeOutcome.unblockedBy).not.toContain('WP-32');
+    expect(scopeOutcome.evidence.join(' ')).toContain('WP-32 MERGED');
 
     const promotion = checkFor(
       'J-Return-away-during-a-halt',

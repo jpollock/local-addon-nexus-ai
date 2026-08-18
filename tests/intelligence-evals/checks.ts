@@ -1073,12 +1073,15 @@ const JOURNEY_GAPS: JourneyGap[] = [
     spec: J_INSPECT,
     kind: 'key_step',
     matches: 'The selection becomes the next',
-    missing: 'selection-becomes-scope: the carried scope artifact and the arming that takes it',
-    unblockedBy:
-      'WP-32 (the scope carrier) — the §1 adjudication made this journey\'s scope-identity pin ' +
-      '("the ids in the dry-run equal the ids selected, asserted as a set") one of its acceptance ' +
-      'criteria, and the governing sheet is from-designer-04 (draft 2)',
-    token: 'scopeBlock',
+    missing: 'the comparator render that would PRODUCE a selection — the carrier now has no source',
+    unblockedBy: `${UX4}; the designer's cycle-one/two seam`,
+    token: 'siteAtPlaces',
+    standing:
+      'WP-32 MERGED (2026-08-18): the scope carrier ships, and the §1 adjudication\'s ' +
+      'scope-identity pin — "the ids in the dry-run equal the ids selected, asserted as a set" — ' +
+      'is one of its ratified acceptance criteria, against the governing sheet from-designer-04 ' +
+      '(draft 2). So the HALF this journey routed to a packet is done; what the journey still ' +
+      'cannot do is start, because nothing renders a selection to carry',
   },
   {
     spec: J_INSPECT,
@@ -1108,9 +1111,12 @@ const JOURNEY_GAPS: JourneyGap[] = [
     spec: J_INSPECT,
     kind: 'must_not',
     matches: 'A scope the user must confirm b',
-    token: 'scopeBlock',
-    missing: 'the handoff whose re-listing this forbids',
-    unblockedBy: 'WP-32 (the scope carrier), the second half of its scope-identity acceptance',
+    token: 'siteAtPlaces',
+    missing: 'a user-made selection to be asked to re-list',
+    unblockedBy: `${UX4} — WP-32 built the carrier; nothing yet produces what it carries`,
+    standing:
+      'WP-32 MERGED: a run that re-derives its own targets fails its acceptance, so the mechanism ' +
+      'this must-not protects is in place ahead of the surface that would exercise it',
   },
 
   // ---- J-Act-small · M3 ----------------------------------------------------

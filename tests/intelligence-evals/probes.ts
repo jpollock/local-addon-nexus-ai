@@ -1316,9 +1316,10 @@ export function probeRendererSurfaces(): SurfaceProbe {
       (c.renderer === 0 ? 'the surface that would render it does not exist' : 'present')
   );
   return {
-    // `ok` means "every named surface is still absent", which is the state the
-    // journey specs are written against. It flips the day one is built, and the
-    // check that reads it says so rather than going quietly stale.
+    // `ok` means "every named surface is still absent". It is ALREADY false and
+    // that is the probe working: WP-32 merged `scopeBlock` into the renderer on
+    // 2026-08-18, and this measurement caught it the same day rather than
+    // leaving a journey criterion blocked on something that had shipped.
     ok: Object.values(counts).every((c) => c.renderer === 0),
     counts,
     absentFromRenderer: (token: string) => (counts[token]?.renderer ?? 0) === 0,

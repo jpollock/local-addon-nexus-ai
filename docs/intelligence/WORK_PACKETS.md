@@ -10322,7 +10322,20 @@ merge adjudication's three-question script — the ratified form, both cited.
    match `/^EVAL [BE]-0\d/`. Each was widened rather than loosened: the id list
    stays exhaustive (a spec that stops parsing must still be loud), the count
    moves to 8, the regex accepts a journey id shape.
-7. **Two mutation runs measured NOTHING and said so.** Both were type-invalid
+7. **WP-32 MERGED MID-PACKET AND THE MEASUREMENT CAUGHT IT THE SAME DAY.**
+   `scopeBlock` went from 0 files under `src/renderer` to 2 while this packet
+   was rebasing. Two J-Inspect criteria had been BLOCKED naming WP-32 as the
+   owner; both were corrected rather than left standing — they are now blocked
+   on the **comparator render that would produce a selection**, with WP-32's
+   delivery stated as `standing` so the finished half is not dropped, and a
+   test asserts that neither `unblockedBy` still cites WP-32. *A BLOCKED that
+   keeps naming a shipped packet is how a stale gap survives a review.* Two
+   test corrections came with it: `probes.test.ts` no longer asserts a blanket
+   "every journey surface is absent" — that assertion was true when it was
+   written and false eight hours later, which is a tripwire against the
+   project's own progress — and pins each token separately, including
+   `scopeBlock` as PRESENT.
+8. **Two mutation runs measured NOTHING and said so.** Both were type-invalid
    mutants (`?? blocked(...)` after a non-nullish operand; `|| blocked(...)`) —
    ts-jest refused the file, the suite reported `Tests: 0 total`, and a naive
    grep for a failure header would have read that as SURVIVED (once) and as
