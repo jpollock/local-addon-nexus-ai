@@ -1,0 +1,37 @@
+id: J-Act-small-one-change-one-site
+description: Journey — M3, one change, one site, one motivating fact (designer §1 §5; bound at the §1 ratification, XD-19)
+suite: journey
+moment: act-small
+mode: [ui]
+prompt: "(none — a fact seen in Glance or Inspect motivates one deliberate write)"
+
+context:
+  description: "A fact seen in Glance or Inspect motivates one deliberate write on one site. No procedure is declared."
+
+expected:
+  key_steps:
+    - "The motivating fact is linked from the change, not restated beside it."
+    - "The write gets the full gate, and the second write of the session gets the same gate as the first."
+    - "A staleness re-check runs against the motivating fact before the write is offered."
+    - "A one-line history flag appears if this component has failed here before."
+  must_not:
+    - "Any act-big machinery: no canary, no scope list, no per-target attestation, no declared block."
+    - "A dry-run standing between the user and a change that is its own preview."
+    - "Ceremony that decays across repeated writes in one session."
+    - "A gate whose record cannot name the fact that motivated it."
+
+notes: |
+  TRANSCRIBED VERBATIM from docs/intelligence/from-designer/from-designer-01-moments-tested.md
+  §5. Ratified as written at the §1 adjudication
+  (docs/intelligence/for-designer-moments-tested-response.md §4; XD-19). The
+  same exchange re-axed the Act-small/Act-big boundary to THE DECLARATION
+  rather than the target count, which is why "No procedure is declared" is the
+  premise and "absence of procedure events in the whole journey" is a pin.
+
+  Programmatic: gate-present on every write event regardless of ordinal;
+  freshness re-check precedes the offer; the rationale event carries the
+  motivating record id; absence of procedure events in the whole journey.
+
+  Judged sitting: Does the small change feel small while still feeling
+  recorded? A user who has just done one should be able to say what it will
+  leave behind.

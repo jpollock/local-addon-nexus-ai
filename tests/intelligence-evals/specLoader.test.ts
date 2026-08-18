@@ -36,13 +36,23 @@ function tempDir(files: Record<string, string>): string {
 }
 
 describe('loadEvalSpecs — the anchor-slice specs on disk', () => {
-  it('loads all three with zero errors', () => {
+  it('loads every spec on disk with zero errors', () => {
+    // WP-33: the directory is no longer only the anchor slice — the five
+    // journey evals bound at designer §1 live here too. This list is
+    // exhaustive on purpose: a spec that stops parsing would otherwise vanish
+    // from the run silently, and a journey that vanishes takes its must-nots
+    // with it.
     const { specs, errors } = loadEvalSpecs(EVALS_DIR);
     expect(errors).toEqual([]);
     expect(specs.map((s) => s.id).sort()).toEqual([
       'B-03-runbook-push-with-capability',
       'E-01-consult-before-risk',
       'E-02-emission-on-completion',
+      'J-Act-small-one-change-one-site',
+      'J-Glance-cold-open-to-answered',
+      'J-Inspect-divergence-to-scoped-intent',
+      'J-Refusal-refusal-grant-resume',
+      'J-Return-away-during-a-halt',
     ]);
   });
 

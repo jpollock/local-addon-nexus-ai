@@ -1,0 +1,38 @@
+id: J-Return-away-during-a-halt
+description: Journey — M6, away during a halt, resumed at the gate (designer §1 §5; bound at the §1 ratification, XD-19)
+suite: journey
+moment: return
+mode: [ui]
+prompt: "(none — the user comes back after the agent has worked overnight)"
+
+context:
+  description: "The agent works overnight. A run halts at a gate; other work finishes. The user comes back and re-enters at consequence."
+
+expected:
+  key_steps:
+    - "The triage shows waiting and changed as two columns of one verdict, sorted by consequence."
+    - "A waiting item names where in the run it is waiting — the gate, not just the run."
+    - "Opening it resumes the same session at the same gate: nothing re-asked, nothing re-derived, the approval already given still given."
+    - "The finished portion is already filed at Record rank, procedure beside run."
+  must_not:
+    - "A scrollback as the re-entry."
+    - "An approval that must be given a second time."
+    - "A needs-you row that knows that but not where."
+    - "Everything-since-you-left rendered as prose."
+
+notes: |
+  TRANSCRIBED VERBATIM from docs/intelligence/from-designer/from-designer-01-moments-tested.md
+  §5. Ratified as written at the §1 adjudication
+  (docs/intelligence/for-designer-moments-tested-response.md §4; XD-19), which
+  also routed this journey's promotion-identity pins to WP-30 as acceptance
+  criteria, and redefined Return as ARRIVAL TRIAGE — one moment, two columns —
+  with the split refused (§1 objection 1). "Sorted by consequence" is the
+  consequence order, ruled at the same exchange and now at moments-model 1.3
+  §4a.
+
+  Programmatic: promotion identity — session id, gate id and pending-approval
+  state unchanged across re-entry; gate-level addressing on every waiting row;
+  the record exists before the user arrives, not on demand.
+
+  Judged sitting: Twelve hours away, no notes: can the person get from the app
+  opening to the decision they owe, with no reading and no re-approving?

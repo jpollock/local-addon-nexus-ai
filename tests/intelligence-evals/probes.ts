@@ -32,6 +32,7 @@ import {
   recordArmingRequest,
 } from '../../src/main/intelligence-host/procedureArming';
 import { foldProcedureCursor, runForTask } from '../../src/main/intelligence-host/procedureCursor';
+import { checkCheckpointSequence } from '../../src/main/intelligence-host/sequenceGuard';
 import {
   deriveProcedureAudit,
   ProcedureAuditRow,
@@ -1088,5 +1089,240 @@ export async function probeGatewayEmission(fixture: EvalFixture): Promise<Gatewa
       `tier boundary: a Tier-1 read (wp_plugin_list) through the same registry emitted nothing: ` +
         `${tierOneSilent}`,
     ],
+  };
+}
+
+/**
+ * WP-33 · J-Refusal's programmatic half, taken off the STRUCTURED refusal.
+ *
+ * `probeArmingGap` above reads the tool RESULT — a rendered message — which is
+ * the right instrument for "was the write refused". J-Refusal asks something
+ * the message cannot answer: whether the refusal carries the capability id *in
+ * the vocabulary the Settings matrix uses* and a door that resolves to THAT
+ * grant rather than to the top of Settings. Those are payload fields, so this
+ * probe calls the guard directly and reports the object.
+ *
+ * It is a separate probe rather than three more fields on `probeArmingGap` for
+ * the reason that one already gives for existing: the gap probe's job is the
+ * 2026-08-18 incident, and a probe that grows a second subject stops being
+ * evidence for either. The two agree by construction — same tool, same turn,
+ * same unarmed state.
+ *
+ * The grant is the ORACLE for both halves. Comparing the door against itself
+ * would pass on any pair of matching strings; comparing it against the live
+ * grant is what makes "deep-links to the specific grant" a claim with a
+ * subject.
+ */
+export interface RefusalPayloadProbe extends Probe {
+  /** Did the guard produce a structured refusal at all? */
+  refused: boolean;
+  reason?: string;
+  /** The capability the refusal names, and the one the door carries. */
+  capability?: string;
+  doorCapability?: string;
+  doorRunbookId?: string;
+  doorSurface?: string;
+  doorSection?: string;
+  /** The live grant this refusal should route to — the oracle, not a restatement. */
+  grantCapability?: string;
+  grantRunbookId?: string;
+  /** The door's capability is the key a Settings override matches on. */
+  capabilityInGrantVocabulary: boolean;
+  /** The door names the DOCUMENT too — a grant for another one is not this grant. */
+  doorResolvesToThatGrant: boolean;
+  /**
+   * MEASURED LIMIT, reported rather than glossed. On a healthy run the grant's
+   * document and the refusal's document are the same string, so this fixture
+   * CANNOT distinguish a door derived from the grant from one derived from the
+   * refusal it rides on. What the criterion is checked against is therefore
+   * "the door names the granted capability and its document", not "the door
+   * was computed from the grant". A mutation swapping the operand survives,
+   * and the report says so instead of implying a discrimination it lacks.
+   */
+  grantAndRefusalAgreeOnDocument: boolean;
+}
+
+export async function probeRefusalPayload(fixture: EvalFixture): Promise<RefusalPayloadProbe> {
+  const evidence: string[] = [];
+  setIntelligenceCore(fixture.core);
+  clearArmingRequests();
+
+  const grant = getCapabilityGrants().find((g) => g.capability === B03_CAPABILITY);
+  if (!grant) {
+    clearArmingRequests();
+    return {
+      ok: false,
+      refused: false,
+      capabilityInGrantVocabulary: false,
+      doorResolvesToThatGrant: false,
+      grantAndRefusalAgreeOnDocument: false,
+      evidence: [
+        `no live grant for ${B03_CAPABILITY} — there is no capability for a refusal to name, so ` +
+          'the journey has no subject here',
+      ],
+    };
+  }
+  evidence.push(
+    `oracle: the live grant is ${grant.capability} -> ${grant.runbookId} ` +
+      '(materialized at initIntelligenceCore, not constructed by this probe)'
+  );
+
+  const flagged = fixture.fleet.find((s) => s.historyFlagged)!;
+  const localSites: Record<string, { id: string; name: string; domain: string }> = {};
+  for (const site of fixture.fleet) {
+    localSites[site.siteId] = { id: site.siteId, name: site.name, domain: `${site.siteId}.local` };
+  }
+  const services = {
+    siteData: { getSite: (id: string) => localSites[id], getSites: () => localSites },
+  } as unknown as NexusServices;
+
+  // The same unarmed turn the gap probe uses: a capability asked for, nothing
+  // armed, so the guard has a refusal to build and no run to build it from.
+  const sessionId = `eval-refusal-${mintTaskId()}`;
+  forgetChatAssemblySession(sessionId);
+  const turn = await assembleForChatTurn({
+    services,
+    sessionId,
+    userMessage: 'Update my plugins on t1, t2',
+    siteId: flagged.siteId,
+    buildingSystemPrompt: true,
+  });
+  recordArmingRequest(B03_CAPABILITY);
+
+  const refusal = checkCheckpointSequence(GAP_TOOL, turn?.taskId);
+  clearArmingRequests();
+
+  if (!refusal) {
+    return {
+      ok: false,
+      refused: false,
+      capabilityInGrantVocabulary: false,
+      doorResolvesToThatGrant: false,
+      grantAndRefusalAgreeOnDocument: false,
+      evidence: [...evidence, `the guard returned null for ${GAP_TOOL} — no refusal, no payload`],
+    };
+  }
+
+  const door = refusal.governDoor;
+  const capabilityInGrantVocabulary =
+    door.capability === refusal.capability && door.capability === grant.capability;
+  const doorResolvesToThatGrant =
+    door.runbookId === grant.runbookId &&
+    door.surface === 'settings' &&
+    door.section === 'capabilities';
+  const grantAndRefusalAgreeOnDocument = grant.runbookId === refusal.runbookId;
+
+  evidence.push(
+    `refused with reason="${refusal.reason}" at ${refusal.checkpoint}`,
+    `the door: {surface: ${door.surface}, section: ${door.section}, capability: ${door.capability}, ` +
+      `runbookId: ${door.runbookId}}`,
+    `the capability id is the grant's own key (${grant.capability}), which is what a Settings ` +
+      `override matches on: ${capabilityInGrantVocabulary}`,
+    `the door names the DOCUMENT as well as the capability, so it resolves to THIS grant rather ` +
+      `than to the top of Settings: ${doorResolvesToThatGrant}`,
+    `LIMIT of this measurement: the grant's document and the refusal's document are ` +
+      `${grantAndRefusalAgreeOnDocument ? 'THE SAME string here' : 'DIFFERENT here'}, so this run ` +
+      `${grantAndRefusalAgreeOnDocument ? 'cannot' : 'can'} distinguish a door derived from the ` +
+      `grant from one derived from the refusal. What is established is that the door names the ` +
+      `granted capability and its document — not the provenance of the two fields`
+  );
+
+  return {
+    ok: capabilityInGrantVocabulary && doorResolvesToThatGrant,
+    refused: true,
+    reason: refusal.reason,
+    capability: refusal.capability,
+    doorCapability: door.capability,
+    doorRunbookId: door.runbookId,
+    doorSurface: door.surface,
+    doorSection: door.section,
+    grantCapability: grant.capability,
+    grantRunbookId: grant.runbookId,
+    capabilityInGrantVocabulary,
+    doorResolvesToThatGrant,
+    grantAndRefusalAgreeOnDocument,
+    evidence,
+  };
+}
+
+/**
+ * WP-33 · The journey surfaces, MEASURED rather than asserted.
+ *
+ * Four of the five journeys walk surfaces nobody has built, and the harness's
+ * own rule is that a BLOCKED verdict must carry a probe demonstrating the
+ * absence. "The Settings capability matrix does not exist" is a claim; "zero
+ * files under src/renderer reference `capabilityGrants`, against 14 under
+ * src/" is a fact a reader can re-run — and it is the fact that will change,
+ * loudly, on the day someone builds it.
+ *
+ * The tokens are chosen to be UNAVOIDABLE for the surface named: a needs-you
+ * row that renders a needs-you fold cannot do it without naming the fold, and
+ * a capability matrix cannot render grants it never references. A token that
+ * a real implementation could plausibly avoid would make a false absence.
+ */
+export interface SurfaceProbe extends Probe {
+  /** token → { renderer: files under src/renderer, all: files under src } */
+  counts: Record<string, { renderer: number; all: number }>;
+  /** True when NOTHING under src/renderer references the token. */
+  absentFromRenderer(token: string): boolean;
+}
+
+const SURFACE_TOKENS = [
+  'capabilityGrants', // the Settings capability matrix (Govern's controls)
+  'needsYou', // Glance's needs-you row and Return's triage
+  'siteAtPlaces', // Inspect's comparator render (the site-at-places matrix)
+  'scopeBlock', // WP-32's carried scope artifact
+  'sessionRegistry', // WP-30's session fold
+] as const;
+
+function countFiles(dir: string, token: string): number {
+  let n = 0;
+  const walk = (d: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== 'node_modules') walk(full);
+      } else if (/\.(ts|tsx)$/.test(e.name)) {
+        try {
+          if (fs.readFileSync(full, 'utf-8').includes(token)) n += 1;
+        } catch {
+          /* unreadable file is not a reference */
+        }
+      }
+    }
+  };
+  walk(dir);
+  return n;
+}
+
+export function probeRendererSurfaces(): SurfaceProbe {
+  const root = path.join(__dirname, '..', '..', 'src');
+  const counts: Record<string, { renderer: number; all: number }> = {};
+  for (const token of SURFACE_TOKENS) {
+    counts[token] = {
+      renderer: countFiles(path.join(root, 'renderer'), token),
+      all: countFiles(root, token),
+    };
+  }
+  const evidence = Object.entries(counts).map(
+    ([token, c]) =>
+      `\`${token}\`: ${c.renderer} file(s) under src/renderer, ${c.all} under src/ — ` +
+      (c.renderer === 0 ? 'the surface that would render it does not exist' : 'present')
+  );
+  return {
+    // `ok` means "every named surface is still absent". It is ALREADY false and
+    // that is the probe working: WP-32 merged `scopeBlock` into the renderer on
+    // 2026-08-18, and this measurement caught it the same day rather than
+    // leaving a journey criterion blocked on something that had shipped.
+    ok: Object.values(counts).every((c) => c.renderer === 0),
+    counts,
+    absentFromRenderer: (token: string) => (counts[token]?.renderer ?? 0) === 0,
+    evidence,
   };
 }

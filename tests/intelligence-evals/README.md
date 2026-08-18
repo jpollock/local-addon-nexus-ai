@@ -190,6 +190,72 @@ library plus a CLI, and `runner.test.ts` drives it and asserts the honesty
 rules (evidence present, BLOCKED names its gap, OWNER-PENDING carries a
 runnable prompt, PASS never rests on model behaviour).
 
+## The journey specs (WP-33) — BLOCKED-never-green, applied to the experience
+
+The directory is no longer only the anchor slice. The moments model's five
+journey evals (`DESIGN_DECISIONS.md` XD-19) are here as ordinary specs, and they
+get the ordinary treatment: an unbound criterion is BLOCKED, a judged one is
+OWNER-PENDING, and neither is ever a pass. The runner's exit code therefore
+starts telling the truth about the *experience*, not only about the platform.
+
+Read the totals as intended, not as a shortfall — **40 journey criteria, 2 PASS,
+2 OWNER-PENDING, 36 BLOCKED.** Four of the five journeys walk surfaces nobody has
+built. That is the report working.
+
+| spec | moment | today |
+|---|---|---|
+| `J-Glance-cold-open-to-answered` | M1 | 8 BLOCKED — no cold-open verdict view, no needs-you row |
+| `J-Inspect-divergence-to-scoped-intent` | M2 | 8 BLOCKED — no comparator render; scope identity is **WP-32**'s |
+| `J-Act-small-one-change-one-site` | M3 | 8 BLOCKED — the gate ships, the act-small surface does not |
+| `J-Return-away-during-a-halt` | M6 | 8 BLOCKED — promotion identity is **WP-30**'s |
+| `J-Refusal-refusal-grant-resume` | any→M7→back | 2 PASS, 2 OWNER-PENDING, 4 BLOCKED |
+
+**The criteria are transcribed, not authored.** Every `key_step` and `must_not`
+is a Must / Must-not bullet from
+`docs/intelligence/from-designer/from-designer-01-moments-tested.md` §5,
+ratified as written at the §1 adjudication. `checks.test.ts` re-extracts those
+bullets from that document on every run and requires the specs to equal them
+exactly, in order — so the transcription is pinned to its source rather than to
+a reviewer's memory of it. The `*Programmatic:*` and `*Judged sitting:*` lines
+live in each spec's `notes`, with their citations.
+
+*(This is also why the specs' history has a false start: WP-33 first shipped a
+J-Refusal spec whose key steps were marked "never authored", because only the
+architect's responses were committed and the positions were not. The positions
+landed; the carve-out was void; the specs were re-transcribed from the source.
+`DESIGN_PROTOCOL` requires positions AND responses committed, and that rule now
+has a packet's worth of evidence behind it.)*
+
+**Three things are different about a journey criterion:**
+
+- **A BLOCKED names the surface AND who owes it.** `probeRendererSurfaces`
+  MEASURES the absence — how many files under `src/renderer` reference the token
+  the surface could not be built without — so "the Settings capability matrix
+  does not exist" is a fact a reader can re-run rather than a claim they have to
+  take. `checks.test.ts` requires every journey `unblockedBy` to name a `WP-NN`
+  or a `UX build N`; a BLOCKED with no owner is a shrug with a symbol in front
+  of it.
+- **The judged half is a SITTING, not a model run.** `DESIGN_PROTOCOL`'s sitting
+  rules govern: a real person, real surfaces, on the record, and *"a judged
+  criterion nobody sat renders OWNER-PENDING, never pass"*. J-Refusal's
+  `ownerPrompt` carries §5's question AND the WP-31 merge adjudication's
+  three-question script that amended it — the ratified form governs, both are
+  cited — including `npm run rebuild`, because a sitting happens inside Local
+  and a tree left on system Node by a jest run cannot host one.
+- **OWNER-PENDING is earned per run.** Rule 2 still outranks rule 3:
+  J-Refusal's two judged checks gate on a refusal `probeRefusalPayload` actually
+  drove out of the guard this run, and fall to BLOCKED if none arrived. Handing
+  somebody a prompt to sit with a refusal the tree no longer produces would park
+  a platform gap in a human's queue.
+
+**One measured limit, stated rather than implied.** J-Refusal's two PASSing
+criteria check that the refusal's Govern door names the granted capability and
+its document. On a healthy run the grant's document and the refusal's document
+are the same string, so this report *cannot* distinguish a door derived from the
+grant from one derived from the refusal — a mutation swapping that operand
+survives the battery. The probe emits the limit as an evidence line, and a test
+pins that it keeps emitting it.
+
 ## Adding a criterion
 
 1. Add it to the YAML. **Quote any value containing `": "`** — unquoted, YAML

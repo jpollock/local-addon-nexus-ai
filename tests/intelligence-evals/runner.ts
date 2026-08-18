@@ -20,6 +20,8 @@ import {
   probeGatewayEmission,
   probeManifestEvent,
   probeProcedureRun,
+  probeRefusalPayload,
+  probeRendererSurfaces,
   probeTimestampDiscipline,
   probeTopicFamily,
 } from './probes';
@@ -139,6 +141,13 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
       // no run by definition, and a probe that armed first would answer a
       // different question than the one the incident asks.
       armingGap: await probeArmingGap(fixture),
+      // WP-33. Its own unarmed turn, like the gap probe and for the same
+      // reason: it must read the refusal the guard builds when nothing is
+      // armed, not one produced by a run this report set up.
+      refusalPayload: await probeRefusalPayload(fixture),
+      // WP-33. Reads the tree, not the ledger — no fixture, no ordering
+      // constraint. Placed here so the journey checks see it beside the rest.
+      surfaces: probeRendererSurfaces(),
       episodic: await probeEpisodicRetrieval(fixture),
       manifest: await probeManifestEvent(fixture),
       // WP-19. Runs BEFORE the schema/timestamp probes below read the ledger,
