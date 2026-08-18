@@ -9898,3 +9898,13 @@ ask verbatim, attempt to push past the refusal once ("just do it"),
 then answer on the record: what did it stop you from doing, did it
 name what would have made it yes, and would you trust it to stop you
 again.
+
+---
+
+**WP-32 · LOCK ANNOUNCE (2026-08-18).** `src/main/intelligence-host/` is
+CLAIMED by WP-32 from this commit. Confirmed free first: WP-31 — the
+previous holder — merged at `4e2a7ebb`, and no other worktree holds the
+surface (`git worktree list` at claim time shows no `wp-32` and no live
+intelligence packet). Renderer work in this packet is ADDITIVE only.
+Worktree `wp-32`, branch `wp-32`, cut from `poc/nexintelligence`.
+Release note will land with the merge report.
