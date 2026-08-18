@@ -11209,3 +11209,137 @@ adjudication adopted as the journey's governing text superseding §1 §5;
 disclosed survivor (door-derived-from-grant vs door-derived-from-refusal) to a
 kill. No `src/`, no new topic, payload version, envelope field or storage
 marker, `wpeOperationPermissions` untouched.
+
+---
+
+**DESIGN ADJUDICATION — the corroboration render; cycle three's
+design half done on its first sheet (2026-08-18).** The designer's
+"Corroboration render" (4a the evidence chain — one reply, three
+states, every door in place; 4b the same facts at Glance and the
+before-the-convention state) is RATIFIED WHOLE in
+`for-designer-corroboration-response.md`; eight J-Investigate pins
+inherited as the M5 surface packet's acceptance criteria (that
+packet builds AFTER WP-34, per ADR-24's own P4 — eval before
+surface). **The four asks ruled** (heading said three, list said
+four, the list wins — second sheet running): (1) the Chip stays in
+the system's face — the badge-loudness doctrine reapplied; a mono
+variant needs sitting/eval evidence of misreading, not taste. (2)
+TRAILING POSITION ratified as the render rule (a claim's source
+belongs at the end of the claim; never a superscript, never a
+footnote); the syntax stays WP-34's to fix, and this ratification
+flows a CONSUMING CONTRACT back into WP-34 — the convention must
+make record id and citation kind addressable for the trailing chip.
+(3) trust words: the derived supply sentence stays (it derives from
+the manifest's supplied relationship, XD-7's ruled word); machine
+trust classes get vocabulary rows only when two classes must first
+render visibly different. (4) tool-call citations stay
+`name #index` — honest-and-technical beats warm-and-authored, the
+door-label precedent verbatim; the trace is the only party entitled
+to rename its testimony. **XD-24 enters the register.** Swap-pattern
+note recorded: the scenario's citation ids are fictional until
+WP-34's convention and adherence fixtures exist, then the sheet
+swaps onto generated data. Position doc (from-designer-07) owed with
+the next handoff. Notably the first cycle where the CONTRACT
+(ADR-24) preceded the drawing — the order the method always wanted.
+
+---
+
+**DESIGN — cycle three's position committed; the designer's desk is
+honestly clear, and the key that refills it is the owner's
+(2026-08-18).** `from-designer-07-corroboration-render.md` committed
+verbatim under `from-designer/`, carrying the six spans as a STATE
+TABLE so WP-34's adherence fixtures have something to line up
+against — the diff-readiness habit, now self-installed. The
+designer's standing is confirmed as stated: both remaining
+dependencies wait on substrate (M5 packet on WP-34; the triage
+scenario on its derivation), not on design. **Ruled on their two
+offers: both wait on WP-20f, and that ruling is the OWNER'S next
+design-path move.** The Settings/grants surface (the deferral
+payload's Settings side, UX build 3, J-Refusal's four BLOCKED
+criteria) and the split-scope second run (needs the production
+runbook version, which is a separate grant + document by shipped
+law) both design AGAINST the deny-flip ruling — whose mandate is
+already recorded (shipped-enabled must not survive for
+cap.promote_environment / cap.incident_remediation). Sequencing
+therefore: owner rules WP-20f → cycle four = the Govern matrix and
+grants pages → UX build 3 becomes buildable → J-Refusal's BLOCKED
+half gains its surface path. Designing the matrix before the ruling
+would draw a default the law hasn't chosen.
+
+---
+
+**WP-20f · THE DENY-FLIP IS RULED (2026-08-18, owner: "ruled").**
+Three points, law from this entry forward:
+
+**1 · `cap.promote_environment` and `cap.incident_remediation` flip
+to DENY by default, no legacy carve-out.** Shipped-enabled does not
+survive for either: any existing implicit enablement dies at the
+flip, and a run needs an explicit grant made before it arms.
+Production consequence is never a default.
+
+**2 · Every capability that remains enabled becomes an explicit,
+visible grant.** At the flip, currently-shipped-enabled capabilities
+are materialized as `control.grant.issued` events, so the ledger and
+the future Settings matrix render grants someone can see and revoke,
+never defaults nobody chose. Day-one behavior changes only for the
+two caps in point 1; what changes everywhere is that the matrix has
+honest rows.
+
+**3 · New capabilities arrive DENIED.** Additive-v0 ends with this
+ruling: shipping a capability and shipping its permission are two
+different acts from here on.
+
+**Unblocked by this ruling:** cycle four — the designer draws the
+Govern matrix and grants pages against real law (the deferral's
+Settings side and the split-scope second run both become drawable);
+the path to UX build 3 (Settings/grants), which J-Refusal's four
+BLOCKED criteria and the two open triage doors name as owner. The
+WP-20f code packet (the flip + grant materialization + the
+mandatory-cap guard) is REGISTERED and prompts on the owner's word —
+it touches capability resolution in the intelligence host, so it
+sequences against that lock like any packet. The WP-25 live-smoke
+receipt remains open on the record (owner attests DONE; the ledger
+paste converts attestation to adjudication).
+
+---
+
+**WP-25 · LIVE SMOKE — PASSED, and it caught its first fabricated
+completion (2026-08-18, adjudicated from the owner's evidence).**
+The ledger receipt: four `episodic.incident.recorded` rows at
+22:25:24Z, all `source: sentinel:r_msz8afwx00` — a real run id, no
+fixture — facts FS-01 (critical, webshell in mu-plugins), ABS-05
+(critical, known backdoor plugin wp-compat), ABS-04 (high, file
+manager plugins), ABS-07 (high, low-entropy plugin names); every row
+`resolved: false` written explicitly; the SEVERITY_FLOOR visibly
+working (the report's below-floor findings folded no events — four
+rows from one sweep, not a heartbeat). The chat half: the next turn
+about the site ("any issues with this site?") carried the incidents —
+the reply cites "incident status per the platform's own ledger:
+UNRESOLVED" and renders the finding symptoms. The producer's
+acceptance criterion — a real sentinel scan producing incidents the
+assembler retrieves on the next chat turn — is CLOSED against the
+live product. WP-25 is done end to end.
+
+**The catch worth more than the pass:** the sentinel report's own
+"Remediation Checklist" claimed every step "✅ verified empty" and
+ended "READY TO PUSH" with a push command — and the model FLAGGED the
+contradiction unprompted, siding with the ledger: "that directly
+contradicts the platform's incident ledger, which lists these same
+findings as UNRESOLVED as of 7 minutes ago. Nothing has actually been
+remediated." That is the intelligence layer's first live catch of a
+fabricated completion in an agent's report — the exact failure class
+the 18 Aug incident taught (claims of completion that are not), now
+caught by the record instead of by the owner. **FINDING FILED against
+the security-sentinel:** its report template asserts remediation
+verified when no remediation occurred — a fabricated checklist inside
+a security report. Out of WP-25's scope by its own rule (tap the
+output, never the behavior); routed to the sentinel's own backlog as
+a defect: a report may list remediation STEPS; it may not pre-check
+them. Also noted for ADR-24's file: the model's cross-check here is
+the corroboration behavior the citation contract formalizes —
+evidence it exists pre-convention, in the wild.
+
+(Context note on the record: the scanned site is the owner's
+deliberately-compromised test copy; if that ever changes, an
+UNRESOLVED row like these is the start of a real remediation, not a
+smoke.)

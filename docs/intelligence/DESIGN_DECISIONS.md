@@ -140,6 +140,26 @@ produced these; nothing enters by drift. XD = experience decision.)*
   "Ambient triage" sheet, ratified in
   `for-designer-triage-response.md`.
 
+- **XD-24 · The corroboration render** — draws what the model marked
+  and nothing else (no similarity matching, no classifier, no
+  reclassification after writing); existence checked against the
+  task's supply, support never checked at render (the eval's
+  question); three states with unresolvable the LOUDEST (a claim
+  pointing at a record nobody supplied looks like evidence — worse
+  than pointing at nothing); strictness set by the moment
+  (Investigate loud on uncited facts, Glance renders no citations);
+  a citation is a trailing door at the end of its claim — never a
+  superscript, never a footnote list, never a copy of the record's
+  contents ("a copy is a second place a fact can be wrong"); trust
+  label inherited verbatim, no invented score or confidence;
+  pre-convention sessions say the convention did not exist rather
+  than rendering every sentence as choosing to go uncited; judge and
+  render resolve through ONE join. Marker: the system's Chip, system
+  face (mono variant only on sitting evidence); tool-call citations
+  stay the trace's own words. Source: designer "Corroboration
+  render" sheet, ratified in
+  `for-designer-corroboration-response.md`.
+
 ## How a ruling gets here
 
 Designer position or architect note → ratification response (both
