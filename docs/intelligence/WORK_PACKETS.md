@@ -8655,3 +8655,12 @@ cosmetic, and deliberately not touched after ratification; and WP-27
 imports the seam's shapes from `procedureView` directly while WP-26
 re-exports them through `common/chat-types`, which is two type paths to
 one source and wants one of them chosen.
+
+**WP-26 MERGED (2026-08-18)** — merge `fe9e36d8`, 18 files,
+**+2,859/−39**. Phase 1 of the UX plan is complete: the rail WP-27 renders
+is now fed by the real emitter off the ledger, and the approval card that
+produces `canary_policy` is reachable for the anchor capability for the
+first time. Post-merge state on the base: **565 suites / 7,341 passed / 12
+skipped / 7,353 total, exit 0** measured in the worktree; the base before
+the merge measured **561 / 7,283 / 2 / 7,285, exit 0** in the primary
+checkout. **ABI: SYSTEM NODE** — `npm run rebuild` before loading Local.
