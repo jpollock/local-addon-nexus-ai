@@ -54,12 +54,27 @@ const ATTEST_SUMMARY: Record<CheckpointState['attest'], string> = {
 };
 
 /**
- * The eight, in declared order. Reasons are the runbook's own `## cp.x — reason`
- * tails, and `unrequested` is the runbook's own authored mark (WP-28): four of
- * the eight, which is the set the shipped document marks. `cp.roll-fleet` is
- * unmarked and `cp.canary` is marked although they name the same tool — the
- * fixture keeps that pair because it is the one that proves the badge is read
- * from the document rather than inferred from structure.
+ * The eight, in declared order.
+ *
+ * **WP-35 · every line here is now the GENERATED fixture's, copied from
+ * `docs/intelligence/design-fixtures/declared-procedures.json` and pinned to it
+ * by `companionDensity.test.tsx`.** WP-27 wrote this list by hand months before
+ * the generator existed, and by the time the generator landed the two had
+ * drifted: v1.1.0 against v1.2.0, a different hash, "the rest, watching"
+ * against the document's "the rest, watched", and a `cp.report` with no reason
+ * against one that has had `close the loop` all along. The designer's own
+ * cycle-one hold named the remedy — "the day WP-32's generated file lands we
+ * diff the two; byte-match lifts the hold, a divergence is a defect in one of
+ * them and we say which." It was a defect in this one.
+ *
+ * What stays local is the RUN: statuses, evidence ids, the abort's site rows.
+ * That is the fold's own line — "only scenario narrative is local" — and it is
+ * why this is a fake emitter rather than a second copy of the document.
+ *
+ * `unrequested` is the runbook's own authored mark (WP-28): four of the eight.
+ * `cp.roll-fleet` is unmarked and `cp.canary` is marked although they name the
+ * same tool — the pair that proves the badge is read from the document rather
+ * than inferred from structure.
  */
 function checkpoints(): CheckpointState[] {
   return [
@@ -69,10 +84,8 @@ function checkpoints(): CheckpointState[] {
     cp('cp.backup', 'event', 'before anything writes'),
     cp('cp.canary', 'narrative', 'one low-risk site first', { unrequested: true }),
     cp('cp.verify-canary', 'narrative', 'prove it before scaling it', { unrequested: true }),
-    cp('cp.roll-fleet', 'event', 'the rest, watching'),
-    // No `## cp.report` heading in the runbook body: a runbook that authored no
-    // reason must not be given one.
-    cp('cp.report', 'narrative', null),
+    cp('cp.roll-fleet', 'event', 'the rest, watched'),
+    cp('cp.report', 'narrative', 'close the loop'),
   ];
 }
 
@@ -82,15 +95,17 @@ export function armedFixture(): ProcedureArmedEvent {
     procedure: {
       capability: 'cap.bulk_plugin_update',
       runbookId: 'rb.bulk-plugin-update',
-      version: '1.1.0',
+      version: '1.2.0',
       strictness: 'strict',
-      hash: 'sha256:9f2c1a7d4e6b0c83a15f2d9e7b4c6081a3d5e7f9b2c4d6e8f0a1b3c5d7e9f1a3',
+      hash: 'sha256:0646cfe11c1b813db994d6c95832ae2c6e97528c3748f7eb2aa44e3c736237c8',
       armedBy: 'predicate',
       checkpoints: checkpoints(),
       verifiableCount: 4,
       communication: [
-        'say which sites are in scope before asking for approval',
-        'say what the canary showed before rolling the rest',
+        'the dry-run diff, before any write',
+        'the backup id(s) and verification status',
+        'which sites were skipped and why (halted, out of scope, data stale)',
+        'the canary site chosen and the reason it was chosen',
       ],
     },
   };

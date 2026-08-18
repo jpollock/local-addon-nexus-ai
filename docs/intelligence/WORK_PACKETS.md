@@ -11678,3 +11678,202 @@ triage packet (deferral payload at ITS gate) → the M5 surface — with
 the designer's cycle-four matrix landing design for UX build 3 in
 the same window. Nothing on the board waits on anything it does not
 actually depend on.
+
+---
+
+**WP-35 · LOCK CLAIMED — `src/renderer/components/DockedPanel/`
+(2026-08-18).** Worktree `.worktrees/wp-35`, branch `wp-35`, cut from
+`poc/nexintelligence` at `1227ad3e` (which is `e85cfefc` plus the
+verbatim architect commit below). **Lock verified free before
+claiming:** WP-34 is the only packet in flight; its worktree holds
+`src/intelligence/`, `src/main/intelligence-host/` and one new
+renderer TEST file (`citationJoin.isolation.test.ts`) — no file under
+`src/renderer/components/DockedPanel/` is touched by it, and WP-32's
+renderer files (`ScopeBlock.tsx`, `scopeModel.ts`) are merged and
+unheld. The claim covers that directory plus the renderer test files
+that pin it (`tests/unit/renderer/procedure*`, `scopeBlock.test.ts`,
+`panelChat-procedure-parity.test.tsx`) — disjoint from WP-34's file.
+
+**Uncommitted architect work found in the primary checkout and
+committed VERBATIM before the worktree was cut** (`1227ad3e`, per the
+standing WP-02 precedent): `INTELLIGENCE_ROADMAP.md` (wave 4 + the
+refreshed standing list) and this file's WP-33b merge acceptance and
+WP-35 registration. Fidelity checked programmatically — md5 of each
+committed blob equals md5 of the working-tree file it was taken from,
+**two for two**. Neither was edited; neither is folded into WP-35's
+own commits.
+
+---
+
+**WP-35 · GATE REPORT — the companion surface is built; two escalations
+and one judgment call are held for ratification (2026-08-18).**
+Branch `wp-35` at worktree `.worktrees/wp-35`, cut from `1227ad3e`.
+Renderer-only: `git status` shows five files under
+`src/renderer/components/DockedPanel/`, three renderer test files and
+one new one. **No `src/main` file is touched** — verified by
+`git diff --name-only`; the two facts the stream does not serve are
+escalations below, not host edits.
+
+**THE NINE PINS, each with the test that holds it**
+(`tests/unit/renderer/companionDensity.test.tsx`, 36 tests, every fact
+read from `docs/intelligence/design-fixtures/declared-procedures.json`
+rather than transcribed — pin 7 of §0 applies to a test file as much as
+to a sheet):
+
+1. *The block yields to the card, never the reverse.* While an approval
+   is pending the declaration renders as the DIGEST (3 rows, not 8);
+   the block draws no card, and the card takes no density prop by which
+   the block could squeeze it. `PanelChat` owns the "a card is up" fact
+   and hands it down — the surface does not go looking.
+2. *Every fact, no scrollbar.* Reference once, provable denominator
+   read from `verifiableCount`, the window centred on the gate with
+   `Checkpoints 2 to 4 of 8` STATED, ATTEST_WORDS in full from the
+   mirrored constants, and the promotion handle. The digest alone drops
+   WP-27's `maxHeight: 540 / overflowY: auto`; every other state keeps
+   it unchanged.
+3. *Folded in place.* A finished run renders ONE row — the header,
+   which is the handle — and the record opens beneath that same row.
+   The row carries the reference and no arithmetic: "a handle, not a
+   summary" is pinned as `not.toContain('provable')`, and the
+   denominator is pinned as present in the opened record.
+4. *The reference exactly once.* `referenceLine` is the one composer,
+   the block header its one home, and the count is asserted over the
+   COMPOSED PANEL's on-screen text (both components really rendered,
+   asserted non-vacuously) — not over `serializeTree`'s JSON, which
+   would have counted the declaration travelling down as props.
+5. *The badge only on runbook-contributed checkpoints.* Asserted
+   equal to the fixture's `unrequested` set, in the full rail and in
+   the digest's window, with `cp.approval`/`cp.backup` named as the
+   two a badge-everything rail wrongly marked.
+6. *The scope block's facts.* UNMOUNTED, per WP-32's ratified call —
+   pinned as a never-shows (no `ScopeBlock`, no `aria-label="Scope"`,
+   in all three states). `scopeBlock.test.ts` still holds byte-identity
+   itself.
+7. *Defer explanation, never a fact.* The digest defers badge reasons,
+   the communication list and the out-of-window rows; promotion renders
+   the SAME `renderFullBody`, so `text(promoted) === text(full)` with
+   the disclosure control excluded — folding is a rendering act,
+   rewording would be an authoring one.
+8. *Zero cells open no container.* `opensContainer` is false only when
+   a scope is carried AND `opensRun` is false; the surface returns the
+   plan attachment BEFORE the section element, and `PanelChat` renders
+   it inside the transcript rather than in the pinned slot.
+9. *Three marks only.* `✓` attested-and-provable, `·`
+   recorded-not-proved, and the POSITION NUMERAL for not-yet. The tick
+   never grows a "verified": no `/verified/i` anywhere and no `title`
+   prop in any state.
+
+**THREE RULED CHANGES TO SHIPPED BEHAVIOUR, named because a reviewer
+should not have to find them:**
+
+- **The mark set went from six to three.** WP-27's `✕` (aborted), `⋯`
+  (skipped) and `▸` (active) are gone. Those three facts are not lost:
+  they were already carried by the row's own derived evidence sentence
+  ("the run aborted here", "the run stopped before reaching this step"),
+  and the active row is now distinguished typographically. A numeral
+  does not say "aborted" — but neither did a glyph nobody has a
+  vocabulary entry for, and the fold closed the vocabulary at three
+  for the reason the not-applicable dash died.
+- **The approval card no longer names the runbook.** Pin 4 is explicit
+  ("not in the card"), and WP-28's "names the runbook, its version and
+  that it is marked strict" test is superseded here rather than worked
+  around. **Accepted consequence, stated:** an approval card rendered
+  with no armed block above it would name only its checkpoint. That
+  combination is not reachable in the ruled flow (an approval happens
+  inside a run whose block is pinned), and a conditional reference
+  would be a second home for the one string the pin exists to keep
+  single.
+- **`procedureStream.fake.ts`'s DOCUMENT facts now come from the
+  generated fixture.** The designer's cycle-one hold said "the day
+  WP-32's generated file lands we diff the two; a divergence is a
+  defect in one of them and we say which." It was a defect in the fake:
+  v1.1.0 against v1.2.0, a different hash, `the rest, watching` against
+  the document's `the rest, watched`, and a `cp.report` with no reason
+  against one that has had `close the loop` all along. The RUN stays
+  local (statuses, evidence ids, abort rows), which is the fold's own
+  line. A test now pins the fake's document facts to the generated file
+  and the mirrored `ATTEST_WORDS` to its `attestWords`.
+
+**ESCALATION 1 — the stream does not distinguish the zero-eligible
+state, and nothing in this packet can make it.** `DeclaredProcedure`
+carries `scope?: ProcedureScope` with `opensRun` — the TYPE serves the
+fact. `procedureStream.ts` does not: its one call is
+`deriveDeclaredProcedure({ outcome, runbook, cursor })`, with no
+`scope` argument anywhere in the file (grep: zero occurrences of
+`scope` in `src/main/intelligence-host/procedureStream.ts`). So
+`procedure.scope` is absent on every live event and **the empty run is
+unreachable in the product today**. The rule is built and pinned
+against constructed events; what is missing is a producer. Deliberately
+NOT worked around: `opensContainer` reads absent-scope as
+container-opens (mutation M20 proves the other reading silences every
+armed run), and the surface never infers a zero-cell plan from
+anything else. Whoever wires `scope` into the arming event closes this;
+it is a `src/main` change and therefore not this packet's.
+
+**ESCALATION 2 — the sheet's plan line names a checkpoint no served
+fact identifies.** The fold draws `rb.bulk-plugin-update · v1.2.0 ·
+marked strict · cp.dry-run — 0 cells eligible`. `cp.dry-run` is the
+checkpoint that PRODUCED the plan, and nothing serves that: it cannot
+be the active checkpoint (`cp.dry-run` is narrative, so
+`nextGatedCheckpoint` never names it) and inferring it from the
+document's shape would be a guess. `derivedPlanLine` therefore renders
+`rb.bulk-plugin-update · v1.2.0 · marked strict — 0 cells eligible`,
+one segment short of the sheet, rather than guessing which step to
+credit. If the segment is wanted, it needs a producer for
+"which checkpoint derived this plan."
+
+**JUDGMENT CALL, held for ratification — the promotion target.** The
+fold promises "the full declaration one promotion away — at stage rank,
+where it fits," and stage rank is unbuilt. **Proposed interim: an
+IN-PANEL promotion.** Contract, stated so the ratification is of
+something specific:
+
+- The handle is `Show the full declaration` / `Fold the declaration
+  back`, marked `data-procedure-promote`, and it is the ONLY control
+  the digest adds.
+- Promotion renders the identical `renderFullBody` the running state
+  renders — not a second, wider digest. That is what makes
+  "disclosed = bytes equal" assertable rather than aspirational, and
+  it is the ratified guard on restatement 2.
+- It is REVERSIBLE and does not survive the decision: `isDigest`
+  reads `props.approvalPending && !state.promoted`, so when the card
+  goes the state is moot. A promotion you cannot leave would be the
+  run-mode bar the fold refused.
+- It is a PROMOTION, not navigation: nothing moves, no mode is
+  entered, and the card keeps its place in the flow throughout.
+- **What it is not:** stage rank. When the stage surface exists, this
+  handle should become its door and the in-panel expansion should go —
+  the cross-density identity pins in `companionDensity.test.tsx` are
+  written against the generated fixture precisely so they can move to
+  the two-rendering form that day.
+
+**RECEIPTS.**
+`npm run typecheck` (`npx tsc -p . --noEmit`) clean, exit 0.
+**Baseline BEFORE, in the worktree: 573 suites, 7666 passed, 12
+skipped, 7678 total, exit 0** — exit captured before any pipe, and
+identical to WP-33b's worktree baseline. **AFTER: 574 suites, 7702
+passed, 12 skipped, 7714 total, exit 0.** The delta is +1 suite and
++36 tests, exactly the new file; **the skipped column is unchanged at
+12**, so the passed-column delta is the whole story here (unlike the
+merge boundary, where it will not be — expect the embedding gate's
+ten to move again).
+
+**MUTATION BATTERY: 28 killed, 0 survived, 0 void, control survived.**
+`--no-cache` on every run, argv passed explicitly as a list and the
+resolved command printed, and every run **count-floored at 148** — the
+floor caught one first-draft mutation that compiled to 57 collected
+tests and would otherwise have read as a kill for the wrong reason.
+The pass condition is parsed from the summary line, not grepped
+(WP-32's substring finding). Witnesses: at least one per pin, and the
+must-nots are first-class — M12 restores WP-28's doubled reference,
+M15 restores the badge-everything rail, M16 mounts a scope block from a
+fixture, M23 restores the uniform dot, M24 ticks a narrative
+attestation, M25 grows a "verified" in a tooltip, M28 leaves a `null`
+child in the parity tree. C01 (comment-only) survived, so the harness
+is measuring. The script wrote to no tracked artifact and verified the
+tree byte-restored after every mutation; it is not committed.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` (its
+`pretest` hook rebuilt better-sqlite3 for the shell's Node).
+**`npm run rebuild` before loading Local** — which the companion
+surface wants anyway, since seeing it is a Local session.

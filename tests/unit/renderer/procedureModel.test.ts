@@ -110,7 +110,7 @@ describe('the renderer mirror cannot drift from procedureView', () => {
 describe('a tick is rendered from the platform proof and nothing else', () => {
   it('ticks an attested, provable checkpoint', () => {
     expect(showsTick(state({ status: 'attested', attest: 'event', verified: true }))).toBe(true);
-    expect(checkpointMark(state({ status: 'attested', attest: 'event', verified: true }))).toBe('✓');
+    expect(checkpointMark(state({ status: 'attested', attest: 'event', verified: true }), 0)).toBe('✓');
   });
 
   it('refuses the tick for a narrative checkpoint even when the event claims verified', () => {
@@ -119,25 +119,35 @@ describe('a tick is rendered from the platform proof and nothing else', () => {
     // where the lie stops on the renderer side too.
     const hostile = state({ id: 'cp.canary', status: 'attested', attest: 'narrative', verified: true });
     expect(showsTick(hostile)).toBe(false);
-    expect(checkpointMark(hostile)).not.toBe('✓');
+    expect(checkpointMark(hostile, 4)).not.toBe('✓');
   });
 
   it('refuses the tick when the declaration allows it but the platform did not prove it', () => {
     const unproved = state({ status: 'attested', attest: 'event', verified: false });
     expect(showsTick(unproved)).toBe(false);
-    expect(checkpointMark(unproved)).not.toBe('✓');
+    expect(checkpointMark(unproved, 2)).not.toBe('✓');
   });
 
-  it('gives every non-ticked status its own mark, so a rail is never uniform', () => {
-    const marks = new Set([
-      checkpointMark(state({ status: 'pending' })),
-      checkpointMark(state({ status: 'active' })),
-      checkpointMark(state({ status: 'aborted' })),
-      checkpointMark(state({ status: 'attested', attest: 'narrative' })),
-      checkpointMark(state({ status: 'attested', attest: 'event', verified: true })),
-    ]);
-    expect(marks.size).toBeGreaterThanOrEqual(4);
-    expect(marks.has('✓')).toBe(true);
+  it('uses THREE marks and no more, and a rail is never uniform (WP-35, pin 9)', () => {
+    // The fold closes the mark vocabulary at three: attested, recorded-not-
+    // proved, not-yet. WP-27's six were five marks doing what the row's own
+    // evidence sentence does better; the dash died for the same reason.
+    const kinds = new Set(
+      [
+        checkpointMark(state({ status: 'pending' }), 0),
+        checkpointMark(state({ status: 'active' }), 1),
+        checkpointMark(state({ status: 'aborted' }), 2),
+        checkpointMark(state({ status: 'skipped' }), 3),
+        checkpointMark(state({ status: 'attested', attest: 'narrative' }), 4),
+        checkpointMark(state({ status: 'attested', attest: 'event', verified: true }), 5),
+      ].map((m) => (/^\d+$/.test(m) ? 'numeral' : m)),
+    );
+    expect([...kinds].sort()).toEqual(['numeral', '·', '✓']);
+
+    // Uniformity is refused by the numeral being the position: eight unreached
+    // checkpoints read 1…8, never eight of the same glyph.
+    const rail = Array.from({ length: 8 }, (_, i) => checkpointMark(state({ status: 'pending' }), i));
+    expect(new Set(rail).size).toBe(8);
   });
 });
 

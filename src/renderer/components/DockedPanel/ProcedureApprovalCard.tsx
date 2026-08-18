@@ -204,14 +204,22 @@ export class ProcedureApprovalCard extends React.Component<Props, State> {
         React.createElement('span', { style: { color: UI_COLORS.WPE_BRAND, fontSize: 14, marginRight: 6 } }, '⚡'),
         React.createElement('span', { style: styles.title }, title),
       ),
-      // The plan reference. Named, versioned, marked strict — and the
-      // checkpoint this decision attests, so the user can see which step of the
-      // document they are standing on.
+      // WP-35 · THE REFERENCE IS NOT HERE, and its absence is the pin.
+      //
+      // The fold, pin 4: "the runbook reference appears exactly once, in the
+      // declared block's header. Not in the card, not in the session header,
+      // not in a turn." This card used to print `Runbook <id> v<version>,
+      // marked strict` — correct when it was the only surface naming the
+      // document, and a second copy the moment the block was pinned above it.
+      // WP-28 already caught this failure once, between the card and the
+      // platform's warning line.
+      //
+      // The CHECKPOINT stays: it is not the reference, and a decision that did
+      // not say which step of the document it stands on would be a consent
+      // without a subject.
       React.createElement(
         'div',
         { style: styles.reference },
-        `Runbook ${procedure.runbookId} v${procedure.version}, marked strict.`,
-        React.createElement('br', null),
         `This approval is checkpoint ${procedure.checkpointId}.`,
       ),
       React.createElement('div', { style: styles.effect }, effect),

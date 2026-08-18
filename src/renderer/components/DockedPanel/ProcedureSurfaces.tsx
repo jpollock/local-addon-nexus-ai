@@ -1,5 +1,24 @@
 /**
  * WP-27 · the procedure surfaces in the Docked Panel — phase 1 of the ruled UX plan.
+ * WP-35 · the COMPANION DENSITY, at the shipped 380px: the fold's ruled composite
+ * (`docs/intelligence/from-designer/from-designer-05-companion-density-final.md`,
+ * ratified whole by `for-designer-fold-response.md`).
+ *
+ * FOUR STATES, and which pin rules each:
+ *
+ *  - **Running.** The declared block, pinned to the top of the session by
+ *    `PanelChat` — the procedure outranks the transcript, so it holds the top
+ *    and the turns move beneath it (1a, XD-3 as geometry).
+ *  - **Waiting on you.** An approval card is up, so the block yields to the
+ *    card and renders as the DIGEST: every fact, a checkpoint window centred on
+ *    the gate with its range stated, no inner scrollbar, the full declaration
+ *    one promotion away. The block yields to the card, never the reverse
+ *    (pin 1) — and the 200px floor it replaced was a fact about a sketch.
+ *  - **Finished.** One row where the block was, still at the top; the record
+ *    opens IN PLACE. The row is a handle, not a summary (pin 3).
+ *  - **The empty run.** A plan of zero cells opens NO container (XD-21,
+ *    pin 8): no block, no checkpoint list, the derived plan attached to the
+ *    refusal turn instead.
  *
  * Three things render here, all of them from data `procedureView.ts` derived:
  *
@@ -45,11 +64,15 @@ import {
   armedByPhrase,
   checkpointBadge,
   checkpointMark,
+  checkpointWindow,
   denominatorLine,
+  derivedPlanLine,
   foldsToOneLine,
+  opensContainer,
+  referenceLine,
   runIsFinished,
   showsTick,
-  stepNoun,
+  windowRangeLine,
   type CheckpointState,
   type DeclaredProcedure,
   type ProcedureAbortedEvent,
@@ -59,16 +82,35 @@ import {
 export interface ProcedureSurfacesProps {
   procedure: DeclaredProcedure | null;
   abort: ProcedureAbortedEvent | null;
+  /**
+   * WP-35 · an approval card is up (the fold, pin 1). The block yields to the
+   * card, never the reverse: while a decision is pending the declaration
+   * renders as the DIGEST. The panel owns this fact — it is the surface that
+   * knows a card is on screen — and hands it down; nothing here goes looking.
+   */
+  approvalPending?: boolean;
+  /**
+   * The checkpoint the pending decision attests. The digest's window centres on
+   * it. Absent ⇒ the active checkpoint stands in (`checkpointWindow`).
+   */
+  gateCheckpointId?: string | null;
 }
 
 interface State {
   /** A finished run folds to one row; this is the user opening it back up. */
   expanded: boolean;
+  /** The digest promoted in place to the full declaration (WP-35's named interim). */
+  promoted: boolean;
   /** The site whose restore launcher was pressed, and whose refusal path is showing. */
   restoreAsked: string | null;
 }
 
 const styles = {
+  /**
+   * The block, pinned to the top of the session (the fold's ruled composite,
+   * 1a). `margin` and `padding` are WP-27's; the height bound is not
+   * unconditional any more — see `bandStyle`.
+   */
   band: {
     border: `1px solid var(--nxai-card-border)`,
     background: 'var(--nxai-section-bg)',
@@ -80,11 +122,31 @@ const styles = {
     gap: 8,
     fontSize: 12,
     color: 'var(--nxai-card-text)',
-    maxHeight: 540,
-    overflowY: 'auto' as const,
   },
+  scroll: { maxHeight: 540, overflowY: 'auto' as const },
   head: { display: 'flex', flexWrap: 'wrap' as const, alignItems: 'baseline', gap: 6 },
-  runbookId: { fontWeight: 600, color: 'var(--nxai-card-text)' },
+  /** The reference row. One home, one string — see `referenceLine`. */
+  reference: {
+    fontWeight: 600,
+    color: 'var(--nxai-card-text)',
+    borderLeft: `2px solid ${UI_COLORS.WPE_BRAND}`,
+    paddingLeft: 8,
+  },
+  foldHandle: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 6,
+    width: '100%',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    margin: 0,
+    textAlign: 'left' as const,
+    font: 'inherit',
+    color: 'var(--nxai-card-text)',
+    cursor: 'pointer',
+  },
+  chevron: { color: 'var(--nxai-card-sub)', fontSize: 10 },
   meta: { color: 'var(--nxai-card-sub)', fontSize: 11 },
   strict: {
     color: UI_COLORS.WPE_BRAND,
@@ -94,6 +156,16 @@ const styles = {
     padding: '0 4px',
   },
   denominator: { color: 'var(--nxai-card-sub)', fontSize: 11 },
+  range: { color: 'var(--nxai-card-sub)', fontSize: 11 },
+  /** The empty run: a turn's attachment, never a container. */
+  planAttachment: {
+    margin: '4px 0 0',
+    paddingLeft: 8,
+    borderLeft: `2px solid var(--nxai-card-border)`,
+    color: 'var(--nxai-card-sub)',
+    fontSize: 11,
+    lineHeight: 1.5,
+  },
   list: { display: 'flex', flexDirection: 'column' as const, gap: 4, margin: 0, padding: 0, listStyle: 'none' },
   row: (folded: boolean) => ({
     display: 'flex',
@@ -109,6 +181,12 @@ const styles = {
   // there is no mono variable. A var with a fallback would have rendered fine and
   // left a dangling reference behind it.
   cpId: { fontFamily: 'monospace', fontSize: 11 },
+  /**
+   * The step the run is standing on. TYPOGRAPHY, not a mark: the mark
+   * vocabulary is three (WP-35, pin 9) and `active` is not one of the three, so
+   * the row is emphasised rather than given a fourth glyph.
+   */
+  cpIdActive: { fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: 'var(--nxai-card-text)' },
   sub: { color: 'var(--nxai-card-sub)', fontSize: 11 },
   badge: {
     color: 'var(--nxai-card-sub)',
@@ -151,12 +229,26 @@ const VERSIONS_ABSENT =
 export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, State> {
   constructor(props: ProcedureSurfacesProps) {
     super(props);
-    this.state = { expanded: false, restoreAsked: null };
+    this.state = { expanded: false, promoted: false, restoreAsked: null };
     this.toggleExpanded = this.toggleExpanded.bind(this);
+    this.togglePromoted = this.togglePromoted.bind(this);
   }
 
   toggleExpanded() {
     this.setState((s) => ({ expanded: !s.expanded }));
+  }
+
+  togglePromoted() {
+    this.setState((s) => ({ promoted: !s.promoted }));
+  }
+
+  /**
+   * Whether the declaration is rendering as the digest right now (the fold,
+   * pin 1). A promotion suspends it — the user asked for the whole document,
+   * and the block stops yielding for as long as she is reading it.
+   */
+  private isDigest(procedure: DeclaredProcedure): boolean {
+    return !!this.props.approvalPending && !this.state.promoted && !runIsFinished(procedure);
   }
 
   askRestore(entityId: string) {
@@ -188,12 +280,26 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
     );
   }
 
-  renderCheckpoint(state: CheckpointState): React.ReactNode {
+  /**
+   * One checkpoint row.
+   *
+   * `index` is the position in the DECLARED order, not in whatever slice is on
+   * screen: the not-yet mark IS that number, and a windowed digest that
+   * renumbered its three rows 1–3 would contradict the range line sitting
+   * directly above them.
+   *
+   * `defer` is the companion's deferral (the fold, restatement 2, adopted with
+   * the guard): explanation may fold behind the promotion, a fact may not. The
+   * badge stays; the badge's REASON is explanation and goes. What comes back on
+   * promotion is byte-identical to the undeferred rendering, because promotion
+   * renders that rendering rather than a second wording of it.
+   */
+  renderCheckpoint(state: CheckpointState, index: number, defer = false): React.ReactNode {
     const folded = foldsToOneLine(state);
     const body: React.ReactNode[] = [
       React.createElement(
         'div',
-        { key: 'id', style: styles.cpId },
+        { key: 'id', style: state.status === 'active' ? styles.cpIdActive : styles.cpId },
         state.id,
       ),
     ];
@@ -218,7 +324,7 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
       const badge = checkpointBadge(state);
       if (badge) {
         body.push(React.createElement('span', { key: 'badge', style: styles.badge }, badge.label));
-        if (badge.reason) {
+        if (badge.reason && !defer) {
           body.push(
             React.createElement(
               'div',
@@ -238,59 +344,67 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
         'data-checkpoint': state.id,
         'data-folded': folded,
         'data-ticked': showsTick(state),
+        'data-status': state.status,
       },
-      React.createElement('span', { style: styles.mark, 'aria-hidden': true }, checkpointMark(state)),
+      React.createElement('span', { style: styles.mark, 'aria-hidden': true }, checkpointMark(state, index)),
       React.createElement('div', { style: styles.rowBody }, ...body),
     );
   }
 
-  renderDeclared(procedure: DeclaredProcedure): React.ReactNode {
-    if (procedure.unavailable) return this.renderDisarm(procedure);
+  /**
+   * THE HEADER, and the runbook reference's one home (the fold, pin 4).
+   *
+   * When the run is finished the header IS the block: one row where the block
+   * was, and the row is a handle rather than a summary — it opens the record in
+   * place and carries nothing it would otherwise have to recount.
+   */
+  renderHeader(procedure: DeclaredProcedure, finished: boolean): React.ReactNode {
+    const reference = React.createElement('span', { style: styles.reference }, referenceLine(procedure));
+    const capability = React.createElement('span', { style: styles.meta }, procedure.capability);
 
-    const finished = runIsFinished(procedure);
-    const showRail = !finished || this.state.expanded;
-    const noun = stepNoun(procedure.strictness);
+    if (!finished) {
+      return React.createElement('div', { key: 'head', style: styles.head }, reference, capability);
+    }
+
+    return React.createElement(
+      'button',
+      {
+        key: 'head',
+        type: 'button',
+        style: styles.foldHandle,
+        onClick: this.toggleExpanded,
+        'aria-expanded': this.state.expanded,
+        'data-run-folded': !this.state.expanded,
+      },
+      reference,
+      capability,
+      React.createElement('span', { style: styles.chevron, 'aria-hidden': true }, this.state.expanded ? '▾' : '▸'),
+    );
+  }
+
+  /**
+   * The declaration's body, undeferred: why the ceremony appeared, the honest
+   * denominator, every checkpoint, and what the procedure requires her to be
+   * told. This is also exactly what a promotion reveals — one rendering, so
+   * folding can never become rewording.
+   */
+  renderFullBody(procedure: DeclaredProcedure): React.ReactNode[] {
+    const children: React.ReactNode[] = [];
     const armed = armedByPhrase(procedure.armedBy);
     const denominator = denominatorLine(procedure);
 
-    const head = React.createElement(
-      'div',
-      { style: styles.head },
-      React.createElement('span', { style: styles.runbookId }, procedure.runbookId ?? procedure.capability),
-      procedure.version ? React.createElement('span', { style: styles.meta }, `v${procedure.version}`) : null,
-      procedure.strictness === 'strict'
-        ? React.createElement('span', { style: styles.strict }, 'marked strict')
-        : null,
-      React.createElement('span', { style: styles.meta }, procedure.capability),
-    );
-
-    const children: React.ReactNode[] = [head];
     if (armed) children.push(React.createElement('div', { key: 'armed', style: styles.meta }, armed));
     if (denominator) {
       children.push(React.createElement('div', { key: 'denominator', style: styles.denominator }, denominator));
     }
 
-    if (showRail) {
-      children.push(
-        React.createElement(
-          'ul',
-          { key: 'rail', style: styles.list },
-          ...procedure.checkpoints.map((c) => this.renderCheckpoint(c)),
-        ),
-      );
-    }
-
-    if (finished) {
-      children.push(
-        React.createElement(
-          'button',
-          { key: 'toggle', style: styles.linkBtn, onClick: this.toggleExpanded },
-          this.state.expanded
-            ? `Hide the ${noun}s`
-            : `Show all ${procedure.checkpoints.length} ${noun}s`,
-        ),
-      );
-    }
+    children.push(
+      React.createElement(
+        'ul',
+        { key: 'rail', style: styles.list },
+        ...procedure.checkpoints.map((c, i) => this.renderCheckpoint(c, i)),
+      ),
+    );
 
     if (procedure.communication.length > 0) {
       children.push(
@@ -307,7 +421,108 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
       );
     }
 
+    return children;
+  }
+
+  /**
+   * THE DIGEST (the fold, pins 1 and 2; the number 200 struck at the fold
+   * response §2).
+   *
+   * Every fact — the reference above, the provable denominator, the marks, the
+   * attest words in full — and a window of the checkpoint list centred on the
+   * gate WITH ITS RANGE STATED, because a window that does not declare itself
+   * is a truncation pretending to be the whole. No inner scrollbar: the block
+   * is sized to what the card leaves rather than scrolled inside a box that
+   * fits nothing.
+   */
+  renderDigestBody(procedure: DeclaredProcedure): React.ReactNode[] {
+    const children: React.ReactNode[] = [];
+    const denominator = denominatorLine(procedure);
+    if (denominator) {
+      children.push(React.createElement('div', { key: 'denominator', style: styles.denominator }, denominator));
+    }
+
+    const window = checkpointWindow(procedure, this.props.gateCheckpointId);
+    if (window) {
+      const range = windowRangeLine(procedure, window);
+      if (range) children.push(React.createElement('div', { key: 'range', style: styles.range }, range));
+      children.push(
+        React.createElement(
+          'ul',
+          { key: 'rail', style: styles.list },
+          ...window.states.map((c, i) => this.renderCheckpoint(c, window.offset + i, true)),
+        ),
+      );
+    }
+
+    return children;
+  }
+
+  renderDeclared(procedure: DeclaredProcedure): React.ReactNode {
+    if (procedure.unavailable) return this.renderDisarm(procedure);
+
+    const finished = runIsFinished(procedure);
+    const digest = this.isDigest(procedure);
+    const children: React.ReactNode[] = [this.renderHeader(procedure, finished)];
+
+    if (finished) {
+      // Folded in place: one row, and the record opens beneath the same row
+      // rather than anywhere else. What she read before the run is what she
+      // reopens after it.
+      if (this.state.expanded) children.push(...this.renderFullBody(procedure));
+    } else if (digest) {
+      children.push(...this.renderDigestBody(procedure));
+      children.push(
+        React.createElement(
+          'button',
+          {
+            key: 'promote',
+            type: 'button',
+            style: styles.linkBtn,
+            onClick: this.togglePromoted,
+            'data-procedure-promote': procedure.runbookId ?? procedure.capability,
+          },
+          'Show the full declaration',
+        ),
+      );
+    } else {
+      children.push(...this.renderFullBody(procedure));
+      if (this.props.approvalPending) {
+        // Promoted while the decision is still pending: the way back to the
+        // digest is the same handle, because a promotion you cannot leave is
+        // the run-mode bar the fold refused.
+        children.push(
+          React.createElement(
+            'button',
+            {
+              key: 'promote',
+              type: 'button',
+              style: styles.linkBtn,
+              onClick: this.togglePromoted,
+              'data-procedure-promote': procedure.runbookId ?? procedure.capability,
+            },
+            'Fold the declaration back',
+          ),
+        );
+      }
+    }
+
     return React.createElement('div', { 'data-procedure': procedure.capability }, ...children);
+  }
+
+  /**
+   * XD-21 · the empty run. A plan of zero cells opens NO container: no block,
+   * no checkpoint list. The refusal stays a turn and the derived plan attaches
+   * to it verbatim, so the reason is inspectable rather than asserted.
+   */
+  renderPlanAttachment(procedure: DeclaredProcedure): React.ReactNode {
+    const plan = derivedPlanLine(procedure);
+    if (!plan) return null;
+    return React.createElement(
+      'div',
+      { style: styles.planAttachment, 'data-procedure-plan': procedure.capability },
+      plan,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -390,14 +605,31 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
     );
   }
 
+  /**
+   * The height bound, and the one state that does not take it.
+   *
+   * WP-27's band scrolls at 540px. The digest must not: "every fact, a stated
+   * window centred on the gate, NO INNER SCROLLBAR" is the rule that replaced
+   * the 200px floor, and a scrollbar is how a block that cannot fit pretends it
+   * did. Everywhere else the bound is unchanged.
+   */
+  private bandStyle(procedure: DeclaredProcedure | null): React.CSSProperties {
+    if (procedure && this.isDigest(procedure)) return styles.band;
+    return { ...styles.band, ...styles.scroll };
+  }
+
   render() {
     const { procedure, abort } = this.props;
     // Nothing armed ⇒ nothing rendered, and the panel is exactly what it was.
     if (!procedure && !abort) return null;
 
+    // XD-21 — no consequence, no rank, no container. Before the section, because
+    // the section IS the container.
+    if (procedure && !abort && !opensContainer(procedure)) return this.renderPlanAttachment(procedure);
+
     return React.createElement(
       'section',
-      { style: styles.band, 'aria-label': 'Procedure' },
+      { style: this.bandStyle(procedure), 'aria-label': 'Procedure' },
       procedure ? this.renderDeclared(procedure) : null,
       abort ? this.renderAbort(abort) : null,
     );
