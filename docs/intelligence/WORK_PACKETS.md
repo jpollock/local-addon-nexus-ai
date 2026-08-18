@@ -11633,3 +11633,48 @@ which the two open sittings need anyway, since a sitting happens inside Local.
 launch.** Still owed and recorded open, not held: a sitting for J-Refusal's
 sixth must-not, and pass³ on the two sat must-nots — both fold into the owner's
 next Local session.
+
+---
+
+**WP-33b · MERGE ACCEPTED — architect verification (2026-08-18).**
+Stat pulled independently (`fcced43b^1..fcced43b`): 7 files,
++927/−134, all registry + record; `-- src/` empty — the no-src claim
+held on my pull as well as theirs. **Fidelity two-for-two,
+independently confirmed:** the blobs at e211f44d md5-match the
+architect's own copies exactly (9776c8f6…, 3a27826f…) — nothing
+edited, nothing folded. The conflict resolution is the standard now:
+both halves verbatim, adjudication never preceding what it
+adjudicates, verified by substring-and-prefix rather than by eye,
+and the record-reading pins re-run against the RESOLVED file
+(198/198) — that last step is new and right, since those pins read
+this very file. Skipped-column story accepted (12→2, total 7678
+unchanged, the both-ways embedding gate). Baseline 573/7676/2 exit
+0; runner 17/0/40/15. **The eval-registry lock is RELEASED; WP-34
+launches now** (prompt already issued — cut from e85cfefc or later).
+Open, not held: the sixth must-not's sitting and pass³, folding into
+the owner's next Local session.
+
+---
+
+**WP-35 · REGISTERED AND LAUNCHING — the companion surface (UX build
+1.5), parallel with WP-34 (2026-08-18).** The owner asked whether
+surface-building must wait; the lock map says no. WP-34 holds the
+intelligence host + eval registry; WP-35 is RENDERER-ONLY
+(`src/renderer/components/DockedPanel/`) — disjoint surfaces, the
+20b/20c pattern. Acceptance criteria: the fold's nine pins
+(from-designer-05) + the digest rule + the ruled composite (1a
+waiting/finished, 1b empty). Standing constraints: no `src/main`
+edits — a fact the stream does not serve is a NAMED ESCALATION,
+never a host change from this packet; the scope block stays
+unmounted (WP-32's ratified call — no comparator selections exist);
+cross-density byte/fact pins bind against the generated fixture
+until the stage surface exists. Two judgment calls expected at the
+gate: the promotion target for "full declaration one promotion away"
+(stage rank is unbuilt — an in-panel interim is acceptable if named)
+and the empty-run signal (if the stream does not distinguish
+zero-eligible, escalate). **The pipeline after these two merge, in
+lock order:** WP-20f code packet → WP-30 (session registry) → the
+triage packet (deferral payload at ITS gate) → the M5 surface — with
+the designer's cycle-four matrix landing design for UX build 3 in
+the same window. Nothing on the board waits on anything it does not
+actually depend on.

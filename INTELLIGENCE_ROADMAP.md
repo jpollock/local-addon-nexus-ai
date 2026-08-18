@@ -1,7 +1,7 @@
 # Intelligence Layer — Roadmap
 
-*Branch: `poc/nexintelligence` · updated 2026-08-17 · Companion docs:
-[`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (ADRs 1–23, adopted),
+*Branch: `poc/nexintelligence` · updated 2026-08-18 (evening) · Companion docs:
+[`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (ADRs 1–24, adopted),
 [`docs/intelligence/reconciliation-site-environment-model.md`](docs/intelligence/reconciliation-site-environment-model.md),
 [`docs/intelligence/implementation-audit-three-layer.md`](docs/intelligence/implementation-audit-three-layer.md),
 [`docs/intelligence/TESTING_STRATEGY.md`](docs/intelligence/TESTING_STRATEGY.md),
@@ -137,17 +137,63 @@ designer cycle waits on 20e's seam. ADR-17 amended (10 KB
 canonical-document ceiling), ADR-20 amended (procedure re-assert instance,
 policy-before-procedure order).
 
-**Owner, standing:** commit cadence on `docs/intelligence/` (agents
-verbatim-commit anything uncommitted, verified md5-faithful twice);
-worktree/branch housekeeping (many merged worktrees parked);
-`NEXUS_EVAL_API_KEY` for the B-03 sitting (seven OWNER-PENDING once 20e
-lands); the first-real-pull live smoke (chip + sync producer + health
-line + where_am_i at once — needs ABI ELECTRON: `npm run rebuild` first,
-last measurement left the tree on system Node). **Registered, not now:**
-WP-20f deny-flip (MANDATORY ruling attached: shipped-enabled must not
-survive the flip for the two production-scoped capabilities), WP-20g, guided-runbook ceiling (vacuous at 10 KB
-today, revived by any full-body guided delivery), pre-commit YAML parse
-for law docs, `arms_on:` authoring on the shipped set.
+**Owner, standing (refreshed 2026-08-18 evening):** commit cadence on
+`docs/intelligence/` (agents verbatim-commit anything uncommitted —
+fidelity verified md5-faithful on every occurrence, most recently
+six-for-six and two-for-two); worktree/branch housekeeping (merged
+worktrees parked); the sixth must-not's sitting + pass³ on the two sat
+must-nots (next Local session, one script); the WP-20f code packet on
+your word. Earlier standing items ALL CLEARED: B-03 sat and passed,
+first-real-pull smoked, WP-25 live-smoked, WP-20f ruled. **Registered,
+not now:** WP-20g, guided-runbook ceiling (vacuous at 10 KB today),
+pre-commit YAML parse for law docs, `arms_on:` authoring on the
+shipped set, sentinel report-template finding (fabricated remediation
+checklist — filed at the WP-25 smoke).
+
+## Wave 4 — the incident closed, the evals bound, the episodic family real (all 2026-08-18)
+
+- [x] **WP-24** sitting-harness rot retired by cause (lazy imports; stub deleted)
+- [x] **WP-31** the live half-adherence incident CLOSED — exclusive tool scope
+      (rule 5: a write the runbook declares nowhere is refused), capability-tense
+      ack (attest words rewritten: "the platform can verify…"), arming-gap harness
+      variant, refusal payload carries the governDoor. Regression-proved by the
+      t1/t2 replay (below).
+- [x] **WP-32** the scope carrier — selection→scope through arming (XD-15's eight
+      pins), `ArmingRequest.scope?` widening ratified, and the derived fixture
+      generator (`design-fixtures/declared-procedures.json`) that ended hand-built
+      design fixtures forever.
+- [x] **WP-33** the five journey evals in the registry, transcribed verbatim from
+      the committed designer positions — BLOCKED-never-green applied to the
+      experience. **WP-33b** re-transcribed J-Refusal from its governing text
+      (8→12 criteria), mechanized the sitting verdicts, proved the stale-pin
+      divergence UNREACHABLE. Runner: 17 PASS / 0 FAIL / 40 BLOCKED / 15
+      OWNER-PENDING — every non-green names its owner.
+- [x] **WP-25** the incident producer — sentinel findings + procedure aborts
+      become `episodic.incident.recorded` (payload ratified field-by-field;
+      SEVERITY_FLOOR high; resolution stricter than the note; version pair
+      honest-empty pending a WP-19 micro). **Live-smoked on a real compromised
+      test site: four real incidents folded, retrieved on the next chat turn —
+      and the model caught the sentinel report's fabricated remediation
+      checklist against the ledger, unprompted.** The episodic family is
+      complete: all five knowledge kinds now have live supply chains.
+- [x] **The first design sitting** (J-Refusal, the t1/t2 replay): both judged
+      criteria PASS at pass@1 on the owner's answers; the incident's ask now
+      produces two reads, an empty plan, and a held refusal. One copy-drift
+      finding ("or tell me to") filed and independently confirmed by the
+      designer's sixth must-not the same day.
+- [x] **WP-20f RULED** (owner): the two production-scoped capabilities flip to
+      DENY with no carve-out; remaining enablements materialize as visible
+      `control.grant.issued` grants; new capabilities arrive denied.
+      Additive-v0 is over. (Code packet registered, prompts on the owner's word.)
+
+**In flight:** WP-34 — the citation convention (span syntax with the trailing-door
+consuming contract, carrier instruction block at gate hold, the one
+claim→record join, adherence evals + fixtures against from-designer-07's state
+table). **Registered, sequenced:** the WP-20f code packet; WP-30 session
+registry (J-Return's owner); WP-29 stage-consumes-seam; the M5 corroboration
+surface packet (after WP-34); UX build 1.5 (the companion surface, eleven+nine
+pins waiting); micros: WP-19 version-pair widening, renderer-safe extraction,
+run.ts telemetry line.
 
 ## The design workstream (consolidated 2026-08-18)
 
@@ -157,18 +203,23 @@ for law docs, `arms_on:` authoring on the shipped set.
 J-Return/J-Refusal bound at designer §1 (+ J-Act-big=B-03,
 J-Investigate=D-02).*
 
-**Designer cycles:** 1 (NOW) — M4's two densities, RB-D/E harmonized to
-canonical, scope block at both heads split-state included · 2 (after
-WP-25) — needs-you/Return as triage against the consequence order,
-coalescing + reserved slot as constraints · 3 — the corroboration
-render (M5's center). Then the lineage session (explanation lines
-against real records).
+**Designer cycles — 1, 2, 3 all CLOSED (2026-08-18), every artifact
+ratified:** 1 — the two densities + the fold (digest rule,
+fact-identity amendment, J-Refusal's governing text) · 2 — the ambient
+triage + deferral affordance (badge-as-instrument, three recorded
+ends, vocabulary v1.2: deferred/wake/end-the-deferral) · 3 — the
+corroboration render against ADR-24 (trailing door, legacy state; the
+first cycle where the contract preceded the drawing). Register at
+**XD-1..24**; positions committed verbatim under `from-designer/`
+(protocol's "both committed" made whole); fixtures generated, never
+hand-built (the swap pattern, three applications). **Cycle 4 (NOW):
+the Govern matrix + grants pages against the WP-20f law** — carries
+the deferral's Settings side and the split-scope second run.
 
-**Method instruments, near-term:** journey specs into the eval
-registry (packet, parallel-safe — BLOCKED-never-green applied to the
-experience); the first design sitting = the post-WP-31 t1/t2 replay
-run as J-Refusal's judged half; the walks fold (transitions, not
-states) when instrumentation is next touched.
+**Instruments, standing:** journey evals LIVE in the registry (WP-33/
+33b); design sitting #1 done; owed the sixth must-not's sitting +
+pass³ (owner's next Local session); the walks fold when
+instrumentation is next touched.
 
 ## UX implementation — four phases (ruled 2026-08-18)
 
@@ -189,12 +240,15 @@ M5's center. Journey evals precede surfaces, per the B-03 discipline.
    platform-can't-verify line), declared-procedure block, RB-A2
    collapsing checklist, abort groups. **Phase 1 complete** — the
    anchor slice's visible half is in the product.
-2. **Next — audit view + Home needs-you rows**: after WP-25 (incident
-   producer) and a session-state query micro. Includes the corroboration
-   render (the sitting-economics surface).
-3. **After the WP-20f ruling — Settings/grants pages**: the designer's
-   copy is written for the deny-by-default destination; build once,
-   against the ruled flip, never twice.
+2. **Next — audit view + Home needs-you rows**: WP-25 is DONE and
+   live-smoked (the data exists); the triage design is ratified (eleven
+   pins, XD-23); waits on WP-30 (session registry) for its query side.
+   The corroboration render (M5) is designed (XD-24) and builds after
+   WP-34's convention + eval half.
+3. **Settings/grants pages — the WP-20f ruling is MADE (2026-08-18)**:
+   deny-flip law is real; the designer is drawing the matrix against it
+   NOW (cycle 4); build follows the ratified sheet + the WP-20f code
+   packet. Build once, against the ruled flip — as planned, never twice.
 4. **Last, with product buy-in — the full shell inversion** (rail, Sites
    matrix, sessions-by-consequence): ruled a rendering change on the
    entity graph, but it reimagines Local's main surface — product
