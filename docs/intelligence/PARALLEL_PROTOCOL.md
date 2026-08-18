@@ -54,7 +54,14 @@ line) while everything else is green, reproducibly with the cache and never
 without it. The move is `npx jest --clearCache`, THEN re-measure — before
 believing the red, before filing a finding, before touching the code it
 points at. A parse failure in one suite you did not edit is the cache until
-proven otherwise.
+proven otherwise. **Fifth occurrence added a new form** (WP-31): the
+poisoned cache can mask a MUTATION — a false SURVIVAL, not just a false
+red — so mutation-battery runs are ALWAYS `--no-cache`, no exceptions;
+a witness credited from a cached run is not credited. And a shell trap
+in the same silently-measures-nothing family: `npx jest $var` does NOT
+word-split under zsh — the command runs, exits green, and tested
+nothing. Quote-and-splat explicitly, or echo the resolved command
+before trusting its result.
 
 **A "dormant" branch may have already shipped** (WP-22 finding): before
 treating branch work as stalled prior art, run

@@ -9403,3 +9403,110 @@ contract). Sequencing: after WP-31 merges (shares the refusal shape);
 the M2 comparator surface that produces selections is the designer's
 cycle-one/two seam — WP-32 can build against a fixture selection the
 way WP-27 built against a fake emitter.
+
+---
+
+**ARCHITECT — SCOPE BLOCK DRAFT 2 ADOPTED; THE SPLIT-WIDENING RULED
+(2026-08-18).** Both flags taken by the designer (canonical checkpoint
+order with shipped attest words and the exact WP-28 badge set; the
+split state designed — three groups by AUTHORITY: runs-now /
+needs-a-grant-with-door / excluded-by-world). The shortform-marks
+suggestion was DECLINED by the designer and the decline is ratified on
+their reasoning: "a shortform mark set would be a second wording of the
+one sentence the seam exists to keep single" — no new vocabulary; the
+attest words render in full at both densities. **WP-32's acceptance
+criteria are now the EIGHT pins of draft 2** (the five inherited plus:
+barred-group capability id in the Settings matrix's vocabulary with a
+door resolving to that grant — shared with WP-31's refusal contract
+from both ends; declared-list-and-attest-words derived from the
+canonical document, "a checkpoint sequence authored anywhere, including
+in a design fixture, is a defect"; runnable-and-barred subsets never
+depend on each other). **RULED, the designer's question: a later
+widening starts a SECOND run under the production runbook — never a
+resumption.** Grounds: runs are hash-pinned to their document
+(verifiableCount ruling — checkpoints attested against one text do not
+describe another, per the hash-mismatch doctrine); cp.approval's own
+contract (a different plan restarts from dry-run — a widened plan is a
+different plan; a stretched approval is consent elicited from the
+past); continuity lives in PROVENANCE — the new run is born pre-scoped
+to the barred cells with the SAME from-line, the two runs sharing the
+selection as ancestor, the containment→remediation handoff shape
+generalized. The door's promise today: the specific grant + the honest
+statement that the production runbook version does not yet exist; when
+both exist, it upgrades to starting the pre-scoped production run.
+Response in `for-designer-scope-block-v2-response.md`.
+
+---
+
+**ARCHITECT — THREE DESIGN-OPS RULINGS FOR CYCLE ONE (2026-08-18,
+designer's questions, owner delegated).** (1) RB-D and RB-E's pre-pin
+checkpoint fixtures: HARMONIZE BOTH to the canonical eight (order,
+shipped attest words, the four WP-28 badges, denominators recomputed) —
+pin 7 makes fixture drift a defect, and the superseded-not-updated rule
+applies only to retired candidates, which these are not. (2) The scope
+block goes into the HEAD OF BOTH densities now, SPLIT STATE INCLUDED,
+in one pass — the ratified artifact includes the split; unsplit-only
+would re-create the two-wordings drift; one pass satisfies the
+byte-identical pin at the source; design-before-carrier is the loop's
+standing method (fake-emitter precedent). (3) Sketch fixtures read ONE
+SHARED FIXTURE FILE generated from the real derivation
+(`deriveDeclaredProcedure` output — computed attest words, badges,
+denominators), regenerated on runbook version bumps; direct reading of
+law/runbooks/ is retired for design use (transcription is authoring by
+another name — draft 1's defect was born there). **WP-32's scope gains
+the fixture generator as its first deliverable** — the carrier packet
+producing the design fixture, one data flow, one direction.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-31 GATE (2026-08-18).** Branch `wp-31`,
+held as pre-declared. All gate items ruled; one small addition required
+pre-merge; merge cleared once it lands.
+
+**The refusal copy: RATIFIED as written.** "Reaching the same effect
+through a tool the procedure does not name is not a way around the
+checkpoint — it is the thing the checkpoint exists to stop" is the
+incident's lesson stated as law, in vocabulary, naming the checkpoint,
+the tool, and the remedy. Keep it verbatim.
+
+**The write classification: RATIFIED.** `getToolSafety(name).tier >=
+GATED_TIER_FLOOR` — the same source the audit chokepoint and WP-19's
+producer read; no new list, which was the requirement. The
+default-by-strictness inversion (strict → exclusive, guided →
+advisory, the field becomes the authored opt-out) is the right shape:
+safety is the default and permissiveness is authored, reviewed, and
+versioned. The arming-gap closure — a pending arming request closes
+the door before any run exists — seals root cause C exactly.
+
+**The verify_site_live finding: fix (a), AND IT RIDES THIS PACKET.**
+Author `verify_site_live` into the anchor's cp.verify-canary `tools:`
+— docs original first, fidelity re-copy, version bump, hash ripple
+verified per the WP-28 pattern (grants repin, chained reissuance).
+Reasons: it repairs the runbook rather than complicating the rule (the
+verification checkpoint gains a declared instrument — its attest
+comment's "no tool checks this in this flow" stops being true, which
+is an upgrade); re-tiering is rejected as the report says (audit-log
+loss); and a readOnlyHint carve-out in the classification is REFUSED —
+one tool does not justify a second classification input, and the hint
+is less audited than the tier. The flip must not merge with a
+checkpoint no tool can satisfy.
+
+**The governDoor structured target: RATIFIED.** `{ surface, section,
+capability, runbookId }` over a URL — a URL to a surface that does not
+exist yet would be an authored promise; the structured target is the
+claim the eventual Settings surface resolves, and J-Refusal's pin
+tests RESOLUTION, not string format. When the matrix ships, the door's
+renderer resolves the target; nothing about the refusal changes.
+
+**Protocol amendments, made with this entry:** mutation batteries are
+ALWAYS `--no-cache` (fifth cache occurrence, new form: false SURVIVAL
+— a masked mutation is worse than a masked red, because it credits a
+witness that never fought); and the zsh `npx jest $var` no-word-split
+trap joins the silently-measures-nothing family.
+
+**Merge order:** the third architect batch in the primary checkout is
+committed FIRST — by the owner now or by the agent verbatim-attributed
+at merge, per protocol; the agent's choice to leave a possibly-partial
+write alone was correct. Then merge with receipts; WORK_PACKETS
+resolves append-only as always. Post-merge, the owner's t1/t2 ask
+replays as the demo of its own fix.
