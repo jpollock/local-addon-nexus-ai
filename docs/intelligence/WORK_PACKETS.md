@@ -11585,3 +11585,51 @@ probe (direct init with a printing logger) is now a PROTOCOL
 addendum. **Still owed, recorded open, not held:** a sitting for the
 sixth must-not and pass³ on the two sat must-nots — both fold into
 the owner's next Local session. WP-34 launches on this merge.
+
+---
+
+**WP-33b · MERGED to `poc/nexintelligence` — receipts (2026-08-18).**
+Merge `fcced43b`, packet commit `2b06b449`.
+
+**Receipts:** `git diff --stat fcced43b^1 fcced43b` — **7 files, +927 / −134**:
+the J-Refusal YAML, `checks.ts` / `checks.test.ts`, `probes.ts` /
+`probes.test.ts`, the registry README, and this record. `git diff --name-only
+fcced43b^1 fcced43b -- src/` is **empty** — the packet stayed inside the eval
+registry, as claimed.
+
+**Merged-tree baseline: 573 suites, 7676 passed, 2 skipped, 7678 total, exit 0**
+(exit captured before any pipe); `npm run typecheck` clean; eval tree 8 suites /
+332 tests, exit 0; the runner exits 2 with **17 PASS / 0 FAIL / 40 BLOCKED / 15
+OWNER-PENDING**. **The skipped column was read first, and it is the whole
+story:** the worktree measured 12 skipped / 7666 passed and the merged tree
+measures 2 skipped / 7676 passed with **the total unchanged at 7678**. Ten
+`embedding-service` tests crossed from skipped to passed because the primary
+checkout holds both model files where a worktree has one — the protocol's
+documented both-ways gate, again. Read as a passed-column delta alone it would
+look like a phantom gain of ten.
+
+**Uncommitted architect work found in the primary checkout, committed VERBATIM
+before merging** (`e211f44d`, per the standing WP-02 precedent): the
+`PARALLEL_PROTOCOL.md` addendum recording the ABI flip's second mask and the
+unmasking probe, and this file's WP-33b adjudication entry. Fidelity checked
+programmatically — md5 of each committed blob equals md5 of the working-tree
+file it was taken from, **two for two**. Neither was edited, neither was folded
+into the packet's own commits.
+
+**Tail conflict resolved as directed: both halves verbatim, ordering
+preserved.** One conflict, both sides pure appends past the same `---`. The
+packet's delivery entry goes FIRST and the architect block (the corroboration
+adjudication, the WP-25 live smoke, the WP-33b adjudication) follows, so the
+adjudication does not precede the thing it adjudicates; each side's internal
+order is untouched. Verified programmatically rather than by eye: both sides'
+appended text — 12,552 and 10,085 characters — is present verbatim in the
+resolved file, and the merge base's content is intact as its prefix.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and `npm rebuild
+better-sqlite3` for system Node. **`npm run rebuild` before loading Local** —
+which the two open sittings need anyway, since a sitting happens inside Local.
+
+**Board after this merge:** the eval-registry lock is RELEASED; **WP-34 may
+launch.** Still owed and recorded open, not held: a sitting for J-Refusal's
+sixth must-not, and pass³ on the two sat must-nots — both fold into the owner's
+next Local session.
