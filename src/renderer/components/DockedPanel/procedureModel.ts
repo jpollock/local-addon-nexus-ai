@@ -74,14 +74,20 @@ type ArmedBy = DeclaredProcedure['armedBy'];
 
 /**
  * What each attest class MEANS. Verbatim from the seam, which took them verbatim
- * from `nexus_load_procedure`: the model is told "your account only, not verified"
- * about the same checkpoint a human sees on this rail, and two vocabularies would
- * let those two sentences drift apart.
+ * from `nexus_load_procedure`: the model is told "the platform cannot verify
+ * this" about the same checkpoint a human sees on this rail, and two
+ * vocabularies would let those two sentences drift apart.
+ *
+ * WP-31 rewrote them in CAPABILITY tense. The old wording named the class and
+ * read as a completion state; the 2026-08-18 incident is a live run that took
+ * "verified from records" as a progress report and wrote without an approval.
+ * On this rail the sentence appears only on a PENDING or ACTIVE checkpoint,
+ * whose own status supplies the state.
  */
 export const ATTEST_WORDS: Record<AttestClass, string> = {
-  event: 'verified from records',
-  manifest: 'verified as supplied',
-  narrative: 'your account only, not verified',
+  event: 'the platform can verify this from records',
+  manifest: 'the platform can verify this from what it supplied',
+  narrative: 'on your account only — the platform cannot verify this',
 };
 
 /** The badge on a step the user did not ask for. */

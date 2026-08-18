@@ -94,12 +94,51 @@ test('the acknowledgement lists the checkpoints in order, and says which are ver
   // and the words must keep them apart per checkpoint. A rail that rendered all
   // eight the same way would be a product that lies (design note §7), and that
   // is as true of a uniformly-cautious rail as of a uniformly-green one.
-  expect(text).toMatch(/`cp\.approval` — verified from records/);
-  expect(text).toMatch(/`cp\.backup` — verified from records/);
-  expect(text).toMatch(/`cp\.roll-fleet` — verified from records/);
-  expect(text).toMatch(/`cp\.consult-history` — verified as supplied/);
+  // WP-31 · IN CAPABILITY TENSE. The old labels ("verified from records" /
+  // "verified as supplied") named attestation CLASSES and READ AS COMPLETION
+  // STATES. On 2026-08-18 a live run split this exact list into "already
+  // satisfied" (the four the platform CAN verify) and "still need to perform"
+  // (the four it cannot), then executed Tier-2 writes with no approval and no
+  // backup on record. The model did what the words said.
+  expect(text).toMatch(/`cp\.approval` — the platform can verify this from records — nothing is attested yet/);
+  expect(text).toMatch(/`cp\.backup` — the platform can verify this from records — nothing is attested yet/);
+  expect(text).toMatch(/`cp\.roll-fleet` — the platform can verify this from records — nothing is attested yet/);
+  expect(text).toMatch(/`cp\.consult-history` — the platform can verify this from what it supplied — nothing is attested yet/);
   for (const narrative of ['cp.dry-run', 'cp.canary', 'cp.verify-canary', 'cp.report']) {
-    expect(text).toMatch(new RegExp(`\`${narrative.replace('.', '\\.')}\` — your account only, not verified`));
+    expect(text).toMatch(
+      new RegExp(`\`${narrative.replace('.', '\\.')}\` — on your account only — the platform cannot verify this`)
+    );
+  }
+});
+
+/**
+ * WP-31 · ruling 2 of the 2026-08-18 incident, pinned on both strings a model
+ * can see. The class labels above say what the platform CAN do; this says what
+ * has HAPPENED, which is nothing, and it says it in one line that cannot be
+ * read as a checklist of completed steps.
+ */
+test('the acknowledgement states outright that no checkpoint has been performed', async () => {
+  const { text } = await call(ANCHOR);
+
+  expect(text).toMatch(/No checkpoint has been performed\./);
+  expect(text).toMatch(/Do not write until the procedure text arrives on your next turn\./i);
+});
+
+test('the tool DESCRIPTION carries the same warning — it is read before the tool is ever called', () => {
+  const description = loadProcedureHandler.definition.description;
+
+  expect(description).toMatch(/performs no checkpoint/i);
+  expect(description).toMatch(/must not write/i);
+  expect(description).toMatch(/next turn/i);
+});
+
+test('THE OLD STATE-READING STRINGS APPEAR NOWHERE in this acknowledgement', async () => {
+  const { text } = await call(ANCHOR);
+
+  // The incident's own words. A partial rewrite that left one of these behind
+  // would leave the misreading available on the checkpoint it still labelled.
+  for (const dead of ['verified from records', 'verified as supplied', 'your account only, not verified']) {
+    expect(text).not.toContain(dead);
   }
 });
 

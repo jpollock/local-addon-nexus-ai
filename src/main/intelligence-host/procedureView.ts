@@ -48,7 +48,7 @@
  *    (design inputs §3) is a compile-time fact rather than a convention.
  *  - The words a surface shows for each attest class are `ATTEST_WORDS`, moved
  *    here from `nexus_load_procedure`'s handler and imported back by it. The
- *    model is told "your account only, not verified" about the same checkpoint a
+ *    model is told "the platform cannot verify this" about the same checkpoint a
  *    human sees on the rail; two vocabularies would let those two sentences
  *    drift apart.
  *  - A criterion is identified by the eval's own id (`<specId>#<kind>[<index>]`),
@@ -84,10 +84,29 @@ import { attestationRemedy } from './sequenceGuard';
  * What each attest class MEANS, in the words already shipped to the model by
  * `nexus_load_procedure`. Shared rather than duplicated: see the header.
  */
+/**
+ * WP-31 · IN CAPABILITY TENSE, after the 2026-08-18 incident.
+ *
+ * These name attestation CLASSES — what the platform CAN prove about a
+ * checkpoint. The previous wording ("verified from records" / "verified as
+ * supplied" / "your account only, not verified") named the same classes and
+ * READ AS COMPLETION STATES. A live run split the acknowledgement's list into
+ * "already satisfied" (exactly the four labelled verified) and "still need to
+ * perform" (exactly the four labelled not verified), then executed Tier-2
+ * writes with no approval and no backup on record. The model did what the words
+ * said.
+ *
+ * Every string is now a sentence about the PLATFORM's ability, which has no
+ * reading as a claim about the run. The acknowledgement adds "— nothing is
+ * attested yet" to the two provable classes and a hard line of its own, because
+ * that is the surface where no state accompanies the label; the rail carries
+ * these words only on a PENDING or ACTIVE checkpoint, where its own status
+ * badge supplies the state.
+ */
 export const ATTEST_WORDS: Record<AttestClass, string> = {
-  event: 'verified from records',
-  manifest: 'verified as supplied',
-  narrative: 'your account only, not verified',
+  event: 'the platform can verify this from records',
+  manifest: 'the platform can verify this from what it supplied',
+  narrative: 'on your account only — the platform cannot verify this',
 };
 
 /**

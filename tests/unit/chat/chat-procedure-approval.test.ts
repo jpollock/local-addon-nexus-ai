@@ -55,6 +55,12 @@ const GATED_TOOL = 'bulk_plugin_update';
  * unchanged by this packet.
  */
 const ORDINARY_TOOL = 'wp_eval';
+/**
+ * WP-31 · the tool the 2026-08-18 incident actually called. Tier 2, claimed by
+ * NO checkpoint, forbidden only in the runbook's prose. Exclusive scope refuses
+ * it — and the refusal must NOT be the one the approval card rides.
+ */
+const UNCLAIMED_WRITE = 'wp_plugin_update';
 
 const mockAssemble = jest.fn();
 jest.mock('../../../src/main/intelligence-host/chatAssembly', () => {
@@ -180,18 +186,24 @@ function armAtApproval(): void {
 interface Harness {
   service: ChatService;
   events: Array<Record<string, unknown>>;
+  /** Tool names whose handler actually ran — a refusal never reaches one. */
+  executed: string[];
 }
 
 /** `decide` is called with the approval event; return the decision to send back. */
 function harness(decide?: (event: any) => { approved: boolean; canaryPolicy?: string }): Harness {
+  const executed: string[] = [];
   const db = new Database(':memory:');
   createSessionTables(db);
 
   const registry = new ToolRegistry();
-  for (const name of [GATED_TOOL, ORDINARY_TOOL]) {
+  for (const name of [GATED_TOOL, ORDINARY_TOOL, UNCLAIMED_WRITE]) {
     registry.register({
       definition: { name, description: name, inputSchema: { type: 'object', properties: {} } },
-      execute: async () => ({ content: [{ type: 'text', text: 'ok' }] }),
+      execute: async () => {
+        executed.push(name);
+        return { content: [{ type: 'text', text: 'ok' }] };
+      },
     } as unknown as McpToolHandler);
   }
 
@@ -219,7 +231,7 @@ function harness(decide?: (event: any) => { approved: boolean; canaryPolicy?: st
       }
     },
   });
-  return { service, events };
+  return { service, events, executed };
 }
 
 const send = (service: ChatService) =>
@@ -421,5 +433,43 @@ describe('the stream reaches the renderer', () => {
     const armedEvent = events.find((e) => e.type === 'procedure_armed') as any;
     expect(armedEvent).toBeDefined();
     expect(armedEvent.procedure.runbookId).toBe('rb.bulk-plugin-update');
+  });
+});
+
+
+/**
+ * WP-31 · the approval card must not become the exclusive-scope refusal's escape
+ * hatch.
+ *
+ * `gatedOnApproval` fires when the sequence guard is refusing THIS call on
+ * exactly the checkpoint an approval would attest. Exclusive scope refuses an
+ * unclaimed write and names the CURRENT checkpoint — which, for a run standing
+ * where the incident's run stood, is `cp.approval`. Left alone, the card would
+ * have offered a human the chance to bless `wp_plugin_update` itself: consent
+ * for the substitution, harvested by the mechanism built to prevent it.
+ */
+describe('WP-31 — an exclusive-scope refusal never raises the approval card', () => {
+  test('the unclaimed write is refused, no card is shown, and the handler never runs', async () => {
+    armAtApproval();
+    mockProviderInstance = toolCallingProvider({ id: 'c1', name: UNCLAIMED_WRITE, arguments: { site: 's', plugin: 'p' } });
+    const { service, events, executed } = harness(() => ({ approved: true }));
+
+    await send(service);
+
+    expect(events.some((e) => e.type === 'tool_call_approval_needed')).toBe(false);
+    expect(executed).not.toContain(UNCLAIMED_WRITE);
+    // And nothing was recorded as a decision: a refusal is not an act, and it
+    // is certainly not consent.
+    expect(rationales()).toHaveLength(0);
+  });
+
+  test('the tool the runbook DOES gate still raises the card — the two refusals stay apart', async () => {
+    armAtApproval();
+    mockProviderInstance = toolCallingProvider({ id: 'c1', name: GATED_TOOL, arguments: {} });
+    const { service, events } = harness(() => ({ approved: true }));
+
+    await send(service);
+
+    expect(events.some((e) => e.type === 'tool_call_approval_needed')).toBe(true);
   });
 });

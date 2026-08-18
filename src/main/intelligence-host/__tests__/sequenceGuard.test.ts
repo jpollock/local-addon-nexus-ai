@@ -295,3 +295,125 @@ describe('the sequencer’s own failure — blast radius of one capability', () 
     expect(checkCheckpointSequence('bulk_plugin_update', task)).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// WP-31 · exclusive tool scope — the unclaimed-tool door, closed
+//
+// The 2026-08-18 incident in one line: `wp_plugin_update` is claimed by no
+// checkpoint and forbidden only in the runbook's PROSE, so the guard above
+// never fired and WP-26's approval card — which rides the guard's refusal —
+// never rendered. Every protection was bypassed by tool substitution.
+//
+// The rule these tests pin: while a STRICT capability is armed with unmet
+// gated checkpoints, a WRITE tool the CURRENT checkpoint does not declare is
+// refused. Reads are untouched, and "write" is not a new list — it is
+// `getToolSafety(...).tier >= GATED_TIER_FLOOR`, the same classification the
+// audit chokepoint and WP-19's producer already use.
+// ---------------------------------------------------------------------------
+
+describe('WP-31 · exclusive tool scope', () => {
+  test("the incident's exact sequence is refused: an armed run, nothing attested, wp_plugin_update", () => {
+    arm();
+
+    const refusal = checkCheckpointSequence('wp_plugin_update', task)!;
+
+    expect(refusal).not.toBeNull();
+    expect(refusal.reason).toBe('exclusive-scope');
+    expect(refusal.runbookId).toBe('rb.bulk-plugin-update');
+    expect(refusal.capability).toBe(CAPABILITY);
+    // Names the CURRENT checkpoint, not the tool's own — the tool has none.
+    expect(refusal.checkpoint).toBe('cp.consult-history');
+    expect(refusal.message).toContain('wp_plugin_update');
+    expect(refusal.message).toContain('rb.bulk-plugin-update');
+    expect(refusal.message).toContain('cp.consult-history');
+  });
+
+  test('the current checkpoint declaring NO tool says so, rather than naming an empty list', () => {
+    arm();
+
+    const refusal = checkCheckpointSequence('wp_plugin_update', task)!;
+
+    // cp.consult-history has `tools: []`. "declares no tool of its own" is a
+    // different instruction from "declares wpe_backup_and_verify", and a
+    // refusal that printed `declares: ` with nothing after it teaches nothing.
+    expect(refusal.message).toMatch(/declares no tool/i);
+  });
+
+  test('the refusal names the tools the current checkpoint DOES declare', () => {
+    arm();
+    emitManifest();
+    emitRationale('approved');
+
+    // Current gated checkpoint is now cp.backup, which declares exactly one tool.
+    const refusal = checkCheckpointSequence('wp_plugin_update', task)!;
+
+    expect(refusal.checkpoint).toBe('cp.backup');
+    expect(refusal.message).toContain('wpe_backup_and_verify');
+  });
+
+  test('a tool the current checkpoint DOES declare still runs', () => {
+    arm();
+    emitManifest();
+    emitRationale('approved');
+
+    expect(checkCheckpointSequence('wpe_backup_and_verify', task)).toBeNull();
+  });
+
+  test('READS are untouched at every point in the run', () => {
+    arm();
+    // Tier 1 by the same table the audit chokepoint reads. A gate that
+    // narrowed the fleet-browsing tool set mid-procedure would make the
+    // procedure unusable, and reads cannot cause the harm this closes.
+    for (const read of ['nexus_list_sites', 'wp_plugin_list', 'wp_core_version', 'wp_option_get']) {
+      expect(checkCheckpointSequence(read, task)).toBeNull();
+    }
+    emitManifest();
+    emitRationale('approved');
+    expect(checkCheckpointSequence('nexus_list_sites', task)).toBeNull();
+  });
+
+  test('the LEGITIMATE sequence still runs end to end', () => {
+    arm();
+    emitManifest();                       // cp.consult-history
+    emitRationale('approved');            // cp.approval
+    expect(checkCheckpointSequence('wpe_backup_and_verify', task)).toBeNull();
+    emitAction('wpe_backup_and_verify');  // cp.backup
+    expect(checkCheckpointSequence('bulk_plugin_update', task)).toBeNull();
+  });
+
+  test('with no gated checkpoint left unmet, exclusive scope stops enforcing', () => {
+    arm();
+    attestPrerequisites();
+    emitAction('bulk_plugin_update');     // cp.roll-fleet — the last gated one
+
+    // The ruling scopes exclusivity to "unmet gated checkpoints". With none
+    // left, the procedure's enforceable part is done and the tool surface
+    // returns to what it is outside a procedure.
+    expect(checkCheckpointSequence('wp_plugin_update', task)).toBeNull();
+  });
+
+  test('a re-run of an ALREADY-ATTESTED checkpoint’s tool is refused once the run has moved on', () => {
+    arm();
+    attestPrerequisites();
+
+    // MEASURED CONSEQUENCE, pinned rather than discovered later: cp.backup is
+    // attested, so the current checkpoint is cp.roll-fleet, which declares
+    // bulk_plugin_update only. A second backup is a write the current
+    // checkpoint does not declare, and the literal ruling refuses it.
+    const refusal = checkCheckpointSequence('wpe_backup_and_verify', task)!;
+    expect(refusal.reason).toBe('exclusive-scope');
+    expect(refusal.checkpoint).toBe('cp.roll-fleet');
+  });
+
+  test('a SEQUENCE refusal still wins over an exclusive one for a declared tool', () => {
+    arm();
+
+    // bulk_plugin_update IS declared (cp.canary, earliest claimer). Its refusal
+    // must stay WP-20d's — same message, same reason — or the approval card
+    // that rides `checkpoint === cp.approval` stops firing.
+    emitManifest();
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+    expect(refusal.reason).toBe('sequence');
+    expect(refusal.checkpoint).toBe('cp.approval');
+  });
+});

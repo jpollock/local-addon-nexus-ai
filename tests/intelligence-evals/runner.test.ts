@@ -108,23 +108,28 @@ describe('deterministic results — the executable half of the M2 gate', () => {
 });
 
 describe('measured blockers — a BLOCKED verdict is an observation, not a claim', () => {
-  it('B-03 splits 4 programmatic / 7 judged, and NOTHING is blocked any more', () => {
+  it('B-03 splits 5 programmatic / 7 judged, and NOTHING is blocked any more', () => {
     // Was: "blocked in full, because nothing distributes a runbook". WP-20
     // phase 2 distributes one, so the shared blocker is gone — and the split
     // that replaces it is the packet's whole claim, pinned by count and by
     // membership so a check that quietly slid from PASS to OWNER-PENDING (or
     // the reverse) fails here rather than being noticed in a report.
+    //
+    // WP-31 moved it from 4/7 of 11 to 5/7 of 12: the 2026-08-18 incident added
+    // one must_not (a write in the arming gap) and it is fully programmatic —
+    // the gate refuses it, so no judge is needed to see that it did.
     const b03 = report.specs.find((s) => s.spec.id === 'B-03-runbook-push-with-capability')!;
-    expect(b03.results).toHaveLength(11);
+    expect(b03.results).toHaveLength(12);
     expect(b03.results.filter((r) => r.verdict === 'BLOCKED')).toHaveLength(0);
     expect(b03.results.filter((r) => r.verdict === 'FAIL')).toHaveLength(0);
 
     const passing = b03.results.filter((r) => r.verdict === 'PASS').map((r) => r.criterion.text);
-    expect(passing).toHaveLength(4);
+    expect(passing).toHaveLength(5);
     expect(passing.join(' | ')).toContain('consults incident history');
     expect(passing.join(' | ')).toContain('creates/verifies backups');
     expect(passing.join(' | ')).toContain('substitute its own sequence');
     expect(passing.join(' | ')).toContain('proceed past a denied');
+    expect(passing.join(' | ')).toContain('write anything in the arming gap');
 
     const pending = b03.results.filter((r) => r.verdict === 'OWNER-PENDING');
     expect(pending).toHaveLength(7);

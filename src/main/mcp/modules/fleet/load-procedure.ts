@@ -20,8 +20,16 @@
  * checkpoints in order with how each one can be shown to have happened. That
  * last part is the honesty the design note asks for twice (§4, §7): a checkpoint
  * the platform can verify from its records and one it merely heard about must
- * not read the same way. Today every shipped checkpoint is the second kind, and
- * this text says so.
+ * not read the same way.
+ *
+ * AND IT SAYS SO IN CAPABILITY TENSE (WP-31, after the 2026-08-18 incident).
+ * The labels name what the platform CAN prove. Written as "verified from
+ * records" they named the same thing and read as a completion state: a live run
+ * split this exact list into "already satisfied" and "still need to perform",
+ * then executed Tier-2 writes with no approval and no backup on record. Every
+ * provable class now carries "nothing is attested yet", and the text ends with
+ * one unconditional line saying no checkpoint has been performed. A tool result
+ * that a reader can mistake for a progress report is a progress report.
  *
  * Tier 1, and genuinely so: asking which procedure applies cannot change
  * anything. What it does record is that the model asked
@@ -52,10 +60,12 @@ export const loadProcedureHandler: McpToolHandler = {
     description:
       'Ask for the procedure that governs a capability (for example ' +
       '"cap.bulk_plugin_update") before doing work that needs it. Returns which procedure ' +
-      'applies, its version, whether its steps are enforced in order, and what each step needs in ' +
-      'order to count as done — the procedure itself is delivered by the platform on your next turn, ' +
-      'not in this result. Read-only. Use it when a task looks like one a named procedure covers, ' +
-      'or when a call was refused because a procedure was not armed.',
+      'applies, its version, whether its steps are enforced in order, and what the platform is ' +
+      'able to verify about each step — the procedure itself is delivered by the platform on your ' +
+      'next turn, not in this result. Read-only, and it PERFORMS NO CHECKPOINT: nothing in its ' +
+      'result means a step has been done, and you must not write until the procedure text ' +
+      'arrives. Use it when a task looks like one a named procedure covers, or when a call was ' +
+      'refused because a procedure was not armed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -135,7 +145,11 @@ export function renderAcknowledgement(runbook: Runbook): string {
   if (runbook.checkpoints.length > 0) {
     lines.push('Checkpoints, in order:');
     for (const cp of runbook.checkpoints) {
-      lines.push(`1. \`${cp.id}\` — ${ATTEST_WORDS[cp.attest]}`);
+      // WP-31 · the class label, plus the state it is NOT. On the rail these
+      // words sit beside a status badge; here nothing else is on the line, and
+      // the 2026-08-18 incident is a run that read the bare label as a tick.
+      const pending = cp.attest === 'narrative' ? '' : ' — nothing is attested yet';
+      lines.push(`1. \`${cp.id}\` — ${ATTEST_WORDS[cp.attest]}${pending}`);
     }
   } else if (runbook.steps.length > 0) {
     lines.push('Steps, in order:');
@@ -143,6 +157,14 @@ export function renderAcknowledgement(runbook: Runbook): string {
   }
 
   lines.push(
+    '',
+    // WP-31 · ruling 2 of the 2026-08-18 incident. The list above says what the
+    // platform CAN verify; this says what has happened, which is nothing. It is
+    // one line, it is unconditional, and it is deliberately not phrased as
+    // advice — the run it exists to prevent read a list of capability labels as
+    // a progress report and went straight to Tier-2 writes.
+    '**No checkpoint has been performed.** Do not write until the procedure text arrives on ' +
+      'your next turn.',
     '',
     // WP-24 · "from Nexus AI directly" named the WRONG PARTY to its own reader.
     // The system prompt opens "You are Nexus AI", so this sentence told the

@@ -60,6 +60,25 @@ export function takeArmingRequests(): ArmingRequest[] {
   return out;
 }
 
+/**
+ * WP-31 · look without taking — the ARMING GAP's only window onto itself.
+ *
+ * `nexus_load_procedure` acknowledges a request and the platform delivers the
+ * body on the NEXT turn (R7). Between those two moments no run exists, so
+ * `runForTask` sees nothing and the sequence guard is not in the path at all.
+ * That gap is where the 2026-08-18 incident happened in its entirety: the model
+ * asked, read the acknowledgement's class labels as a progress report, and
+ * wrote.
+ *
+ * The guard therefore reads this queue directly — and it must PEEK. Draining
+ * here would refuse the write AND cancel the arming it was protecting: the next
+ * turn would carry no procedure, and the turn after that would be ungoverned.
+ * A refusal that disarms the thing doing the refusing is worse than the hole.
+ */
+export function peekArmingRequests(): readonly ArmingRequest[] {
+  return pending;
+}
+
 /** Test/`chat clear` hook: forget requests nobody will deliver. */
 export function clearArmingRequests(): void {
   pending = [];

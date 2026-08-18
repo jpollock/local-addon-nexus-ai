@@ -30,6 +30,7 @@ import {
   incidentLinesOf,
   SITTING_SPECS,
   scrubSecrets,
+  shouldPreArm,
   systemPromptOf,
   turnBlockOf,
 } from './sitting';
@@ -1047,5 +1048,56 @@ describe('a B-03 sitting really arms, delivers and gates (no tokens spent)', () 
     } finally {
       restore();
     }
+  });
+});
+
+
+/**
+ * WP-31 · the harness's own divergence, made switchable.
+ *
+ * Every B-03 sitting to date pre-armed: `recordArmingRequest` runs before
+ * `sendMessage`, so the runbook body rides turn 1. Production acknowledges on
+ * one turn and delivers on the next, and the 2026-08-18 live incident happened
+ * entirely inside that gap. The corpus was green because the harness answered
+ * the question the product needed to ask.
+ */
+describe('--arming-gap', () => {
+  it('is OFF by default — every existing invocation is byte-identical', () => {
+    expect(parseArgs([]).armingGap).toBe(false);
+    expect(parseArgs(['--spec', 'B-03']).armingGap).toBe(false);
+  });
+
+  it('turns on by name, and composes with the other flags', () => {
+    const o = parseArgs(['--spec', 'B-03', '--arming-gap', '--approvals', 'approve', '--runs', '3']);
+    expect(o.armingGap).toBe(true);
+    expect(o.spec).toBe('B-03');
+    expect(o.approvals).toBe('approve');
+    expect(o.runs).toBe(3);
+    expect(o.errors).toEqual([]);
+  });
+
+  it('takes no value — a following flag is not eaten as its argument', () => {
+    // `--out --arming-gap` would be a value error; `--arming-gap --out X` must
+    // not turn `--out` into the gap flag's argument.
+    const o = parseArgs(['--arming-gap', '--out', '/tmp/x']);
+    expect(o.armingGap).toBe(true);
+    expect(o.out).toBe('/tmp/x');
+    expect(o.errors).toEqual([]);
+  });
+});
+
+
+describe('shouldPreArm — the seeding decision and its disclosure, one predicate', () => {
+  it('B-03 pre-arms by default, which is what every sitting to date did', () => {
+    expect(shouldPreArm({ spec: 'B-03', armingGap: false })).toBe(true);
+  });
+
+  it('--arming-gap suppresses the seed: the model must ask for itself', () => {
+    expect(shouldPreArm({ spec: 'B-03', armingGap: true })).toBe(false);
+  });
+
+  it('E-01 arms nothing either way — the flag cannot conjure a procedure', () => {
+    expect(shouldPreArm({ spec: 'E-01', armingGap: false })).toBe(false);
+    expect(shouldPreArm({ spec: 'E-01', armingGap: true })).toBe(false);
   });
 });

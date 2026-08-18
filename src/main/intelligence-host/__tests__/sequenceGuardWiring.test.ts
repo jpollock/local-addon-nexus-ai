@@ -21,6 +21,7 @@ import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import { setIntelligenceCore } from '../coreRegistry';
 import { armProcedureRun, forgetProcedureRun, registerProcedureTurn } from '../procedureCursor';
+import { clearArmingRequests, recordArmingRequest } from '../procedureArming';
 import { ToolRegistry } from '../../mcp/tool-registry';
 import { AgentDispatcher } from '../../agent-runtime/AgentDispatcher';
 import { taskId as mintTaskId } from '../../../intelligence';
@@ -62,12 +63,14 @@ beforeEach(() => {
   })!;
   setIntelligenceCore(core);
   forgetProcedureRun('s1');
+  clearArmingRequests();
   task = mintTaskId();
   executed = [];
   audited = [];
 });
 
 afterEach(() => {
+  clearArmingRequests();
   core.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -85,6 +88,34 @@ function arm(): void {
 
 const actions = () =>
   core.ledger.query({ topicPrefix: 'task.action.' }).map((e) => (e.payload as { tool: string }).tool);
+
+/** Minimal contributed registry: one tool, declared Tier 2. */
+function dispatcherFor(name: string, onExecute: () => void) {
+  const registered = {
+    agentName: 'acme',
+    toolName: name,
+    permissionTier: 2,
+    executionMode: 'function' as const,
+    handler: async () => {
+      onExecute();
+      return { content: [{ type: 'text' as const, text: 'ran' }] };
+    },
+  };
+  const contributedRegistry = {
+    get: (agentName: string, toolName: string) =>
+      agentName === 'acme' && toolName === name ? registered : undefined,
+  };
+  // Positional constructor: contributedRegistry, toolRegistry, services, …
+  return new AgentDispatcher(
+    contributedRegistry as never,
+    new ToolRegistry(),
+    services(),
+    undefined as never,
+    undefined as never,
+    undefined as never
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 
@@ -168,33 +199,6 @@ describe('chokepoint 1 — ToolRegistry.call', () => {
 });
 
 describe('chokepoint 2 — AgentDispatcher.dispatch', () => {
-  /** Minimal contributed registry: one tool, declared Tier 2. */
-  function dispatcherFor(name: string, onExecute: () => void) {
-    const registered = {
-      agentName: 'acme',
-      toolName: name,
-      permissionTier: 2,
-      executionMode: 'function' as const,
-      handler: async () => {
-        onExecute();
-        return { content: [{ type: 'text' as const, text: 'ran' }] };
-      },
-    };
-    const contributedRegistry = {
-      get: (agentName: string, toolName: string) =>
-        agentName === 'acme' && toolName === name ? registered : undefined,
-    };
-    // Positional constructor: contributedRegistry, toolRegistry, services, …
-    return new AgentDispatcher(
-      contributedRegistry as never,
-      new ToolRegistry(),
-      services(),
-      undefined as never,
-      undefined as never,
-      undefined as never
-    );
-  }
-
   test('the guard is in this path too — the McpServer bypass is covered', async () => {
     // No SHIPPED runbook claims a contributed tool, so the decisive pin is a
     // runbook that does: if the qualified name is claimed and out of sequence,
@@ -251,8 +255,7 @@ describe('chokepoint 2 — AgentDispatcher.dispatch', () => {
     expect(audited[0]).toMatchObject({ operation: 'acme/dangerous_tool', outcome: 'failure' });
   });
 
-  test('PARITY: an unclaimed contributed tool is untouched by the guard', async () => {
-    arm();
+  test('PARITY: with nothing armed, an unclaimed contributed tool is untouched by the guard', async () => {
     const dispatcher = dispatcherFor('harmless_tool', () => {});
 
     const result = await dispatcher.dispatch('acme', 'harmless_tool', {}, { id: task });
@@ -260,5 +263,117 @@ describe('chokepoint 2 — AgentDispatcher.dispatch', () => {
     // It may still fail for its own reasons (this fixture has no agent module
     // on disk) — what it must never carry is the guard's refusal.
     expect(result.content[0].text ?? '').not.toContain('REFUSED by procedure');
+  });
+
+  /**
+   * WP-31 · MEASURED CONSEQUENCE, pinned rather than discovered in production.
+   *
+   * A contributed tool's QUALIFIED name (`acme/harmless_tool`) is absent from
+   * `TIER_OVERRIDES`, so `getToolSafety` returns Tier 2 — a write. While a
+   * strict exclusive capability is armed with unmet gated checkpoints, every
+   * contributed tool is therefore refused on this path, including one whose own
+   * manifest calls it a read.
+   *
+   * That is deliberate, and the alternative was considered and rejected: the
+   * dispatcher does hold `registered.permissionTier`, but that number is
+   * declared by the AGENT's manifest, and a gate an agent can open by declaring
+   * `permissionTier: 1` is not a gate. The platform's own tier table is the
+   * authority everywhere else — the audit chokepoint gives this exact name the
+   * exact same answer — and fail-closed is the direction a safety gate must
+   * fail in. The blast radius is bounded by arming: it lasts only while a
+   * procedure run's turns are live, and only for calls carrying those turns'
+   * task ids.
+   */
+  test('WP-31: while the anchor is armed, an unclaimed contributed WRITE is refused here too', async () => {
+    arm();
+    let ran = false;
+    const dispatcher = dispatcherFor('harmless_tool', () => {
+      ran = true;
+    });
+
+    const result = await dispatcher.dispatch('acme', 'harmless_tool', {}, { id: task });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('REFUSED by procedure rb.bulk-plugin-update');
+    expect(result.content[0].text).toContain('acme/harmless_tool');
+    expect(ran).toBe(false);
+    // Chokepoint two owns its own audit write, and a refusal must leave one.
+    expect(audited[0]).toMatchObject({ operation: 'acme/harmless_tool', outcome: 'failure' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-31 · the two new refusals, at BOTH chokepoints
+//
+// The incident's whole mechanism was tool substitution: `wp_plugin_update`
+// reached the same effect as the tool the runbook claims, and the guard — which
+// gates only DECLARED tools — was never in the path. A door closed at one
+// dispatch chokepoint and left open at the other is not closed: `McpServer`'s
+// `tools/call` routes `agent__*` names past `ToolRegistry.call` entirely.
+// ---------------------------------------------------------------------------
+
+describe('WP-31 · exclusive scope and the arming gap, at both chokepoints', () => {
+  test('chokepoint 1 refuses the incident’s own tool, runs no handler, audits, and emits no act', async () => {
+    arm();
+    const registry = new ToolRegistry();
+    registry.register(tool('wp_plugin_update'));
+
+    const result = await registry.call(
+      'wp_plugin_update', { site: 't1' }, services(), 'mcp', true, undefined, { id: task }
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('rb.bulk-plugin-update');
+    expect(result.content[0].text).toContain('wp_plugin_update');
+    expect(executed).toEqual([]);
+    expect(audited[0]).toMatchObject({ operation: 'wp_plugin_update', outcome: 'failure' });
+    // A refusal is not an act (WP-19's producer, restated by the WP-20d doctrine).
+    expect(actions()).toEqual([]);
+  });
+
+  test('chokepoint 1 still lets the READ through in the same armed state', async () => {
+    arm();
+    const registry = new ToolRegistry();
+    registry.register(tool('wp_plugin_list'));
+
+    const result = await registry.call(
+      'wp_plugin_list', {}, services(), 'mcp', true, undefined, { id: task }
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(executed).toEqual(['wp_plugin_list']);
+  });
+
+  test('chokepoint 1 refuses in the ARMING GAP — no run exists, and that was the hole', async () => {
+    // No `arm()`. This is the incident's real shape: the turn was assembled
+    // before the request existed, so `runForTask` had nothing to find.
+    recordArmingRequest(CAPABILITY);
+    const registry = new ToolRegistry();
+    registry.register(tool('wp_plugin_update'));
+
+    const result = await registry.call(
+      'wp_plugin_update', { site: 't1' }, services(), 'mcp', true, undefined, { id: task }
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/no checkpoint has been performed/i);
+    expect(executed).toEqual([]);
+    expect(audited[0]).toMatchObject({ operation: 'wp_plugin_update', outcome: 'failure' });
+    expect(actions()).toEqual([]);
+  });
+
+  test('chokepoint 2 refuses in the ARMING GAP too — the McpServer bypass covered again', async () => {
+    recordArmingRequest(CAPABILITY);
+    let ran = false;
+    const dispatcher = dispatcherFor('write_something', () => {
+      ran = true;
+    });
+
+    const result = await dispatcher.dispatch('acme', 'write_something', {}, { id: task });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/no checkpoint has been performed/i);
+    expect(ran).toBe(false);
+    expect(audited[0]).toMatchObject({ operation: 'acme/write_something', outcome: 'failure' });
   });
 });
