@@ -308,6 +308,21 @@ describe('a strict run standing at its approval checkpoint', () => {
     expect(rationale.payload as Record<string, unknown>).not.toHaveProperty('canary_policy');
   });
 
+  test('the recorded prompt names the runbook the human was shown', async () => {
+    // `prompt` is "the card the human was shown", verbatim. The card leads with
+    // the plan reference, so a prompt that omitted it would make the ledger's
+    // own claim about itself untrue.
+    armAtApproval();
+    mockProviderInstance = toolCallingProvider({ id: 'c1', name: GATED_TOOL, arguments: {} });
+    const { service } = harness(() => ({ approved: true }));
+
+    await send(service);
+
+    const [rationale] = rationales();
+    expect((rationale.payload as Record<string, unknown>).prompt).toContain('rb.bulk-plugin-update');
+    expect((rationale.payload as Record<string, unknown>).prompt).toContain('cp.approval');
+  });
+
   test('DENY is final: recorded as a denial, and the fold reports it', async () => {
     armAtApproval();
     mockProviderInstance = toolCallingProvider({ id: 'c1', name: GATED_TOOL, arguments: {} });
@@ -324,6 +339,51 @@ describe('a strict run standing at its approval checkpoint', () => {
     const runbook = core.law!.runbooks.byCapability(CAPABILITY)!;
     const cursor = foldProcedureCursor(runForTask(TASK)!, runbook.checkpoints, core.ledger);
     expect(cursor.denied).toContain('cp.approval');
+  });
+});
+
+describe('an approver that answers inside the emit call', () => {
+  test('does not hang the turn — the pending approval is registered before the card goes out', async () => {
+    // `emit` runs synchronously into `sendToRenderer`. A headless approver —
+    // the eval sitting harness is one — answers there and then. Registering the
+    // pending approval AFTER emitting meant that answer resolved nothing and
+    // the await never returned; production only escaped it because a real
+    // renderer replies over IPC on a later tick.
+    armAtApproval();
+    mockProviderInstance = toolCallingProvider({ id: 'c1', name: GATED_TOOL, arguments: {} });
+
+    const db = new Database(':memory:');
+    createSessionTables(db);
+    const registry = new ToolRegistry();
+    registry.register({
+      definition: { name: GATED_TOOL, description: GATED_TOOL, inputSchema: { type: 'object', properties: {} } },
+      execute: async () => ({ content: [{ type: 'text', text: 'ok' }] }),
+    } as unknown as McpToolHandler);
+
+    let service!: ChatService;
+    service = new ChatService({
+      registry,
+      services: {
+        siteData: { getSite: () => null, getSites: () => ({}) },
+        indexRegistry: { get: () => null, listAll: () => [] },
+        fileScanner: { scan: async () => ({ wpVersion: '', phpVersion: '', themes: [], plugins: [] }) },
+        graphService: { getDb: () => db },
+      } as unknown as NexusServices,
+      sendToRenderer: (_channel: string, ...args: unknown[]) => {
+        const event = args[1] as any;
+        // SYNCHRONOUS, deliberately — no setImmediate.
+        if (event?.type === 'tool_call_approval_needed') {
+          service.resolveApproval(args[0] as string, event.id, true);
+        }
+      },
+    });
+
+    await expect(
+      Promise.race([
+        send(service).then(() => 'returned'),
+        new Promise((r) => setTimeout(() => r('hung'), 2000)),
+      ])
+    ).resolves.toBe('returned');
   });
 });
 

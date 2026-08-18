@@ -458,6 +458,18 @@ describe('the approval context — what the card is allowed to render', () => {
     expect(procedureApprovalContext('s1')?.offersCanaryPolicy).toBe(false);
   });
 
+  test('a GUIDED runbook is never given a strict approval card', () => {
+    // The card's whole frame is "this is a checkpoint of a strict runbook".
+    // A guided runbook has steps, not checkpoints (ADR-17 am. 2), and nothing
+    // sequences them — a card claiming otherwise would be describing a
+    // ceremony the platform is not performing.
+    armRun([t1]);
+    emitManifest(t1);
+    turn(t1, runbookFixture({ strictness: 'guided' }), delivery({ strictness: 'guided' }));
+
+    expect(procedureApprovalContext('s1')).toBeNull();
+  });
+
   test('nothing armed means no context', () => {
     expect(procedureApprovalContext('s1')).toBeNull();
   });

@@ -440,6 +440,13 @@ export class ChatService {
           `checkpoint ${procedure.checkpointId}. ` +
           (safety.confirmationMessage ?? 'Approve this step to let the runbook continue.')
         : safety.confirmationMessage ?? 'This action may have significant consequences.';
+      // REGISTER BEFORE EMITTING. `emit` is synchronous all the way into
+      // `sendToRenderer`, so a caller that answers the card inside that call —
+      // any headless approver, and the eval sitting harness is one — resolved
+      // an approval that was not yet pending, and the await below then hung
+      // forever. Production never saw it because a real renderer answers over
+      // IPC on a later tick; that is luck, not design.
+      const pending = this.waitForApproval(session, toolCall.id, toolCall.name, toolCall.arguments);
       this.emit(sessionId(session), {
         type: 'tool_call_approval_needed',
         id: toolCall.id,
@@ -449,7 +456,7 @@ export class ChatService {
         ...(procedure ? { procedure } : {}),
       });
 
-      const decision = await this.waitForApproval(session, toolCall.id, toolCall.name, toolCall.arguments);
+      const decision = await pending;
       const approved = decision.approved;
 
       // WP-19 · task.rationale.recorded v0 — the card the human was shown and

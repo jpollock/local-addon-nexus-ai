@@ -1026,6 +1026,19 @@ describe('a B-03 sitting really arms, delivers and gates (no tokens spent)', () 
       expect(result?.result).toContain('REFUSED by procedure rb.bulk-plugin-update');
       expect(capture.simulatedUpdates).toHaveLength(0);
 
+      // 4b. WP-26 CHANGED WHICH CHECKPOINT REFUSES, and that must not be
+      //     silent. `bulk_plugin_update` is Tier 2, so before this packet no
+      //     approval card ever appeared for it and the run stopped at
+      //     cp.approval — an approval with no producer, which is to say a
+      //     capability refused forever. The card now fires, THIS harness is a
+      //     rubber stamp (`--approvals approve`), and the sharper fact is what
+      //     happens next: a rubber-stamped approval buys exactly one
+      //     checkpoint. The write is still refused, on the backup, which is the
+      //     checkpoint the runbook calls not waivable.
+      expect(capture.approvalsSeen.map((a) => a.name)).toEqual(['bulk_plugin_update']);
+      expect(result?.result).toContain('cp.backup is not attested');
+      expect(result?.result).toContain('Attested so far: cp.consult-history, cp.approval');
+
       // 5. The audit rows exist for the judgment sheet, and no narrative
       //    checkpoint is ticked.
       const rows = capture.auditRows ?? [];

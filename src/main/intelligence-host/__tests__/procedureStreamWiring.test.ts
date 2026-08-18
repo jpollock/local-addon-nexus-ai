@@ -189,6 +189,23 @@ describe('the armed run, through the real assembler', () => {
   });
 });
 
+describe('session lifetime', () => {
+  test('re-arms in full after the session is forgotten', async () => {
+    await turn(armed());
+    expect(types()).toEqual(['procedure_armed']);
+
+    // A cleared chat, a deleted session. The cursor's run is dropped, so the
+    // stream's memory of what it has announced must go with it — diffing the
+    // next run against a run that no longer exists would announce a rail whose
+    // declaration the surface was never given.
+    forgetChatAssemblySession('s1');
+    emitted = [];
+
+    await turn(armed());
+    expect(types()).toEqual(['procedure_armed']);
+  });
+});
+
 describe('the approval context the card is emitted with', () => {
   test('a strict run standing at its approval checkpoint offers the canary policy', async () => {
     // ONE turn. cp.consult-history attests from the assembler's OWN episodic
