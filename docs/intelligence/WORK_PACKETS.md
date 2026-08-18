@@ -7729,3 +7729,38 @@ eComm) is amended by this paragraph: one pull each, two sites. All four
 smoke lights stand as judged — and the tie-breaker itself is the thesis
 exercised on its own paperwork: when memory went 50/50, the append-only
 record answered in one query.
+
+---
+
+### [ ] WP-26 · Procedure-surface wiring  *(registered 2026-08-18, created by designer-v6 Q1/Q2)*
+
+The three stream events shipped as shapes at WP-20e with deliberate
+non-emission; the designer's status doc (v6) volunteers as consumer and
+asks who emits. This packet: (1) EMIT `ProcedureArmedEvent` /
+`CheckpointChangedEvent` / `ProcedureAbortedEvent` from the host seam
+that folds the cursor — the armed event carries the WHOLE
+`DeclaredProcedure` once, changes ride as `CheckpointState[]` diffs
+(ADR-20's cadence at the UI seam), and **the emitter coalesces**: one
+event per checkpoint-state transition, never per ledger event; the
+renderer must not need to know the ledger exists. (2) The
+**`canary_policy` producer**: the approval card offers
+`pause-after-canary` (default) / `continue-if-clean`; the choice is
+recorded on `task.rationale.recorded` (elicited intent, recorded from a
+human act — the approval); absence means default; the gateway never
+authors it. Ruled at the v6 response; full contract there. Note the
+compounding effect: the armed event carrying the declaration makes every
+historical run's `verifiableCount` denominator self-contained in its own
+stream (v6 Q3). **Escalation note:** the `canary_policy` field on
+`task.rationale.recorded` is a payload-schema change — the packet holds
+at the gate for ratification of the widened payload before merging, per
+protocol.
+
+**Also registered from the v6 exchange:** restore-as-capability
+(strict runbook; `c.backup-before-overwrite` applies to the restore
+itself — pre-restore snapshot; the abort panel is its LAUNCHER, WP-20g
+family); SLO law-vs-default provenance (ships WITH the override
+mechanism, not before); the corroboration render (each factual claim in
+a reply linked to its supplying record, unlinked claims loud — the
+sitting-economics surface, R3's contract made visible; candidate for the
+next UI packet after WP-26). Full answers in
+`for-designer-v6-response.md`.
