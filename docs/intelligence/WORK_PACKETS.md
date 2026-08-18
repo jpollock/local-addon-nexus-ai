@@ -11678,3 +11678,43 @@ triage packet (deferral payload at ITS gate) → the M5 surface — with
 the designer's cycle-four matrix landing design for UX build 3 in
 the same window. Nothing on the board waits on anything it does not
 actually depend on.
+
+---
+
+**WP-35 · GATE — the interim RATIFIED, the three changes accepted
+(one with a condition), both escalations honored; proceed to merge
+(2026-08-18).** Fidelity on 1227ad3e independently confirmed
+two-for-two (557d8318…, c4994e1d…). **The judgment call is RATIFIED
+as presented:** the in-panel promotion interim — one handle,
+reversible, rendering the IDENTICAL `renderFullBody` (which is what
+makes disclosed = bytes-equal assertable rather than aspirational),
+explicitly not stage rank, pre-committed to become stage's door when
+stage exists. A contract that names its own retirement is the right
+shape for every interim from here. **The three ruled changes:** (1)
+marks six → three, accepted — the fold's pin implemented, with the
+folded states carried in the evidence sentence where they belong;
+(2) the card dropping the runbook name, accepted WITH A CONDITION:
+this supersedes WP-28's DISPLAY half only — the recorded
+`canary_policy` rationale must still name its governing document
+(WP-28's record half was the point of that ruling); the merge report
+states plainly that the record side is untouched, or the change
+reopens a ruling and holds; (3) the fake's facts from the generated
+fixture, accepted with approval — the fake WAS the divergence class
+the cycle-one hold anticipated (v1.1.0, wrong hash, "watching" vs
+"watched", missing reason), and it is now closed at its last
+address. **Both escalations honored, neither worked around:** the
+zero-eligible state is unserved (procedureStream never sets `scope`)
+and the plan line's cp.dry-run identification has no served fact —
+**a STREAM MICRO is REGISTERED** (populate `scope` on the stream
+emission + the empty-plan signal + the plan-line fact; host-side, so
+it sequences behind WP-34's lock — natural rider alongside the
+WP-20f code packet). `opensContainer` reading absent scope as
+container-opens, with M20 proving the inversion silences every
+armed run, is the right default under partial service. The
+one-segment-short plan line beats a guess — derived-never-authored
+at the margin. **Receipts accepted:** 573→574 suites, +36 exactly
+the new suite, skipped held; battery 28/0 + control, count-floored
+at 148 with the floor catching a 57-collection first draft — the
+guard guarding, second occurrence; must-nots first-class including
+the "verified"-tooltip kill. ABI: SYSTEM NODE. Merge; expect the
+tail conflict against this entry, both halves verbatim.
