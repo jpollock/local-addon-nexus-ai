@@ -250,3 +250,13 @@ source file binary is a FINDING, not an inconvenience: sweep for the
 character, don't add `-a` and move on. Non-printing characters in source
 belong only in explicit escapes (`'\0'` says what it is; a pasted NUL
 says nothing to anyone).
+
+**The mid-session ABI flip's second mask, and the unmasking probe**
+(WP-33b, seventh occurrence): the flip can surface as "intelligence
+core failed to initialise" across dozens of suites while
+`node -p process.versions.modules` still prints your own ABI — the
+version check tells you about YOUR node, not about what the shared
+`node_modules` was last rebuilt for. The unmasking probe: call
+`initIntelligenceCore` directly with a printing logger; the real
+`NODE_MODULE_VERSION <n>` line names the mismatch. `npm rebuild
+better-sqlite3` recovers, as documented.

@@ -11343,3 +11343,52 @@ evidence it exists pre-convention, in the wild.
 deliberately-compromised test copy; if that ever changes, an
 UNRESOLVED row like these is the start of a real remediation, not a
 smoke.)
+
+---
+
+**WP-33b · ADJUDICATED — both items accepted; MERGE (2026-08-18).**
+On branch at 2b06b449, verified NOT yet on base — the merge is the
+one act remaining; expect the tail conflict, resolve as always.
+
+**Item 1 accepted.** J-Refusal 8 → 12 criteria, transcribed
+mechanically from the fold's governing text; no escalation needed and
+none manufactured. The two widened key steps staying PASS on existing
+probes WITH unmeasured-half disclosures is the disclosed-limit
+doctrine applied correctly — the disclosure is the guard against the
+unmeasured half silently satisfying. **The mechanized sitting is the
+item's best work:** the record's "16 → 14" was the architect's claim
+about a number the code did not produce — owned here; the agent made
+the code produce it. The two sat criteria render PASS carrying the
+owner's answers verbatim, pinned to this record, and FALL TO BLOCKED
+if the guard ever stops refusing — "a human verdict describes the
+platform that was sat with" enters the canon. The sixth must-not at
+OWNER-PENDING with the turn-one "or tell me to" observation riding in
+evidence — correct, and honest not to re-adjudicate a sitting that
+predates the criterion. Runner delta reconciles exactly:
+17/0/40/15 = +2 PASS (the sitting mechanized), +3 net BLOCKED (7 new
+against UX build 1.5 / UX build 3 / WP-30, each stating WP-32's
+shipped half), −1 OWNER-PENDING.
+
+**Item 2 accepted: UNREACHABLE, proven, survivor stands disclosed.**
+The three-legged argument (a stale pin produces NO grant, not a
+divergent one; a live grant's runbookId is always the served
+document; duplicate capabilities are refused at load) is driven end
+to end — the disarmed state reports "no live grant — the journey has
+no subject here" — and M15's compound mutation (the only
+construction that could produce divergence) killing 2 tests is what
+makes the unreachability claim load-bearing rather than asserted.
+The earlier micro-followup CLOSES as unreachable-and-cited. The
+equivalent mutant identified and not counted is the battery's
+honesty holding at the margin.
+
+**Receipts accepted:** 15/0 + control, count-floored (WP-33's
+finding 8 reproduced and caught by the floor — the guard guarding);
+573/7666/12 exit 0 both sides with +20 exactly the eval tree; no
+src/ touched; primary clean. **Seventh environment incident
+recorded:** the mid-session Electron rebuild wearing the
+"intelligence core failed to initialise" mask while
+process.versions.modules reads the shell's own ABI — the unmasking
+probe (direct init with a printing logger) is now a PROTOCOL
+addendum. **Still owed, recorded open, not held:** a sitting for the
+sixth must-not and pass³ on the two sat must-nots — both fold into
+the owner's next Local session. WP-34 launches on this merge.
