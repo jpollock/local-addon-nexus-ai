@@ -7764,3 +7764,152 @@ a reply linked to its supplying record, unlinked claims loud — the
 sitting-economics surface, R3's contract made visible; candidate for the
 next UI packet after WP-26). Full answers in
 `for-designer-v6-response.md`.
+
+---
+
+**WP-24 OUTCOME — done (branch `wp-24`, worktree `.worktrees/wp-24`, merge
+`286effd7`, 7 files, **+171/−74**).** Three of the four items the
+2026-08-18 owner sitting registered, plus the harness-rot note filed with
+them. **E-01's outstanding re-sit is unblocked and is the owner's to run —
+this packet deliberately spent no API tokens.**
+
+**Lock announced and taken, per the assignment:** one string in
+`src/main/mcp/modules/fleet/load-procedure.ts` (a fleet one-tool file,
+parallel-safe by the ownership map). It turned out to be **two** strings in
+that same file, not one — the acknowledgement body AND the tool's own
+`description`, which carried the identical defect and which a model reads
+*before* it ever calls. Both changed; nothing else in the file's behaviour
+moved. No core, no `intelligence-host`, no `index.ts`.
+
+**(a) Cross-run arming leakage — fixed, and the mechanism is worth
+recording because it is not obvious from either half alone.**
+`assembleForChatTurn` runs ONCE per `sendMessage`, and the arming queue is
+process-wide (`procedureArming.ts` says so in its own header, and says why
+— `McpToolHandler.execute` has no session id to key on). Compose the two:
+a `nexus_load_procedure` call the model makes on a run's **last** iteration
+is never drained inside the run that made it. It sits in the queue and arms
+whatever assembles next — which inside one `sitting.ts` invocation is the
+next run. Hence E-01 run 2 and its empty twin's run 2 arriving "Armed by:
+model-request" having asked for nothing. `runOnce` now calls
+`clearArmingRequests()` at the START of each run — start rather than end,
+so whatever ran before run 1 in that process is covered too.
+
+  Pin (`sitting.test.ts`): two runs; run 1's scripted model asks for the
+  procedure by name, run 2 asks for nothing; run 2's carrier must carry no
+  `Armed by` and no runbook body. It first asserts run 1's acknowledgement
+  really came back, so it cannot pass against a harness that armed nothing
+  for some unrelated reason. **Witness: RED against the unfixed line, on
+  the exact leaked string** — i.e. the pin reproduces the sitting's own
+  finding before fixing it.
+
+  NOT fixed, and out of scope: the queue is still un-keyed by session, so
+  two concurrent chats asking for procedures in the same second still
+  cannot be told apart. That is `procedureArming.ts`'s own stated v0
+  limitation, and it is a core-lock change.
+
+**(b) `nexus_load_procedure` named the wrong party to its own reader —
+fixed.** "arrives on your next turn, from Nexus AI directly", read by a
+model whose system prompt opens "You are Nexus AI" (`ChatService.ts:667`).
+One empty-history run reasoned from exactly that sentence and treated the
+absence as a fault. Both model-visible strings now name the **platform** as
+the deliverer, which is the word the carrier already uses of itself
+("chosen per type by the platform", "platform-authored and trusted"). R7 is
+untouched: the tool still acknowledges and never carries the body, and
+`loadProcedure.test.ts`'s R7 pin is unmodified and still green. **Witness:
+the new pin is RED against both old strings.**
+
+  Observed, deliberately NOT changed: the degraded branch still says
+  "Nexus AI's background record-keeping is not running", also read by a
+  model told it is Nexus AI. That one is a claim about a subsystem's state
+  rather than about who delivers a document, its comment says the naming is
+  deliberate, and no sitting run tripped on it. Watch, don't chase.
+
+**(c) The electron stub is DELETED, by removing what made it load-bearing
+— not by working around it.** `probes.ts` imported `AgentDispatcher` at
+module scope; that reaches electron through `buildAgentContext` →
+`ipc-handlers` → `getAIProvider` → `KeyVault`. Under jest it resolves to
+the mock, so the defect was invisible to `npm test`; in the eval CLIs,
+which are plain Node, it resolved to nothing. Now `import type` plus a lazy
+`require` inside the one probe that constructs a dispatcher.
+
+  Measured, in the worktree, both CLIs (`run.ts` imports the same
+  `runner.ts` and had the identical defect):
+
+  ```bash
+  # exit 2 at "No anthropic API key available" — i.e. everything loaded,
+  # providers initialised, ABI check passed, one gate short of an API call
+  npx ts-node --project tsconfig.test.json \
+    tests/intelligence-evals/sitting.ts --spec E-01 --runs 3
+  # exit 2 — the runner's own standing exit, unrelated to loading
+  npx ts-node --project tsconfig.test.json tests/intelligence-evals/run.ts
+  ```
+
+  No `-r` hook, no `TS_NODE_TRANSPILE_ONLY=1`. The transpile-only flag is
+  gone as a *consequence*, not by configuration: ts-node typechecks only
+  the files it loads, and the file whose types were the problem
+  (`ipc-handlers.ts`) is no longer on the chain. **No tsconfig was touched
+  — the option to scope `tsconfig.test.json` was in scope and turned out
+  not to be needed.** Verified positively rather than assumed: a deliberate
+  type error under that same invocation still fails, so typechecking is
+  genuinely on. `sitting.ts`'s header now documents the plain invocation
+  and says what a re-added flag would MEAN, so the next occurrence is
+  diagnosable instead of mysterious.
+
+  Pin (`probes.test.ts`): `electron` poisoned to throw, and both `./probes`
+  and `./runner` required in an isolated registry.
+  **Witness — and a trap worth recording.** Mutating ONLY the `import type`
+  keyword back to a value import leaves the test GREEN, because TypeScript
+  elides an import whose binding is used solely in type position; the first
+  witness attempt "passed" for that reason and was invalid. The real
+  witness restores the pre-WP-24 shape whole (value import AND `new
+  AgentDispatcher`), and against that the pin is RED. **A mutation that
+  the compiler optimises away is not a mutation** — same family as the
+  short-anchor problem already recorded on this board.
+
+**Sitting finding (c) — cp.consult-history matching on component
+combinations — is NOT in this packet.** It routes as an anchor-slice
+runbook edit (docs/ original first, fidelity re-copy, version bump), as the
+sitting entry itself says.
+
+**Also observed while running the CLIs, filed not fixed:** `run.ts` emits
+telemetry (`CloudflareTransmitter … tool_call`) on every eval run.
+`sitting.ts` sets `NEXUS_TELEMETRY='0'` in `main()` precisely so a sitting
+never shows up in the product's analytics; the eval runner has no such
+line. Developer eval traffic is therefore in the product's telemetry
+stream. One line to fix, in a file this packet had no lock on.
+
+**Baselines** — same worktree, `npm test`, exit code captured BEFORE any
+pipe (`npm test > log; echo $?`):
+
+| | suites | passed | skipped | total | exit |
+|---|---|---|---|---|---|
+| before | 557 | 7204 | 12 | 7216 | 0 |
+| after | 557 | 7207 | 12 | 7219 | 0 |
+
+Delta **+3** — exactly the three pins above, one per finding. **Skipped
+column unmoved**, so the delta is real and not a gating artefact. Zero
+FAIL lines in either run. `npm run typecheck` clean, and `npx tsc -p
+tsconfig.test.json --noEmit` clean too (that one covers `tests/**`, which
+the default project does not). `npm run lint`: 0 errors, 6 warnings, all
+pre-existing and all in files this packet did not touch.
+
+**ABI state on exit: SYSTEM NODE.** This session ran jest repeatedly, so
+better-sqlite3 is built for the shell's Node — measured here, not quoted:
+`node -v` → **v25.9.0**, `node -p process.versions.modules` → **141**.
+**`npm run rebuild` is required before loading Local or running the
+re-sit through a development build.** (The re-sit itself is a ts-node CLI
+and runs under system Node — it does not need the rebuild; Local does.)
+
+**READY FOR THE OWNER — the E-01 re-sit, 3 runs, unchanged in shape from
+the sitting that produced 5/6:**
+
+```bash
+NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+  tests/intelligence-evals/sitting.ts --out /tmp/wp24-e01-resit
+```
+
+Every run now starts with an empty arming queue, so all three are the same
+trial and K3 is judged on the configuration the product actually ships.
+Verification here was by inspection plus the pin — no stub provider exists
+that would drive a full sitting without an API call, and standing
+instruction was not to spend owner tokens.
