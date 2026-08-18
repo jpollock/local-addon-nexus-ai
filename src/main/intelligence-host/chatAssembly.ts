@@ -37,6 +37,7 @@ import {
   runForTask,
 } from './procedureCursor';
 import type { ProcedureCursorState, ProcedureRun } from './procedureCursor';
+import { recordAbortIncidents } from './incidentProducer';
 import { forgetProcedureStream, notifyProcedureState } from './procedureStream';
 import { environmentEntityId, siteEntityId } from './provisionalEntity';
 import { buildTaskFrame, describeEnvironmentsFor } from './taskFrame';
@@ -233,6 +234,15 @@ export async function assembleForChatTurn(
       run: folded?.run,
       ledger: core.ledger,
     });
+
+    // WP-25 · the incident producer's abort tap, on the same seam and reading
+    // the same slice `foldProcedureCursor` reads. AFTER the assembly, so this
+    // turn's bundle is unaffected and the incident is retrievable by the NEXT
+    // turn's cp.consult-history — which is the loop the design note is for.
+    // Nothing is recorded when no procedure is armed.
+    if (folded?.run && folded?.runbook && core.ledger) {
+      recordAbortIncidents({ run: folded.run, runbook: folded.runbook, ledger: core.ledger });
+    }
 
     return {
       taskId,

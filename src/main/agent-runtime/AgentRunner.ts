@@ -234,6 +234,29 @@ export class AgentRunner {
       logger.error(`inbox write failed for ${agent.name}:`, inboxErr?.message);
     }
 
+    // WP-25 · the incident producer's sentinel tap, at the run-completion
+    // chokepoint. Its OWN try block, not the inbox one: an inbox fault must not
+    // also cost the ledger record, and vice versa. The producer reads this
+    // result and nothing else — no sentinel behaviour is touched — and it
+    // decides for itself whether this agent's findings are incidents.
+    try {
+      const { recordSentinelIncidents } = await import('../intelligence-host/incidentProducer');
+      recordSentinelIncidents(
+        {
+          agentId: agent.name,
+          runId: result.runId,
+          // The scan's own completion time, carried from the result. The
+          // producer must never stamp "now": `observed_at` is when the fact was
+          // true at its source.
+          observedAt: result.finishedAt,
+          sites: result.sites,
+        },
+        { services: this.services },
+      );
+    } catch (incidentErr: any) {
+      logger.error(`incident record failed for ${agent.name}:`, incidentErr?.message);
+    }
+
     return result;
   }
 }
