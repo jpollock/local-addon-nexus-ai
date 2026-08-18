@@ -68,6 +68,15 @@ produced these; nothing enters by drift. XD = experience decision.)*
   refusal before the gate (refusal shifted left); barred never blocks
   runnable; a later widening starts a SECOND run (hash-pinned
   procedure; approval doesn't stretch; continuity in the from-line).
+  **Amended at the fold (2026-08-18):** byte-identity holds as
+  FACT-identity at companion rank — headline, places, group heads
+  with counts, door and from-line byte-invariant; explanation (cell
+  lists, reasons) may fold behind a disclosure whose DISCLOSED text
+  is byte-identical to the stage rendering. A density may defer
+  explanation; it may never defer a fact, and never the door. The
+  barred head and door never defer. Source:
+  `from-designer/from-designer-05-companion-density-final.md`,
+  ratified in `for-designer-fold-response.md`.
 - **XD-16 · Fixtures come from the derivation** — one shared fixture
   file generated from `deriveDeclaredProcedure`; a checkpoint sequence
   authored anywhere, including in a design fixture, is a defect;
@@ -82,6 +91,12 @@ produced these; nothing enters by drift. XD = experience decision.)*
   J-Act-small, J-Return, J-Refusal (replacing J-Govern), plus
   J-Act-big=B-03 and J-Investigate=D-02; must-nots are the never-shows
   with teeth; judged halves are sittings; BLOCKED until surfaces exist.
+  **Amended at the fold (2026-08-18):** J-Refusal's governing text is
+  now the fold's spec section (both refusal states — world-state and
+  grant — plus the split, the zero-cell container, and the
+  offer-that-breaks-the-enforced-rule must-not, proven same-day by
+  the first design sitting); re-transcription into the shipped YAML
+  is WP-33b's.
 
 - **XD-20 · Density changes rendering, never facts** — which
   checkpoints tick, what the badge says, the attest wording, the
@@ -103,6 +118,27 @@ produced these; nothing enters by drift. XD = experience decision.)*
   costume. M5's surfaces are designed against `rb.diagnose-site`'s
   real shape. Source: designer `fixture-diff-notes.md`, ratified in
   `for-designer-fixture-diff-response.md`.
+
+- **XD-23 · The ambient triage** — waiting and changed are two
+  columns of one verdict; every row shows the rule that placed it
+  (the sort inspectable where it is used); causally linked events
+  render as one situation at its highest tier with parts stated; the
+  reserved epistemic row is always one row and cannot grow or scroll
+  away; drift renders nowhere and the panel says where it went; no
+  dismiss — a row leaves only by being answered. Deferral: user-only
+  (an agent lowering its own gate's escalation is eliciting
+  inattention — the self-promotion power inverted), keeps tier and
+  position, lowers escalation only, recorded on the run with reason
+  and wake condition; ends by wake (condition named), early end
+  (also a session act, also recorded, superseding), or answer. The
+  ambient badge counts situations CURRENTLY ESCALATING — an
+  instrument, not an inventory — and the panel's accounting line
+  states deferrals so the count never reads as the whole truth.
+  Badge loudness stays inside the design system; a variant proposal
+  requires sitting evidence (J-Glance's judged half). Vocabulary:
+  deferred / wake / end the deferral (v1.2 rows). Source: designer
+  "Ambient triage" sheet, ratified in
+  `for-designer-triage-response.md`.
 
 ## How a ruling gets here
 

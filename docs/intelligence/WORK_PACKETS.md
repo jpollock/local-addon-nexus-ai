@@ -10900,3 +10900,154 @@ questions that actually need a word: the `fact` field (1b), the
 `from_version`/`to_version` gap against the ratified sentence (1d), the
 `SEVERITY_FLOOR` value (P2), the stricter sentinel resolution rule (P3), and
 whether `component: 'site'` should render as a head word (1a).
+**DESIGN ADJUDICATION — the fold; CYCLE ONE CLOSES (2026-08-18).**
+"Companion density, final" arrived (committed verbatim as
+`from-designer/from-designer-05-companion-density-final.md`) and is
+RATIFIED WHOLE in `for-designer-fold-response.md`: the ruled
+composite (1a waiting/finished, 1b empty), nine pins inherited as the
+companion-surface packet's acceptance criteria, absences list with
+reasons, all facts from the derivation. **Both restatements ruled in
+the designer's favor:** (1) the 200px yield number dies as sketch
+scaffolding — the rule is the DIGEST (every fact, a stated
+checkpoint window centred on the gate, no inner scrollbar, full
+declaration one promotion away); the designer showed the letter
+defeating the purpose (253px of header+scope band leaves no
+checkpoint row visible at any scroll). (2) XD-15's byte-identity is
+AMENDED to fact-identity at companion rank with the disclosure
+guard: collapsed = facts byte-invariant (headline, places, group
+heads+counts, door, from-line), disclosed = bytes identical to the
+stage rendering — folding is rendering, rewording is authoring; the
+barred head and door never defer. The no-scope-block-at-companion
+alternative refused on the designer's own argument (the door is the
+panel's most useful line). **The J-Refusal spec section is adopted as
+the journey's governing text**, superseding §1 §5 — covering both
+refusal states, the split, the zero-cell container, and the SIXTH
+MUST-NOT ("an offer that would break the rule the refusal just
+enforced… the refusal reworded"), which the first design sitting's
+copy-drift finding ("or tell me to") had independently evidenced
+HOURS EARLIER — the sitting's finding now cites this must-not as its
+rule. XD-19 amended to point at the new source. **WP-33b ·
+REGISTERED, not launched** — two items, both registry-scoped:
+re-transcribe J-Refusal's YAML from the ratified fold text
+(transcription discipline unchanged), and attempt the stale-pin
+exhibiting fixture that would convert WP-33's disclosed survivor to
+a kill. **Housekeeping owed by the designer:** XD-17 supersede marks
+go IN RB-C's and RB-D turn 1's own headers. **Cycle one is CLOSED**
+— rank model, moments, consequence order, scope block, two
+densities, the fold: every artifact ratified, every pin registered,
+every fixture derived. Cycles two (deferral affordance; payload
+ratified, WP-25 building its producer now) and three (corroboration
+render; ADR-24) open in the designer's stated order.
+
+---
+
+**DESIGN ADJUDICATION — the ambient triage; cycle two opens
+(2026-08-18).** The designer's "Ambient triage" sheet (3a the
+morning-after — the §2 golden fixture rendered as the surface it was
+an argument about; 3b the deferral affordance offered/recorded/woken)
+is RATIFIED in `for-designer-triage-response.md`; the eight J-Return
+pins plus the accounting-line pin become the triage packet's
+acceptance criteria (WP-30 family; the deferral-record payload holds
+at that packet's gate per the house rule). **The four asks ruled** —
+the sheet's heading said three, the list said four, the list wins:
+(1) the badge counts situations CURRENTLY ESCALATING — a deferral
+leaves it, because the ambient channel is exactly what the user asked
+to quiet; colour-only refused; one pin added — the panel's accounting
+line states deferrals ("1 needs you · 1 deferred by you"). (2) "wake"
+is not new vocabulary — XD-13's ratified text already says "wake
+conditions"; Controlled Vocabulary v1.2 rows added (deferred / wake /
+end the deferral; never snoozed, muted, dismissed, expires, cancel).
+(3) ending early is a session act, recorded, SUPERSEDING — three
+recorded ends: wake (condition named), early end, answer; the agent
+can end a deferral no more than start one. (4) badge loudness stays
+inside the design system — render the shipped loudest; a variant
+proposal requires sitting evidence from J-Glance's judged half, not
+one person's squint. **XD-23 enters the register** (the triage's
+laws, incl. "an agent that lowers the escalation of its own gate is
+eliciting inattention — the self-promotion power inverted").
+Transcription note recorded: the sheet's scenario file must carry
+the §2 golden fixture verbatim until the triage derivation ships and
+the fixture becomes its expected output. Housekeeping: the position
+doc (from-designer-06) comes back with the next handoff for the
+verbatim commit. Cycle three (corroboration render, ADR-24) is open.
+
+---
+
+**WP-25 · GATE — all five RATIFIED; proceed to merge (2026-08-18).**
+The payload contract as presented (branch `wp-25`, §1) is ruled field
+by field, with the packet's own doctrine adopted: where P2's prose
+and the consumer disagree, the CONSUMER governs and the divergence is
+declared. **(1) `component`: OMIT when site-level** — a head word must
+carry information, and 'site' as head is a schema artifact leaking
+into prose; write-side omission is the only in-scope lever (§3 bars
+the assembler), the summary opens on the symptom, the producer's
+dedup defaults the absent component to 'site' internally, and a test
+pins the rendered line. When a real slug exists, `component` is
+written and heads the line. This is WP-16's omit-never-unknown and
+1f's own omitted-not-invented, applied once more. **(2) `fact`:
+RATIFIED as named** — P4's dedup key needs a stable class and nothing
+in P2 carries one; `fact` is the key `factKeyOf` already reads, so
+the consumer chose the name. Deduping on a drifting title is how an
+episodic family becomes a heartbeat — the field is the fix. **(3)
+SEVERITY_FLOOR = 'high': RATIFIED** — critical+high are "wrong on
+this site now"; medium-and-below is hygiene; the exported named
+constant plus the below-floor pin means floors move by ruling, not by
+drift. **(4) P3's sentinel narrowing: RATIFIED as a v0-stricter
+amendment to the note** — resolve only on `clean` AND `notChecked`
+empty. "Closing a filesystem finding on a Tier-1 sweep that never
+read the filesystem would launder a coverage limit into an all-clear
+— the largest available fabrication in this packet" enters the canon;
+the forever-open cost is blessed by P3's own "an open incident is a
+fact, not a nag." **(5) `from_version`/`to_version`: option (i)
+RATIFIED as built** — the fields stay in the contract, nothing fills
+them in v0, and (iii) is REFUSED in the ruling's words: reading a
+version off redacted args is a guess dressed as an observation. The
+ratification's sentence is corrected on the record: the contract
+includes the pair; v0 has no producer for it. **Option (ii) is
+REGISTERED as a micro on WP-19's contract family** — widen
+`task.action.executed` to record the version a plugin tool is called
+with, at that producer's own gate; when it ships, this producer picks
+the pair up with no contract change, and the abort-groups UI stops
+waiting. **Also accepted:** `correlate` (consumer governs; P2's
+spelling corrected), `severity` carried-not-rendered as disclosed,
+`source` run-id with omitted-not-invented, causation/correlation
+envelope use, the two P1 scope gates (sentinel-only fold — widening
+to other agents is a PRODUCT ruling, registered not drifted; per-site
+only per ADR-22), the durable-ledger dedup over the twin-backed
+change gate (the WP-14/19 reasoning re-applied, correctly), and
+`abortForTool` deriving the three abort ids from the document with
+the exactly-one-candidate pin — derived-never-authored inside the
+producer, accepted with approval. **Lock conduct ratified:** the
+announce landed on the branch because the primary was mid-WP-33-merge
+— "reaching into another agent's live merge was not mine to do" is
+the right instinct and the accepted pattern for that collision; the
+later base merge carried it, tail conflict kept both halves verbatim.
+Battery 16/16 + control, first-run self-reported faults and three
+gaps closed by tests; runner 15/0/37/16 with exactly E-01's criterion
+0 moving; suite 573/7646/12 reconciling to WP-33's baseline. ABI:
+SYSTEM NODE. **Gate CLEARED — merge. The live smoke is the owner's,
+post-merge** (a real sentinel sweep, then the next chat turn carries
+the incident — adjudicated like the first-real-pull), steps in the
+packet's §5.
+
+---
+
+**DESIGN — cycle two's position committed; the triage pins now number
+eleven (2026-08-18).** `from-designer-06-ambient-triage.md` landed
+with the handoff and is committed verbatim under `from-designer/`.
+The sheet now RENDERS §1's accounting-line pin (the deferred
+specimen's header: "1 needs you · 1 deferred by you · 1 changed
+overnight · three checks dark" — count and deferral in one breath),
+and two pins were added, both accepted as exact statements of the
+rulings: the three recorded ends of a deferral (wake fires / user
+ends early / situation answered), and badge-as-instrument-not-
+inventory with the accounting line as its honesty guarantee. The
+triage packet's acceptance criteria stand at eleven pins. **Cycle
+three opens:** the designer draws the corroboration render against
+ADR-24 and has asked to read it first — the relay is the full
+`citation-contract-design-note.md` (the ADR's source, P1–P5) plus
+the ADR-24 register entry in `architecture.md`. Sequencing note:
+sheets may be drawn now against the contract; the RENDER packet
+waits on WP-34 (the convention + carrier instruction + eval half),
+which sequences after WP-25's merge, alongside WP-30 — eval before
+surface, per the contract's own P4.

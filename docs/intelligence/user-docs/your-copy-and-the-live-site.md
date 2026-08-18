@@ -168,6 +168,14 @@ already the v1 fact-level freshness phrase (it composes with the status
 level: "checked 3 days ago · ⚠ may be out of date · Check it now"), and the
 prototype's usage conforms.
 
+### v1.2 additions (2026-08-18 — the ambient triage + the deferral affordance)
+
+| Concept (internal) | User-facing term | Never say |
+|---|---|---|
+| deferral (session act, XD-13) | **deferred** — "deferred by you until <condition>", the reason on the row | snoozed, muted, dismissed, silenced |
+| wake condition (ends a deferral) | **wake** — "wakes when <condition>"; the deferral ends, full escalation returns, the condition is named | expires/expiry (a wake can be an event, not only a date), reminder |
+| ending a deferral early | **end the deferral** — a session act, recorded like the deferral it ends | cancel, undo, dismiss |
+
 ## PRESSURE-TEST FINDINGS (№2)
 
 1. **The model survived the harder test.** Every future behavior was
