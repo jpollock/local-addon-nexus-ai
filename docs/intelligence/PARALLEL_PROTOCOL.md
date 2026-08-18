@@ -223,3 +223,20 @@ them VERBATIM in a separate, clearly-attributed commit ("commit architect
 session's … (found uncommitted in primary checkout)") before merging. Never
 fold them into your own commits, never edit them, and flag the commit in
 your report so the architect can verify fidelity.
+
+**A pass-condition substring must not be a substring of a failure** (WP-32
+finding): a harness that greps battery output for `0 total` also matches
+`Snapshots: 0 total` and `20 total`, and reported two lies the same way
+before it was caught. Anchor the match — full token, line-anchored, or
+parse the count — so the assertion cannot be satisfied by a string that
+contains it. A green that can be produced by the wrong line is not a green.
+
+**A generator under mutation writes to a temp path, never the working
+tree** (WP-32 finding — the poisoned-fixture form): a mutation to a
+generator script ran, wrote the TRACKED fixture it generates, and the
+revert of the script left the poisoned output on disk — the next full run
+failed on a file nobody edited, which is the poisoned-cache rule's sixth
+form. Determinism and battery runs of any file-emitting tool take
+`--out <tmp>`; the tracked artifact is only ever written by the real
+invocation, and a `:check` script that fails closed on a stale file is the
+guard that makes the tracked copy trustworthy.

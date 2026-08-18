@@ -9971,3 +9971,80 @@ adjudication's three-question script. The BLOCKED-pending-the-fold
 carve-out for J-Refusal's key steps is void; the designer's RB-D fold
 owes only what the densities adjudication already assigned. WP-33's
 hold lifts when this commit lands.
+
+---
+
+**OWNER RATIFICATION — the two design notes, both whole (2026-08-18).**
+The owner's verdict, verbatim: "first one, good. second one. good."
+**WP-25 (incident producer): P1–P5 ratified as written** — sentinel
+findings + procedure aborts as v0 sources (Tell intake registered,
+not scoped); payload contract matching `episodicSummary` incl. the
+`from_version`/`to_version` pair the abort-groups UI waits on;
+resolution observed via superseding amendment events, never assumed,
+never mutated; change-gate with dedup key site+component+finding-class;
+ADR-22 routing with no assembler changes. One correction to the note's
+§3 recorded here: "must wait for WP-26" is STALE — the current holder
+of `src/main/intelligence-host/` is WP-32 (lock announce 3d84e96b);
+WP-25 launches after WP-32's merge. Prompt issued this session; the
+payload contract holds at WP-25's gate for ratification, per the note's
+own §4. **Citation contract: P1–P5 ratified as written and ADR-24
+ENTERS architecture.md** (existence-never-support verification;
+minimal inline spans as hash-versioned carrier policy; unlinked as a
+three-state render with moment-set strictness; eval-before-surface
+with fabrication-with-a-costume as the worst FAIL; one shared
+claim→record join for judge and renderer). **WP-34 · The citation
+convention is REGISTERED, not launched** — model-facing half only:
+span convention + carrier instruction block (carrier change = gate
+hold) + the criterion family on E-01/B-03/D-02 + a three-run
+adherence sitting before any UI exists. Sequenced per the note: after
+WP-25, alongside WP-30; the M5 render surface is a separate later
+packet (designer cycle three). **Designer consequence:** cycle two
+(the deferral affordance, payload now ratified) and cycle three (the
+corroboration render, contract now ruled) are OPEN behind the RB-D
+fold. What remains on the owner: the t1/t2 replay — the last unplayed
+piece of his queue.
+
+---
+
+**WP-32 · GATE — the widening RATIFIED; proceed to merge (2026-08-18).**
+**The arming-payload ruling, as held for:** `ArmingRequest.scope?` +
+`DeclaredProcedure.scope?` + a third optional param on
+`recordArmingRequest` is RATIFIED as built — the carry rides the
+host-side queue, `src/intelligence/` untouched, no topic, envelope
+field, schema version or storage marker moved; conditional spread with
+M09/M10 killing the unconditional form is the toEqual-blindness
+doctrine applied at authoring time. One boundary stated with the
+ratification: `scope?` optional is a v0 seam-compat state, not a
+license — XD-15's teeth ("a run that derives its own targets fails the
+journey") are asserted by the journey eval when a selection exists,
+not by the type; the mandate arrives with the surface packet that
+produces real selections. **Both withheld judgment calls ratified as
+made:** place-label words are an XD-1 vocabulary question (propose a
+row, ratify it — one function and the mirror pin hold the change);
+the block stays UNMOUNTED in PanelChat — a mounted fixture would
+render fake targets in the live product, and the fake-emitter
+precedent is a fixture module, not a mounted one. `armedBy` under a
+`$notDerived` header is XD-2 applied to the file's own provenance —
+accepted with approval. XD-21 built-against mid-flight
+(`opensRun: false`, no container, plan + door still carried) noted:
+the register worked as designed — a ruling landed and changed a
+packet in motion without a relay. **The battery's three findings:**
+no-op mutations closed with exhibiting fixtures (M01/M12 — "a
+mutation that changes nothing observable under the fixture is an
+unmeasured line" enters the canon); the `0 total` substring lie and
+the poisoned-generator form (M15 outliving its own revert) are now
+PROTOCOL RULES — pass-condition substrings must not be substrings of
+failures; generators under mutation write `--out <tmp>`, never the
+tracked artifact. **Receipts accepted:** 567/7424/12 → 571/7495/12
+both exit 0, +4 suites +71 tests reconciling exactly, skipped held at
+12; tsc/eslint clean; ADR-16 seam rule re-probed live; primary
+checkout clean; two architect batches committed verbatim (4fe103ec,
+461aff65). ABI on exit: SYSTEM NODE — `npm run rebuild` before
+loading Local. **The densities HOLD moves to its last step:** the
+generator's `design-fixtures/declared-procedures.json` is committed
+(seven runbooks, anchor 4-of-8 at v1.2.0, badges on exactly the four
+ruled checkpoints, full attest words, hash included); the designer
+swaps the prototypes onto it and returns the hand-built fixture for
+the diff — the hold lifts on the swap, and any divergence found by
+the diff is adjudicated as a defect in whichever artifact authored
+it. Merge report next; no further holds.
