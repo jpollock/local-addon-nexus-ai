@@ -74,6 +74,7 @@ import {
   RunbookStrictness,
 } from '../../intelligence';
 import type { ProcedureCursorState } from './procedureCursor';
+import type { ProcedureScope } from './procedureScope';
 import { attestationRemedy } from './sequenceGuard';
 
 // ---------------------------------------------------------------------------
@@ -222,6 +223,21 @@ export interface DeclaredProcedure {
     expectedHash?: string;
     actualHash?: string;
   };
+  /**
+   * WP-32 · the scope the arming carried (XD-15). The cells a human selected,
+   * split by authority; `procedureScope.ts` owns every derivation over it.
+   *
+   * Handed on UNCHANGED — this seam does not re-split, re-order, or re-filter
+   * it. A second derivation of a carried artifact is the re-derivation the
+   * packet exists to stop, and it would be no less wrong for happening here.
+   *
+   * **Absent on a REFUSAL, always.** A refused capability is not armed, so
+   * there is no run for a scope to belong to; attaching one would render a plan
+   * beside a procedure the platform just disarmed — the same defect as listing
+   * checkpoints from a runbook not in force, which is why that branch returns
+   * `checkpoints: []` two screens up.
+   */
+  scope?: ProcedureScope;
 }
 
 export interface CheckpointBadge {
@@ -487,6 +503,8 @@ export function deriveDeclaredProcedure(args: {
   runbook?: Runbook;
   cursor?: ProcedureCursorState;
   abortedAt?: string;
+  /** WP-32 · what the arming carried. Passed through, never recomputed. */
+  scope?: ProcedureScope;
 }): DeclaredProcedure | null {
   const { outcome } = args;
   if (!outcome) return null;
@@ -531,6 +549,10 @@ export function deriveDeclaredProcedure(args: {
     checkpoints,
     verifiableCount: checkpoints.filter((c) => c.attest !== 'narrative').length,
     communication: communicationOf(args.runbook),
+    // Conditional spread, not `scope: args.scope`: the parity pin asserts the
+    // KEY is absent when nothing was selected, and `toEqual` cannot tell the
+    // two apart (WP-26's finding). The refusal branch above never reaches here.
+    ...(args.scope ? { scope: args.scope } : {}),
   };
 }
 

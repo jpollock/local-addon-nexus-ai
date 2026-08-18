@@ -1,0 +1,477 @@
+{
+  "$generatedBy": "scripts/generate-procedure-fixtures.ts (WP-32)",
+  "$doNotEdit": "Generated from law/ by deriveDeclaredProcedure. Editing this file by hand is the defect pin 7 names: a checkpoint sequence authored anywhere, including in a design fixture, is a defect. Regenerate instead — npm run fixtures:procedures.",
+  "$shapeVersion": 1,
+  "$notDerived": "armedBy is a property of the ARMING, not of the document. There is no run here, so the generator supplies 'model-request'. Every other field on every line came out of the reviewed document.",
+  "runbooks": {
+    "rb.bulk-plugin-update": {
+      "armedBy": "model-request",
+      "capability": "cap.bulk_plugin_update",
+      "checkpointCount": 8,
+      "checkpoints": [
+        {
+          "attest": "manifest",
+          "attestWords": "the platform can verify this from what it supplied",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "has this bitten us before?"
+          },
+          "id": "cp.consult-history",
+          "reason": "has this bitten us before?",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "show what would change"
+          },
+          "id": "cp.dry-run",
+          "reason": "show what would change",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "event",
+          "attestWords": "the platform can verify this from records",
+          "badge": null,
+          "id": "cp.approval",
+          "reason": "explicit, informed consent",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "event",
+          "attestWords": "the platform can verify this from records",
+          "badge": null,
+          "id": "cp.backup",
+          "reason": "before anything writes",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "one low-risk site first"
+          },
+          "id": "cp.canary",
+          "reason": "one low-risk site first",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "prove it before scaling it"
+          },
+          "id": "cp.verify-canary",
+          "reason": "prove it before scaling it",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "event",
+          "attestWords": "the platform can verify this from records",
+          "badge": null,
+          "id": "cp.roll-fleet",
+          "reason": "the rest, watched",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.report",
+          "reason": "close the loop",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        }
+      ],
+      "communication": [
+        "the dry-run diff, before any write",
+        "the backup id(s) and verification status",
+        "which sites were skipped and why (halted, out of scope, data stale)",
+        "the canary site chosen and the reason it was chosen"
+      ],
+      "hash": "sha256:0646cfe11c1b813db994d6c95832ae2c6e97528c3748f7eb2aa44e3c736237c8",
+      "runbookId": "rb.bulk-plugin-update",
+      "steps": [],
+      "strictness": "strict",
+      "verifiableCount": 4,
+      "version": "1.2.0"
+    },
+    "rb.diagnose-site": {
+      "armedBy": "model-request",
+      "capability": "cap.diagnose_site",
+      "checkpointCount": 0,
+      "checkpoints": [],
+      "communication": [
+        "which entity was diagnosed — name, source, environment — before any finding",
+        "the site's run/halt status, stated first, because it explains a large share of \"not loading\"",
+        "each finding with its evidence (log line, version, status code) and its freshness/source",
+        "what was checked and found NORMAL, not only what was found wrong",
+        "what could not be checked, and why",
+        "the proposed fix as a proposal, with the explicit statement that nothing was changed"
+      ],
+      "hash": "sha256:f088ac33547274974dc8be19f48fadd12dd789dfcb1023ccc927add25a7627c7",
+      "runbookId": "rb.diagnose-site",
+      "steps": [
+        "st.resolve-identity",
+        "st.status-first",
+        "st.recent-history",
+        "st.breadth-sweep",
+        "st.both-sides",
+        "st.hypothesis",
+        "st.propose-not-execute",
+        "st.honest-null"
+      ],
+      "strictness": "guided",
+      "verifiableCount": 0,
+      "version": "1.0.0"
+    },
+    "rb.incident-containment": {
+      "armedBy": "model-request",
+      "capability": "cap.incident_containment",
+      "checkpointCount": 5,
+      "checkpoints": [
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.triage",
+          "reason": "confirm the findings before acting on them",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "contain before you investigate"
+          },
+          "id": "cp.isolate",
+          "reason": "contain before you investigate",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "preserve the infected state"
+          },
+          "id": "cp.snapshot",
+          "reason": "preserve the infected state",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.integrity-diff",
+          "reason": "what does not belong here?",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "a hypothesis with evidence under it"
+          },
+          "id": "cp.entry-vector",
+          "reason": "a hypothesis with evidence under it",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        }
+      ],
+      "communication": [
+        "the findings, ranked by severity, each with its evidence (path, account name, log line)",
+        "what isolation was applied, when, and what it makes unavailable to real visitors",
+        "the snapshot id(s) and their verification status, before any cleanup runs",
+        "the entry-vector hypothesis with the log evidence it rests on — or an explicit statement that the entry vector is unknown"
+      ],
+      "hash": "sha256:fedec1dfb1a6b1e43ac978d356c3e75aad48be9b44ed05aca2f0e4f0b3e689df",
+      "runbookId": "rb.incident-containment",
+      "steps": [],
+      "strictness": "strict",
+      "verifiableCount": 0,
+      "version": "1.1.0"
+    },
+    "rb.incident-remediation": {
+      "armedBy": "model-request",
+      "capability": "cap.incident_remediation",
+      "checkpointCount": 6,
+      "checkpoints": [
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "the exact commands, in full, before approval"
+          },
+          "id": "cp.cleanup-plan",
+          "reason": "the exact commands, in full, before approval",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.approval",
+          "reason": "per destructive step, not per plan",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.execute-cleanup",
+          "reason": "expect the gate, do not route around it",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "assume everything was seen"
+          },
+          "id": "cp.rotate-credentials",
+          "reason": "assume everything was seen",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "scan again, from scratch"
+          },
+          "id": "cp.verify-clean",
+          "reason": "scan again, from scratch",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.post-mortem",
+          "reason": "write it for the client, not for us",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        }
+      ],
+      "communication": [
+        "the exact commands proposed, shown in full, BEFORE approval is requested",
+        "which credentials were rotated and the consequences (sessions invalidated, users logged out, integrations needing re-authentication)",
+        "the blind spots this investigation cannot see — runtime behaviour and premium/paid component internals — stated in the post-mortem, not omitted because the news is good",
+        "anything left uncleaned because a permission was refused, named as such"
+      ],
+      "hash": "sha256:bb707ba844bd8fcbdb4bba0bbe7a2433ea9fe82c2e73e2767c296c9b07b7337b",
+      "runbookId": "rb.incident-remediation",
+      "steps": [],
+      "strictness": "strict",
+      "verifiableCount": 0,
+      "version": "1.1.0"
+    },
+    "rb.promotion-execute": {
+      "armedBy": "model-request",
+      "capability": "cap.promote_environment",
+      "checkpointCount": 5,
+      "checkpoints": [
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.backup",
+          "reason": "before anything writes",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.approval",
+          "reason": "explicit, informed consent",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.promote",
+          "reason": "execute, with the ids you resolved",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "prove it landed"
+          },
+          "id": "cp.verify-destination",
+          "reason": "prove it landed",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.report",
+          "reason": "close the loop",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        }
+      ],
+      "communication": [
+        "the destination backup id and its verification status",
+        "the post-promotion verification result, or that verification could not be completed"
+      ],
+      "hash": "sha256:d5fa9bc67d769cb134a3c64260a56a07cd046882b08b6c29f9c2093890059221",
+      "runbookId": "rb.promotion-execute",
+      "steps": [],
+      "strictness": "strict",
+      "verifiableCount": 0,
+      "version": "1.1.0"
+    },
+    "rb.promotion-preflight": {
+      "armedBy": "model-request",
+      "capability": "cap.promotion_preflight",
+      "checkpointCount": 4,
+      "checkpoints": [
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.resolve-endpoints",
+          "reason": "which way does this run?",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": null,
+          "id": "cp.grant-check",
+          "reason": "is this write allowed at all?",
+          "status": "pending",
+          "unrequested": false,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "has this pair bitten us before?"
+          },
+          "id": "cp.consult-history",
+          "reason": "has this pair bitten us before?",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        },
+        {
+          "attest": "narrative",
+          "attestWords": "on your account only — the platform cannot verify this",
+          "badge": {
+            "label": "runbook added this",
+            "reason": "show what is about to be destroyed"
+          },
+          "id": "cp.preflight-diff",
+          "reason": "show what is about to be destroyed",
+          "status": "pending",
+          "unrequested": true,
+          "verified": false
+        }
+      ],
+      "communication": [
+        "the resolved source and destination, each with its environment label, before anything runs",
+        "that promotion OVERWRITES the destination, stated before approval is requested",
+        "what the pre-flight diff showed (what is about to be replaced)",
+        "anything cp.consult-history surfaced about these two environments"
+      ],
+      "hash": "sha256:ae5a1678d2471c58d21a0c11f532245accb5e1511923113d694adff3673f3a86",
+      "runbookId": "rb.promotion-preflight",
+      "steps": [],
+      "strictness": "strict",
+      "verifiableCount": 0,
+      "version": "1.1.0"
+    },
+    "rb.wpe-pull": {
+      "armedBy": "model-request",
+      "capability": "cap.wpe_pull",
+      "checkpointCount": 0,
+      "checkpoints": [],
+      "communication": [
+        "the resolved pair — which local site receives, which remote install/environment supplies",
+        "that the pull OVERWRITES the local copy (files, and the database when --db is used)",
+        "that the pull is asynchronous and typically takes tens of seconds or longer, stated before the wait, not after",
+        "the operation's terminal status, from a status check — never inferred from the call returning",
+        "what was NOT done (no WP Engine write; AI setup / health check handed off, if asked for)"
+      ],
+      "hash": "sha256:0c052e155ae16df5c1275f64771ec55acd7d3a56e8a4be7197dea0fca8bfaef6",
+      "runbookId": "rb.wpe-pull",
+      "steps": [
+        "st.resolve-both-ends",
+        "st.direction-check",
+        "st.destination-ready",
+        "st.scope-the-pull",
+        "st.local-overwrite-consent",
+        "st.execute-and-watch",
+        "st.verify-local",
+        "st.report-and-handoff"
+      ],
+      "strictness": "guided",
+      "verifiableCount": 0,
+      "version": "1.0.0"
+    }
+  }
+}

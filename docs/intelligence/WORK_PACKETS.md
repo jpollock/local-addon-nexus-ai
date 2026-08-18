@@ -9577,7 +9577,7 @@ pre.no-production) — returned to the designer as the SPLIT-SCOPE state
 to design: runnable subset armed, barred subset stated with reason and
 a Govern door — J-Refusal arriving inside the handoff.
 
-### [ ] WP-32 · The scope carrier  *(registered 2026-08-18; acceptance = the designer's five pins)*
+### [x] WP-32 · The scope carrier  *(registered 2026-08-18; acceptance = the designer's five pins → the EIGHT pins of draft 2; MERGED 2026-08-18 — delivery note and gate ratification below)*
 
 Renderer selection → task frame → arming → dry-run, as one carried
 artifact. Scope unit is the CELL (site, place) — the designer's
@@ -10004,6 +10004,148 @@ corroboration render, contract now ruled) are OPEN behind the RB-D
 fold. What remains on the owner: the t1/t2 replay — the last unplayed
 piece of his queue.
 
+
+### [x] WP-32 · The scope carrier — DELIVERED, HELD AT THE GATE
+
+Branch `wp-32`, worktree `.worktrees/wp-32`, cut from `poc/nexintelligence`
+at `3d84e96b`. Held pre-merge for ONE ratification: the arming-payload
+widening (below), per the packet's own instruction and the `canary_policy`
+precedent.
+
+**FIRST DELIVERABLE, and it lifts the designer's HOLD.**
+`scripts/generate-procedure-fixtures.ts` → `docs/intelligence/design-fixtures/
+declared-procedures.json`, committed. One JSON file, keyed by runbook id
+(`runbooks['rb.bulk-plugin-update']`, the shape the prototypes already read),
+covering all **seven** shipped runbooks: checkpoints in canonical order with
+`attestWords`, `badge`, `status`, `verified`, `reason`; `verifiableCount`,
+`checkpointCount`, `version`, `hash`, `strictness`, `communication`, `steps`.
+The anchor emits **4 of 8 at v1.2.0** with badges on exactly
+`cp.consult-history`, `cp.dry-run`, `cp.canary`, `cp.verify-canary`.
+`npm run fixtures:procedures` regenerates; `:check` fails closed on a stale
+file. The densities response's hold ("hand us your fixture and we diff") is
+answerable now — the generated file is in the tree.
+
+**The one field with no document behind it is `armedBy`**, a property of the
+arming rather than of the runbook. The generator supplies `model-request` and
+the file says so in its own `$notDerived` header rather than letting a reader
+assume it was derived. Everything else on every line came out of `law/`.
+
+**The eight pins, all pinned:** cell unit (`placeToken`/`placeLabel`, one
+source two renderings); arming carries the scope and the dry-run set is
+asserted as a SET; byte-identical block across the three surfaces (one
+renderer, no density parameter — a parameter is a place to differ); every line
+derived; split by authority; barred row carries the capability id + WP-31's
+`governDoor` verbatim; declared list derived from the canonical document
+(pinned as a SEQUENCE, because draft 1's defect was ORDER and a set comparison
+would have passed it); barred and runnable never depend on each other (pinned
+in BOTH directions by deleting each group and re-deriving).
+
+**The widening ruling is honoured structurally**: there is no `widenScope`,
+and a test asserts the module exports nothing matching
+`/widen|extend|addTarget|addCell|merge/`. The second run is pinned instead —
+born pre-scoped to the barred cells, carrying the SAME from-line, leaving the
+first run untouched.
+
+**XD-21 arrived mid-packet and is built against**, not around: a zero-cell
+plan sets `opensRun: false`, the surface draws no run container, and the block
+still renders the derived plan and its door — the refusal is a turn with the
+plan, not a silence. XD-20 is why the block has no density parameter at all.
+
+**ESCALATION FOR THE GATE — the arming-payload widening.** Two additive,
+host-side, optional fields: `ArmingRequest.scope?` (`procedureArming.ts`) and
+`DeclaredProcedure.scope?` (`procedureView.ts`), plus a third optional
+parameter on `recordArmingRequest`. **No core type was touched** — the carry
+rides the host-side arming queue and the host-side declared procedure, so
+`src/intelligence/` is unchanged and no event topic, envelope field, payload
+schema version or storage marker moved. Both fields are CONDITIONALLY SPREAD,
+never assigned: the parity pins assert the KEY is absent, which `toEqual`
+cannot distinguish from present-and-undefined (WP-26's finding), and two
+mutations (M09, M10) exist solely to kill the unconditional form. A refusal
+never carries a scope — nothing is armed, so there is no run for a plan to
+belong to.
+
+**BATTERY — 14 mutations, 14 KILLED; 1 declared control, SURVIVED as
+intended.** All runs `--no-cache`, driven from an explicit argv list (no shell
+word-splitting anywhere — the zsh trap). Named witnesses, one per mutation.
+M13 is the control: a style-only frame change must NOT trip the byte-identity
+pin, and it does not.
+
+**The battery found two real gaps and one harness lie, and all three are
+worth recording:**
+
+- **M01 and M12 initially read as "witness matched nothing" and were in fact
+  NO-OP MUTATIONS** — the fixture could not tell the mutated code from the
+  original. M01 (moving the world-exclusion check below the grant check) was
+  invisible because every excluded cell in the fixture sat at an ALLOWED
+  place; M12 (flattening the barred grouping) was invisible because both
+  barred cells shared one reason. Both gaps are now closed by cases that
+  exhibit the difference — a halted cell at a BARRED place, and two barred
+  cells with DIFFERENT reasons — and both mutations then killed. This is the
+  WP-24/WP-26 family again in a third form: **a mutation that changes no
+  observable behaviour under the fixture is not a survivor, it is an
+  unmeasured line.** Check that the fixture can EXHIBIT the difference before
+  reading a survival as either a pass or a gap.
+- **The harness itself lied twice, the same way:** `"0 total" in output`
+  matches `"Snapshots: 0 total"` and matches `"20 total"`. A battery that
+  mis-reports its own results is worse than no battery. Anchor on the `Tests:`
+  line with a word-boundary match.
+- **A mutation on a GENERATOR leaves an artifact its revert does not
+  undo.** M15 (stamping a clock) ran the generator, which wrote the tracked
+  fixture; reverting the script left the poisoned JSON on disk and the next
+  full-suite run failed on a file nobody had edited. Two fixes: the artifact is
+  regenerated after a battery, and the determinism pin now runs the generator
+  with `--out <tmp>` so **no suite mutates the working tree** — a test that
+  rewrites a committed file can silently repair the staleness its sibling test
+  exists to catch.
+
+**Renderer additive, and the mirror precedent followed.** `scopeModel.ts`
+mirrors `scopeBlockLines`/`placeLabel`; `tests/unit/renderer/scopeBlock.test.ts`
+runs both copies over one shared case table (the `localDay` /
+`effectiveCadenceExpression` / `ATTEST_WORDS` pattern, fourth instance).
+`procedureScope.ts` is pure TODAY — every import is `import type` — and the
+mirror stays exactly because purity is one careless value-import away from
+being false, with nothing failing until a user opens the panel. Both new
+renderer modules are added to `procedureModel.isolation.test.ts`, which
+measures the require graph for better-sqlite3 and `intelligence-host`. No
+`index.ts`, no `ipc-handlers.ts`, no core edit. The block is NOT mounted in
+`PanelChat`: there is no comparator to produce a real selection yet, and
+mounting a fixture selection would render fake targets in the live product —
+the fake-emitter precedent is a fixture MODULE, not a mounted one.
+
+**Baselines, tree held still, exit code captured before any pipe.**
+Pre: `567 suites / 7424 passed / 12 skipped / 7436 total`, exit 0.
+Post: `571 suites / 7495 passed / 12 skipped / 7507 total`, exit 0.
+Delta `+4 suites / +71 tests`, and it reconciles exactly: four new suites
+carry 69 tests and `procedureModel.isolation.test.ts` went 3 → 5. **Skipped
+held at 12 in both directions** — the embedding split did not move, so the
+delta is neither a phantom gain nor a phantom regression.
+`npx tsc -p . --noEmit` clean; eslint clean on all new and touched files;
+the ADR-16 seam rule re-probed live (an `electron` import from
+`src/intelligence/` still errors `no-restricted-imports`).
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and `npx jest`
+repeatedly, so better-sqlite3 is built for the shell's Node, not Electron.
+**Run `npm run rebuild` before loading Local.**
+
+**Two items left explicitly on the table, neither folded in:**
+1. **The place LABEL vocabulary is mine and wants a designer ruling.**
+   `local` / `staging` / `external production` are derived from `{host, kind}`
+   and pinned, but the words are a controlled-vocabulary question (XD-1) and I
+   declined to invent a display mapping beyond what the data says. If the
+   designer wants different words, they change in one function and the mirror
+   pin holds both copies together.
+2. **`resolveScopeFrom` resolves through a caller-supplied lookup**, because
+   the comparator surface does not exist. It is generic in the resolved shape
+   deliberately — this module has no opinion about what a comparator render IS,
+   and XD-18's precedent is that the pin tests RESOLUTION, not format.
+
+**Architect work committed verbatim first, in two batches** (protocol's
+uncommitted-work rule), each in its own attributed commit, unedited:
+`4fe103ec` — WP-31 merge adjudication (md5 `f7cf1178…`);
+`461aff65` — the densities adjudication: XD-20, XD-21 and
+`for-designer-densities-response.md` (md5s `0e5e094f…`, `fdcb56d6…`,
+`00dd58bb…`). Flagged here so the architect can verify fidelity.
+
 ---
 
 **WP-32 · GATE — the widening RATIFIED; proceed to merge (2026-08-18).**
@@ -10048,3 +10190,28 @@ swaps the prototypes onto it and returns the hand-built fixture for
 the diff — the hold lifts on the swap, and any divergence found by
 the diff is adjudicated as a defect in whichever artifact authored
 it. Merge report next; no further holds.
+
+---
+
+**WP-32 · MERGED (2026-08-18).** Merge commit below; `wp-32` folded into
+`poc/nexintelligence` after the gate ratified the arming-payload widening.
+
+**Merge-conflict note, for the record:** the only conflict was this file —
+both sides appended to its tail (the architect's densities + owner + gate
+batch on `HEAD`, the packet's delivery note on `wp-32`). Resolved by keeping
+BOTH verbatim and placing the delivery note between the densities
+adjudication and the gate that accepts its receipts, so the record reads
+delivery → gate → merge rather than gate-before-the-thing-it-accepts.
+Verified programmatically after resolution: both architect sub-blocks (33 and
+44 lines) are present as exact substrings, and the ordering assertion holds.
+No architect sentence was edited, reflowed or moved relative to another.
+
+**The registration checkbox at the top of the packet section is now ticked**
+and points here.
+
+**Post-merge baseline, merged tree, exit captured before any pipe** — see the
+merge report for the numbers and the skipped-column read. The lock on
+`src/main/intelligence-host/` is RELEASED with this merge; per the owner
+ratification, **WP-25 (incident producer) launches from here**.
+
+**ABI on exit: SYSTEM NODE.** `npm run rebuild` before loading Local.
