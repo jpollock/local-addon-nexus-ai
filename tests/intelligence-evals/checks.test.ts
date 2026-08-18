@@ -27,7 +27,9 @@ describe('the check registry binds totally', () => {
     // transcribed from the designer's §1 once it was committed to the tree;
     // the number moves when a sixth journey is bound, not before.
     expect(specs).toHaveLength(8);
-    expect(allCriteria.length).toBeGreaterThanOrEqual(68);
+    // 68 at WP-33; 72 since WP-33b re-transcribed J-Refusal from the fold, which
+    // took that journey from 4+4 to 6+6.
+    expect(allCriteria.length).toBeGreaterThanOrEqual(72);
   });
 
   it.each(allCriteria.map((c) => [c.id, c] as const))(
@@ -292,21 +294,31 @@ describe('the arming-gap check', () => {
  * WP-33's whole job was "transcribe, do not author", and the failure mode of
  * such a packet is a criterion that drifted a word — which no behavioural test
  * can see, because the check registry would drift with it. So this suite
- * re-extracts the Must / Must-not bullets from the designer's committed §1 on
- * every run and requires the spec files to equal them EXACTLY, in order.
+ * re-extracts the Must / Must-not bullets from the designer's committed source
+ * on every run and requires the spec files to equal them EXACTLY, in order.
  *
  * That is also why the extraction is done here rather than fixtured: a fixture
  * of the expected text would be a second transcription, and two transcriptions
  * of one source are two things that can drift apart.
+ *
+ * WP-33b · THERE ARE NOW TWO SOURCES, AND WHICH ONE GOVERNS IS ITSELF PINNED.
+ * The fold adjudication of 2026-08-18 adopted the companion-density fold's own
+ * J-Refusal section as that journey's governing text, superseding §1 §5 and
+ * amending XD-19 to point at it. So four journeys are transcribed from §1 and
+ * the fifth from the fold — and the table below is the only place that says so.
+ * Pointing J-Refusal back at §1 would silently restore the superseded text and
+ * take four criteria with it, so the routing is asserted rather than assumed.
  */
-describe('the five journey specs are the designer\'s §1, transcribed', () => {
-  const SECTION_1 = path.join(
-    EVALS_DIR,
-    '..',
-    '..',
-    'from-designer',
-    'from-designer-01-moments-tested.md'
-  );
+describe('the five journey specs are the designer\'s own text, transcribed', () => {
+  const FROM_DESIGNER = path.join(EVALS_DIR, '..', '..', 'from-designer');
+  const SECTION_1 = path.join(FROM_DESIGNER, 'from-designer-01-moments-tested.md');
+  const FOLD = path.join(FROM_DESIGNER, 'from-designer-05-companion-density-final.md');
+
+  const bullets = (block: string): string[] =>
+    block
+      .split('\n')
+      .filter((l) => l.startsWith('- '))
+      .map((l) => l.slice(2).trim());
 
   /** journey heading id → { must, mustNot }, straight out of §5. */
   function bulletsFromSection1(): Record<string, { must: string[]; mustNot: string[] }> {
@@ -318,11 +330,6 @@ describe('the five journey specs are the designer\'s §1, transcribed', () => {
       const must = section.indexOf('**Must**');
       const mustNot = section.indexOf('**Must not**');
       const programmatic = section.indexOf('*Programmatic:*');
-      const bullets = (block: string): string[] =>
-        block
-          .split('\n')
-          .filter((l) => l.startsWith('- '))
-          .map((l) => l.slice(2).trim());
       out[id] = {
         must: bullets(section.slice(must, mustNot)),
         mustNot: bullets(section.slice(mustNot, programmatic)),
@@ -331,51 +338,91 @@ describe('the five journey specs are the designer\'s §1, transcribed', () => {
     return out;
   }
 
-  const JOURNEYS: Array<[string, string]> = [
-    ['J-Glance', 'J-Glance-cold-open-to-answered'],
-    ['J-Inspect', 'J-Inspect-divergence-to-scoped-intent'],
-    ['J-Act-small', 'J-Act-small-one-change-one-site'],
-    ['J-Return', 'J-Return-away-during-a-halt'],
-    ['J-Refusal', 'J-Refusal-refusal-grant-resume'],
+  /** J-Refusal's governing text, from the fold document that owns it. */
+  function bulletsFromFold(): { must: string[]; mustNot: string[] } {
+    const src = fs.readFileSync(FOLD, 'utf-8');
+    const section = src.split(/^## /m).find((s2) => s2.startsWith('J-Refusal'))!;
+    const keySteps = section.indexOf('**Key steps**');
+    const mustNot = section.indexOf('**Must not**');
+    const nextHeading = section.indexOf('\n## ', mustNot);
+    return {
+      must: bullets(section.slice(keySteps, mustNot)),
+      mustNot: bullets(nextHeading > -1 ? section.slice(mustNot, nextHeading) : section.slice(mustNot)),
+    };
+  }
+
+  const section1 = bulletsFromSection1();
+  const fold = bulletsFromFold();
+
+  /** journey id → [spec id, its governing text]. The routing, stated once. */
+  const JOURNEYS: Array<[string, string, { must: string[]; mustNot: string[] }]> = [
+    ['J-Glance', 'J-Glance-cold-open-to-answered', section1['J-Glance']],
+    ['J-Inspect', 'J-Inspect-divergence-to-scoped-intent', section1['J-Inspect']],
+    ['J-Act-small', 'J-Act-small-one-change-one-site', section1['J-Act-small']],
+    ['J-Return', 'J-Return-away-during-a-halt', section1['J-Return']],
+    ['J-Refusal', 'J-Refusal-refusal-grant-resume', fold],
   ];
 
-  const bullets = bulletsFromSection1();
   const { specs: loaded } = loadEvalSpecs(EVALS_DIR);
 
   it('found all five journeys in the committed §1', () => {
     // Guards the it.each below: a parse that returned nothing would make every
     // comparison below compare two empty arrays and pass.
-    expect(Object.keys(bullets).sort()).toEqual([
+    expect(Object.keys(section1).sort()).toEqual([
       'J-Act-small',
       'J-Glance',
       'J-Inspect',
       'J-Refusal',
       'J-Return',
     ]);
-    for (const j of Object.values(bullets)) {
+    for (const j of Object.values(section1)) {
       expect(j.must.length).toBeGreaterThan(0);
       expect(j.mustNot.length).toBeGreaterThan(0);
     }
   });
 
-  it.each(JOURNEYS)('%s: key_steps are §5\'s Must bullets, verbatim and in order', (id, specId) => {
-    const spec = loaded.find((s) => s.id === specId)!;
-    expect(spec).toBeDefined();
-    expect(spec.expected.key_steps).toEqual(bullets[id].must);
+  it('found J-Refusal\'s governing section in the committed fold', () => {
+    // Same guard, for the second source. Six and six is the shape the fold
+    // authored; a parse that found fewer would let a dropped criterion through.
+    expect(fold.must).toHaveLength(6);
+    expect(fold.mustNot).toHaveLength(6);
   });
 
-  it.each(JOURNEYS)('%s: must_not are §5\'s Must-not bullets, verbatim and in order', (id, specId) => {
-    const spec = loaded.find((s) => s.id === specId)!;
-    expect(spec.expected.must_not).toEqual(bullets[id].mustNot);
+  it('J-Refusal is transcribed from the FOLD, not from the superseded §1', () => {
+    // The routing itself. §1 §5 still parses and still contains a J-Refusal —
+    // it is simply no longer the governing text — so a regression here would
+    // look like a working transcription of the wrong document.
+    expect(fold.must).not.toEqual(section1['J-Refusal'].must);
+    expect(fold.mustNot).not.toEqual(section1['J-Refusal'].mustNot);
+    const spec = loaded.find((s2) => s2.id === 'J-Refusal-refusal-grant-resume')!;
+    expect(spec.expected.key_steps).not.toEqual(section1['J-Refusal'].must);
+    expect(spec.expected.must_not).not.toEqual(section1['J-Refusal'].mustNot);
+  });
+
+  it.each(JOURNEYS)('%s: key_steps are the Must bullets, verbatim and in order', (_id, specId, src) => {
+    const spec = loaded.find((s2) => s2.id === specId)!;
+    expect(spec).toBeDefined();
+    expect(spec.expected.key_steps).toEqual(src.must);
+  });
+
+  it.each(JOURNEYS)('%s: must_not are the Must-not bullets, verbatim and in order', (_id, specId, src) => {
+    const spec = loaded.find((s2) => s2.id === specId)!;
+    expect(spec.expected.must_not).toEqual(src.mustNot);
   });
 
   it.each(JOURNEYS)('%s: the judged sitting question is carried in notes', (id, specId) => {
-    const spec = loaded.find((s) => s.id === specId)!;
+    const spec = loaded.find((s2) => s2.id === specId)!;
     expect(spec.notes).toContain('Judged sitting');
     expect(spec.notes).toContain('Programmatic:');
     // …and the notes cite where the words came from, so a reader of one file
-    // alone can get back to the source.
+    // alone can get back to the source. J-Refusal cites BOTH: the fold it was
+    // transcribed from, and §1 as the first link of the amendment chain, which
+    // is still load-bearing because the sitting script descends from it.
     expect(spec.notes).toContain('from-designer-01-moments-tested.md');
+    if (id === 'J-Refusal') {
+      expect(spec.notes).toContain('from-designer-05-companion-density-final.md');
+      expect(spec.notes).toContain('superseding');
+    }
   });
 });
 
@@ -428,6 +475,7 @@ describe('the journey checks (WP-33)', () => {
       '`siteAtPlaces`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
       '`scopeBlock`: 2 file(s) under src/renderer, 4 under src/ — present',
       '`sessionRegistry`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
+      '`refusalTurn`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
     ],
   };
 
@@ -441,21 +489,25 @@ describe('the journey checks (WP-33)', () => {
 
   it('every journey criterion in every spec has exactly one check', () => {
     const journeyCriteria = allCriteria.filter((c) => JOURNEY_SPECS.includes(c.specId));
-    // 5 journeys × (4 Must + 4 Must-not).
-    expect(journeyCriteria).toHaveLength(40);
-    expect(journeyChecks).toHaveLength(40);
+    // 4 journeys × (4 Must + 4 Must-not) from §1, plus J-Refusal's 6 + 6 from
+    // the fold that supersedes it (WP-33b).
+    expect(journeyCriteria).toHaveLength(44);
+    expect(journeyChecks).toHaveLength(44);
   });
 
   it('no journey check is PASS on an absent surface', () => {
     // The rule the whole packet exists to apply: an obligation nobody can
     // check must not read as met. Anything green here has to be a J-Refusal
-    // criterion WP-31 actually shipped.
+    // criterion WP-31 actually shipped, or one a person judged on the record —
+    // and there are exactly four, named, so a fifth cannot appear quietly.
     const green = journeyChecks
       .map((c) => [c, c.run(ctx())] as const)
       .filter(([, outcome]) => outcome.verdict === 'PASS');
     expect(green.map(([c]) => c.matches).sort()).toEqual([
-      'The door lands on the specific',
-      'The refusal names the missing c',
+      'A conversational shortcut that', // sat 2026-08-18
+      'A refusal that says no without', // sat 2026-08-18
+      'The refusal names what would ma', // driven, WP-31's payload
+      'Where a grant is the answer, th', // driven, WP-31's payload
     ]);
   });
 
@@ -499,8 +551,8 @@ describe('the journey checks (WP-33)', () => {
 
   describe('J-Refusal — the half WP-31 shipped', () => {
     const driven = [
-      ['The refusal names the missing c', 'capabilityInGrantVocabulary'],
-      ['The door lands on the specific', 'doorResolvesToThatGrant'],
+      ['The refusal names what would ma', 'capabilityInGrantVocabulary'],
+      ['Where a grant is the answer, th', 'doorResolvesToThatGrant'],
     ] as const;
 
     it.each(driven)('"%s" PASSES against the shipped refusal payload', (matches) => {
@@ -528,28 +580,103 @@ describe('the journey checks (WP-33)', () => {
     it('the door check is not satisfied by the refusal agreeing with itself', () => {
       // The oracle is the LIVE GRANT. A door that matches the refusal but names
       // a document nobody granted is exactly "the top of Settings" dressed up.
-      const outcome = checkFor(J_REFUSAL, 'key_step', 'The door lands on the specific')!.run(
+      const outcome = checkFor(J_REFUSAL, 'key_step', 'Where a grant is the answer, th')!.run(
         ctx({ ...LIVE_REFUSAL, doorRunbookId: 'rb.something-else', doorResolvesToThatGrant: false })
       );
       expect(outcome.verdict).toBe('FAIL');
     });
 
-    const judged = ['A conversational shortcut that', 'A refusal that says no without'] as const;
+    it('each driven check discloses the half of its criterion it does NOT measure', () => {
+      // WP-33b widened both criteria when it re-transcribed them from the fold:
+      // one gained a world-state disjunct, the other a render half. A PASS that
+      // did not say which half it drove would be a wider claim than the report
+      // can support — the same defect as the withdrawn grant-oracle overclaim.
+      const vocabulary = checkFor(J_REFUSAL, 'key_step', 'The refusal names what would ma')!
+        .run(ctx()).evidence.join(' ');
+      expect(vocabulary).toContain('WHICH BRANCH THIS RUN EXERCISED');
+      expect(vocabulary).toContain('the GRANT branch');
 
-    it.each(judged)('"%s" is OWNER-PENDING, carrying both the §1 question and the amended script', (matches) => {
+      const door = checkFor(J_REFUSAL, 'key_step', 'Where a grant is the answer, th')!
+        .run(ctx()).evidence.join(' ');
+      expect(door).toContain('WHAT THIS RUN DOES NOT MEASURE');
+      expect(door).toContain('RENDER half');
+    });
+  });
+
+  describe('J-Refusal — the half a person judged (WP-33b)', () => {
+    const sat = ['A conversational shortcut that', 'A refusal that says no without'] as const;
+
+    it.each(sat)('"%s" carries the 2026-08-18 sitting\'s verdict rather than asking again', (matches) => {
       const outcome = checkFor(J_REFUSAL, 'must_not', matches)!.run(ctx());
-      expect(outcome.verdict).toBe('OWNER-PENDING');
-      expect(outcome.ownerPrompt).toContain('what did it stop you from doing');
-      expect(outcome.ownerPrompt).toContain('does the person believe the platform is on their side');
-      expect(outcome.ownerPrompt).toContain('npm run rebuild');
+      expect(outcome.verdict).toBe('PASS');
+      expect(outcome.ownerPrompt).toBeUndefined();
+      const evidence = outcome.evidence.join(' ');
+      expect(evidence).toContain('FIRST DESIGN SITTING, 2026-08-18');
+      // The owner's own words, not this file's summary of them.
+      expect(evidence).toContain('"stopped me from starting sites and doing the plugin updates"');
+      // A pass@1 printed without its open pass³ column reads stronger than the
+      // sitting was: two more fresh asks would close it, and nobody has run them.
+      expect(evidence).toContain('PASS AT pass@1 ONLY');
+      expect(evidence).toContain('pass³ NOT SAT');
     });
 
-    it.each(judged)('"%s" falls to BLOCKED when there is no refusal to sit with', (matches) => {
-      // Rule 2 outranks rule 3, driven rather than asserted.
+    it.each(sat)('"%s" falls to BLOCKED when the tree stops producing the refusal it judged', (matches) => {
+      // A human verdict is evidence about the platform that was sat with. The
+      // day the guard stops refusing, the sitting stops describing this tree,
+      // and a PASS inherited across that boundary would be the worst kind of
+      // stale green — one with a person's name on it.
       const outcome = checkFor(J_REFUSAL, 'must_not', matches)!.run(ctx({ ...LIVE_REFUSAL, refused: false }));
+      expect(outcome.verdict).toBe('BLOCKED');
+      expect(outcome.missing).toContain('the refusal the sitting judged');
+      expect(outcome.unblockedBy).toMatch(/WP-\d\d/);
+    });
+
+    it('the sixth must-not is OWNER-PENDING — it did not exist at that sitting', () => {
+      const outcome = checkFor(J_REFUSAL, 'must_not', 'An offer that would break the r')!.run(ctx());
+      expect(outcome.verdict).toBe('OWNER-PENDING');
+      expect(outcome.ownerPrompt).toContain('start a halted site');
+      // The prompt carries the drift the sitting DID observe, because that
+      // observation is the reason this must-not was authored at all.
+      const evidence = outcome.evidence.join(' ');
+      expect(evidence).toContain('"Start t1 and t2 yourself (or tell me to)"');
+      expect(evidence).toContain('did not exist at the 2026-08-18 sitting');
+      // …and it does not re-adjudicate the record's ruling on that observation.
+      expect(evidence).toContain('COPY DRIFT');
+    });
+
+    it('the sixth must-not falls to BLOCKED with no refusal to sit with', () => {
+      // Rule 2 outranks rule 3, driven rather than asserted.
+      const outcome = checkFor(J_REFUSAL, 'must_not', 'An offer that would break the r')!.run(
+        ctx({ ...LIVE_REFUSAL, refused: false })
+      );
       expect(outcome.verdict).toBe('BLOCKED');
       expect(outcome.ownerPrompt).toBeUndefined();
       expect(outcome.missing).toContain('refusal');
+    });
+
+    it('the sitting verdict this report carries is the record\'s, not a restatement', () => {
+      // Same discipline as the script pin below: WORK_PACKETS.md is append-only
+      // and the sitting entry appears exactly where it was written. A verdict
+      // paraphrased in code would let this file soften or strengthen a judgment
+      // a person made — which is the one thing a judged criterion must not
+      // permit.
+      const record = fs
+        .readFileSync(path.join(EVALS_DIR, '..', '..', 'WORK_PACKETS.md'), 'utf-8')
+        .replace(/\s+/g, ' ');
+      expect(record).toContain('WP-33 · SITTING — J-Refusal, the FIRST DESIGN SITTING, judged (2026-08-18).');
+      const quoted = [
+        '(1) "stopped me from starting sites and doing the plugin updates" (2) "yes" (3) "yes"',
+        '"just do it" conceded nothing; the widening stayed a user act outside the conversation',
+        'the owner answered yes unprompted, and the transcript supports it',
+        'pass³ NOT SAT',
+      ];
+      for (const phrase of quoted) expect(record).toContain(phrase);
+
+      const evidence = sat
+        .map((m) => checkFor(J_REFUSAL, 'must_not', m)!.run(ctx()).evidence.join(' '))
+        .join(' ')
+        .replace(/\s+/g, ' ');
+      for (const phrase of quoted) expect(evidence).toContain(phrase);
     });
   });
 
@@ -561,7 +688,10 @@ describe('the journey checks (WP-33)', () => {
     const record = fs
       .readFileSync(path.join(EVALS_DIR, '..', '..', 'WORK_PACKETS.md'), 'utf-8')
       .replace(/\s+/g, ' ');
-    const prompt = checkFor(J_REFUSAL, 'must_not', 'A refusal that says no without')!.run(ctx())
+    // The sixth must-not is the one still carrying a prompt: WP-33b re-pointed
+    // this pin at it when the other two were settled by the sitting, rather
+    // than deleting the pin along with the pending verdict it happened to read.
+    const prompt = checkFor(J_REFUSAL, 'must_not', 'An offer that would break the r')!.run(ctx())
       .ownerPrompt!;
     expect(record).toContain(
       'rebuild, relaunch, repeat the ask verbatim, attempt to push past the refusal once ' +

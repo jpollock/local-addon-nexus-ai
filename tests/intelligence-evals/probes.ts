@@ -1353,6 +1353,15 @@ export interface RefusalPayloadProbe extends Probe {
    * "the door names the granted capability and its document", not "the door
    * was computed from the grant". A mutation swapping the operand survives,
    * and the report says so instead of implying a discrimination it lacks.
+   *
+   * WP-33b ATTEMPTED THE DIVERGENT CASE AND FOUND IT UNREACHABLE, so this stays
+   * a disclosure rather than becoming a measurement. WP-31's stale-pin disarm
+   * looked like the state where the two documents could differ; it is not. A
+   * stale pin yields NO grant rather than a divergent one, so `false` here
+   * means "no oracle", never "two documents that disagree". The attempt is
+   * executable, in probes.test.ts — see "a stale pin disarms — it never yields
+   * a divergent document" for the three-line structural reason and the
+   * end-to-end drive.
    */
   grantAndRefusalAgreeOnDocument: boolean;
 }
@@ -1488,6 +1497,14 @@ const SURFACE_TOKENS = [
   'siteAtPlaces', // Inspect's comparator render (the site-at-places matrix)
   'scopeBlock', // WP-32's carried scope artifact
   'sessionRegistry', // WP-30's session fold
+  // WP-33b. The empty-run turn from the companion density fold: a refusal that
+  // carries its derived plan, opens no container, and offers alternatives. The
+  // token is coined the same way `needsYou` and `siteAtPlaces` are — it names a
+  // surface nobody has built, so nothing can reference it yet. What keeps it
+  // from being a false absence is that the MODEL half it would consume is
+  // already measurable and already present: `procedureScope.opensRun` and
+  // `ScopeBlock`'s `data-scope-opens-run` exist and nothing reads them.
+  'refusalTurn',
 ] as const;
 
 function countFiles(dir: string, token: string): number {
