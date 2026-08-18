@@ -115,6 +115,19 @@ describe('the gap itself', () => {
     expect(message).toMatch(/no checkpoint has been performed/i);
   });
 
+  test('the gap refusal carries the Govern door too — the fourth reason', () => {
+    recordArmingRequest(CAPABILITY);
+
+    // The gap builds its refusal on a path with no run and no cursor, so it is
+    // the one that would most easily be left without the contract.
+    expect(checkCheckpointSequence('wp_plugin_update', task)!.governDoor).toEqual({
+      surface: 'settings',
+      section: 'capabilities',
+      capability: CAPABILITY,
+      runbookId: 'rb.bulk-plugin-update',
+    });
+  });
+
   test('a task id is not required — the gap has no run to key on', () => {
     recordArmingRequest(CAPABILITY);
     expect(checkCheckpointSequence('wp_plugin_update', undefined)!.reason).toBe('arming-gap');

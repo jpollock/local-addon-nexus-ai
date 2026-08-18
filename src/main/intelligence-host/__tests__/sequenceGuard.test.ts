@@ -417,3 +417,63 @@ describe('WP-31 · exclusive tool scope', () => {
     expect(refusal.checkpoint).toBe('cp.approval');
   });
 });
+
+// ---------------------------------------------------------------------------
+// WP-31 · the refusal payload contract (inherited requirement)
+//
+// Ruled at the designer §1 adjudication while this packet was in flight:
+// "WP-31 inherits both requirements — its instructive refusal carries the
+// machine-readable capability id and the deep-link target from birth."
+// J-Refusal is the refusal → grant → resume walk, and a door that lands on a
+// settings PAGE makes the user hunt for the row that stopped them. WP-32's
+// barred-subset row consumes the same three fields.
+// ---------------------------------------------------------------------------
+
+describe('WP-31 · every refusal carries the Govern door', () => {
+  test('the capability id is the key the Settings matrix matches on', () => {
+    arm();
+
+    // Not a display string and not a runbook id: `CapabilityGrantSetting.capability`
+    // is the override key, so a surface goes from refusal to row with no lookup.
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+    expect(refusal.governDoor.capability).toBe(CAPABILITY);
+    expect(refusal.capability).toBe(refusal.governDoor.capability);
+  });
+
+  test('the door names the DOCUMENT too — a grant naming another one is not this grant', () => {
+    arm();
+
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+    expect(refusal.governDoor).toEqual({
+      surface: 'settings',
+      section: 'capabilities',
+      capability: CAPABILITY,
+      runbookId: 'rb.bulk-plugin-update',
+    });
+  });
+
+  test('ALL FOUR refusal reasons carry it — sequence, exclusive-scope and ledger-fault', () => {
+    // Reached by three different code paths that build three different
+    // objects; the arming-gap fourth is pinned in armingGap.test.ts, where the
+    // state it needs (no run, a pending request) can be constructed.
+    arm();
+    const sequence = checkCheckpointSequence('bulk_plugin_update', task)!;
+    const exclusive = checkCheckpointSequence('wp_plugin_update', task)!;
+
+    setIntelligenceCore({ ...core, ledger: { query: () => { throw new Error('down'); } } } as never);
+    const fault = checkCheckpointSequence('bulk_plugin_update', task)!;
+
+    expect([sequence.reason, exclusive.reason, fault.reason]).toEqual([
+      'sequence',
+      'exclusive-scope',
+      'ledger-fault',
+    ]);
+    for (const refusal of [sequence, exclusive, fault]) {
+      expect([refusal.reason, refusal.governDoor.capability]).toEqual([refusal.reason, CAPABILITY]);
+      expect([refusal.reason, refusal.governDoor.runbookId]).toEqual([
+        refusal.reason,
+        'rb.bulk-plugin-update',
+      ]);
+    }
+  });
+});

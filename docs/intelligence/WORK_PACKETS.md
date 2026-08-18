@@ -9341,12 +9341,13 @@ review as the ruling itself required.
 Jest, compiled worktree, tree held still, cache cleared, exit code captured
 before any pipe. Baseline at `d46ec382`: **565 suites / 7,357 passed / 12
 skipped / 7,369 total, exit 0**. Branch: **567 / 7,416 / 12 / 7,428, exit 0**.
-Delta **+2 suites, +59 tests, skipped unchanged**. `npx tsc -p . --noEmit`
+Delta **+2 suites, +63 tests, skipped unchanged** (567 / 7,420 / 12 / 7,432 —
+the last four are the inherited refusal-payload requirement, below). `npx tsc -p . --noEmit`
 clean; eslint clean across `src/intelligence`, `src/main/intelligence-host`,
 `load-procedure.ts`, `ChatService.ts`, `src/renderer/components/DockedPanel` and
 `tests/intelligence-evals`; the seam rule was PROBED (an `electron` import into
 `src/intelligence/law/runbookRegistry.ts` produced the ADR-16 error, then was
-reverted and re-linted clean). **Mutation battery 24/24 killed by a named
+reverted and re-linted clean). **Mutation battery 28/28 killed by a named
 witness**; two of them survived their first witness and both were real coverage
 gaps, closed with new tests rather than re-labelled — see findings 3 and 4.
 
@@ -9438,6 +9439,33 @@ registry with a five-case can-fail suite; the spec's split moves 4/7 of 11 to
    of nothing, indistinguishable from a passing witness. The battery harness now
    uses `${=witness}` and treats "No tests found" as a HARNESS FAULT rather than
    a result. Same family as the protocol's "verify the measurement method".
+
+### The inherited requirement, landed mid-packet
+
+The designer §1 adjudication was found uncommitted in the primary checkout
+WHILE this packet was building, and it binds it: *"WP-31 inherits both
+requirements — its instructive refusal carries the machine-readable capability
+id and the deep-link target from birth."* It is implemented, not deferred.
+
+`SequenceRefusal` now carries `governDoor: { surface, section, capability,
+runbookId }` on **all four** refusal reasons. `capability` is already
+`CapabilityGrantSetting.capability` — the exact key a settings override matches
+on — so a surface goes from a refusal to the row that governs it with no lookup
+table; the door names the DOCUMENT too, because a grant naming another one is
+not a grant for this capability (`resolveCapabilityGrants.admit`).
+
+**It is a structured target, not a URL, and that is a decision worth ruling
+on.** Measured: the Settings capability matrix does not exist yet (zero
+`capabilityGrants` references anywhere in `src/renderer/`), and `nexus://` is
+already the MCP resource namespace. Authoring a URL now would pin a route
+nobody has designed to a scheme that means something else. The three fields are
+the deep link in payload form, and WP-32's barred-subset row ("reason +
+capability id + Govern door") consumes exactly them. If the architect wants a
+URL vocabulary, it should be authored once, for both.
+
+The third J-Refusal requirement — *session state identical across the
+excursion* — is a property of the door, not of the refusal, and belongs to
+whoever builds it. Nothing here can establish or violate it.
 
 ### Escalations — one fires, and it is held at the gate
 

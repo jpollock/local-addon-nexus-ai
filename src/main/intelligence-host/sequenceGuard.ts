@@ -102,6 +102,44 @@ export type SequenceRefusalReason =
   /** WP-31 rule 6: a write between the acknowledgement and the procedure's delivery. */
   | 'arming-gap';
 
+/**
+ * WP-31 · THE REFUSAL PAYLOAD CONTRACT (inherited requirement, ruled at the
+ * designer §1 adjudication while this packet was in flight).
+ *
+ * J-Refusal is the refusal → grant → resume walk: "the only place the platform
+ * tells the user no and then has to be worth trusting again." Its programmatic
+ * half requires two things of every refusal this guard produces, from birth:
+ * the capability id in the vocabulary the Settings matrix uses, and a door that
+ * points at THE SPECIFIC GRANT rather than at a settings page.
+ *
+ * `capability` is already that id — it is `CapabilityGrantSetting.capability`,
+ * the exact key a settings override matches on, so a surface can go from a
+ * refusal to the row that governs it without a lookup table. This block names
+ * the rest of the row.
+ *
+ * WHY A TARGET AND NOT A URL. The Settings capability matrix does not exist
+ * yet (measured: zero `capabilityGrants` references anywhere in
+ * `src/renderer/`), and `nexus://` is already spoken for by the MCP resource
+ * namespace. Inventing a URL now would pin a route nobody has designed to a
+ * scheme that means something else. A structured target is the deep link in
+ * payload form: the surface that builds the door owns how it renders, and
+ * WP-32's barred-subset row consumes the same three fields.
+ */
+export interface GovernDoorTarget {
+  /** Where the grant is governed. One value today; a union when there are two. */
+  surface: 'settings';
+  /** The section within it. */
+  section: 'capabilities';
+  /** `CapabilityGrantSetting.capability` — the key an override matches on. */
+  capability: string;
+  /**
+   * The document this grant is reviewed against. A grant naming another
+   * document is not a grant for this one (`resolveCapabilityGrants.admit`), so
+   * the door needs the pair, not the capability alone.
+   */
+  runbookId: string;
+}
+
 export interface SequenceRefusal {
   capability: string;
   runbookId: string;
@@ -120,8 +158,18 @@ export interface SequenceRefusal {
    */
   claimedBy: string;
   reason: SequenceRefusalReason;
+  /**
+   * Where a surface sends the user to govern THIS refusal — the Govern door,
+   * carried by every refusal rather than by the ones a later packet remembers.
+   */
+  governDoor: GovernDoorTarget;
   /** Rendered for the tool result: names the runbook, the checkpoint and the remedy. */
   message: string;
+}
+
+/** The door, built from the same two ids the refusal already names. */
+function governDoorFor(capability: string, runbookId: string): GovernDoorTarget {
+  return { surface: 'settings', section: 'capabilities', capability, runbookId };
 }
 
 /** Checkpoints the ledger can prove. The others are recorded, never verified. */
@@ -191,6 +239,7 @@ function refusal(
     checkpoint: checkpoint.id,
     claimedBy: claimedBy.id,
     reason: 'sequence',
+    governDoor: governDoorFor(capability, runbook.id),
     message: `${head}${body} ${attestedSoFar}${narrativeNote(runbook)}`,
   };
 }
@@ -249,6 +298,7 @@ function exclusiveRefusal(
     checkpoint: current.id,
     claimedBy: current.id,
     reason: 'exclusive-scope',
+    governDoor: governDoorFor(capability, runbook.id),
     message:
       `REFUSED by procedure ${runbook.id} (${capability}): ${toolName} is a write, and no ` +
       `checkpoint of this procedure declares it. The run is standing at ${current.id}, and ` +
@@ -303,6 +353,7 @@ function armingGapRefusal(toolName: string): SequenceRefusal | null {
       checkpoint: current.id,
       claimedBy: current.id,
       reason: 'arming-gap',
+      governDoor: governDoorFor(request.capability, runbook.id),
       message:
         `REFUSED by procedure ${runbook.id} (${request.capability}): you asked for this procedure ` +
         'and it has not arrived yet. The platform places it in your turn context on your NEXT ' +
@@ -373,6 +424,7 @@ export function checkCheckpointSequence(
         checkpoint: named.id,
         claimedBy: (claimedBy ?? named).id,
         reason: 'ledger-fault',
+        governDoor: governDoorFor(run.capability, runbook.id),
         message:
           `REFUSED by procedure ${runbook.id} (${run.capability}): the attestation ledger ` +
           `could not be read, so ${toolName} cannot be shown to be in sequence. This refusal ` +
