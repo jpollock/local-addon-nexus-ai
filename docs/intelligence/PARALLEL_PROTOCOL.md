@@ -115,7 +115,11 @@ a suite that just passed is the environment, not your change — re-run
 `npm test` (the pretest hook re-flips it) and re-measure before believing
 the red. Same family as the poisoned cache: check the environment before
 diagnosing the code. During multi-agent operation, expect this whenever
-another session touches the repo.
+another session touches the repo. **The flip can wear a mask** (WP-20e):
+a fixture that catches its own init failure surfaces the flip as
+`Cannot read properties of undefined`, not a NODE_MODULE_VERSION stack —
+if a native-module suite fails with a nonsense undefined-read it did not
+fail with yesterday, suspect the ABI before the code.
 
 ## Ownership map (contention control)
 

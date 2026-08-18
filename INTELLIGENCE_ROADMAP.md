@@ -107,10 +107,18 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
         topics — no new topic needed; guard at BOTH chokepoints;
         narrative checkpoints named un-gateable; six judgement calls
         ratified)
-  - [ ] **20e** eval flip + UI seam — **IN FLIGHT** (prompt delivered
-        2026-08-17: four B-03 criteria go programmatic, seven become
-        OWNER-PENDING on `NEXUS_EVAL_API_KEY`; §7 render shapes,
-        vocabulary v1.1-conformant)
+  - [x] **20e** eval flip + UI seam — DONE 2026-08-17 (B-03: 4 PASS
+        programmatic via a real end-to-end procedure probe, 7
+        OWNER-PENDING on `NEXUS_EVAL_API_KEY`, 0 BLOCKED, 0 fabricated;
+        `procedureView.ts` = the derivation seam, audit columns shared
+        with the eval sheet at compile time). **WP-20 phase 2 is
+        COMPLETE.**
+- [x] **B-03 owner sitting** — JUDGED 2026-08-18: **B-03 PASSES** (4
+      programmatic + 7 owner-judged, all pass³) — **WP-20 is accepted end
+      to end; the anchor-slice acceptance eval is green.** E-01 re-sat on
+      the new substrate: 5/6 pass³; K3 at 2/3 pending one re-sit after
+      the harness arming-leakage fix (sitting adjudication in
+      WORK_PACKETS).
 
 - [x] **WP-23** AgentRegistry fixture — DONE 2026-08-17 (fixture reads
       `src/` `__dirname`-relative; the uncompiled-worktree four-red trap is
