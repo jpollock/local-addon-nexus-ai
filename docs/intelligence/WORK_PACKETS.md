@@ -11184,3 +11184,28 @@ turn about that site carries the incident; adjudicated like the
 first-real-pull); WP-33b launches now (eval-registry micro); WP-34
 launches when WP-33b merges (they share the registry surface —
 serialized by lock, not by dependency).
+
+---
+
+**WP-33b ANNOUNCED 2026-08-18 — LOCK TAKEN: the eval registry
+(`tests/intelligence-evals/` + `docs/intelligence/anchor-slice/evals/`).**
+Worktree `.worktrees/wp-33b`, branch `wp-33b`, base `poc/nexintelligence` @
+`dfe29377`.
+
+**Contention check, run before cutting the worktree, not assumed.**
+`git status --porcelain -- tests/intelligence-evals
+docs/intelligence/anchor-slice/evals` is EMPTY in the primary checkout and in
+every recent worktree (`wp-25`, `wp-26`, `wp-28`, `wp-31`, `wp-32`, `wp-33`).
+WP-33's registry work is merged (`f0d7f27b`) and WP-25's E-01 half is merged
+(`230c3dfa`); nothing is holding the surface. WP-34 shares this surface and
+launches when this packet merges — serialized by lock, per the WP-25 merge
+acceptance's board note.
+
+**Scope, both items registry-only:** (1) re-transcribe
+`J-Refusal-refusal-grant-resume.yaml` from the fold document's J-Refusal
+section (`from-designer-05-companion-density-final.md`), which the fold
+adjudication adopted as the journey's governing text superseding §1 §5;
+(2) attempt the stale-pin exhibiting fixture that would convert WP-33's
+disclosed survivor (door-derived-from-grant vs door-derived-from-refusal) to a
+kill. No `src/`, no new topic, payload version, envelope field or storage
+marker, `wpeOperationPermissions` untouched.
