@@ -14,6 +14,9 @@ import { buildWordPressSystemPrompt } from '../assistant/wordpress-knowledge';
 import { getSession, deleteAllSessions } from '../ipc/chat-sessions';
 import { assembleForChatTurn } from '../intelligence-host/chatAssembly';
 import { recordApprovalRationale } from '../intelligence-host/actionProducer';
+import { procedureApprovalContext, setProcedureStreamSink } from '../intelligence-host/procedureStream';
+import { checkCheckpointSequence } from '../intelligence-host/sequenceGuard';
+import type { CanaryPolicy } from '../intelligence-host/procedureView';
 
 // ---------------------------------------------------------------------------
 // Site Lifecycle — tools that require a running local site
@@ -72,12 +75,24 @@ const NEEDS_RUNNING_SITE: Record<string, SiteToolConfig> = {
 // Session State
 // ---------------------------------------------------------------------------
 
+/**
+ * WP-26 · what the human's click carries back.
+ *
+ * The policy rides WITH the decision rather than being read from somewhere
+ * afterwards, because it is part of the same act: the card offered two values
+ * and the person chose one. Absent means they were offered none, or chose none.
+ */
+interface ApprovalDecision {
+  approved: boolean;
+  canaryPolicy?: CanaryPolicy;
+}
+
 interface ChatSession {
   id: string;
   messages: ChatMessage[];
   abortController: AbortController;
   pendingApprovals: Map<string, {
-    resolve: (approved: boolean) => void;
+    resolve: (decision: ApprovalDecision) => void;
     toolName: string;
     args: Record<string, unknown>;
   }>;
@@ -103,6 +118,10 @@ export class ChatService {
     this.registry = deps.registry;
     this.services = deps.services;
     this.sendToRenderer = deps.sendToRenderer;
+    // WP-26 · the procedure stream's one consumer. Registered here rather than
+    // at bootstrap because the sink IS this service's `emit` — the events are
+    // per-session and the chat stream is the channel a session already has.
+    setProcedureStreamSink((sessionId, event) => this.emit(sessionId, event));
   }
 
   /**
@@ -145,7 +164,7 @@ export class ChatService {
 
     if (!session) {
       const abortController = new AbortController();
-      const pendingApprovals = new Map<string, { resolve: (approved: boolean) => void; toolName: string; args: Record<string, unknown> }>();
+      const pendingApprovals: ChatSession['pendingApprovals'] = new Map();
 
       // Attempt to restore persisted history so Claude remembers prior turns
       const db = this.services.graphService?.getDb();
@@ -395,17 +414,43 @@ export class ChatService {
     // Requires human approval: every Tier-3 tool, plus the freeform/overwrite Tier-2 tools
     // (wp_eval, wp_search_replace) that a prompt-injected model — fed untrusted site content — could
     // be steered into calling (T-INJECTION). Both route through the same approval card below.
-    if (requiresHumanApproval(toolCall.name)) {
-      const cardText = safety.confirmationMessage ?? 'This action may have significant consequences.';
+    // WP-26 · an armed strict runbook can REQUIRE an approval the tool's own
+    // tier does not.
+    //
+    // `bulk_plugin_update` is Tier 2, so nothing here ever showed a card for
+    // it — while `rb.bulk-plugin-update` declares `cp.approval` as the
+    // checkpoint a human decision attests, and the sequence guard refuses the
+    // tool until it is. With no card there is no producer for that decision,
+    // so the guard refuses the anchor capability FOREVER and the run
+    // deadlocks. The condition is the guard's OWN answer, not a second rule:
+    // it fires only when the guard is already refusing this call on exactly
+    // the checkpoint the approval would attest. It can only ADD a gate.
+    const procedure = procedureApprovalContext(sessionId(session));
+    const gatedOnApproval =
+      !!procedure &&
+      checkCheckpointSequence(toolCall.name, taskId)?.checkpoint === procedure.checkpointId;
+
+    if (requiresHumanApproval(toolCall.name) || gatedOnApproval) {
+      // The recorded rationale's `prompt` is "the card the human was shown", so
+      // when the runbook reference is part of what they were shown it has to be
+      // part of what is recorded. Composed from the declaration's own fields —
+      // naming a document is not inventing a rationale.
+      const cardText = procedure
+        ? `Runbook ${procedure.runbookId} v${procedure.version}, marked strict — ` +
+          `checkpoint ${procedure.checkpointId}. ` +
+          (safety.confirmationMessage ?? 'Approve this step to let the runbook continue.')
+        : safety.confirmationMessage ?? 'This action may have significant consequences.';
       this.emit(sessionId(session), {
         type: 'tool_call_approval_needed',
         id: toolCall.id,
         name: toolCall.name,
         arguments: toolCall.arguments,
         warning: cardText,
+        ...(procedure ? { procedure } : {}),
       });
 
-      const approved = await this.waitForApproval(session, toolCall.id, toolCall.name, toolCall.arguments);
+      const decision = await this.waitForApproval(session, toolCall.id, toolCall.name, toolCall.arguments);
+      const approved = decision.approved;
 
       // WP-19 · task.rationale.recorded v0 — the card the human was shown and
       // the arguments they ruled on, VERBATIM. No prose is composed here: the
@@ -420,6 +465,10 @@ export class ChatService {
         decision: approved ? 'approved' : 'denied',
         taskId,
         services: this.services,
+        // WP-26: the canary policy is part of the approval, not a separate act.
+        // The producer validates it and drops it on a denial — nothing is
+        // authored here, and absence stays meaningful.
+        ...(decision.canaryPolicy ? { canaryPolicy: decision.canaryPolicy } : {}),
       });
 
       if (!approved) {
@@ -579,7 +628,7 @@ export class ChatService {
     toolCallId: string,
     toolName: string,
     args: Record<string, unknown>,
-  ): Promise<boolean> {
+  ): Promise<ApprovalDecision> {
     return new Promise((resolve) => {
       session.pendingApprovals.set(toolCallId, { resolve, toolName, args });
     });
@@ -588,13 +637,18 @@ export class ChatService {
   /**
    * Resolve a pending tier 3 approval (called from IPC handler).
    */
-  resolveApproval(sessionId: string, toolCallId: string, approved: boolean): void {
+  resolveApproval(
+    sessionId: string,
+    toolCallId: string,
+    approved: boolean,
+    canaryPolicy?: CanaryPolicy,
+  ): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
     const pending = session.pendingApprovals.get(toolCallId);
     if (pending) {
-      pending.resolve(approved);
+      pending.resolve({ approved, ...(canaryPolicy ? { canaryPolicy } : {}) });
       session.pendingApprovals.delete(toolCallId);
     }
   }
@@ -608,7 +662,7 @@ export class ChatService {
       session.abortController.abort();
       // Reject all pending approvals
       for (const [, pending] of session.pendingApprovals) {
-        pending.resolve(false);
+        pending.resolve({ approved: false });
       }
       session.pendingApprovals.clear();
     }

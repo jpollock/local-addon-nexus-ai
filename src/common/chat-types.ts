@@ -1,6 +1,20 @@
 // ---------------------------------------------------------------------------
 // Chat Types — shared between main and renderer
 // ---------------------------------------------------------------------------
+import type {
+  CheckpointChangedEvent,
+  ProcedureAbortedEvent,
+  ProcedureArmedEvent,
+} from '../main/intelligence-host/procedureView';
+import type { ProcedureApprovalContext } from '../main/intelligence-host/procedureStream';
+
+export type {
+  CheckpointChangedEvent,
+  ProcedureAbortedEvent,
+  ProcedureApprovalContext,
+  ProcedureArmedEvent,
+};
+export type { CheckpointState, DeclaredProcedure } from '../main/intelligence-host/procedureView';
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -22,6 +36,16 @@ export interface ToolCallRequest {
 // Stream Events — sent from main → renderer via CHAT_STREAM IPC channel
 // ---------------------------------------------------------------------------
 
+/**
+ * WP-26 · the procedure stream, joined to the chat stream.
+ *
+ * TYPE-ONLY imports, which TypeScript erases completely — the renderer bundle
+ * gains no main-process code from them. That erasure is the whole reason these
+ * three can be named here rather than restated: a structural copy of
+ * `DeclaredProcedure` in `common/` would be a second definition of the shapes
+ * `procedureView.ts` exists to be the single source of, and the two would drift
+ * on the first field either side added.
+ */
 export type ChatStreamEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call_start'; id: string; name: string }
@@ -29,9 +53,27 @@ export type ChatStreamEvent =
   | { type: 'tool_call_end'; id: string; name: string; arguments: Record<string, unknown> }
   | { type: 'tool_call_executing'; id: string; name: string }
   | { type: 'tool_call_result'; id: string; name: string; result: string; isError?: boolean }
-  | { type: 'tool_call_approval_needed'; id: string; name: string; arguments: Record<string, unknown>; warning: string }
+  | {
+      type: 'tool_call_approval_needed';
+      id: string;
+      name: string;
+      arguments: Record<string, unknown>;
+      warning: string;
+      /**
+       * WP-26 · present ONLY when this approval is a strict runbook's approval
+       * checkpoint. The platform derives it (`procedureApprovalContext`); the
+       * card renders it. Absent for every other approval, which is what keeps
+       * the ordinary action card byte-identical to the pre-WP-26 build.
+       */
+      procedure?: ProcedureApprovalContext;
+    }
   | { type: 'done'; stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'error' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  // WP-26 · the procedure surfaces. A renderer that does not handle these
+  // ignores them, exactly as it ignored them when nothing emitted them.
+  | ProcedureArmedEvent
+  | CheckpointChangedEvent
+  | ProcedureAbortedEvent;
 
 // ---------------------------------------------------------------------------
 // Provider-level stream events (subset emitted by providers)
