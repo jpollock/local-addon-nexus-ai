@@ -96,6 +96,14 @@ produced these; nothing enters by drift. XD = experience decision.)*
   attached and its alternatives as offers, a door where a grant is
   the answer. Source: RB-E 2c + RB-D 1b, ratified ibid.
 
+- **XD-22 · Guided renders steps, never checkpoints** — a guided
+  runbook (`steps`, `checkpointCount: 0`) never renders a checkpoint
+  rail, a tick, a denominator, or an attest line; inventing a
+  checkpoint for a guided document is the XD-16 defect in a new
+  costume. M5's surfaces are designed against `rb.diagnose-site`'s
+  real shape. Source: designer `fixture-diff-notes.md`, ratified in
+  `for-designer-fixture-diff-response.md`.
+
 ## How a ruling gets here
 
 Designer position or architect note → ratification response (both
