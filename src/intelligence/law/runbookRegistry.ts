@@ -334,7 +334,18 @@ export class RunbookRegistry {
       checkpoints,
       steps: (fm.steps ?? []).map((s) => s.id),
       tools: (fm.tools ?? []).map(toRunbookTool),
-      toolScope: fm.tool_scope ?? 'advisory',
+      // WP-31 · the default is STRICTNESS-DEPENDENT, and the 2026-08-18
+      // incident is why. ADR-17's third amendment shipped `exclusive` as a
+      // mechanism, OFF — so a strict runbook's tool surface was bounded only by
+      // its own prose ("never wp_plugin_update"), and a live run reached the
+      // same effect through a tool no checkpoint claimed: no gate, no card, no
+      // approval, no backup. On a strict document the door is now shut by
+      // default and the field is how an author OPTS OUT, in the reviewed
+      // document where `attest:` and `unrequested:` already live. Guided
+      // runbooks are unchanged: ADR-12 makes them "ordered advice you may
+      // adapt", and a tool surface that narrowed under advice could not be
+      // adapted at all.
+      toolScope: fm.tool_scope ?? (strictness === 'strict' ? 'exclusive' : 'advisory'),
       ...(armsOn ? { armsOn } : {}),
       body: doc.body,
       canonicalText: doc.canonicalText,

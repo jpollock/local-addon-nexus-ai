@@ -425,10 +425,20 @@ export class ChatService {
     // deadlocks. The condition is the guard's OWN answer, not a second rule:
     // it fires only when the guard is already refusing this call on exactly
     // the checkpoint the approval would attest. It can only ADD a gate.
+    //
+    // WP-31 · and it must be the SEQUENCE refusal, not just any refusal on that
+    // checkpoint. Exclusive tool scope refuses a write the current checkpoint
+    // does not declare and names that CURRENT checkpoint — which, for a run
+    // standing where the 2026-08-18 incident's run stood, is `cp.approval`.
+    // Reading the checkpoint alone would have raised a card offering a human
+    // the chance to bless `wp_plugin_update` itself: consent for the tool
+    // substitution, harvested by the mechanism built to prevent it.
     const procedure = procedureApprovalContext(sessionId(session));
+    const sequenceRefusal = checkCheckpointSequence(toolCall.name, taskId);
     const gatedOnApproval =
       !!procedure &&
-      checkCheckpointSequence(toolCall.name, taskId)?.checkpoint === procedure.checkpointId;
+      sequenceRefusal?.reason === 'sequence' &&
+      sequenceRefusal.checkpoint === procedure.checkpointId;
 
     if (requiresHumanApproval(toolCall.name) || gatedOnApproval) {
       // TWO STRINGS, one card, and the split is the point (WP-28 finding 2).

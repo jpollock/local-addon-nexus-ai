@@ -7,6 +7,8 @@
  * sentence in every direction it can be violated: by status, by the `verified`
  * flag, by an evidence line, by an audit row, and by a diff between two states.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   AttestClass,
   ProcedureOutcome,
@@ -209,13 +211,99 @@ describe('deriveCheckpointStates — a narrative checkpoint is never verified', 
     expect(states.find((s) => s.id === 'cp.backup')!.status).toBe('aborted');
   });
 
-  it('gives every narrative checkpoint the shipped "not verified" wording', () => {
+  it('states each attest class in CAPABILITY tense — what the platform can do, not what has happened', () => {
     // The words are the ones nexus_load_procedure already tells the model. A
     // second vocabulary on the rail would let the transcript and the surface
     // describe the same checkpoint differently.
-    expect(ATTEST_WORDS.narrative).toBe('your account only, not verified');
-    expect(ATTEST_WORDS.event).toBe('verified from records');
-    expect(ATTEST_WORDS.manifest).toBe('verified as supplied');
+    //
+    // WP-31 · rewritten after the 2026-08-18 incident. "verified from records"
+    // names an attestation CLASS and reads as a completion STATE; a live run
+    // took the three labels below as a progress report and wrote without an
+    // approval or a backup. Every string here is now a sentence about the
+    // PLATFORM's ability, which cannot be read as a claim about the run.
+    expect(ATTEST_WORDS.narrative).toBe('on your account only — the platform cannot verify this');
+    expect(ATTEST_WORDS.event).toBe('the platform can verify this from records');
+    expect(ATTEST_WORDS.manifest).toBe('the platform can verify this from what it supplied');
+  });
+
+  it('THE OLD STATE-READING STRINGS ARE EMITTED NOWHERE IN src/ — main, renderer and fakes alike', () => {
+    // Three copies of this vocabulary exist by design (procedureView, the
+    // renderer mirror, the renderer's stream fake — main and renderer cannot
+    // share a bundle; see procedureModel's header). A rewrite that reached two
+    // of three would leave the misreading live on whichever surface it missed,
+    // so the assertion is over the TREE rather than over the module.
+    //
+    // TWO EXEMPTIONS, and neither is a loophole — together they are the point.
+    //
+    // COMMENT LINES: the old wording is quoted in several headers to record WHY
+    // it changed; deleting the incident's own words to satisfy a scan would
+    // trade the reason for the rule. What may not survive is a string a surface
+    // EMITS, and in this codebase's style those never live on a `*`- or
+    // `//`-prefixed line.
+    //
+    // TEST FILES: this file holds all three phrases as the corpus it searches
+    // for, and `loadProcedure.test.ts` holds them as the assertion that the
+    // acknowledgement no longer contains them. A scan that flagged its own
+    // subject could only be satisfied by deleting the check. Production copy —
+    // including the renderer's mirror and its stream fake, which are not tests —
+    // is fully in scope.
+    const root = path.resolve(__dirname, '../../..');
+    const dead = ['verified from records', 'verified as supplied', 'your account only, not verified'];
+    const isComment = (line: string): boolean => /^(\*|\/\/|\/\*)/.test(line.trim());
+    const offenders: string[] = [];
+
+    const walk = (current: string): void => {
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== '__tests__') walk(full);
+        } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+          fs.readFileSync(full, 'utf8')
+            .split('\n')
+            .forEach((line, i) => {
+              if (isComment(line)) return;
+              for (const phrase of dead) {
+                if (line.includes(phrase)) {
+                  offenders.push(`${path.relative(root, full)}:${i + 1}: ${phrase}`);
+                }
+              }
+            });
+        }
+      }
+    };
+    walk(root);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('the scan is not vacuous — it walks real files, and its comment rule can say no', () => {
+    // A walk that returns [] because it looked in the wrong place is
+    // indistinguishable from a walk that returns [] because the tree is clean.
+    // So: prove it reaches the module under test, and prove the one predicate
+    // that could swallow a real emission distinguishes a comment from code.
+    const root = path.resolve(__dirname, '../../..');
+    const seen: string[] = [];
+    const walk = (current: string): void => {
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== '__tests__') walk(full);
+        } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+          seen.push(path.relative(root, full));
+        }
+      }
+    };
+    walk(root);
+
+    // The three files that carry the vocabulary, all reached by the same walk.
+    expect(seen).toContain(path.join('main', 'intelligence-host', 'procedureView.ts'));
+    expect(seen).toContain(path.join('renderer', 'components', 'DockedPanel', 'procedureModel.ts'));
+    expect(seen).toContain(path.join('renderer', 'components', 'DockedPanel', 'procedureStream.fake.ts'));
+
+    const isComment = (line: string): boolean => /^(\*|\/\/|\/\*)/.test(line.trim());
+    expect(isComment(" * it used to read as a completed step")).toBe(true);
+    expect(isComment("  // it used to read as a completed step")).toBe(true);
+    expect(isComment("  event: 'a label a surface emits',")).toBe(false);
   });
 
   it('marks the first unattested ATTESTABLE checkpoint active, skipping narrative ones', () => {

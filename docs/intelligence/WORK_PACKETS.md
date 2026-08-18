@@ -9305,6 +9305,198 @@ nothing, and closes three doors.
 
 ---
 
+### [x] WP-31 · Close the unclaimed-tool door  *(registered by the 2026-08-18 INCIDENT, rulings 1–3)* — **MERGED**
+
+**ANNOUNCED 2026-08-18 — LOCKS TAKEN.** Worktree `.worktrees/wp-31`, branch
+`wp-31`, base `poc/nexintelligence` @ `d46ec382` (the architect's WP-28 merge
+adjudication and the INCIDENT entry itself were found uncommitted in the
+primary checkout and committed VERBATIM, attributed, at `d46ec382` before this
+worktree was cut — md5 identical before and after the commit, `28b88bf0aca1b5bf0bab5bcdfd954fd7`;
+flagged for fidelity verification).
+
+Locks: **core + host** (`src/main/intelligence-host/` — `sequenceGuard.ts`,
+`procedureArming.ts`, `procedureView.ts`; `src/intelligence/law/runbookRegistry.ts`)
+and `src/main/mcp/modules/fleet/load-procedure.ts`. Confirmed free: no other
+worktree holds them (WP-28 merged at `cff8ee55`; no wp-29/30/31 branch exists).
+**Two files outside the announced set are touched and are named here rather
+than taken silently:** `src/main/chat/ChatService.ts` (one condition — the
+approval card must not ride an exclusive-scope refusal; see finding below) and
+the renderer's pinned `ATTEST_WORDS` mirrors (`procedureModel.ts`,
+`procedureStream.fake.ts`), which a copy change is not allowed to leave behind.
+The integration lock (`src/main/index.ts`, `ipc-handlers.ts`) is **not** taken.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code
+captured before any pipe): **565 suites / 7,357 passed / 12 skipped / 7,369
+total, exit 0.**
+
+---
+
+**WP-31 OUTCOME — built, pinned, and HELD AT THE GATE (branch `wp-31`,
+NOT merged).** The unclaimed-tool door is shut, the acknowledgement no longer
+reads as a progress report, and the harness can now sit the path production
+actually walks. All three rulings of the 2026-08-18 incident are implemented in
+one packet; the exclusive-scope semantics change holds for payload/behavior
+review as the ruling itself required.
+
+Jest, compiled worktree, tree held still, cache cleared, exit code captured
+before any pipe. Baseline at `d46ec382`: **565 suites / 7,357 passed / 12
+skipped / 7,369 total, exit 0**. Branch: **567 / 7,416 / 12 / 7,428, exit 0**.
+Delta **+2 suites, +63 tests, skipped unchanged** (567 / 7,420 / 12 / 7,432 —
+the last four are the inherited refusal-payload requirement, below). `npx tsc -p . --noEmit`
+clean; eslint clean across `src/intelligence`, `src/main/intelligence-host`,
+`load-procedure.ts`, `ChatService.ts`, `src/renderer/components/DockedPanel` and
+`tests/intelligence-evals`; the seam rule was PROBED (an `electron` import into
+`src/intelligence/law/runbookRegistry.ts` produced the ADR-16 error, then was
+reverted and re-linted clean). **Mutation battery: 27 distinct mutations, 32 witness runs, ALL KILLED by a
+named witness**, every run under `--no-cache` (finding 6). Two survived their
+first witness and both were real coverage gaps, closed with new tests rather
+than re-labelled — findings 3 and 4. A third "survival" was a harness fault and
+is finding 7.
+
+### What was built
+
+**Ruling 1 — exclusive tool scope.** `runbookRegistry` defaults `toolScope` by
+STRICTNESS (`strict → exclusive`, `guided → advisory`); the field becomes the
+authored way to opt OUT. `sequenceGuard` gains two rules on top of WP-20d's
+four: a WRITE the CURRENT checkpoint does not declare is refused
+(`reason: 'exclusive-scope'`), and a pending arming request closes the same door
+before any run exists (`reason: 'arming-gap'`). Both live inside
+`checkCheckpointSequence`, so both dispatch chokepoints get them with no edit to
+either locked file — and both are driven at both chokepoints in
+`sequenceGuardWiring.test.ts`.
+
+**Ruling 2 — the acknowledgement.** `ATTEST_WORDS` rewritten in capability
+tense in all three copies (seam, renderer mirror, renderer stream fake); the ack
+appends "— nothing is attested yet" to the two provable classes and ends with
+one unconditional line: *"**No checkpoint has been performed.** Do not write
+until the procedure text arrives on your next turn."* The tool DESCRIPTION
+carries the same warning, per WP-24's both-model-visible-strings precedent. A
+tree scan pins that the old wording is emitted nowhere in `src/`.
+
+**Ruling 3 — the harness.** `sitting.ts --arming-gap` does not pre-arm: the
+model must call `nexus_load_procedure` itself, so turn 1 carries the
+acknowledgement alone. **NOT RUN — it spends owner tokens.** It is ready, and
+the seeding decision and the transcript's own disclosure of it are one exported
+predicate (`shouldPreArm`) so a transcript can never describe an arming mode the
+run did not use. B-03 gains the criterion the incident is, wired to the check
+registry with a five-case can-fail suite; the spec's split moves 4/7 of 11 to
+5/7 of 12.
+
+### Findings
+
+1. **`verify_site_live` is the one legitimate flow the flip breaks, and it is on
+   the anchor's own happy path.** MEASURED, not reasoned: of 193 tool
+   definitions, 28 are absent from `TIER_OVERRIDES` and therefore Tier 2 by
+   default, and exactly ONE of those declares `readOnlyHint: true` —
+   `verify_site_live` ("observes and records; never mutates the site"). The
+   authoritative classification calls it a write, so after cp.backup attests and
+   the canary runs, the runbook's own `cp.verify-canary` — *"prove it before
+   scaling it"* — has no tool the gate will allow. **Not fixed here; it wants a
+   ruling.** The better of the two repairs is authoring `verify_site_live` into
+   the anchor's `cp.roll-fleet`/`cp.canary` `tools:` (the document should name
+   the tool it asks for; costs the audit trail nothing), rather than adding
+   `verify_site_live: 1` to `TIER_OVERRIDES` (which would silently drop it from
+   `operation-audit.log`). Both are governing-text changes and neither is in
+   this packet's scope.
+2. **A re-run of an already-attested checkpoint's tool is now refused, and so is
+   every contributed agent tool.** Both follow from the ruling read literally
+   ("not declared by the CURRENT checkpoint"), both are pinned rather than
+   discovered later. The contributed case is the fail-closed one:
+   `getToolSafety('acme/x')` has no table entry and returns Tier 2 — the same
+   answer the audit chokepoint gives that name. The dispatcher does hold
+   `registered.permissionTier`, and it was rejected as the source: a gate an
+   agent can open by declaring `permissionTier: 1` is not a gate.
+3. **The strictness conjunct in `isExclusive` is unreachable on the RUN path and
+   load-bearing on the GAP path.** Measured: dropping it left every run-path
+   test green, because the guard already returns null for a non-strict runbook
+   before `isExclusive` is called — but `armingGapRefusal` has no such early
+   return, so it is the only thing between a guided document and a narrowed tool
+   surface. Three gap-path boundary tests were added, and they kill it.
+4. **A capability-name check that only ever saw an unservable capability proves
+   nothing.** Dropping the grant lookup from the gap path survived, because the
+   fixture's ungranted capability also had no runbook. The case the check
+   actually protects is a grant the USER SWITCHED OFF in settings while the
+   document still loads — a queue is not an authority — and that is now its own
+   test, seeded through the real settings overlay.
+5. **The approval card had to be taught to read the REASON, not the
+   checkpoint.** WP-26's card fires when the guard refuses on exactly the
+   checkpoint an approval would attest. Exclusive scope names the CURRENT
+   checkpoint, which for a run standing where the incident's run stood IS
+   `cp.approval` — so without a discriminant the card would have offered a human
+   the chance to approve `wp_plugin_update` itself: consent for the
+   substitution, harvested by the mechanism built to prevent it. One condition
+   in `ChatService`, two tests, and `SequenceRefusal.reason` is now a closed
+   four-value vocabulary.
+6. **THE POISONED ts-jest CACHE MASKS MUTATIONS, not just producing phantom
+   reds.** Fifth occurrence in the protocol's family, and a new form: `M05`
+   (revert the registry default) reported SURVIVED with the cache and KILLED by
+   two witnesses with `--no-cache`. The protocol's existing entry describes the
+   cache as a source of false FAILURES; a mutation battery run under a warm
+   cache can also report a false SURVIVAL, which is the direction that costs
+   coverage silently. **Run every mutation with `--no-cache`.**
+7. **`npx jest $var` does not word-split under zsh, and a multi-path witness
+   silently becomes one literal pattern.** `M05` also reported SURVIVED a second
+   time from a harness fault: jest printed `Pattern: "a b" - 0 matches` and
+   `Tests: 0 total`, and a grep for a failure header found none — a measurement
+   of nothing, indistinguishable from a passing witness. The battery harness now
+   uses `${=witness}` and treats "No tests found" as a HARNESS FAULT rather than
+   a result. Same family as the protocol's "verify the measurement method".
+
+### The inherited requirement, landed mid-packet
+
+The designer §1 adjudication was found uncommitted in the primary checkout
+WHILE this packet was building, and it binds it: *"WP-31 inherits both
+requirements — its instructive refusal carries the machine-readable capability
+id and the deep-link target from birth."* It is implemented, not deferred.
+
+`SequenceRefusal` now carries `governDoor: { surface, section, capability,
+runbookId }` on **all four** refusal reasons. `capability` is already
+`CapabilityGrantSetting.capability` — the exact key a settings override matches
+on — so a surface goes from a refusal to the row that governs it with no lookup
+table; the door names the DOCUMENT too, because a grant naming another one is
+not a grant for this capability (`resolveCapabilityGrants.admit`).
+
+**It is a structured target, not a URL, and that is a decision worth ruling
+on.** Measured: the Settings capability matrix does not exist yet (zero
+`capabilityGrants` references anywhere in `src/renderer/`), and `nexus://` is
+already the MCP resource namespace. Authoring a URL now would pin a route
+nobody has designed to a scheme that means something else. The three fields are
+the deep link in payload form, and WP-32's barred-subset row ("reason +
+capability id + Govern door") consumes exactly them. If the architect wants a
+URL vocabulary, it should be authored once, for both.
+
+The third J-Refusal requirement — *session state identical across the
+excursion* — is a property of the door, not of the refusal, and belongs to
+whoever builds it. Nothing here can establish or violate it.
+
+### Escalations — one fires, and it is held at the gate
+
+No new event topic, payload schema version, envelope field or storage marker.
+`wpeOperationPermissions` untouched. No two packets on one file. The one thing
+that IS a semantics change — `tool_scope: exclusive` becoming the default for
+strict runbooks, which narrows the tool surface of an armed capability — is the
+ruling's own subject and is why this packet holds. Note the shape of the
+opt-out it leaves: a strict document may author `tool_scope: advisory` and get
+today's behaviour back. That is deliberate (authored, reviewed, in the document
+where `attest:` and `unrequested:` already live) and pinned by a test that no
+shipped strict runbook takes it.
+
+**Blast radius today is exactly one runbook.** The other four strict runbooks
+declare no `attest:`, so every checkpoint defaults to narrative,
+`nextGatedCheckpoint` is undefined, and exclusive scope enforces nothing for
+them — measured, and pinned. And **no shipped runbook authors `arms_on:`**, so
+the only way to arm anything remains the model explicitly calling
+`nexus_load_procedure`: a chat flow that never asks for a procedure is
+byte-identical to today. Pinned over the whole tool surface — every one of the
+165 names in `TIER_OVERRIDES` plus an unknown and a contributed name, all null
+with nothing armed and nothing pending.
+
+**ABI ON EXIT: system Node.** This session ran `npm test`, so better-sqlite3 is
+built for the shell's Node (measured here: **v25.9.0 → ABI 141**; `.nvmrc`/CI
+is 22.16.0 → 127). **`npm run rebuild` before loading Local.**
+
+---
+
 **ARCHITECT — DESIGNER §1 "MOMENTS, TESTED" ADJUDICATED; MODEL AT 1.2;
 THE CONSEQUENCE ORDER RULED (2026-08-18).** All four objections
 ratified with their fixes (Return = arrival triage, split refused; the
@@ -9510,3 +9702,112 @@ at merge, per protocol; the agent's choice to leave a possibly-partial
 write alone was correct. Then merge with receipts; WORK_PACKETS
 resolves append-only as always. Post-merge, the owner's t1/t2 ask
 replays as the demo of its own fix.
+
+
+---
+
+**WP-31 POST-GATE — the ruled addition built, and it did not land the way the
+ruling assumed. Merging.**
+
+`verify_site_live` is authored into the anchor's `cp.verify-canary` `tools:`,
+docs original first (`docs/intelligence/anchor-slice/runbooks/`), fidelity
+re-copy to `law/` verified by md5, version **1.1.0 → 1.2.0**, hash ripple
+measured. **But authoring alone did not make the checkpoint satisfiable, and
+the rule had to change to let the ruling land.**
+
+### The measurement that forced it
+
+`cp.verify-canary` is **narrative**. `nextGatedCheckpoint` skips narrative
+steps by construction — naming one would tell the actor to clear a gate that
+does not exist — so at canary-verification time the current GATED checkpoint is
+`cp.roll-fleet`, whose declared list holds `bulk_plugin_update` alone. Measured
+before authoring anything: *"AFTER cp.backup the current gated checkpoint is:
+cp.roll-fleet — it declares: [bulk_plugin_update]"*. Under the packet's
+first rule — *a write the CURRENT checkpoint does not declare is refused* —
+`verify_site_live` stayed refused with the authoring in place. The gate's
+requirement ("the flip must not merge with a checkpoint no tool can satisfy")
+and its prescription (author it, don't complicate the rule) could not both hold.
+
+### The resolution: the rule got SIMPLER, not more complex
+
+Rule 5 is now **a write the runbook declares NOWHERE**. A declared tool is
+handed to the sequencer and nothing else is asked of it. This is the packet's
+own title — *close the unclaimed-tool door* — and it honours the ruling's stated
+preference by removing a clause rather than adding one.
+
+**Ordering is not lost.** Rule 1 already refuses a claimed tool until its
+attestable predecessors are attested, and those being attested means the run has
+REACHED its checkpoint. "Declared, in sequence" and "declared by where we are
+standing" permit the same calls going forward; they differ only on calls the run
+has already passed — a second backup, a re-verification — which the narrow
+reading refused for no safety reason. That consequence, reported at the gate as
+finding 2, is now gone; the pin that recorded it is inverted and says why.
+
+`verify_site_live` is still SEQUENCED at its earliest claim: before
+`cp.approval` attests it is refused, so declaring it did not turn a live
+re-check into a way to touch the fleet before consent and a backup are on the
+record. Pinned in both directions.
+
+### The regression this opened, caught by the battery, and closed
+
+Making the GAP path unclaimed-only too would have let `bulk_plugin_update` —
+the capability's own primary tool — execute in the arming gap with no approval
+and no backup: **the incident's harm reached through a claimed tool instead of
+an unclaimed one.** The asymmetry is deliberate and now stated in the code: on
+the run path a declared tool is left to the sequencer; in the gap there IS no
+run and therefore no sequencer, so the only safe reading is the conservative
+one — the first gated checkpoint's declared tools and nothing else. Two new pins
+(`bulk_plugin_update` and `verify_site_live` both refused in the gap) and
+mutation M30.
+
+### The battery found one more thing
+
+`exclusive` carried a redundant `claimIndex < 0` conjunct: the rule was written
+in two places and only one was load-bearing, so a mutation of the second
+survived. Removed — a conjunct no test can distinguish reads as a second place
+the rule lives.
+
+### Hash ripple — verified, not assumed
+
+Measured on the built tree against the real `law/` directory:
+
+- `resolveCapabilityGrants` → **5 grants, 0 disarmed**; every pin equals the
+  hash the registry computed today (all five verified equal).
+- Anchor: `sha256:0646cfe11c1b813db994d6c95832ae2c6e97528c3748f7eb2aa44e3c736237c8`,
+  **7,463 canonical bytes** (7,002 → 7,463, +461), **v1.2.0**.
+  `registry.warnings()` **empty** — 1,753 bytes of margin to the 9,216
+  near-ceiling WARN, 2,777 to the 10,240 ceiling. `registry.errors()` empty.
+- A grant explicitly pinned to an older hash **disarms with `hash-mismatch`,
+  naming both hashes** — an old pin keeps its meaning and refuses rather than
+  being silently re-pointed at a document nobody reviewed.
+- `cp.verify-canary` keeps `attest: narrative`. The instrument does not make the
+  checkpoint provable: `verify_site_live` re-observes plugins, and nothing
+  proves "admin reachable, checkout renders". The body now says both halves, and
+  the attest comment's *"no tool checks this in this flow"* — which stopped
+  being true — is replaced rather than left standing.
+- Size pin re-measured in `shippedRunbooks.test.ts`; four version pins rippled
+  (`shippedRunbooks`, `procedureStreamWiring`, `loadProcedure`,
+  `chat-procedure-approval`), each with the reason on the line above it.
+
+### Receipts
+
+Same worktree, `npm test`, cache cleared, tree held still, exit captured BEFORE
+any pipe:
+
+| | suites | passed | skipped | total | exit |
+|---|---|---|---|---|---|
+| baseline `d46ec382` | 565 | 7,357 | 12 | 7,369 | 0 |
+| gate | 567 | 7,420 | 12 | 7,432 | 0 |
+| post-gate | 567 | 7,424 | 12 | 7,436 | 0 |
+
+**+2 suites, +67 tests over baseline, skipped unmoved at 12**, zero FAIL lines.
+`npx tsc -p . --noEmit` clean; eslint clean across `src/intelligence`,
+`src/main/intelligence-host`, `load-procedure.ts`, `ChatService.ts`,
+`src/renderer/components/DockedPanel` and `tests/intelligence-evals`, seam rule
+included and separately probed.
+
+**Mutation battery re-run in full against the FINAL rule: 26 mutations, all
+killed by a named witness, every run `--no-cache` per the amended protocol.**
+
+**ABI ON EXIT: system Node** (measured `v25.9.0 → 141`; `.nvmrc`/CI is
+22.16.0 → 127). **`npm run rebuild` before loading Local.**

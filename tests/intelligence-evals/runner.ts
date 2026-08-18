@@ -13,6 +13,7 @@ import { createEvalFixture, EvalFixture } from './fixture';
 import { criteriaOf, loadEvalSpecs } from './specLoader';
 import { checkFor } from './checks';
 import {
+  probeArmingGap,
   probeDeniedApproval,
   probeEnvelopeSchema,
   probeEpisodicRetrieval,
@@ -134,6 +135,10 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
       // why the schema and timestamp probes still run last.
       procedure: await probeProcedureRun(fixture),
       deniedApproval: await probeDeniedApproval(fixture),
+      // WP-31. Runs on its own turn, assembled with NOTHING armed — the gap has
+      // no run by definition, and a probe that armed first would answer a
+      // different question than the one the incident asks.
+      armingGap: await probeArmingGap(fixture),
       episodic: await probeEpisodicRetrieval(fixture),
       manifest: await probeManifestEvent(fixture),
       // WP-19. Runs BEFORE the schema/timestamp probes below read the ledger,

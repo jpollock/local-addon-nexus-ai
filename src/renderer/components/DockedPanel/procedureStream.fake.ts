@@ -48,9 +48,9 @@ function cp(
 
 /** What `deriveCheckpointStates` writes into an un-reached checkpoint's evidence. */
 const ATTEST_SUMMARY: Record<CheckpointState['attest'], string> = {
-  event: 'verified from records',
-  manifest: 'verified as supplied',
-  narrative: 'your account only, not verified',
+  event: 'the platform can verify this from records',
+  manifest: 'the platform can verify this from what it supplied',
+  narrative: 'on your account only — the platform cannot verify this',
 };
 
 /**

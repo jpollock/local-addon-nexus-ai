@@ -130,9 +130,11 @@ describe('the shipped law/ directory', () => {
     const rb = load().registry.byCapability('cap.bulk_plugin_update');
 
     expect(rb?.id).toBe('rb.bulk-plugin-update');
-    // 1.1.0 at WP-28: the `unrequested:` marks are an additive authoring change
+    // 1.2.0 at WP-31: cp.verify-canary gains a declared instrument
+    // (`verify_site_live`) so the checkpoint the runbook asks for is one the
+    // gate can permit. Additive, like WP-28's marks before it.
     // to a reviewed document, so the version moves and the hash with it.
-    expect(rb?.version).toBe('1.1.0');
+    expect(rb?.version).toBe('1.2.0');
     expect(rb?.strictness).toBe('strict');
     expect(rb?.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
@@ -283,8 +285,13 @@ describe('the shipped law/ directory', () => {
     // strict documents grew by 549–633 bytes each (the marks plus the comment
     // that explains what a reader is looking at). The two guided ones are
     // untouched and their numbers are the WP-20c ones, unchanged.
+    //
+    // The anchor moved again the same day (WP-31, 7,002 → 7,463): cp.verify-canary
+    // gains `tools: [verify_site_live]` and the body names the instrument and
+    // restates what the gateway still cannot see. +461 bytes, and the margin to
+    // the near-ceiling WARN is 1,753 — the ceiling pins below still hold.
     expect(bytes).toEqual({
-      'rb.bulk-plugin-update': 7002,
+      'rb.bulk-plugin-update': 7463,
       'rb.diagnose-site': 8970,
       'rb.incident-containment': 8673,
       'rb.incident-remediation': 8714,

@@ -375,13 +375,36 @@ describe('RunbookRegistry', () => {
       expect(rb.checkpoints[0].tools).toEqual([]);
     });
 
-    it('defaults tool_scope to advisory — v0 grants disclose tools, they do not filter them', () => {
+    // WP-31 · the default is now STRICTNESS-DEPENDENT. The 2026-08-18 incident
+    // was a Tier-2 write through a tool no checkpoint claimed, forbidden only in
+    // the runbook's prose — so on a strict document the mechanism ADR-17's third
+    // amendment shipped OFF is the default, and the field becomes the authored,
+    // reviewable way to opt OUT of it rather than the way to opt in.
+    it('defaults a STRICT runbook to exclusive — the unclaimed-tool door is shut by default', () => {
       write('runbooks/strict.md', STRICT);
 
-      expect(build().registry.byId('rb.test-strict')!.toolScope).toBe('advisory');
+      expect(build().registry.byId('rb.test-strict')!.toolScope).toBe('exclusive');
     });
 
-    it('round-trips the exclusive scope that ships as mechanism only', () => {
+    it('defaults a GUIDED runbook to advisory — exclusive is strict-only', () => {
+      write('runbooks/guided.md', GUIDED);
+
+      expect(build().registry.byId('rb.test-guided')!.toolScope).toBe('advisory');
+    });
+
+    it('an authored tool_scope still wins in both directions', () => {
+      write('runbooks/strict.md', STRICT.replace('strictness: strict', 'strictness: strict\ntool_scope: advisory'));
+      write('runbooks/guided.md', GUIDED.replace('strictness: guided', 'strictness: guided\ntool_scope: exclusive'));
+
+      const { registry } = build();
+
+      // The opt-out is deliberately possible, and deliberately visible: it lives
+      // in the reviewed document, not in a default nobody reads.
+      expect(registry.byId('rb.test-strict')!.toolScope).toBe('advisory');
+      expect(registry.byId('rb.test-guided')!.toolScope).toBe('exclusive');
+    });
+
+    it('round-trips the exclusive scope on a strict document', () => {
       write('runbooks/strict.md', STRICT.replace('strictness: strict', 'strictness: strict\ntool_scope: exclusive'));
 
       expect(build().registry.byId('rb.test-strict')!.toolScope).toBe('exclusive');
