@@ -1,0 +1,191 @@
+{
+  "type": "div",
+  "key": null,
+  "props": {
+    "style": {
+      "display": "flex",
+      "flexDirection": "column",
+      "height": "100%",
+      "overflow": "hidden"
+    }
+  },
+  "children": [
+    {
+      "type": "div",
+      "key": null,
+      "props": {
+        "aria-live": "polite",
+        "data-nexus-chat": true,
+        "ref": {
+          "current": null
+        },
+        "style": {
+          "flex": 1,
+          "overflowY": "auto",
+          "padding": "0"
+        }
+      },
+      "children": {
+        "type": "div",
+        "key": null,
+        "props": {
+          "style": {
+            "maxWidth": 720,
+            "margin": "0 auto",
+            "padding": "12px 14px",
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": 10
+          }
+        },
+        "children": [
+          {
+            "type": "div",
+            "key": null,
+            "props": {
+              "style": {
+                "padding": "24px 0",
+                "color": "var(--nxai-card-sub)",
+                "textAlign": "center",
+                "fontSize": 13
+              }
+            },
+            "children": [
+              {
+                "type": "div",
+                "key": null,
+                "props": {
+                  "style": {
+                    "color": "#0ECAD4",
+                    "fontSize": 18,
+                    "marginBottom": 8
+                  }
+                },
+                "children": "Nexus"
+              },
+              {
+                "type": "div",
+                "key": null,
+                "props": {},
+                "children": "Ask anything about your WordPress sites."
+              }
+            ]
+          },
+          []
+        ]
+      }
+    },
+    {
+      "type": "SiteContextStrip",
+      "key": null,
+      "props": {
+        "mode": "none",
+        "onClear": "[fn]",
+        "onPick": "[fn]",
+        "siteName": null,
+        "sites": [],
+        "viewedSiteName": null
+      },
+      "children": null
+    },
+    {
+      "type": "div",
+      "key": null,
+      "props": {
+        "style": {
+          "display": "flex",
+          "gap": 8,
+          "padding": "10px 14px",
+          "borderTop": "1px solid var(--nxai-card-border)",
+          "background": "var(--nxai-card-bg)",
+          "flexShrink": 0
+        }
+      },
+      "children": [
+        {
+          "type": "textarea",
+          "key": null,
+          "props": {
+            "aria-label": "Chat input",
+            "disabled": false,
+            "onChange": "[fn]",
+            "onKeyDown": "[fn]",
+            "placeholder": "Ask anything about your sites…",
+            "ref": {
+              "current": null
+            },
+            "rows": 1,
+            "style": {
+              "flex": 1,
+              "background": "var(--nxai-input-bg)",
+              "border": "1px solid var(--nxai-card-border)",
+              "borderRadius": 6,
+              "color": "var(--nxai-card-text)",
+              "fontSize": 13,
+              "padding": "8px 10px",
+              "resize": "none",
+              "outline": "none",
+              "fontFamily": "inherit",
+              "minHeight": 36,
+              "maxHeight": 120
+            },
+            "value": ""
+          },
+          "children": null
+        },
+        {
+          "type": "button",
+          "key": null,
+          "props": {
+            "aria-label": "Send message",
+            "disabled": true,
+            "onClick": "[fn]",
+            "style": {
+              "background": "var(--nxai-card-border)",
+              "border": "none",
+              "borderRadius": 6,
+              "color": "var(--nxai-card-sub)",
+              "cursor": "not-allowed",
+              "fontSize": 18,
+              "padding": "0 14px",
+              "fontWeight": 700,
+              "alignSelf": "flex-end",
+              "height": 36
+            }
+          },
+          "children": "↑"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "key": null,
+      "props": {
+        "style": {
+          "padding": "3px 14px 6px",
+          "color": "var(--nxai-card-sub)",
+          "fontSize": 10,
+          "display": "flex",
+          "gap": 6,
+          "flexShrink": 0
+        }
+      },
+      "children": [
+        {
+          "type": "span",
+          "key": null,
+          "props": {
+            "title": "Chat sends your site content and data to this AI provider (claude-sonnet-5). Change the provider in Settings."
+          },
+          "children": "Claude · claude-sonnet-5 · sends site data"
+        },
+        {
+          "type": "span",
+          "key": null,
+          "props": {},
+          "children": "· Confirm required for destructive actions"
+        }
+      ]
+    }
+  ]
+}

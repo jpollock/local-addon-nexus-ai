@@ -3,6 +3,13 @@ import { marked, Renderer } from 'marked';
 import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
 import { SiteContextStrip, type SiteChoice } from './SiteContextStrip';
+import { ProcedureSurfaces } from './ProcedureSurfaces';
+import {
+  applyProcedureEvent,
+  emptyProcedureState,
+  hasProcedureSurface,
+  type ProcedureStreamState,
+} from './procedureModel';
 import type { SiteContextMode, SiteContentStatus } from './siteContextModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 
@@ -83,6 +90,13 @@ interface State {
   // Mirrors chatRetentionDays setting; null means keep forever.
   retentionDays: number | null;
   expandedTools: Set<string>;
+  /**
+   * WP-27 · the procedure rail, folded from the three stream events. The panel
+   * consumes ONE stream, so procedure events arrive beside tokens and tool rows;
+   * `applyProcedureEvent` returns the same object for everything else, which is
+   * what keeps a rail from being rebuilt on every character of output.
+   */
+  procedure: ProcedureStreamState;
 }
 
 const styles = {
@@ -276,6 +290,7 @@ export class PanelChat extends React.Component<Props, State> {
       actionCount: 0,
       retentionDays: 30,
       expandedTools: new Set<string>(),
+      procedure: emptyProcedureState(),
     };
     this.handleInput = this.handleInput.bind(this);
     this.handleSend = this.handleSend.bind(this);
@@ -463,6 +478,18 @@ export class PanelChat extends React.Component<Props, State> {
         ],
       }));
       this.props.onStreamingStatusChange?.(null);
+    } else if (
+      event.type === 'procedure_armed' ||
+      event.type === 'checkpoint_changed' ||
+      event.type === 'procedure_aborted'
+    ) {
+      // The ONE swap point. WP-26's emitter puts these three shapes on this same
+      // stream; until it lands, `procedureStream.fake.ts` produces them from
+      // fixtures. Nothing below this line knows or cares which delivered them.
+      this.setState((s) => {
+        const next = applyProcedureEvent(s.procedure, event);
+        return next === s.procedure ? null : ({ procedure: next } as Pick<State, 'procedure'>);
+      });
     } else if (event.type === 'done') {
       this.setState(
         (s) => ({
@@ -784,6 +811,18 @@ export class PanelChat extends React.Component<Props, State> {
     );
   }
 
+  /** Empty until something arms — see the spread at the call site. */
+  renderProcedureSurfaces(): React.ReactNode[] {
+    if (!hasProcedureSurface(this.state.procedure)) return [];
+    return [
+      React.createElement(ProcedureSurfaces, {
+        key: 'procedure',
+        procedure: this.state.procedure.procedure,
+        abort: this.state.procedure.abort,
+      }),
+    ];
+  }
+
   render() {
     const { messages, input, streaming, offline, providerId, model } = this.state;
 
@@ -810,6 +849,11 @@ export class PanelChat extends React.Component<Props, State> {
           messages.map((m) => this.renderMessage(m)),
         ),
       ),
+      // WP-27 · the procedure band, above the site strip and below the transcript.
+      // Spread rather than a conditional child: a `null` in the children array is
+      // still an entry in the children array, and the parity pin says this tree is
+      // byte-identical to the pre-WP-27 one whenever nothing is armed.
+      ...this.renderProcedureSurfaces(),
       // Directly above the composer, and above BOTH branches below: which site the chat
       // is scoped to is true whether or not the network is. It is also the disclosure
       // that scope moved when the user navigates mid-session — no toast, no modal, the
