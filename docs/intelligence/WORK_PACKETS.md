@@ -10542,6 +10542,364 @@ registered.
 
 ---
 
+**WP-25 ANNOUNCED 2026-08-18 — LOCK TAKEN: `src/main/intelligence-host/`
+(serialized with the core; the core itself is NOT taken and stays free).**
+Worktree `.worktrees/wp-25`, branch `wp-25`, base `poc/nexintelligence` @
+`a39f5a83`.
+
+**Contention check, run before cutting the worktree, not assumed.** The
+design note's §3 says "must wait for or coordinate with WP-26"; the owner
+ratification already recorded that as STALE and named WP-32 the holder
+(lock announce `3d84e96b`). Measured here:
+
+- `git merge-base --is-ancestor 11159418 poc/nexintelligence` passes —
+  WP-32's packet commit is on the base, folded by merge `74a7144e`, and
+  the architect's merge acceptance (`a39f5a83`) records the lock RELEASED.
+- `git status --porcelain -- src/main/intelligence-host src/intelligence`
+  is EMPTY in every recent worktree — `wp-26`, `wp-28`, `wp-31`, `wp-32`,
+  `wp-33`. Nothing is holding the surface.
+- `git log --oneline -- src/main/intelligence-host` tops out at `11159418`
+  (WP-32). No later writer.
+
+**One live condition, recorded because it constrains this packet's own
+merge and because the next reader will otherwise mis-read the record.**
+At the moment of this announce the PRIMARY checkout is mid-merge:
+`.git/MERGE_HEAD` present, `docs/intelligence/WORK_PACKETS.md` in
+`both modified`, WP-33's five journey specs staged. So this lock-announce
+entry is committed on the `wp-25` BRANCH rather than directly on
+`poc/nexintelligence` as WP-32's was (`3d84e96b`) — committing on the base
+would have meant reaching into another agent's in-flight merge. The
+announce is no less binding for it; it simply lands with the packet. WP-25
+will therefore merge base-first and expect a tail conflict in this file
+(both sides append), resolved by keeping both verbatim, per WP-32's
+precedent.
+
+**Surfaces this packet will touch, declared up front:**
+
+| file | lock | why |
+|---|---|---|
+| `src/main/intelligence-host/incidentProducer.ts` (new) | held | the packet |
+| `src/main/intelligence-host/__tests__/incidentProducer.test.ts` (new) | held | its pins |
+| `src/main/intelligence-host/actionProducer.ts` | held | export the target-resolution ladder rather than duplicate it |
+| `src/main/intelligence-host/chatAssembly.ts` | held | one call at the seam that already folds the run |
+| `src/main/agent-runtime/AgentRunner.ts` | free | one wrapped call beside the existing inbox write (the run-completion chokepoint) |
+| `tests/intelligence-evals/` | free, but contended | E-01 criterion 0 + its probe; WP-33 is editing these files in its own merge RIGHT NOW, so this packet takes them LAST, after the base carries WP-33 |
+
+**Out, per the note's §3 and restated so the boundary is checkable:** no
+assembler change, no sentinel behaviour change, no new topic, no Tell-channel
+intake, no UI, no new envelope field.
+
+---
+
+### [x] WP-25 · The incident producer — DELIVERED, HELD AT THE GATE
+
+Branch `wp-25`, worktree `.worktrees/wp-25`, base `poc/nexintelligence` @
+`a39f5a83`, base re-merged at `828e12de` to take WP-33 before touching
+`tests/intelligence-evals/`. Lock announce above. **Not merged: the payload
+contract holds for ratification per the design note's §4, and this section is
+that presentation.**
+
+`episodic.incident.recorded` has been in the taxonomy since WP-11, retrieved by
+the assembler, rendered by `episodicSummary`, and carried two eval families
+through five sittings — and every incident event in every ledger was planted
+`via fixture:e01-incident`. It now has a producer.
+
+## 1 · THE PAYLOAD CONTRACT, field by field — FOR RATIFICATION
+
+Emitted on `episodic.incident.recorded`, schema `incident.recorded/1`. Both
+taps write the same shape. **Every field name below is answerable to a
+CONSUMER**: `component`, `symptom`, `from_version`, `to_version`, `correlate`
+and `resolved` are exactly the keys `episodicSummary`'s allow-list renders, and
+`fact` is what `factKeyOf` renders as the item's detail line. The ratification's
+own criterion was "matching what `episodicSummary` already serves", and §3
+forbids an assembler change, so where P2's prose and the consumer disagree the
+CONSUMER governs and the divergence is declared here rather than absorbed.
+
+| field | v0 value | renders? | divergence from P2 |
+|---|---|---|---|
+| `component` | `'site'` — both taps, always (see 1a) | yes, as the head word | none in name; the VALUE is always site-level in v0 |
+| `fact` | the finding class: `FS-02`, `ab.backup-failed` | yes, as `detail` | **NEW FIELD.** P2 lists none, and P4's dedup key cannot be computed without one (see 1b) |
+| `symptom` | sentinel: the finding TITLE verbatim. abort: the runbook's own `on:` clause verbatim | yes | none |
+| `severity` | sentinel only, the finding's own value | **no** — not in the allow-list | none; it is a machine field (see 1c) |
+| `from_version` / `to_version` | **never populated in v0** | yes when present | **the one place the ratified sentence cannot be honoured — see 1d** |
+| `correlate` | never populated in v0 | yes when present | P2 spells it `correlates_with`; the assembler reads `correlate` (see 1e) |
+| `resolved` | `false` on the incident, `true` on the amendment | yes (`UNRESOLVED` / `resolved`) | none; `false` is written EXPLICITLY so an open incident reads as open rather than as unknown |
+| `resolved_at` | ISO, amendment only | no | none |
+| `source` | `sentinel:<run-id>` or `abort:<task-id>/<abort-id>` | no | P2's own spelling, kept, including its collision with the ENVELOPE's `source` (see 1f) |
+
+**1a · `component` is `'site'` for everything v0 records, and that is a
+measurement, not a shortcut.** A sentinel per-site finding carries `id`,
+`severity`, `title`, `site` and `category` — the agent's own
+`sites[name].findings` mapping drops `evidence` — so no plugin/theme/core slug
+reaches this seam. An abort carries none either. P2's "or `site` for
+site-level" is therefore the whole of v0. Consequence worth a ruling: the
+rendered line reads `site; Webshell in wp-content/uploads; UNRESOLVED`, with
+the word "site" as the head. **Question: keep it, or omit `component` when
+site-level and let the summary open on the symptom?** Omitting is a one-line
+change and costs the dedup key nothing (the key is `component + fact`, and a
+missing component defaults to `site` on read).
+
+**1b · `fact` is a new payload field, and P4 requires one.** The ratified dedup
+key is site + component + FINDING CLASS. Nothing in P2's list carries a class:
+`source` carries the report id (which changes every scan), and `symptom` is a
+title (which can embed a path or a count and drift between scans). Deduping on
+a drifting string is how an episodic family becomes the heartbeat P4 forbids.
+`fact` reuses the payload convention the assembler ALREADY reads
+(`factKeyOf` → `payload.fact ?? payload.slug ?? payload.name`), so it renders
+as the item's detail line with no assembler change. **Ratify the field, or name
+the one it should be.**
+
+**1c · `severity` is carried but not rendered**, because `episodicSummary`'s
+allow-list does not include it. That is deliberate and disclosed rather than
+"fixed": widening the allow-list is an assembler change, which §3 puts out of
+scope. It is a machine field today — the floor is applied at the producer, and
+a later reader (Home's needs-you rows) can sort on it.
+
+**1d · `from_version` / `to_version` HAVE NO PRODUCER IN v0, and the
+ratification expects them.** The owner's sentence reads "payload contract
+matching `episodicSummary` incl. the `from_version`/`to_version` pair the
+abort-groups UI waits on". Measured, both taps:
+- a sentinel finding carries no version of anything;
+- an abort's evidence is `task.outcome.recorded`, whose payload is
+  `{tool, result, result_scope, duration_ms?, error?}`, and
+  `deriveAbortGroups` already documents this exact absence for the same
+  reason — "`from_version` / `to_version` … have no producer: neither the
+  action nor the outcome payload records a version, so a field for them would
+  be a slot a surface fills with a dash and a reader reads as 'unchanged'".
+
+So the FIELDS exist in the contract and nothing fills them. The three ways
+forward are a ruling, not an implementation detail: (i) accept the gap and let
+the abort-groups UI keep waiting; (ii) widen `task.action.executed`'s payload
+to record the version a plugin tool was called with — a payload widening at the
+gateway producer, i.e. WP-19's contract and its own gate; (iii) read the
+version off the ACTION's redacted `args` here, which is a guess dressed as an
+observation whenever the tool's argument shape changes. **The packet built
+(i) and did not attempt the others.**
+
+**1e · `correlate`, not `correlates_with`.** The assembler renders
+`payload.correlate`; a field named `correlates_with` would be written, stored,
+and read by nothing. The fixture that has stood in for this payload since WP-13
+uses `correlate` too. Neither v0 tap populates it — a sentinel finding names no
+second component, and an abort names none.
+
+**1f · `source` in the payload is not `source.system` in the envelope, and the
+report id does not exist.** `source.system` is a CONSTANT per tap
+(`sentinel:scan`, `procedure:abort`) because the health surface counts liveness
+one row per system, and a value carrying a report id would grow that table by a
+row per scan. The payload's `source` carries the specific identity P2 asks for.
+For the sentinel that is the RUN id (`r_…`): there is no report id in the
+runtime — reports are written per install under
+`agents/security-sentinel/reports/<installName>/` with no id of their own — and
+the field is OMITTED rather than invented when the run id is absent.
+
+**Envelope fields used, all pre-existing, none new:** `causation` (an amendment
+names the incident it closes; an abort incident names the failing outcome that
+caused it) and `correlation` (the task id, on abort incidents, so an incident
+joins the task thread the gateway already correlates). `source.class` is
+`work` and `trust` is `emitted` for both taps — the provenance the fixture's
+planted history has always carried.
+
+## 2 · The other four positions, as built
+
+**P1 · two taps.** (a) `AgentRunner.run()`'s completion block, beside the
+existing inbox write and in its OWN try — an inbox fault must not also cost the
+ledger record. The tap reads `result.sites` and nothing else; the sentinel is
+not touched. (b) The chat seam that already folds the cursor, reading the same
+`runEvents` slice `foldProcedureCursor` reads. (c) Tell intake: not attempted.
+
+Two scope decisions inside P1 that want a nod:
+- **Only `security-sentinel`'s runs are folded.** The chokepoint is generic, so
+  the gate is in the producer. Widening it to every agent's findings is a
+  product decision, not an implementation one.
+- **Only PER-SITE findings are folded.** `AgentResult.findings` (run-level,
+  unattributed) is skipped: ADR-22 routes episodic to a Site, and an incident
+  with no site is a record nothing can retrieve. `recordRunToInbox` has the same
+  input and labels it "Site not identified"; the ledger has no equivalent.
+
+**P2 · SEVERITY_FLOOR is `high`, and it is mine, not the note's.** The note says
+"at or above the severity threshold" without naming one. `critical` + `high`
+are what the sentinel reserves for "something is wrong on this site now";
+`medium` and below are hygiene and would make the family a heartbeat. Exported
+as a named constant so the line is visible and a test can pin that the cases
+below it really are below it. **Ratify the value.**
+
+**P3 · resolution, and one place v0 is STRICTER than the note.** An amendment
+supersedes; nothing is mutated. The abort side is P3 as written (a later
+success for the same tool on the same site closes it — a same-run retry
+satisfies that too). The sentinel side is stricter: P3 says "a LATER scan of
+the same site reports the same finding class clean", and v0 closes only when
+the site's status is `clean` **and its `notChecked` list is empty**. Reason:
+nothing maps a finding class to the check that would produce it, and the
+sentinel's own summary says `clean` means "the checks that ran found nothing,
+never this site is not compromised". Closing a filesystem finding on a Tier-1
+sweep that never read the filesystem would launder a coverage limit into an
+all-clear — the largest available fabrication in this packet. The cost is
+conservative: an incident on a site whose scans always skip something stays
+open forever, which P3 already blesses ("an open incident is a fact, not a
+nag"). **Flagged because it is a narrowing of a ratified position.**
+
+**P4 · dedup is a durable LEDGER read, NOT `changeGate.ts`.** Two gates, both
+required: the same open (site, component, class) never opens twice, and the
+same CAUSING RECORD never produces two incidents. The twin-backed change gate
+is wrong here for the reason WP-14 and WP-19 both recorded for their own
+episodic emissions — it compares against `twin_facts`, an episodic occurrence
+folds into no twin, and it would degrade to a process-lifetime cache. That
+degradation is not theoretical for this producer: the abort tap re-reads the
+same run events on EVERY armed turn, so a process cache would not survive the
+session, let alone a restart.
+
+**P5 · routing.** `entityRefsFor` — `actionProducer`'s ladder, EXPORTED rather
+than copied — resolves local sites through Local's store and remote ones
+through mirror-written aliases only. A name that resolves to nothing produces
+no event and no entity. The assembler is untouched.
+
+## 3 · Findings
+
+1. **THE THREE ABORT IDS ARE A CONSEQUENCE OF THE DOCUMENT, NOT A LIST IN THE
+   CODE.** The note names `ab.backup-failed`, `ab.canary-regression`,
+   `ab.mid-fleet-failure`; nothing in the producer does. `abortForTool` maps
+   tool → the checkpoints that declare it (`evidence.tool` OR `tools:`) → the
+   abort whose `on:` clause names one of them, and requires EXACTLY ONE
+   candidate. Over the shipped `rb.bulk-plugin-update` that yields precisely
+   those three, and a test asserts it — so an edit to the runbook's abort paths
+   fails here rather than silently disagreeing with the note. Both halves of the
+   selector are load-bearing: `cp.verify-canary` declares `verify_site_live`
+   under `tools:` with no `evidence` at all (it is narrative), so an
+   `evidence.tool`-only reading would never produce `ab.canary-regression`;
+   and `bulk_plugin_update` is declared by TWO checkpoints (`cp.canary`,
+   `cp.roll-fleet`) of which only one is named by an abort, which is what makes
+   the exactly-one rule resolve rather than refuse.
+2. **NOTHING RECORDS THAT A RUN ENTERED AN ABORT PATH — the `ab.*` ids exist
+   only in the documents.** `procedureStream.maybeEmitAbort` derives an abort
+   solely from a DENIED approval, and the `abortId` it carries is an EVENT id,
+   not an `ab.*` id. So this packet's tap is the first thing in the product that
+   classifies a halt by the runbook's own vocabulary. Two consequences the owner
+   should see: (a) a canary that fails to APPLY is recorded as
+   `ab.mid-fleet-failure`, because `cp.canary` and `cp.roll-fleet` share a tool
+   and both are narrative-or-event at the same seam — the ledger genuinely
+   cannot tell them apart; (b) `aborts:` is NOT modelled on the `Runbook` type,
+   only in the raw `frontmatter`, so this reader parses it there. If a later
+   packet models it, this is a caller.
+3. **The abort's checkpoint has nowhere structural to go, so it rides in
+   `symptom`.** The prompt asks the incident to carry the abort id, the
+   checkpoint and the affected sites. Abort id → the payload's `source`.
+   Affected sites → the ENTITY stamp, one incident per site with a failed
+   outcome. Checkpoint → inside `symptom`, because the runbook's own `on:`
+   clause names it ("cp.backup failure or unverifiable backup") and P2 has no
+   field for it. That is human-readable but not machine-readable. **If the
+   abort-groups UI needs the checkpoint structurally, that is a payload
+   widening and wants the owner's word, not mine.**
+4. **Three retired claims deleted rather than left to rot.** The episodic
+   probe's "no code in src/ emits an incident"; the runner's E-01 NOTE; and the
+   next criterion's standing "expect a fail for substrate reasons … the history
+   is not retrievable from the docked panel", which told a human judge what to
+   conclude before looking, on a premise false twice over (retrieval landed at
+   WP-16b, the producer here).
+5. **The ABI flipped mid-session, wearing the documented mask.** Every one of
+   25 new tests failed with `Cannot read properties of undefined` because
+   `initIntelligenceCore` was returning `undefined`: better-sqlite3 had been
+   rebuilt for Electron (146) by another session while this one needed 141. The
+   protocol's WP-20e paragraph describes this exactly. Worth adding: the
+   producer's own non-fatal design made it look like a LOGIC bug first — the
+   tap degraded silently and returned 0, which is correct behaviour and an
+   excellent disguise. The tell was that a bare `initIntelligenceCore` in a
+   scratch test also returned undefined.
+6. **Two mutants were TYPE-INVALID and therefore unmeasurable**, and the harness
+   said so instead of scoring them (WP-33's finding 7, reproduced): a `return
+   true` inserted above live code (unreachable), and removing the chat seam's
+   import (undefined name) — the second also in its `if (false && …)` form,
+   which leaves the import unused. Both made a suite fail to LOAD, which the
+   floor check caught as a HARNESS FAULT rather than crediting a kill. Both were
+   rewritten into valid mutants that kill.
+7. **A mutation a second guard absorbs is an unmeasured line, not a survivor.**
+   `entityRefsFor(...) ?? {}` survived the first battery — because the `anchor`
+   guard two lines down already refused an empty ref set. The mutant now defeats
+   both guards (a conjured placeholder id, the audit-A7 shape) and the test
+   asserts no incident carries an empty entity block. WP-32's canon, applied.
+
+## 4 · Receipts
+
+**Mutation battery — 16 KILLED of 16, control SURVIVED as designed.** All runs
+`--no-cache` (fifth-occurrence rule). The harness parses the `Tests:` counts
+rather than grepping for a phrase (WP-32's `0 total` substring lie) and treats
+a run below the suite's own floor as a HARNESS FAULT rather than a result.
+
+| mutation | verdict |
+|---|---|
+| M01 sentinel `observed_at` becomes the fold time | KILLED |
+| M02 the severity floor is removed | KILLED |
+| M03 an unresolvable site is stamped with a conjured entity | KILLED |
+| M04 the open-incident dedup gate is dropped | KILLED |
+| M05 a clean scan resolves without checking coverage | KILLED |
+| M06 the amendment stops naming what it closes | KILLED |
+| M07 an ambiguous abort mapping picks the first candidate | KILLED |
+| M08 abort mapping reads `evidence.tool` only | KILLED |
+| M09 checkpoint ids match as substrings | KILLED |
+| M10 the abort tap forgets which record it already folded | KILLED |
+| M11 the abort incident is stamped now instead of at the halt | KILLED |
+| M12 the sentinel tap fires for every agent | KILLED |
+| M13 `AgentRunner` stops calling the producer | KILLED |
+| M14b the chat seam keeps the import and drops the call | KILLED |
+| M15 an unreadable ledger reads as an empty history | KILLED |
+| M16 the E-01 probe's `ok` stops tracking its measurements | KILLED |
+| C01 control — a local variable is renamed | SURVIVED (as designed) |
+
+**Eval runner: 14 PASS / 0 FAIL / 38 BLOCKED / 16 OWNER-PENDING → 15 / 0 / 37 /
+16, exit 2.** Exactly one criterion moved, and it is E-01's
+`queries incident/sync history…`. It is adjudicated the WP-20e way — probe the
+facts, check the conjunction — and PASS requires all four halves: produced by
+the sentinel tap, produced by the abort tap, retrieved for the target site by
+the WIRED assembler, and rendered as a line a model can read. The report prints
+the produced-vs-planted provenance split, so the green cannot rest silently on
+synthetic data, and it states what it does NOT claim (that any actor consulted
+the history — that is the next three criteria, still judged).
+
+**Baselines, exit captured before any pipe.** Worktree `wp-25` before, at
+`a39f5a83`: **571 suites, 7495 passed, 12 skipped, 7507 total**, exit 0.
+After, with WP-33's merge folded in: **573 suites, 7646 passed, 12 skipped,
+7658 total**, exit 0. Reconciled against WP-33's merged-tree baseline
+(571 / 7623 / 2 / 7625): +2 suites and +33 tests are WP-25's
+(26 + 6 + 1), and the skipped column reads 12 here against 2 there for the
+documented embedding-model reason — the primary checkout holds both model files
+and a worktree holds one, so ten tests cross from skipped to passed at that
+boundary. 7623 + 33 − 10 = 7646, exactly. `npm run typecheck` clean;
+`npx tsc --noEmit -p tsconfig.test.json` clean; eslint clean on every touched
+file.
+
+**Files:** new `src/main/intelligence-host/incidentProducer.ts` and its two
+suites; `actionProducer.ts` exports `entityRefsFor` (no behaviour change);
+`chatAssembly.ts` one guarded call; `AgentRunner.ts` one wrapped call;
+`tests/intelligence-evals/{probes,checks,runner}.ts` + `{probes,runner}.test.ts`
+for the E-01 half. No new topic, no new envelope field, no schema version
+moved, no storage marker touched, no assembler change, no sentinel change,
+`wpeOperationPermissions` untouched. The battery harness is untracked
+(`.claude/` is gitignored, as with the previous packets).
+
+## 5 · What is OWED, and by whom
+
+**The live smoke is not done, and I did not attempt it.** The note's §5 asks for
+a real sentinel scan on a real site, folded and retrieved on the next chat turn.
+That needs Local running against a real fleet (Electron ABI), an AI provider
+key, and a sweep that reaches production WP Engine installs — an outward-facing
+run against real sites, which is the owner's to start, not an agent session's.
+What IS driven in-repo is every seam it would exercise: a real `AgentRunner.run`
+through the real chokepoint, the real chat assembly, the real ledger, the real
+assembler, and the next turn carrying the incident (`incidentProducerWiring.
+test.ts`, "a halted run records its abort, and the NEXT turn carries it").
+Steps, when the owner runs it: `npm run rebuild`; start Local; run
+security-sentinel (Run Now) on a site with a real finding; then ask the docked
+panel about that site and confirm the incident line appears in the turn.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and `npx jest` many
+times, and additionally ran `npm rebuild better-sqlite3` once mid-session to
+recover from another session's Electron rebuild. **`npm run rebuild` before
+loading Local** — the live smoke above requires it anyway.
+
+**HELD AT THE GATE.** Nothing merges until §1 is ratified or amended. The
+questions that actually need a word: the `fact` field (1b), the
+`from_version`/`to_version` gap against the ratified sentence (1d), the
+`SEVERITY_FLOOR` value (P2), the stricter sentinel resolution rule (P3), and
+whether `component: 'site'` should render as a head word (1a).
 **DESIGN ADJUDICATION — the fold; CYCLE ONE CLOSES (2026-08-18).**
 "Companion density, final" arrived (committed verbatim as
 `from-designer/from-designer-05-companion-density-final.md`) and is
@@ -10693,3 +11051,53 @@ sheets may be drawn now against the contract; the RENDER packet
 waits on WP-34 (the convention + carrier instruction + eval half),
 which sequences after WP-25's merge, alongside WP-30 — eval before
 surface, per the contract's own P4.
+
+---
+
+**WP-25 · POST-GATE — the one ruling that changed code, and one defect the
+review surfaced (2026-08-18).**
+
+Four of the five ratifications were "as built" and cost nothing. **1a was a
+behaviour change and is implemented:** a site-level incident now OMITS
+`component` rather than writing `'site'`, so `episodicSummary`'s line opens on
+the symptom. One function decides it (`componentField`), because two taps
+writing one topic must not disagree about when a field is present; absent means
+site-level and `incidentHistory` defaults it back, so the dedup key is
+untouched; a real slug is still written and still heads the line. Measured, the
+same abort incident before and after:
+
+    before   site; cp.backup failure or unverifiable backup; UNRESOLVED
+    after    cp.backup failure or unverifiable backup; UNRESOLVED
+
+**Pinned on the RENDERED LINE, not only on the payload.** The summary must
+START with the symptom and must not contain `site;` — the payload assertion
+alone would pass against a producer that wrote the field and an assembler that
+happened to ignore it. Presence is asserted with `Object.keys`, because
+`toEqual` treats an explicit `component: undefined` as equal to an absent one
+(WP-26's trap, and this is precisely its shape). **M17 was added to the battery
+for the ruling itself** — write the component unconditionally and four tests
+die. A rule nobody can break in a measurable way is a rule that comes back.
+
+**A DEFECT THE REVIEW SURFACED, worth the canon: `KEY_SEPARATOR` was a literal
+NUL character.** It worked perfectly — nothing can contain a NUL, so the dedup
+key was unambiguous — and it made the whole FILE read as binary to grep:
+`grep -n component incidentProducer.ts` printed `Binary file matches` and
+nothing else, which is how it was found (while making the 1a edit, not by any
+test). Every test, `tsc`, and eslint passed with it in place, and the byte was
+COMMITTED. The lesson is not about NULs: **an invisible character in source is
+invisible to review by construction, and the tool that would normally show you
+the line is the tool it disables.** It is now `'|'` — which cannot appear in a
+component slug or a finding class either, and can be seen.
+
+**Post-ruling receipts.** Battery re-run in full against the changed code, all
+`--no-cache`: **17 KILLED of 17** (M17 new), control SURVIVED as designed. Eval
+runner unchanged at **15 PASS / 0 FAIL / 37 BLOCKED / 16 OWNER-PENDING**, exit
+2, with the rendered line in E-01's evidence now opening on the symptom. Full
+suite **573 suites, 7646 passed, 12 skipped, 7658 total**, exit 0 captured
+before any pipe; `npm run typecheck`, `npx tsc --noEmit -p tsconfig.test.json`
+and eslint all clean.
+
+**Registered by the gate, not built here:** option (ii) on the version pair (a
+`task.action.executed` payload widening at WP-19's contract family, its own
+gate), and widening the sentinel tap beyond `security-sentinel` as a product
+ruling. When either lands, this producer picks it up with no contract change.

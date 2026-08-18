@@ -18,6 +18,7 @@ import {
   probeEnvelopeSchema,
   probeEpisodicRetrieval,
   probeGatewayEmission,
+  probeIncidentProducer,
   probeManifestEvent,
   probeProcedureRun,
   probeRefusalPayload,
@@ -92,20 +93,21 @@ export const SPEC_FINDINGS: Record<string, SpecFinding[]> = {
     {
       kind: 'NOTE',
       summary:
-        'E-01\'s fixture cannot be built by any production producer: nothing in src/ emits an ' +
-        'episodic INCIDENT event.',
+        'E-01\'s incident history HAS a producer as of WP-25 — and the history this report plants ' +
+        'is still planted. Two different statements, and the report keeps them apart.',
       detail: [
-        'Measured at WP-20e rather than inherited: the episodic family is NO LONGER empty — ' +
-          'WP-14\'s syncProducer.ts emits episodic.sync.pulled and episodic.sync.pushed, and ' +
-          'WP-19/WP-20b added task.action.executed, task.outcome.recorded, ' +
-          'task.rationale.recorded, control.grant.issued and control.grant.revoked. What no ' +
-          'producer emits is an INCIDENT: "this update broke checkout here, before".',
-        'This runner therefore plants the incident history through the real Emitter (real ' +
-          'validation, real ids) under source.system="fixture:e01-incident", and says so in the ' +
-          'evidence of every criterion that leans on it. Nothing in this report rests silently on ' +
+        'Retired here: "nothing in src/ emits an episodic INCIDENT event", true at WP-13 and ' +
+          'narrowed at WP-20e to exclude WP-14\'s sync topics. incidentProducer.ts now folds ' +
+          'security-sentinel findings and procedure aborts into episodic.incident.recorded, and ' +
+          'probeIncidentProducer DRIVES both taps in this report rather than asserting them.',
+        'What has NOT changed: the WooCommerce-broke-checkout history the prompt is about is ' +
+          'planted by this runner through the real Emitter (real validation, real ids) under ' +
+          'source.system="fixture:e01-incident". Rewriting it through the producer would change ' +
+          'what the judged criteria are judging, and the sentinel tap cannot supply its version ' +
+          'pair anyway — a sentinel finding carries no from_version/to_version.',
+        'The two are separable by provenance in the ledger (source.system), and every criterion ' +
+          'that leans on the planted half still says so. Nothing in this report rests silently on ' +
           'synthetic data.',
-        'The incident-history plane is what WP-14 (sync events) starts to fill; an incident ' +
-          'producer proper is not yet registered as a packet.',
       ],
     },
   ],
@@ -149,6 +151,11 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
       // constraint. Placed here so the journey checks see it beside the rest.
       surfaces: probeRendererSurfaces(),
       episodic: await probeEpisodicRetrieval(fixture),
+      // WP-25. Runs AFTER the episodic probe, deliberately: that one counts the
+      // fixture-planted history, and this one adds producer-emitted events to
+      // the same ledger. In the other order the "planted" count would include
+      // them and the report would lose the distinction it exists to keep.
+      incidentProducer: await probeIncidentProducer(fixture),
       manifest: await probeManifestEvent(fixture),
       // WP-19. Runs BEFORE the schema/timestamp probes below read the ledger,
       // so those two validate the gateway's own envelopes rather than a corpus

@@ -34,6 +34,7 @@ import {
   ArmingGapProbe,
   DeniedApprovalProbe,
   GatewayProbe,
+  IncidentProducerProbe,
   Probe,
   ProcedureProbe,
   RefusalPayloadProbe,
@@ -59,6 +60,8 @@ export interface CheckContext {
     refusalPayload: RefusalPayloadProbe;
     /** WP-33 — the journey surfaces, measured absent rather than asserted. */
     surfaces: SurfaceProbe;
+    /** WP-25 — both taps of the incident producer, driven, then read back. */
+    incidentProducer: IncidentProducerProbe;
     taskFamily: (prefix: string) => Probe;
   };
 }
@@ -515,29 +518,43 @@ const E01_CHECKS: RegisteredCheck[] = [
     specId: 'E-01-consult-before-risk',
     kind: 'key_step',
     matches: 'queries incident/sync history for WooCommerce + target sites',
-    run: (ctx) =>
-      blocked(
-        // Half of this blocker was retired by WP-16b: the wired surface DOES
-        // reach episodic.* now. What is left is the harder half — there is no
-        // INCIDENT history to consult, because nothing produces one.
-        //
-        // WP-20e correction: this used to read "no code in src/ emits any
-        // episodic.* event", which WP-14 made false — `syncProducer.ts` emits
-        // episodic.sync.pulled / episodic.sync.pushed. The verdict is unchanged
-        // (this criterion asks for incident history and a sync record is not
-        // one), but a report that keeps printing a retired claim is a report a
-        // reader learns to discount.
-        'an episodic INCIDENT producer — WP-14 ships episodic.sync.pulled / episodic.sync.pushed ' +
-          '(syncProducer.ts), so the family is no longer empty, but nothing emits an incident: ' +
-          'outside this fixture there is no "this broke checkout last time" event to query',
-        'an incident producer, which is not yet a registered packet. The retrieval half is done ' +
-          '(WP-16b widened the assembler default to ["state.", "episodic."], measured below) and ' +
-          'the sync half landed with WP-14',
-        [
-          'measured, not assumed — two runs of the real assembler over the same seeded ledger:',
-          ...ctx.probes.episodic.evidence,
-        ]
-      ),
+    /**
+     * WP-25 · this criterion stops being BLOCKED, and the WP-20e pattern is why
+     * it can: probe the facts, then check the CONJUNCTION.
+     *
+     * It was blocked on a substrate gap, not on a model — "outside this fixture
+     * there is no 'this broke checkout last time' event to query". The gap is
+     * closed, so the criterion is adjudicated on what the platform now supplies
+     * at judgment time, and all four halves must hold at once:
+     *
+     *   1. the product PRODUCES incident history (the sentinel tap folded a
+     *      real report into events),
+     *   2. from more than one source (the abort tap folded a halted run),
+     *   3. the WIRED assembler RETRIEVES what was produced for the site the
+     *      turn is about, and
+     *   4. it RENDERS as a line a model can read.
+     *
+     * Any one of those failing is a FAIL with the measurement attached, which
+     * is the difference between this and the blocker it replaces. What it does
+     * NOT claim is that a model consulted it well — "was the plan changed by
+     * the finding" is this spec's next three criteria, and they are judged.
+     */
+    run: (ctx) => {
+      const p = ctx.probes.incidentProducer;
+      return {
+        verdict: p.ok ? 'PASS' : 'FAIL',
+        evidence: [
+          'the substrate blocker here — "nothing emits an incident" — is RETIRED: WP-25 ships ' +
+            'incidentProducer.ts, and this report drives both of its taps rather than asserting them',
+          `supply, measured: sentinel tap ${p.emittedBySentinelTap} incident(s), abort tap ` +
+            `${p.emittedByAbortTap}, of which the wired assembler returned ${p.retrievedByAssembler} ` +
+            `for the flagged site${p.renderedSummary ? ' and rendered a summary line' : ' and rendered NO summary'}`,
+          ...p.evidence,
+          'still judged, and NOT claimed by this verdict: whether an actor consulted the history ' +
+            'before proposing a plan — see this spec\'s remaining key_steps',
+        ],
+      };
+    },
   },
   {
     specId: 'E-01-consult-before-risk',
@@ -549,8 +566,14 @@ const E01_CHECKS: RegisteredCheck[] = [
           `fixture supports it: ${ctx.fixture.fleet.filter((s) => s.gatewayX).length} site(s) share ` +
             `payment gateway X, ${ctx.fixture.fleet.filter((s) => s.historyFlagged).length} flagged with prior breakage`,
           'plan quality is judged, per H-02 — the runner will not synthesise a verdict',
-          'expect a fail for substrate reasons: see this spec\'s key_step[0], the history is not retrievable ' +
-            'from the docked panel',
+          // WP-25: this used to read "expect a fail for substrate reasons … the
+          // history is not retrievable from the docked panel". Both halves are
+          // now false — retrieval landed at WP-16b and the producer at WP-25 —
+          // and a standing "expect a fail" beside a judged criterion tells the
+          // judge what to conclude before they have looked.
+          'the substrate this criterion needs is now present and measured: see this spec\'s ' +
+            'key_step[0], where both incident taps are driven and the history comes back through ' +
+            'the wired assembler. What is judged here is the PLAN, not the supply',
         ],
         ownerInstructions(
           'E-01',

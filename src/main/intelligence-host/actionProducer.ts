@@ -343,8 +343,13 @@ function resolveTargets(
  * targets are RESOLVED through aliases the mirror wrote and never derived: a
  * derived id for an install would mint a second entity beside the real one,
  * which is audit A7's defect and the exact thing WP-14 fixed for lineage.
+ *
+ * EXPORTED at WP-25, unchanged: the incident producer resolves the same kind of
+ * target (a site the sentinel names) and a second copy of this ladder is how
+ * two producers start disagreeing about which entity a site is. Consumers must
+ * treat `undefined` as "do not record", never as "derive one".
  */
-function entityRefsFor(
+export function entityRefsFor(
   core: IntelligenceCore,
   value: string,
   services: NexusServices | undefined
