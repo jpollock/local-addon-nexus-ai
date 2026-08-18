@@ -134,8 +134,15 @@ const INCIDENT_READ_LIMIT = 500;
  *     reads rather than inventing a key.
  */
 export interface IncidentPayload extends Record<string, unknown> {
-  /** Plugin/theme/core slug, or `site` for a site-level incident. */
-  component: string;
+  /**
+   * Plugin/theme/core slug. OMITTED for a site-level incident (gate ruling 1a):
+   * `episodicSummary` uses it as the summary's HEAD, and a head word must carry
+   * information — `site` there is a schema artifact leaking into the model's
+   * prose. Absent means site-level, and every reader here defaults it back to
+   * `SITE_LEVEL` so the dedup key is unchanged. When a real slug exists it is
+   * written, and it heads the line.
+   */
+  component?: string;
   /** The finding class — stable across scans, and the dedup key's third part. */
   fact: string;
   /** One sentence: the sentinel finding's title, or the runbook's own abort condition. */
@@ -244,7 +251,13 @@ export function recordSentinelIncidents(
           actor: SENTINEL_ACTOR,
           system: SENTINEL_SYSTEM,
           payload: {
-            component: SITE_LEVEL,
+            // `component` OMITTED at site level (gate ruling 1a). A head word
+            // must carry information, and `site` as a head is a schema artifact
+            // leaking into the model's prose — the summary opens on the symptom
+            // instead. Omission is the only in-scope lever, since the assembler
+            // is out of bounds; the dedup key defaults the absent value back to
+            // `site` on read, so nothing downstream has to know.
+            ...componentField(SITE_LEVEL),
             fact,
             ...(typeof finding.title === 'string' && finding.title ? { symptom: finding.title } : {}),
             severity: finding.severity as Severity,
@@ -440,7 +453,7 @@ export function recordAbortIncidents(args: AbortObservation): number {
         if (history.causes.has(event.id)) continue;
         if (history.open.has(key)) continue;
         const payload: IncidentPayload = {
-          component: SITE_LEVEL,
+          ...componentField(SITE_LEVEL),
           fact: abort.id,
           symptom: abort.on,
           resolved: false,
@@ -500,7 +513,29 @@ export function recordAbortIncidents(args: AbortObservation): number {
 /** A site-level incident, where no component is named. P2's own wording. */
 const SITE_LEVEL = 'site';
 
-const KEY_SEPARATOR = ' ';
+/**
+ * The `component` field, or nothing at all when the incident is site-level.
+ *
+ * ONE place decides this, because two producers writing the same topic must not
+ * disagree about when the field is present — and because the alternative
+ * (`component: 'site'`) is what the gate ruled out.
+ */
+function componentField(component: string): { component?: string } {
+  return component === SITE_LEVEL ? {} : { component };
+}
+
+/**
+ * The dedup key's separator.
+ *
+ * This was a literal NUL character until the gate review — which worked
+ * (nothing may contain it) and made the whole FILE read as binary to grep, so
+ * `grep -n component incidentProducer.ts` printed "Binary file matches" and
+ * nothing else. An invisible control character in source is unreadable,
+ * unsearchable and changes tooling behaviour for every later reader. A pipe
+ * cannot appear in a component slug or a finding class either, and it can be
+ * seen.
+ */
+const KEY_SEPARATOR = '|';
 
 function incidentKey(component: string, fact: string): string {
   return `${component}${KEY_SEPARATOR}${fact}`;
@@ -564,7 +599,7 @@ function incidentHistory(core: IntelligenceCore, entityId: string): IncidentHist
 /** The fields an amendment restates, so the closing event still says WHAT closed. */
 function openPayloadOf(payload: IncidentPayload): IncidentPayload {
   return {
-    component: payload.component,
+    ...componentField(payload.component ?? SITE_LEVEL),
     fact: payload.fact,
     ...(payload.symptom ? { symptom: payload.symptom } : {}),
     ...(payload.from_version ? { from_version: payload.from_version } : {}),

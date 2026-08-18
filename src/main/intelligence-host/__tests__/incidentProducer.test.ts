@@ -147,14 +147,18 @@ describe('the sentinel tap', () => {
     // ADR-22: episodic is Site-scoped across environments.
     expect(event.entity.site).toBe(siteEntityId(core.entities, SITE_A));
     expect(event.entity.environment).toBe(environmentEntityId(core.entities, SITE_A));
+    // `component` is ABSENT, not 'site' (gate ruling 1a). toEqual would treat an
+    // explicit `component: undefined` as equal to an absent one, so presence
+    // itself is asserted separately — WP-26's trap, and this is exactly the
+    // shape it catches.
     expect(event.payload).toEqual({
-      component: 'site',
       fact: 'FS-02',
       symptom: 'Webshell in wp-content/uploads',
       severity: 'critical',
       resolved: false,
       source: 'sentinel:r_scan_1',
     });
+    expect(Object.keys(event.payload)).not.toContain('component');
   });
 
   test('observed_at is the scan time, never the fold time', () => {
@@ -285,13 +289,13 @@ describe('the sentinel tap', () => {
     expect(original.payload.resolved).toBe(false);
     const amendment = events.find((e) => e.id !== openId)!;
     expect(amendment.payload).toEqual({
-      component: 'site',
       fact: 'FS-02',
       symptom: 'Webshell',
       resolved: true,
       resolved_at: LATER_SCAN_AT,
       source: 'sentinel:r_scan_2',
     });
+    expect(Object.keys(amendment.payload)).not.toContain('component');
     expect(amendment.causation).toBe(openId);
     expect(amendment.observed_at).toBe(LATER_SCAN_AT);
   });
@@ -428,6 +432,12 @@ describe('the sentinel tap', () => {
     expect(item!.summary).toContain('Webshell in wp-content/uploads');
     expect(item!.summary).toContain('UNRESOLVED');
     expect(item!.detail).toBe('FS-02');
+    // Gate ruling 1a, pinned on the RENDERED LINE rather than on the payload:
+    // the summary OPENS on the symptom. A producer that wrote `component:
+    // 'site'` would put the schema's own word in front of the model, and the
+    // only place that is visible is here.
+    expect(item!.summary!.startsWith('Webshell in wp-content/uploads')).toBe(true);
+    expect(item!.summary).not.toContain('site;');
   });
 });
 
@@ -550,7 +560,6 @@ describe('the abort tap', () => {
     expect(event.causation).toBe(outcomeId);
     expect(event.correlation).toBe(TASK_ID);
     expect(event.payload).toEqual({
-      component: 'site',
       fact: 'ab.backup-failed',
       // The runbook's own `on:` clause, VERBATIM — the condition that halted
       // the run, which is also where the checkpoint id is carried. `do:` is the
