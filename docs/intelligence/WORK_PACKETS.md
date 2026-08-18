@@ -8664,3 +8664,104 @@ first time. Post-merge state on the base: **565 suites / 7,341 passed / 12
 skipped / 7,353 total, exit 0** measured in the worktree; the base before
 the merge measured **561 / 7,283 / 2 / 7,285, exit 0** in the primary
 checkout. **ABI: SYSTEM NODE** — `npm run rebuild` before loading Local.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-26 MERGE ACCEPTED; UX PHASE 1 COMPLETE
+(2026-08-18).** Merge `fe9e36d8`. Fidelity of `48df0b7c` verified — both
+md5s match the architect's originals exactly. And the flag deserves its
+own paragraph: the gate response said the adjudication was "on the base"
+when it was on DISK in the primary checkout, uncommitted — the agent
+checked `git show` rather than trusting the sentence, found zero
+matches, and committed verbatim before merging. The architect's phrasing
+is corrected going forward ("on disk in the primary checkout" until a
+commit exists), and the agent's move — verify the claim against the
+ref, not the prose — is the project's own doctrine applied to its
+architect. Correctly.
+
+**Ratification 2's implementation exceeded its instruction, in the
+right direction:** `unverifiablePrecedent` DERIVES the nearest narrative
+checkpoint and its reason from the runbook's own body heading — the
+required line is built from the document, not authored beside it, which
+is stronger than what the gate demanded. Dropping "verify" entirely per
+v1.1 (with a /verif/i absence test over the rendered card) is the
+vocabulary applied with more rigor than the architect's own suggested
+wording, second time this week the vocabulary outranked the prompt and
+the second time it was right. The nearest-not-first mutation finding —
+survivable until a two-narrative fixture existed — joins the witness-
+blindness family (third member: a witness cannot kill a difference no
+fixture exhibits; build the fixture that exhibits it).
+
+**The delta arithmetic (68 − 10 = 58) read the skipped-split correctly
+without being reminded** — the protocol line has fully amortized.
+
+**Left-on-table items, dispositioned:** (1) the doubled runbook
+reference on the card — cosmetic, deliberately untouched after
+ratification, routed to the DESIGNER's next cycle (their eye, their
+call; the card is now real product surface and exactly what the loop
+exists to refine). (2) Two type paths to one source (WP-27 imports
+`procedureView` type-only; WP-26 re-exports through `common/chat-types`)
+— registered as a micro with the ruling direction stated: the
+renderer-facing seam should be `common/chat-types` (a common module is
+the right home for renderer↔main shapes), with the earlier-registered
+renderer-safe-module extraction as the fuller fix that would retire
+both the mirror and the dual path in one move.
+
+**PHASE 1 OF THE UX PLAN IS COMPLETE.** Emitter, approval card,
+`canary_policy` producer, and the procedure surfaces are all merged and
+live-testable: arming `cap.bulk_plugin_update` in the Docked Panel now
+renders the declared-procedure block, folds checkpoints as the run
+advances, cards the approval with the derived honesty line, and — if a
+run aborts — shows the four groups. The next B-03 sitting exercises the
+real card. Owner smoke suggested: `npm run rebuild`, relaunch, ask the
+panel to update plugins on a fleet, and watch the surfaces the
+prototype promised render from the ledger. Phase 2 waits on WP-25
+(design note under owner review).
+
+---
+
+**THE PHASE-1 UX SMOKE — PASSED WITH TWO FINDINGS AND ONE STRATEGIC
+CORRECTION (2026-08-18, owner at the wheel).** The procedure surfaces
+rendered live in the Docked Panel: the declared block with honest
+attestation marks ("verified as supplied" / "your account only, not
+verified" / "verified from records"), the armed_by line ("Nexus AI asked
+for this runbook by name"), the derived denominator. And the substance
+held under real pressure: asked to "update plugins across t1 and t2"
+(both halted), the model skipped them per the runbook; given an EXPLICIT
+"start and do the updates," it REFUSED — quoting the runbook's hard rule,
+reporting an honest empty dry-run ("0 sites eligible… there's nothing to
+approve, back up, canary, or roll out — the plan is empty"), and
+offering the legitimate alternatives. B-03's hardest must_not (never
+start the halted site) held against direct user pressure in production,
+on the first day the surfaces existed.
+
+**Finding 1 — the uniform badge (registered as WP-28):** every
+checkpoint renders "runbook added this," including cp.approval and
+cp.backup. The badge's ruled meaning (§5b) is "a step the user didn't
+ask for" — the designer's set is history-check, dry-run, canary,
+ordering, NOT approval/backup/roll/report. A uniform badge is the
+uniform-rail defect: if everything is badged, nothing is. The honest
+derivation cannot be inferred from structure (canary is badged despite
+using the primary tool), so the fix is AUTHORED IN THE REVIEWED
+DOCUMENT: an optional per-checkpoint frontmatter field, authored on the
+shipped runbooks per the ruled set, derived by `checkpointBadge` from
+the document — authored-in-law, derived-in-render. That is an ADR-17
+additive field → gate hold for ratification, pre-declared. **Finding 2 —
+the doubled runbook reference on the card** (from WP-26's own report)
+rides the same packet as the cosmetic half, with the styled block kept
+and the duplicate dropped.
+
+**The strategic correction, owner-called:** "we're suffering from trying
+to do the UX changes within the old UX" — correct, and the boundary is
+sharper than the four-phase plan stated. Phase 4's product-buy-in gate
+applies to LOCAL'S SHELL (rail, Sites matrix, main window). The DOCKED
+PANEL'S INTERNAL IA IS THE ADDON'S OWN — nothing gates rebuilding the
+panel to the prototype's session idiom now. **Phase 1.5 is hereby
+inserted: the panel becomes a session** — a procedure run gets a proper
+run view instead of cards in transcript flow. The designer's RB-C
+("docked run panel"), set aside when RB-A2 won the full-shell
+comparison, is the natural starting shape for exactly this container
+and gets revisited against the now-shipped seam. Designer brief
+delivered with this entry (`for-designer-phase-1.5-brief.md`); the live
+halted-sites transcript is part of the material — real product
+conversation, not fixture.

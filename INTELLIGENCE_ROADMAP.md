@@ -153,10 +153,12 @@ for law docs, `arms_on:` authoring on the shipped set.
 
 "The UX per design" is four builds with four gates, in order:
 
-1. **Now — procedure surfaces in the Docked Panel** (WP-26 wiring + WP-27
-   render): stream emission, the approval card as `canary_policy`'s
-   producer, declared-procedure block, RB-A2 collapsing checklist, abort
-   groups. Substrate complete; the anchor slice's visible half (ADR-19).
+1. [x] **Procedure surfaces in the Docked Panel — DONE 2026-08-18**
+   (WP-26 `fe9e36d8` + WP-27 `0d14db03`): stream emission, the approval
+   card as `canary_policy`'s producer (with the derived
+   platform-can't-verify line), declared-procedure block, RB-A2
+   collapsing checklist, abort groups. **Phase 1 complete** — the
+   anchor slice's visible half is in the product.
 2. **Next — audit view + Home needs-you rows**: after WP-25 (incident
    producer) and a session-state query micro. Includes the corroboration
    render (the sitting-economics surface).
