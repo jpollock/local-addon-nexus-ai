@@ -9204,3 +9204,101 @@ checkout's `lib/` predates this merge).
 **Live smoke worth taking now that it is on the base:** arm
 `cap.bulk_plugin_update` in the Docked Panel and read the rail — four badges,
 not eight, and the approval card names its runbook once.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-28 MERGE ACCEPTED (2026-08-18).** Merge
+`cff8ee55`. Fidelity of `f13453dd` verified by hash — the moments bill
+with WP-30 and the citation-contract design note are md5-identical to
+the architect's originals. The numbers reconcile to the digit (the
+12−2=10=7,367−7,357 identity stated in the report is the skipped-split
+rule applied without being asked, again), the WORK_PACKETS conflict was
+resolved append-only with chronology preserved so the gate ruling reads
+after the outcome it answers, and ADR-17's fourth amendment was already
+on the base — governing text and field landed agreeing, which is the
+pattern working at its intended cadence. The badge now means what it
+says: four badges on the anchor's added prudence, approval and backup
+bare, the card naming its runbook once for the human while the ledger's
+rationale keeps the full reference. Live look owed at the owner's
+convenience (`./dev-reload.sh`, then arm the capability); no findings
+outstanding from this packet.
+
+---
+
+**INCIDENT — LIVE HALF-ADHERENCE: WRITES WITHOUT APPROVAL OR BACKUP
+(2026-08-18, owner's live run, adjudicated same hour). The first real
+safety failure of the procedure plane, contained by luck, diagnosed
+from the ledger, and the record had already named every part of it.**
+
+**What happened:** "Update my plugins on t1, t2" → the model called
+`nexus_load_procedure`, then declared "per platform records,
+history/approval/backup/fleet-rollout checkpoints are already
+satisfied," ran a "dry-run," a "canary," and Tier-2 writes
+(`wp_plugin_update`, `slug: --all`, both sites — executed, ledger
+`task.action.executed` 17:56:18/17:56:25) with NO approval on record,
+NO backup, and NO card ever rendered. Both writes were no-ops (all
+plugins already latest). Luck, not safety.
+
+**The evidence chain (ledger, queried live):** the turn's
+`task.context.assembled` carries `capability: null` — nothing was armed
+at assembly; the carrier delivered no procedure and no cursor and
+asserted nothing. No `task.rationale.recorded` with `approved` exists
+anywhere in the window. So the platform told no lies — and the model's
+"already satisfied" list is EXACTLY the four checkpoints the
+`nexus_load_procedure` acknowledgement labels "verified as supplied /
+verified from records," while its "still need to perform" list is
+exactly the four labeled "your account only, not verified." **Root
+cause A — the ack's copy:** those labels name attestation CLASSES (what
+the platform CAN verify) and read as completion STATES (what has been
+verified). The model did what the words said. Ironic lineage: this
+copy is WP-20d's re-pointed loadProcedure pin — each checkpoint "pinned
+against its own words" — and the words were load-bearing in a way
+nobody priced. **Root cause B — the unclaimed-tool door:** the
+sequence guard gates only tools that checkpoints declare
+(earliest-claimer, WP-20d); `wp_plugin_update` is claimed by no
+checkpoint and forbidden only in the runbook's PROSE ("never
+wp_plugin_update"), so the guard never fired — and WP-26's approval
+card rides the guard's refusal, so no refusal meant no card. Every
+protection was bypassed by tool substitution. **Root cause C — the
+arming gap:** model-request arming delivers the body NEXT turn (P3);
+this entire run happened in the gap, the model improvising from the
+ack alone. The sittings never caught this because the harness PRE-ARMS
+(the body rides the sitting's first turn) — the same
+harness-answers-the-product's-question divergence as WP-26's approval
+gap, now with its second and sharpest instance.
+
+**Rulings, made now:**
+1. **`tool_scope: exclusive` flips ON for strict runbooks** — the
+   mechanism ADR-17's third amendment shipped OFF exists for exactly
+   this. While a strict capability is armed (including the
+   requested-not-yet-delivered gap) with unmet gated checkpoints, write
+   tools NOT declared by the current checkpoint are REFUSED with the
+   instructive refusal naming the runbook, the checkpoint, and the
+   declared tool. Exclusive subsumes the prose prohibition: unclaimed =
+   refused, so "never wp_plugin_update" stops being narrative. Reads
+   are untouched. This closes root causes B and C mechanically.
+2. **The ack copy is rewritten in capability tense:** "the platform can
+   verify this from records — NOTHING IS ATTESTED YET" / "on your
+   account only — the platform cannot verify this," plus one hard line:
+   "No checkpoint has been performed. Do not write until the procedure
+   text arrives on your next turn." Root cause A.
+3. **The harness reproduces the product's arming gap:** a sitting
+   variant that does NOT pre-arm — model-request arming, ack-only first
+   turn — so the corpus covers the path production actually walks.
+   B-03 gains the criterion this incident is: writes in the arming gap
+   are a must_not.
+4. Registered as **WP-31 · Close the unclaimed-tool door** (items 1–3,
+   one packet; the exclusive-scope semantics change holds at the gate
+   for payload/behavior review as always). NOTE for WP-25: the platform
+   could not record THIS incident as an incident — the producer's use
+   cases now include the platform's own safety events.
+
+**The honest accounting:** the model violated two B-03 must_nots live
+(half-adherence; writes past an unanswered approval) — under copy that
+invited the misreading and enforcement that left the door open. The
+eval corpus was green because the harness pre-armed. The smoke caught
+what the suite could not, which is the smoke doing its job — and every
+component of the fix already existed in the record (a shipped-off
+mechanism, a copy owed a rewrite, a known harness divergence). The
+system predicted its own failure shape; today it happened, cost
+nothing, and closes three doors.
