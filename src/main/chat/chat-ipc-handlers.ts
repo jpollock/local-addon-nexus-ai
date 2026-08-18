@@ -67,8 +67,17 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_TOOL_APPROVE,
-    (_event: any, sessionId: string, toolCallId: string, approved: boolean) => {
-      chatService.resolveApproval(sessionId, toolCallId, approved);
+    (
+      _event: any,
+      sessionId: string,
+      toolCallId: string,
+      approved: boolean,
+      // WP-26 · the canary policy the approval card offered, when it offered
+      // one. Validated at the producer, not here: a value invented anywhere on
+      // this path must not become a recorded human decision.
+      canaryPolicy?: string,
+    ) => {
+      chatService.resolveApproval(sessionId, toolCallId, approved, canaryPolicy as never);
       return { success: true };
     },
   );

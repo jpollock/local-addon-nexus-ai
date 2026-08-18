@@ -50,6 +50,7 @@ import type { NexusServices } from '../mcp/types';
 import type { IntelligenceCore } from './bootstrap';
 import { getIntelligenceCore } from './coreRegistry';
 import { environmentEntityId, siteEntityId } from './provisionalEntity';
+import { CANARY_POLICIES, CanaryPolicy } from './procedureView';
 
 /** Topics — architecture doc §4.2, three-segment spelling (WP-11 respell). */
 export const ACTION_EXECUTED_TOPIC = 'task.action.executed';
@@ -114,6 +115,17 @@ export interface ApprovalRationaleRecord {
   decision: 'approved' | 'denied';
   taskId?: string;
   services?: NexusServices;
+  /**
+   * WP-26 · the canary policy the human chose ON this approval.
+   *
+   * **Absence is meaningful and must stay meaningful.** `deriveCanaryPolicy`
+   * reports `declared: false` when no approval carried one, and the surface
+   * renders the default AS a default; a gateway-authored value would turn that
+   * flag into a lie and put a decision in the user's mouth. So this is written
+   * only when the card actually offered the choice and the human made it —
+   * never defaulted here, never inferred.
+   */
+  canaryPolicy?: CanaryPolicy;
 }
 
 /**
@@ -221,6 +233,10 @@ export function recordGatedAction(record: GatedActionRecord): string | undefined
  *
  * Returns the event id, so the action that follows can chain its causation.
  */
+function isCanaryPolicy(value: unknown): value is CanaryPolicy {
+  return typeof value === 'string' && (CANARY_POLICIES as readonly string[]).includes(value);
+}
+
 export function recordApprovalRationale(record: ApprovalRationaleRecord): string | undefined {
   try {
     const core = getIntelligenceCore();
@@ -247,6 +263,12 @@ export function recordApprovalRationale(record: ApprovalRationaleRecord): string
         prompt: record.cardText,
         args: redactParams(record.args),
         source: 'approval-card',
+        // Validated against the vocabulary HERE, at the producer, so no call
+        // site can widen the field by passing something else through. A denial
+        // carries none: there is no canary to have a policy about.
+        ...(record.decision === 'approved' && isCanaryPolicy(record.canaryPolicy)
+          ? { canary_policy: record.canaryPolicy }
+          : {}),
       },
     });
 

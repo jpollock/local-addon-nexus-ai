@@ -654,7 +654,19 @@ export function deriveAbortGroups(options: AbortGroupOptions): AbortGroups {
   ];
 
   let untouched: SiteOutcomeRow[] = [];
-  if (options.scope?.length) {
+  if (!options.scope?.length) {
+    // Absent scope and absent resolver are two ways of not knowing, and both
+    // must say so. An empty `untouched` with nothing naming it reads as
+    // "nothing was left untouched" — the same claim the `skipped` note above
+    // refuses to make. Reachable since WP-26: the stream derives an abort
+    // notice from the run's events, and that seam holds no approved plan.
+    unavailable.push({
+      group: 'untouched',
+      reason:
+        'the approved plan\'s target list is not recorded at this seam, so the sites the halt ' +
+        'prevented cannot be listed; the ledger shows only what was attempted',
+    });
+  } else {
     if (options.resolveEntity) {
       const attempted = new Set(updates.keys());
       const seen = new Set<string>();

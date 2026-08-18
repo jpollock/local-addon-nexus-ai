@@ -8042,6 +8042,268 @@ on the path that exercises it, not the path that exits first.
 
 ---
 
+**WP-26 ANNOUNCED 2026-08-18 — LOCK TAKEN: `src/main/intelligence-host/`
+(serialized with the core; the core itself is NOT taken and stays free).**
+Worktree `.worktrees/wp-26`, branch `wp-26`, base `poc/nexintelligence` @
+`9699d752`.
+
+**Contention check, done before cutting the worktree, not assumed:** WP-24
+is merged (`git merge-base --is-ancestor wp-24 poc/nexintelligence` passes)
+and `.worktrees/wp-24` reports a clean tree — so nothing is holding
+`tests/intelligence-evals/` or `src/main/mcp/modules/fleet/load-procedure.ts`,
+and the two files WP-24 owned are not on this packet's list anyway. WP-25 has
+a design note in the primary checkout (`wp25-incident-producer-design-note.md`,
+untracked) but no worktree and no announced lock.
+
+**Surfaces this packet will touch, declared up front:**
+
+| file | lock | why |
+|---|---|---|
+| `src/main/intelligence-host/procedureStream.ts` | this packet (new) | the emitter + its coalescing memory |
+| `src/main/intelligence-host/chatAssembly.ts` | this packet | the seam that folds the cursor calls the emitter |
+| `src/main/intelligence-host/actionProducer.ts` | this packet | `canary_policy` on the approval's rationale |
+| `src/common/chat-types.ts` | free | the stream union, widened additively (type-only import — erased) |
+| `src/main/chat/ChatService.ts` | free (minimal wiring) | sink registration + the policy threaded through the approval |
+| `src/main/chat/chat-ipc-handlers.ts` | free (minimal wiring) | one optional argument on `CHAT_TOOL_APPROVE` |
+| `src/renderer/components/DockedPanel/*` | renderer-additive | the approval card |
+
+**NOT taken:** `src/intelligence/`, `src/main/index.ts`,
+`src/main/ipc-handlers.ts`, `src/main/mcp/modules/fleet/`. The integration
+lock is not needed — nothing in this packet requires a bootstrap call site.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code
+captured before any pipe): **557 suites / 7,207 passed / 12 skipped / 7,219
+total, exit 0**. Skipped 12 is the documented embedding-model split for a
+worktree (the primary checkout holds both model files and reports 2).
+
+**GATE HOLD DECLARED IN ADVANCE, per the registration:** the `canary_policy`
+field on `task.rationale.recorded` is a payload-schema change. It will be
+built and pinned, and the widened payload presented for architect
+ratification BEFORE any merge. Nothing merges past that hold.
+
+---
+
+**WP-26 OUTCOME — built, pinned, and HELD AT THE GATE (branch `wp-26`,
+worktree `.worktrees/wp-26`). NOT MERGED.** Two ratifications are owed
+before it can be, and the second was not foreseen at registration.
+
+Jest, compiled worktree, tree held still, exit code captured before any
+pipe. Baseline at `9699d752`: **557 suites / 7,207 passed / 12 skipped /
+7,219 total, exit 0**. Branch: ****561 suites / 7,267 passed / 12 skipped / 7,279 total, exit 0****. Delta **+4 suites, +60 tests, skipped unchanged at 12** (the split is the documented embedding-model boundary for a worktree; the primary checkout reports 2).
+`npx tsc -p . --noEmit` clean; eslint clean across `src/intelligence`,
+`src/main/intelligence-host`, `src/main/chat`,
+`src/renderer/components/DockedPanel`, `src/common/chat-types.ts` and
+`tests/intelligence-evals`. The seam rule was verified LIVE, not assumed:
+an `electron` import planted in `src/intelligence/` produced the
+`no-restricted-imports` error and was removed (WP-06's probe).
+**Mutation battery 32/32 killed by their named witness.**
+
+### What shipped
+
+**The emitter** (`src/main/intelligence-host/procedureStream.ts`, new).
+`procedure_armed` carries the WHOLE `DeclaredProcedure` once, at arm —
+which is also v6 Q3's archival answer, since `verifiableCount` then rides
+with it and a historical run's denominator no longer depends on today's
+registry. Everything after carries `diffCheckpointStates` output. **The
+coalescing pin drives the seam once per ledger event and counts
+emissions**: six real ledger events, exactly one of which moves a
+checkpoint state, produce exactly one `checkpoint_changed`. That is the
+only shape of test a per-event emitter fails.
+
+**The abort notice is emitted only when the ledger holds the record that
+ends the run**, and `abortId` IS that event's id — openable, not
+invented. An aborted rail with no such record announces nothing, and that
+rule now has its own witness (see the survivors below).
+
+**The approval card** (`ProcedureApprovalCard.tsx`, new;
+`PanelChat.tsx`, routed). Plan reference (runbook, version, marked
+strict, and the checkpoint this decision attests), approve/deny, and the
+canary-policy choice with **pause-after-canary labelled AS the default**.
+It computes nothing: every fact comes from the `procedure` block the
+platform emitted with the approval. The word *verified* never appears
+about a checkpoint, and a test asserts its absence.
+
+**`canary_policy` on `task.rationale.recorded`**, validated at the
+producer against `CANARY_POLICIES`, dropped on a denial, and never
+authored when nobody chose — `deriveCanaryPolicy`'s `declared: false` is
+what stops a surface rendering the default as a decision, and a
+gateway-written default would make that flag a lie.
+
+**Parity, pinned in both directions.** Nothing armed ⇒ zero emissions, no
+`procedure` block on the approval event, `ActionCard` unchanged, and
+`CHAT_TOOL_APPROVE` still called with three arguments — the policy
+argument OMITTED, not passed as `undefined`.
+
+### GATE ITEM 1 — the widened payload (foreseen, per the registration)
+
+`task.rationale.recorded` gains ONE optional field. The whole delta:
+
+```jsonc
+{
+  "tool": "bulk_plugin_update",
+  "decision": "approved",
+  "prompt": "Runbook rb.bulk-plugin-update v1.0.0, marked strict — checkpoint cp.approval. …",
+  "args": { "…": "redacted as before" },
+  "source": "approval-card",
+  "canary_policy": "continue-if-clean"   // NEW — present only when a human chose one
+}
+```
+
+- **Absent by default, and absence is load-bearing.** Written only on an
+  `approved` decision, only when the value is in `CANARY_POLICIES`, only
+  when the card offered the choice (a runbook with no `cp.canary` offers
+  none). Every approval recorded before this packet reads back exactly as
+  it did.
+- **No new topic, no new schema version, no envelope field, no storage
+  marker.** `RATIONALE_RECORDED_SCHEMA` is unchanged, and the reader
+  (`deriveCanaryPolicy`, WP-20e) already looked for this key — the
+  producer is what was missing, which is what the v6 answer said.
+- **Redaction unaffected**: the field is a closed two-value vocabulary,
+  not freeform input.
+
+### GATE ITEM 2 — NOT FORESEEN, and it is why the card exists at all
+
+**`cp.approval` had no producer, so the anchor capability was refused
+forever.** `bulk_plugin_update` is not in `TIER_OVERRIDES`, so it is Tier
+2, so `requiresHumanApproval` never raised a card for it. Meanwhile
+`rb.bulk-plugin-update` declares `cp.approval` as the checkpoint a human
+decision attests, and `checkCheckpointSequence` refuses the tool — and
+`wpe_backup_and_verify` too — until it is. Nothing else in the product
+writes a `task.rationale.recorded`. WP-20e's probe supplied the approval
+itself, which is why the gap survived: the mechanism was proved against a
+caller that did the human's job for it.
+
+The condition added in `ChatService.executeToolCall` is **the guard's own
+answer, not a second rule**: the card is raised when
+`checkCheckpointSequence` is already refusing this call on exactly the
+checkpoint the approval would attest. It can only ADD a gate, never
+remove one.
+
+**What this changes, measured, and now pinned rather than silent.** The
+B-03 sitting (`sitting.test.ts`, `--approvals approve`) used to observe
+the improvised fleet update refused at `cp.approval`. It now observes:
+the card fires → that harness is a rubber stamp → `cp.approval` attests →
+**the write is still refused, on `cp.backup`**, which the runbook itself
+calls not waivable. The test now asserts all three facts explicitly, so
+the change cannot be read as a pass for the old reason.
+
+The architect's call, and the honest statement of both sides: a card
+raised on an improvised call lets a human bless a plan they were never
+shown — but the platform CANNOT tell an improvised call from a planned
+one, because `cp.dry-run` is narrative by ruling, and "that half is yours
+to state and the user's to judge" is the design's own answer. Without the
+card the capability is inert. **If this is refused, WP-26's card ships
+unreachable for the only runbook that has an approval checkpoint, and
+that should be recorded as the outcome rather than hidden.**
+
+### Findings
+
+1. **The stream must fold AFTER the manifest, and it must agree with the
+   GATE, not with the carrier.** `chatAssembly` folds before assembling,
+   so the carrier is one fold old by construction — `cp.consult-history`
+   attests from the manifest that same turn writes. The sequence guard
+   re-folds at call time and knows better. A stream on the carrier's view
+   would hand the approval card no runbook on the very turn the gate
+   demands the approval, because that is the arming turn. The wiring test
+   asserts the arming turn already stands at `cp.approval`, and the
+   mutation that moves the emission above `emitManifest` is killed by it.
+
+2. **A real latent defect in `ChatService`, found because this is the
+   first card the B-03 sitting ever raised.** The pending approval was
+   registered AFTER the card was emitted, and `emit` is synchronous all
+   the way into `sendToRenderer` — so any approver that answers inside
+   that call resolved nothing and the await hung forever. It cost a 30s
+   timeout to find. Production escaped it only because a real renderer
+   replies over IPC on a later tick; that is luck, not design. Fixed by
+   registering first, with its own witness (a synchronous approver, no
+   `setImmediate`).
+
+3. **`deriveAbortGroups` claimed something when handed no scope at all.**
+   With no approved-plan target list it returned `untouched: []` and named
+   nothing in `unavailable` — which reads as "nothing was left untouched",
+   the exact claim the module's own `skipped` note refuses to make. Absent
+   scope and absent resolver are two ways of not knowing and both must say
+   so. WP-26 made it reachable (the stream derives the notice from the
+   run's events, and holds no approved plan), which is what brought it
+   inside the mid-task scope rule.
+
+4. **Both mutation survivors were witness gaps, and one is worth
+   promoting.** `expect(call.slice(1)).toEqual(['s1','t1',true])` PASSED
+   against a handler that always pushed the policy argument, because
+   **jest's `toEqual` ignores an undefined array element**. Absent and
+   present-but-undefined were the entire distinction the pin existed to
+   protect. `toStrictEqual` kills it. This joins the vacuous-guard family
+   alongside WP-24's `import type` elision: *the matcher can erase the
+   difference the test is about.*
+
+### Not done, deliberately
+
+- **The renderer does not yet CONSUME the three stream events** — that is
+  WP-27's declared scope (the rail, the collapsing checklist, the abort
+  panel). WP-26 emits them and the card needs none of them: the approval
+  event carries its own context, so nothing renderer-side correlates or
+  derives. A `procedure_armed` arriving at `PanelChat` today is ignored,
+  exactly as it was when nothing emitted it.
+- **`ChatTab.tsx` (the non-anchor chat surface) is untouched.** It renders
+  the plain card for a procedure approval; the composed card text still
+  names the runbook, so the recorded `prompt` stays honest, and the
+  approval simply carries no policy — i.e. the default, labelled a
+  default. ADR-19's anchor is the Docked Panel; widening this is a
+  decision, not an oversight.
+- **The un-keyed arming queue** (WP-24's registered item (a)) was NOT
+  absorbed. It is a core-lock change and its own decision, as the WP-24
+  adjudication said.
+
+### State on exit
+
+**ABI: SYSTEM NODE — measured, not quoted** (`npm test` ran here; its
+`pretest` hook rebuilt better-sqlite3 for system Node). `npm run rebuild`
+is required before loading Local.
+
+**Uncommitted architect work in the primary checkout, flagged not
+touched:** `docs/intelligence/wp25-incident-producer-design-note.md`
+(untracked, 118 lines, md5 `9e5304640c03331844761a4180a60fc2`). It is not
+blocking anything because this packet is NOT merging; it will be committed
+verbatim and attributed as a separate commit at merge time, per the
+standing practice.
+
+**WP-26 ADDENDUM — WP-27 LANDED MID-PACKET; the two-packets-one-file
+condition fired and resolved to zero code conflict (measured, then
+aborted).** `poc/nexintelligence` moved from `9699d752` to `0d14db03`
+while this packet was building: WP-27 merged, and it edits
+`PanelChat.tsx`, which this packet also edits. Per the standing
+escalation the reconciliation is not this agent's to make, so it was
+MEASURED and the trial merge was aborted — nothing merged.
+
+- **`PanelChat.tsx` auto-merges cleanly.** The two packets touched
+  different regions: WP-27 added the procedure-event branch and the
+  rail's state; WP-26 added the approval branch's `procedure`/`warning`
+  passthrough and the card routing. The ONLY conflict in the whole merge
+  is this file, `WORK_PACKETS.md`, where both packets appended at the end.
+- **On the trial-merged tree, `tests/unit/renderer/` +
+  `tests/unit/chat/` + `src/main/intelligence-host/` ran 129 suites /
+  1,646 tests, all passing.**
+- **WP-27's "ONE swap point" is exactly what this packet supplies.** Its
+  `onStreamEvent` already folds `procedure_armed` /
+  `checkpoint_changed` / `procedure_aborted` off the same stream, from
+  `procedureStream.fake.ts`; WP-26's emitter puts the identical shapes on
+  the identical channel.
+- **The hazard WP-27's note names was checked here, not assumed.**
+  Requiring `procedureView` from the renderer pulls better-sqlite3 and
+  would be `NODE_MODULE_VERSION` at panel load under Electron — invisible
+  to jest. WP-26 widens `ChatStreamEvent` with `import type` /
+  `export type` only, and the EMITTED file was inspected:
+  `lib/common/chat-types.js` compiles to the two-line `__esModule`
+  preamble and nothing else. The references survive only in
+  `chat-types.d.ts`, which is compile-time. (WP-24's lesson applied in
+  the other direction: verify on the path that exercises it.)
+- Reconciling the two type paths — WP-27 imports the seam's shapes from
+  `procedureView` directly, WP-26 re-exports them through
+  `common/chat-types` — is cosmetic and is a merge-time decision, not a
+  defect in either.
+
+---
+
 ### [x] WP-27 · Procedure surfaces in the Docked Panel — DONE
 
 **Branch `wp-27`, worktree `.worktrees/wp-27`. 8 files, renderer-additive.
@@ -8307,3 +8569,89 @@ assert length).
 <merge>`), re-measured baseline on the merged tree, ABI on exit. Phase
 1 of the UX completes with this merge; the B-03 sitting's next run will
 exercise the card for real.
+
+---
+
+**WP-26 POST-GATE — required addition built, merged, re-measured. PHASE 1
+OF THE UX IS COMPLETE.** 
+**The required line shipped, and its facts are derived, not authored.**
+`ProcedureApprovalContext` gains `unverifiablePrecedent` — the NEAREST
+narrative checkpoint the runbook declares before its approval, plus that
+checkpoint's own authored reason read off the runbook body's
+`## cp.x — reason` heading (`checkpointReason`, WP-20e). The card turns
+those two facts into one sentence:
+
+> The runbook asks for cp.dry-run — show what would change before this
+> checkpoint. Nothing the platform records can show that happened, so
+> read the plan above before you approve.
+
+- **NEAREST, not first, and the distinction needed its own fixture.** The
+  anchor declares exactly ONE narrative step before `cp.approval`, so
+  first and nearest coincide in every fixture built from it — the
+  mutation that swaps the loop direction SURVIVED until a two-narrative
+  runbook was added. A document may declare several; the step the
+  approval directly rests on is the one a reader needs named, and the
+  earliest would point them at the wrong part of the transcript.
+- **Absent when the runbook puts nothing narrative before its approval**,
+  pinned in both directions. A caveat printed there would describe a gap
+  the document does not have.
+- **The word "verify" stays absent, denial included.** v1.1 reserves it
+  for the live check and a checkpoint never takes it in either direction,
+  so the sentence says "nothing the platform records can show that
+  happened" rather than "the platform can't verify it". A test asserts
+  `/verif/i` matches nowhere in the rendered card.
+- **The reason is quoted, never paraphrased**; a section with no authored
+  reason yields `null` and the copy names the step alone rather than
+  inventing a description of it.
+
+**Receipts.** Merged tree, jest, tree held still, exit captured before any
+pipe: **565 suites / 7,341 passed / 12 skipped / 7,353 total, exit 0**. Base (`poc/nexintelligence` @ `48df0b7c`)
+measured in the primary checkout for comparison: **561 / 7,283 / 2 skipped / 7,285, exit 0** — the
+skipped column differs by the documented embedding-model boundary (the
+primary checkout holds both model files, a worktree holds one), which is
+the split the protocol says to read first, and it closes to the test: the
+packet's delta is **+4 suites and +68 tests** (60 at the gate, 8 for the
+required line); the PASSED columns differ by 58 because ten embedding
+tests the worktree skips are gated IN by the primary checkout, and
+68 − 10 = 58. `npx tsc -p . --noEmit` clean;
+eslint clean across `src/intelligence`, `src/main/intelligence-host`,
+`src/main/chat`, `src/renderer/components/DockedPanel`,
+`src/common/chat-types.ts` and `tests/intelligence-evals`. **Mutation
+battery 35/35 killed by their named witness** (32 at the gate, plus three
+for the required line, one of which exposed the nearest-vs-first gap
+above).
+
+**The merge went exactly as the trial measured.** `PanelChat.tsx`
+auto-merged in disjoint regions — WP-27 added the procedure-event branch
+and the rail's state, WP-26 the approval branch's passthrough and the card
+routing. The only conflict in the whole merge was this file, resolved
+append-only per precedent: WP-26's announcement, outcome and addendum,
+then WP-27's outcome, then the architect's adjudication last. Nothing
+reordered, nothing dropped.
+
+**WP-27's swap point is closed.** Its `onStreamEvent` already folded
+`procedure_armed` / `checkpoint_changed` / `procedure_aborted` from
+`procedureStream.fake.ts`; WP-26's emitter now puts the identical shapes
+on the identical channel from the seam that folds the cursor. The rail is
+live off the real ledger.
+
+**Architect work committed verbatim before merging** (`48df0b7c`): the
+WP-26 gate adjudication in `WORK_PACKETS.md` and the `PARALLEL_PROTOCOL.md`
+DoD-4 amendment (the `toEqual`-ignores-undefined trap, credited to this
+packet) were found UNCOMMITTED in the primary checkout — the gate response
+said they were on the base, and they were on disk but not in a commit.
+Committed unedited, in their own attributed commit, per the standing
+practice. **Fidelity: md5 of both files is byte-identical before and after
+the commit** — `4d6a157dbd1ed356bdd4bbbaf493a8a2` (WORK_PACKETS) and
+`2fdc8d3e24d0c2b2cb604065807b9986` (PARALLEL_PROTOCOL).
+
+**State on exit: ABI SYSTEM NODE — measured, not quoted.** `npm run rebuild`
+before loading Local.
+
+**Two things left on the table, neither a defect, both worth a designer's
+eye:** the card shows the runbook reference twice (once as the styled
+block derived from the context, once inside the recorded card text) —
+cosmetic, and deliberately not touched after ratification; and WP-27
+imports the seam's shapes from `procedureView` directly while WP-26
+re-exports them through `common/chat-types`, which is two type paths to
+one source and wants one of them chosen.

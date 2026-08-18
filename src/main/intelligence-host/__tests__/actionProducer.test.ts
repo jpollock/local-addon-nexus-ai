@@ -29,6 +29,7 @@ import {
   recordGatedAction,
 } from '../actionProducer';
 import { environmentEntityId, siteEntityId } from '../provisionalEntity';
+import { deriveCanaryPolicy } from '../procedureView';
 import type { EventEnvelope } from '../../../intelligence';
 
 const silent = { info: () => {}, error: () => {} };
@@ -306,6 +307,84 @@ test('the outcome is caused by its action', () => {
   const [action] = eventsOf(core, ACTION_EXECUTED_TOPIC);
   const [outcome] = eventsOf(core, OUTCOME_RECORDED_TOPIC);
   expect(outcome.causation).toBe(action.id);
+});
+
+describe('WP-26 · the canary policy the approval carried', () => {
+  test('the chosen policy rides on the approval, as the approval', () => {
+    recordApprovalRationale({
+      toolName: 'bulk_plugin_update',
+      args: { site_ids: ['alpha'] },
+      cardText: 'Updates plugins on 3 sites.',
+      decision: 'approved',
+      canaryPolicy: 'continue-if-clean',
+    });
+
+    const [rationale] = eventsOf(core, RATIONALE_RECORDED_TOPIC);
+    expect((rationale.payload as Record<string, unknown>).canary_policy).toBe('continue-if-clean');
+    // Elicited intent, recorded from a human act. Unchanged by the new field.
+    expect(rationale.source).toMatchObject({ class: 'intent', trust: 'elicited' });
+  });
+
+  test('ABSENCE means the default — the field is never written when nobody chose', () => {
+    // `deriveCanaryPolicy` returns `declared: false` for exactly this case, and a
+    // gateway-authored default would make that flag a lie: the surface would then
+    // render "pause after the canary" as a decision the human made.
+    recordApprovalRationale({
+      toolName: 'bulk_plugin_update',
+      args: { site_ids: ['alpha'] },
+      cardText: 'Updates plugins on 3 sites.',
+      decision: 'approved',
+    });
+
+    const [rationale] = eventsOf(core, RATIONALE_RECORDED_TOPIC);
+    expect(rationale.payload as Record<string, unknown>).not.toHaveProperty('canary_policy');
+  });
+
+  test('a value outside the vocabulary is not recorded at all', () => {
+    recordApprovalRationale({
+      toolName: 'bulk_plugin_update',
+      args: {},
+      cardText: 'card',
+      decision: 'approved',
+      canaryPolicy: 'ship-it' as never,
+    });
+
+    const [rationale] = eventsOf(core, RATIONALE_RECORDED_TOPIC);
+    expect(rationale.payload as Record<string, unknown>).not.toHaveProperty('canary_policy');
+  });
+
+  test('a DENIAL carries no policy: there is no canary to have a policy about', () => {
+    recordApprovalRationale({
+      toolName: 'bulk_plugin_update',
+      args: {},
+      cardText: 'card',
+      decision: 'denied',
+      canaryPolicy: 'continue-if-clean',
+    });
+
+    const [rationale] = eventsOf(core, RATIONALE_RECORDED_TOPIC);
+    expect((rationale.payload as Record<string, unknown>).decision).toBe('denied');
+    expect(rationale.payload as Record<string, unknown>).not.toHaveProperty('canary_policy');
+  });
+
+  test('the recorded policy is what `deriveCanaryPolicy` reads back, declared', () => {
+    // The producer and the reader are pinned together: a field written under a
+    // name the reader does not look for is a field that does not exist.
+    recordApprovalRationale({
+      toolName: 'bulk_plugin_update',
+      args: {},
+      cardText: 'card',
+      decision: 'approved',
+      canaryPolicy: 'continue-if-clean',
+    });
+
+    const state = deriveCanaryPolicy(eventsOf(core, RATIONALE_RECORDED_TOPIC));
+    expect(state).toMatchObject({
+      policy: 'continue-if-clean',
+      declared: true,
+      source: 'approval',
+    });
+  });
 });
 
 test('an approval chains rationale -> action -> outcome', () => {
