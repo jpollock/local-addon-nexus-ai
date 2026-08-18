@@ -11150,3 +11150,37 @@ repeatedly, and ran `npm rebuild better-sqlite3` once mid-session to recover
 from another session's Electron rebuild. **`npm run rebuild` before loading
 Local** — which the owner's live smoke (§5 of the delivery note) requires
 anyway.
+
+---
+
+**WP-25 · MERGE ACCEPTED — architect verification (2026-08-18).** Stat
+pulled independently (`git diff --stat 230c3dfa^1 230c3dfa`): 12
+files, +2,413/−71, every line inside the claim — the producer and its
+two suites, the AgentRunner tap, the chat-seam tap, the E-01 half
+across five eval files, three call-site lines, the record. **Fidelity
+check on 06e901e9: six for six** — both response docs, the register,
+the vocabulary doc, both designer positions md5-identical between the
+architect's copies and the committed tree; nothing altered. **The 1a
+implementation is accepted as built:** one function (`componentField`)
+decides omission so the taps cannot disagree; the pin sits on the
+RENDERED line (opens on the symptom, never contains `site;`);
+presence asserted with `Object.keys` — the toEqual-treats-undefined-
+as-absent trap applied at authoring time; and M17 mutates the ruling
+itself (unconditional write → four tests die). The before/after
+specimen is the ruling made visible. **The NUL defect: accepted as
+found, fixed, and taught** — KEY_SEPARATOR was a committed literal
+NUL that passed every check and blinded grep; now `'|'`, the sweep
+clean, and the lesson is a PROTOCOL RULE (invisible characters are
+invisible to review by construction; a grep calling source binary is
+a finding). **Receipts accepted:** battery 17/17 + control re-run in
+full against the changed code; merged tree 573/7656/2 exit 0,
+typecheck clean, skipped-column read first and reconciling (+2
+suites, +33 tests against WP-33's baseline); runner 15/0/37/16 with
+exactly E-01's criterion 0 moved. Tail conflict resolved as directed,
+verified programmatically. ABI: SYSTEM NODE. **Board after this
+merge:** the intelligence-host lock is RELEASED; the LIVE SMOKE is
+the owner's (packet §5 — a real sentinel sweep, then the next chat
+turn about that site carries the incident; adjudicated like the
+first-real-pull); WP-33b launches now (eval-registry micro); WP-34
+launches when WP-33b merges (they share the registry surface —
+serialized by lock, not by dependency).

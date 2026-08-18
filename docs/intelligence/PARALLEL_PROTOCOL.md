@@ -240,3 +240,13 @@ form. Determinism and battery runs of any file-emitting tool take
 `--out <tmp>`; the tracked artifact is only ever written by the real
 invocation, and a `:check` script that fails closed on a stale file is the
 guard that makes the tracked copy trustworthy.
+
+**Source files carry no invisible characters** (WP-25 finding — the NUL
+form): a literal NUL committed inside a string constant passed every test,
+tsc and eslint, and made `grep` answer `Binary file matches` — the tool
+that would show you the offending line is the one the character disables,
+so the defect is invisible to review by construction. A grep that calls a
+source file binary is a FINDING, not an inconvenience: sweep for the
+character, don't add `-a` and move on. Non-printing characters in source
+belong only in explicit escapes (`'\0'` says what it is; a pasted NUL
+says nothing to anyone).
