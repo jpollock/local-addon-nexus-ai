@@ -11051,3 +11051,53 @@ sheets may be drawn now against the contract; the RENDER packet
 waits on WP-34 (the convention + carrier instruction + eval half),
 which sequences after WP-25's merge, alongside WP-30 — eval before
 surface, per the contract's own P4.
+
+---
+
+**WP-25 · POST-GATE — the one ruling that changed code, and one defect the
+review surfaced (2026-08-18).**
+
+Four of the five ratifications were "as built" and cost nothing. **1a was a
+behaviour change and is implemented:** a site-level incident now OMITS
+`component` rather than writing `'site'`, so `episodicSummary`'s line opens on
+the symptom. One function decides it (`componentField`), because two taps
+writing one topic must not disagree about when a field is present; absent means
+site-level and `incidentHistory` defaults it back, so the dedup key is
+untouched; a real slug is still written and still heads the line. Measured, the
+same abort incident before and after:
+
+    before   site; cp.backup failure or unverifiable backup; UNRESOLVED
+    after    cp.backup failure or unverifiable backup; UNRESOLVED
+
+**Pinned on the RENDERED LINE, not only on the payload.** The summary must
+START with the symptom and must not contain `site;` — the payload assertion
+alone would pass against a producer that wrote the field and an assembler that
+happened to ignore it. Presence is asserted with `Object.keys`, because
+`toEqual` treats an explicit `component: undefined` as equal to an absent one
+(WP-26's trap, and this is precisely its shape). **M17 was added to the battery
+for the ruling itself** — write the component unconditionally and four tests
+die. A rule nobody can break in a measurable way is a rule that comes back.
+
+**A DEFECT THE REVIEW SURFACED, worth the canon: `KEY_SEPARATOR` was a literal
+NUL character.** It worked perfectly — nothing can contain a NUL, so the dedup
+key was unambiguous — and it made the whole FILE read as binary to grep:
+`grep -n component incidentProducer.ts` printed `Binary file matches` and
+nothing else, which is how it was found (while making the 1a edit, not by any
+test). Every test, `tsc`, and eslint passed with it in place, and the byte was
+COMMITTED. The lesson is not about NULs: **an invisible character in source is
+invisible to review by construction, and the tool that would normally show you
+the line is the tool it disables.** It is now `'|'` — which cannot appear in a
+component slug or a finding class either, and can be seen.
+
+**Post-ruling receipts.** Battery re-run in full against the changed code, all
+`--no-cache`: **17 KILLED of 17** (M17 new), control SURVIVED as designed. Eval
+runner unchanged at **15 PASS / 0 FAIL / 37 BLOCKED / 16 OWNER-PENDING**, exit
+2, with the rendered line in E-01's evidence now opening on the symptom. Full
+suite **573 suites, 7646 passed, 12 skipped, 7658 total**, exit 0 captured
+before any pipe; `npm run typecheck`, `npx tsc --noEmit -p tsconfig.test.json`
+and eslint all clean.
+
+**Registered by the gate, not built here:** option (ii) on the version pair (a
+`task.action.executed` payload widening at WP-19's contract family, its own
+gate), and widening the sentinel tap beyond `security-sentinel` as a product
+ruling. When either lands, this producer picks it up with no contract change.
