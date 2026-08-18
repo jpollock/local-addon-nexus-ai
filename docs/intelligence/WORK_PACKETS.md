@@ -8765,3 +8765,128 @@ and gets revisited against the now-shipped seam. Designer brief
 delivered with this entry (`for-designer-phase-1.5-brief.md`); the live
 halted-sites transcript is part of the material — real product
 conversation, not fixture.
+
+---
+
+**ARCHITECT — THE RANK MODEL ADOPTED; SELF-PROMOTION RULED; WP-29
+REGISTERED (2026-08-18).** The designer's §0 ("chat is a rank a session
+is currently at, not a place") is adopted as governing doctrine for
+every chat surface — full response in
+`for-designer-rank-model-response.md`. It is
+ceremony-scales-with-consequence generalized from turns to layout, and
+it re-files the phase-1.5 container question at the level it actually
+lives: the Docked Panel and the main-app chat are two DENSITIES of one
+session, sharing derivations, never two designs. Two clarifications
+recorded there (the approval card is consent WITHIN capability, §7
+governs consent ABOUT capability — both stand; the empty run earns no
+rank, verbatim adoption). **The open question is RULED: no
+self-promotion, ever, by default.** A waiting gate escalates its
+ambient rank without limit; it never takes the stage — the gate
+doctrine is built on the platform waiting at consequence, an agent that
+takes the screen at its own gate is eliciting its own approval, and if
+an autonomy panel someday offers self-promotion it is a GRANT, made
+where grants are made.
+
+### [ ] WP-29 · The stage consumes the seam  *(registered 2026-08-18, rank-model consequence)*
+
+The main-app chat renders NONE of the procedure surfaces — a strict
+runbook arming there is prose and a tool row, while the same session in
+the Docked Panel gets the declared block, marks, and card. Under the
+adopted rank model this is an engineering defect, not a design
+preference. Scope: the stage surface subscribes to the SAME stream
+(WP-26's emitter — one emitter, N subscribers), renders the SAME
+derivations (`procedureView.ts` via the ruled type path) at stage
+density; promotion re-parents a subscription and re-renders density,
+never re-derives state. **The promotion pin family ships with it** —
+the §0 doc's three testable failures as tests: a promoted run must not
+restate its declaration, an approval given at one rank is resolved at
+every rank, an armed procedure survives the move with its cursor.
+Renderer + main-app chat surface; sequence within the phase-1.5 family
+(the designer's RB-C companion density and the stage density are one
+design rendered twice — hold the render packet until their phase-1.5
+response lands, so it is built once).
+
+---
+
+**ARCHITECT ADJUDICATION — WP-28 GATE (2026-08-18).** Branch `wp-28`,
+held as pre-declared. All three rulings below; merge is CLEARED once
+read.
+
+**Gate ruling — `unrequested: true` RATIFIED, name and semantics as
+proposed.** The name asks exactly the badge's question; the conservative
+default (absent = not badged) makes the uniform-rail defect structurally
+unrepeatable through omission; refusing a non-boolean rather than
+reading it truthy is the loader's strictness family applied correctly.
+ADR-17 gains its fourth amendment with this entry — the governing text
+and the field land agreeing, per the standing pattern.
+
+**The authoring generalization: RATIFIED, both flagged calls as made.**
+The tripartite articulation the packet's authoring implies is adopted as
+the rule: a strict runbook's checkpoints divide into THE ASK's own
+mechanics (resolve-endpoints is the request resolving itself —
+unmarked), THE PLATFORM's ceremony around writes (grant-check, consent,
+backup, report — unmarked; that ceremony is the gate doctrine, not the
+runbook's addition), and THE RUNBOOK'S ADDED PRUDENCE (history, dry-run,
+canary, verify-canary — badged). The live receipt matches the designer's
+ruled set on the anchor exactly. Flagging the two judgment calls rather
+than asserting them was the right reporting shape.
+
+**Finding 2's correction: RATIFIED, and the instruction it corrected was
+the architect's error.** Deleting the duplicate from `cardText` would
+have deleted WP-26's pin that the rationale event names the document the
+decision was taken under — a record that cannot name its governing
+document is a worse artifact than a doubled line is a cosmetic. The
+display-vs-record split (warning line for the human, reference intact in
+the ledger) preserves both truths. Third instance this week of an
+implementer correctly refusing the architect's literal wording in favor
+of the ruled record — vocabulary twice, record-integrity once — and the
+third time it was right. The check is working in every direction it was
+built to.
+
+**Also noted:** the hash ripple VERIFIED not assumed (5 grants repinned,
+chained reissuance, old-hash disarm naming both, ledger untouched — the
+full consequence chain exercised); M4's BUILD-ERROR-first is the third
+recurrence of WP-20a finding 8, handled per doctrine; the near-miss
+(absolute-path edit landing in the primary — the WP-20b trap's third
+firing) was caught by the protocol's own line and recovered cleanly —
+the trap keeps firing and the net keeps holding, which is what nets are
+for.
+
+**Merge with receipts; the badge will mean what it says.**
+
+---
+
+**ARCHITECT — THE MOMENTS MODEL, DRAFTED AND OWNER-LIKED (2026-08-18).**
+The owner's step-back ("we're heading towards a rather complex
+experience… sometimes I just want the config; sometimes bulk updates
+with plan and process") produced the missing taxonomy: the UX effort
+had laws (vocabulary, rank model, derived-never-authored) but no naming
+of the material the way the five-types model named intelligence.
+`moments-model.md` (draft 1.1): six working moments — Glance, Inspect,
+Act-small, Act-big (renamed from "Campaign" at owner review: in the web
+world that word means marketing), Investigate, Return — plus Govern,
+the meta-moment that is deliberately never a session. Each moment
+carries center / edge / intelligence-rides-in / NEVER-shows / rank
+affinity — the routing table for attention. The core claim: complexity
+is total surface, experienced simplicity is per-moment surface; the
+test of the model is the WALKS between moments, each carrying its
+handoff artifact. Adds the complexity budget as the fourth law: a
+feature serving no named moment is not built; additions name what they
+retire; the walk list is closed.
+
+`moments-companion-for-designer.md` ships with it, at the owner's push
+("are you sure there's not more to do to get clarity for the
+designer?"): the worked walk (one WooCommerce story through all seven
+moments, every handoff artifact named, ending on the co-work test —
+intent stated once, approval given once, context never re-established);
+the prototype audit (finding: NO surfaces serving no moment — the
+feared accumulation has not happened; the gaps are connective tissue:
+the M5 corroboration render, the M2→M4 selection-becomes-scope handoff,
+M6's gate-level "where you're needed"); the designer's next three
+cycles in moment terms; and four journey-eval skeletons (J-Glance,
+J-Inspect, J-Act-small, J-Return) deliberately unfinished for
+co-authoring — J-Act-big IS B-03, J-Investigate IS D-02, J-Govern
+proposed as unnecessary because that moment's virtue is being boring.
+Both docs go to the designer with the rank model and the phase-1.5
+brief; what survives their pressure-test becomes law. §8's open
+questions are assigned (1/3/5 designer, 4 shared, 2 architect).

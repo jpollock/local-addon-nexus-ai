@@ -151,6 +151,15 @@ for law docs, `arms_on:` authoring on the shipped set.
 
 ## UX implementation — four phases (ruled 2026-08-18)
 
+**Governing frame (2026-08-18): the moments model** — six working
+moments (Glance, Inspect, Act-small, Act-big, Investigate, Return) +
+Govern, with per-moment center/edge/never-shows and the complexity
+budget as the fourth law beside the vocabulary, the rank model, and
+derived-never-authored. `moments-model.md` + the designer companion
+(worked walk, prototype audit, journey-eval skeletons). Phase 1.5 = M4's
+two densities; needs-you/Return = M6 after WP-25; corroboration render =
+M5's center. Journey evals precede surfaces, per the B-03 discipline.
+
 "The UX per design" is four builds with four gates, in order:
 
 1. [x] **Procedure surfaces in the Docked Panel — DONE 2026-08-18**
