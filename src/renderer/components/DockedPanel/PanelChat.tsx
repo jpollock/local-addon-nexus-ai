@@ -2,9 +2,11 @@ import React from 'react';
 import { marked, Renderer } from 'marked';
 import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
+import { ProcedureApprovalCard } from './ProcedureApprovalCard';
 import { SiteContextStrip, type SiteChoice } from './SiteContextStrip';
 import type { SiteContextMode, SiteContentStatus } from './siteContextModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
+import type { ProcedureApprovalContext } from '../../../common/chat-types';
 
 const safeRenderer = new Renderer();
 // Suppress raw HTML passthrough — LLM output should never need raw HTML
@@ -33,6 +35,19 @@ interface UIMessage {
     args: string;
     status: 'pending' | 'awaiting_approval' | 'running' | 'done' | 'error';
     result?: string;
+    /**
+     * The card text the platform composed and RECORDED as the approval's
+     * rationale. Rendering something else here would make the ledger's "the
+     * card the human was shown" untrue.
+     */
+    warning?: string;
+    /**
+     * WP-26 · present only when this approval is a strict runbook's approval
+     * checkpoint. It arrives ON the approval event, derived by the platform —
+     * nothing here computes checkpoint state, which is the rule
+     * `procedureView.ts` exists to hold.
+     */
+    procedure?: ProcedureApprovalContext;
   }>;
 }
 
@@ -432,12 +447,20 @@ export class PanelChat extends React.Component<Props, State> {
       });
       this.props.onStreamingStatusChange?.('Working…');
     } else if (event.type === 'tool_call_approval_needed') {
-      // Tier-3 destructive tool — upgrade whichever message owns this toolCall id
+      // Tier-3 destructive tool — upgrade whichever message owns this toolCall id.
+      // WP-26: and carry the procedure block through when the platform sent one.
       this.setState((s) => ({
         messages: s.messages.map((m) => ({
           ...m,
           toolCalls: (m.toolCalls ?? []).map((tc) =>
-            tc.id === event.id ? { ...tc, status: 'awaiting_approval' as const } : tc,
+            tc.id === event.id
+              ? {
+                  ...tc,
+                  status: 'awaiting_approval' as const,
+                  ...(event.warning ? { warning: event.warning } : {}),
+                  ...(event.procedure ? { procedure: event.procedure } : {}),
+                }
+              : tc,
           ),
         })),
       }));
@@ -592,15 +615,15 @@ export class PanelChat extends React.Component<Props, State> {
     this.setState({ streaming: false, streamingId: null });
   }
 
-  handleApprove(toolId: string) {
+  handleApprove(toolId: string, canaryPolicy?: string) {
     const sessionId = this.state.activeSessionId ?? this.props.sessionId;
     if (sessionId) {
-      this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.CHAT_TOOL_APPROVE,
-        sessionId,
-        toolId,
-        true,
-      );
+      // The policy argument is OMITTED, not sent as undefined, when there is
+      // none: absence is what the producer reads as "nobody chose", and it is
+      // what keeps every pre-WP-26 approval byte-identical on the wire.
+      const args: unknown[] = [IPC_CHANNELS.CHAT_TOOL_APPROVE, sessionId, toolId, true];
+      if (canaryPolicy) args.push(canaryPolicy);
+      (this.props.electron.ipcRenderer.invoke as (...a: unknown[]) => unknown)(...args);
     }
   }
 
@@ -665,7 +688,21 @@ export class PanelChat extends React.Component<Props, State> {
     // Approval cards — render individually
     const approvalCards = allCalls
       .filter((tc) => tc.status === 'awaiting_approval')
-      .map((tc) => React.createElement(ActionCard, {
+      .map((tc) => tc.procedure
+        ? React.createElement(ProcedureApprovalCard, {
+            key: tc.id,
+            title: toolDisplayName(tc.name),
+            effect: toolEffect(tc.name),
+            warning: tc.warning ?? '',
+            procedure: tc.procedure,
+            onApprove: (canaryPolicy?: string) => {
+              this.handleApprove(tc.id, canaryPolicy);
+              try { track(this.props.electron.ipcRenderer, 'nexus_panel_action_confirmed', { destructive: false }); } catch (_) {}
+              this.inputRef.current?.focus();
+            },
+            onDeny: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
+          })
+        : React.createElement(ActionCard, {
         key: tc.id,
         title: toolDisplayName(tc.name),
         effect: toolEffect(tc.name),
