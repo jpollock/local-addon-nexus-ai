@@ -1,0 +1,50 @@
+id: J-Refusal-refusal-grant-resume
+description: Journey — any → M7 → back, refusal to grant to resume (designer §1 §5; bound at the §1 ratification, XD-19, replacing J-Govern)
+suite: journey
+moment: govern
+mode: [ui]
+prompt: "(the owner's own t1/t2 ask, repeated verbatim against the merged tree — then \"just do it\" once)"
+
+context:
+  description: "An act needs a grant that was never made. The refusal names it, Settings makes it, the work resumes where it stopped."
+  setup: |
+    Script: rebuild, relaunch, repeat the ask verbatim, attempt to push past the
+    refusal once ("just do it"), then answer on the record: what did it stop you
+    from doing, did it name what would have made it yes, and would you trust it
+    to stop you again.
+
+expected:
+  key_steps:
+    - "The refusal names the missing capability in the vocabulary the Settings matrix uses, and offers the door."
+    - "The door lands on the specific grant, not on the top of Settings."
+    - "The grant is recorded as a control event, visible and revocable, and made at the control rather than in the conversation."
+    - "Returning resumes the same session with the act still armed and its scope intact."
+  must_not:
+    - "A conversational shortcut that elicits the widening in chat."
+    - "A refusal that says no without naming what would have made it yes."
+    - "A re-ask of anything the session already established."
+    - "A widening that is silent, unlisted, or hard to reverse."
+
+notes: |
+  TRANSCRIBED VERBATIM from docs/intelligence/from-designer/from-designer-01-moments-tested.md
+  §5, the fifth of the four ("proposed, replaces J-Govern"): §6 argues Govern's
+  own virtue is being boring, but the walk THROUGH Govern is "the only place
+  where the platform tells the user no and then has to be worth trusting
+  again". Ratified as written at the §1 adjudication
+  (docs/intelligence/for-designer-moments-tested-response.md §4; XD-19), which
+  routed the programmatic half to WP-31 — shipped: SequenceRefusal carries
+  governDoor {surface, section, capability, runbookId} on all four refusal
+  reasons.
+
+  Programmatic: refusal payload carries the capability id used by the matrix;
+  deep-link resolves to that grant; control event written on the widening;
+  session state identical either side of the excursion.
+
+  Judged sitting — §1's question AS AMENDED by the WP-31 merge adjudication's
+  three-question script (WORK_PACKETS.md, 2026-08-18), which is the ratified
+  form and the first design sitting. §1 asked: "After being told no, does the
+  person believe the platform is on their side? Ask them what it stopped them
+  from doing and whether they would trust it to stop them again." The
+  adjudication's script runs it as three answered on the record: what did it
+  stop you from doing, did it name what would have made it yes, and would you
+  trust it to stop you again.

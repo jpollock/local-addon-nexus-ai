@@ -1,0 +1,37 @@
+id: J-Inspect-divergence-to-scoped-intent
+description: Journey — M2, divergence to scoped intent (designer §1 §5; bound at the §1 ratification, XD-19)
+suite: journey
+moment: inspect
+mode: [ui]
+prompt: "(none — a named divergence is opened from Glance)"
+
+context:
+  description: "A named divergence is opened from Glance, explained by its lineage, and turned into a scope the next act inherits."
+
+expected:
+  key_steps:
+    - "The comparator render is on screen before any prose about it."
+    - "The verdict on a disagreeing cell comes from the comparator, not from cell inequality."
+    - "A disagreeing cell explains itself in place — lineage, and the history badge where the component has bitten before."
+    - "The selection becomes the next act's scope with nothing retyped and nothing re-picked."
+  must_not:
+    - "A summary standing in for the shape."
+    - "A dead-end fact: any cell with no door."
+    - "A claim in the surrounding prose that no cell supplies."
+    - "A scope the user must confirm by re-listing the targets they just selected."
+
+notes: |
+  TRANSCRIBED VERBATIM from docs/intelligence/from-designer/from-designer-01-moments-tested.md
+  §5. Ratified as written at the §1 adjudication
+  (docs/intelligence/for-designer-moments-tested-response.md §4; XD-19), which
+  also routed this journey's scope-identity pin to WP-32 as an acceptance
+  criterion. Where scope criteria bind, the governing sheet is
+  from-designer-04-selection-to-scope-split.md (draft 2) — draft 1
+  (from-designer-03) is committed but superseded on content by its own header.
+
+  Programmatic: shape-renders-first ordering; comparator-verdict provenance on
+  each cell; scope identity — the ids in the dry-run equal the ids selected,
+  asserted as a set.
+
+  Judged sitting: Given only the matrix, can the person say why staging differs
+  and hand those exact sites to a run without typing a site name?

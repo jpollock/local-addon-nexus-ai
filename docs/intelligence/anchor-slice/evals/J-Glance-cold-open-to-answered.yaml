@@ -1,0 +1,34 @@
+id: J-Glance-cold-open-to-answered
+description: Journey — M1, cold open to answered (designer §1 §5; bound at the §1 ratification, XD-19)
+suite: journey
+moment: glance
+mode: [ui]
+prompt: "(none — the user asks nothing; the app opens cold)"
+
+context:
+  description: "App opens cold. The user asks nothing. Within one look they can say whether anything needs them and where it is."
+
+expected:
+  key_steps:
+    - "A verdict is visible with no interaction and no question asked."
+    - "Every count and age on screen is derived, and each one is dated or carries its freshness class."
+    - "Exactly one door per fact, and the door arrives at the fact rather than at the section containing it."
+    - "The needs-you row names what is needed of the user, not only that something is."
+  must_not:
+    - "Any ceremony: no approval, no confirmation, no plan."
+    - "A fact with no date where its class has an SLO."
+    - "A transcript or a session scroll anywhere in the first view."
+    - "A count the user must open something to trust."
+
+notes: |
+  TRANSCRIBED VERBATIM from docs/intelligence/from-designer/from-designer-01-moments-tested.md
+  §5 ("The four journey evals, finished"). Ratified as written at the §1
+  adjudication (docs/intelligence/for-designer-moments-tested-response.md §4;
+  register entry XD-19). Must-nots are the moment's never-shows made testable —
+  "a prohibition in a document loses every argument it has with a deadline".
+
+  Programmatic: derivation pins on every rendered count; route-exists for each
+  fact's door; a no-interaction render carrying zero authored numbers.
+
+  Judged sitting: Cold open, no briefing: can the person say what needs them,
+  and point at where, within five seconds and no clicks?
