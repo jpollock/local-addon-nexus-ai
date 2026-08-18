@@ -235,6 +235,16 @@ describe('the sentinel tap', () => {
     expect(written).toBe(0);
     expect(incidents(core)).toHaveLength(0);
     expect(entityCount(core)).toBe(before);
+    // Not "no entity was created" alone — no event was written AT ALL. An
+    // incident stamped with an empty entity block is worse than no incident: it
+    // is a security finding about nothing, which no reader can route or act on.
+    // (Scoped to incidents: `control.grant.issued` legitimately carries no
+    // entity — a grant is about a capability, not about a site.)
+    expect(
+      core.ledger
+        .query({ topicPrefix: INCIDENT_TOPIC, limit: 1000 })
+        .filter((e) => Object.keys(e.entity).length === 0)
+    ).toHaveLength(0);
   });
 
   test('a run that is not the sentinel emits nothing', () => {
@@ -362,16 +372,25 @@ describe('the sentinel tap', () => {
       )
     ).not.toThrow();
 
+    // A ledger that cannot be READ must not be treated as a ledger holding
+    // nothing: "no history" is the one reading that re-emits everything this
+    // site already has. So the producer records NOTHING while it cannot see
+    // what is already open — silence, not repetition.
     const core = newCore();
+    const realQuery = core.ledger.query.bind(core.ledger);
     core.ledger.query = () => {
       throw new Error('ledger is gone');
     };
-    expect(() =>
-      recordSentinelIncidents(
+    let written = -1;
+    expect(() => {
+      written = recordSentinelIncidents(
         sweep({ [SITE_A]: { status: 'escalated', findings: [{ id: 'X', severity: 'critical', title: 'x' }] } }),
         { services: services() }
-      )
-    ).not.toThrow();
+      );
+    }).not.toThrow();
+    expect(written).toBe(0);
+    core.ledger.query = realQuery;
+    expect(incidents(core)).toHaveLength(0);
 
     const clean = newCore();
     expect(() => recordSentinelIncidents({} as never, { services: services() })).not.toThrow();
@@ -478,6 +497,25 @@ describe('the abort tap', () => {
     // Not a hand-kept list: the ids are what the DOCUMENT declares, and a tool
     // the document ties to no abort path yields nothing.
     expect(abortForTool(runbook, 'nexus_list_sites')).toBeUndefined();
+  });
+
+  test('a checkpoint id matches WHOLE, so cp.backup is not cp.backup-verify', () => {
+    const core = newCore();
+    // The condition names a DIFFERENT checkpoint whose id merely starts with
+    // this one's. A substring match would file every failed backup under an
+    // abort path the document never tied to it — and the anchor runbook has no
+    // such pair, so nothing else in this suite would notice.
+    const neighbouring = {
+      ...anchorRunbook(core),
+      frontmatter: { aborts: [{ id: 'ab.verify-failed', on: 'cp.backup-verify failure' }] },
+    } as Runbook;
+    expect(abortForTool(neighbouring, 'wpe_backup_and_verify')).toBeUndefined();
+
+    const exact = {
+      ...anchorRunbook(core),
+      frontmatter: { aborts: [{ id: 'ab.verify-failed', on: 'on cp.backup failure, stop' }] },
+    } as Runbook;
+    expect(abortForTool(exact, 'wpe_backup_and_verify')?.id).toBe('ab.verify-failed');
   });
 
   test('a tool whose checkpoints reach two abort paths declines rather than guesses', () => {

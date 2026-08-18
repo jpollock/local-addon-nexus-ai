@@ -13,7 +13,13 @@
  * that bug was found.)
  */
 import { createEvalFixture, EvalFixture } from './fixture';
-import { probeRefusalPayload, probeRendererSurfaces, probeTimestampDiscipline, probeTopicFamily } from './probes';
+import {
+  probeIncidentProducer,
+  probeRefusalPayload,
+  probeRendererSurfaces,
+  probeTimestampDiscipline,
+  probeTopicFamily,
+} from './probes';
 
 jest.setTimeout(60_000);
 
@@ -188,5 +194,31 @@ describe('probeRendererSurfaces', () => {
     for (const line of surfaces.evidence) {
       expect(line).toMatch(/file\(s\) under src\/renderer/);
     }
+  });
+});
+
+describe('probeIncidentProducer', () => {
+  /**
+   * The negative direction this probe has, and the one a report would never
+   * show: `ok` must TRACK the measurements rather than announce success.
+   *
+   * A second run over the same fixture is the cheapest honest degraded world —
+   * and it is a real property, not a contrivance. The producer's dedup is
+   * durable, so the second fold of the same report and the same halted call
+   * emits nothing; a probe hardcoded to `ok: true` (or one whose conjunction
+   * had lost a term) would still claim a healthy supply, and E-01's criterion
+   * would pass on a platform that had produced nothing this time.
+   */
+  it('reports NOT-ok when a run produces nothing new, however much history exists', async () => {
+    const first = await probeIncidentProducer(fixture);
+    expect(first.ok).toBe(true);
+    expect(first.emittedBySentinelTap).toBeGreaterThan(0);
+    expect(first.emittedByAbortTap).toBeGreaterThan(0);
+
+    const second = await probeIncidentProducer(fixture);
+    expect(second.emittedBySentinelTap).toBe(0);
+    expect(second.ok).toBe(false);
+    // …and it says so, rather than reporting a bare false.
+    expect(second.evidence.join(' ')).toMatch(/folded a 2-finding report into 0 incident\(s\)/);
   });
 });
