@@ -8569,3 +8569,89 @@ assert length).
 <merge>`), re-measured baseline on the merged tree, ABI on exit. Phase
 1 of the UX completes with this merge; the B-03 sitting's next run will
 exercise the card for real.
+
+---
+
+**WP-26 POST-GATE — required addition built, merged, re-measured. PHASE 1
+OF THE UX IS COMPLETE.** 
+**The required line shipped, and its facts are derived, not authored.**
+`ProcedureApprovalContext` gains `unverifiablePrecedent` — the NEAREST
+narrative checkpoint the runbook declares before its approval, plus that
+checkpoint's own authored reason read off the runbook body's
+`## cp.x — reason` heading (`checkpointReason`, WP-20e). The card turns
+those two facts into one sentence:
+
+> The runbook asks for cp.dry-run — show what would change before this
+> checkpoint. Nothing the platform records can show that happened, so
+> read the plan above before you approve.
+
+- **NEAREST, not first, and the distinction needed its own fixture.** The
+  anchor declares exactly ONE narrative step before `cp.approval`, so
+  first and nearest coincide in every fixture built from it — the
+  mutation that swaps the loop direction SURVIVED until a two-narrative
+  runbook was added. A document may declare several; the step the
+  approval directly rests on is the one a reader needs named, and the
+  earliest would point them at the wrong part of the transcript.
+- **Absent when the runbook puts nothing narrative before its approval**,
+  pinned in both directions. A caveat printed there would describe a gap
+  the document does not have.
+- **The word "verify" stays absent, denial included.** v1.1 reserves it
+  for the live check and a checkpoint never takes it in either direction,
+  so the sentence says "nothing the platform records can show that
+  happened" rather than "the platform can't verify it". A test asserts
+  `/verif/i` matches nowhere in the rendered card.
+- **The reason is quoted, never paraphrased**; a section with no authored
+  reason yields `null` and the copy names the step alone rather than
+  inventing a description of it.
+
+**Receipts.** Merged tree, jest, tree held still, exit captured before any
+pipe: **565 suites / 7,341 passed / 12 skipped / 7,353 total, exit 0**. Base (`poc/nexintelligence` @ `48df0b7c`)
+measured in the primary checkout for comparison: **561 / 7,283 / 2 skipped / 7,285, exit 0** — the
+skipped column differs by the documented embedding-model boundary (the
+primary checkout holds both model files, a worktree holds one), which is
+the split the protocol says to read first, and it closes to the test: the
+packet's delta is **+4 suites and +68 tests** (60 at the gate, 8 for the
+required line); the PASSED columns differ by 58 because ten embedding
+tests the worktree skips are gated IN by the primary checkout, and
+68 − 10 = 58. `npx tsc -p . --noEmit` clean;
+eslint clean across `src/intelligence`, `src/main/intelligence-host`,
+`src/main/chat`, `src/renderer/components/DockedPanel`,
+`src/common/chat-types.ts` and `tests/intelligence-evals`. **Mutation
+battery 35/35 killed by their named witness** (32 at the gate, plus three
+for the required line, one of which exposed the nearest-vs-first gap
+above).
+
+**The merge went exactly as the trial measured.** `PanelChat.tsx`
+auto-merged in disjoint regions — WP-27 added the procedure-event branch
+and the rail's state, WP-26 the approval branch's passthrough and the card
+routing. The only conflict in the whole merge was this file, resolved
+append-only per precedent: WP-26's announcement, outcome and addendum,
+then WP-27's outcome, then the architect's adjudication last. Nothing
+reordered, nothing dropped.
+
+**WP-27's swap point is closed.** Its `onStreamEvent` already folded
+`procedure_armed` / `checkpoint_changed` / `procedure_aborted` from
+`procedureStream.fake.ts`; WP-26's emitter now puts the identical shapes
+on the identical channel from the seam that folds the cursor. The rail is
+live off the real ledger.
+
+**Architect work committed verbatim before merging** (`48df0b7c`): the
+WP-26 gate adjudication in `WORK_PACKETS.md` and the `PARALLEL_PROTOCOL.md`
+DoD-4 amendment (the `toEqual`-ignores-undefined trap, credited to this
+packet) were found UNCOMMITTED in the primary checkout — the gate response
+said they were on the base, and they were on disk but not in a commit.
+Committed unedited, in their own attributed commit, per the standing
+practice. **Fidelity: md5 of both files is byte-identical before and after
+the commit** — `4d6a157dbd1ed356bdd4bbbaf493a8a2` (WORK_PACKETS) and
+`2fdc8d3e24d0c2b2cb604065807b9986` (PARALLEL_PROTOCOL).
+
+**State on exit: ABI SYSTEM NODE — measured, not quoted.** `npm run rebuild`
+before loading Local.
+
+**Two things left on the table, neither a defect, both worth a designer's
+eye:** the card shows the runbook reference twice (once as the styled
+block derived from the context, once inside the recorded card text) —
+cosmetic, and deliberately not touched after ratification; and WP-27
+imports the seam's shapes from `procedureView` directly while WP-26
+re-exports them through `common/chat-types`, which is two type paths to
+one source and wants one of them chosen.
