@@ -8187,3 +8187,123 @@ gives the panel a resolver should take it; (c) `data-*` attributes are this
 packet's test seam (`data-checkpoint`, `data-abort-group`, `data-restore`)
 — they ship to the DOM and are cheap, but if a later packet adds a real
 test id convention these should join it.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-27 (2026-08-18).** Merge `0d14db03`
+accepted. Fidelity of `edb30f80` verified by hash — the WP-25 design
+note is md5-identical (`9e5304…`) to the architect's original, and the
+agent quoting the hash IN the report is an improvement the practice
+should keep. +66 tests = exactly the four new suites; skipped unmoved in
+the worktree pair; 12/12 mutations with four re-verified as
+assertion-kills under compile-error=False — the doctrine, applied
+without being asked.
+
+**The finding that shaped the packet is RATIFIED and is bigger than the
+packet:** the renderer value-importing `procedureView.ts` loads 77
+modules including better-sqlite3 thirteen times over — invisible under
+jest (whose ABI is correct), fatal at panel load under Electron. WP-24's
+electron-stub finding with the arrow reversed, exactly as the report
+says: each runtime's test environment hides the OTHER runtime's break.
+The `import type` + mirrored-values + 15-row shared case table +
+isolation suite is the correct treatment — and the isolation pin's
+first-version failure (it imported the seam itself and measured its own
+imports) is candidly disclosed and correctly rebuilt: a graph pin that
+participates in the graph pins nothing. **Registered as a candidate
+micro:** this is the THIRD instance of the mirror-with-case-table
+pattern; at three, the underlying cause has earned a look — extracting
+the derivations into a renderer-safe pure module (no transitive core
+imports) would retire the mirror class entirely. Not demanded now; the
+mirror is pinned and honest.
+
+**Both judgment calls RATIFIED, one promoted to doctrine:** (1)
+`canary_policy` not rendered at all — right; one field, one producer,
+one renderer, and WP-26's card is all three; two packets rendering the
+same choice in the same week is how surfaces diverge. (2) "attested"
+over the brief's "proved" — right, and the PRECEDENCE is the doctrine:
+**Controlled Vocabulary v1.1 outranks the literal wording of an
+architect's prompt.** A prompt is instruction; the vocabulary is law;
+when they conflict, the agent follows the law and says so — which is
+exactly what happened. The architect's prompts will still err; the
+vocabulary is why it doesn't matter.
+
+**Also noted with appreciation:** the legacy theme pin rejecting the
+invented `var(--nxai-mono, monospace)` — a dangling variable reference
+that would have rendered fine on its fallback forever; legacy pins
+catching new code is the compact working as designed. And the swap
+point: `PanelChat.onStreamEvent` folds anything shaped like the three
+events, with a test proving fake-emitter and hand-fed events render
+identical trees — WP-26's wiring is a subscription, as scoped.
+
+**State:** phase 1 of the UX is half-landed — the surfaces exist and
+render from fixture streams; WP-26 (emission + approval card) completes
+it and holds at the gate for the `canary_policy` payload ratification.
+WP-25's design note awaits owner review. ABI note: the report does not
+state ABI on exit; the panel-load finding implies jest ran — assume
+SYSTEM NODE, `npm run rebuild` before loading Local.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-26 GATE (2026-08-18).** Branch `wp-26`,
+held pre-merge as instructed. Both ratifications ruled, the merge
+condition cleared, one small required addition before merge.
+
+**Ratification 1 — the `canary_policy` payload: RATIFIED as registered.**
+One optional field on `task.rationale.recorded`, no new topic, no schema
+version bump, no envelope field, no marker; the reader already looked
+for the key; validated at the producer, dropped on denial, never
+authored when nobody chose. This is the smallest honest widening the
+field could have had.
+
+**Ratification 2 — the approval card firing on the guard's cp.approval
+refusal: RATIFIED, with one required line of copy.** The gap it closes
+is real and embarrassing in the right way: the anchor capability was
+refused FOREVER in the product because nothing produced cp.approval —
+and it survived because WP-20e's probe supplied approvals itself,
+which is now the canonical example of a harness answering the question
+the product needed to ask. The added condition is correctly shaped: it
+fires only when the guard is ALREADY refusing on exactly that
+checkpoint, so it can only add a gate, never bypass one. On the stated
+worry — a card on an improvised call lets a human bless an unshown
+plan — the ruling is that this is the P4 boundary seen from a new
+angle, not a new hole: cp.dry-run is narrative BY RULING, so the
+platform verifying plan-was-shown before carding would claim a
+verification the ruled model says it cannot make. The honest treatment
+is the one this project always uses — SAY the boundary: **required
+before merge, one derived line on the card when the preceding narrative
+checkpoint is unattested-by-record: "The runbook requires a dry-run
+plan before this approval. The platform can't verify one was shown —
+read the plan above before approving."** (Wording may be tuned to
+v1.1; the semantic content — platform-can't-verify + read-the-plan —
+is the requirement. One string, one test.) The card ships reachable;
+the human is told exactly what the platform does and does not know.
+The sitting-behavior change (card fires → rubber-stamp approves →
+cp.approval attests → still refused at cp.backup) being pinned as
+three facts rather than allowed to pass for a new reason silently is
+exactly right.
+
+**The two-packets-one-file condition: MERGE CLEARED.** The agent did
+the protocol's stop-and-ask with measurements attached — PanelChat.tsx
+auto-merges in disjoint regions, the only conflict is the append-only
+WORK_PACKETS (resolved append-only per precedent), the trial-merged
+tree runs 129 suites green, and WP-27's native-import hazard was
+CHECKED rather than assumed (the widened union compiles to the
+__esModule preamble and nothing else). Merge on the trial-merge's
+terms; re-run the full suite on the merged tree before reporting.
+
+**Findings ratified:** stream folds after the manifest and agrees with
+the GATE, not the carrier (the card must arrive on the turn the gate
+demands the answer); the register-before-emit fix for the pending
+approval (a real latent race that production escaped only by IPC
+timing — found by a timeout, fixed at the cause); the
+`deriveAbortGroups` empty-`untouched` fix (an unexplained empty set is
+the claim its own skipped note refuses to make — WP-26 made it
+reachable, WP-26 fixed it). **The `toEqual`-ignores-undefined witness
+trap is promoted to protocol with this entry** (second member of the
+elision family: when presence is the assertion, `toStrictEqual` or
+assert length).
+
+**On merge:** report receipts as usual (`git diff --stat <merge>^1
+<merge>`), re-measured baseline on the merged tree, ABI on exit. Phase
+1 of the UX completes with this merge; the B-03 sitting's next run will
+exercise the card for real.
