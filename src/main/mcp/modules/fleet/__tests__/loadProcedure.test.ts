@@ -78,8 +78,8 @@ test('a granted capability is acknowledged with the runbook, its version and its
   expect(isError).toBeFalsy();
   expect(text).toContain('rb.bulk-plugin-update');
   // The shipped document's version, which moves when it is re-authored:
-  // 1.1.0 since WP-28 marked its unrequested checkpoints.
-  expect(text).toContain('1.1.0');
+  // 1.2.0 since WP-31 gave cp.verify-canary its declared instrument.
+  expect(text).toContain('1.2.0');
   expect(text).toContain('strict');
   expect(text).toContain(ANCHOR);
 });

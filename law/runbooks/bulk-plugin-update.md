@@ -1,7 +1,7 @@
 ---
 id: rb.bulk-plugin-update
 kind: runbook
-version: 1.1.0
+version: 1.2.0
 strictness: strict
 capability: cap.bulk_plugin_update
 owner: ops
@@ -52,7 +52,8 @@ checkpoints:                     # ordered; strict mode — gateway refuses gate
     tools: [bulk_plugin_update]  # never wp_plugin_update: that tool's path AUTO-STARTS a halted site
     unrequested: true
   - id: cp.verify-canary
-    attest: narrative            # no tool checks "site loads, admin reachable, checkout renders" in this flow
+    attest: narrative            # verify_site_live re-observes plugins live; nothing proves "admin reachable, checkout renders"
+    tools: [verify_site_live]    # the instrument this step has (WP-31): declared, so the gate permits it here
     unrequested: true
   - id: cp.roll-fleet
     attest: event
@@ -127,8 +128,13 @@ the user's to judge.
 
 ## cp.verify-canary — prove it before scaling it
 
-Verify the canary: site loads, admin reachable, no new PHP errors in logs, and any
+Verify the canary with `verify_site_live`: it re-observes the site's plugins through
+the live transport and reports the delta against what the platform had recorded. Then
+verify what no tool can: site loads, admin reachable, no new PHP errors in logs, and any
 site-specific checks from history (e.g. checkout renders where commerce is present).
+
+The gateway can see that the live re-check ran. It cannot see that the page rendered,
+so this checkpoint stays narrative and that half is yours to state.
 On regression: `ab.canary-regression`.
 
 ## cp.roll-fleet — the rest, watched

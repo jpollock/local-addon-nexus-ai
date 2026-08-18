@@ -133,6 +133,29 @@ describe('the gap itself', () => {
     expect(checkCheckpointSequence('wp_plugin_update', undefined)!.reason).toBe('arming-gap');
   });
 
+  test('THE RUNBOOK’S OWN WRITE TOOL IS REFUSED IN THE GAP TOO — no run means no sequencer', () => {
+    recordArmingRequest(CAPABILITY);
+
+    // `bulk_plugin_update` IS declared (cp.canary, cp.roll-fleet), so on the RUN
+    // path rule 5 leaves it to the sequencer, which refuses it until approval
+    // and backup are attested. In the gap there is no run and therefore no
+    // sequencer — an unclaimed-only reading here would execute the capability's
+    // own primary tool with no approval and no backup, which is the incident's
+    // harm reached through a claimed tool instead of an unclaimed one.
+    const refusal = checkCheckpointSequence('bulk_plugin_update', task)!;
+    expect(refusal.reason).toBe('arming-gap');
+    expect(refusal.checkpoint).toBe('cp.consult-history');
+  });
+
+  test('and so is the canary instrument, which no run has reached', () => {
+    recordArmingRequest(CAPABILITY);
+
+    // WP-31's own authoring: `verify_site_live` is declared on cp.verify-canary,
+    // five checkpoints in. Declaring a tool does not make it callable before the
+    // run that would reach it has started.
+    expect(checkCheckpointSequence('verify_site_live', task)!.reason).toBe('arming-gap');
+  });
+
   test('reads are untouched in the gap', () => {
     recordArmingRequest(CAPABILITY);
     for (const read of ['nexus_list_sites', 'wp_plugin_list', 'wp_core_version']) {

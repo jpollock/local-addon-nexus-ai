@@ -9494,3 +9494,112 @@ with nothing armed and nothing pending.
 **ABI ON EXIT: system Node.** This session ran `npm test`, so better-sqlite3 is
 built for the shell's Node (measured here: **v25.9.0 → ABI 141**; `.nvmrc`/CI
 is 22.16.0 → 127). **`npm run rebuild` before loading Local.**
+
+
+---
+
+**WP-31 POST-GATE — the ruled addition built, and it did not land the way the
+ruling assumed. Merging.**
+
+`verify_site_live` is authored into the anchor's `cp.verify-canary` `tools:`,
+docs original first (`docs/intelligence/anchor-slice/runbooks/`), fidelity
+re-copy to `law/` verified by md5, version **1.1.0 → 1.2.0**, hash ripple
+measured. **But authoring alone did not make the checkpoint satisfiable, and
+the rule had to change to let the ruling land.**
+
+### The measurement that forced it
+
+`cp.verify-canary` is **narrative**. `nextGatedCheckpoint` skips narrative
+steps by construction — naming one would tell the actor to clear a gate that
+does not exist — so at canary-verification time the current GATED checkpoint is
+`cp.roll-fleet`, whose declared list holds `bulk_plugin_update` alone. Measured
+before authoring anything: *"AFTER cp.backup the current gated checkpoint is:
+cp.roll-fleet — it declares: [bulk_plugin_update]"*. Under the packet's
+first rule — *a write the CURRENT checkpoint does not declare is refused* —
+`verify_site_live` stayed refused with the authoring in place. The gate's
+requirement ("the flip must not merge with a checkpoint no tool can satisfy")
+and its prescription (author it, don't complicate the rule) could not both hold.
+
+### The resolution: the rule got SIMPLER, not more complex
+
+Rule 5 is now **a write the runbook declares NOWHERE**. A declared tool is
+handed to the sequencer and nothing else is asked of it. This is the packet's
+own title — *close the unclaimed-tool door* — and it honours the ruling's stated
+preference by removing a clause rather than adding one.
+
+**Ordering is not lost.** Rule 1 already refuses a claimed tool until its
+attestable predecessors are attested, and those being attested means the run has
+REACHED its checkpoint. "Declared, in sequence" and "declared by where we are
+standing" permit the same calls going forward; they differ only on calls the run
+has already passed — a second backup, a re-verification — which the narrow
+reading refused for no safety reason. That consequence, reported at the gate as
+finding 2, is now gone; the pin that recorded it is inverted and says why.
+
+`verify_site_live` is still SEQUENCED at its earliest claim: before
+`cp.approval` attests it is refused, so declaring it did not turn a live
+re-check into a way to touch the fleet before consent and a backup are on the
+record. Pinned in both directions.
+
+### The regression this opened, caught by the battery, and closed
+
+Making the GAP path unclaimed-only too would have let `bulk_plugin_update` —
+the capability's own primary tool — execute in the arming gap with no approval
+and no backup: **the incident's harm reached through a claimed tool instead of
+an unclaimed one.** The asymmetry is deliberate and now stated in the code: on
+the run path a declared tool is left to the sequencer; in the gap there IS no
+run and therefore no sequencer, so the only safe reading is the conservative
+one — the first gated checkpoint's declared tools and nothing else. Two new pins
+(`bulk_plugin_update` and `verify_site_live` both refused in the gap) and
+mutation M30.
+
+### The battery found one more thing
+
+`exclusive` carried a redundant `claimIndex < 0` conjunct: the rule was written
+in two places and only one was load-bearing, so a mutation of the second
+survived. Removed — a conjunct no test can distinguish reads as a second place
+the rule lives.
+
+### Hash ripple — verified, not assumed
+
+Measured on the built tree against the real `law/` directory:
+
+- `resolveCapabilityGrants` → **5 grants, 0 disarmed**; every pin equals the
+  hash the registry computed today (all five verified equal).
+- Anchor: `sha256:0646cfe11c1b813db994d6c95832ae2c6e97528c3748f7eb2aa44e3c736237c8`,
+  **7,463 canonical bytes** (7,002 → 7,463, +461), **v1.2.0**.
+  `registry.warnings()` **empty** — 1,753 bytes of margin to the 9,216
+  near-ceiling WARN, 2,777 to the 10,240 ceiling. `registry.errors()` empty.
+- A grant explicitly pinned to an older hash **disarms with `hash-mismatch`,
+  naming both hashes** — an old pin keeps its meaning and refuses rather than
+  being silently re-pointed at a document nobody reviewed.
+- `cp.verify-canary` keeps `attest: narrative`. The instrument does not make the
+  checkpoint provable: `verify_site_live` re-observes plugins, and nothing
+  proves "admin reachable, checkout renders". The body now says both halves, and
+  the attest comment's *"no tool checks this in this flow"* — which stopped
+  being true — is replaced rather than left standing.
+- Size pin re-measured in `shippedRunbooks.test.ts`; four version pins rippled
+  (`shippedRunbooks`, `procedureStreamWiring`, `loadProcedure`,
+  `chat-procedure-approval`), each with the reason on the line above it.
+
+### Receipts
+
+Same worktree, `npm test`, cache cleared, tree held still, exit captured BEFORE
+any pipe:
+
+| | suites | passed | skipped | total | exit |
+|---|---|---|---|---|---|
+| baseline `d46ec382` | 565 | 7,357 | 12 | 7,369 | 0 |
+| gate | 567 | 7,420 | 12 | 7,432 | 0 |
+| post-gate | 567 | 7,424 | 12 | 7,436 | 0 |
+
+**+2 suites, +67 tests over baseline, skipped unmoved at 12**, zero FAIL lines.
+`npx tsc -p . --noEmit` clean; eslint clean across `src/intelligence`,
+`src/main/intelligence-host`, `load-procedure.ts`, `ChatService.ts`,
+`src/renderer/components/DockedPanel` and `tests/intelligence-evals`, seam rule
+included and separately probed.
+
+**Mutation battery re-run in full against the FINAL rule: 26 mutations, all
+killed by a named witness, every run `--no-cache` per the amended protocol.**
+
+**ABI ON EXIT: system Node** (measured `v25.9.0 → 141`; `.nvmrc`/CI is
+22.16.0 → 127). **`npm run rebuild` before loading Local.**

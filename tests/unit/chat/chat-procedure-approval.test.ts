@@ -290,8 +290,8 @@ describe('a strict run standing at its approval checkpoint', () => {
     const card = events.find((e) => e.type === 'tool_call_approval_needed')! as any;
     expect(card.procedure).toEqual({
       runbookId: 'rb.bulk-plugin-update',
-      // 1.1.0 since WP-28 authored the `unrequested:` marks on the document.
-      version: '1.1.0',
+      // 1.2.0 since WP-31 declared verify_site_live on cp.verify-canary.
+      version: '1.2.0',
       strictness: 'strict',
       checkpointId: 'cp.approval',
       offersCanaryPolicy: true,

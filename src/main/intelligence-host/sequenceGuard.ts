@@ -42,15 +42,36 @@
  *
  * TWO MORE, ADDED BY WP-31 AFTER THE 2026-08-18 INCIDENT.
  *
- * 5. **EXCLUSIVE TOOL SCOPE — an unclaimed WRITE is refused.** Rules 1–4 gate
- *    only tools a checkpoint DECLARES. On 2026-08-18 a live run reached the
- *    same effect through `wp_plugin_update`, which no checkpoint claims and the
- *    anchor runbook forbids only in prose: the guard never fired, and WP-26's
- *    approval card — which rides the guard's refusal — never rendered. So while
- *    a strict, exclusive-scope capability is armed with unmet gated
- *    checkpoints, a write tool the CURRENT checkpoint does not declare is
+ * 5. **EXCLUSIVE TOOL SCOPE — a write the runbook declares NOWHERE is
+ *    refused.** Rules 1–4 gate only tools a checkpoint DECLARES. On 2026-08-18
+ *    a live run reached the same effect through `wp_plugin_update`, which no
+ *    checkpoint claims and the anchor runbook forbids only in prose: the guard
+ *    never fired, and WP-26's approval card — which rides the guard's refusal —
+ *    never rendered. So while a strict, exclusive-scope capability is armed
+ *    with unmet gated checkpoints, a write tool NO checkpoint declares is
  *    refused. Exclusive subsumes the prose prohibition: unclaimed = refused,
  *    and "never wp_plugin_update" stops being narrative.
+ *
+ *    **UNCLAIMED, not "not declared by the current checkpoint" — and the
+ *    difference was measured, not reasoned.** The narrower reading was built
+ *    first and the WP-31 gate broke it: `verify_site_live` was authored onto
+ *    `cp.verify-canary` to give the canary-verification checkpoint an
+ *    instrument, and it stayed refused, because cp.verify-canary is NARRATIVE.
+ *    `nextGatedCheckpoint` skips narrative steps by construction (naming one
+ *    would tell the actor to clear a gate that does not exist), so at
+ *    canary-verification time the current GATED checkpoint is cp.roll-fleet and
+ *    its declared list holds `bulk_plugin_update` alone. A rule keyed on the
+ *    current checkpoint therefore cannot see the tools of the narrative steps a
+ *    run must pass through — it refuses the runbook's own instructions for
+ *    every step the platform cannot prove.
+ *
+ *    Ordering is not lost by widening this: rule 1 already refuses a claimed
+ *    tool until its attestable predecessors are attested, and a tool's
+ *    predecessors being attested means the run has REACHED its checkpoint. So
+ *    "declared, in sequence" and "declared by where we are standing" permit the
+ *    same calls going forward; they differ only on calls the run has already
+ *    passed (a second backup, a re-verification), which the narrower reading
+ *    refused for no safety reason.
  *
  *    **Reads are untouched**, and "write" is not a new list — it is
  *    `getToolSafety(...).tier >= GATED_TIER_FLOOR`, the same classification the
@@ -271,10 +292,6 @@ function isExclusive(runbook: Runbook): boolean {
   return runbook.strictness === 'strict' && runbook.toolScope === 'exclusive';
 }
 
-function declares(checkpoint: RunbookCheckpoint, toolName: string): boolean {
-  return checkpoint.tools.some((t) => t.name === toolName);
-}
-
 /** What the current checkpoint permits, in words a refusal can use. */
 function declaredList(checkpoint: RunbookCheckpoint): string {
   if (checkpoint.tools.length === 0) {
@@ -344,8 +361,18 @@ function armingGapRefusal(toolName: string): SequenceRefusal | null {
     const runbook = core.law.runbooks.byCapability(request.capability);
     if (!runbook || !isExclusive(runbook)) continue;
 
+    // NOT unclaimed-only — and the asymmetry with rule 5 is deliberate, and was
+    // measured. On the run path a declared tool is left to the SEQUENCER, which
+    // refuses it until its predecessors are attested. In the gap there is no
+    // run, so there is no sequencer: an unclaimed-only reading here would let
+    // `bulk_plugin_update` — the capability's own primary tool, claimed by
+    // cp.canary — execute with no approval and no backup, which is the
+    // incident's harm reached through a claimed tool instead of an unclaimed
+    // one. Nothing is attested in the gap by definition, so the only safe
+    // reading is the conservative one: the first gated checkpoint's declared
+    // tools, and nothing else.
     const current = nextGatedCheckpoint(runbook.checkpoints, () => false);
-    if (!current || declares(current, toolName)) continue;
+    if (!current || current.tools.some((t) => t.name === toolName)) continue;
 
     return {
       capability: request.capability,
@@ -395,7 +422,11 @@ export function checkCheckpointSequence(
 
     const claimIndex = claimingCheckpoint(runbook, toolName);
     // WP-31 rule 5. `exclusive` is what turns "unclaimed" from untouched into
-    // refused — but only for writes, and only on a strict document.
+    // refused — but only for writes, and only on a strict document. The
+    // "unclaimed" half is NOT repeated here: it is expressed once, at the
+    // `if (claimedBy)` return below, which hands every declared tool to the
+    // sequencer and never reaches this. A conjunct no test can distinguish
+    // reads as a second place the rule lives, and the mutation battery said so.
     const exclusive = isExclusive(runbook) && isWriteTool(toolName);
 
     // Unclaimed AND advisory: untouched, exactly as WP-20d shipped it. This is
@@ -405,9 +436,9 @@ export function checkCheckpointSequence(
     const claimedBy = claimIndex >= 0 ? runbook.checkpoints[claimIndex] : undefined;
     const prerequisites =
       claimIndex >= 0 ? runbook.checkpoints.slice(0, claimIndex).filter(isAttestable) : [];
-    // A claimed tool with nothing attestable in front of it was never sequenced;
-    // under exclusive scope it is still asked whether it belongs HERE.
-    if (claimIndex >= 0 && prerequisites.length === 0 && !exclusive) return null;
+    // A claimed tool with nothing attestable in front of it was never sequenced,
+    // and exclusive scope has nothing to say about it — the runbook declares it.
+    if (claimIndex >= 0 && prerequisites.length === 0) return null;
 
     const cursor = foldProcedureCursor(run, runbook.checkpoints, core.ledger);
     if (cursor.fault) {
@@ -435,15 +466,16 @@ export function checkCheckpointSequence(
 
     const unmet = prerequisites.find((c) => !cursor.attested.includes(c.id));
     // The DECLARED-tool refusal keeps WP-20d's shape and its `sequence` reason,
-    // because WP-26's approval card rides exactly this one.
-    if (unmet && claimedBy) return refusal(runbook, run.capability, toolName, claimedBy, unmet, cursor);
-
-    if (!exclusive) return null;
+    // because WP-26's approval card rides exactly this one. A declared tool is
+    // never handed to rule 5: the runbook names it, and sequence is the whole
+    // of what may be asked of it.
+    if (claimedBy) return unmet ? refusal(runbook, run.capability, toolName, claimedBy, unmet, cursor) : null;
 
     // Where the run is standing — the same answer the turn carrier renders as
     // "Next gated checkpoint" and the rail marks active. Three surfaces naming
     // three different checkpoints is how a product contradicts itself about the
-    // step it is on.
+    // step it is on. The refusal names it and its declared list so the actor is
+    // pointed at the instrument the procedure DOES sanction here.
     const current = nextGatedCheckpoint(runbook.checkpoints, (c) => cursor.attested.includes(c.id));
     // No gated checkpoint left unmet: the ruling scopes exclusivity to "unmet
     // gated checkpoints", and a procedure whose enforceable part is complete
@@ -451,7 +483,7 @@ export function checkCheckpointSequence(
     // checkpoints are ALL narrative lands here too, which is right — nothing can
     // ever be attested, so nothing can ever be unmet, and a permanently closed
     // tool surface is WP-20d's broken-gate shape wearing a new hat.
-    if (!current || declares(current, toolName)) return null;
+    if (!current) return null;
 
     return exclusiveRefusal(runbook, run.capability, toolName, current);
   } catch {

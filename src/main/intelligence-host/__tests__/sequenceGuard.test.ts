@@ -392,17 +392,41 @@ describe('WP-31 · exclusive tool scope', () => {
     expect(checkCheckpointSequence('wp_plugin_update', task)).toBeNull();
   });
 
-  test('a re-run of an ALREADY-ATTESTED checkpoint’s tool is refused once the run has moved on', () => {
+  test('a DECLARED tool is never handed to exclusive scope — sequence is all that is asked of it', () => {
     arm();
     attestPrerequisites();
 
-    // MEASURED CONSEQUENCE, pinned rather than discovered later: cp.backup is
-    // attested, so the current checkpoint is cp.roll-fleet, which declares
-    // bulk_plugin_update only. A second backup is a write the current
-    // checkpoint does not declare, and the literal ruling refuses it.
-    const refusal = checkCheckpointSequence('wpe_backup_and_verify', task)!;
-    expect(refusal.reason).toBe('exclusive-scope');
-    expect(refusal.checkpoint).toBe('cp.roll-fleet');
+    // The rule is UNCLAIMED-only, and this is the case that decided it. A first
+    // draft keyed on "the current checkpoint's tools" refused a second backup
+    // here — cp.backup is attested, so the current GATED checkpoint is
+    // cp.roll-fleet, which declares bulk_plugin_update alone. Nothing about
+    // safety wanted that: the runbook names the tool, its predecessors are
+    // attested, and a re-verified backup is not a substitution.
+    expect(checkCheckpointSequence('wpe_backup_and_verify', task)).toBeNull();
+  });
+
+  test('cp.verify-canary IS SATISFIABLE — the checkpoint has an instrument the gate permits', () => {
+    // WP-31 gate ruling: "the flip must not merge with a checkpoint no tool can
+    // satisfy." `verify_site_live` is Tier 2 by the tier table (a readOnlyHint
+    // carve-out was refused, and re-tiering would cost the audit trail), so
+    // before it was declared, the runbook's own "prove it before scaling it"
+    // had no tool the gate would allow.
+    arm();
+    attestPrerequisites();
+
+    expect(checkCheckpointSequence('verify_site_live', task)).toBeNull();
+  });
+
+  test('…and it is still SEQUENCED: the canary instrument does not run before the backup', () => {
+    // Declaring it did not exempt it. Rule 1 still applies at its earliest
+    // claim, so a live re-check cannot become a way to touch the fleet before
+    // consent and a backup are on the record.
+    arm();
+    emitManifest();
+
+    const refusal = checkCheckpointSequence('verify_site_live', task)!;
+    expect(refusal.reason).toBe('sequence');
+    expect(refusal.checkpoint).toBe('cp.approval');
   });
 
   test('a SEQUENCE refusal still wins over an exclusive one for a declared tool', () => {
