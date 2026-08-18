@@ -198,8 +198,8 @@ get the ordinary treatment: an unbound criterion is BLOCKED, a judged one is
 OWNER-PENDING, and neither is ever a pass. The runner's exit code therefore
 starts telling the truth about the *experience*, not only about the platform.
 
-Read the totals as intended, not as a shortfall — **40 journey criteria, 2 PASS,
-2 OWNER-PENDING, 36 BLOCKED.** Four of the five journeys walk surfaces nobody has
+Read the totals as intended, not as a shortfall — **44 journey criteria, 4 PASS,
+1 OWNER-PENDING, 39 BLOCKED.** Four of the five journeys walk surfaces nobody has
 built. That is the report working.
 
 | spec | moment | today |
@@ -208,16 +208,28 @@ built. That is the report working.
 | `J-Inspect-divergence-to-scoped-intent` | M2 | 8 BLOCKED — no comparator render; scope identity is **WP-32**'s |
 | `J-Act-small-one-change-one-site` | M3 | 8 BLOCKED — the gate ships, the act-small surface does not |
 | `J-Return-away-during-a-halt` | M6 | 8 BLOCKED — promotion identity is **WP-30**'s |
-| `J-Refusal-refusal-grant-resume` | any→M7→back | 2 PASS, 2 OWNER-PENDING, 4 BLOCKED |
+| `J-Refusal-refusal-grant-resume` | any→M7→back | 12 criteria: 4 PASS, 1 OWNER-PENDING, 7 BLOCKED |
 
 **The criteria are transcribed, not authored.** Every `key_step` and `must_not`
-is a Must / Must-not bullet from
-`docs/intelligence/from-designer/from-designer-01-moments-tested.md` §5,
-ratified as written at the §1 adjudication. `checks.test.ts` re-extracts those
-bullets from that document on every run and requires the specs to equal them
-exactly, in order — so the transcription is pinned to its source rather than to
-a reviewer's memory of it. The `*Programmatic:*` and `*Judged sitting:*` lines
-live in each spec's `notes`, with their citations.
+is a Must / Must-not bullet from the designer's own committed text, and
+`checks.test.ts` re-extracts those bullets from that text on every run and
+requires the specs to equal them exactly, in order — so the transcription is
+pinned to its source rather than to a reviewer's memory of it. The
+`*Programmatic:*` and `*Judged sitting:*` lines live in each spec's `notes`,
+with their citations.
+
+**THERE ARE TWO SOURCES, AND WHICH ONE GOVERNS IS PINNED TOO (WP-33b).** Four
+journeys come from `from-designer-01-moments-tested.md` §5, ratified as written
+at the §1 adjudication. J-Refusal comes from
+`from-designer-05-companion-density-final.md` §"J-Refusal · the spec section
+this document owns" — the companion-density fold, which the fold adjudication of
+2026-08-18 adopted as that journey's governing text, superseding §5 and amending
+XD-19 to point at it. §1 §5 still parses and still contains a J-Refusal, so
+pointing the extractor back at it would look like a working transcription of the
+wrong document; a test asserts the routing rather than assuming it. The fold's
+version covers **two** refusal states rather than one — the empty run, where the
+world's state is the answer, and the split scope, where a grant is — which is
+why J-Refusal has 12 criteria where the others have 8.
 
 *(This is also why the specs' history has a false start: WP-33 first shipped a
 J-Refusal spec whose key steps were marked "never authored", because only the
@@ -243,18 +255,47 @@ has a packet's worth of evidence behind it.)*
   cited — including `npm run rebuild`, because a sitting happens inside Local
   and a tree left on system Node by a jest run cannot host one.
 - **OWNER-PENDING is earned per run.** Rule 2 still outranks rule 3:
-  J-Refusal's two judged checks gate on a refusal `probeRefusalPayload` actually
+  J-Refusal's judged checks gate on a refusal `probeRefusalPayload` actually
   drove out of the guard this run, and fall to BLOCKED if none arrived. Handing
   somebody a prompt to sit with a refusal the tree no longer produces would park
   a platform gap in a human's queue.
+- **A SAT criterion keeps its verdict, and keeps earning it (WP-33b).** The
+  first design sitting was held on 2026-08-18 and settled two of J-Refusal's
+  must-nots at pass@1, recorded verbatim in `WORK_PACKETS.md`. Those two now
+  render **PASS carrying the sitting's own words** — not a summary of them —
+  with the open pass³ column printed beside the pass@1, because a pass@1 shown
+  alone reads stronger than the sitting was. Re-transcribing the journey did not
+  un-sit them: neither changed in substance, and asking a person the same
+  question again because a document was re-authored spends their time to buy
+  nothing. But the verdict is earned per run like every other: a sitting judges
+  the refusal the tree emits, so if the guard stops emitting one, the criterion
+  falls to BLOCKED. A human verdict inherited across that boundary would be the
+  worst kind of stale green — one with a person's name on it.
 
-**One measured limit, stated rather than implied.** J-Refusal's two PASSing
-criteria check that the refusal's Govern door names the granted capability and
-its document. On a healthy run the grant's document and the refusal's document
-are the same string, so this report *cannot* distinguish a door derived from the
-grant from one derived from the refusal — a mutation swapping that operand
-survives the battery. The probe emits the limit as an evidence line, and a test
-pins that it keeps emitting it.
+**One measured limit, stated rather than implied — and an attempt to remove it
+that failed honestly.** J-Refusal's two driven criteria check that the refusal's
+Govern door names the granted capability and its document. On a healthy run the
+grant's document and the refusal's document are the same string, so this report
+*cannot* distinguish a door derived from the grant from one derived from the
+refusal — a mutation swapping that operand survives the battery. The probe emits
+the limit as an evidence line, and a test pins that it keeps emitting it.
+
+WP-33b attempted the fixture that would have converted that survivor to a kill,
+following the merge acceptance's registered follow-up: WP-31's **stale-pin
+disarm** looked like a shipped state where a grant's pinned document and the
+current registry differ. **It is not, and the reason is structural.** A stale pin
+yields *no grant*, not a divergent one — `resolveCapabilityGrants.admit` refuses
+the pin and disarms the capability — while a live grant's `runbookId` is always
+the id of the runbook the registry serves, and the registry refuses a second
+runbook claiming a served capability. So: grant exists ⟹ same document;
+documents differ ⟹ no grant, no oracle, and the probe reports *"the journey has
+no subject here"*. **The survivor stays disclosed.** The attempt is executable
+rather than argued — `probes.test.ts`, *"a stale pin disarms — it never yields a
+divergent document"*, drives both disarm forms through the production resolver,
+checks the invariant over every capability the registry serves, and drives the
+probe end to end in the disarmed state. The alternative would have been reaching
+past the guard to force a divergent pair, and a kill credited to a state the
+platform cannot be in is a kill of nothing.
 
 ## Adding a criterion
 

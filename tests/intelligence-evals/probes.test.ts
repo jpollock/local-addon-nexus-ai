@@ -12,6 +12,8 @@
  * the validator was mishandling `undefined`-valued optional keys, which is how
  * that bug was found.)
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { createEvalFixture, EvalFixture } from './fixture';
 import {
   probeIncidentProducer,
@@ -20,8 +22,27 @@ import {
   probeTimestampDiscipline,
   probeTopicFamily,
 } from './probes';
+import {
+  getCapabilityGrants,
+  resolveCapabilityGrants,
+  syncCapabilityGrants,
+  DisarmedGrant,
+  GrantResolution,
+  ResolvedGrant,
+} from '../../src/main/intelligence-host/capabilityGrants';
+import type { RunbookRegistry } from '../../src/intelligence';
+import type { NexusSettings } from '../../src/common/types';
+import { STORAGE_KEYS } from '../../src/common/constants';
 
 jest.setTimeout(60_000);
+
+/** Storage the grant sync can read, seeded with whatever a case needs. */
+function memoryStorageWith(seed: Record<string, unknown>): { get(k: string): unknown; set(k: string, v: unknown): void } {
+  const map = new Map<string, unknown>(Object.entries(seed));
+  return { get: (k) => map.get(k) ?? null, set: (k, v) => void map.set(k, v) };
+}
+
+const quietLogger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
 let fixture: EvalFixture;
 
@@ -148,6 +169,18 @@ describe('probeRefusalPayload', () => {
     });
   });
 
+  it('the disclosure points at the attempt that tried to remove it (WP-33b)', () => {
+    // A disclosed limit with no record of having been tested reads as one
+    // nobody looked at. The type's own comment carries where the attempt lives
+    // and what it found, so the next reader does not redo it from scratch —
+    // and if the attempt is ever deleted, this goes red rather than quietly
+    // leaving a dangling citation.
+    const source = fs.readFileSync(path.join(__dirname, 'probes.ts'), 'utf-8');
+    expect(source).toContain('WP-33b ATTEMPTED THE DIVERGENT CASE AND FOUND IT UNREACHABLE');
+    const attempt = fs.readFileSync(path.join(__dirname, 'probes.test.ts'), 'utf-8');
+    expect(attempt).toContain('a stale pin disarms — it never yields a divergent document');
+  });
+
   it('reports refused=false rather than throwing when nothing is armed', async () => {
     // The negative direction the runner never reaches: the guard returns null
     // for a tool on a turn with no request pending, and the probe has to
@@ -175,6 +208,7 @@ describe('probeRendererSurfaces', () => {
     expect(surfaces.counts.siteAtPlaces.renderer).toBe(0); // Inspect's comparator
     expect(surfaces.counts.sessionRegistry.renderer).toBe(0); // WP-30's fold
     expect(surfaces.counts.capabilityGrants.renderer).toBe(0); // Govern's matrix
+    expect(surfaces.counts.refusalTurn.renderer).toBe(0); // WP-33b, the empty-run turn
     // …and the one that HAS landed, pinned as present so its BLOCKED criteria
     // cannot quietly go on citing it as missing.
     expect(surfaces.counts.scopeBlock.renderer).toBeGreaterThan(0); // WP-32, merged
@@ -220,5 +254,147 @@ describe('probeIncidentProducer', () => {
     expect(second.ok).toBe(false);
     // …and it says so, rather than reporting a bare false.
     expect(second.evidence.join(' ')).toMatch(/folded a 2-finding report into 0 incident\(s\)/);
+  });
+});
+
+
+/**
+ * WP-33b · THE STALE-PIN EXHIBITING ATTEMPT — and its honest result.
+ *
+ * WP-33 left one mutation SURVIVED-and-disclosed: swapping
+ * `grantAndRefusalAgreeOnDocument`'s (and the door check's) oracle from the
+ * GRANT to the REFUSAL survives, because on a healthy run the two documents are
+ * the same string. The merge acceptance registered a follow-up: WP-31's
+ * stale-pin disarm is a shipped state in which a grant's pinned document and
+ * the current registry can differ, so *maybe* a fixture reaching that state
+ * makes the mutation observable and converts the survivor to a kill.
+ *
+ * IT DOES NOT, AND THE REASON IS STRUCTURAL RATHER THAN CIRCUMSTANTIAL. A stale
+ * pin does not produce a grant that names a different document; it produces NO
+ * GRANT. `resolveCapabilityGrants.admit` refuses the pin — hash-mismatch on
+ * either form, the ruled word for both — and pushes it onto `disarmed`, where
+ * the capability behaves as though it had never been granted. So the two
+ * documents cannot differ *while both exist*:
+ *
+ *   · a LIVE grant's `runbookId` is always `rb.id` for the runbook the registry
+ *     serves that capability, because `admit` writes `rb.id` and never the
+ *     pinned `entry.runbookId`;
+ *   · the refusal's `runbookId` is `runbooks.byCapability(capability).id` —
+ *     the same registry, the same lookup;
+ *   · and the registry refuses a second runbook claiming a capability already
+ *     served (`duplicate-capability`), so that lookup has exactly one answer.
+ *
+ *   grant exists ⟹ same document.  documents differ ⟹ no grant, no oracle,
+ *   and the probe reports "the journey has no subject here" instead of a door.
+ *
+ * THE SURVIVOR THEREFORE STAYS DISCLOSED. The alternative — reaching into the
+ * grant set or the registry to force a divergent pair — would be a fixture
+ * faking a state the platform cannot be in, and a kill credited to it would be
+ * a kill of nothing. An unreachable state honestly stated beats a fixture that
+ * fakes one. Everything below is executable: the disarm is driven through the
+ * production resolver, the invariant is checked over every capability the
+ * registry actually serves, and the probe is driven end to end in the disarmed
+ * state. If a later change makes the divergence reachable, these tests are what
+ * will notice — the third one goes red the day a stale pin yields a live grant.
+ *
+ * PLACED LAST IN THIS FILE ON PURPOSE: the end-to-end half re-syncs the
+ * module-level live grant set, which every earlier test in this file reads.
+ */
+describe('WP-33b · a stale pin disarms — it never yields a divergent document', () => {
+  const CAP = 'cap.bulk_plugin_update';
+  const NEVER_THE_FILE_HASH = `sha256:${'0'.repeat(64)}`;
+
+  const runbooks = (): RunbookRegistry => fixture.core.law!.runbooks;
+  const grantFor = (res: GrantResolution, capability: string): ResolvedGrant | undefined =>
+    res.grants.find((g) => g.capability === capability);
+  const disarmFor = (res: GrantResolution, capability: string): DisarmedGrant | undefined =>
+    res.disarmed.find((d) => d.capability === capability);
+
+  it('the healthy state is the one the survivor describes: one document, two readers', () => {
+    // The premise of the whole follow-up, driven rather than recalled.
+    const served = runbooks().byCapability(CAP)!;
+    const healthy = grantFor(resolveCapabilityGrants({ runbooks: runbooks(), settings: null }), CAP)!;
+    expect(healthy.runbookId).toBe(served.id);
+    expect(healthy.runbookHash).toBe(served.hash);
+  });
+
+  it('a pin to a hash the file has moved past DISARMS — no grant, not a different one', () => {
+    const res = resolveCapabilityGrants({
+      runbooks: runbooks(),
+      settings: { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
+    });
+    expect(grantFor(res, CAP)).toBeUndefined();
+    const disarmed = disarmFor(res, CAP)!;
+    expect(disarmed.reason).toBe('hash-mismatch');
+    // Both hashes, because the remedy is to re-grant against the current file.
+    expect(disarmed.detail).toContain(NEVER_THE_FILE_HASH);
+  });
+
+  it('a pin to a DIFFERENT document — the runbook-split shape — disarms the same way', () => {
+    // The other half of "the grant's pinned document and the current registry
+    // can differ": a grant reviewed against a document that no longer serves
+    // this capability. This is the case that would most plausibly have produced
+    // a live-but-divergent grant, and it does not.
+    const res = resolveCapabilityGrants({
+      runbooks: runbooks(),
+      settings: { capabilityGrants: [{ capability: CAP, runbookId: 'rb.some-other-document' }] },
+    });
+    expect(grantFor(res, CAP)).toBeUndefined();
+    expect(disarmFor(res, CAP)!.reason).toBe('hash-mismatch');
+  });
+
+  it('every live grant names the document the registry serves — there is no third source', () => {
+    // The invariant the two cases above are instances of, checked over the
+    // whole shipped set rather than the one capability this journey uses. This
+    // is what makes the conclusion structural: a live grant CANNOT name a
+    // document other than the served one, whatever settings say.
+    // Checked with NO overlay and with three overlays, because the settings
+    // layer is the only thing that could introduce a second document — an
+    // invariant asserted only over the shipped set would say nothing about the
+    // case the follow-up was actually about.
+    const overlays: Array<Pick<NexusSettings, 'capabilityGrants'> | null> = [
+      null,
+      { capabilityGrants: [{ capability: CAP, runbookId: runbooks().byCapability(CAP)!.id }] },
+      { capabilityGrants: [{ capability: CAP, runbookId: 'rb.some-other-document' }] },
+      { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
+    ];
+    for (const settings of overlays) {
+      const res = resolveCapabilityGrants({ runbooks: runbooks(), settings });
+      expect(res.grants.length).toBeGreaterThan(0);
+      for (const grant of res.grants) {
+        const served = runbooks().byCapability(grant.capability)!;
+        expect(served).toBeDefined();
+        expect(grant.runbookId).toBe(served.id);
+        expect(grant.runbookHash).toBe(served.hash);
+      }
+    }
+  });
+
+  it('END TO END: in the disarmed state the probe has NO ORACLE, so there is nothing to compare', async () => {
+    // The exhibiting attempt itself, driven through production code: sync the
+    // live grant set from a settings overlay carrying a stale pin, then run the
+    // probe the survivor lives in. If the divergent state were reachable this
+    // is where it would show up as two different documents. What shows up
+    // instead is the absence of the oracle — and the probe says so.
+    const staleStorage = memoryStorageWith({
+      [STORAGE_KEYS.SETTINGS]: { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
+    });
+    syncCapabilityGrants({ core: fixture.core, storage: staleStorage, logger: quietLogger });
+    expect(getCapabilityGrants().some((g) => g.capability === CAP)).toBe(false);
+
+    const p = await probeRefusalPayload(fixture);
+    expect(p.ok).toBe(false);
+    expect(p.grantRunbookId).toBeUndefined();
+    expect(p.grantAndRefusalAgreeOnDocument).toBe(false);
+    expect(p.evidence.join(' ')).toContain('no live grant');
+    // …and it does NOT report a divergent pair, because there is no pair. The
+    // door the guard would still build has nothing to be compared against.
+    expect(p.evidence.join(' ')).not.toContain('DIFFERENT here');
+  });
+
+  afterAll(() => {
+    // Put the live set back, so a later reader of this module's state sees the
+    // tree's real grants rather than this block's disarmed one.
+    syncCapabilityGrants({ core: fixture.core, storage: memoryStorageWith({}), logger: quietLogger });
   });
 });

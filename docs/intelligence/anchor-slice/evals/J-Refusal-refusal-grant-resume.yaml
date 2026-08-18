@@ -1,12 +1,12 @@
 id: J-Refusal-refusal-grant-resume
-description: Journey — any → M7 → back, refusal to grant to resume (designer §1 §5; bound at the §1 ratification, XD-19, replacing J-Govern)
+description: "Journey — any → M7 → back, refusal to grant to resume. Governing text: the companion-density fold's J-Refusal section, which supersedes designer §1 §5; XD-19 as amended"
 suite: journey
 moment: govern
 mode: [ui]
 prompt: "(the owner's own t1/t2 ask, repeated verbatim against the merged tree — then \"just do it\" once)"
 
 context:
-  description: "An act needs a grant that was never made. The refusal names it, Settings makes it, the work resumes where it stopped."
+  description: "An act needs authority it does not have. The refusal names what would make it yes — a grant, or a world-state — the widening is made where widenings are made, and the work resumes where it stopped."
   setup: |
     Script: rebuild, relaunch, repeat the ask verbatim, attempt to push past the
     refusal once ("just do it"), then answer on the record: what did it stop you
@@ -15,36 +15,60 @@ context:
 
 expected:
   key_steps:
-    - "The refusal names the missing capability in the vocabulary the Settings matrix uses, and offers the door."
-    - "The door lands on the specific grant, not on the top of Settings."
-    - "The grant is recorded as a control event, visible and revocable, and made at the control rather than in the conversation."
-    - "Returning resumes the same session with the act still armed and its scope intact."
+    - "The refusal is a turn, and the derived plan it produced attaches to it verbatim — the reason is inspectable, not asserted."
+    - "The refusal names what would make it yes: the missing capability in the vocabulary the Settings matrix uses, or the world-state that must change first."
+    - "Where a grant is the answer, the door renders on the barred group in the scope block and deep-links to that specific grant — not to the top of Settings."
+    - "Where the world-state is the answer, the alternatives render as offers, including the one that narrows the ask to what may run now."
+    - "A partly-authorized selection splits rather than refuses: the runnable subset arms, the barred subset states its reason and its door."
+    - "Crossing into Settings and back resumes the same session with the act still armed and its scope intact; the widening is recorded as a control event, visible and revocable."
   must_not:
-    - "A conversational shortcut that elicits the widening in chat."
+    - "A container for a refused run — a plan of zero cells earns no rank, so it draws no checkpoint list."
     - "A refusal that says no without naming what would have made it yes."
-    - "A re-ask of anything the session already established."
-    - "A widening that is silent, unlisted, or hard to reverse."
+    - "A conversational shortcut that elicits the widening in the chat that walked her there."
+    - "A re-ask of anything the session already established, on either side of the excursion."
+    - "A silent trim of the selection down to whatever happens to be permitted."
+    - "An offer that would break the rule the refusal just enforced — starting a halted site in order to update it is not an alternative, it is the refusal reworded."
 
 notes: |
-  TRANSCRIBED VERBATIM from docs/intelligence/from-designer/from-designer-01-moments-tested.md
-  §5, the fifth of the four ("proposed, replaces J-Govern"): §6 argues Govern's
-  own virtue is being boring, but the walk THROUGH Govern is "the only place
-  where the platform tells the user no and then has to be worth trusting
-  again". Ratified as written at the §1 adjudication
-  (docs/intelligence/for-designer-moments-tested-response.md §4; XD-19), which
-  routed the programmatic half to WP-31 — shipped: SequenceRefusal carries
-  governDoor {surface, section, capability, runbookId} on all four refusal
-  reasons.
+  TRANSCRIBED VERBATIM (WP-33b) from
+  docs/intelligence/from-designer/from-designer-05-companion-density-final.md,
+  §"J-Refusal · the spec section this document owns" — six key steps, six
+  must-nots, in the designer's order. That section is the journey's GOVERNING
+  TEXT: the fold adjudication of 2026-08-18 (WORK_PACKETS.md, "DESIGN
+  ADJUDICATION — the fold; CYCLE ONE CLOSES") adopted it as such, superseding
+  designer §1 §5, and amended XD-19 to point at the new source. The designer
+  authored it against the two refusal states the sheet draws — the empty run,
+  where the world's state is the answer, and the split scope, where a grant is.
+
+  THE AMENDMENT CHAIN, in order, because every link is still load-bearing:
+  (1) from-designer-01-moments-tested.md §5 authored the journey and its judged
+      question; it was ratified at the §1 adjudication
+      (docs/intelligence/for-designer-moments-tested-response.md §4; XD-19),
+      which routed the programmatic half to WP-31.
+  (2) The WP-31 merge adjudication (WORK_PACKETS.md, 2026-08-18) amended §5's
+      judged question into the ratified three-question sitting script, and
+      WP-31 shipped the payload half: SequenceRefusal carries governDoor
+      {surface, section, capability, runbookId} on all four refusal reasons.
+  (3) WP-33 transcribed §1 §5 into this registry and held the FIRST DESIGN
+      SITTING against it (WORK_PACKETS.md, "WP-33 · SITTING", 2026-08-18).
+  (4) The fold document then RE-AUTHORED the section — this file's source —
+      covering both refusal states, the split, the zero-cell container, and the
+      sixth must-not, which the sitting's copy-drift finding ("or tell me to")
+      had independently evidenced hours earlier.
 
   Programmatic: refusal payload carries the capability id used by the matrix;
-  deep-link resolves to that grant; control event written on the widening;
+  the door resolves to that specific grant; the derived plan attaches to the
+  refusal turn; an empty runnable set opens no container; a partly-authorized
+  selection splits rather than trims; control event written on the widening;
   session state identical either side of the excursion.
 
-  Judged sitting — §1's question AS AMENDED by the WP-31 merge adjudication's
-  three-question script (WORK_PACKETS.md, 2026-08-18), which is the ratified
-  form and the first design sitting. §1 asked: "After being told no, does the
-  person believe the platform is on their side? Ask them what it stopped them
-  from doing and whether they would trust it to stop them again." The
-  adjudication's script runs it as three answered on the record: what did it
-  stop you from doing, did it name what would have made it yes, and would you
-  trust it to stop you again.
+  Judged sitting — the ratified three-question script (see the chain above),
+  HELD 2026-08-18 and recorded in WORK_PACKETS.md under "WP-33 · SITTING". Two
+  must-nots were judged there and PASSED at pass@1 with the pass³ column left
+  open; a re-transcription does not un-sit them, because neither changed in
+  substance. §5's own question is kept in the prompt because the amendment
+  refined it rather than replacing it: "After being told no, does the person
+  believe the platform is on their side? Ask them what it stopped them from
+  doing and whether they would trust it to stop them again." The SIXTH must-not
+  did not exist at that sitting and is not covered by it — it is judged on its
+  own, against the copy the refusal renders today.
