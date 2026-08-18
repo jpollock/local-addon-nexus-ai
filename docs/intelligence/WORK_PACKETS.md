@@ -10355,9 +10355,21 @@ must-not; survivor is finding 5.
 marker. No `src/` touched, no lock taken, `wpeOperationPermissions` untouched.
 No two packets on one file.**
 
-**Baselines (worktree `wp-33`).** Before: `npm test` **567 suites, 7424 passed,
+**Baselines.** Worktree `wp-33` before: `npm test` **567 suites, 7424 passed,
 12 skipped, 7436 total**, exit 0; `npx jest tests/intelligence-evals
---no-cache` 8 suites / 193 tests. After: see the merge report.
+--no-cache` 8 suites / 193 tests. Worktree after (rebased onto WP-32):
+**571 suites, 7613 passed, 12 skipped, 7625 total**, exit 0; eval tree 8 suites
+/ 311 tests.
+
+**MERGED-TREE baseline (`f0d7f27b`): 571 suites, 7623 passed, 2 skipped, 7625
+total, exit 0**; `npm run typecheck` clean; the runner exits 2 with 14 PASS /
+0 FAIL / 38 BLOCKED / 16 OWNER-PENDING. **The skipped column moved 12 → 2 and
+the total did not move at all** — the protocol's documented both-ways gate,
+exactly: the primary checkout holds both embedding model files where a worktree
+has one, so ten `embedding-service` tests cross from skipped to passed. Read as
+a passed-column delta alone it would look like a phantom gain of ten.
+
+Receipts: `git diff --stat f0d7f27b^1 f0d7f27b` — 14 files, +1659 / −7.
 
 **A sixth poisoned-cache occurrence, and a sixth confirmation of the rule.**
 `npm test` reported `sitting.test.ts` failing to parse at its own shebang, one
@@ -10380,3 +10392,41 @@ script and both forms of the question are carried verbatim in the spec's
 Record the answers here when it happens. It is also the FIRST DESIGN SITTING
 per `DESIGN_PROTOCOL`, and the two criteria it settles are the two the designer
 predicted would fail first.
+
+---
+
+**DESIGN ADJUDICATION — the fixture diff; the densities HOLD LIFTS
+(2026-08-18).** The designer completed the swap (verbatim JSON +
+mechanical `window.NEXUS_PROCEDURES` wrapper + scenario-only narrative
+file, labels from the document's own `reason` phrase sentence-cased)
+and returned four divergences in `fixture-diff-notes.md`, with the
+hand-built fixture preserved for the diff. Adjudicated in
+`for-designer-fixture-diff-response.md`. **Finding 1 (attest wording
+table) DISSOLVES:** neither artifact is defective — the designer read
+`procedureModel.ts` before WP-31's merge (`c5d717eb`, 18 Aug 11:44)
+rewrote all three attest strings into capability tense, seam and
+mirror together; the generator was built after. The "verified from
+records" wording in their table is the PRE-incident-fix frame — the
+class-label-reads-as-completion-state root cause repaired by WP-31 —
+and the tree today carries one sentence per class, held by the mirror
+pin (`toEqual`) and a dead-strings test. The designer enforced the
+one-vocabulary rule from OUTSIDE the repo and caught the rewrite
+propagating: the seam working. **Findings 2/3 accepted as called:**
+stale version now fails closed via `:check`; authored labels ("two of
+eight noticeably softer than the runbook's words") are pin 7's case
+made flesh — reason-phrase-sentence-cased RATIFIED as the label rule
+(sentence-casing is rendering; choosing words is authoring).
+**Finding 4 answered from the tree:** no Settings matrix surface and
+no capability-label map ship anywhere — the id IS the matrix's
+vocabulary today; the door renders and resolves by
+`cap.bulk_plugin_update`; no interim invented label (finding 3's
+defect at the most consequential words); human labels arrive as XD-1
+vocabulary rows when Govern's matrix is designed. **XD-22 enters the
+register** (guided renders steps, never checkpoints — no sheet
+invents rigor a document does not declare; M5 designs against
+`rb.diagnose-site`'s real shape). Swap pattern ratified as standing;
+one caution: scenario scope lines keep `procedureScope`'s output
+shape. The diff notes + hand-built fixture are committed under
+`from-designer/` per the positions rule. **RB-D/RB-E are now FULLY
+RATIFIED; cycle one closes on the RB-D final fold**, which the diff
+notes reveal exists — requested for the closing adjudication.
