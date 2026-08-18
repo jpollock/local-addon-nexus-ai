@@ -3,10 +3,25 @@
  * WP-13b · The sitting harness — live-model transcript capture over the eval
  * fixture.
  *
- *   npx ts-node --project tsconfig.test.json tests/intelligence-evals/sitting.ts
+ *   NEXUS_EVAL_API_KEY=<key> npx ts-node --project tsconfig.test.json \
+ *     tests/intelligence-evals/sitting.ts
  *   … --runs 3 --out /tmp/wp13-sitting
  *   … --runs 1                      # the smoke run, one API call
  *   … --empty-history               # E-01's abstain twin
+ *   … --help                        # spends nothing; also the cheapest check
+ *                                   # that the require chain still loads
+ *
+ * THAT IS THE WHOLE INVOCATION — no `-r` require hook, no
+ * `TS_NODE_TRANSPILE_ONLY=1`, and ts-node typechecks as it goes. It briefly was
+ * not: WP-20e's probes imported `AgentDispatcher` at module scope, which
+ * reaches `electron` through `buildAgentContext → ipc-handlers → getAIProvider
+ * → KeyVault`. Under jest that resolves to `tests/__mocks__/electron.ts`; in
+ * this plain-Node CLI it resolved to nothing, and the 2026-08-18 sitting had to
+ * be run behind a stub require-hook (`electron-node-stub.cjs`, now deleted) with
+ * typechecking switched off to get past what the stub then dragged in. WP-24
+ * made that import lazy in `probes.ts` instead. IF YOU EVER NEED A FLAG BACK
+ * HERE, something on this file's require chain has re-acquired electron — find
+ * it and make it lazy rather than re-adding the hook.
  *
  * ⚠️ THIS SPENDS REAL API TOKENS AND IS NEVER PART OF `npm test`. It is a CLI,
  * not a jest suite: `main()` runs only when this file is invoked directly
@@ -62,7 +77,10 @@ import {
   HALTED_SITE,
   SittingWorld,
 } from './sittingWorld';
-import { recordArmingRequest } from '../../src/main/intelligence-host/procedureArming';
+import {
+  clearArmingRequests,
+  recordArmingRequest,
+} from '../../src/main/intelligence-host/procedureArming';
 import { foldProcedureCursor, runForTask } from '../../src/main/intelligence-host/procedureCursor';
 import {
   deriveProcedureAudit,
@@ -379,6 +397,18 @@ export async function runOnce(run: number, ctx: RunContext): Promise<RunCapture>
   const spec = SITTING_SPECS[ctx.options.spec];
   const world = await createSittingWorld({ incidents: !ctx.options.emptyHistory });
   setIntelligenceCore(world.fixture.core);
+
+  // WP-24 · Every run is an identical trial, and the arming queue is
+  // process-wide. `assembleForChatTurn` runs ONCE per `sendMessage`, so a
+  // `nexus_load_procedure` call the model makes on its LAST iteration is never
+  // drained inside the run that made it — it sits in the queue and arms the
+  // NEXT run's carrier instead. That is exactly what the 2026-08-18 owner
+  // sitting caught (finding (a)): E-01 run 2 and its empty twin's run 2 both
+  // arrived "Armed by: model-request" having asked for nothing, which made runs
+  // 1..N of a pass^N different experiments wearing one label. Clearing at the
+  // START of the run rather than the end also covers whatever ran before the
+  // first run in this process.
+  clearArmingRequests();
 
   const sessionId =
     `wp13b-sitting-${ctx.options.spec}-` +

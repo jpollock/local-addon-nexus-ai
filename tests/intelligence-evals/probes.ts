@@ -35,7 +35,16 @@ import {
 import { loadProcedureHandler } from '../../src/main/mcp/modules/fleet/load-procedure';
 import { ToolRegistry } from '../../src/main/mcp/tool-registry';
 import { ChatService } from '../../src/main/chat/ChatService';
-import { AgentDispatcher } from '../../src/main/agent-runtime/AgentDispatcher';
+/**
+ * TYPE-ONLY, deliberately — see `contributedDispatcher()`. A value import here
+ * puts `AgentDispatcher` on this module's require chain, and through
+ * `buildAgentContext` → `ipc-handlers` → `getAIProvider` → `KeyVault` that
+ * chain ends at `electron`. Under jest that resolves to the mock; the sitting
+ * harness is a plain-Node CLI where it resolves to nothing at all, which is
+ * why WP-20e's probes cost the sitting a require-hook stub to run. `import
+ * type` is erased at emit, so nothing is dragged.
+ */
+import type { AgentDispatcher } from '../../src/main/agent-runtime/AgentDispatcher';
 import { ContributedToolRegistry } from '../../src/main/agent-runtime/ContributedToolRegistry';
 import {
   ACTION_EXECUTED_TOPIC,
@@ -757,6 +766,15 @@ export interface GatewayProbe extends Probe {
  * evidence, that suite is the pin.
  */
 function contributedDispatcher(): AgentDispatcher {
+  // WP-24 · LAZY BY REQUIREMENT, not by taste. Loading the dispatcher at module
+  // scope pulls electron into every importer of this file, including
+  // `sitting.ts` — a plain-Node CLI. Requiring it here confines that cost to
+  // the one probe that actually constructs a dispatcher, so the sitting runs
+  // with no electron stub. If a second probe ever needs it, require it there
+  // too rather than hoisting this back to the top.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { AgentDispatcher: Dispatcher } =
+    require('../../src/main/agent-runtime/AgentDispatcher') as typeof import('../../src/main/agent-runtime/AgentDispatcher');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wp19-eval-agent-'));
   fs.mkdirSync(path.join(dir, 'log_processor'));
   fs.writeFileSync(
@@ -769,7 +787,7 @@ function contributedDispatcher(): AgentDispatcher {
     { name: 'rescan', description: 'Rescan the log bucket', inputSchema: {} },
     2
   );
-  return new AgentDispatcher(
+  return new Dispatcher(
     contributed,
     new ToolRegistry(),
     {} as never,

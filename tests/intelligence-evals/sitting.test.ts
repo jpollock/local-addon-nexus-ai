@@ -40,7 +40,7 @@ import {
   ProcedureAuditRow,
 } from '../../src/main/intelligence-host/procedureView';
 import type { ProviderStreamEvent } from '../../src/common/chat-types';
-import { createSittingWorld, E01_PROMPT, FLAGGED_SITE } from './sittingWorld';
+import { B03_CAPABILITY, createSittingWorld, E01_PROMPT, FLAGGED_SITE } from './sittingWorld';
 import {
   createEvalFixture,
   EvalFixture,
@@ -728,6 +728,63 @@ describe('end-to-end capture with the model call scripted (no tokens spent)', ()
       // The wrapper restored the OWN property it found, rather than deleting it
       // and silently uncovering the prototype's real (billable) implementation.
       expect(provider.streamChat).toBe(fake);
+    } finally {
+      restore();
+    }
+  });
+
+  /**
+   * WP-24 · The sitting's own finding (a) from the 2026-08-18 owner sitting:
+   * E-01 run 2 and its empty twin's run 2 both arrived carrying the FULL
+   * procedure, "Armed by: model-request", on a run that never asked for one —
+   * they were consuming run 1's request. `assembleForChatTurn` runs ONCE per
+   * `sendMessage`, so a `nexus_load_procedure` call made on a run's LAST
+   * iteration is never drained inside that run; the process-wide queue carries
+   * it into whatever assembles next, which within one `sitting.ts` invocation
+   * is the next run. That is not a variant, it is nondeterminism: runs 1..N of
+   * a pass^N must be identical trials.
+   */
+  test('an arming request cannot leak from one run into the next — runs are identical trials', async () => {
+    let call = 0;
+    const { restore } = scriptProvider(async function* () {
+      call += 1;
+      if (call === 1) {
+        // Run 1, iteration 1: ask for the procedure by name. Nothing in run 1
+        // assembles again, so the request is still queued when run 1 ends.
+        yield { type: 'token', text: 'Which procedure covers this?' };
+        yield {
+          type: 'tool_call_end',
+          id: 'c1',
+          name: 'nexus_load_procedure',
+          arguments: { capability: B03_CAPABILITY },
+        };
+        yield { type: 'done', stopReason: 'tool_use' };
+        return;
+      }
+      // Every later iteration, in both runs: answer and stop. Run 2 asks for
+      // nothing at all.
+      yield { type: 'token', text: 'Here is the plan.' };
+      yield { type: 'done', stopReason: 'end_turn' };
+    });
+
+    try {
+      const first = await runOnce(1, ctx());
+      // The premise: the tool really ran and really recorded a request. Without
+      // this the assertion below would pass against a harness that never armed
+      // anything for any reason — a vacuous guard.
+      const ack = first.events.find(
+        (e) => e.type === 'tool_call_result' && e.name === 'nexus_load_procedure'
+      ) as { result?: string } | undefined;
+      expect(ack?.result).toContain('rb.bulk-plugin-update');
+
+      const second = await runOnce(2, ctx());
+
+      // Run 2 armed nothing, so run 2's carrier holds no procedure: no armed
+      // header, no "Armed by" attribution, no runbook body. The index (which a
+      // live grant always contributes) is untouched — this is about arming.
+      const block = turnBlockOf(second) ?? '';
+      expect(block).not.toContain('Armed by');
+      expect(block).not.toContain('## Procedure — rb.bulk-plugin-update');
     } finally {
       restore();
     }
