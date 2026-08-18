@@ -9302,3 +9302,29 @@ component of the fix already existed in the record (a shipped-off
 mechanism, a copy owed a rewrite, a known harness divergence). The
 system predicted its own failure shape; today it happened, cost
 nothing, and closes three doors.
+
+---
+
+### [ ] WP-31 · Close the unclaimed-tool door  *(registered by the 2026-08-18 INCIDENT, rulings 1–3)*
+
+**ANNOUNCED 2026-08-18 — LOCKS TAKEN.** Worktree `.worktrees/wp-31`, branch
+`wp-31`, base `poc/nexintelligence` @ `d46ec382` (the architect's WP-28 merge
+adjudication and the INCIDENT entry itself were found uncommitted in the
+primary checkout and committed VERBATIM, attributed, at `d46ec382` before this
+worktree was cut — md5 identical before and after the commit, `28b88bf0aca1b5bf0bab5bcdfd954fd7`;
+flagged for fidelity verification).
+
+Locks: **core + host** (`src/main/intelligence-host/` — `sequenceGuard.ts`,
+`procedureArming.ts`, `procedureView.ts`; `src/intelligence/law/runbookRegistry.ts`)
+and `src/main/mcp/modules/fleet/load-procedure.ts`. Confirmed free: no other
+worktree holds them (WP-28 merged at `cff8ee55`; no wp-29/30/31 branch exists).
+**Two files outside the announced set are touched and are named here rather
+than taken silently:** `src/main/chat/ChatService.ts` (one condition — the
+approval card must not ride an exclusive-scope refusal; see finding below) and
+the renderer's pinned `ATTEST_WORDS` mirrors (`procedureModel.ts`,
+`procedureStream.fake.ts`), which a copy change is not allowed to leave behind.
+The integration lock (`src/main/index.ts`, `ipc-handlers.ts`) is **not** taken.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code
+captured before any pipe): **565 suites / 7,357 passed / 12 skipped / 7,369
+total, exit 0.**
