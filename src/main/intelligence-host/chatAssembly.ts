@@ -26,6 +26,7 @@ import {
   SemanticHit,
   TaskFrame,
 } from '../../intelligence';
+import type { Runbook } from '../../intelligence';
 import { getIntelligenceCore } from './coreRegistry';
 import { procedureRequestForTurn } from './procedureArming';
 import {
@@ -35,6 +36,8 @@ import {
   registerProcedureTurn,
   runForTask,
 } from './procedureCursor';
+import type { ProcedureCursorState, ProcedureRun } from './procedureCursor';
+import { forgetProcedureStream, notifyProcedureState } from './procedureStream';
 import { environmentEntityId, siteEntityId } from './provisionalEntity';
 import { buildTaskFrame, describeEnvironmentsFor } from './taskFrame';
 import { wrapUntrusted } from '../mcp/pii';
@@ -130,6 +133,10 @@ export function forgetChatAssemblySession(sessionId: string): void {
   // WP-20d: and the checkpoint run, which is the same kind of "what has this
   // actor already done" state, held for the same ADR-10 reason.
   forgetProcedureRun(sessionId);
+  // WP-26: and the stream's memory of what it has already announced, so a
+  // re-armed session announces its declaration again rather than diffing
+  // against a run that no longer exists.
+  forgetProcedureStream(sessionId);
 }
 
 export async function assembleForChatTurn(
@@ -162,6 +169,12 @@ export async function assembleForChatTurn(
       req.procedure ??
       procedureRequestForTurn({ runbooks: core.law?.runbooks, userMessage: req.userMessage });
 
+    // WP-20d folds the cursor here; WP-26 keeps what the fold saw, because the
+    // stream needs the same slice and a second fold would be a second opinion.
+    const folded = procedureRequest
+      ? withCursor(procedureRequest, req.sessionId, taskId)
+      : undefined;
+
     const request: AssembleRequest = {
       actor: { id: 'act_chat_assembler', kind: 'system', autonomy: 'interactive' },
       capability: null, // v0 chat runs under no capability grant
@@ -173,9 +186,7 @@ export async function assembleForChatTurn(
       // stays authoritative, because the field is 20c's contract. WP-20d then
       // attaches the checkpoint cursor to whatever that produced — it decides
       // nothing about arming, and with nothing armed it changes nothing.
-      ...(procedureRequest
-        ? { procedure: withCursor(procedureRequest, req.sessionId, taskId) }
-        : {}),
+      ...(folded ? { procedure: folded.request } : {}),
       surface: CHAT_SURFACE,
       policyDivergences,
       context: {
@@ -210,6 +221,19 @@ export async function assembleForChatTurn(
 
     emitManifest(core, bundle, targets);
 
+    // WP-26 · the three stream events, from the seam that folds the cursor.
+    // AFTER the manifest, deliberately, and the stream re-folds rather than
+    // reusing `folded.cursor`: this turn's manifest is what attests
+    // `cp.consult-history`, and the surface must stand where the sequence guard
+    // stands, not where the carrier does. See `procedureStream.notifyProcedureState`.
+    notifyProcedureState({
+      sessionId: req.sessionId,
+      outcome: bundle.procedure,
+      runbook: folded?.runbook,
+      run: folded?.run,
+      ledger: core.ledger,
+    });
+
     return {
       taskId,
       ambientBlock: bundle.blocks.ambient,
@@ -236,18 +260,26 @@ export async function assembleForChatTurn(
  * request without a cursor, and 20c renders "the platform is not attesting
  * checkpoints", which is then exactly true.
  */
+interface FoldedProcedure {
+  request: ProcedureRequest;
+  /** What the fold saw, kept for the stream. Absent when no fold ran. */
+  cursor?: ProcedureCursorState;
+  runbook?: Runbook;
+  run?: ProcedureRun;
+}
+
 function withCursor(
   procedure: ProcedureRequest,
   sessionId: string,
   taskId: string
-): ProcedureRequest {
+): FoldedProcedure {
   try {
     const armed = procedure.armed;
-    if (!armed) return procedure;
+    if (!armed) return { request: procedure };
 
     const core = getIntelligenceCore();
     const runbook = core?.law?.runbooks.byCapability(armed.capability);
-    if (!core || !runbook) return procedure;
+    if (!core || !runbook) return { request: procedure };
 
     armProcedureRun({
       sessionId,
@@ -257,21 +289,27 @@ function withCursor(
     });
     registerProcedureTurn({ sessionId, taskId });
     const run = runForTask(taskId);
-    if (!run) return procedure;
+    if (!run) return { request: procedure };
 
     const state = foldProcedureCursor(run, runbook.checkpoints, core.ledger);
     // A fault is NOT rendered as an empty cursor: an empty cursor says "nothing
     // attested yet", and an unreadable ledger says nothing of the kind. The
     // guard refuses this capability's calls in that state; the carrier stays
-    // silent rather than claiming progress it could not read.
-    if (state.fault) return procedure;
+    // silent rather than claiming progress it could not read. The stream is
+    // handed the faulted state too and makes the same call for itself.
+    if (state.fault) return { request: procedure, cursor: state, runbook, run };
 
     return {
-      ...procedure,
-      cursor: { attested: state.attested, narrative: state.narrative, denied: state.denied },
+      request: {
+        ...procedure,
+        cursor: { attested: state.attested, narrative: state.narrative, denied: state.denied },
+      },
+      cursor: state,
+      runbook,
+      run,
     };
   } catch {
-    return procedure;
+    return { request: procedure };
   }
 }
 

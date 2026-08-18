@@ -159,6 +159,25 @@ function payloadOf(event: EventEnvelope): Record<string, unknown> {
  * every turn of the run — not by turn, because the turns are separate
  * correlations and "the latest decision" has to mean the latest in the RUN.
  */
+/**
+ * One run's events, oldest first.
+ *
+ * Ordering is by event id (ULID, so lexicographic order IS time order) across
+ * every turn of the run — not by turn, because the turns are separate
+ * correlations and "the latest decision" has to mean the latest in the RUN.
+ *
+ * Exported because the abort path reads the same slice (WP-26): a second query
+ * built beside this one is how a reader and a fold start disagreeing about what
+ * a run contains. THROWS on an unreadable ledger — the caller decides what that
+ * means, and the two callers mean different things by it (the fold reports a
+ * fault; the stream emits nothing).
+ */
+export function runEvents(run: ProcedureRun, ledger: Ledger | LedgerLike): EventEnvelope[] {
+  return run.taskIds
+    .flatMap((correlation) => ledger.query({ correlation, limit: RUN_EVENT_LIMIT }))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
 export function foldProcedureCursor(
   run: ProcedureRun,
   checkpoints: RunbookCheckpoint[],
@@ -168,9 +187,7 @@ export function foldProcedureCursor(
 
   let events: EventEnvelope[];
   try {
-    events = run.taskIds
-      .flatMap((correlation) => ledger.query({ correlation, limit: RUN_EVENT_LIMIT }))
-      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    events = runEvents(run, ledger);
   } catch {
     // §4's fail-behaviour: an unreadable ledger is fail-CLOSED for the
     // sequenced capability. Nothing is attested, the fault is reported, and the

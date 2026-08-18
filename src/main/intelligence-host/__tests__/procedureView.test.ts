@@ -457,6 +457,19 @@ describe('deriveAbortGroups', () => {
     expect(withoutResolver.unavailable.map((u) => u.group)).toContain('untouched');
   });
 
+  it('names untouched as unavailable when no approved-plan scope was supplied at all', () => {
+    // WP-26 made this reachable: the stream emits an abort notice from the run's
+    // events, and this seam holds no record of the approved plan's target list.
+    // With no scope, an empty `untouched` reads as "nothing was left untouched"
+    // — which is the claim this module's own rule forbids ("an empty 'skipped'
+    // reads as 'nothing was skipped'; that is a claim"). Absent scope and absent
+    // resolver are two ways of not knowing, and both must SAY so.
+    const groups = deriveAbortGroups({ events, updateTool: 'bulk_plugin_update' });
+    expect(groups.untouched).toEqual([]);
+    const untouched = groups.unavailable.find((u) => u.group === 'untouched');
+    expect(untouched?.reason).toMatch(/approved plan/i);
+  });
+
   it('never invents a skipped site: no producer records a skip reason', () => {
     const groups = deriveAbortGroups({ events, updateTool: 'bulk_plugin_update' });
     expect(groups.skipped).toEqual([]);
