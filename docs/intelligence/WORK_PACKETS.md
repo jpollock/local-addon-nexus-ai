@@ -8266,3 +8266,38 @@ touched:** `docs/intelligence/wp25-incident-producer-design-note.md`
 blocking anything because this packet is NOT merging; it will be committed
 verbatim and attributed as a separate commit at merge time, per the
 standing practice.
+
+**WP-26 ADDENDUM — WP-27 LANDED MID-PACKET; the two-packets-one-file
+condition fired and resolved to zero code conflict (measured, then
+aborted).** `poc/nexintelligence` moved from `9699d752` to `0d14db03`
+while this packet was building: WP-27 merged, and it edits
+`PanelChat.tsx`, which this packet also edits. Per the standing
+escalation the reconciliation is not this agent's to make, so it was
+MEASURED and the trial merge was aborted — nothing merged.
+
+- **`PanelChat.tsx` auto-merges cleanly.** The two packets touched
+  different regions: WP-27 added the procedure-event branch and the
+  rail's state; WP-26 added the approval branch's `procedure`/`warning`
+  passthrough and the card routing. The ONLY conflict in the whole merge
+  is this file, `WORK_PACKETS.md`, where both packets appended at the end.
+- **On the trial-merged tree, `tests/unit/renderer/` +
+  `tests/unit/chat/` + `src/main/intelligence-host/` ran 129 suites /
+  1,646 tests, all passing.**
+- **WP-27's "ONE swap point" is exactly what this packet supplies.** Its
+  `onStreamEvent` already folds `procedure_armed` /
+  `checkpoint_changed` / `procedure_aborted` off the same stream, from
+  `procedureStream.fake.ts`; WP-26's emitter puts the identical shapes on
+  the identical channel.
+- **The hazard WP-27's note names was checked here, not assumed.**
+  Requiring `procedureView` from the renderer pulls better-sqlite3 and
+  would be `NODE_MODULE_VERSION` at panel load under Electron — invisible
+  to jest. WP-26 widens `ChatStreamEvent` with `import type` /
+  `export type` only, and the EMITTED file was inspected:
+  `lib/common/chat-types.js` compiles to the two-line `__esModule`
+  preamble and nothing else. The references survive only in
+  `chat-types.d.ts`, which is compile-time. (WP-24's lesson applied in
+  the other direction: verify on the path that exercises it.)
+- Reconciling the two type paths — WP-27 imports the seam's shapes from
+  `procedureView` directly, WP-26 re-exports them through
+  `common/chat-types` — is cosmetic and is a merge-time decision, not a
+  defect in either.
