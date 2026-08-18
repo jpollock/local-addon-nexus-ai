@@ -11917,3 +11917,73 @@ at 148 with the floor catching a 57-collection first draft — the
 guard guarding, second occurrence; must-nots first-class including
 the "verified"-tooltip kill. ABI: SYSTEM NODE. Merge; expect the
 tail conflict against this entry, both halves verbatim.
+
+---
+
+**WP-35 · MERGED to `poc/nexintelligence` — receipts (2026-08-18).**
+Merge `62f03139`, packet commit `f9534a4f`.
+
+**THE CONDITION ON THE CARD CHANGE, ANSWERED PLAINLY: THE RECORD SIDE IS
+UNTOUCHED.** `git diff --name-only 62f03139^1 62f03139 -- src/main` is
+**empty** — `ChatService.ts` is not in the merge at all, so `cardText` still
+composes ``Runbook ${runbookId} v${version}, marked strict — checkpoint
+${checkpointId}. ${cardMessage}`` (`src/main/chat/ChatService.ts:462`) and
+that string is still what the `task.rationale.recorded` payload's `prompt`
+carries. WP-28's own record-half pin — *"the recorded prompt names the runbook
+the human was shown"* (`tests/unit/chat/chat-procedure-approval.test.ts`) —
+was re-run against this branch and PASSES, alongside its display-half sibling;
+13/13 in that suite, `--no-cache`. **What moved is only where the name appears
+on screen:** it left the card's styled block and now renders in the declared
+block pinned above it. The rationale event can still name the document the
+decision was taken under, which was the point of that ruling. No ruling
+reopens.
+
+**Receipts:** `git diff --stat 62f03139^1 62f03139` — **10 files,
++1568 / −110**: five renderer files under
+`src/renderer/components/DockedPanel/`, four renderer test files (one new,
+775 lines), and this record. `-- src/main` is **empty**, as claimed at the
+gate and re-verified here against the merge rather than against the branch.
+
+**Merged-tree baseline: 574 suites, 7712 passed, 2 skipped, 7714 total, exit
+0** (exit captured before any pipe); `npm run typecheck` clean.
+**The skipped column was read first, and it is again the whole story:** the
+worktree measured **12 skipped / 7702 passed** and the merged tree measures
+**2 skipped / 7712 passed**, with **the total unchanged at 7714**. Ten
+`embedding-service` tests crossed from skipped to passed because the primary
+checkout holds both model files where a worktree has one — the protocol's
+documented both-ways gate, third occurrence. Read as a passed-column delta
+alone it would look like a phantom gain of exactly ten.
+
+**Uncommitted architect work found in the primary checkout and committed
+VERBATIM before merging** (`54aa5fb9`, per the standing WP-02 precedent): this
+file's WP-35 gate verdict. Fidelity checked programmatically — md5 of the
+committed blob equals md5 of the working-tree file it was taken from
+(`db33d8b8…`). It was not edited and is not folded into the merge. (This is
+the second such commit in WP-35's window; `1227ad3e` carried the roadmap's
+wave 4 and the registration, two for two.)
+
+**Tail conflict resolved as directed: both halves verbatim, ordering
+preserved.** One hunk, both sides pure appends past the same `---`. The
+packet's own entries (the lock claim and the gate report, 11,420 characters)
+go FIRST and the architect's gate verdict (2,417 characters) follows, so the
+adjudication does not precede what it adjudicates. Verified programmatically
+rather than by eye: both sides' text is present verbatim in the resolved file,
+`index(report) < index(verdict)`, no conflict markers survive, and the merge
+base's 718,617 characters are intact as the resolved file's prefix.
+
+**Board after this merge:** the `src/renderer/components/DockedPanel/` lock is
+RELEASED. WP-34 remains in flight on the host + eval registry, untouched by
+this merge. **Registered by the gate verdict and not started: the STREAM
+MICRO** — populate `scope` on the emission, the empty-plan signal, and the
+plan line's producing-checkpoint fact; all three are host-side and sequence
+behind WP-34's lock. Until it lands, the empty-run rendering is built, pinned
+and unreachable in the product, which the gate report says on the record.
+Still owed and open, not held: J-Refusal's sixth must-not sitting and pass³ on
+the two sat must-nots.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` in both the worktree
+and the merged tree; `better-sqlite3` loads under the shell's Node (v25.9.0,
+ABI 141) and will throw `NODE_MODULE_VERSION` inside Local until rebuilt.
+**Run `npm run rebuild` before loading Local** — which this packet wants
+anyway: the companion density is a thing you look at, and looking at it is a
+Local session.
