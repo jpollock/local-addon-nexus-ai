@@ -12,7 +12,9 @@
  * `compressStaleToolResults` truncates tool content over 800 chars after two
  * assistant turns — the procedure would silently degrade while the record still
  * claimed it had been supplied. The document rides the platform's own user-role
- * turn carrier instead (WP-20c), which is why this text points at the next turn.
+ * turn carrier instead (WP-20c), which is why this text points at the next turn —
+ * and names the PLATFORM as what puts it there, never "Nexus AI", which is what
+ * this tool's own reader has been told it is (WP-24).
  *
  * WHAT IT DOES CARRY: the runbook's identity, version, strictness, and its
  * checkpoints in order with how each one can be shown to have happened. That
@@ -51,7 +53,7 @@ export const loadProcedureHandler: McpToolHandler = {
       'Ask for the procedure that governs a capability (for example ' +
       '"cap.bulk_plugin_update") before doing work that needs it. Returns which procedure ' +
       'applies, its version, whether its steps are enforced in order, and what each step needs in ' +
-      'order to count as done — the procedure itself is delivered by Nexus AI on your next turn, ' +
+      'order to count as done — the procedure itself is delivered by the platform on your next turn, ' +
       'not in this result. Read-only. Use it when a task looks like one a named procedure covers, ' +
       'or when a call was refused because a procedure was not armed.',
     inputSchema: {
@@ -142,8 +144,16 @@ export function renderAcknowledgement(runbook: Runbook): string {
 
   lines.push(
     '',
-    'The procedure itself arrives on your **next turn**, from Nexus AI directly — it is never ' +
-      'delivered inside a tool result, so it is not in this message. Continue, and read it there.'
+    // WP-24 · "from Nexus AI directly" named the WRONG PARTY to its own reader.
+    // The system prompt opens "You are Nexus AI", so this sentence told the
+    // model a document would arrive from itself — and the 2026-08-18 owner
+    // sitting caught a run reasoning exactly that way ("I *am* Nexus AI, and no
+    // procedure body reached me"), then treating the absence as a fault. The
+    // deliverer is the PLATFORM: the host that builds the turn carrier, which
+    // is neither the model nor the tool. Same word the carrier uses of itself.
+    'The procedure itself arrives on your **next turn**, placed in your turn context by the ' +
+      'platform — it is never delivered inside a tool result, so it is not in this message. ' +
+      'Continue, and read it there.'
   );
   return lines.join('\n');
 }

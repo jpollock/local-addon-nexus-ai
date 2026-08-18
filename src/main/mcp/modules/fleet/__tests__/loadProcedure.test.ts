@@ -113,6 +113,26 @@ test('THE PROCEDURE IS NOT IN THE RESULT — R7: the body never rides a tool res
   expect(text.toLowerCase()).toContain('next turn');
 });
 
+/**
+ * WP-24 · finding (b) from the 2026-08-18 owner sitting. The acknowledgement
+ * used to say the procedure arrives "from Nexus AI directly" — to a reader
+ * whose system prompt opens "You are Nexus AI". One empty-history run reasoned
+ * from exactly that sentence: "I *am* Nexus AI, and no procedure body reached
+ * me." The deliverer must be named as the PLATFORM, which is neither the model
+ * nor this tool. Asserted on both strings a model can see: the result text and
+ * the tool's own description, which the model reads before it ever calls.
+ */
+test('the deliverer is named as the platform, never as the reader itself', async () => {
+  const { text } = await call(ANCHOR);
+  expect(text).toContain('platform');
+  expect(text.toLowerCase()).toContain('next turn');
+  expect(text).not.toContain('Nexus AI');
+
+  const description = loadProcedureHandler.definition.description;
+  expect(description).toContain('delivered by the platform on your next turn');
+  expect(description).not.toContain('Nexus AI');
+});
+
 test('an ungranted capability is answered, not failed, and names what is granted', async () => {
   const { text, isError } = await call('cap.incident_response');
 

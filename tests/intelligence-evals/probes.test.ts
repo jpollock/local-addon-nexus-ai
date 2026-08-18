@@ -74,3 +74,30 @@ describe('probeTopicFamily', () => {
     expect(probe.evidence[0]).toContain('returned 7 event(s)');
   });
 });
+
+/**
+ * WP-24 · The probes must not put electron on their own require chain.
+ *
+ * `probes.ts` is imported by `runner.ts`, which is imported by BOTH CLI entry
+ * points (`run.ts` and `sitting.ts`). Those run under plain Node, where
+ * `require('electron')` resolves to nothing at all — so a value import of
+ * anything that reaches it (`AgentDispatcher` →`buildAgentContext` →
+ * `ipc-handlers` → `getAIProvider` → `KeyVault`) makes both CLIs unstartable.
+ * That is not hypothetical: it is how the 2026-08-18 owner sitting came to be
+ * run behind a stub require-hook, and WP-24 is the packet that removed it.
+ *
+ * Under jest `electron` is mapped to a working mock, so the failure is
+ * invisible here unless it is made visible — hence poisoning the module rather
+ * than trusting the mock. `jest.isolateModules` gives the require a fresh
+ * registry so the poison applies to a genuinely fresh load of the whole graph.
+ */
+test('electron is not on the require chain — both eval CLIs run under plain Node', () => {
+  jest.isolateModules(() => {
+    jest.doMock('electron', () => {
+      throw new Error('electron was required by the eval probes');
+    });
+    expect(() => require('./probes')).not.toThrow();
+    // And through the path that actually matters: the runner both CLIs load.
+    expect(() => require('./runner')).not.toThrow();
+  });
+});
