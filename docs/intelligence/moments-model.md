@@ -1,6 +1,6 @@
 # The moments model — a working taxonomy of the Nexus experience
 
-*(Architect draft 1, 2026-08-18. The genre of the original intelligence
+*(Draft 1.3, 2026-08-18 — §4a rewritten after designer §2 ("The consequence order, tested"): within-column scope, situations, the reserved slot, world-state gate classification, deferral-as-session-act, place-as-set, and the one-morning fixture as the order's regression pin. Previously: draft 1.2 — amended after the designer's §1 "Moments, tested": Return redefined as arrival triage; the Act boundary re-axed to declared-procedure; Inspect's center generalized to the comparator render; the concurrency clause and the consequence order added as §4a; the complexity budget made falsifiable. Designer amendments credited throughout; ratifications in `for-designer-moments-tested-response.md`. Originally: architect draft 1, 2026-08-18. The genre of the original intelligence
 concept doc, for the same job: name the material before building more of
 it. The intelligence layer became systematic the day work could be asked
 "which of the five types are you moving, from which source, to where?"
@@ -48,8 +48,12 @@ Evidence: the site-at-places matrix ruling (divergence = comparator
 verdict); the change report with hold durations; E-01's fleet-picture
 tables — every sitting run BUILT one before acting; the designer's §6:
 "orientation is not a question… prose flattens shapes."
-Center: the matrix, the change report, the audit record — data surfaces
-chat points at and never contains.
+Center: a COMPARATOR RENDER (designer §1-Q3) — the site-at-places
+matrix is one instance, the content diff another; every instance owes
+the same three things: shape before any prose, a verdict from the
+comparator never from cell inequality, a door on every cell. Plus the
+change report and the audit record — data surfaces chat points at and
+never contains.
 Edge: the ask ("why does staging differ?") and the act (the act-big
 this inspection is about to become).
 Intelligence in, unasked: lineage explaining a disagreeing cell;
@@ -72,9 +76,15 @@ bitten before.
 Never shows: act-big machinery — a canary for one site is noise.
 Rank affinity: companion.
 
-**M4 · Act-big** — *"Do this across the fleet — show me the plan and
-the process."*
-Many targets, a declared procedure, plan-approve-watch. The owner's own
+**M4 · Act-big** — *"Do this under a declared procedure — show me the
+plan and the process."*
+THE AXIS IS THE DECLARATION, NOT THE COUNT (designer §1-Q1): one site
+under a runbook is Act-big; five sites changed by five separate asks is
+five Act-smalls. The arming event IS the transition — the boundary is
+observable in the stream, never a judgement. Act-small needs no dry-run
+because the change is its own preview; a declared block over a
+one-liner teaches the user the block is decoration.
+Plan-approve-watch. The owner's own
 words: "I'll be keen to know the plan and the process."
 Naming note: draft 1 said "Campaign", renamed at owner review — in the web world that word means marketing, and a moment must not borrow a domain word its users already own.
 Evidence: B-03 whole — three sittings of it; the procedure surfaces
@@ -105,7 +115,12 @@ Never shows: a cheerful summary where the chain should be.
 Rank affinity: stage — this is conversational work by nature.
 
 **M6 · Return** — *"What happened while I was away? What needs me?"*
-Delegated or long-running work, re-entered. The co-work moment proper:
+ARRIVAL TRIAGE, NOT A DESTINATION (designer §1-obj.1): one moment, two
+columns — waiting and changed — sorted by the consequence order (§4a);
+it earns a screen only when the triage outgrows the ambient rank.
+Whether a run halted or finished is the answer Return gives, not a
+fork before it. Delegated or long-running work, re-entered. The
+co-work moment proper:
 the agent worked; the human returns to consequence, not to a scrollback.
 Evidence: sessions-sorted-by-consequence; the needs-you list; the
 record rank ("filed, against its runbook"); the abort groups' four
@@ -170,16 +185,62 @@ have been built as two products.
 | Return | waiting + changed | sessions, record | consequence triage | scrollback first | ambient→anywhere |
 | Govern | controls + grants | the change record | the refusals that routed here | conversational consent | its own pages |
 
+### §4a · Concurrency, and the consequence order
+
+Several moments are always live. THE CONCURRENCY CLAUSE (designer
+§1-obj.3): at most one moment holds the column; every other live
+moment is represented in the ambient rank only; no moment promotes
+itself — the self-promotion ruling, generalized. Ambient is therefore
+the only surface that must represent every moment at once, which makes
+the needs-you row the most constrained artifact in the product.
+
+THE CONSEQUENCE ORDER (v1.3, rewritten after designer §2's six tears;
+becomes a policy document when overrides exist): rank by what the
+delay costs and who can pay it — WITHIN A COLUMN, over SITUATIONS.
+(1) The order runs within a column: tiers 1–2 order WAITING; tier 4
+orders CHANGED; tier 5 leaves the list entirely — drift is a rendering
+rule on the fact's own chip, never a triage row. (2) The unit is the
+SITUATION: causally linked events (the halt, its failing verify, the
+incident it opened — the links exist in the record) coalesce into one
+row at the highest tier of its members, expandable to parts; "a
+correct list of parts is not a verdict about the whole." (3) Tier 3 is
+STRUCTURE, not rank: one RESERVED slot, always rendered, holding one
+derived row — the record's own health, folded ("3 producers dark,
+oldest 9h") — cannot grow, cannot interrupt, cannot be scrolled away.
+(4) Gates classify by the STATE OF THE WORLD behind them, not their
+kind: tier 1 when any write has landed in the gate's scope (a
+post-canary approval sits on a part-changed fleet) or when the delay
+has a derivable deadline (dry-run staleness, maintenance window);
+tier 2 otherwise. (5) DEFERRAL is a session act (user-only — the agent
+may never quiet its own gate): tier and place kept, escalation
+intensity lowered, reason recorded on the run; never a dismissal;
+optionally carries a derivable wake condition, and a woken deferral
+returns to full intensity. (6) PLACE IS A SET: ordered by the
+highest-consequence member of the derived affected set, and the row
+shows the set ("touches production on 2 of 5") — sort key and rendered
+fact from one derivation. Within tier: place, then age, oldest first,
+tempered by deferral. Every input derived; the order governs ambient
+sort and escalation intensity only — the column changes hands solely
+by the user's promotion. PINNED by the "one morning" fixture (designer
+§2): eight live things in, two waiting situations + one reserved row +
+one changed row out; the order changes only when the fixture's
+expected output is re-ruled.
+
 ## 5 · The laws this composes with — and the budget it adds
 
 The vocabulary says what words mean. The rank model says how much
 screen. Derived-never-authored says what a surface may claim. The
 moments model adds the fourth: **what a moment may contain** — and with
 it the complexity budget: (a) a feature that serves no named moment is
-complexity by definition and is not built; (b) every addition to a
+either CUT, or it names a candidate moment with its own evidence and
+undergoes the same ratification this model did — new moments are
+expensive and possible (designer §1-obj.2 made the budget falsifiable);
+(b) every addition to a
 moment names what it retires or folds within that moment; (c) the walk
 list is closed — a new transition is a design decision, recorded, not
-an emergent accident.
+an emergent accident. Every never-shows entry is a must-not PIN in its
+moment’s journey eval (designer §1-obj.4): “a prohibition in a
+document loses every argument it has with a deadline.”
 
 ## 6 · Journey evals — the B-03 pattern, applied to experience
 
@@ -188,10 +249,15 @@ built or revised, with must/must-nots, split exactly like B-03: the
 programmatic half (the route exists; the promotion loses nothing; every
 claim links; the never-shows list is absent — these become pins) and
 the judged half (owner sittings, watching a real walk). Three exist in
-embryo already: J-Act-big IS B-03; J-Investigate IS D-02; J-Glance is
-the where-am-I contract plus "from cold open to 'anything wrong?' in
-one look, zero questions asked." The remaining four want writing at the
-same eleven-criteria discipline. The eval registry treats them like any
+embryo already: J-Act-big IS B-03; J-Investigate IS D-02. The designer
+finished the set in §1: J-Glance, J-Inspect, J-Act-small, J-Return,
+and J-Refusal (replacing J-Govern — the journey through Govern is the
+refusal→grant→resume walk, “the only place the platform tells the user
+no and then has to be worth trusting again”). All five BIND as of the
+§1 ratification; must-nots are the never-shows with teeth. Validation
+of the model is by WALKS, not inventory (designer §1-Q5): instrument
+transitions in the ledger; a moment whose inbound walks never fire is
+ours, not the user’s. The eval registry treats them like any
 spec: BLOCKED until their surfaces exist, never green by assumption.
 
 ## 7 · What this decides right now
@@ -206,6 +272,14 @@ through the moments — which is the reassurance the step-back deserves:
 the plan was already converging on this shape; now it has the name.
 
 ## 8 · Open for pressure-test, named
+
+RESOLVED at the §1 exchange: (1) Act-small is real — the axis is the
+declaration; (3) content is a resident, Inspect generalized to the
+comparator render; (4) Return is one moment, two columns, split
+refused; (5) settled by METHOD — walks instrumented, never counted by
+inventory. STILL OPEN: (2) Investigate’s surfaces, deferred to the M5
+cycle; and the consequence order (§4a), the newest and least-tested
+ruling. The original questions, kept for the record:
 
 (1) Is Act-small real, or is it a act-big of one — does collapsing
 them cost the low-ceremony read path or save a moment? (2) Does

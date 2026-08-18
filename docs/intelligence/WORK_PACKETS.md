@@ -9302,3 +9302,104 @@ component of the fix already existed in the record (a shipped-off
 mechanism, a copy owed a rewrite, a known harness divergence). The
 system predicted its own failure shape; today it happened, cost
 nothing, and closes three doors.
+
+---
+
+**ARCHITECT — DESIGNER §1 "MOMENTS, TESTED" ADJUDICATED; MODEL AT 1.2;
+THE CONSEQUENCE ORDER RULED (2026-08-18).** All four objections
+ratified with their fixes (Return = arrival triage, split refused; the
+budget made falsifiable via the one-way appeal; the concurrency clause;
+never-shows become must-not pins). All three answers adopted — the
+Act-small/Act-big axis is now THE DECLARATION, not the target count
+(the arming event is the observable boundary); Inspect's center
+generalized to the comparator render; model validation is by
+instrumented WALKS, not inventory. **The five journey evals BIND as
+written**, J-Refusal replacing J-Govern — and note the designer
+specified J-Refusal's programmatic half (refusal payload carries the
+capability id in the Settings matrix's vocabulary; the door deep-links
+to the specific grant; session state identical across the excursion)
+BEFORE being told about this week's live incident; the eval they
+predicted "most likely to fail on first attempt" is the one the
+incident already failed. **WP-31 inherits both requirements** — its
+instructive refusal carries the machine-readable capability id and the
+deep-link target from birth. **WP-30 inherits J-Return's
+promotion-identity pins as acceptance criteria.** Cycle 1 gains
+selection-becomes-scope, as asked.
+
+**The consequence order (designer §8's question, ruled):** rank by what
+the delay costs and who can pay it — Tier 1 world-mid-change-only-you-
+can-move-it (abort halts; open incidents when produced) · Tier 2
+awaiting-consent-world-untouched (approval gates) · Tier 3
+the-record-is-going-blind (health degradation; never interrupts, never
+below the fold) · Tier 4 changed · Tier 5 drifting (past-SLO, already
+gateway-fenced). Within tier: place (production > staging > local),
+then age. Every input derived; the order governs ambient sort and
+escalation intensity ONLY — the column moves solely by user promotion.
+v0 law in the model §4a; becomes a policy document when overrides
+exist. Full response in `for-designer-moments-tested-response.md`;
+moments-model.md is at 1.2 with amendments credited.
+
+---
+
+**ARCHITECT — DESIGNER §2 ADJUDICATED; CONSEQUENCE ORDER AT v1.3 WITH
+ITS OWN REGRESSION FIXTURE; DEFERRAL RULED (2026-08-18).** All six
+tears adopted: within-column scope (T5 leaves the list — drift is a
+chip rendering rule); SITUATIONS as the unit (causal coalescing from
+record links — WP-25's `source: abort:<task>/<abort>` already feeds
+it); tier 3 becomes the RESERVED SLOT (one folded health row, cannot
+grow/interrupt/scroll away — the health line asking for a guaranteed
+seat); gates classify by WORLD STATE (write-landed-in-scope or
+derivable deadline → T1; the post-canary approval was T1 all along);
+place is a SET (highest member orders, row shows the set). **Deferral
+RULED: a session act** — consent WITHIN capability's own line, the
+canary-policy species: recorded on the run (rationale family, payload
+widening gate-held when built), tier/place kept, escalation lowered,
+reason recorded, never a dismissal — with two architect additions:
+ONLY THE USER defers (an agent quieting its own gate is the
+self-promotion power inverted), and a deferral may carry a derivable
+WAKE condition (tear 4's deadline machinery, symmetric) that returns
+it to full intensity. **The designer's "one morning, both ways" is
+adopted as the order's golden fixture** — eight live things in, 2
+waiting situations + 1 reserved + 1 changed out — pinned in WP-30
+(which also inherits situations as a fold concept and the comparator
+itself); future tears re-render the same morning. Response in
+`for-designer-consequence-order-response.md`; model at 1.3.
+
+---
+
+**ARCHITECT — CYCLE-ONE ARTIFACT ADOPTED; WP-32 REGISTERED
+(2026-08-18).** The designer's "Selection becomes scope" is adopted as
+the walk's first typed handoff artifact: the SCOPE BLOCK — four derived
+lines (targets, places-as-set, excludes-with-reason, from-provenance),
+rendered byte-identically in the selection bar, the companion
+declaration, and the stage document. Response in
+`for-designer-scope-block-response.md`. Two fixture flags: (1) the
+sketch AUTHORED its checkpoint list and authored canary-before-approval
+— the incident's own order; no code risk (the shipped render derives
+the list from the canonical document) but recorded as the rule that
+derived-never-authored applies to design fixtures' checkpoint sequences
+too; marks ("provable/gate/—") either render from ATTEST_WORDS or get
+ratified as companion shortforms. (2) The fixture's production targets
+are REFUSED by shipped law (anchor scope excludes production;
+pre.no-production) — returned to the designer as the SPLIT-SCOPE state
+to design: runnable subset armed, barred subset stated with reason and
+a Govern door — J-Refusal arriving inside the handoff.
+
+### [ ] WP-32 · The scope carrier  *(registered 2026-08-18; acceptance = the designer's five pins)*
+
+Renderer selection → task frame → arming → dry-run, as one carried
+artifact. Scope unit is the CELL (site, place) — the designer's
+refinement, adopted. Requirements: the arming CARRIES the scope and the
+dry-run's target set equals the selected cell set (asserted as a set,
+both densities) — a run that re-derives its own targets fails; the
+scope block's text byte-identical across all three renders (one
+component, the ruled chat-types seam); every line derived (targets from
+selection, places from the affected-set derivation the ambient order
+sorts by, exclusions from their causing records, from-line resolving to
+the comparator render with filter); split-scope behavior when selection
+spans authority (runnable subset arms; barred subset renders reason +
+capability id + Govern door — inherits WP-31's refusal payload
+contract). Sequencing: after WP-31 merges (shares the refusal shape);
+the M2 comparator surface that produces selections is the designer's
+cycle-one/two seam — WP-32 can build against a fixture selection the
+way WP-27 built against a fake emitter.
