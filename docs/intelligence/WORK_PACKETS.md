@@ -8768,7 +8768,7 @@ conversation, not fixture.
 
 ---
 
-### [ ] WP-28 · The badge means what it says  *(registered from the phase-1 UX smoke, finding 1)*
+### [x] WP-28 · The badge means what it says  *(registered from the phase-1 UX smoke, finding 1)* — **MERGED**
 
 **ANNOUNCED 2026-08-18 — OWNER LOCK TAKEN on `src/main/intelligence-host/`
 (`procedureView.ts`) and on runbook authoring (`docs/intelligence/anchor-slice/
@@ -9163,3 +9163,44 @@ architecture); a later moments-usage fold can answer §8 Q5 (is six the
 right count?) from the ledger by measurement — registered as a
 someday-nicety, very much in the house style of letting the record
 answer questions about itself.
+
+---
+
+**WP-28 MERGED (2026-08-18)** — merge `cff8ee55`, **27 files, +777/−80**
+(`git diff --stat cff8ee55^1 cff8ee55`). Gate cleared on all three rulings;
+`unrequested:` shipped under its proposed name, and ADR-17's fourth amendment
+was already on the base when the merge landed, so the governing text and the
+field agree without a follow-up.
+
+**Post-merge baseline, primary checkout, tree held still, exit captured before
+any pipe: 565 suites / 7,367 passed / 2 skipped / 7,369 total, exit 0.** The
+worktree's own after-run was **565 / 7,357 / 12 / 7,369** — same TOTAL, and the
+passed/skipped split differs by exactly ten in the documented direction: the
+primary checkout holds both embedding-model files and gates ten tests IN that a
+worktree skips (12 − 2 = 10 = 7,367 − 7,357). Read the skipped column first.
+Against the pre-merge base (**565 / 7,341 / 12 / 7,353** measured in the
+worktree) the packet's delta is **+16 tests, no new suites**, which is 19 added
+minus 3 replaced, counted off the diff.
+
+**The only merge conflict was this file**, resolved append-only per precedent:
+this packet's announcement and outcome first, then the architect's later
+entries (rank model, the WP-28 gate adjudication, the moments model, the
+moments bill and WP-30) exactly as they stand on the base. Nothing reordered
+within either side, nothing dropped — the resulting order is chronological,
+so the gate ruling now reads after the outcome it answers.
+
+**Architect work committed verbatim before merging** (`f13453dd`): the
+moments-model architectural bill with the WP-30 registration in this file, plus
+`citation-contract-design-note.md`, were found uncommitted in the primary
+checkout. Committed unedited in their own attributed commit. **Fidelity: md5
+identical before and after the commit** — `d2ac852242e4c27d0e4cf6aa0396d62d`
+(WORK_PACKETS) and `e01d82e200ef7d26602922983acea611` (the design note).
+
+**State on exit: ABI SYSTEM NODE** — measured here, not quoted: `node -v` →
+**v25.9.0**, `node -p process.versions.modules` → **141**. `npm run rebuild`
+before loading Local (`./dev-reload.sh` does the compile too — the primary
+checkout's `lib/` predates this merge).
+
+**Live smoke worth taking now that it is on the base:** arm
+`cap.bulk_plugin_update` in the Docked Panel and read the rail — four badges,
+not eight, and the approval card names its runbook once.
