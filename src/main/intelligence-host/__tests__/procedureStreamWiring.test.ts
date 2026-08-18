@@ -219,6 +219,8 @@ describe('the approval context the card is emitted with', () => {
       strictness: 'strict',
       checkpointId: 'cp.approval',
       offersCanaryPolicy: true,
+      // The real document's own authored reason, read off its body.
+      unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: 'show what would change' },
     });
   });
 

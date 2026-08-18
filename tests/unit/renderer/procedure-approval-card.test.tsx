@@ -27,6 +27,7 @@ const PROCEDURE = {
   strictness: 'strict' as const,
   checkpointId: 'cp.approval',
   offersCanaryPolicy: true,
+  unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: 'show what would change' },
 };
 
 function card(props: Record<string, unknown> = {}): any {
@@ -70,6 +71,44 @@ describe('the plan reference', () => {
 
   it('never says a checkpoint is verified — that word belongs to the live check', () => {
     expect(render(card())).not.toMatch(/verif/i);
+  });
+});
+
+describe('the boundary the platform states out loud (WP-26 gate, ratification 2)', () => {
+  it('names the step it cannot show happened, and sends the reader to the plan', () => {
+    // cp.dry-run is narrative BY RULING, so nothing recorded distinguishes an
+    // approval of a presented plan from an approval of an improvised one.
+    // Gating the card on plan-was-shown would claim a verification the model
+    // says the platform cannot make; saying so is the honest alternative.
+    const text = render(card());
+    expect(text).toContain('cp.dry-run');
+    expect(text).toContain('show what would change');
+    // platform-can't-verify…
+    expect(text).toMatch(/nothing the platform records/i);
+    // …and read-the-plan.
+    expect(text).toMatch(/read the plan above/i);
+  });
+
+  it('still avoids the banned word while saying the platform cannot show it', () => {
+    // Controlled Vocabulary v1.1: "verify" belongs to the live check alone, and
+    // never appears about a checkpoint — including in a sentence denying it.
+    expect(render(card())).not.toMatch(/verif/i);
+  });
+
+  it('names the step alone when the runbook authored no reason for it', () => {
+    const text = render(card({
+      procedure: { ...PROCEDURE, unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: null } },
+    }));
+    expect(text).toContain('cp.dry-run');
+    expect(text).toMatch(/read the plan above/i);
+  });
+
+  it('says nothing at all when the runbook puts nothing narrative before its approval', () => {
+    const bare: Record<string, unknown> = { ...PROCEDURE };
+    delete bare.unverifiablePrecedent;
+    const text = render(card({ procedure: bare }));
+    expect(text).not.toMatch(/read the plan above/i);
+    expect(text).not.toContain('cp.dry-run');
   });
 });
 

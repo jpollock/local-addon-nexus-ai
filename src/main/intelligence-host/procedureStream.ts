@@ -39,6 +39,7 @@ import type { ProcedureRun } from './procedureCursor';
 import { foldProcedureCursor, runEvents } from './procedureCursor';
 import {
   checkpointChangedEvent,
+  checkpointReason,
   deriveAbortGroups,
   deriveDeclaredProcedure,
   diffCheckpointStates,
@@ -95,6 +96,20 @@ export interface ProcedureApprovalContext {
    * same fabricated-consent error as rendering the default as a decision.
    */
   offersCanaryPolicy: boolean;
+  /**
+   * The nearest NARRATIVE checkpoint the runbook puts before this approval —
+   * the step the platform can never show happened (ratified at the WP-26 gate).
+   *
+   * The anchor's is `cp.dry-run`: the runbook asks for a plan before consent,
+   * and `cp.dry-run` is narrative BY RULING, so nothing the platform records
+   * can distinguish an approval of a presented plan from an approval of an
+   * improvised one. Gating the card on plan-was-shown would be the platform
+   * claiming a verification the ruled model says it cannot make (P4), so the
+   * card SAYS the boundary instead. Absent when the runbook puts nothing
+   * narrative before its approval — a caveat printed there would describe a gap
+   * the document does not have.
+   */
+  unverifiablePrecedent?: { checkpointId: string; reason: string | null };
 }
 
 interface SessionMemory {
@@ -253,13 +268,43 @@ function approvalContextOf(
   // carrier can never disagree about where the run is standing.
   const state = declared.checkpoints.find((c) => c.id === checkpoint.id);
   if (state?.status !== 'active') return null;
+  const precedent = unverifiablePrecedentOf(runbook, checkpoint.id);
   return {
     runbookId: declared.runbookId,
     version: declared.version,
     strictness: 'strict',
     checkpointId: checkpoint.id,
     offersCanaryPolicy: declaresCanary(runbook),
+    ...(precedent ? { unverifiablePrecedent: precedent } : {}),
   };
+}
+
+/**
+ * The nearest narrative checkpoint before the approval, with the runbook's own
+ * authored reason for it.
+ *
+ * NEAREST, not "any": a document may declare several narrative steps, and the
+ * one the approval directly rests on is the one a reader needs named. The
+ * reason comes from the runbook body's own `## cp.x — reason` heading via
+ * `checkpointReason`, so the caveat quotes the author rather than paraphrasing
+ * them; a section with no reason yields `null` and the copy says less rather
+ * than inventing more.
+ */
+function unverifiablePrecedentOf(
+  runbook: Runbook | undefined,
+  approvalId: string
+): { checkpointId: string; reason: string | null } | undefined {
+  const checkpoints = runbook?.checkpoints ?? [];
+  const at = checkpoints.findIndex((c) => c.id === approvalId);
+  if (at < 0) return undefined;
+  for (let i = at - 1; i >= 0; i--) {
+    if (checkpoints[i].attest !== 'narrative') continue;
+    return {
+      checkpointId: checkpoints[i].id,
+      reason: runbook ? checkpointReason(runbook, checkpoints[i].id) : null,
+    };
+  }
+  return undefined;
 }
 
 /**

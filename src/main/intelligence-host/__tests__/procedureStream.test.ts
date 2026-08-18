@@ -459,6 +459,7 @@ describe('the approval context — what the card is allowed to render', () => {
       strictness: 'strict',
       checkpointId: 'cp.approval',
       offersCanaryPolicy: true,
+      unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: null },
     });
   });
 
@@ -487,6 +488,80 @@ describe('the approval context — what the card is allowed to render', () => {
     }));
 
     expect(procedureApprovalContext('s1')?.offersCanaryPolicy).toBe(false);
+  });
+
+  test('it names the narrative step the platform cannot show happened', () => {
+    // The anchor puts cp.dry-run — narrative BY RULING — immediately before
+    // cp.approval. The platform therefore cannot show a plan was presented, and
+    // carding the approval without saying so would let a human bless a plan
+    // they were never shown while the product looked certain. The card says the
+    // boundary out loud; the facts it says it with are derived here.
+    armRun([t1]);
+    emitManifest(t1);
+    turn(t1);
+
+    expect(procedureApprovalContext('s1')?.unverifiablePrecedent).toEqual({
+      checkpointId: 'cp.dry-run',
+      reason: null,
+    });
+  });
+
+  test('it carries the runbook author\'s own reason for that step when one is written', () => {
+    const authored = runbookFixture({
+      body: [
+        '# Bulk plugin update',
+        '',
+        '## cp.dry-run — show what would change',
+        '',
+        'Present the full diff and stop.',
+      ].join('\n'),
+    });
+    armRun([t1]);
+    emitManifest(t1);
+    turn(t1, authored);
+
+    expect(procedureApprovalContext('s1')?.unverifiablePrecedent).toEqual({
+      checkpointId: 'cp.dry-run',
+      reason: 'show what would change',
+    });
+  });
+
+  test('with several narrative steps before the approval it names the NEAREST', () => {
+    // The anchor declares only one, so first and nearest coincide there and a
+    // fixture built from it cannot tell the two rules apart. A document may
+    // declare several; the step the approval directly rests on is the one a
+    // reader needs named, and naming the earliest instead would point them at
+    // the wrong part of the transcript.
+    const twoNarrative = runbookFixture({
+      checkpoints: [
+        { id: 'cp.scope', attest: 'narrative', tools: [] },
+        ...CHECKPOINTS,
+      ],
+    });
+    armRun([t1]);
+    emitManifest(t1);
+    turn(t1, twoNarrative, delivery({
+      checkpoints: twoNarrative.checkpoints.map((c) => ({ id: c.id, attest: c.attest, attested: false })),
+    }));
+
+    expect(procedureApprovalContext('s1')?.unverifiablePrecedent?.checkpointId).toBe('cp.dry-run');
+  });
+
+  test('a runbook with nothing narrative before its approval says nothing about one', () => {
+    // Absence is the other half of the pin: a caveat printed where no narrative
+    // step exists would be describing a gap the document does not have.
+    const noPlanStep = runbookFixture({
+      checkpoints: CHECKPOINTS.filter((c) => c.id !== 'cp.dry-run'),
+    });
+    armRun([t1]);
+    emitManifest(t1);
+    turn(t1, noPlanStep, delivery({
+      checkpoints: noPlanStep.checkpoints.map((c) => ({ id: c.id, attest: c.attest, attested: false })),
+    }));
+
+    const context = procedureApprovalContext('s1');
+    expect(context).not.toBeNull();
+    expect(context?.unverifiablePrecedent).toBeUndefined();
   });
 
   test('a GUIDED runbook is never given a strict approval card', () => {

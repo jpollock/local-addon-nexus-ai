@@ -74,6 +74,14 @@ const styles = {
     paddingLeft: 8,
   },
   effect: { color: 'var(--nxai-card-sub)', fontSize: 12, lineHeight: 1.4 },
+  precedent: {
+    color: 'var(--nxai-card-text)',
+    fontSize: 12,
+    lineHeight: 1.45,
+    background: 'var(--nxai-card-bg)',
+    borderRadius: 4,
+    padding: '8px 10px',
+  },
   policyGroup: { display: 'flex', flexDirection: 'column' as const, gap: 4, marginTop: 2 },
   policyHeading: { color: 'var(--nxai-card-text)', fontSize: 12, fontWeight: 600 },
   policyRow: {
@@ -132,6 +140,33 @@ export class ProcedureApprovalCard extends React.Component<Props, State> {
     this.props.onDeny();
   }
 
+  /**
+   * The boundary, stated out loud (WP-26 gate, ratification 2).
+   *
+   * The runbook asks for a plan before consent, and that step is narrative BY
+   * RULING — nothing the platform records distinguishes an approval of a
+   * presented plan from an approval of an improvised one. Refusing to raise the
+   * card until plan-was-shown would be the platform claiming a verification the
+   * ruled model says it cannot make (P4); saying so, and pointing the reader at
+   * the transcript that CAN answer it, is the honest alternative.
+   *
+   * The word "verify" is absent deliberately, denial included: v1.1 reserves it
+   * for the live check, and a checkpoint never takes it in either direction.
+   */
+  renderPrecedent(): React.ReactNode {
+    const precedent = this.props.procedure.unverifiablePrecedent;
+    if (!precedent) return null;
+    const step = precedent.reason
+      ? `${precedent.checkpointId} — ${precedent.reason}`
+      : precedent.checkpointId;
+    return React.createElement(
+      'div',
+      { style: styles.precedent },
+      `The runbook asks for ${step} before this checkpoint. Nothing the platform ` +
+        'records can show that happened, so read the plan above before you approve.',
+    );
+  }
+
   renderPolicy(): React.ReactNode {
     if (!this.props.procedure.offersCanaryPolicy) return null;
     return React.createElement(
@@ -181,6 +216,7 @@ export class ProcedureApprovalCard extends React.Component<Props, State> {
       ),
       React.createElement('div', { style: styles.effect }, effect),
       React.createElement('div', { style: styles.effect }, warning),
+      this.renderPrecedent(),
       this.renderPolicy(),
       React.createElement(
         'div',

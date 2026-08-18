@@ -282,6 +282,7 @@ describe('a strict run standing at its approval checkpoint', () => {
       strictness: 'strict',
       checkpointId: 'cp.approval',
       offersCanaryPolicy: true,
+      unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: 'show what would change' },
     });
   });
 
