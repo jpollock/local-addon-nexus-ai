@@ -128,6 +128,10 @@ const checkpointSchema = z
       .passthrough()
       .optional(),
     tools: z.array(toolSchema).optional(),
+    // WP-28. Boolean or absent, never a truthy string: this field decides what a
+    // human is told about a step they did not ask for, and a typo that reads as
+    // `true` would badge a step the reviewer did not mark.
+    unrequested: z.boolean().optional(),
   })
   .passthrough();
 
@@ -263,6 +267,11 @@ export class RunbookRegistry {
         attest,
         ...(evidence ? { evidence } : {}),
         tools: (raw.tools ?? []).map(toRunbookTool),
+        // Carried through as authored, absence included: `false` is a reviewer
+        // saying "this is what you asked for", absence is a document written
+        // before the field existed. Both render as no badge; only the document
+        // knows which one it meant, and defaulting here would lose that.
+        ...(raw.unrequested !== undefined ? { unrequested: raw.unrequested } : {}),
       });
     }
 

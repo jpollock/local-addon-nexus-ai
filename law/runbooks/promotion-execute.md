@@ -1,7 +1,7 @@
 ---
 id: rb.promotion-execute
 kind: runbook
-version: 1.0.0
+version: 1.1.0
 strictness: strict
 capability: cap.promote_environment    # unchanged from rb.staging-promotion: this half is the write the capability names
 owner: ops
@@ -28,10 +28,19 @@ preconditions:                   # gateway-verified before checkpoint 1
   - id: pre.target-not-restricted
     check: destination is not on the restricted/never-touch list for this tenant
 checkpoints:                     # ordered; strict — gated calls out of sequence are refused
+  # unrequested: a step the user did not ask for — the surface badges it
+  # "runbook added this" (§5b). Authored, never derived. Consent, backups and a
+  # closing report are the platform's own ceremony and stay unmarked, per the
+  # anchor runbook's ruled set.
+  # Marked: verifying the destination after the write — the user asked for the
+  # promotion, not for it to be checked afterwards. The backup, the approval and
+  # the report are the platform's ceremony around any write; cp.promote is the
+  # request itself.
   - id: cp.backup                # eval 05 (backup the destination before promoting; wait for it or use backup_and_verify)
   - id: cp.approval              # eval 05 (explicit confirmation before executing)
   - id: cp.promote               # eval 05 (executes promotion with correct install ids)
   - id: cp.verify-destination    # eval 05 (a promotion claimed but unverified is not a completed promotion)
+    unrequested: true
   - id: cp.report
 aborts:
   - id: ab.backup-failed

@@ -8791,3 +8791,207 @@ exit 0.**
 
 **HOLDS AT THE GATE, pre-declared:** the per-checkpoint frontmatter field is an
 ADR-17 additive field and needs its NAME and SEMANTICS ratified before merge.
+
+---
+
+**WP-28 OUTCOME — built, all green, HELD AT THE GATE for ratification of the
+frontmatter field's name and semantics (branch `wp-28`, not merged).**
+
+The badge now means what §5b says it means. On the anchor runbook the panel
+badges `cp.consult-history`, `cp.dry-run`, `cp.canary` and `cp.verify-canary`
+and nothing else; `cp.approval`, `cp.backup`, `cp.roll-fleet` and `cp.report`
+render with no badge and no reason line.
+
+### THE GATE ITEM — one optional per-checkpoint frontmatter field
+
+**Proposed name: `unrequested: true`.** Semantics: *this step is one the user
+did not ask for*, which is §5b's own words for what the badge asserts. Boolean
+or absent; **absent means not badged**, so a document that says nothing gets no
+badges and the uniform rail cannot come back through an omission. A
+non-boolean (`unrequested: "yes"`) is REFUSED as invalid frontmatter rather
+than read as truthy — this field decides what a human is told about a step
+they did not ask for, and it may not be typo-tolerant.
+
+Names considered and rejected: `added_by_runbook` (every checkpoint is added by
+the runbook — it would read as a tautology and invite exactly the uniform
+marking this packet removes) and `unasked_for` (the brief's adjective, but it
+reads as an editorial judgement of the user rather than a fact about the
+request). `unrequested` names the relationship between the step and the
+request, which is the ruled meaning.
+
+**If the field name changes at ratification it is a rename in five documents
+and four call sites**, none of them behavioural — the derivation, the schema,
+the two mirrors and the tests all key off one identifier.
+
+**ADR-17's third amendment currently enumerates four additive fields.
+Architecture.md is NOT edited by this packet** (owner-approval surface, and the
+amendment should carry the ratified name). Proposed amendment text:
+
+> **Fifth additive field (WP-28):** `unrequested:` — per checkpoint, optional,
+> boolean. Marks a step the user did not ask for; the procedure surfaces derive
+> §5b's "runbook added this" badge from it and from nothing else. Absent means
+> not badged. It is authored rather than derived because it cannot be derived:
+> the ruled set badges `cp.canary`, which uses the capability's primary tool,
+> and does not badge `cp.roll-fleet`, which uses the same one. Authored in law,
+> derived at render.
+
+### What was built
+
+1. **`RunbookCheckpoint.unrequested?: boolean`** — parsed by `runbookRegistry`,
+   carried as authored (an authored `false` and silence stay distinguishable;
+   both render as no badge, and only the document knows which it meant).
+2. **`CheckpointState.unrequested: boolean`** on the render seam, read off the
+   DECLARATION exactly the way `attest` is, so nothing downstream can add one.
+   `checkpointBadge` returns `CheckpointBadge | null` — null rather than a flag
+   on an always-returned object, because a surface that must remember to check
+   `badge.show` is a surface that will forget, and what it would then render is
+   the badge this packet removed.
+3. **Authored on all five shipped strict runbooks**, docs originals first and
+   re-copied into `law/runbooks/` (the fidelity pin fires on direct edits, by
+   design — it stayed green). Each edited document is version **1.1.0**, and
+   each carries a comment saying what the mark means so the next author is not
+   guessing. The anchor's set is the designer's ruling; the other four are this
+   packet's authoring against the same rule, stated in each file:
+
+   | runbook | marked | not marked |
+   |---|---|---|
+   | bulk-plugin-update | consult-history, dry-run, canary, verify-canary | approval, backup, roll-fleet, report |
+   | incident-containment | isolate, snapshot, entry-vector | triage, integrity-diff |
+   | incident-remediation | cleanup-plan, rotate-credentials, verify-clean | approval, execute-cleanup, post-mortem |
+   | promotion-preflight | consult-history, preflight-diff | resolve-endpoints, grant-check |
+   | promotion-execute | verify-destination | backup, approval, promote, report |
+
+   The rule the four non-anchor sets apply: **the request itself is not marked,
+   and neither is the platform's own ceremony around any write** (consent, a
+   backup, a closing report — the anchor's ruled exclusions generalised). What
+   the runbook ADDS is marked. Two calls in there are judgement and are flagged
+   for the designer rather than asserted: `cp.grant-check` is unmarked (the
+   permission gate applies to the write with or without the document) and
+   `cp.resolve-endpoints` is unmarked (knowing which way a promotion runs is
+   doing the request correctly, not adding to it).
+4. **The renderer mirror moved with the seam** and is pinned to it by the
+   existing shared case table, extended with a mark × reason table. Only the
+   badge branch of `ProcedureSurfaces.renderCheckpoint` changed: the badge and
+   its reason line are now one thing, because a reason line under no badge
+   explains a claim the surface is not making.
+5. **Finding 2 — the doubled runbook reference — fixed on the DISPLAY, not in
+   the record.** `ChatService` now composes two strings: `warning` (the card's
+   message line, emitted) and `cardText` (the whole card including the
+   reference, recorded as the rationale's `prompt`). The card renders the
+   reference once, from the styled block. **Taking the duplicate out of the
+   recorded text instead would have deleted a WP-26 pin with its reasoning
+   attached** — `prompt` is "the card the human was shown", and a rationale
+   event that cannot name the document the decision was taken under is a worse
+   record than a cosmetic win is worth. Both directions are pinned, and the
+   wrong fix is mutation M10.
+
+### The hash ripple, verified rather than assumed
+
+Five documents re-authored ⇒ five new hashes. Measured on the built tree,
+against the real `law/` directory:
+
+- `resolveCapabilityGrants` returns **5 grants, 0 disarmed**, each pinned to the
+  hash the registry computed today (all five verified equal).
+- A grant explicitly pinned to an older hash **disarms with `hash-mismatch`,
+  naming both hashes** — an old pin keeps its meaning and refuses rather than
+  being silently re-pointed at a document nobody reviewed.
+- The first boot after this lands emits one `control.grant.issued` per affected
+  capability with `reason: 'repinned'` and `previous_runbook_hash`, chained to
+  the issuance it supersedes (pinned by `capabilityGrants.test.ts`); no
+  revocation, because the capability was never withdrawn.
+- Ledger events already written are untouched — the ledger is append-only and
+  nothing here rewrites a recorded hash. A session mid-run re-delivers the full
+  document on the turn the hash changes, which is ADR-20's cadence and is
+  pinned by `procedureDelivery.test.ts`.
+
+Sizes after authoring (canonical whole document): 7,002 / 8,673 / 8,714 /
+6,902 / 8,184 — all under the 9,216-byte near-ceiling WARN line, so
+`registry.warnings()` is still empty and that pin's claim still holds.
+
+### Receipts
+
+Same worktree, `npm test`, tree held still, exit captured BEFORE any pipe
+(`npm test > log; echo $?`):
+
+| | suites | passed | skipped | total | exit |
+|---|---|---|---|---|---|
+| before | 565 | 7,341 | 12 | 7,353 | 0 |
+| after | 565 | 7,357 | 12 | 7,369 | 0 |
+
+**+16 tests, no new suites** — 19 added minus 3 replaced, counted off the diff.
+**Skipped unmoved at 12.** Zero FAIL lines in either run. `npx tsc -p .
+--noEmit` and `npx tsc -p tsconfig.test.json --noEmit` both clean. `npm run
+lint`: **0 errors, 6 warnings**, all pre-existing and none in a file this packet
+touched; `npx eslint` over `src/intelligence`, `src/main/intelligence-host`,
+`src/main/chat` and `src/renderer/components/DockedPanel` is silent, seam rule
+included.
+
+**Mutation battery — 12 witnesses, 12 killed by their named witness, 0
+survivors.** Each recreates a real pre-fix shape (M1, M6 and M7 are the exact
+shipped v0 lines) and each kill executed tests rather than failing to build.
+
+| # | witness | dies on |
+|---|---|---|
+| M1 | `checkpointBadge` returns a badge for every checkpoint (the shipped v0 line) | procedureView: badges NOTHING unmarked |
+| M2 | the rail marks every checkpoint unrequested regardless of the declaration | procedureView: carries the authored mark |
+| M3 | the registry parses the field and drops it | shippedRunbooks: the ruled set |
+| M4 | the schema takes anything, so `unrequested: "yes"` badges the step | runbookRegistry: refuses a non-boolean |
+| M5 | absence collapsed to `false` at the parse | runbookRegistry: leaves it ABSENT |
+| M6 | the renderer mirror keeps the v0 unconditional badge | procedureModel: the mirror case table |
+| M7 | the panel badges every expanded checkpoint (the live defect, exactly) | procedureSurfaces: badges nothing unmarked |
+| M8 | the panel prints the reason line without the badge above it | procedureSurfaces: badges nothing unmarked |
+| M9 | the emitted card text repeats the reference (pre-fix) | chat: the card text does not repeat |
+| M10 | the duplicate taken out of the RECORD instead of the display | chat: the recorded prompt names the runbook |
+| M11 | the anchor document marks `cp.approval` | shippedRunbooks: the ruled set |
+| M12 | a strict document marks ALL its checkpoints | shippedRunbooks: SOME but never ALL |
+
+M4 was a BUILD-ERROR before it was a kill (`z.unknown()` makes the parsed type
+unassignable) — WP-20a finding 8, third recurrence on this branch. Rewritten
+type-clean as `z.any()` and then killed.
+
+**The parity pin is untouched and green**: nothing armed ⇒ the panel renders
+byte-identical (`panelChat-procedure-parity.test.tsx`).
+
+**A live-path receipt, not only fixtures.** The built tree, reading the real
+`law/` directory through the registry and `deriveCheckpointStates`, prints the
+badge set above for all five strict runbooks — the shipped documents, the
+shipped derivation, no test fixture in the path.
+
+### Findings
+
+1. **The uniform badge was a derivation that could not have been right, and the
+   evidence was inside the seam's own comment.** v0's justification — "uniform
+   in v0 because the runbook is the only source of steps" — is a true sentence
+   about `source`, and `source` is a different question from the one the badge
+   asks. The badge asks *did the user ask for this*, which the platform cannot
+   see at all. A derivation whose input is unavailable to the deriver has one
+   honest home: the reviewed document. Same shape as the `attest` field, one
+   question over.
+2. **A fifth ADR-17 field, and the amendment is not a formality.** The four
+   existing additive fields all describe what the PLATFORM can do with a step
+   (attest, tools, tool_scope, arms_on). This is the first that describes the
+   step's relationship to the person asking. It is worth saying in the ADR that
+   the two kinds of field exist, because the next authored field will land on
+   one side or the other.
+3. **The five non-anchor documents needed a rule, not a copy.** The anchor's
+   ruled set does not transfer literally — four of the five have no canary and
+   two have no approval. The rule stated in each file ("the request is not
+   marked, and neither is the ceremony around any write") is this packet's
+   generalisation and is the part most worth a designer's eye at ratification.
+4. **A cosmetic fix reached for the audit record and was caught by an existing
+   pin.** The instruction — drop the duplicated reference from "the approval
+   card's recorded text" — read literally would have removed the runbook from
+   `task.rationale.recorded`'s `prompt`, which WP-26 pinned deliberately with
+   its reasoning in the test. The display and the record are two consumers of
+   one string; splitting them was the smaller change. Recorded here because
+   "cosmetic" is exactly the adjective under which a record quietly gets worse.
+
+### State on exit
+
+**ABI: SYSTEM NODE** — measured, not quoted: `node -v` → **v25.9.0**,
+`node -p process.versions.modules` → **141**. `npm run rebuild` before loading
+Local. `lib/` is compiled (the live-path receipt above needed it).
+
+**HELD AT THE GATE. Not merged.** Awaiting ratification of `unrequested:` as
+the field name and of the semantics above; the four non-anchor mark sets are
+the second thing worth ruling on.

@@ -27,6 +27,7 @@ import {
   BADGE_LABEL,
   applyProcedureEvent,
   armedByPhrase,
+  checkpointBadge,
   checkpointMark,
   denominatorLine,
   emptyProcedureState,
@@ -51,6 +52,7 @@ function state(over: Partial<CheckpointState> = {}): CheckpointState {
     verified: false,
     reason: null,
     source: 'runbook',
+    unrequested: false,
     ...over,
   };
 }
@@ -66,6 +68,25 @@ describe('the renderer mirror cannot drift from procedureView', () => {
 
   it('carries the seam badge label verbatim', () => {
     expect(BADGE_LABEL).toBe(seam.BADGE_LABEL);
+  });
+
+  it('agrees with the seam on the badge, over every mark x reason combination', () => {
+    // WP-28. The mirror's whole risk is that one copy learns a rule and the other
+    // does not: if `checkpointBadge` here still returned a badge unconditionally,
+    // the rail would badge all eight while the seam badged four, and only the
+    // rail is what a human reads.
+    const table = [
+      state({ unrequested: true, reason: 'one low-risk site first' }),
+      state({ unrequested: true, reason: null }),
+      state({ unrequested: false, reason: 'before anything writes' }),
+      state({ unrequested: false, reason: null }),
+    ];
+    for (const s of table) {
+      expect(checkpointBadge(s)).toEqual(seam.checkpointBadge(s));
+    }
+    // Not vacuous: the table must contain both answers.
+    expect(table.filter((s) => checkpointBadge(s) !== null)).toHaveLength(2);
+    expect(table.filter((s) => checkpointBadge(s) === null)).toHaveLength(2);
   });
 
   it('agrees with the seam predicate on every status x attest combination', () => {

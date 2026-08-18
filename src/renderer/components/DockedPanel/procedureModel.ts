@@ -84,7 +84,7 @@ export const ATTEST_WORDS: Record<AttestClass, string> = {
   narrative: 'your account only, not verified',
 };
 
-/** The badge on every step a runbook contributed. */
+/** The badge on a step the user did not ask for. */
 export const BADGE_LABEL = 'runbook added this';
 
 /** The seam's tick predicate, mirrored. */
@@ -105,7 +105,18 @@ export function showsTick(state: CheckpointState): boolean {
   return state.verified === true && isVerified(state);
 }
 
-export function checkpointBadge(state: CheckpointState): CheckpointBadge {
+/**
+ * The badge, or null (WP-28) — the seam's rule, mirrored.
+ *
+ * v0 returned a badge for every checkpoint, on the reasoning that a runbook is
+ * the only source of steps. Live, that put "runbook added this" on cp.approval
+ * and cp.backup: if everything is badged, nothing is. Which steps qualify is a
+ * judgement about what the person asking had in mind, so it is AUTHORED in the
+ * reviewed document (`unrequested:`) and read here — never inferred from the
+ * step's shape, tool or attest class.
+ */
+export function checkpointBadge(state: CheckpointState): CheckpointBadge | null {
+  if (!state.unrequested) return null;
   return { label: BADGE_LABEL, reason: state.reason };
 }
 

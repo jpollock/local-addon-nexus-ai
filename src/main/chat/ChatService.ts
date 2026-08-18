@@ -431,15 +431,27 @@ export class ChatService {
       checkCheckpointSequence(toolCall.name, taskId)?.checkpoint === procedure.checkpointId;
 
     if (requiresHumanApproval(toolCall.name) || gatedOnApproval) {
-      // The recorded rationale's `prompt` is "the card the human was shown", so
-      // when the runbook reference is part of what they were shown it has to be
-      // part of what is recorded. Composed from the declaration's own fields —
-      // naming a document is not inventing a rationale.
+      // TWO STRINGS, one card, and the split is the point (WP-28 finding 2).
+      //
+      // `warning` is the card's own message line. `procedure` travels beside it
+      // and the card renders the runbook, its version and the checkpoint from
+      // those fields as a styled block — so a warning that opened with the same
+      // sentence printed the reference twice on one card, which is what the
+      // first live run showed.
+      //
+      // `cardText` is what the ledger records, and it stays whole. The recorded
+      // rationale's `prompt` is "the card the human was shown" — the whole card,
+      // block included — and a rationale event that could not name the document
+      // the decision was taken under would be a worse record for a cosmetic win.
+      // Composed from the declaration's own fields; naming a document is not
+      // inventing a rationale.
+      const cardMessage = procedure
+        ? safety.confirmationMessage ?? 'Approve this step to let the runbook continue.'
+        : safety.confirmationMessage ?? 'This action may have significant consequences.';
       const cardText = procedure
         ? `Runbook ${procedure.runbookId} v${procedure.version}, marked strict — ` +
-          `checkpoint ${procedure.checkpointId}. ` +
-          (safety.confirmationMessage ?? 'Approve this step to let the runbook continue.')
-        : safety.confirmationMessage ?? 'This action may have significant consequences.';
+          `checkpoint ${procedure.checkpointId}. ${cardMessage}`
+        : cardMessage;
       // REGISTER BEFORE EMITTING. `emit` is synchronous all the way into
       // `sendToRenderer`, so a caller that answers the card inside that call —
       // any headless approver, and the eval sitting harness is one — resolved
@@ -452,7 +464,7 @@ export class ChatService {
         id: toolCall.id,
         name: toolCall.name,
         arguments: toolCall.arguments,
-        warning: cardText,
+        warning: cardMessage,
         ...(procedure ? { procedure } : {}),
       });
 

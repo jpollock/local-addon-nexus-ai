@@ -40,9 +40,20 @@ function cp(id: string, attest: AttestClass, extra: Partial<RunbookCheckpoint> =
   return { id, attest, tools: [], ...extra };
 }
 
+/**
+ * The anchor runbook's checkpoints, INCLUDING its authored `unrequested:` marks
+ * (WP-28). Four of the eight are marked, and the four that are not — approval,
+ * backup, roll-fleet, report — are the ruled exclusions. The marks are what the
+ * badge derives from; nothing structural distinguishes `cp.canary` (marked, and
+ * using the capability's own primary tool) from `cp.roll-fleet` (not marked,
+ * same tool), which is exactly why the field is authored.
+ */
 const CHECKPOINTS: RunbookCheckpoint[] = [
-  cp('cp.consult-history', 'manifest', { evidence: { topic: 'task.context.assembled' } }),
-  cp('cp.dry-run', 'narrative'),
+  cp('cp.consult-history', 'manifest', {
+    evidence: { topic: 'task.context.assembled' },
+    unrequested: true,
+  }),
+  cp('cp.dry-run', 'narrative', { unrequested: true }),
   cp('cp.approval', 'event', {
     evidence: { topic: 'task.rationale.recorded', decision: 'approved' },
   }),
@@ -50,8 +61,8 @@ const CHECKPOINTS: RunbookCheckpoint[] = [
     evidence: { topic: 'task.action.executed', tool: 'wpe_backup_and_verify', perTarget: true },
     tools: [{ name: 'wpe_backup_and_verify' }],
   }),
-  cp('cp.canary', 'narrative', { tools: [{ name: 'bulk_plugin_update' }] }),
-  cp('cp.verify-canary', 'narrative'),
+  cp('cp.canary', 'narrative', { tools: [{ name: 'bulk_plugin_update' }], unrequested: true }),
+  cp('cp.verify-canary', 'narrative', { unrequested: true }),
   cp('cp.roll-fleet', 'event', {
     evidence: { topic: 'task.action.executed', tool: 'bulk_plugin_update' },
     tools: [{ name: 'bulk_plugin_update' }],
@@ -173,6 +184,7 @@ describe('deriveCheckpointStates — a narrative checkpoint is never verified', 
         verified: true,
         reason: null,
         source: 'runbook',
+        unrequested: true,
       })
     ).toBe(false);
     expect(
@@ -183,6 +195,7 @@ describe('deriveCheckpointStates — a narrative checkpoint is never verified', 
         verified: true,
         reason: null,
         source: 'runbook',
+        unrequested: false,
       })
     ).toBe(true);
   });
@@ -235,12 +248,55 @@ describe('deriveCheckpointStates — a narrative checkpoint is never verified', 
     expect(states.find((s) => s.id === 'cp.report')!.reason).toBeNull();
   });
 
-  it('badges every declared step as runbook-supplied — the prompt asked for none of them', () => {
+  it('badges a step the runbook MARKED unrequested, with the runbook’s own reason', () => {
     const states = deriveCheckpointStates(runbook(), cursor());
-    const badge = checkpointBadge(states.find((s) => s.id === 'cp.backup')!);
-    expect(badge.label).toBe(BADGE_LABEL);
-    expect(badge.reason).toBe('before anything writes');
+    const badge = checkpointBadge(states.find((s) => s.id === 'cp.canary')!);
+    expect(badge).not.toBeNull();
+    expect(badge!.label).toBe(BADGE_LABEL);
+    expect(badge!.reason).toBe('one low-risk site first');
     expect(states.every((s) => s.source === 'runbook')).toBe(true);
+  });
+
+  it('badges NOTHING the runbook did not mark — the badge is not a synonym for "declared"', () => {
+    // The defect this replaced: every checkpoint carried "runbook added this",
+    // cp.approval and cp.backup included. If everything is badged, nothing is.
+    const states = deriveCheckpointStates(runbook(), cursor());
+    for (const id of ['cp.approval', 'cp.backup', 'cp.roll-fleet', 'cp.report']) {
+      expect({ id, badge: checkpointBadge(states.find((s) => s.id === id)!) }).toEqual({
+        id,
+        badge: null,
+      });
+    }
+  });
+
+  it('badges exactly the ruled set for the anchor runbook', () => {
+    const states = deriveCheckpointStates(runbook(), cursor());
+    const badged = states.filter((s) => checkpointBadge(s) !== null).map((s) => s.id);
+    expect(badged).toEqual(['cp.consult-history', 'cp.dry-run', 'cp.canary', 'cp.verify-canary']);
+  });
+
+  it('carries the authored mark onto the state, and false when the document is silent', () => {
+    // Absent in the document ⇒ `false` on the rail: a surface asks one question
+    // ("is this badged?") and gets one answer, and the conservative one is the
+    // answer to silence.
+    const states = deriveCheckpointStates(runbook(), cursor());
+    expect(states.find((s) => s.id === 'cp.dry-run')!.unrequested).toBe(true);
+    expect(states.find((s) => s.id === 'cp.report')!.unrequested).toBe(false);
+  });
+
+  it('badges a marked step that authored no reason, without inventing one', () => {
+    // `cp.report` has no `## cp.report — …` heading. Marked but reasonless is a
+    // real authoring state, and the badge shows bare rather than paraphrased.
+    const marked = runbook({
+      checkpoints: CHECKPOINTS.map((c) =>
+        c.id === 'cp.report' ? { ...c, unrequested: true } : c
+      ),
+    });
+    const states = deriveCheckpointStates(marked, cursor());
+    expect(checkpointBadge(states.find((s) => s.id === 'cp.report')!)).toEqual({
+      label: BADGE_LABEL,
+      reason: null,
+    });
   });
 
   it('reports an unreadable ledger as unknown progress, never as "nothing attested"', () => {

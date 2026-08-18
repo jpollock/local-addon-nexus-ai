@@ -1,7 +1,7 @@
 ---
 id: rb.promotion-preflight
 kind: runbook
-version: 1.0.0
+version: 1.1.0
 strictness: strict
 capability: cap.promotion_preflight
 owner: ops
@@ -32,10 +32,20 @@ preconditions:                   # gateway-verified before checkpoint 1
   - id: pre.sources-present
     check: requires_sources are reachable (CAPI grantable, ledger queryable, policy set fresh)
 checkpoints:                     # ordered; strict — gated calls out of sequence are refused
+  # unrequested: a step the user did not ask for — the surface badges it
+  # "runbook added this" (§5b). Authored, never derived. Consent, backups and a
+  # closing report are the platform's own ceremony and stay unmarked, per the
+  # anchor runbook's ruled set.
+  # Marked: the history check and the diff shown before the destination is
+  # overwritten. Resolving which way the promotion runs and checking the grant
+  # are not additions — they are doing the requested write correctly, and the
+  # grant gate applies to the write with or without this document.
   - id: cp.resolve-endpoints     # eval 05 (must_not: get source/destination reversed)
   - id: cp.grant-check           # M4-08 / M4-09 (production write is grant-gated; exceptions override the global default)
   - id: cp.consult-history       # E-01 (consult-before-risk, made structural)
+    unrequested: true
   - id: cp.preflight-diff        # eval 05 (warns that promotion overwrites production)
+    unrequested: true
 aborts:
   - id: ab.direction-ambiguous
     on: cp.resolve-endpoints cannot pin both endpoints to entities, or the direction is not upward

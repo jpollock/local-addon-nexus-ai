@@ -1,7 +1,7 @@
 ---
 id: rb.incident-remediation
 kind: runbook
-version: 1.0.0
+version: 1.1.0
 strictness: strict
 capability: cap.incident_remediation
 owner: ops
@@ -30,11 +30,22 @@ preconditions:                   # gateway-verified before checkpoint 1
   - id: pre.sources-present
     check: requires_sources are reachable (policy set fresh, client policy loaded)
 checkpoints:                     # ordered; strict — gated calls out of sequence are refused
+  # unrequested: a step the user did not ask for — the surface badges it
+  # "runbook added this" (§5b). Authored, never derived. Consent, backups and a
+  # closing report are the platform's own ceremony and stay unmarked, per the
+  # anchor runbook's ruled set.
+  # Marked: the plan shown before anything is deleted, credential rotation
+  # (nobody asks to be logged out of their own site), and re-scanning from
+  # scratch afterwards. Executing the cleanup is the request; approval and the
+  # post-mortem are the platform's own ceremony.
   - id: cp.cleanup-plan
+    unrequested: true
   - id: cp.approval
   - id: cp.execute-cleanup
   - id: cp.rotate-credentials
+    unrequested: true
   - id: cp.verify-clean          # unverified cleanup is a claim, not a result
+    unrequested: true
   - id: cp.post-mortem
 aborts:
   - id: ab.grant-refused

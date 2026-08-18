@@ -91,10 +91,24 @@ export const ATTEST_WORDS: Record<AttestClass, string> = {
 };
 
 /**
- * The badge on every step a runbook contributed (§5b: "unasked-for steps are
- * badged"). Uniform in v0 because the runbook is the only source of steps — the
- * `source` field on `CheckpointState` is what a later packet would use to tell a
- * model-proposed step apart from a procedure's own.
+ * The badge on a step the user did not ask for (§5b: "unasked-for steps are
+ * badged", each with its own reason line).
+ *
+ * **WP-28: it is no longer on every step.** v0 badged every declared checkpoint,
+ * on the reasoning that the runbook is the only source of steps — which made the
+ * badge a synonym for "declared", so the first live run rendered "runbook added
+ * this" over `cp.approval` and `cp.backup` too. If everything is badged, nothing
+ * is: that is the uniform-rail defect wearing a different hat.
+ *
+ * Which steps qualify is AUTHORED in the reviewed document (`unrequested:` on the
+ * checkpoint) and DERIVED here. It cannot be derived from structure: the ruled
+ * set badges `cp.canary`, which uses the capability's own primary tool, and does
+ * not badge `cp.roll-fleet`, which uses the same one. The difference is a
+ * judgement about what the person asking had in mind, and the only place that
+ * judgement belongs is the document a human reviewed.
+ *
+ * The `source` field on `CheckpointState` remains what a later packet would use
+ * to tell a model-proposed step from a procedure's own — a different question.
  */
 export const BADGE_LABEL = 'runbook added this';
 
@@ -144,6 +158,15 @@ export interface CheckpointState {
   reason: string | null;
   /** Where the step came from. v0 has one answer; the field is what keeps it honest later. */
   source: 'runbook';
+  /**
+   * Whether the reviewed document marked this step as one the user did not ask
+   * for (WP-28). The ONLY field a badge may be rendered from — see `BADGE_LABEL`.
+   *
+   * `false` for a checkpoint the document does not mark, INCLUDING a document
+   * that predates the field: a rail asks one question and gets one answer, and
+   * the answer to silence is the conservative one.
+   */
+  unrequested: boolean;
 }
 
 /**
@@ -288,7 +311,15 @@ export function checkpointReason(runbook: Pick<Runbook, 'body'>, checkpointId: s
   return reason ? reason : null;
 }
 
-export function checkpointBadge(state: CheckpointState): CheckpointBadge {
+/**
+ * The badge for a step, or `null` when the document did not mark one.
+ *
+ * Null rather than a flag on a always-returned object, deliberately: a surface
+ * that has to remember to check `badge.show` is a surface that will forget, and
+ * the thing it would then render is the uniform badge this replaced.
+ */
+export function checkpointBadge(state: CheckpointState): CheckpointBadge | null {
+  if (!state.unrequested) return null;
   return { label: BADGE_LABEL, reason: state.reason };
 }
 
@@ -327,6 +358,9 @@ export function deriveCheckpointStates(
     attest: checkpoint.attest,
     reason: checkpointReason(runbook, checkpoint.id),
     source: 'runbook' as const,
+    // Read off the DECLARATION, like `attest`: the badge is the document's
+    // claim about the step, and nothing downstream may add one.
+    unrequested: checkpoint.unrequested === true,
   });
 
   // Rule 1 — and the same shape when no cursor exists at all: WP-20c renders

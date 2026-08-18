@@ -1,7 +1,7 @@
 ---
 id: rb.bulk-plugin-update
 kind: runbook
-version: 1.0.0
+version: 1.1.0
 strictness: strict
 capability: cap.bulk_plugin_update
 owner: ops
@@ -25,11 +25,21 @@ checkpoints:                     # ordered; strict mode — gateway refuses gate
   # attest: what the PLATFORM can prove, never how well the step was done.
   # Four are provable and four are not; a reader who cannot tell which is which
   # would read a narrative tick as a verified one (WP-20 design note §4).
+  #
+  # unrequested: this step is one the user did not ask for, so the surface says
+  # "runbook added this" beside it (§5b). Marked here rather than derived: no
+  # structural property separates cp.canary (marked) from cp.roll-fleet (not),
+  # since both use the same tool. The user asked for the roll-out; consent, a
+  # backup and a report are what this platform does about any write. What the
+  # RUNBOOK adds is the history check, the plan-before-writing, and the canary
+  # pair. A document that marked all eight would be saying nothing.
   - id: cp.consult-history
     attest: manifest             # the assembler's own episodic retrieval — the SUPPLY side only
     evidence: { topic: task.context.assembled }
+    unrequested: true
   - id: cp.dry-run
     attest: narrative            # bulk_plugin_update has no dry_run parameter and no dry-run tool exists (WP-20g)
+    unrequested: true
   - id: cp.approval
     attest: event
     evidence: { topic: task.rationale.recorded, decision: approved }
@@ -40,8 +50,10 @@ checkpoints:                     # ordered; strict mode — gateway refuses gate
   - id: cp.canary
     attest: narrative            # cardinality is observable; that the site chosen was low-risk is not
     tools: [bulk_plugin_update]  # never wp_plugin_update: that tool's path AUTO-STARTS a halted site
+    unrequested: true
   - id: cp.verify-canary
     attest: narrative            # no tool checks "site loads, admin reachable, checkout renders" in this flow
+    unrequested: true
   - id: cp.roll-fleet
     attest: event
     evidence: { topic: task.action.executed, tool: bulk_plugin_update }

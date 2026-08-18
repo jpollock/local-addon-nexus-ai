@@ -34,7 +34,11 @@ function card(props: Record<string, unknown> = {}): any {
   return new (ProcedureApprovalCard as any)({
     title: 'Bulk Plugin Update',
     effect: 'Updates plugins on the sites in the plan.',
-    warning: 'Runbook rb.bulk-plugin-update v1.0.0, marked strict — checkpoint cp.approval.',
+    // WP-28: the platform's warning line no longer repeats the reference the
+    // styled block renders — `ChatService` composes the two separately and only
+    // the RECORDED text carries both (`chat-procedure-approval.test.ts` pins
+    // that half). The fixture follows the shape the card is actually handed.
+    warning: 'Approve this step to let the runbook continue.',
     procedure: PROCEDURE,
     onApprove: jest.fn(),
     onDeny: jest.fn(),
@@ -58,6 +62,15 @@ function texts(node: any, out: string[] = []): string[] {
 const render = (instance: any) => texts(serializeTree(instance.render())).join(' ');
 
 describe('the plan reference', () => {
+  it('shows the reference ONCE — WP-28 finding 2, the doubled reference', () => {
+    // Both halves: the card never prints the runbook twice on its own, and it
+    // does not need the warning line to carry the reference in order to show it.
+    const text = render(card());
+    expect(text.split('rb.bulk-plugin-update').length - 1).toBe(1);
+    expect(text.split(/marked strict/i).length - 1).toBe(1);
+    expect(text.split('cp.approval').length - 1).toBe(1);
+  });
+
   it('names the runbook, its version and that it is marked strict', () => {
     const text = render(card());
     expect(text).toContain('rb.bulk-plugin-update');

@@ -214,6 +214,62 @@ describe('RunbookRegistry', () => {
     });
   });
 
+  describe('unrequested — the field the badge is derived from (WP-28, §5b)', () => {
+    it('round-trips an authored unrequested checkpoint', () => {
+      write(
+        'runbooks/strict.md',
+        STRICT.replace('  - id: cp.second', '  - id: cp.second\n    unrequested: true')
+      );
+
+      const rb = build().registry.byId('rb.test-strict')!;
+
+      expect(rb.checkpoints[1].unrequested).toBe(true);
+    });
+
+    it('leaves it ABSENT when the runbook authors nothing — silence is never a badge', () => {
+      // The conservative default, and the reason the field exists: the uniform
+      // rail this packet removed came from a badge no document had asked for.
+      // A runbook that says nothing gets no badges, so the defect cannot recur
+      // by omission.
+      write('runbooks/strict.md', STRICT);
+
+      const rb = build().registry.byId('rb.test-strict')!;
+
+      expect(rb.checkpoints.map((c) => c.unrequested)).toEqual([undefined, undefined]);
+    });
+
+    it('carries an authored FALSE as authored, distinct from silence', () => {
+      // `false` is a reviewer saying "this step is what you asked for"; absence
+      // is a document that predates the field. Both render the same today, and
+      // collapsing them at the parse would throw away the difference before any
+      // later reader could see it.
+      write(
+        'runbooks/strict.md',
+        STRICT.replace('  - id: cp.second', '  - id: cp.second\n    unrequested: false')
+      );
+
+      const rb = build().registry.byId('rb.test-strict')!;
+
+      expect(rb.checkpoints[1].unrequested).toBe(false);
+    });
+
+    it('refuses a non-boolean rather than reading a string as truth', () => {
+      // `unrequested: "yes"` is truthy in JavaScript and meaningless in the
+      // contract. A field that decides what a human is told about a step they
+      // did not ask for may not be typo-tolerant.
+      write(
+        'runbooks/strict.md',
+        STRICT.replace('  - id: cp.second', '  - id: cp.second\n    unrequested: "yes"')
+      );
+
+      const { registry } = build();
+
+      expect(registry.byId('rb.test-strict')).toBeUndefined();
+      expect(registry.errors()[0].code).toBe('invalid-frontmatter');
+      expect(registry.errors()[0].reason).toMatch(/unrequested/);
+    });
+  });
+
   describe('the contract a strict runbook must carry (ADR-17)', () => {
     it('refuses a strict runbook that enumerates no checkpoints', () => {
       write('runbooks/strict.md', STRICT.replace(/checkpoints:\n( {2}- id: .*\n)+/, ''));

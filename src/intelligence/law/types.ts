@@ -136,6 +136,22 @@ export interface RunbookCheckpoint {
   evidence?: RunbookEvidence;
   /** Tools this checkpoint expects; empty when the runbook declares none for it. */
   tools: RunbookTool[];
+  /**
+   * WP-28 · §5b's badge, AUTHORED IN THE REVIEWED DOCUMENT: this step is one the
+   * user did not ask for, so a surface may say "runbook added this" about it.
+   *
+   * It is authored rather than derived because it CANNOT be derived. The ruled
+   * set for the anchor runbook badges `cp.canary` — which uses the capability's
+   * own primary tool — and does not badge `cp.backup`, which uses a different
+   * one; no structural property separates those two. What separates them is the
+   * reviewer's judgement about what the person asking had in mind, and the only
+   * place that judgement legitimately lives is the document a human reviewed.
+   *
+   * **Absent means NOT badged.** A document that says nothing gets no badges:
+   * the uniform rail this field replaced (every checkpoint badged, so the badge
+   * meant nothing) cannot come back through an omission.
+   */
+  unrequested?: boolean;
 }
 
 /** The lexical arming predicate 20b evaluates over the user's turn text (design note §1, path A). */
