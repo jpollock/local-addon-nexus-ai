@@ -9947,3 +9947,27 @@ RB-C and the unchosen variant per XD-17), hand over the current
 fixture file for the diff. Cycle one closes on the fold; cycles two
 and three remain gated on the owner's reading queue (WP-25 note,
 citation contract), not on the designer.
+
+---
+
+**THE POSITIONS ARE COMMITTED — protocol gap closed (2026-08-18).**
+WP-33's sourcing block surfaced a defect in the record, not the
+packet: DESIGN_PROTOCOL requires positions AND responses committed,
+and only the `for-designer-*-response.md` half ever landed. The
+designer packaged all five originals with provenance frontmatter
+(`committed_by: architect, verbatim`); they land under
+`docs/intelligence/from-designer/` unedited: 00-rank-model,
+01-moments-tested, 02-consequence-order, 03-selection-to-scope
+(draft 1, superseded on content by draft 2 per its own header),
+04-selection-to-scope-split. **Sourcing ruling corrected on the
+evidence:** the relay's claim that J-Refusal's key steps were never
+authored was repo-scoped and is WITHDRAWN — §1 carries J-Refusal in
+full (must/must-not, programmatic half, judged question). WP-33
+therefore transcribes ALL FIVE journeys from the committed §1; where
+the architect response or a later adjudication amended a criterion,
+the ratified form governs, citing both — for J-Refusal's judged
+sitting that is §1's question as amended by the WP-31 merge
+adjudication's three-question script. The BLOCKED-pending-the-fold
+carve-out for J-Refusal's key steps is void; the designer's RB-D fold
+owes only what the densities adjudication already assigned. WP-33's
+hold lifts when this commit lands.
