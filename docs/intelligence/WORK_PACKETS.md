@@ -10238,3 +10238,52 @@ Standing state after this merge: WP-33 in flight (worktree at
 8df3433b); designer owes the fold + the fixture swap/hand-back; owner
 owes the t1/t2 replay, and the ABI is SYSTEM NODE — `npm run rebuild`
 before loading Local, which the replay requires anyway.
+
+---
+
+**WP-25 ANNOUNCED 2026-08-18 — LOCK TAKEN: `src/main/intelligence-host/`
+(serialized with the core; the core itself is NOT taken and stays free).**
+Worktree `.worktrees/wp-25`, branch `wp-25`, base `poc/nexintelligence` @
+`a39f5a83`.
+
+**Contention check, run before cutting the worktree, not assumed.** The
+design note's §3 says "must wait for or coordinate with WP-26"; the owner
+ratification already recorded that as STALE and named WP-32 the holder
+(lock announce `3d84e96b`). Measured here:
+
+- `git merge-base --is-ancestor 11159418 poc/nexintelligence` passes —
+  WP-32's packet commit is on the base, folded by merge `74a7144e`, and
+  the architect's merge acceptance (`a39f5a83`) records the lock RELEASED.
+- `git status --porcelain -- src/main/intelligence-host src/intelligence`
+  is EMPTY in every recent worktree — `wp-26`, `wp-28`, `wp-31`, `wp-32`,
+  `wp-33`. Nothing is holding the surface.
+- `git log --oneline -- src/main/intelligence-host` tops out at `11159418`
+  (WP-32). No later writer.
+
+**One live condition, recorded because it constrains this packet's own
+merge and because the next reader will otherwise mis-read the record.**
+At the moment of this announce the PRIMARY checkout is mid-merge:
+`.git/MERGE_HEAD` present, `docs/intelligence/WORK_PACKETS.md` in
+`both modified`, WP-33's five journey specs staged. So this lock-announce
+entry is committed on the `wp-25` BRANCH rather than directly on
+`poc/nexintelligence` as WP-32's was (`3d84e96b`) — committing on the base
+would have meant reaching into another agent's in-flight merge. The
+announce is no less binding for it; it simply lands with the packet. WP-25
+will therefore merge base-first and expect a tail conflict in this file
+(both sides append), resolved by keeping both verbatim, per WP-32's
+precedent.
+
+**Surfaces this packet will touch, declared up front:**
+
+| file | lock | why |
+|---|---|---|
+| `src/main/intelligence-host/incidentProducer.ts` (new) | held | the packet |
+| `src/main/intelligence-host/__tests__/incidentProducer.test.ts` (new) | held | its pins |
+| `src/main/intelligence-host/actionProducer.ts` | held | export the target-resolution ladder rather than duplicate it |
+| `src/main/intelligence-host/chatAssembly.ts` | held | one call at the seam that already folds the run |
+| `src/main/agent-runtime/AgentRunner.ts` | free | one wrapped call beside the existing inbox write (the run-completion chokepoint) |
+| `tests/intelligence-evals/` | free, but contended | E-01 criterion 0 + its probe; WP-33 is editing these files in its own merge RIGHT NOW, so this packet takes them LAST, after the base carries WP-33 |
+
+**Out, per the note's §3 and restated so the boundary is checkable:** no
+assembler change, no sentinel behaviour change, no new topic, no Tell-channel
+intake, no UI, no new envelope field.
