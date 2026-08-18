@@ -9908,3 +9908,42 @@ surface (`git worktree list` at claim time shows no `wp-32` and no live
 intelligence packet). Renderer work in this packet is ADDITIVE only.
 Worktree `wp-32`, branch `wp-32`, cut from `poc/nexintelligence`.
 Release note will land with the merge report.
+
+---
+
+**DESIGN ADJUDICATION — RB-D & RB-E, the M4 densities (2026-08-18).**
+Cycle one's remaining piece arrived as two sheets: RB-D ("the panel
+becomes a session," turn 1, drawn at the shipped 380px) and RB-E
+("stage density," turn 2, governed by §0). Adjudicated per
+DESIGN_PROTOCOL; full response in
+`for-designer-densities-response.md`. **The variant is ruled: 1a's
+layout with 1b's empty run.** 1a ratified — block pinned top while in
+force (XD-3 as geometry), fold-in-place on finish (the record does not
+move), and the yield rule (block gives back space while a card is up,
+never the reverse) is XD-5 as layout law. 1b as layout refused on the
+designer's own cost sentence — "a mode you can leave is a mode you can
+lose track of" — rank is promotion, not navigation, and 1b made it
+navigation; its finished-behind-a-bar record is promotion made lossy.
+1a's empty state refused: an armed block of not-applicable dashes is a
+container pretending to be work, and the dash was a fourth mark by
+drift. RB-E adopted whole. **Two register entries ratified:** XD-20
+(density changes rendering, never facts — RB-E's closing contract:
+tick set, badge, attest wording, ref-once, empty-plan product are
+seam-governed and density-invariant; cross-density difference =
+defect, never a density choice) and XD-21 (empty consequence earns no
+container — zero-cell plan opens no run, draws no list; the refusal
+stays a turn with the derived plan attached and alternatives as
+offers). **One HOLD on both sheets:** they read
+`NEXUS_FIXTURES['rb.bulk-plugin-update']` claiming "nothing here is
+authored," but WP-32's generator — the only ratified source — has not
+merged (lock claimed at 3d84e96b, no generator in the tree). The
+prototype fixture is hand-built; pin 7 names the defect class. Hold
+lifts on byte-match against the generator's output; divergence is a
+defect in one of them, named. Marks cleared (progress marks, not
+attest shortforms; ATTEST_WORDS render in full both densities; the
+tick must never grow a "verified"). **Designer's next:** fold RB-D to
+one final sheet (ruled composite + pins + absences; supersede marks on
+RB-C and the unchosen variant per XD-17), hand over the current
+fixture file for the diff. Cycle one closes on the fold; cycles two
+and three remain gated on the owner's reading queue (WP-25 note,
+citation contract), not on the designer.

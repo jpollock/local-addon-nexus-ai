@@ -83,6 +83,19 @@ produced these; nothing enters by drift. XD = experience decision.)*
   J-Act-big=B-03 and J-Investigate=D-02; must-nots are the never-shows
   with teeth; judged halves are sittings; BLOCKED until surfaces exist.
 
+- **XD-20 · Density changes rendering, never facts** — which
+  checkpoints tick, what the badge says, the attest wording, the
+  runbook reference appearing once, and what an empty plan produces
+  are seam-governed and density-invariant; a difference between
+  densities on any of them is a defect in one of the sheets, never a
+  density choice. Source: RB-E's closing contract, ratified in
+  `for-designer-densities-response.md`.
+- **XD-21 · Empty consequence earns no container** — a declared
+  procedure whose plan is zero cells opens no run and draws no
+  checkpoint list; the refusal stays a turn with the derived plan
+  attached and its alternatives as offers, a door where a grant is
+  the answer. Source: RB-E 2c + RB-D 1b, ratified ibid.
+
 ## How a ruling gets here
 
 Designer position or architect note → ratification response (both
