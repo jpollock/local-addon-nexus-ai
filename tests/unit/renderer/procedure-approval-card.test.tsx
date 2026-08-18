@@ -193,7 +193,11 @@ describe('PanelChat routing — parity is the first requirement', () => {
 
     instance.handleApprove('t1');
 
+    // `toStrictEqual`, not `toEqual`: jest's `toEqual` ignores an undefined
+    // element, so `[...,true,undefined]` and `[...,true]` compare equal and a
+    // handler that always pushed the argument passed this test. Absent and
+    // present-but-undefined are the distinction the whole pin is about.
     const call = instance.props.electron.ipcRenderer.invoke.mock.calls.at(-1);
-    expect(call.slice(1)).toEqual(['s1', 't1', true]);
+    expect(call.slice(1)).toStrictEqual(['s1', 't1', true]);
   });
 });

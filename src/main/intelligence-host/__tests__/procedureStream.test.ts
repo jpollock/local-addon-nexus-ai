@@ -405,6 +405,37 @@ describe('the abort event', () => {
     expect(event.groups.headline).toContain('Stopping here changes none of them');
   });
 
+  test('an aborted rail with no record of WHAT ended the run announces nothing', () => {
+    // The fold treats "a decision exists for this checkpoint and it is not the
+    // one the runbook wants" as denial, so a decision word no producer here
+    // writes today still aborts the rail. The stream cannot name the record
+    // that ended the run, and an abort notice carrying an invented id would be
+    // claiming it could.
+    armRun([t1]);
+    emitManifest(t1);
+    turn(t1);
+    emitted = [];
+
+    core.emitter.emit({
+      observed_at: new Date().toISOString(),
+      topic: RATIONALE_RECORDED_TOPIC,
+      schema: RATIONALE_RECORDED_SCHEMA,
+      entity: {},
+      actor: { id: 'act_local_operator', kind: 'human' },
+      source: { class: 'intent', system: 'gateway:approval', trust: 'elicited' },
+      correlation: t1,
+      payload: { tool: 'bulk_plugin_update', decision: 'deferred', prompt: 'card', source: 'approval-card' },
+    });
+    turn(t1);
+
+    // The rail DID abort — that is the fold's rule, unchanged...
+    const changed = emitted.find((e) => e.event.type === 'checkpoint_changed')!.event;
+    if (changed.type !== 'checkpoint_changed') throw new Error('wrong event');
+    expect(changed.changed.find((c) => c.id === 'cp.approval')?.status).toBe('aborted');
+    // ...and the stream said nothing about it, because it cannot say what.
+    expect(types()).not.toContain('procedure_aborted');
+  });
+
   test('a healthy run emits no abort', () => {
     armRun([t1]);
     emitManifest(t1);
