@@ -7913,3 +7913,14 @@ trial and K3 is judged on the configuration the product actually ships.
 Verification here was by inspection plus the pin — no stub provider exists
 that would drive a full sitting without an API call, and standing
 instruction was not to spend owner tokens.
+
+**WP-24 POST-MERGE VERIFICATION (primary checkout, at `71ba3594`).**
+`npm test`: **557 suites, 7217 passed, 2 skipped, 7219 total, exit 0, zero
+FAIL lines.** Total identical to the worktree's after-run (7219); the
+**skipped column moved 12 → 2**, which is the documented worktree/primary
+boundary effect and not a change — the primary holds both embedding model
+files where the worktree holds one, so ten `embedding-service` tests move
+from skipped to passed. Read the skipped column first, exactly as the
+protocol says; the passed column alone would show a phantom +10.
+Worktree `.worktrees/wp-24` and branch `wp-24` left in place, joining the
+housekeeping backlog.
