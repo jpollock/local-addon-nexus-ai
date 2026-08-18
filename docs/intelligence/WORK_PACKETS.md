@@ -10238,3 +10238,132 @@ Standing state after this merge: WP-33 in flight (worktree at
 8df3433b); designer owes the fold + the fixture swap/hand-back; owner
 owes the t1/t2 replay, and the ABI is SYSTEM NODE — `npm run rebuild`
 before loading Local, which the replay requires anyway.
+### [x] WP-33 · The journey evals enter the registry  *(2026-08-18; all five bound)*
+
+The moments model's five journey evals (XD-19) are now ordinary specs in
+`docs/intelligence/anchor-slice/evals/`, adjudicated by the same registry that
+adjudicates B-03/E-01/E-02 — so **BLOCKED-never-green now applies to the
+EXPERIENCE**, and the runner's exit code tells the truth about it. Evals tree
+only: no `src/`, no lock, no new topics.
+
+**Runner, before → after:** 12 PASS / 0 FAIL / 2 BLOCKED / 14 OWNER-PENDING
+→ **14 PASS / 0 FAIL / 38 BLOCKED / 16 OWNER-PENDING**, exit 2. The 40 new
+criteria land 2 PASS, 2 OWNER-PENDING, **36 BLOCKED** — which is the packet
+working, not falling short. Four of the five journeys walk surfaces nobody has
+built.
+
+| spec | moment | today |
+|---|---|---|
+| `J-Glance-cold-open-to-answered` | M1 | 8 BLOCKED — no cold-open verdict view, no needs-you row |
+| `J-Inspect-divergence-to-scoped-intent` | M2 | 8 BLOCKED — no comparator render; scope identity routed to **WP-32** |
+| `J-Act-small-one-change-one-site` | M3 | 8 BLOCKED — the gate ships, the act-small surface does not |
+| `J-Return-away-during-a-halt` | M6 | 8 BLOCKED — promotion identity routed to **WP-30** |
+| `J-Refusal-refusal-grant-resume` | any→M7→back | 2 PASS (WP-31's payload), 2 OWNER-PENDING (the sitting), 4 BLOCKED (Settings) |
+
+Every criterion is a Must / Must-not bullet from
+`from-designer/from-designer-01-moments-tested.md` §5, verbatim and in order;
+`*Programmatic:*` and `*Judged sitting:*` ride in each spec's `notes` with
+citations. J-Refusal's judged half is §5's question **as amended** by the WP-31
+merge adjudication's three-question script — the ratified form, both cited.
+
+### Findings
+
+1. **THE SOURCING ESCALATION WAS RIGHT AND ITS FIRST RULING WAS WRONG, AND THE
+   DIFFERENCE IS WHAT THE PROTOCOL IS FOR.** The packet blocked because the
+   designer's §1 was not in the tree — correct, and it surfaced a real defect:
+   `DESIGN_PROTOCOL` requires positions AND responses committed, and only the
+   `for-designer-*-response.md` half had ever landed. The first ruling then
+   inferred from that absence that J-Refusal's key steps *had never been
+   authored*, and shipped an interim spec whose halves were marked BLOCKED on
+   the designer's RB-D fold. **That inference was repo-scoped reasoning about
+   the world.** §1 carries J-Refusal in full. The positions were committed
+   (`8df3433b`), the carve-out was voided, and all five journeys were
+   transcribed from the source. *An absence in the record is evidence about the
+   record. Reading it as evidence about the world is how a documentation gap
+   becomes a design claim* — and the cost here was one spec written twice,
+   which is the cheap version of that mistake.
+2. **A transcription packet's real failure mode is invisible to behavioural
+   tests, so the pin has to read the source.** A criterion that drifts one word
+   takes its check's `matches` with it and everything stays green. So
+   `checks.test.ts` re-extracts the Must/Must-not bullets from §1 on every run
+   and requires the specs to equal them exactly, in order — deliberately NOT
+   from a fixture, because a fixture of the expected text is a second
+   transcription, and two transcriptions of one source are two things that can
+   drift apart. Witness: changing "A verdict is **visible**" to "**shown**"
+   kills three tests.
+3. **A BLOCKED with no owner is a shrug with a symbol in front of it.** Each of
+   the 36 names the surface it waits on and the packet or UX build that owes it,
+   and `checks.test.ts` requires every journey `unblockedBy` to match
+   `WP-\d\d|UX build \d`. The two the §1 adjudication routed explicitly carry
+   their packet ids, because the adjudication made them those packets'
+   acceptance criteria — dropping "WP-32" from the scope-identity gap kills two
+   tests.
+4. **The absences are MEASURED, not asserted.** `probeRendererSurfaces` counts
+   files under `src/renderer` referencing the token each surface could not be
+   built without (`needsYou`, `capabilityGrants`, `siteAtPlaces`, `scopeBlock`,
+   `sessionRegistry`) — all zero; `capabilityGrants` has 14 hits under `src/`,
+   which is what proves the scanner can find anything at all. Without that
+   control a broken walker reports zero for everything and 36 BLOCKED verdicts
+   rest on it. Witness: an always-zero scanner kills a test.
+5. **A SURVIVOR, kept as a survivor.** M4 swapped the door-vs-**grant**
+   comparison for door-vs-**refusal** and SURVIVED: on a healthy run the two
+   documents are the same string, so nothing here can tell a door derived from
+   the grant apart from one derived from the refusal it rides on. The overclaim
+   ("the grant is the oracle; comparing against the refusal would pass on any
+   two matching strings") was **withdrawn from the comments** and replaced by a
+   `grantAndRefusalAgreeOnDocument` field, an evidence line naming the limit,
+   and a test pinning that the probe keeps disclosing it. What those two PASSes
+   establish is that the door names the granted capability and its document —
+   not the provenance of the fields. Field provenance is WP-31's own tests'
+   subject.
+6. **Three count guards encoded "the anchor slice is the whole directory".**
+   `specLoader.test.ts` asserted the exact three ids, `checks.test.ts` asserted
+   `toHaveLength(3)`, `runner.test.ts` required every OWNER-PENDING prompt to
+   match `/^EVAL [BE]-0\d/`. Each was widened rather than loosened: the id list
+   stays exhaustive (a spec that stops parsing must still be loud), the count
+   moves to 8, the regex accepts a journey id shape.
+7. **Two mutation runs measured NOTHING and said so.** Both were type-invalid
+   mutants (`?? blocked(...)` after a non-nullish operand; `|| blocked(...)`) —
+   ts-jest refused the file, the suite reported `Tests: 0 total`, and a naive
+   grep for a failure header would have read that as SURVIVED (once) and as
+   KILLED-by-an-unrelated-suite (once). The battery harness now treats a run
+   with fewer tests than the suite's own floor as a HARNESS FAULT, not a result.
+   Same family as the protocol's existing `npx jest $var` trap: **a measurement
+   of nothing is indistinguishable from a result unless you check the count.**
+
+**Mutation battery (all `--no-cache`, per the protocol's fifth-occurrence
+rule): 8 KILLED, 1 SURVIVED-and-disclosed** — criterion paraphrase, gap-check
+returns PASS, driven check ignores whether the guard refused, routed BLOCKED
+loses its packet id, judged prompt drops the amended script, surface scanner
+always returns zero, probe stops disclosing its limit, a spec loses a whole
+must-not; survivor is finding 5.
+
+**No new event topic, payload schema version, envelope field or storage
+marker. No `src/` touched, no lock taken, `wpeOperationPermissions` untouched.
+No two packets on one file.**
+
+**Baselines (worktree `wp-33`).** Before: `npm test` **567 suites, 7424 passed,
+12 skipped, 7436 total**, exit 0; `npx jest tests/intelligence-evals
+--no-cache` 8 suites / 193 tests. After: see the merge report.
+
+**A sixth poisoned-cache occurrence, and a sixth confirmation of the rule.**
+`npm test` reported `sitting.test.ts` failing to parse at its own shebang, one
+suite, everything else green — and `--no-cache` had run it clean minutes
+earlier. `npx jest --clearCache` first, always.
+
+**ABI ON EXIT: system Node.** This session ran `npm test`. **`npm run rebuild`
+before loading Local** — which J-Refusal's sitting requires, since a sitting
+happens inside Local.
+
+### SITTING — J-Refusal's judged half, OWED
+
+Not runnable from an agent session: it needs a person at a real Local. The
+script and both forms of the question are carried verbatim in the spec's
+`ownerPrompt`:
+
+    npx ts-node --project tsconfig.test.json tests/intelligence-evals/run.ts \
+      --only J-Refusal-refusal-grant-resume
+
+Record the answers here when it happens. It is also the FIRST DESIGN SITTING
+per `DESIGN_PROTOCOL`, and the two criteria it settles are the two the designer
+predicted would fail first.

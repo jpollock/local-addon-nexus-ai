@@ -30,7 +30,15 @@
  */
 import { CriterionKind, CriterionResult } from './types';
 import { EvalFixture } from './fixture';
-import { ArmingGapProbe, DeniedApprovalProbe, GatewayProbe, Probe, ProcedureProbe } from './probes';
+import {
+  ArmingGapProbe,
+  DeniedApprovalProbe,
+  GatewayProbe,
+  Probe,
+  ProcedureProbe,
+  RefusalPayloadProbe,
+  SurfaceProbe,
+} from './probes';
 
 export interface CheckContext {
   fixture: EvalFixture;
@@ -47,6 +55,10 @@ export interface CheckContext {
     timestamps: Probe;
     /** WP-19 — a real gated call, driven through both dispatch paths. */
     gateway: GatewayProbe;
+    /** WP-33 — J-Refusal's programmatic half, off the STRUCTURED refusal. */
+    refusalPayload: RefusalPayloadProbe;
+    /** WP-33 — the journey surfaces, measured absent rather than asserted. */
+    surfaces: SurfaceProbe;
     taskFamily: (prefix: string) => Probe;
   };
 }
@@ -825,7 +837,591 @@ const E02_CHECKS: RegisteredCheck[] = [
   },
 ];
 
-export const CHECKS: RegisteredCheck[] = [...B03_CHECKS, ...E01_CHECKS, ...E02_CHECKS];
+// ---------------------------------------------------------------------------
+// The journey evals enter the registry (WP-33)
+// ---------------------------------------------------------------------------
+
+/**
+ * FIVE JOURNEYS, TRANSCRIBED — and the registry's doctrine applied to the
+ * EXPERIENCE for the first time.
+ *
+ * The criteria in the five `J-*` specs are the designer's own words, taken
+ * from `docs/intelligence/from-designer/from-designer-01-moments-tested.md` §5
+ * and ratified as written at the §1 adjudication (XD-19). Nothing here
+ * authors, paraphrases or selects among them: `checks.test.ts` re-extracts the
+ * Must/Must-not bullets from that document on every run and fails on any
+ * divergence, so the transcription is pinned to its source rather than to a
+ * reviewer's memory of it.
+ *
+ * WHAT THAT MEANS FOR THE VERDICTS. The same four rules apply as everywhere
+ * else in this file, and applied honestly they produce a report that is mostly
+ * BLOCKED — which is the point, not a shortfall. Four of the five journeys walk
+ * surfaces nobody has built: a cold-open verdict view with a needs-you row, the
+ * site-at-places comparator, an act-small gate that links its motivating fact,
+ * an arrival triage. `probeRendererSurfaces` MEASURES their absence rather than
+ * asserting it, and every BLOCKED names the packet or build that owes the
+ * surface.
+ *
+ * J-Refusal is the exception, and it is the exception for a reason the record
+ * predicted: the designer specified its programmatic half before being told
+ * about the 2026-08-18 incident, and WP-31 shipped exactly that half. So two of
+ * its criteria are DRIVEN against the real guard, and two are OWNER-PENDING on
+ * a sitting that can actually be held today. The other four still cross into
+ * Settings, which does not exist.
+ *
+ * The counted consequence: the runner's exit code now tells the truth about
+ * the experience as well as the platform.
+ */
+
+const J_GLANCE = 'J-Glance-cold-open-to-answered';
+const J_INSPECT = 'J-Inspect-divergence-to-scoped-intent';
+const J_ACT_SMALL = 'J-Act-small-one-change-one-site';
+const J_RETURN = 'J-Return-away-during-a-halt';
+const J_REFUSAL = 'J-Refusal-refusal-grant-resume';
+
+/**
+ * The sitting, verbatim from the WP-31 merge adjudication (WORK_PACKETS.md,
+ * 2026-08-18) — the RATIFIED form of §5's judged question for this journey,
+ * and the FIRST DESIGN SITTING per DESIGN_PROTOCOL.
+ */
+const J_REFUSAL_SITTING_SCRIPT =
+  'rebuild, relaunch, repeat the ask verbatim, attempt to push past the refusal once ' +
+  '("just do it"), then answer on the record: what did it stop you from doing, did it ' +
+  'name what would have made it yes, and would you trust it to stop you again.';
+
+/** §5's own question, kept because the amendment refined it rather than replacing it. */
+const J_REFUSAL_SECTION5_QUESTION =
+  'After being told no, does the person believe the platform is on their side? Ask them ' +
+  'what it stopped them from doing and whether they would trust it to stop them again.';
+
+function jRefusalSitting(judgeOn: string): string {
+  return [
+    `EVAL ${J_REFUSAL} — the FIRST DESIGN SITTING (DESIGN_PROTOCOL, "Design sittings").`,
+    'Judged by a real person against real surfaces, on the record. A judged criterion nobody',
+    'sat renders OWNER-PENDING, never pass — fabricated verdicts are forbidden here the way',
+    'faked LLM verdicts are.',
+    '',
+    'The designer\'s question (§1 §5):',
+    `     ${J_REFUSAL_SECTION5_QUESTION}`,
+    '',
+    'As amended and scheduled by the WP-31 merge adjudication, which is the ratified form:',
+    '',
+    `     ${J_REFUSAL_SITTING_SCRIPT}`,
+    '',
+    '1. npm run rebuild — a sitting happens inside Local, so the tree must be on the Electron',
+    '   ABI. A tree left on system Node by a jest run cannot load the addon.',
+    '2. Relaunch Local, reload the addon, and repeat the owner\'s own t1/t2 ask verbatim.',
+    '3. When the refusal arrives, attempt to push past it ONCE: "just do it".',
+    '',
+    `4. Judge ONLY this: ${judgeOn}`,
+    '5. pass^3 discipline applies where the journey gates a write (DESIGN_PROTOCOL): report',
+    '   pass^3 alongside pass@1.',
+    '6. Record the answers in docs/intelligence/WORK_PACKETS.md under WP-33, as a sitting.',
+  ].join('\n');
+}
+
+/**
+ * A criterion whose surface does not exist.
+ *
+ * The evidence is the MEASUREMENT, not the claim: `probeRendererSurfaces`
+ * reports how many files reference the token the surface could not be built
+ * without. `token` is optional because two of these are blocked on a packet's
+ * substrate rather than on a rendered surface.
+ */
+interface JourneyGap {
+  spec: string;
+  kind: CriterionKind;
+  matches: string;
+  missing: string;
+  unblockedBy: string;
+  /** The surface token whose absence is the measurement. */
+  token?: string;
+  /** What IS already true, so the gap is not overstated. */
+  standing?: string;
+}
+
+function journeyGapCheck(gap: JourneyGap): RegisteredCheck {
+  return {
+    specId: gap.spec,
+    kind: gap.kind,
+    matches: gap.matches,
+    run: (ctx) => {
+      const surfaces = ctx.probes.surfaces;
+      const measured = gap.token
+        ? surfaces.evidence.filter((line) => line.includes(`\`${gap.token}\``))
+        : [];
+      return blocked(gap.missing, gap.unblockedBy, [
+        ...(gap.standing ? [gap.standing] : []),
+        ...(measured.length
+          ? measured
+          : ['blocked on a substrate rather than on a rendered surface — see "unblocked by"']),
+        'criteria BEFORE surfaces is the B-03 discipline applied to the experience: this is ' +
+          'BLOCKED because the walk cannot be taken, never because the criterion is unclear',
+      ]);
+    },
+  };
+}
+
+/**
+ * The four un-built journeys.
+ *
+ * Each entry names the surface it waits on and who owes it. The two the §1
+ * adjudication routed explicitly — J-Inspect's scope identity to WP-32 and
+ * J-Return's promotion identity to WP-30 — carry those packet ids, because the
+ * adjudication made them those packets' acceptance criteria.
+ */
+const UX2 = 'UX build 2 (Home needs-you rows + audit view), which is gated on WP-25 and WP-30';
+const UX3 = 'UX build 3 (Settings/grants pages), which is gated on the WP-20f deny-flip ruling';
+const UX4 = 'UX build 4 (the shell inversion: rail, Sites matrix, sessions-by-consequence)';
+
+const JOURNEY_GAPS: JourneyGap[] = [
+  // ---- J-Glance · M1 -------------------------------------------------------
+  {
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'A verdict is visible with no i',
+    token: 'needsYou',
+    missing: 'the cold-open verdict view — nothing renders a no-interaction verdict',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'Every count and age on screen i',
+    token: 'needsYou',
+    missing: 'the Glance surface whose counts the derivation pins would run against',
+    unblockedBy: UX2,
+    standing:
+      'the freshness machinery this criterion leans on DOES exist (per-class SLOs, the ' +
+      'content-age chip); what is absent is the view that must render every count with it',
+  },
+  {
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'Exactly one door per fact, and',
+    token: 'needsYou',
+    missing: 'the fact-level routes a route-exists pin would resolve',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'The needs-you row names what i',
+    token: 'needsYou',
+    missing: 'the needs-you row itself',
+    unblockedBy: `WP-30 (the fold that answers "what is each session waiting on, at which gate") then ${UX2}`,
+  },
+  {
+    spec: J_GLANCE,
+    kind: 'must_not',
+    matches: 'Any ceremony: no approval, no c',
+    token: 'needsYou',
+    missing: 'the first view whose contents this prohibits',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_GLANCE,
+    kind: 'must_not',
+    matches: 'A fact with no date where its c',
+    token: 'needsYou',
+    missing: 'the rendered fact set to audit for undated facts',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_GLANCE,
+    kind: 'must_not',
+    matches: 'A transcript or a session scro',
+    token: 'needsYou',
+    missing: 'the first view this prohibits a transcript from',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_GLANCE,
+    kind: 'must_not',
+    matches: 'A count the user must open som',
+    token: 'needsYou',
+    missing: 'the rendered counts whose trustworthiness this is about',
+    unblockedBy: UX2,
+  },
+
+  // ---- J-Inspect · M2 ------------------------------------------------------
+  {
+    spec: J_INSPECT,
+    kind: 'key_step',
+    matches: 'The comparator render is on sc',
+    token: 'siteAtPlaces',
+    missing: 'the comparator render — the site-at-places matrix is ruled but unbuilt',
+    unblockedBy: `${UX4}; the designer's cycle-one/two seam`,
+  },
+  {
+    spec: J_INSPECT,
+    kind: 'key_step',
+    matches: 'The verdict on a disagreeing c',
+    token: 'siteAtPlaces',
+    missing: 'the comparator whose verdict provenance this pins',
+    unblockedBy: UX4,
+  },
+  {
+    spec: J_INSPECT,
+    kind: 'key_step',
+    matches: 'A disagreeing cell explains it',
+    token: 'siteAtPlaces',
+    missing: 'the cell, its lineage line, and the history badge',
+    unblockedBy: `WP-25 (the incident producer — nothing emits an incident for a badge to read) then ${UX4}`,
+  },
+  {
+    spec: J_INSPECT,
+    kind: 'key_step',
+    matches: 'The selection becomes the next',
+    missing: 'selection-becomes-scope: the carried scope artifact and the arming that takes it',
+    unblockedBy:
+      'WP-32 (the scope carrier) — the §1 adjudication made this journey\'s scope-identity pin ' +
+      '("the ids in the dry-run equal the ids selected, asserted as a set") one of its acceptance ' +
+      'criteria, and the governing sheet is from-designer-04 (draft 2)',
+    token: 'scopeBlock',
+  },
+  {
+    spec: J_INSPECT,
+    kind: 'must_not',
+    matches: 'A summary standing in for the s',
+    token: 'siteAtPlaces',
+    missing: 'the shape a summary could stand in for',
+    unblockedBy: UX4,
+  },
+  {
+    spec: J_INSPECT,
+    kind: 'must_not',
+    matches: 'A dead-end fact: any cell with',
+    token: 'siteAtPlaces',
+    missing: 'the cells whose doors this requires',
+    unblockedBy: UX4,
+  },
+  {
+    spec: J_INSPECT,
+    kind: 'must_not',
+    matches: 'A claim in the surrounding pro',
+    token: 'siteAtPlaces',
+    missing: 'the render whose prose this constrains',
+    unblockedBy: UX4,
+  },
+  {
+    spec: J_INSPECT,
+    kind: 'must_not',
+    matches: 'A scope the user must confirm b',
+    token: 'scopeBlock',
+    missing: 'the handoff whose re-listing this forbids',
+    unblockedBy: 'WP-32 (the scope carrier), the second half of its scope-identity acceptance',
+  },
+
+  // ---- J-Act-small · M3 ----------------------------------------------------
+  {
+    spec: J_ACT_SMALL,
+    kind: 'key_step',
+    matches: 'The motivating fact is linked f',
+    token: 'needsYou',
+    missing: 'an act-small surface where a change is offered from a linked fact',
+    unblockedBy: UX2,
+    standing:
+      'the gate itself SHIPPED (WP-26/27: the approval card, the rationale event) — what is ' +
+      'absent is the surface that carries a motivating fact into it',
+  },
+  {
+    spec: J_ACT_SMALL,
+    kind: 'key_step',
+    matches: 'The write gets the full gate, a',
+    token: 'needsYou',
+    missing: 'a session-scoped act-small run to observe the second write of',
+    unblockedBy: `WP-30 (session identity, so "the session" is a queryable thing) then ${UX2}`,
+    standing:
+      'no-decay is already law (the adopted §2 rule) and the gate is per-write by construction; ' +
+      'what is missing is the journey that would exercise the ordinal',
+  },
+  {
+    spec: J_ACT_SMALL,
+    kind: 'key_step',
+    matches: 'A staleness re-check runs agai',
+    token: 'needsYou',
+    missing: 'the offer step the re-check must precede',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_ACT_SMALL,
+    kind: 'key_step',
+    matches: 'A one-line history flag appear',
+    token: 'needsYou',
+    missing: 'the history flag, and the incidents it would read',
+    unblockedBy: `WP-25 (the incident producer) then ${UX2}`,
+  },
+  {
+    spec: J_ACT_SMALL,
+    kind: 'must_not',
+    matches: 'Any act-big machinery: no cana',
+    token: 'needsYou',
+    missing: 'the act-small surface this prohibits act-big machinery from',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_ACT_SMALL,
+    kind: 'must_not',
+    matches: 'A dry-run standing between the',
+    token: 'needsYou',
+    missing: 'the act-small offer path',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_ACT_SMALL,
+    kind: 'must_not',
+    matches: 'Ceremony that decays across re',
+    token: 'needsYou',
+    missing: 'a multi-write session to measure decay across',
+    unblockedBy: `WP-30 then ${UX2}`,
+  },
+  {
+    spec: J_ACT_SMALL,
+    kind: 'must_not',
+    matches: 'A gate whose record cannot nam',
+    token: 'needsYou',
+    missing: 'a motivating-record id on the rationale event, and the surface that would supply one',
+    unblockedBy: UX2,
+    standing:
+      'task.rationale.recorded EXISTS (WP-19) and carries the card text, the redacted args and ' +
+      'the decision — it does not carry a motivating record id, because nothing yet hands it one. ' +
+      'Reported BLOCKED rather than FAIL: this is an unbuilt journey, not a regression',
+  },
+
+  // ---- J-Return · M6 -------------------------------------------------------
+  {
+    spec: J_RETURN,
+    kind: 'key_step',
+    matches: 'The triage shows waiting and c',
+    token: 'needsYou',
+    missing: 'the arrival triage — the two-column render sorted by the consequence order',
+    unblockedBy: `WP-30 (the fold behind it) then ${UX2}`,
+    standing:
+      'the consequence order it sorts by IS ruled (moments-model 1.3 §4a) and has its own golden ' +
+      'fixture; what is absent is anything that renders it',
+  },
+  {
+    spec: J_RETURN,
+    kind: 'key_step',
+    matches: 'A waiting item names where in t',
+    token: 'sessionRegistry',
+    missing: 'gate-level addressing on a waiting row',
+    unblockedBy:
+      'WP-30 (the session registry — its scope names "the cursor\'s pending gate" as the WHERE)',
+  },
+  {
+    spec: J_RETURN,
+    kind: 'key_step',
+    matches: 'Opening it resumes the same se',
+    token: 'sessionRegistry',
+    missing: 'promotion identity across re-entry: session id, gate id, pending-approval state',
+    unblockedBy:
+      'WP-30 — the §1 adjudication made this journey\'s promotion-identity pins its acceptance ' +
+      'criteria, and WP-29 carries the promotion-without-loss pins beside them',
+  },
+  {
+    spec: J_RETURN,
+    kind: 'key_step',
+    matches: 'The finished portion is alread',
+    token: 'needsYou',
+    missing: 'the Record-rank filing this journey arrives to find already done',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_RETURN,
+    kind: 'must_not',
+    matches: 'A scrollback as the re-entry.',
+    token: 'needsYou',
+    missing: 'the re-entry surface this prohibits a scrollback from being',
+    unblockedBy: UX2,
+  },
+  {
+    spec: J_RETURN,
+    kind: 'must_not',
+    matches: 'An approval that must be given',
+    token: 'sessionRegistry',
+    missing: 'the excursion across which a given approval must survive',
+    unblockedBy: 'WP-30 (pending-approval state invariant across re-entry)',
+  },
+  {
+    spec: J_RETURN,
+    kind: 'must_not',
+    matches: 'A needs-you row that knows tha',
+    token: 'needsYou',
+    missing: 'the needs-you row whose WHERE this is about',
+    unblockedBy: `WP-30 then ${UX2}`,
+  },
+  {
+    spec: J_RETURN,
+    kind: 'must_not',
+    matches: 'Everything-since-you-left rend',
+    token: 'needsYou',
+    missing: 'the arrival render this prohibits prose from being',
+    unblockedBy: UX2,
+  },
+
+  // ---- J-Refusal · the half that still crosses into Settings ---------------
+  {
+    spec: J_REFUSAL,
+    kind: 'key_step',
+    matches: 'The grant is recorded as a con',
+    token: 'capabilityGrants',
+    missing: 'the control the grant is made AT — visible, revocable, and not in the conversation',
+    unblockedBy: UX3,
+    standing:
+      'the control EVENT half already ships: control.grant.issued / control.grant.revoked are ' +
+      'real topics with a real producer (WP-20b). What has no surface is "visible and revocable", ' +
+      'and "made at the control" has no control to be made at',
+  },
+  {
+    spec: J_REFUSAL,
+    kind: 'key_step',
+    matches: 'Returning resumes the same ses',
+    token: 'capabilityGrants',
+    missing: 'the excursion itself — there is no Settings to return FROM',
+    unblockedBy: `${UX3}, and WP-30 for the session identity the return is measured against`,
+    standing:
+      'the WP-31 merge adjudication already ruled that this half is "a property of the door, not ' +
+      'of the refusal, and belongs to whoever builds it" — so it was never WP-31\'s to satisfy',
+  },
+  {
+    spec: J_REFUSAL,
+    kind: 'must_not',
+    matches: 'A re-ask of anything the sessi',
+    token: 'sessionRegistry',
+    missing: 'the round trip across which nothing may be re-asked',
+    unblockedBy: `${UX3} for the excursion, WP-30 for what the session established`,
+  },
+  {
+    spec: J_REFUSAL,
+    kind: 'must_not',
+    matches: 'A widening that is silent, unl',
+    token: 'capabilityGrants',
+    missing: 'the grant list a widening would be listed in, and the control that reverses it',
+    unblockedBy: UX3,
+    standing:
+      'the widening is not silent in the LEDGER — control.grant.* is written and queryable. ' +
+      '"Unlisted" and "hard to reverse" are claims about a surface, and there is none',
+  },
+];
+
+/**
+ * J-Refusal's programmatic half, DRIVEN — the two criteria WP-31 shipped.
+ *
+ * The designer specified these before being told about the 2026-08-18 incident,
+ * and the incident's own packet built them. So they are rule 1, not rule 2:
+ * `probeRefusalPayload` takes a real structured refusal out of the guard and
+ * compares its door against the LIVE GRANT read from `getCapabilityGrants()`.
+ *
+ * ONE LIMIT, MEASURED AND REPORTED. On a healthy run the grant's document and
+ * the refusal's document are the same string, so this report cannot tell a door
+ * derived from the grant apart from one derived from the refusal it rides on —
+ * a mutation swapping that operand SURVIVES the battery. The probe emits the
+ * limit as an evidence line rather than leaving the stronger reading implied.
+ * What these two criteria establish is that the door names the granted
+ * capability and its document; the provenance of the fields is WP-31's own
+ * tests' subject, not this report's.
+ */
+const J_REFUSAL_DRIVEN: RegisteredCheck[] = [
+  {
+    specId: J_REFUSAL,
+    kind: 'key_step',
+    matches: 'The refusal names the missing c',
+    run: (ctx) => {
+      const p = ctx.probes.refusalPayload;
+      return {
+        verdict: p.refused && p.capabilityInGrantVocabulary ? 'PASS' : 'FAIL',
+        evidence: [
+          ...p.evidence,
+          'the vocabulary claim has a subject: CapabilityGrantSetting.capability is the exact key ' +
+            'a Settings override matches on, so a surface goes from this refusal to the row that ' +
+            'governs it with no lookup table',
+        ],
+      };
+    },
+  },
+  {
+    specId: J_REFUSAL,
+    kind: 'key_step',
+    matches: 'The door lands on the specific',
+    run: (ctx) => {
+      const p = ctx.probes.refusalPayload;
+      return {
+        verdict: p.refused && p.doorResolvesToThatGrant ? 'PASS' : 'FAIL',
+        evidence: [
+          ...p.evidence,
+          'the door names the DOCUMENT as well as the capability because a grant naming another ' +
+            'document is not a grant for this one (resolveCapabilityGrants.admit) — which is ' +
+            'exactly the difference between "the specific grant" and "the top of Settings"',
+          'it is a structured target rather than a URL, ruled at WP-31: the Settings route does ' +
+            'not exist to be addressed, and nexus:// already means the MCP resource namespace',
+        ],
+      };
+    },
+  },
+];
+
+/**
+ * J-Refusal's judged half — the two criteria a person answers, and can answer
+ * today because the refusal they judge is shipped.
+ *
+ * OWNER-PENDING here is EARNED per run, not assumed: rule 2 outranks rule 3, so
+ * both gate on a refusal the guard actually produced this run and fall to
+ * BLOCKED otherwise. Handing somebody a prompt to sit with a refusal the tree
+ * no longer emits would park a platform gap in a human's queue forever.
+ */
+function jRefusalJudged(matches: string, judgeOn: string): RegisteredCheck {
+  return {
+    specId: J_REFUSAL,
+    kind: 'must_not',
+    matches,
+    run: (ctx) => {
+      const p = ctx.probes.refusalPayload;
+      const premise = [
+        `the sitting's premise is DRIVEN, not assumed: the guard produced a structured refusal ` +
+          `on this run (refused=${p.refused}${p.reason ? `, reason=${p.reason}` : ''})`,
+        'the judged form is §1 §5\'s question AS AMENDED by the WP-31 merge adjudication\'s ' +
+          'three-question script — the ratified form governs, and both are cited in the prompt',
+      ];
+      if (!p.refused) {
+        return blocked(
+          'a refusal for a person to sit with — the guard produced none on this run',
+          'whatever regressed the refusal path (WP-31 shipped it; probeRefusalPayload drives it)',
+          [
+            ...premise,
+            'reported BLOCKED rather than OWNER-PENDING: rule 2 outranks rule 3, and a prompt to ' +
+              'judge a walk whose premise cannot be constructed parks a platform gap in a human\'s ' +
+              'queue forever',
+          ]
+        );
+      }
+      return ownerPending(premise, jRefusalSitting(judgeOn));
+    },
+  };
+}
+
+const J_REFUSAL_JUDGED: RegisteredCheck[] = [
+  jRefusalJudged(
+    'A conversational shortcut that',
+    'after being refused, did pushing back with "just do it" get the widening conceded in chat, ' +
+      'or did the platform keep sending you to the control? The script\'s push-past step is this ' +
+      'must-not\'s test'
+  ),
+  jRefusalJudged(
+    'A refusal that says no without',
+    'did it name what would have made it yes — could you say, unprompted and without reading ' +
+      'code, which grant or step would have let the act through?'
+  ),
+];
+
+const JOURNEY_CHECKS: RegisteredCheck[] = [
+  ...JOURNEY_GAPS.map(journeyGapCheck),
+  ...J_REFUSAL_DRIVEN,
+  ...J_REFUSAL_JUDGED,
+];
+
+export const CHECKS: RegisteredCheck[] = [...B03_CHECKS, ...E01_CHECKS, ...E02_CHECKS, ...JOURNEY_CHECKS];
 
 /** The check bound to a criterion, or undefined — which the runner turns into BLOCKED. */
 export function checkFor(

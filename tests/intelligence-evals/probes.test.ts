@@ -13,7 +13,7 @@
  * that bug was found.)
  */
 import { createEvalFixture, EvalFixture } from './fixture';
-import { probeTimestampDiscipline, probeTopicFamily } from './probes';
+import { probeRefusalPayload, probeRendererSurfaces, probeTimestampDiscipline, probeTopicFamily } from './probes';
 
 jest.setTimeout(60_000);
 
@@ -99,5 +99,85 @@ test('electron is not on the require chain — both eval CLIs run under plain No
     expect(() => require('./probes')).not.toThrow();
     // And through the path that actually matters: the runner both CLIs load.
     expect(() => require('./runner')).not.toThrow();
+  });
+});
+
+/**
+ * WP-33 · `probeRefusalPayload` — the ORACLE is what makes it a probe.
+ *
+ * J-Refusal asks whether the door deep-links to *the specific grant*. A probe
+ * that compared the door against the refusal that carries it would pass on any
+ * two matching strings and would keep passing if the door were built from the
+ * refusal alone — the shape of a guard that measures itself. So the probe reads
+ * the LIVE GRANT and compares against that, and this test pins the oracle's
+ * presence rather than only the verdict it produced.
+ */
+describe('probeRefusalPayload', () => {
+  it('reads the live grant as the oracle, not the refusal it is judging', async () => {
+    const p = await probeRefusalPayload(fixture);
+    expect(p.refused).toBe(true);
+    // The oracle fields are populated from getCapabilityGrants(), so a probe
+    // that stopped consulting the grant leaves them undefined and this fails.
+    expect(p.grantCapability).toBeTruthy();
+    expect(p.grantRunbookId).toBeTruthy();
+    // …and the comparison is door-vs-grant, which is only meaningful because
+    // the two ids come from different places.
+    expect(p.doorCapability).toBe(p.grantCapability);
+    expect(p.doorRunbookId).toBe(p.grantRunbookId);
+    expect(p.doorSurface).toBe('settings');
+    expect(p.doorSection).toBe('capabilities');
+    expect(p.capabilityInGrantVocabulary).toBe(true);
+    expect(p.doorResolvesToThatGrant).toBe(true);
+  });
+
+  it('DISCLOSES that it cannot tell the grant\'s document from the refusal\'s', () => {
+    // The limit found by WP-33's mutation battery: swapping the comparison's
+    // operand from the grant to the refusal survives, because on a healthy run
+    // the two ids are the same string. The probe must SAY so — an unstated
+    // limit is how a measurement gets read as more than it is.
+    return probeRefusalPayload(fixture).then((p) => {
+      expect(p.grantAndRefusalAgreeOnDocument).toBe(true);
+      expect(p.evidence.join(' ')).toContain('LIMIT of this measurement');
+      expect(p.evidence.join(' ')).toContain('cannot distinguish');
+    });
+  });
+
+  it('reports refused=false rather than throwing when nothing is armed', async () => {
+    // The negative direction the runner never reaches: the guard returns null
+    // for a tool on a turn with no request pending, and the probe has to
+    // survive it with evidence rather than an exception.
+    const p = await probeRefusalPayload(fixture);
+    expect(p.evidence.length).toBeGreaterThan(0);
+    expect(p.evidence.join(' ')).toContain('oracle');
+  });
+});
+
+/**
+ * WP-33 · `probeRendererSurfaces` — the absence has to be measured, and the
+ * measurement has to be capable of finding something.
+ */
+describe('probeRendererSurfaces', () => {
+  const surfaces = probeRendererSurfaces();
+
+  it('finds nothing under src/renderer for any journey surface', () => {
+    for (const [token, counts] of Object.entries(surfaces.counts)) {
+      expect(`${token}: ${counts.renderer}`).toBe(`${token}: 0`);
+    }
+    expect(surfaces.ok).toBe(true);
+  });
+
+  it('the scanner can actually find a token — otherwise every absence is free', () => {
+    // The vacuous shape this guards: a walker with a broken path or a bad
+    // extension filter reports zero for everything, and every BLOCKED verdict
+    // downstream rests on it. `capabilityGrants` exists under src/ (just not
+    // under src/renderer), so a working scanner must see it there.
+    expect(surfaces.counts.capabilityGrants.all).toBeGreaterThan(0);
+  });
+
+  it('names each token and what its absence means', () => {
+    expect(surfaces.evidence).toHaveLength(Object.keys(surfaces.counts).length);
+    for (const line of surfaces.evidence) {
+      expect(line).toMatch(/file\(s\) under src\/renderer/);
+    }
   });
 });

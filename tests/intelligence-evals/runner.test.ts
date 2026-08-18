@@ -289,7 +289,9 @@ describe('honesty invariants — the rules that keep the report worth reading', 
       // Runnable means: it names the spec, and it says what to judge rather
       // than asking for a general impression. Decorative instructions are the
       // failure this guards.
-      expect(result.ownerPrompt).toMatch(/^EVAL [BE]-0\d/);
+      // WP-33 widened this from /^EVAL [BE]-0\d/: the registry now carries a
+      // JOURNEY spec too, and the id shape it encoded was the anchor slice's.
+      expect(result.ownerPrompt).toMatch(/^EVAL (?:[BE]-0\d|J-[A-Z])/);
       expect(result.ownerPrompt).toMatch(/Judge ONLY this|Judge ONLY/);
     }
 
