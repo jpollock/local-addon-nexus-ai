@@ -162,7 +162,13 @@ fail with yesterday, suspect the ABI before the code.
    `grep -rl <your-file's-basename> tests/` and run those via plain `npx jest <path>`.
 4. New behavior has a test that pins it (no untested acceptance criteria) —
    including the additive-parity pin for reader migrations (see the pattern's
-   cp.test).
+   cp.test). **A mutation witness must recreate the real pre-fix shape, not a
+   syntactic shadow of it** (WP-24 finding): flipping `import type` → `import`
+   left a pin green because TypeScript ELIDES an import used only in type
+   position — the "mutation" compiled to nothing and the witness was invalid.
+   Before crediting a kill, confirm the mutation actually changes emitted
+   behavior; the honest witness restores the whole pre-fix construct (value
+   import AND the runtime use) and goes RED against that.
 5. Diff reviewed against the pattern's exemplar for structural drift.
 6. Packet checklist updated in `WORK_PACKETS.md` (checkbox + one-line outcome
    note + anything learned that should amend a pattern), and the ABI state

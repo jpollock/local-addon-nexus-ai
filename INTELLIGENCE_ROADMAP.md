@@ -118,7 +118,9 @@ vocabulary, pipeline watching itself with WARN-on-degradation.** Wave 1
       to end; the anchor-slice acceptance eval is green.** E-01 re-sat on
       the new substrate: 5/6 pass³; K3 at 2/3 pending one re-sit after
       the harness arming-leakage fix (sitting adjudication in
-      WORK_PACKETS).
+      WORK_PACKETS). **Re-sit judged 2026-08-18: K3 pass³ — E-01 CLOSED
+      at 6/6 judgeable; the seventh criterion waits on WP-25's incident
+      producer.**
 
 - [x] **WP-23** AgentRegistry fixture — DONE 2026-08-17 (fixture reads
       `src/` `__dirname`-relative; the uncompiled-worktree four-red trap is
@@ -146,6 +148,26 @@ WP-20f deny-flip (MANDATORY ruling attached: shipped-enabled must not
 survive the flip for the two production-scoped capabilities), WP-20g, guided-runbook ceiling (vacuous at 10 KB
 today, revived by any full-body guided delivery), pre-commit YAML parse
 for law docs, `arms_on:` authoring on the shipped set.
+
+## UX implementation — four phases (ruled 2026-08-18)
+
+"The UX per design" is four builds with four gates, in order:
+
+1. **Now — procedure surfaces in the Docked Panel** (WP-26 wiring + WP-27
+   render): stream emission, the approval card as `canary_policy`'s
+   producer, declared-procedure block, RB-A2 collapsing checklist, abort
+   groups. Substrate complete; the anchor slice's visible half (ADR-19).
+2. **Next — audit view + Home needs-you rows**: after WP-25 (incident
+   producer) and a session-state query micro. Includes the corroboration
+   render (the sitting-economics surface).
+3. **After the WP-20f ruling — Settings/grants pages**: the designer's
+   copy is written for the deny-by-default destination; build once,
+   against the ruled flip, never twice.
+4. **Last, with product buy-in — the full shell inversion** (rail, Sites
+   matrix, sessions-by-consequence): ruled a rendering change on the
+   entity graph, but it reimagines Local's main surface — product
+   territory beyond this POC branch. The prototype stays the contract;
+   the phase-1 demo is what sells it.
 
 ## Later — deliberately not now
 

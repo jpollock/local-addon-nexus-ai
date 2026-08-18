@@ -7924,3 +7924,118 @@ from skipped to passed. Read the skipped column first, exactly as the
 protocol says; the passed column alone would show a phantom +10.
 Worktree `.worktrees/wp-24` and branch `wp-24` left in place, joining the
 housekeeping backlog.
+
+---
+
+**ARCHITECT — UX PHASING RULED; WP-26 SCOPE FIXED; WP-27 REGISTERED
+(2026-08-18).** The four-phase UX plan is in the roadmap (procedure
+surfaces now → audit/needs-you after WP-25 → Settings after the 20f
+ruling → shell inversion with product buy-in). Consequences here:
+
+**WP-26's scope is fixed as wiring + the approval card** (one coherent
+contract: the card IS `canary_policy`'s producer, so emission and card
+ship together): host-side emission of the three stream events per the
+registered contract (whole declaration at arm, diffs after, emitter
+coalesces), the approval card rendered in the Docked Panel (approve /
+deny / canary-policy choice, default pause), the `canary_policy` field
+on `task.rationale.recorded` (GATE HOLD stands — payload schema change),
+and denial recorded as final per c.denial-is-final. Prompt delivered to
+the owner with this entry.
+
+### [ ] WP-27 · Procedure surfaces in the Docked Panel  *(registered 2026-08-18, phase 1 render)*
+
+Renderer-additive, parallel-safe. Consumes WP-26's events — buildable
+BEFORE WP-26 merges against a fake emitter (the same trick ruled for the
+designer), wired to the real emitter in a one-line swap when 26 lands.
+Scope: the declared-procedure block (id, version, strict, checkpoint
+list with `verified`/narrative marks per `procedureView.ts` — the ONLY
+source of derivations; no renderer-side computation), the RB-A2
+collapsing checklist (attested folds to one line; finished run folds to
+one row), "runbook added this" badges with `checkpointReason` lines, the
+abort groups panel (launcher-not-actor for restore, per the v6 Q7
+ruling; versions ABSENT until their producer exists — render the absence
+honestly, never an empty pair). Every user string conforms to Controlled
+Vocabulary v1.1. Parity: with nothing armed, the panel renders exactly
+as today — pinned.
+
+---
+
+**ARCHITECT ADJUDICATION — WP-24 (2026-08-18).** Merge `286effd7`
+accepted; fidelity of `8cdc69e4` verified by hash (the v6 response and
+WP-26 registration are md5-identical to the architect's originals). +3
+tests = exactly the three pins, skipped-split read correctly, exit codes
+captured — the receipts discipline is now simply how reports look.
+
+**All four fixes ratified, three with notes worth keeping:** (1) The
+leakage MECHANISM is the finding — the arming queue is drained by
+assembly, assembly runs once per sendMessage, so a last-iteration
+`nexus_load_procedure` arms the NEXT run: invisible from either half
+alone, which is why it survived until a sitting put two runs side by
+side. The clear-at-run-start fix with the non-vacuous two-run pin is
+right. (2) The copy fix caught the SECOND instance (the tool
+description) of the same defect in the same locked file — the grep the
+finding deserved. R7's pin untouched and green, as it must be. (3) The
+stub retired by CAUSE, not accommodation — and the flag fell out with
+it, with type-checking verified still genuinely on by planting a type
+error. Both CLI entrypoints covered; the poisoned-electron pin holds the
+door shut. **The mutation-witness trap is promoted to protocol with this
+entry**: an `import type` flip is elided by the compiler — the witness
+"passed" while mutating nothing. The agent caught its own invalid
+witness and rebuilt it against the whole pre-fix shape; the protocol's
+DoD now says so for everyone.
+
+**The two filed items, registered:** (a) the arming queue remains
+un-keyed by session — procedureArming's stated v0 limit; two concurrent
+chats in one second are indistinguishable. WP-26 works in that
+neighborhood and should NOT silently absorb it (core-lock change; its
+own decision) — registered as a named micro, priority rising the day a
+second concurrent chat surface exists. (b) `run.ts` emits telemetry on
+every eval run where `sitting.ts` deliberately sets `NEXUS_TELEMETRY='0'`
+— one line, registered as an immediate micro for whichever packet next
+touches the evals tree (WP-27 may not; it is renderer-side). Sitting
+finding (c) (component-pairing consult-history) stands routed as the
+anchor-slice runbook edit.
+
+**State:** the E-01 re-sit is unblocked on the shipping configuration —
+all three runs now identical trials; command with the owner. ABI SYSTEM
+NODE (measured, not quoted — a phrase worth keeping). The re-sit doesn't
+need a rebuild; loading Local does.
+
+---
+
+**OWNER SITTING — E-01 K3 RE-SIT, JUDGED (2026-08-18, architect as
+judge). Three runs on the post-WP-24 harness — identical trials for the
+first time (no arming leakage; every run index-only + in-run
+acknowledgement, the configuration a single-turn session actually gets).
+Transcripts at `sitting-transcripts/e01-resit/`. ~30k tokens.**
+
+**K3 (checkout-specific verification bar for gateway-X sites): pass³.**
+Run 1: Bravo/Charlie staged last "as a second canary stage with explicit
+checkout verification." Run 2: checkout verification named in the
+rollout bar with Bravo sequenced last (looser binding than the others —
+the checkout mention rides the sequence rather than the flagged sites
+directly — judged PASS under the same standard that failed the prior
+run-3, where the word appeared nowhere; noted for honesty). Run 3: the
+strongest of the six E-01 runs to date — a TWO-STAGE canary ("Charlie —
+first gateway-bearing site; verify checkout specifically before touching
+Bravo"), which is the criterion's "or canaries them separately" branch
+executed better than the spec imagined it. The rest of the sheet held at
+pass³ on re-inspection (flagged-last, plain-language finding, no uniform
+plan, no fabrication — run 1's "both update tools auto-start sites" is
+corroborated by the system prompt's lifecycle section, a supplied claim,
+not a historical one; no refusals). **E-01 CLOSES: six of six judgeable
+criteria at pass³ across sittings; the seventh (queries history before
+planning) remains BLOCKED on the incident producer — WP-25's to unblock,
+correctly outside this verdict.**
+
+**WP-24 residual, found by the re-sit and registered:** the sitting's
+judging-instruction load still reaches `electron` through a TYPE-level
+chain into `ipc-handlers.ts` (TS2307 under full type-checking) — WP-24's
+lazy-require fixed the runtime chain, and its verification exited at
+"no key" before the sheet phase where the type chain bites. The harness
+degraded honestly ("falling back to the spec text alone — verdicts and
+judging instructions omitted"), which is the right failure mode, but it
+cost the sheet its BLOCKED/PENDING distinction (7 listed where 6 are
+judgeable). One more lazy edge or a type-only import fix; micro,
+evals-tree, parallel-safe. The lesson joins WP-24's own: verify the fix
+on the path that exercises it, not the path that exits first.
