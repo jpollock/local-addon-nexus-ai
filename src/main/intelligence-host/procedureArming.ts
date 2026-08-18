@@ -23,11 +23,27 @@
 
 import { armByPredicate, armByRequest, ProcedureRequest, RunbookRegistry } from '../../intelligence';
 import { getCapabilityGrants, grantedRunbooks, ResolvedGrant } from './capabilityGrants';
+import type { ProcedureScope } from './procedureScope';
 
 export interface ArmingRequest {
   capability: string;
   /** ISO 8601 — when the model asked. */
   at: string;
+  /**
+   * WP-32 · THE SCOPE THE ARMING CARRIES (XD-15's headline requirement).
+   *
+   * The cells a human selected at a comparator, split by authority before the
+   * gate ever sees them. It rides HERE, on the request, because this queue is
+   * the only thing that survives the gap between `nexus_load_procedure`'s
+   * acknowledgement and the next turn's delivery — and that gap is precisely
+   * where a re-derivation would slip in unobserved.
+   *
+   * **Optional, and absent means absent.** A request recorded without a
+   * selection carries no `scope` key at all, not a `scope: undefined` — the
+   * parity floor is that everything predating WP-32 is byte-identical, and a
+   * present-but-undefined field is not byte-identical to a missing one.
+   */
+  scope?: ProcedureScope;
 }
 
 /**
@@ -39,10 +55,20 @@ const MAX_PENDING = 8;
 
 let pending: ArmingRequest[] = [];
 
-/** Record that the model asked for a capability by name. Never throws. */
-export function recordArmingRequest(capability: string, at: Date = new Date()): void {
+/**
+ * Record that the model asked for a capability by name. Never throws.
+ *
+ * `scope` is spread conditionally rather than assigned: see `ArmingRequest.scope`
+ * — the parity pin asserts the KEY is absent, which an unconditional assignment
+ * would defeat while still passing a `toEqual`.
+ */
+export function recordArmingRequest(
+  capability: string,
+  at: Date = new Date(),
+  scope?: ProcedureScope
+): void {
   if (!capability) return;
-  pending.push({ capability, at: at.toISOString() });
+  pending.push({ capability, at: at.toISOString(), ...(scope ? { scope } : {}) });
   // Oldest first out: a full queue means requests are not being consumed, and
   // the newest is the one a live turn is most likely waiting on.
   if (pending.length > MAX_PENDING) pending = pending.slice(-MAX_PENDING);

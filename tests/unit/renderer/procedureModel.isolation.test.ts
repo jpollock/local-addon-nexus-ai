@@ -20,6 +20,12 @@ const RENDERER_MODULES = [
   '../../../src/renderer/components/DockedPanel/procedureModel',
   '../../../src/renderer/components/DockedPanel/procedureStream.fake',
   '../../../src/renderer/components/DockedPanel/ProcedureSurfaces',
+  // WP-32. `procedureScope.ts` is pure TODAY — every one of its imports is
+  // `import type` — which is exactly why its mirror is pinned here too: purity
+  // is one careless value-import away from being false, and nothing would fail
+  // until a user opened the panel.
+  '../../../src/renderer/components/DockedPanel/scopeModel',
+  '../../../src/renderer/components/DockedPanel/ScopeBlock',
 ];
 
 describe.each(RENDERER_MODULES)('%s', (modulePath) => {
