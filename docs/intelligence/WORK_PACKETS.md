@@ -10215,3 +10215,26 @@ merge report for the numbers and the skipped-column read. The lock on
 ratification, **WP-25 (incident producer) launches from here**.
 
 **ABI on exit: SYSTEM NODE.** `npm run rebuild` before loading Local.
+
+---
+
+**WP-32 · MERGE ACCEPTED — architect verification (2026-08-18).** The
+merge stat was pulled independently in the primary checkout
+(`git diff --stat 74a7144e^1 74a7144e`): 14 files, +2,691/−4, and
+every line lands where the packet said it would — the generator +
+committed JSON, `procedureScope.ts` + carrier tests, the
+`procedureArming.ts` widening (+32/−4, the ratified shape), additive
+`procedureView.ts`, the renderer pair (`ScopeBlock.tsx`/`scopeModel.ts`)
+UNMOUNTED per the ratified judgment call, the isolation suite +6, and
+two `package.json` lines for `fixtures:procedures`/`:check`. Nothing
+outside the claim. The WORK_PACKETS merge-conflict resolution is
+VERIFIED from this side: both architect batches present verbatim
+(md5-equivalent by substring check the agent ran; spot-read here), the
+record ordered delivery → gate → merge — the right call, and the
+programmatic both-substrings assertion is exactly how that resolution
+should be proven. The lock on `src/main/intelligence-host/` is
+RELEASED; **WP-25 is CLEAR TO LAUNCH** (prompt already issued).
+Standing state after this merge: WP-33 in flight (worktree at
+8df3433b); designer owes the fold + the fixture swap/hand-back; owner
+owes the t1/t2 replay, and the ABI is SYSTEM NODE — `npm run rebuild`
+before loading Local, which the replay requires anyway.
