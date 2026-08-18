@@ -8039,3 +8039,44 @@ cost the sheet its BLOCKED/PENDING distinction (7 listed where 6 are
 judgeable). One more lazy edge or a type-only import fix; micro,
 evals-tree, parallel-safe. The lesson joins WP-24's own: verify the fix
 on the path that exercises it, not the path that exits first.
+
+---
+
+**WP-26 ANNOUNCED 2026-08-18 — LOCK TAKEN: `src/main/intelligence-host/`
+(serialized with the core; the core itself is NOT taken and stays free).**
+Worktree `.worktrees/wp-26`, branch `wp-26`, base `poc/nexintelligence` @
+`9699d752`.
+
+**Contention check, done before cutting the worktree, not assumed:** WP-24
+is merged (`git merge-base --is-ancestor wp-24 poc/nexintelligence` passes)
+and `.worktrees/wp-24` reports a clean tree — so nothing is holding
+`tests/intelligence-evals/` or `src/main/mcp/modules/fleet/load-procedure.ts`,
+and the two files WP-24 owned are not on this packet's list anyway. WP-25 has
+a design note in the primary checkout (`wp25-incident-producer-design-note.md`,
+untracked) but no worktree and no announced lock.
+
+**Surfaces this packet will touch, declared up front:**
+
+| file | lock | why |
+|---|---|---|
+| `src/main/intelligence-host/procedureStream.ts` | this packet (new) | the emitter + its coalescing memory |
+| `src/main/intelligence-host/chatAssembly.ts` | this packet | the seam that folds the cursor calls the emitter |
+| `src/main/intelligence-host/actionProducer.ts` | this packet | `canary_policy` on the approval's rationale |
+| `src/common/chat-types.ts` | free | the stream union, widened additively (type-only import — erased) |
+| `src/main/chat/ChatService.ts` | free (minimal wiring) | sink registration + the policy threaded through the approval |
+| `src/main/chat/chat-ipc-handlers.ts` | free (minimal wiring) | one optional argument on `CHAT_TOOL_APPROVE` |
+| `src/renderer/components/DockedPanel/*` | renderer-additive | the approval card |
+
+**NOT taken:** `src/intelligence/`, `src/main/index.ts`,
+`src/main/ipc-handlers.ts`, `src/main/mcp/modules/fleet/`. The integration
+lock is not needed — nothing in this packet requires a bootstrap call site.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit code
+captured before any pipe): **557 suites / 7,207 passed / 12 skipped / 7,219
+total, exit 0**. Skipped 12 is the documented embedding-model split for a
+worktree (the primary checkout holds both model files and reports 2).
+
+**GATE HOLD DECLARED IN ADVANCE, per the registration:** the `canary_policy`
+field on `task.rationale.recorded` is a payload-schema change. It will be
+built and pinned, and the widened payload presented for architect
+ratification BEFORE any merge. Nothing merges past that hold.
