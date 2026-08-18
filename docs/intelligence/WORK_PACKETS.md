@@ -8765,3 +8765,29 @@ and gets revisited against the now-shipped seam. Designer brief
 delivered with this entry (`for-designer-phase-1.5-brief.md`); the live
 halted-sites transcript is part of the material — real product
 conversation, not fixture.
+
+---
+
+### [ ] WP-28 · The badge means what it says  *(registered from the phase-1 UX smoke, finding 1)*
+
+**ANNOUNCED 2026-08-18 — OWNER LOCK TAKEN on `src/main/intelligence-host/`
+(`procedureView.ts`) and on runbook authoring (`docs/intelligence/anchor-slice/
+runbooks/` originals first, `law/runbooks/` re-copied — the fidelity pin fires on
+direct edits by design).** Worktree `.worktrees/wp-28`, branch `wp-28`, base
+`poc/nexintelligence` @ `7b932c79`. Confirmed no other packet holds the lock:
+WP-26 (`fe9e36d8`) and WP-27 (`0d14db03`) are both merged and adjudicated, and
+nothing after them is announced.
+
+Also touched, minimally and named here so a later packet is not surprised:
+`src/intelligence/law/` (the checkpoint schema takes the new optional field),
+the renderer's mirror (`procedureModel.ts`) and the one line in
+`ProcedureSurfaces.tsx` that renders the badge, and `src/main/chat/ChatService.ts`
+for the doubled runbook reference (finding 2). **The integration lock is NOT
+taken:** `src/main/index.ts` and `ipc-handlers.ts` are untouched.
+
+**Baseline** (`npm test`, compiled worktree, tree held still, exit captured
+before any pipe): **565 suites / 7,341 passed / 12 skipped / 7,353 total,
+exit 0.**
+
+**HOLDS AT THE GATE, pre-declared:** the per-checkpoint frontmatter field is an
+ADR-17 additive field and needs its NAME and SEMANTICS ratified before merge.
