@@ -9,6 +9,7 @@ import {
   applyProcedureEvent,
   emptyProcedureState,
   hasProcedureSurface,
+  opensContainer,
   type ProcedureStreamState,
 } from './procedureModel';
 import type { SiteContextMode, SiteContentStatus } from './siteContextModel';
@@ -848,14 +849,62 @@ export class PanelChat extends React.Component<Props, State> {
     );
   }
 
-  /** Empty until something arms — see the spread at the call site. */
+  /**
+   * The approval the panel is waiting on, or null.
+   *
+   * WP-35 · the block yields to the card, never the reverse (the fold, pin 1),
+   * and the panel is the only surface that knows a card is up. It reads its own
+   * tool calls for that fact and hands it down; `ProcedureSurfaces` does not go
+   * looking, and nothing here derives checkpoint state.
+   */
+  pendingProcedureApproval(): ProcedureApprovalContext | null {
+    for (const message of this.state.messages) {
+      for (const call of message.toolCalls ?? []) {
+        if (call.status === 'awaiting_approval' && call.procedure) return call.procedure;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The declared block, PINNED TO THE TOP OF THE SESSION (the fold's ruled
+   * composite, 1a): XD-3 as geometry — the procedure outranks the transcript,
+   * so it holds the top and the turns move beneath it.
+   *
+   * Empty until something arms, and empty for the empty run — a plan of zero
+   * cells opens no container, so it renders as a turn's attachment instead
+   * (`renderProcedurePlan`). Spread rather than a conditional child: a `null`
+   * in a children array is still an entry in it, and the parity pin says this
+   * tree is byte-identical to the pre-WP-27 one whenever nothing is armed.
+   */
   renderProcedureSurfaces(): React.ReactNode[] {
     if (!hasProcedureSurface(this.state.procedure)) return [];
+    const { procedure, abort } = this.state.procedure;
+    if (procedure && !opensContainer(procedure)) return [];
+    const approval = this.pendingProcedureApproval();
     return [
       React.createElement(ProcedureSurfaces, {
         key: 'procedure',
-        procedure: this.state.procedure.procedure,
-        abort: this.state.procedure.abort,
+        procedure,
+        abort,
+        approvalPending: !!approval,
+        gateCheckpointId: approval ? approval.checkpointId : null,
+      }),
+    ];
+  }
+
+  /**
+   * XD-21 · the empty run. No block, no checkpoint list: the refusal stays a
+   * turn and the derived plan attaches to it, in the flow, where the turn is.
+   */
+  renderProcedurePlan(): React.ReactNode[] {
+    const { procedure } = this.state.procedure;
+    if (!procedure || opensContainer(procedure)) return [];
+    return [
+      React.createElement(ProcedureSurfaces, {
+        key: 'procedure-plan',
+        procedure,
+        abort: null,
       }),
     ];
   }
@@ -869,6 +918,9 @@ export class PanelChat extends React.Component<Props, State> {
     return React.createElement(
       'div',
       { style: styles.root },
+      // WP-35 · the declared block, pinned above the transcript. The turns move
+      // beneath it; it does not move with them.
+      ...this.renderProcedureSurfaces(),
       React.createElement(
         'div',
         { ref: this.logRef, style: styles.log, 'aria-live': 'polite', 'data-nexus-chat': true },
@@ -884,13 +936,10 @@ export class PanelChat extends React.Component<Props, State> {
               )
             : null,
           messages.map((m) => this.renderMessage(m)),
+          // The empty run's derived plan, attached where the refusal turn is.
+          ...this.renderProcedurePlan(),
         ),
       ),
-      // WP-27 · the procedure band, above the site strip and below the transcript.
-      // Spread rather than a conditional child: a `null` in the children array is
-      // still an entry in the children array, and the parity pin says this tree is
-      // byte-identical to the pre-WP-27 one whenever nothing is armed.
-      ...this.renderProcedureSurfaces(),
       // Directly above the composer, and above BOTH branches below: which site the chat
       // is scoped to is true whether or not the network is. It is also the disclosure
       // that scope moved when the user navigates mid-session — no toast, no modal, the

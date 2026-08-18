@@ -62,20 +62,26 @@ function texts(node: any, out: string[] = []): string[] {
 const render = (instance: any) => texts(serializeTree(instance.render())).join(' ');
 
 describe('the plan reference', () => {
-  it('shows the reference ONCE — WP-28 finding 2, the doubled reference', () => {
-    // Both halves: the card never prints the runbook twice on its own, and it
-    // does not need the warning line to carry the reference in order to show it.
+  it('does NOT carry the reference — it belongs to the declared block (WP-35, pin 4)', () => {
+    // Superseding WP-28's rule for this card. WP-28 fixed a DOUBLED reference
+    // between the card and the platform's warning line, and the card kept it
+    // because the card was then the only surface naming the document. The fold
+    // pins the block to the top of the session, header first: "the runbook
+    // reference appears exactly once, in the declared block's header. Not in
+    // the card, not in the session header, not in a turn."
+    // `companionDensity.test.tsx` holds the exactly-once count over the whole
+    // composed panel, which is where that property actually lives.
     const text = render(card());
-    expect(text.split('rb.bulk-plugin-update').length - 1).toBe(1);
-    expect(text.split(/marked strict/i).length - 1).toBe(1);
-    expect(text.split('cp.approval').length - 1).toBe(1);
+    expect(text).not.toContain('rb.bulk-plugin-update');
+    expect(text).not.toMatch(/marked strict/i);
+    expect(text).not.toContain('1.0.0');
   });
 
-  it('names the runbook, its version and that it is marked strict', () => {
+  it('still names the checkpoint this decision attests, exactly once', () => {
+    // The checkpoint is not the reference. A consent that did not say which
+    // step of the document it stands on would be a consent without a subject.
     const text = render(card());
-    expect(text).toContain('rb.bulk-plugin-update');
-    expect(text).toContain('1.0.0');
-    expect(text).toMatch(/marked strict/i);
+    expect(text.split('cp.approval').length - 1).toBe(1);
   });
 
   it('names the checkpoint this approval attests', () => {

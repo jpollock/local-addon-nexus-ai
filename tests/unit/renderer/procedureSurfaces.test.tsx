@@ -90,7 +90,10 @@ describe('the declared procedure', () => {
   it('names the runbook, its version, and that it is marked strict', () => {
     const out = text(render(MID_RUN()));
     expect(out).toContain('rb.bulk-plugin-update');
-    expect(out).toContain('1.1.0');
+    // WP-35: the fake's document facts now come from the generated fixture
+    // (`design-fixtures/declared-procedures.json`), which is what lifted the
+    // designer's cycle-one hold. The hand-written 1.1.0 was the drift.
+    expect(out).toContain('1.2.0');
     expect(out).toContain('marked strict');
     expect(out).toContain('cap.bulk_plugin_update');
   });
@@ -148,7 +151,8 @@ describe('the declared procedure', () => {
     const block = walk(out).find((n) => n?.props?.['data-communication']);
     expect(block).toBeTruthy();
     expect(text(block)).toContain('the procedure requires you to be told');
-    expect(text(block)).toContain('say what the canary showed before rolling the rest');
+    // The runbook's own `communication:` frontmatter, as the generator reads it.
+    expect(text(block)).toContain('the canary site chosen and the reason it was chosen');
     expect(text(block)).not.toContain('✓');
   });
 });
@@ -256,11 +260,18 @@ describe('the collapsing checklist', () => {
     const instance = surfaces(afterEvents(finished));
     const collapsed = serializeTree(instance.render());
     expect(walk(collapsed).filter((n) => n?.props?.['data-checkpoint'])).toHaveLength(0);
-    expect(text(collapsed)).toContain('4 of 4 provable checkpoints attested');
+    // WP-35 · the fold, pin 3: "one row where the block was" — and the row is a
+    // HANDLE, not a summary. It carries the reference and opens the record in
+    // place; the denominator lives in the record, one click away, rather than
+    // being recounted on a row whose job is to be small.
+    expect(text(collapsed)).toContain('rb.bulk-plugin-update · v1.2.0 · marked strict');
+    expect(text(collapsed)).not.toContain('provable');
 
     instance.state = { ...instance.state, expanded: true };
     const opened = serializeTree(instance.render());
     expect(walk(opened).filter((n) => n?.props?.['data-checkpoint'])).toHaveLength(8);
+    // The record, opened in place, is where the denominator went.
+    expect(text(opened)).toContain('4 of 4 provable checkpoints attested');
   });
 });
 

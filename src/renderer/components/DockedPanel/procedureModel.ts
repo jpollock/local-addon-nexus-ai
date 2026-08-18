@@ -1,5 +1,10 @@
 /**
  * WP-27 · the renderer's half of the procedure seam.
+ * WP-35 · plus the companion density's copy rules — the reference line, the
+ * three-mark vocabulary, the checkpoint window and its stated range, the
+ * zero-cell container predicate, and the derived plan a refusal carries. Same
+ * rule as everything else here: these compose facts that arrived in an event
+ * into sentences a human reads, and compute none of them.
  *
  * `src/main/intelligence-host/procedureView.ts` is the ONLY source of derivations
  * for procedure surfaces. This module does not compute a single fact: it reads
@@ -136,16 +141,57 @@ export function stepNoun(strictness: Strictness): 'checkpoint' | 'step' {
 }
 
 /**
- * One mark per state, and never the same mark for two different truths. The tick
- * is reserved; everything else is distinguishable from it and from each other.
+ * THREE MARKS ONLY (WP-35 · the fold, pin 9): attested, recorded-not-proved,
+ * not-yet. The set is closed, and it is closed because a mark vocabulary that
+ * grows is a vocabulary nobody reads: the not-applicable dash died with 1a's
+ * armed empty block for exactly that reason ("a fourth mark meaning
+ * nothing-attests is vocabulary by drift"), and WP-27's provisional six were
+ * five marks doing what words do better.
+ *
+ *  - `✓` — attested AND provable. The only tick, from `showsTick` alone.
+ *  - `·` — recorded, not proved: a narrative checkpoint the agent attested.
+ *  - the POSITION NUMERAL — not yet. Its own declared index, so eight
+ *    unreached checkpoints read `1 · 2 · 3 …` rather than eight identical
+ *    dots, and the digest's stated range ("Checkpoints 2 to 4 of 8") names
+ *    numbers the rail itself is showing.
+ *
+ * WHAT THE NUMERAL DOES NOT SAY, and where that fact went instead. `aborted`
+ * and `skipped` are not "not yet" — one ended and one was never reached — and
+ * `active` is not "not yet" either. Those three facts are carried by the row's
+ * own evidence sentence, which the seam derives and this surface renders
+ * verbatim ("the run aborted here", "the run stopped before reaching this
+ * step"), and the active row is distinguished typographically. A fact moved
+ * from a glyph to a sentence is still on screen; a fourth glyph would be a
+ * fourth word in a three-word vocabulary.
+ *
+ * `index` is the checkpoint's position in the DECLARED order — the caller's
+ * loop index over `procedure.checkpoints`, never a filtered or windowed one.
+ * The digest windows the list and still marks `cp.approval` as 3, because 3 is
+ * what it is.
  */
-export function checkpointMark(state: CheckpointState): string {
-  if (showsTick(state)) return '✓';
-  if (state.status === 'aborted') return '✕';
-  if (state.status === 'attested') return '○'; // recorded, not proved — a narrative attestation
-  if (state.status === 'active') return '▸';
-  if (state.status === 'skipped') return '⋯';
-  return '·';
+export const MARK_ATTESTED = '✓';
+export const MARK_RECORDED = '·';
+
+export function checkpointMark(state: CheckpointState, index: number): string {
+  if (showsTick(state)) return MARK_ATTESTED;
+  if (state.status === 'attested') return MARK_RECORDED; // recorded, not proved
+  return String(index + 1);
+}
+
+/**
+ * THE RUNBOOK REFERENCE, and its one home (the fold, pin 4): the declared
+ * block's header. Not in the card, not in the session header, not in a turn.
+ *
+ * One function rather than three spans composed at each site, because "appears
+ * exactly once" is a property of a whole panel and the only way to hold it is
+ * for there to be one thing that says it. WP-28 already caught this once, as a
+ * doubled reference between the card and the platform's warning line.
+ */
+export function referenceLine(procedure: DeclaredProcedure): string {
+  const parts = [procedure.runbookId ?? procedure.capability];
+  if (procedure.version) parts.push(`v${procedure.version}`);
+  if (procedure.strictness === 'strict') parts.push('marked strict');
+  return parts.join(' · ');
 }
 
 /**
@@ -183,6 +229,113 @@ export function runIsFinished(procedure: DeclaredProcedure): boolean {
 /** RB-A2: an attested checkpoint has nothing left to say, so it says it in one line. */
 export function foldsToOneLine(state: CheckpointState): boolean {
   return state.status === 'attested';
+}
+
+// ---------------------------------------------------------------------------
+// WP-35 · the companion density (the fold, ratified 2026-08-18)
+// ---------------------------------------------------------------------------
+
+/**
+ * XD-21, as a predicate: a declared procedure whose plan is zero cells opens no
+ * run and draws no checkpoint list. No consequence, no rank, no container.
+ *
+ * ABSENT SCOPE IS NOT AN EMPTY SCOPE. A declaration that carries no scope at
+ * all is the ordinary case today — nothing on the stream sets one — and it
+ * opens its container exactly as it did before this packet. Reading "no scope"
+ * as "no cells" would silence every armed run in the product on the strength of
+ * a field nobody populates.
+ */
+export function opensContainer(procedure: DeclaredProcedure): boolean {
+  return procedure.scope ? procedure.scope.opensRun : true;
+}
+
+/**
+ * The derived plan a refusal carries (the fold, pin 8: "the refusal stays a
+ * turn, the derived plan attaches verbatim"). Null when no scope was carried —
+ * there is no plan to attach, and a line invented from the declaration alone
+ * would be a plan the platform never derived.
+ *
+ * THE SHEET'S LINE HAS ONE SEGMENT THIS ONE DOES NOT, and the omission is
+ * deliberate: `rb.bulk-plugin-update · v1.2.0 · marked strict · cp.dry-run —
+ * 0 cells eligible` names the checkpoint that PRODUCED the plan, and no fact
+ * the stream serves identifies it. `cp.dry-run` cannot be the active
+ * checkpoint (it is narrative, so `nextGatedCheckpoint` never names it) and it
+ * cannot be inferred from the document's shape without guessing. Escalated
+ * rather than guessed — see the packet's gate report.
+ */
+export function derivedPlanLine(procedure: DeclaredProcedure): string | null {
+  const scope = procedure.scope;
+  if (!scope) return null;
+  const cells = scope.runnable.length;
+  return `${referenceLine(procedure)} — ${cells} ${cells === 1 ? 'cell' : 'cells'} eligible`;
+}
+
+/**
+ * How many checkpoint rows the digest shows. Three: the gate, and one row of
+ * context on either side of it.
+ *
+ * The number is drawn, not measured. The ratified rule is the digest — "every
+ * fact, a stated window centred on the gate, no inner scrollbar" — and 200px
+ * was struck precisely because a number pretending to be a rule outlives the
+ * geometry it described. This constant is the sheet's window, exported so a
+ * test asserts against the same number the surface renders rather than a
+ * second copy of it.
+ */
+export const CHECKPOINT_WINDOW = 3;
+
+export interface CheckpointWindow {
+  /** Declared index of the first row shown, zero-based. */
+  offset: number;
+  /** The rows, in declared order. */
+  states: CheckpointState[];
+  /** The whole list's length — the honest denominator of the range line. */
+  total: number;
+}
+
+/**
+ * The window, centred on the gate being decided.
+ *
+ * The gate is the checkpoint the pending approval attests, which the approval
+ * context names. With none named the active checkpoint stands in — the same
+ * one `nextGatedCheckpoint` chose — and with neither, the list's head.
+ *
+ * CLAMPED AT THE ENDS, NEVER SHRUNK. A gate at position 1 of 8 windows rows
+ * 1–3, not rows 0–2 with one row missing: the window's size is what the sheet
+ * drew, and a short window at an edge would silently show less than the density
+ * promises while the range line said otherwise.
+ */
+export function checkpointWindow(
+  procedure: DeclaredProcedure,
+  gateCheckpointId: string | null | undefined,
+): CheckpointWindow | null {
+  const all = procedure.checkpoints;
+  if (all.length === 0) return null;
+
+  const named = gateCheckpointId ? all.findIndex((c) => c.id === gateCheckpointId) : -1;
+  const active = all.findIndex((c) => c.status === 'active');
+  const centre = named >= 0 ? named : active >= 0 ? active : 0;
+
+  const size = Math.min(CHECKPOINT_WINDOW, all.length);
+  const offset = Math.max(0, Math.min(centre - Math.floor((size - 1) / 2), all.length - size));
+  return { offset, states: all.slice(offset, offset + size), total: all.length };
+}
+
+/**
+ * "Checkpoints 2 to 4 of 8" — the honest part of a window (the fold response
+ * §2: "a window that doesn't declare itself is a truncation pretending to be
+ * the whole").
+ *
+ * Null when the window IS the whole list: there is no truncation to declare,
+ * and "Checkpoints 1 to 3 of 3" would be a disclosure about nothing.
+ */
+export function windowRangeLine(
+  procedure: DeclaredProcedure,
+  window: CheckpointWindow,
+): string | null {
+  if (window.states.length >= window.total) return null;
+  const noun = stepNoun(procedure.strictness);
+  const plural = `${noun.charAt(0).toUpperCase()}${noun.slice(1)}s`;
+  return `${plural} ${window.offset + 1} to ${window.offset + window.states.length} of ${window.total}`;
 }
 
 /**
