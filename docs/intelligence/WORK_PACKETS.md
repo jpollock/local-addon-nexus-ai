@@ -8890,3 +8890,46 @@ proposed as unnecessary because that moment's virtue is being boring.
 Both docs go to the designer with the rank model and the phase-1.5
 brief; what survives their pressure-test becomes law. §8's open
 questions are assigned (1/3/5 designer, 4 shared, 2 architect).
+
+---
+
+**ARCHITECT — THE MOMENTS MODEL'S ARCHITECTURAL BILL (2026-08-18).**
+Walking the seven moments against the shipped substrate found the model
+mostly supported already; the gaps are three, and two are registered
+with this entry (the third is WP-25, already in owner review):
+
+### [ ] WP-30 · The session registry  *(registered 2026-08-18; promoted from the "session state as data" micro)*
+
+One durable, queryable fold over the ledger answering "what sessions
+exist, what is each waiting on, at which gate, what changed" — the
+substrate of M1's needs-you fold, all of M6 (Return), sessions-by-
+consequence, promotion-without-loss (WP-29's pins), and
+resume-after-restart. The architecture already guarantees possibility:
+the cursor re-folds from `task.*` events, so a run survives restart by
+derivation, not by trusting host memory — this packet makes that the
+ONE query surface instead of three ad-hoc ones. Scope: the fold
+(TaskId correlation × cursor state × pending approvals × outcomes ×
+consequence rank), a host-side query API, re-fold-on-boot; no UI (M6's
+surfaces consume it in the designer's cycle 2). Derived, nothing
+stored outside the ledger; the needs-you row's "WHERE you're needed"
+is the cursor's pending gate, already known. Lock:
+`src/main/intelligence-host/` — serialized. Sequence: after WP-25 or
+parallel if locks clear; before the M6 surface work.
+
+**The citation contract — design note delivered for owner review**
+(`citation-contract-design-note.md`, ADR-24 candidate): model-authored
+citation spans joining each factual claim to the supplying record (evt
+id / tool call / carrier line), platform-verified for EXISTENCE never
+for support (P4 governs), unlinked-as-a-state with strictness decided
+by the moment, eval criteria BEFORE the render, judge and user reading
+the same joins. This is M5's substrate and the mechanization of the
+sitting judge's slowest verb. Packet follows the owner's ratification
+of the note's five positions.
+
+**Also noted from the walk-through:** the Inspect→Act-big
+selection-becomes-scope handoff is renderer plumbing into the existing
+`AssembleRequest.frame` (small, rides an M2 surface packet, no new
+architecture); a later moments-usage fold can answer §8 Q5 (is six the
+right count?) from the ledger by measurement — registered as a
+someday-nicety, very much in the house style of letting the record
+answer questions about itself.
