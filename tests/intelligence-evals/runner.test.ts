@@ -63,7 +63,14 @@ describe('the fixture ledger is seeded through the real producers', () => {
   });
 
   it('backdates the planted incident rather than stamping it "now"', () => {
-    const incidents = fixture.core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 10 });
+    // SCOPED to the planted half at WP-25, and scoped by PROVENANCE rather than
+    // by count: the ledger now also holds incidents the real producer wrote
+    // during the run, whose ages are their own (see the next test). The
+    // assertion this one exists to make — the fixture does not stamp 30-day-old
+    // history with today's clock — is unchanged.
+    const incidents = fixture.core.ledger
+      .query({ topicPrefix: INCIDENT_TOPIC, limit: 100 })
+      .filter((e) => e.source.system === 'fixture:e01-incident');
     expect(incidents.length).toBeGreaterThan(0);
     for (const event of incidents) {
       const ageMs = Date.parse(event.recorded_at) - Date.parse(event.observed_at);
@@ -71,10 +78,21 @@ describe('the fixture ledger is seeded through the real producers', () => {
     }
   });
 
-  it('labels the planted events as synthetic, so nothing rests on them silently', () => {
+  it('labels the planted events as synthetic, and the produced ones as the product', () => {
     expect(fixture.syntheticTopics).toContain(INCIDENT_TOPIC);
-    const incidents = fixture.core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 10 });
-    expect(incidents.every((e) => e.source.system === 'fixture:e01-incident')).toBe(true);
+    const incidents = fixture.core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 100 });
+    const systems = new Set(incidents.map((e) => e.source.system));
+    // Both populations are present and TELLABLE APART. Before WP-25 this read
+    // `.every(system === 'fixture:e01-incident')`, which was the whole truth
+    // then; asserting it now would forbid the producer this milestone shipped.
+    expect(systems).toContain('fixture:e01-incident');
+    expect(systems).toContain('sentinel:scan');
+    expect(systems).toContain('procedure:abort');
+    // And the produced ones observe the same discipline the planted ones do:
+    // a real source time, never the fold's.
+    for (const event of incidents.filter((e) => e.source.system !== 'fixture:e01-incident')) {
+      expect(Date.parse(event.recorded_at)).toBeGreaterThan(Date.parse(event.observed_at));
+    }
   });
 });
 
@@ -169,9 +187,14 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     // drives five gate decisions and one backup; only the LAST update is
     // allowed through, and the denial run must add none. If a probe were edited
     // to claim a drive it skipped, these counts would not move.
-    const actions = fixture.core.ledger
+    // Scoped to acts the GATEWAY recorded (WP-25): the ledger also holds one
+    // hand-emitted action/outcome pair, stamped `fixture:wp25-abort`, that the
+    // incident probe uses to drive the abort tap. Counting it here would say
+    // the gate allowed a second backup, which it did not.
+    const gatewayActions = fixture.core.ledger
       .query({ topicPrefix: 'task.action.executed', limit: 10_000 })
-      .map((e) => (e.payload as { tool?: string }).tool);
+      .filter((e) => e.source.system === 'gateway:tool-call');
+    const actions = gatewayActions.map((e) => (e.payload as { tool?: string }).tool);
 
     // TWO bulk updates executed in this fixture, and both are accounted for:
     // one from WP-19's gateway probe (the two-site call that pins per-target
@@ -182,9 +205,9 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     expect(actions.filter((t) => t === 'bulk_plugin_update')).toHaveLength(2);
     expect(actions.filter((t) => t === 'wpe_backup_and_verify')).toHaveLength(1);
 
-    const backup = fixture.core.ledger
-      .query({ topicPrefix: 'task.action.executed', limit: 10_000 })
-      .find((e) => (e.payload as { tool?: string }).tool === 'wpe_backup_and_verify')!;
+    const backup = gatewayActions.find(
+      (e) => (e.payload as { tool?: string }).tool === 'wpe_backup_and_verify'
+    )!;
     const perTarget = fixture.core.ledger
       .query({ topicPrefix: 'task.outcome.recorded', limit: 10_000 })
       .filter((e) => e.causation === backup.id);
@@ -199,24 +222,42 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     expect(evidence).toMatch(/task\.action\.executed events for bulk_plugin_update under this run: 0/);
   });
 
-  it('E-01 history is now REACHABLE from the wired surface, and still has no producer', () => {
-    // Was: "in the ledger and unreachable". WP-16b fixed the retrieval half —
-    // the assembler's default episodic prefixes are ["state.", "episodic."], so
-    // the docked panel reaches the planted history. The criterion stays BLOCKED
-    // on the half that remains: nothing in src/ produces episodic.* at all.
+  it('E-01 history now HAS a producer, and the criterion is adjudicated on the conjunction', () => {
+    // THE THIRD STATE OF THIS TEST, and the last one it can have. WP-13: "in the
+    // ledger and unreachable". WP-16b fixed retrieval and it became "reachable,
+    // and nothing produces it". WP-25 produces it, so the criterion is decided
+    // on what the platform now supplies — and a verdict that rests on four
+    // measurements has to name all four, or the next reader cannot tell which
+    // one carried it.
     const result = results.find((r) => r.criterion.text.includes('queries incident/sync history'))!;
-    expect(result.verdict).toBe('BLOCKED');
-    expect(result.evidence.join(' ')).toMatch(/WIRED defaults.*retrieved 1 incident item\(s\)/);
-    // One planted event for this site, retrieved once — not once per role. The
-    // request carries both the environment and the Site target (WP-16's A3
-    // fix), and the dedupe is what keeps that from reading as two incidents.
-    expect(result.evidence.join(' ')).toMatch(/episodicTopicPrefix="episodic\." retrieved 1 ledger item/);
-    // WP-20e re-point: this asserted "episodic.* producer", a phrase that went
-    // stale when WP-14 shipped episodic.sync.pulled / episodic.sync.pushed. The
-    // verdict is unchanged and so is the gap — it is an INCIDENT producer that
-    // does not exist — but the blocker now says which half is missing.
-    expect(result.missing).toMatch(/episodic INCIDENT producer/);
-    expect(result.missing).toContain('episodic.sync.pulled');
+    expect(result.verdict).toBe('PASS');
+    expect(result.missing).toBeUndefined();
+    expect(result.unblockedBy).toBeUndefined();
+    const evidence = result.evidence.join(' ');
+
+    // 1 · produced, by both taps — and the counts are real, not a fixed string.
+    expect(evidence).toMatch(/sentinel tap [1-9]\d* incident\(s\)/);
+    expect(evidence).toMatch(/abort tap [1-9]\d*/);
+    // 2 · retrieved by the WIRED assembler, and 3 · rendered for a model.
+    expect(evidence).toMatch(/wired assembler returned [1-9]\d*/);
+    expect(evidence).toContain('rendered a summary line');
+    // 4 · the floor was applied: two findings in, one incident out.
+    expect(evidence).toContain('below SEVERITY_FLOOR');
+
+    // The abort classification came from the DOCUMENT, which is the property
+    // that makes the id trustworthy rather than a constant someone typed.
+    expect(evidence).toContain('ab.backup-failed');
+    expect(evidence).toContain("read off rb.bulk-plugin-update's own aborts:");
+
+    // And the report still separates what the product produced from what the
+    // fixture planted — a green criterion must not rest silently on synthetic
+    // data, and here the two populations sit in the same ledger.
+    expect(evidence).toContain('fixture:e01-incident');
+    expect(evidence).toContain('sentinel:scan');
+    expect(evidence).toContain('procedure:abort');
+
+    // What the PASS does not claim: that a model consulted any of it.
+    expect(evidence).toMatch(/still judged, and NOT claimed by this verdict/);
   });
 
   it('the task.* families E-02 needs are now PRODUCED, and by both dispatch paths', () => {

@@ -57,9 +57,16 @@ import {
   RATIONALE_RECORDED_TOPIC,
   recordApprovalRationale,
 } from '../../src/main/intelligence-host/actionProducer';
+import {
+  ABORT_SYSTEM,
+  SENTINEL_AGENT_ID,
+  SEVERITY_FLOOR,
+  recordAbortIncidents,
+  recordSentinelIncidents,
+} from '../../src/main/intelligence-host/incidentProducer';
 import type { McpToolHandler, NexusServices } from '../../src/main/mcp/types';
 import { validateAgainstJsonSchema } from './jsonSchemaCheck';
-import { EvalFixture, INCIDENT_TOPIC } from './fixture';
+import { EvalFixture, INCIDENT_SOURCE_SYSTEM, INCIDENT_TOPIC } from './fixture';
 
 export const ENVELOPE_SCHEMA_PATH = path.join(
   __dirname,
@@ -694,12 +701,220 @@ export async function probeEpisodicRetrieval(fixture: EvalFixture): Promise<Prob
       `assemble() with episodicTopicPrefix="episodic." retrieved ${episodicIncidents} ledger item(s)`,
       `so retrieval is no longer the blocker: the anchor surface (chat.docked-panel) now reaches ` +
         `episodic.* through the default`,
-      `what remains missing is an INCIDENT producer: WP-14 emits episodic.sync.pulled / ` +
-        `episodic.sync.pushed (syncProducer.ts), so the family is populated, but no code in src/ ` +
-        `emits an incident — this history exists only because the fixture planted it ` +
-        `(WP-13 finding 5; corrected at WP-20e, which measured the sync topics rather than ` +
-        `inheriting the older "nothing emits episodic.*" claim)`,
+      `WP-25 correction: an INCIDENT PRODUCER now exists (incidentProducer.ts), so "nothing in ` +
+        `src/ emits an incident" — true at WP-13, narrowed at WP-20e to exclude WP-14's sync ` +
+        `topics — is retired outright. THE HISTORY COUNTED ABOVE IS STILL FIXTURE-PLANTED: this ` +
+        `probe seeds it directly through the emitter, and what the producer emits is measured ` +
+        `separately by probeIncidentProducer below`,
     ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// WP-25 · does the PRODUCT produce incident history, and does it come back?
+// ---------------------------------------------------------------------------
+
+/**
+ * The provenance the WP-25 probe stamps on the halted call it synthesizes. A
+ * fixture-emitted act must be separable from a gateway-driven one by reading
+ * the event, not by knowing which probe ran.
+ */
+export const ABORT_PROBE_SYSTEM = 'fixture:wp25-abort';
+
+export interface IncidentProducerProbe extends Probe {
+  /** Events the real sentinel tap wrote from a report it was handed. */
+  emittedBySentinelTap: number;
+  /** Events the real abort tap wrote from a halted run's own outcome event. */
+  emittedByAbortTap: number;
+  /** Of those, how many the WIRED assembler returned for the target site. */
+  retrievedByAssembler: number;
+  /** The line the model would actually read, from the real `episodicSummary`. */
+  renderedSummary?: string;
+  /** `source.system` of every incident in the ledger — fixture vs producer. */
+  incidentSystems: string[];
+}
+
+/**
+ * Drive BOTH taps of the incident producer, then ask the real assembler for the
+ * history back.
+ *
+ * WHAT IS FIXTURE HERE, stated because a criterion's verdict rests on it: the
+ * sentinel REPORT is synthesized (no security sweep runs inside a test) and the
+ * failing tool call is emitted by this probe rather than by a real backup that
+ * failed. What is real is everything the criterion is about — the producer's
+ * own decisions, the entity resolution, the ledger, the assembler's retrieval,
+ * and the summary line `episodicSummary` composes. The equivalent disclosure
+ * `probeProcedureRun` makes about its two `ok` handlers.
+ *
+ * The abort half additionally proves the mapping is taken from the DOCUMENT:
+ * nothing here names `ab.backup-failed`; it is what `rb.bulk-plugin-update`
+ * says a failed `wpe_backup_and_verify` means.
+ */
+export async function probeIncidentProducer(fixture: EvalFixture): Promise<IncidentProducerProbe> {
+  const evidence: string[] = [];
+  const site = fixture.fleet.find((s) => s.historyFlagged) ?? fixture.fleet[0];
+  const localSites: Record<string, { id: string; name: string; domain: string }> = {};
+  for (const s of fixture.fleet) {
+    localSites[s.siteId] = { id: s.siteId, name: s.name, domain: `${s.siteId}.local` };
+  }
+  const services = {
+    siteData: {
+      getSite: (id: string) => localSites[id],
+      getSites: () => localSites,
+    },
+  } as unknown as NexusServices;
+  setIntelligenceCore(fixture.core);
+
+  const idsBefore = new Set(
+    fixture.core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 500 }).map((e) => e.id)
+  );
+  evidence.push(
+    `before the producer runs, the ledger holds ${idsBefore.size} incident event(s), all planted by ` +
+      `the fixture (${INCIDENT_SOURCE_SYSTEM})`
+  );
+
+  // ── tap A: a completed sentinel report, seven days old ────────────────────
+  const scanAt = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const emittedBySentinelTap = recordSentinelIncidents(
+    {
+      agentId: SENTINEL_AGENT_ID,
+      runId: 'r_probe_sentinel',
+      observedAt: scanAt,
+      sites: {
+        [site.name]: {
+          status: 'escalated',
+          findings: [
+            {
+              id: 'FS-02',
+              severity: 'critical',
+              title: 'Unexpected PHP file in wp-content/uploads responding to POST',
+            },
+            // Below the floor: present so the count proves the floor is applied
+            // rather than everything being folded.
+            { id: 'CFG-01', severity: 'medium', title: 'Directory listing enabled' },
+          ],
+        },
+      },
+    },
+    { services }
+  );
+  evidence.push(
+    `the sentinel tap (recordSentinelIncidents, production code) folded a 2-finding report into ` +
+      `${emittedBySentinelTap} incident(s) — the medium-severity finding is below SEVERITY_FLOOR ` +
+      `("${SEVERITY_FLOOR}") and is not one`
+  );
+
+  // ── tap B: a halted run, from the shipped anchor runbook ──────────────────
+  const runbook = fixture.core.law?.runbooks.byCapability('cap.bulk_plugin_update');
+  let emittedByAbortTap = 0;
+  if (!runbook) {
+    evidence.push('no anchor runbook served — the abort half of this probe could not be driven');
+  } else {
+    const correlation = mintTaskId();
+    const entity = {
+      environment: fixture.environmentIdOf(site.siteId),
+      site: fixture.siteIdOf(site.siteId),
+    };
+    const failedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    // `source.system` is the PROBE's, not `gateway:tool-call`. No backup really
+    // failed here, and a hand-emitted pair wearing the gateway's provenance
+    // would be indistinguishable from a real gate-driven act in the same
+    // ledger — which is the property this report's ground-truth counts rest on
+    // (runner.test.ts counts gateway-emitted actions). The tap keys on topic,
+    // tool and result, so labelling honestly costs the probe nothing.
+    const action = fixture.core.emitter.emit({
+      observed_at: failedAt,
+      topic: ACTION_EXECUTED_TOPIC,
+      schema: 'action.executed/1',
+      entity,
+      actor: { id: 'act_chat_agent', kind: 'agent' },
+      source: { class: 'work', system: ABORT_PROBE_SYSTEM, trust: 'emitted' },
+      correlation,
+      payload: { tool: 'wpe_backup_and_verify', tier: 3, dispatch: 'registry' },
+    });
+    fixture.core.emitter.emit({
+      observed_at: failedAt,
+      topic: OUTCOME_RECORDED_TOPIC,
+      schema: 'outcome.recorded/1',
+      entity,
+      actor: { id: 'act_chat_agent', kind: 'agent' },
+      source: { class: 'work', system: ABORT_PROBE_SYSTEM, trust: 'emitted' },
+      correlation,
+      causation: action.id,
+      payload: { tool: 'wpe_backup_and_verify', result: 'failure', result_scope: 'call' },
+    });
+    emittedByAbortTap = recordAbortIncidents({
+      run: {
+        sessionId: 'probe-wp25',
+        capability: 'cap.bulk_plugin_update',
+        runbookId: runbook.id,
+        runbookHash: runbook.hash,
+        taskIds: [correlation],
+      },
+      runbook,
+      ledger: fixture.core.ledger,
+    });
+    const abortFacts = fixture.core.ledger
+      .query({ topicPrefix: INCIDENT_TOPIC, limit: 500 })
+      .filter((e) => !idsBefore.has(e.id) && e.source?.system === ABORT_SYSTEM)
+      .map((e) => String((e.payload as { fact?: unknown })?.fact));
+    evidence.push(
+      `the abort tap (recordAbortIncidents) turned ONE failed wpe_backup_and_verify outcome into ` +
+        `${emittedByAbortTap} incident(s) classed ${abortFacts.join(', ') || '(none)'} — the id is ` +
+        `read off ${runbook.id}'s own aborts:, not from a list in the producer`
+    );
+  }
+
+  // ── and does the wired surface hand it back? ──────────────────────────────
+  const produced = fixture.core.ledger
+    .query({ topicPrefix: INCIDENT_TOPIC, limit: 500 })
+    .filter((e) => !idsBefore.has(e.id));
+  const bundle = await assemble(
+    {
+      actor: { id: 'act_eval_wp25', kind: 'agent', autonomy: 'interactive' },
+      task: { id: mintTaskId(), intent: 'Update WooCommerce across the fleet.' },
+      targets: [
+        { role: 'environment', id: fixture.environmentIdOf(site.siteId), label: site.name },
+        { role: 'site', id: fixture.siteIdOf(site.siteId), label: site.name },
+      ],
+      surface: 'eval.wp-25',
+    },
+    { law: fixture.core.law?.registry, ledger: fixture.core.ledger, twins: fixture.core.twins, wrapUntrusted }
+  );
+  const producedIds = new Set(produced.map((e) => e.id));
+  const retrieved = bundle.retrieved.filter((r) => producedIds.has(r.id));
+  const renderedSummary = retrieved.find((r) => r.summary)?.summary;
+  evidence.push(
+    `the WIRED assembler (same defaults chatAssembly passes) returned ${retrieved.length} of the ` +
+      `${produced.length} producer-emitted incident(s) for ${site.name}`
+  );
+  if (renderedSummary) {
+    evidence.push(`and the line the model reads is: "${renderedSummary}"`);
+  } else {
+    evidence.push('but NONE of them rendered a summary — the payload field names miss the allow-list');
+  }
+
+  const incidentSystems = [
+    ...new Set(
+      fixture.core.ledger
+        .query({ topicPrefix: INCIDENT_TOPIC, limit: 500 })
+        .map((e) => e.source?.system ?? '(none)')
+    ),
+  ].sort();
+  evidence.push(
+    `incident events in this ledger now carry source.system: ${incidentSystems.join(', ')} — ` +
+      `the fixture's planted history and the product's own output are separable by provenance, ` +
+      `which is what keeps a green criterion from resting silently on synthetic data`
+  );
+
+  return {
+    ok: emittedBySentinelTap > 0 && emittedByAbortTap > 0 && retrieved.length > 0 && !!renderedSummary,
+    emittedBySentinelTap,
+    emittedByAbortTap,
+    retrievedByAssembler: retrieved.length,
+    renderedSummary,
+    incidentSystems,
+    evidence,
   };
 }
 
