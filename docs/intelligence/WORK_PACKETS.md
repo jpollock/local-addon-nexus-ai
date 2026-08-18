@@ -11101,3 +11101,52 @@ and eslint all clean.
 `task.action.executed` payload widening at WP-19's contract family, its own
 gate), and widening the sentinel tap beyond `security-sentinel` as a product
 ruling. When either lands, this producer picks it up with no contract change.
+
+---
+
+**WP-25 · MERGED (2026-08-18).** `wp-25` folded into `poc/nexintelligence` at
+merge `230c3dfa`, after the gate ratified all five positions and 1a was built.
+
+**Receipts, per the protocol's "integration reports carry receipts".**
+`git diff --stat 230c3dfa^1 230c3dfa`: **12 files, +2,413 / −71** —
+`incidentProducer.ts` (+683) and its two suites (+665, +230), the E-01 half
+across `tests/intelligence-evals/{probes,checks,runner}.ts` and
+`{probes,runner}.test.ts`, three call-site lines (`AgentRunner.ts` +23,
+`chatAssembly.ts` +10, `actionProducer.ts` +7/−4 for the exported resolver),
+and the record. Nothing outside the claim.
+
+**Merged-tree baseline, exit captured before any pipe: 573 suites, 7656 passed,
+2 skipped, 7658 total, exit 0**; `npm run typecheck` clean; the runner exits 2
+with **15 PASS / 0 FAIL / 37 BLOCKED / 16 OWNER-PENDING**. Read the skipped
+column first, as the protocol says: **2 here against 12 in the worktree, total
+unchanged at 7658** — the primary checkout holds both embedding model files
+where a worktree holds one, so ten `embedding-service` tests cross from skipped
+to passed at that boundary. Same total, different split; as a passed-column
+delta alone it would read as a phantom gain of ten. Against WP-33's merged-tree
+baseline (571 / 7623 / 2 / 7625) the delta is exactly **+2 suites, +33 tests**,
+all WP-25's.
+
+**Merge-conflict note, for the record:** the only conflict was this file's
+tail, both sides appended — the packet's delivery note on `wp-25`, the
+architect's gate adjudication and design-fold batch on `HEAD`. Resolved by
+keeping BOTH verbatim with the delivery note FIRST, so the record reads
+delivery → gate → merge rather than gate-before-the-thing-it-accepts. Verified
+programmatically after resolution: each side's block is an exact substring of
+the result and the ordering assertion holds; no architect sentence was edited,
+reflowed, or moved relative to another.
+
+**Architect work found uncommitted in the primary checkout and committed
+VERBATIM before the merge (`06e901e9`)**, per the standing precedent: the WP-25
+gate adjudication, the design-fold ratification (cycle one closes), the
+ambient-triage response, the two designer positions
+(`from-designer-05-companion-density-final.md`,
+`from-designer-06-ambient-triage.md`) and a user-docs edit. Nothing was written
+or altered by this session — flagged here so the architect can verify fidelity.
+
+**The lock on `src/main/intelligence-host/` is RELEASED with this merge.**
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and `npx jest`
+repeatedly, and ran `npm rebuild better-sqlite3` once mid-session to recover
+from another session's Electron rebuild. **`npm run rebuild` before loading
+Local** — which the owner's live smoke (§5 of the delivery note) requires
+anyway.
