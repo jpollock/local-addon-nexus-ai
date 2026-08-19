@@ -14459,3 +14459,170 @@ fails in CI instead of degrading a judgment sheet mid-sitting.
 **Board: WP-37 is the last packet in flight** — cleared at the
 consolidated adjudication, merge on the agent's relay; then the
 in-flight column is empty for the first time since WP-31.
+
+---
+
+**WP-37 · GATE REPORT — the emission shape, held for ratification; one
+escalation and one renderer hand-off (2026-08-19).** Branch `wp-37` at
+worktree `.worktrees/wp-37`, cut from `240da7fd`. Packet commit `d61a9a03`.
+**No renderer file is touched** — `git diff --name-only | grep renderer` is
+empty. Five files: four under `src/main/intelligence-host/` plus one existing
+test file's mechanical churn, and one new suite.
+
+**THE EMISSION SHAPE, presented for ratification.** Two fields on
+`DeclaredProcedure`, which rides ONCE on `procedure_armed` (rule 2 —
+`checkpoint_changed` carries no declaration, so neither field can arrive twice
+and disagree with itself).
+
+| field | when present | when absent |
+|---|---|---|
+| `scope?: ProcedureScope` | the arming that was honoured carried a selection | every other case — including a predicate arming, a caller-supplied request, and **every armed run in the product today** |
+| `planCheckpoint?: {checkpointId, reason: string \| null}` | the document declares a consent gate AND something narrative before it | no gate, nothing narrative before it, no document (a refusal) |
+
+Five rules govern them, each with a witness:
+
+1. **Absent, never present-undefined.** Conditional spread throughout; the
+   pins assert `'scope' in procedure`, because `toEqual` cannot see the
+   difference (WP-26's finding) and the parity floor is exactly that
+   difference.
+2. **Handed on unchanged.** The pin is `toBe`, not `toEqual`. An equal-but-
+   rebuilt scope is the re-derivation `checkDryRunTargets` catches one layer
+   down, and it would pass every equality assertion ever written (M03).
+3. **A zero-runnable scope still rides.** The refusal is a turn with a plan
+   and its door, not a silence. M04 is the plausible wrong implementation
+   ("attach it only when something runs") and it fails three pins.
+4. **Absent scope still opens the container.** M20's legacy default, re-pinned
+   here from the emission side. This is not a hypothetical branch: it is the
+   state of every armed run in the product (see the escalation).
+5. **`planCheckpoint` is derived, never authored, and matched by CONTRACT.**
+   The gate is found by `evidence.topic === task.rationale.recorded`, not by
+   the id `cp.approval` (M05); the step is the NEAREST narrative before it,
+   not the first (M06) and not merely the adjacent one (M07); the reason is
+   the author's own heading, quoted (M08).
+
+**ON THE DERIVATION FOR `planCheckpoint`, because the gate ruled once that
+inference here would be a guess.** WP-35's escalation 2 said `cp.dry-run`
+"cannot be inferred from the document's shape without guessing." What is
+served is not an inference about prose — it is the derivation
+`unverifiablePrecedentOf` has ALREADY held, ratified at the WP-26 gate: the
+nearest narrative checkpoint before the consent gate. The claim it makes is
+bounded by what a consent gate IS: a gate consents to a presented plan, so the
+plan was produced before it, and the nearest step before it that the platform
+cannot verify is where. **The two are now ONE function with two consumers**
+(`planCheckpointOf`), the card reads the declaration's field instead of
+recomputing, and a pin asserts them equal — M11 (split them into two rules)
+fails six tests. **If the gate reads this as a claim one notch stronger than
+the derivation supports, the correction is a rename, not a re-derivation:**
+serving the identical value as `unverifiablePrecedent` on the declaration
+costs one line and gives the plan line the same segment under the weaker
+name. That choice is the architect's, and it is the reason this is held.
+
+**ESCALATION — THE ACCEPTANCE IS NOT YET REACHABLE, AND THE MISSING PIECE IS
+NOT THIS PACKET'S TO BUILD.** The packet's acceptance was "a halted-sites ask
+drives the ratified state end to end." Measured in this worktree:
+
+```
+deriveScope(          production callers: ZERO
+recordArmingRequest(  production callers: ONE — load-procedure.ts:113,
+                      `recordArmingRequest(capability)`, no scope argument
+```
+
+The carrier is complete from `ArmingRequest.scope` to the renderer's
+`opensContainer`, and pinned end to end through the real `assembleForChatTurn`.
+**Nothing fills it.** No comparator surface exists, so no `ScopeSelection` is
+ever constructed outside tests and the renderer's `FIXTURE_SELECTION`.
+Therefore **the live smoke today shows an ordinary armed run with an absent
+scope** — container open, no plan line — which is correct behaviour and not
+the ratified empty-run state. Saying otherwise would be reporting a rendering
+as a measurement, which is the WP-36 finding.
+
+*What the owner's smoke shows once a producer lands, stated as the runnable
+check:* halt `t1` and `t2`, ask the Docked Panel **"Update my plugins on t1,
+t2"**, and the panel must draw the plan line and its door with NO checkpoint
+container and NO run — `0 cells eligible`, both sites under `Excludes:`
+carrying the record that observed them halted. That exact path is pinned in
+`wp37StreamScope.test.ts` §5 against the real assembler with the real anchor
+runbook and the real live grants; the only unmocked step is who calls
+`recordArmingRequest` with a scope.
+
+**Two candidate producers, neither built, both wanting a ruling:**
+
+- **A · the comparator surface** (WP-32's intended source, XD-15). A renderer
+  packet; the from-line resolves honestly and nothing widens.
+- **B · `nexus_load_procedure` gains an optional site list** and derives the
+  selection at the arming, from the named sites and their observed status,
+  through the real `deriveScope`. Minimal, and it keeps "the arming carries
+  the scope" literally true. **It needs a ruling, because it widens WP-32's
+  ratified artifact:** `ScopeFrom.surface` is typed `'comparator'` and nothing
+  else, so a model-named selection would either need a new variant with its
+  own honest from-line, or would lie about where it came from. Not built —
+  the packet's own escalate-don't-build clause names "a scope derived from
+  anything but the carrier," and this derives one AT the carrier, which is
+  close enough to the line to belong to the architect.
+
+**RENDERER HAND-OFF (not this packet — `DockedPanel/` is WP-35's lock).** The
+plan line's segment is now SERVED but not yet CONSUMED: `derivedPlanLine`
+composes `referenceLine(procedure) — N cells eligible` and would need
+`procedure.planCheckpoint` spliced in to reach the sheet's four-segment form.
+Also `procedureStream.fake.ts` now lacks a field the real stream emits — the
+same divergence class WP-35 closed for the document facts, and it should gain
+`planCheckpoint` from the same generated fixture when that packet runs.
+
+**MUTATION BATTERY: 16 KILLED, 0 VOID, 2 EQUIVALENT (recorded, not excused),
+control survived.** Every run `--no-cache`, argv an explicit list with the
+resolved command printed, counts PARSED from the summary block, every run
+count-floored at the measured green (523 across 38 suites), and the tree
+verified byte-pristine before and after each mutation with a `finally`
+restore. The script wrote to no tracked artifact and is not committed.
+
+**The two survivors are EQUIVALENT MUTANTS, and M17 is what proved it rather
+than an argument.** M02 (stream) and M16 (assembler) make the conditional
+spread unconditional at their seam — and nothing observable changes, because
+`deriveDeclaredProcedure` does its OWN conditional spread and absorbs a
+present-undefined. That could have been a weak-guard story, so it was
+measured: **M17 makes the DECLARATION's spread unconditional and kills three
+pins; M18 removes it and kills seven.** The parity floor is enforced, and it
+is enforced at the layer that owns it. Both seams keep their spread (a seam
+that passes an explicit `undefined` reads as though absence were a value it
+chose to send) and both now carry a comment naming M17 as the real guard —
+**because the failure mode here is not the mutation surviving, it is a future
+reader crediting the unfalsifiable line and deleting the load-bearing one.**
+
+This is the WP-36 twelfth shape in a new form and is offered as its
+generalisation: *a mutation is equivalent whenever a DOWNSTREAM guard collapses
+the two states it distinguishes.* WP-36's version was two states that could not
+both reach the code; this is two states that reach it and are made one before
+anything can observe them. The test for both is the same — before crediting a
+survivor as a weak guard, find the line that actually holds the property and
+mutate THAT.
+
+**BASELINES BOTH SIDES, in the worktree, exit captured before any pipe.**
+Before: **583 suites / 7817 passed / 12 skipped / 7829 total, exit 0** —
+identical to WP-36's post figure. After: **584 / 7839 / 12 / 7851, exit 0.**
+**+1 suite and +22 tests, exactly the new file; the skipped column is
+unchanged at 12**, so the passed-column delta is the whole story. `npx tsc -p
+. --noEmit` clean throughout. The legacy suites covering the touched files
+(`grep -rl` over `tests/` → 16 files across `tests/intelligence-evals`,
+`tests/unit/chat`, `tests/unit/renderer`) run green: 114 suites, 1748 tests.
+
+**No poisoned-cache occurrence this session** — every battery run and every
+verification run was `--no-cache` from the start, and no unrelated suite ever
+failed to parse.
+
+**ONE MECHANICAL CHURN, named so a reviewer does not have to find it.**
+`procedureRequestForTurn` returns `TurnProcedure` (`{request, scope?}`) rather
+than `ProcedureRequest`, so eleven call sites in
+`procedureArmingWiring.test.ts` gained `.request`. WP-20b's pins are otherwise
+untouched — same assertions, same subjects. The alternative considered and
+rejected was a second exported entry point wrapping the first: two doors to one
+implementation, which this repo's own aesthetic argues against harder than it
+argues against churn.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` (its `pretest` hook
+rebuilt better-sqlite3 for the shell's Node), `npx jest`, and an 18-mutation
+battery. **`npm run rebuild` before loading Local** — which the live smoke
+above wants anyway, since seeing the panel is a Local session.
+
+**HELD AT THE GATE — not merged.** The emission is a contract with a shipped
+consumer, per the registration's own gate hold.
+
