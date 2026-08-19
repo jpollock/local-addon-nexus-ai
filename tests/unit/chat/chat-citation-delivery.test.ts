@@ -221,3 +221,121 @@ describe('every exit the turn has', () => {
     expect(source.indexOf(bareDone[0])).toBeGreaterThan(source.indexOf('private endTurn('));
   });
 });
+
+// ---------------------------------------------------------------------------
+// The turn's tool trace — the half of the supply the assembler cannot know
+// ---------------------------------------------------------------------------
+
+/**
+ * BATTERY FINDING (M15, M16). The first run of this suite exercised no tool
+ * call at all, so deleting `turnToolCalls.push(tc.name)` outright SURVIVED, and
+ * so did moving it behind a success check. Both would ship a real defect —
+ * the first makes every `[[cite:tool:…]]` unresolvable, the second renumbers
+ * every later call of a tool that once failed, so a citation the model wrote
+ * against call #2 resolves to call #3's record. A WRONG record is worse than
+ * an unresolvable one, and quieter: it draws the neutral chip.
+ *
+ * These tests are the hole closed. They run tool calls through the REAL loop —
+ * a registry with a tool that answers, and one that errors.
+ */
+function toolProvider(names: string[]) {
+  let turn = 0;
+  return {
+    id: 'mock',
+    displayName: 'Mock',
+    requiresApiKey: false,
+    defaultModels: ['mock-model'],
+    async *streamChat() {
+      if (turn++ === 0) {
+        for (const [i, name] of names.entries()) {
+          yield { type: 'tool_call_start', id: `t${i}`, name };
+          yield { type: 'tool_call_end', id: `t${i}`, name, arguments: {} };
+        }
+        yield { type: 'done', stopReason: 'tool_use' };
+      } else {
+        yield { type: 'token', text: 'Done. [[cite:tool:wp_plugin_list#2]]' };
+        yield { type: 'done', stopReason: 'end_turn' };
+      }
+    },
+    async listModels() { return ['mock-model']; },
+    async validateKey() { return null; },
+  };
+}
+
+/**
+ * A registry whose tools answer — or come back REFUSED, when the name says so.
+ *
+ * `isError`, not a throw, and the distinction is the one the test needs: a
+ * throw unwinds the whole agent loop and ends the turn, so the second call
+ * never happens and there is nothing to renumber. A refusal — which is what the
+ * sequence guard and the permission gate actually produce — leaves the loop
+ * running and the next call of the same tool right behind it. That is the state
+ * where skipping failures would silently hand a citation the wrong record.
+ */
+function registryWith(failing: string[] = []): ToolRegistry {
+  const r = new ToolRegistry();
+  (r as any).call = async (name: string) =>
+    failing.includes(name)
+      ? { content: [{ type: 'text', text: `${name} was refused` }], isError: true }
+      : { content: [{ type: 'text', text: 'ok' }] };
+  (r as any).get = (name: string) => ({ name, description: '', inputSchema: {} });
+  return r;
+}
+
+function serviceWithRegistry(registry: ToolRegistry): ChatService {
+  const db = new Database(':memory:');
+  createSessionTables(db);
+  return new ChatService({
+    registry,
+    services: {
+      siteData: { getSite: () => null, getSites: () => ({}) },
+      indexRegistry: { get: () => null, listAll: () => [] },
+      fileScanner: { scan: async () => ({ wpVersion: '', phpVersion: '', themes: [], plugins: [] }) },
+      graphService: { getDb: () => db },
+    } as never as NexusServices,
+    sendToRenderer: (channel: string, _s: unknown, event: unknown) => {
+      if (channel === IPC_CHANNELS.CHAT_STREAM) sent.push(event);
+    },
+  });
+}
+
+describe('the turn’s tool calls', () => {
+  test('reach the delivered supply, numbered per tool in call order', async () => {
+    mockProviderInstance = toolProvider(['wp_plugin_list', 'wpe_backup_and_verify', 'wp_plugin_list']);
+
+    await serviceWithRegistry(registryWith()).sendMessage('s1', 'update plugins', providerConfig);
+
+    expect(citation().supply.toolCalls).toEqual([
+      { name: 'wp_plugin_list', index: 1 },
+      { name: 'wpe_backup_and_verify', index: 1 },
+      { name: 'wp_plugin_list', index: 2 },
+    ]);
+  });
+
+  test('a call that was REFUSED still holds its place in the numbering', async () => {
+    // The refused call is `wp_plugin_list#1`. If failures were skipped, the
+    // second call would be numbered #1, and the model's `[[cite:tool:
+    // wp_plugin_list#2]]` — written while looking at a transcript where it was
+    // the second call — would resolve to nothing, or worse, to the wrong one.
+    mockProviderInstance = toolProvider(['wp_plugin_list', 'wp_plugin_list']);
+
+    await serviceWithRegistry(registryWith(['wp_plugin_list'])).sendMessage('s1', 'update plugins', providerConfig);
+
+    expect(citation().supply.toolCalls).toEqual([
+      { name: 'wp_plugin_list', index: 1 },
+      { name: 'wp_plugin_list', index: 2 },
+    ]);
+  });
+
+  test('the supply is delivered ONCE for the whole turn, not once per iteration', async () => {
+    // The panel shows one assistant bubble per turn — tokens from every
+    // iteration append to the same streaming message — so the turn, not the
+    // iteration, is the unit a supply describes. Two deliveries would have the
+    // second overwrite the first, and only the last iteration's trace survive.
+    mockProviderInstance = toolProvider(['wp_plugin_list']);
+
+    await serviceWithRegistry(registryWith()).sendMessage('s1', 'update plugins', providerConfig);
+
+    expect(sent.filter((e) => e.type === 'citation_supply')).toHaveLength(1);
+  });
+});

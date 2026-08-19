@@ -24,7 +24,7 @@ import subprocess
 import sys
 import re
 
-FLOOR = 101
+FLOOR = 105
 
 SUITES = [
     "tests/unit/renderer/panelChat-citation-delivery.test.tsx",
@@ -115,8 +115,14 @@ MUTATIONS = [
      "a refused call is not counted, so every later call of that tool renumbers to the WRONG record"),
 
     # --- the renderer wiring ------------------------------------------------
-    ("M17", PANEL, "          m.id === streamingId",
-     "          true",
+    # The anchor is TWO LINES, because `m.id === streamingId` occurs three
+    # times in this file and a one-line anchor mutated a different branch.
+    # WP-24's rule, met: an anchor that matches more than once is not an anchor.
+    ("M17", PANEL,
+     "          m.id === streamingId\n"
+     "            ? { ...m, citation: { supply: event.supply, manifest: event.manifest, moment: event.moment } }",
+     "          true\n"
+     "            ? { ...m, citation: { supply: event.supply, manifest: event.manifest, moment: event.moment } }",
      "RETROACTIVE CITATION: every earlier reply in the session is re-linked against this turn's supply"),
     ("M18", PANEL,
      "            ? { ...m, citation: { supply: event.supply, manifest: event.manifest, moment: event.moment } }",
@@ -162,16 +168,30 @@ def pristine():
 
 
 def jest():
+    """
+    Returns (testsFailed, suitesFailed, testsTotal, output).
+
+    BOTH lines are parsed, and that is a battery finding rather than a
+    precaution. The first run of this battery read only `Tests:` and reported
+    M02 and M07 as VOID — "executed 85 < floor 101" — when what had actually
+    happened was that a suite FAILED TO COMPILE and therefore contributed zero
+    tests. A mutant that breaks the type check is KILLED, loudly; reading only
+    the test line turned two of the clearest kills in the set into
+    unmeasurables. Same family as WP-32's substring finding: the wrong line
+    answered the question.
+
+    Each pattern is line-anchored and parses a NUMBER rather than matching a
+    token, so no summary line can satisfy it by containing it.
+    """
     argv = ["npx", "jest", "--no-cache", *SUITES]
     r = run(argv)
     text = r.stdout + r.stderr
-    m = re.search(r"^Tests:\s+(?:(\d+) failed, )?(?:(\d+) skipped, )?(\d+) passed, (\d+) total",
-                  text, re.M)
-    if not m:
-        return None, None, text
-    failed = int(m.group(1) or 0)
-    total = int(m.group(4))
-    return failed, total, text
+    suites = re.search(r"^Test Suites:\s+(?:(\d+) failed, )?", text, re.M)
+    tests = re.search(r"^Tests:\s+(?:(\d+) failed, )?(?:(\d+) skipped, )?(\d+) passed, (\d+) total",
+                      text, re.M)
+    if not tests:
+        return None, None, None, text
+    return int(tests.group(1) or 0), int(suites.group(1) or 0) if suites else 0, int(tests.group(4)), text
 
 
 def mutate(path, find, replace):
@@ -192,9 +212,9 @@ def main():
         print(run(["git", "status", "--porcelain"]).stdout)
         return 2
 
-    failed, total, _ = jest()
-    print(f"PRISTINE BASELINE: {failed} failed / {total} total (floor {FLOOR})")
-    if failed != 0 or total < FLOOR:
+    failed, suitesFailed, total, _ = jest()
+    print(f"PRISTINE BASELINE: {failed} failed / {total} total, {suitesFailed} suites failed (floor {FLOOR})")
+    if failed != 0 or suitesFailed != 0 or total < FLOOR:
         print("REFUSING: baseline is not green at or above the floor.")
         return 2
 
@@ -206,15 +226,18 @@ def main():
             print(f"{mid}  ANCHOR-MISS ({n} matches) — {path}")
             continue
         try:
-            f, t, _ = jest()
+            f, sf, t, _ = jest()
         finally:
             restore(path, original)
+        # Order matters: RED first, then the floor. A suite that failed to
+        # compile is a kill, and it also drops the executed count — checking
+        # the floor first would file it as unmeasurable.
         if t is None:
             verdict, detail = "VOID", "no test summary parsed"
+        elif (f and f > 0) or (sf and sf > 0):
+            verdict, detail = "KILLED", f"{f} tests / {sf} suites failed"
         elif t < FLOOR:
-            verdict, detail = "VOID", f"executed {t} < floor {FLOOR}"
-        elif f and f > 0:
-            verdict, detail = "KILLED", f"{f} failed"
+            verdict, detail = "VOID", f"green but executed {t} < floor {FLOOR}"
         else:
             verdict, detail = "SURVIVED", f"{t} passed"
         results.append((mid, verdict, detail, lie))
@@ -226,10 +249,10 @@ def main():
         print(f"CONTROL  ANCHOR-MISS ({n} matches)")
     else:
         try:
-            f, t, _ = jest()
+            f, sf, t, _ = jest()
         finally:
             restore(path, original)
-        ok = (f == 0 and t is not None and t >= FLOOR)
+        ok = (f == 0 and sf == 0 and t is not None and t >= FLOOR)
         print(f"CONTROL  {'SURVIVED (correct)' if ok else 'KILLED (BATTERY IS WRONG)'}  {f} failed / {t} total")
 
     if not pristine():

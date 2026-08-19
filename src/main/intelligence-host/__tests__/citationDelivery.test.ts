@@ -298,3 +298,36 @@ describe('the manifest that crosses the seam', () => {
     expect(delivery!.manifest.citation).toBe(assembly!.citationManifest);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Battery-driven: the append-vs-replace rule, measured where it can differ
+// ---------------------------------------------------------------------------
+
+describe('replacing the assembler’s tool list, not appending to it', () => {
+  it('drops an assembler-supplied tool list entirely in favour of the turn’s trace', async () => {
+    // BATTERY FINDING (M05). The test above asserts a length that is right
+    // either way, because `citationSupply.toolCalls` is `[]` by the assembler's
+    // v0 contract — append and replace are indistinguishable against it. That
+    // is a vacuous guard: it passes against the bug it names. The honest
+    // measurement needs a supply that is NOT empty, which is why this one
+    // fabricates the result rather than assembling it.
+    //
+    // Why replace is right: the assembler's list is a statement about the
+    // ASSEMBLY moment ("no tool call is citable yet"); the turn's trace is the
+    // answer to the same question at the end of the turn. Concatenating would
+    // number the same call twice the day the assembler ever populates.
+    const assembly = await turn('update plugins');
+    const withStaleTrace = {
+      ...assembly!,
+      citationSupply: {
+        ...assembly!.citationSupply,
+        toolCalls: [{ name: 'wp_plugin_list', index: 1 }],
+      },
+    };
+    const delivery = citationDeliveryFor(withStaleTrace, ['wp_plugin_list', 'wp_plugin_list']);
+    expect(delivery!.supply.toolCalls).toEqual([
+      { name: 'wp_plugin_list', index: 1 },
+      { name: 'wp_plugin_list', index: 2 },
+    ]);
+  });
+});
