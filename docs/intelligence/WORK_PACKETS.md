@@ -17268,3 +17268,65 @@ session ran `npm test` and the battery. Local cannot load the addon until
 
 **THE `src/main/intelligence-host/` AND SETTINGS-RENDERER LOCKS ARE
 RELEASED.**
+
+---
+
+## WP-44 · MERGE ACCEPTED — the Govern matrix (2026-08-19, architect adjudication)
+
+**Independent verification, all green:**
+- `git diff --stat 73f8b67b^1 73f8b67b` re-pulled on the primary checkout:
+  **18 files changed, 3615 insertions(+), 23 deletions(-)** — exact match
+  to the merge report. The file list matches the gate's payload table:
+  `governMatrix.ts` (701), `GovernSection.tsx` (378), the IPC handler,
+  the grants module, both renderer test files, the battery script, and
+  the eval-registry updates.
+- **The riding condition is DISCHARGED.** The four REFUSAL_COPY sentences
+  were re-extracted from `73f8b67b:src/renderer/components/settings/GovernSection.tsx:373`
+  by the architect and match the merge report's table verbatim:
+  - `no-core` · "Nexus could not reach the capability register, so nothing was granted or revoked."
+  - `not-served` · "No document serves that capability any more, so there is nothing to grant."
+  - `unwritable` · "That change could not be saved, so nothing was granted or revoked."
+  - `unknown` · "That change did not go through, so nothing was granted or revoked."
+
+  Ratified as written. The not-served sentence's deviation from the
+  "nothing was granted or revoked" pattern is noted WITH APPROVAL: on a
+  capability no document serves, there was nothing to grant, so implying
+  a revocation didn't happen would imply a grant that never existed.
+  The copy departure rides to the designer as an FYI on the next handoff
+  (their surface, their refinement — the interim sentences are honest).
+- **The append-ness verification is accepted as reported**: substring
+  check, not diffstat — a zero-deletion diffstat does not prove pure
+  append, which is exactly what the paragraph being committed warns
+  about. The rule obeyed against itself. Architect batch `6cd2482f`
+  substring-verified.
+- **The tail arithmetic accepted**: three blobs, 1,013,126 + 4,863 +
+  18,203 = 1,036,192, rebuilt in one named unit per the record-merge
+  standard. Post-merge the file measures 1,051,330 with the merge
+  report as its tail — coherent.
+- **Tree state accepted**: 601 suites / 8,194 pass / 2 skipped / 8,196
+  exit 0, boundary effect read skipped-first; battery 27/27 re-run on
+  the merged tree; J-Refusal **5 PASS / 6 BLOCKED / 1 OWNER-PENDING**
+  with the widening criterion driven green — the honest
+  one-flip-one-re-own count, standing as measured.
+
+**The two carried items route as already ruled:**
+1. The WP-20b `reason` finding (producer hardcodes `'materialized'`;
+   caller-supplied reason needed) → **folds into WP-45** with the
+   ratified vocabulary `materialized` · `granted-at-control` ·
+   `law-review re-pin`, per the gate ruling and the owner-approved
+   law-review note's P4.
+2. The two authored interim sentences (class-derived absence line;
+   disarmed-band reason line) → **designer path**, riding with the
+   copy-departure FYI above.
+
+**WP-44 is CLOSED.** The Govern matrix is live: rows derived from the
+registry, five grant states, the gates column derived from the
+documents ("The grant itself, and nothing after it," unsoftened, on
+granted rows as loudly as denied ones), the property pin driving it,
+doors landing on rows, and the act at the control recorded as
+`control.grant.issued` with `granted_at_control`. J-Refusal's
+remaining BLOCKED criteria are owned by WP-30 and the judged half of
+J-Inspect, as registered.
+
+**WP-45 (the law review applied) is CLEAR TO CUT** from the base at
+`601eed47` or later — after WP-44's merge, as its prompt instructs.
