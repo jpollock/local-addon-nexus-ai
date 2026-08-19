@@ -411,3 +411,17 @@ fabricated receipt even if the value later matches: the record's purpose
 is checkable fidelity, and a pre-written value checks nothing. The
 WP-45 merge caught its own (an md5 written before the print, amended en
 route); the amendment is the standard, and so is the catch.
+
+## NUL/invisible-character rule, extended (WP-30)
+
+The family's first occurrence in FRESHLY AUTHORED source (not a
+generator artifact): a literal NUL in a run-key separator passed tsc,
+eslint and 48 tests; only `grep` answering "Binary file matches"
+caught it. Two additions now standing: (1) batteries REFUSE to run
+over sources containing non-printing characters — a mutation battery
+over invisible bytes measures nothing trustworthy; (2) after any NUL
+finding, every touched file is swept by byte scan, not by eye. Note
+the architect's own first check of this finding also failed silently
+(`grep -c $'\x00'` passes an empty pattern — argv cannot carry NUL —
+and matches every line): verify NUL absence with a byte-level tool
+(python/od), never a shell-argument pattern.

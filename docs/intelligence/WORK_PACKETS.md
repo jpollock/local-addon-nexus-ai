@@ -17985,3 +17985,147 @@ expected shape.
 
 **THE `src/main/intelligence-host/` AND `tests/intelligence-evals/` LOCKS
 ARE HELD BY WP-30 UNTIL ITS MERGE REPORT SAYS OTHERWISE.**
+
+---
+
+## DESIGNER CYCLE FIVE — THE RETURN ARRIVAL RECEIVED AND ADJUDICATED; GOVERN REFRESH CLOSES THE PROPERTY-PIN LOOP (2026-08-19, architect adjudication)
+
+Two sheets received: the refreshed Govern matrix (reading the
+regenerated post-WP-45 fixture — the gates column MOVED WITH ZERO SHEET
+CHANGES, the property pin fired for real) and cycle five's Return
+arrival (6a the arrival, 6b the re-entry, 6c the unknown-arm state).
+The handoff answered BOTH open designer rulings: 6c resolves the
+reopened-session unknown-arm question (the platform names its own
+limit, never an invented procedure state, nothing armed, the run stays
+in the record — ratified in structure and doctrine), and the two
+comparator wordings are marked final.
+
+**Adjudicated in `for-designer-return-response.md`:** the arrival
+RATIFIED whole — nine pins into the register as **XD-26**, inherited as
+the UX build 2 packet's acceptance criteria; the three-marks discipline
+ratified with the designer's own sentence as the pin; the six absences
+ratified. **The designer's three query-contract requirements ADOPTED
+into WP-30's gate-held contract** and relayed to the packet in flight:
+(1) session × cursor gate resolves to a checkpoint id, with the
+attested-before-excursion SET supplied so marks render from the record;
+(2) pending approvals as a set of {checkpoint, decision, moment}, never
+a count or boolean; (3) consequence rank per SITUATION with coalesced
+parts and placing rule — no derivation in the render path.
+
+**Two holds, both on missing files not on disagreement:** the 6c
+strings and the two final comparator wordings live in
+`scenario-return.js` / `scenario-govern.js`, which did not ride the
+handoff — verbatim record and copy ratification hold for the fixtures
+and the position document (from-designer-09). **One field note back:**
+the Govern sheet's orange-panel prose ("four... and two granted today")
+now contradicts its own derived list, which post-review renders
+containment alone — derive the count or make the panel the review's
+memorial; the contradiction must not ship.
+
+---
+
+## CYCLE FIVE CLOSED — from-designer-09 + fixtures COMMITTED VERBATIM; ALL HOLDS RATIFIED (2026-08-19, architect adjudication)
+
+The v10 handoff delivered the position document and both scenario
+fixtures. Committed verbatim under `docs/intelligence/from-designer/`,
+fidelity verified by hash on the device against the uploaded originals
+— receipts pasted from the printed output:
+
+- `from-designer-09-return-arrival.md` · **9,875 bytes · md5
+  `41822cbbc0bd3294b5e1bda087c40402`**
+- `fixtures/scenario-return.js` · **5,412 bytes · md5
+  `a623afc4cea1e1615b6ea88106343bdb`**
+- `fixtures/scenario-govern.js` · **3,754 bytes · md5
+  `57ee24eb4d1efaddbc9f46236b078e8d`**
+
+**Both holds CLOSED and the strings RATIFIED** (XD-26 amended from
+COPY HOLD to COPY RATIFIED): the 6c unknown-arm copy (platform names
+its own limit, two doors — the start-a-new-run door adopted as better
+than asked); the class-derived absence line and disarmed-band reason
+line in final form, each with its rule. **The Govern panel field note:
+the designer's resolution ADOPTED over the architect's suggested
+memorial** — both counts now derive from the same rows the list
+renders ("a panel that remembers a state the table no longer shows is
+the same defect one sentence later"). The correction is the
+designer's, credited.
+
+One scenario note for readers: `scenario-govern.js` draws
+cap.promotion_preflight DISARMED to exercise the disarm band — that is
+a per-machine scenario state (the file says so in its own header), not
+a report of this machine, where WP-45's re-pin kept both materialized
+grants armed. Addendum in `for-designer-return-response.md`. Cycle
+five: ask, drawing, contract requirements, both rulings, field note —
+one handoff, everything answered.
+
+---
+
+## WP-30 · GATE RULING — the session registry (2026-08-19, architect adjudication)
+
+**Verdict: PASS. Cleared to merge.** Verified on the branch, not the
+relay: the stat reconciles exactly (9 files +4,484/−57 including the
+packet's own 338-line record entry; the report's 8/+4,146 excludes it —
+both are true and they differ by precisely the entry); the NUL is GONE,
+verified by byte scan (0 non-printing control bytes in 56,882); the
+gate-held contract read in full from the branch record. The contract
+satisfies the designer's three adopted requirements and exceeds them
+honestly: `ConsequenceTier = 1 | 2 | 4` with tier 3 absent from the
+TYPE because it is structure (tear 3 applied at the type level);
+`situations` as ONE ranked list with the columns as a filter — "two
+columns of one verdict" as a type signature; the horizon,
+concurrency limit and deadline source disclosed on EVERY snapshot
+(the disclosed-limit precedent, generalized); `staleCount` counted and
+never promoted to a row; the gate excluded from `SituationPart.kind`
+because the gate is the WHERE, not a coalesced part.
+
+**The naming question, ruled: KEEP `state`.** `decision: 'pending'`
+would name a decision that does not exist — pending is the absence of
+one, and the field is three-valued. The designer's requirement was
+about content (the checkpoint and the moment survive as a set), and
+that sentence stays writable from `{checkpointId, decidedAt}` for
+decided members. Rides to the designer as FYI, not a ruling request.
+
+**The three escalations, ruled:**
+
+1. **World-state generalized to halts: RATIFIED.** Classify-by-world-
+   state was the RULING; gates were the instance. A halt with nothing
+   written is T2; a halt with a write landed is T1 — the same
+   principle, honestly flagged as reaching past the tear's letter.
+   Rides to the designer as FYI with the next handoff (their tear,
+   generalized).
+2. **Denial terminal in the fold: RATIFIED on the eval's own
+   evidence** — a freshly-armed run folding into an unrelated denied
+   one and inheriting the denial is the defect that proves the rule.
+   The residue (a same-chat re-arm after denial renders more alive
+   than the guard considers it) is ACCEPTED as failing loud rather
+   than hiding a gate — the safe direction. The registry/guard seam
+   divergence is recorded as a KNOWN SEAM: if it ever produces a
+   contradictory rendering in a live run, that is its own packet,
+   never a quiet fix.
+3. **The horizon: RATIFIED as a disclosed limit.** Newest-first
+   justified against the ledger's own WP-03 note (an ascending query
+   at its limit silently drops the NEWEST events — the worse miss);
+   `truncated` and `oldestManifestId` on every snapshot; at most one
+   `idProvisional` session flagged rather than an id left to shift
+   silently as the ledger grows. The number 2000 stays CHOSEN and
+   says so. Micro registered: when the fleet's real manifest volume
+   is measured, the record revisits the number with data — the house
+   pattern of letting the record answer questions about itself.
+
+**Findings entered:** the NUL in freshly authored source is recorded
+in the protocol's NUL family (first occurrence in authored source, not
+a generator artifact); the battery's new refusal to run over
+non-printing characters is RATIFIED and appended to the protocol rule.
+The eval divergence line — "about the answer" vs "about its
+rendering," not "named WP-30" — is ratified as the ownership rule's
+wording. Baseline measured not derived (36→40 PASS, 32→28 BLOCKED;
+J-Return 2→3, J-Refusal 5→6; every needsYou criterion honestly held on
+UX2); the gate criterion's first-drive failure fixed by arming a run
+in the probe rather than assuming one stood.
+
+**Merge instructions standing:** the architect's five uncommitted
+files committed verbatim FIRST in their own attributed commit with md5
+fidelity; then the merge; the WORK_PACKETS tail conflict resolved by
+the record-merge blob standard (four-way verification, one named
+unit); full suite both sides read skipped-first; battery re-run on the
+merged tree; receipts pasted after they print; locks released only
+after acceptance.

@@ -179,6 +179,42 @@ produced these; nothing enters by drift. XD = experience decision.)*
   matrix" sheet, ratified in
   `for-designer-govern-matrix-response.md`.
 
+- **XD-26 · Return — the arrival and the re-entry** — the arrival is
+  two columns of ONE VERDICT (waiting / changed), each sorted within
+  itself by the consequence order, rendered with no interaction and no
+  question asked; the headline is about the user's absence with the
+  accounting line in one breath; every waiting row names the gate it
+  waits at BY CHECKPOINT ID from the session's own cursor; opening a
+  row PROMOTES the session — same session id, same cursor, same
+  pending approvals, and a promotion that loses anything is a defect;
+  an approval given before the excursion renders as STANDING with its
+  moment, never re-asked; the declared list, order, attest words and
+  denominator are read from the runbook document; the record for
+  finished work exists before the user arrives; the reserved health
+  row cannot grow or scroll away; marks discipline — the tick belongs
+  only to an attested provable checkpoint, a reached narrative
+  checkpoint is recorded-not-proved and takes the neutral dot,
+  identical across the densities and this surface ("a difference
+  between the densities and this sheet would be a defect in one of
+  them"). Unknown-arm: the platform names ITS OWN limit ("cannot
+  establish"), never an invented procedure state; nothing armed; the
+  run stays in the record. No scrollback as re-entry; no
+  everything-since-you-left prose; no second approval; no badge on
+  changed. COPY RATIFIED (2026-08-19, fixtures received): the 6c
+  strings ("This session was running a procedure, and the platform
+  can no longer say which" + body, two doors), the class-derived
+  absence line ("This file is a drop-in, so no place records a
+  version for it. The dashes are not missing data — there is nothing
+  here that varies by place."), and the disarmed-band reason line
+  ("The document on disk is not the one this grant was made against.
+  Not staleness — the review this grant carries happened against
+  different text, so the capability behaves as though it were never
+  granted.") — recorded verbatim in
+  `from-designer/from-designer-09-return-arrival.md` and
+  `from-designer/fixtures/scenario-return.js`. Source:
+  designer "Return arrival" sheet (cycle five), ratified in
+  `for-designer-return-response.md`.
+
 ## How a ruling gets here
 
 Designer position or architect note → ratification response (both
