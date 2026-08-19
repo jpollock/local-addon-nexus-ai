@@ -15212,3 +15212,83 @@ head, which the merge reproduces file-for-file): **591 suites / 7,980 passed /
 pins 22.16.0 → 127, which is what CI sees). `npm run rebuild` before loading
 Local. **Not pushed**; branch `wp-42` and worktree `.worktrees/wp-42` left in
 place.
+
+---
+
+**WP-42 · MERGE ACCEPTED — the sitting mechanized at scale, the last
+vacuous green closed (2026-08-19).** Stat verified (10 files,
++1,229/−277); the no-conflict merge (base→branch first, append after)
+accepted as the clean case of the crowded-tail discipline. **Item 1
+accepted with its three judgment calls RATIFIED:** the asterisk held
+by three pins including the count assertion (exactly one carried
+verdict with an open column — a mechanization that could quietly
+gain a second asterisk would be hiding one); the ** emphasis
+transformation named-and-permitted is transcription discipline
+applied at the character level; the SECOND premise (incident supply
+for the six history verdicts) is correct — a fall-to-BLOCKED binding
+that watched only the convention would keep a history verdict alive
+after its history stopped riding. **The WP-34 pin rewrite is
+RATIFIED as the true form:** "no PASS may be derived from the PROBE;
+every citation PASS must quote the sitting" — ADR-24 withholds the
+support judgment from the platform, never from the owner; the old
+wording accidentally withheld it from both. Runner 29/0/40/9 with
+the milestone verdict still honestly NOT MET — mechanizing consent
+to a judgment retires re-asking, not the capability gap. **Item 2
+accepted:** exit 2, selector named, ids listed, zero stdout bytes;
+`milestoneVerdict` refusing zero-criteria MET closes the family at
+the summary line. M04's disclosed survivor accepted as bounded-and-
+measured. **Count correction:** the poisoned-cache occurrence logged
+here as the eighth is the NINTH (WP-36 logged the eighth); the count
+is the record's, not each packet's memory. **The filed item that
+matters, RULED:** the WP-13b verdicts were judged from a
+WP-39-degraded sheet (no judge-only sentences; a 10-vs-9 count
+slip). The verdicts STAND — the owner judged the criterion TEXT,
+which is the obligation, and the architect's trace-vs-claim
+pre-checks did the work the instructions would have directed, all
+stated in the sitting's provenance — and the degraded-sheet fact now
+JOINS that provenance: any future E-01 re-sit runs under the
+repaired sheet, and criterion 4's two-run close will naturally do
+so. **Registered:** the --json/stdout micro (a logger sharing stdout
+makes --json unparseable); the "decided programmatically" copy
+correction adopted from the record's suggested string at the next
+registry touch. The load-timeout finding enters the PROTOCOL
+(re-measure alone before believing a timeout under multi-packet
+load).
+
+---
+
+**WP-20g · BUILD ACCEPTED at the merge boundary; MERGE AUTHORIZED
+(2026-08-19).** Both rulings applied exactly. E1(a) with both riders:
+promotion-execute 1.1.0 → 1.2.0, the anchor-slice copy edited under
+its copy-drift lint, and rider 1 VERIFIED rather than assumed — zero
+live grants rippled, because the deny-flip never materialized the
+capability; the flip paid for the law edit, measured. **Rider 2
+resolved the honest way:** cp.execute-cleanup names no instrument —
+the only tool-shaped name in the document is a READ in
+requires_sources, which the design note forbids deriving from — so
+the remediation half is fixture-proven with the gap recorded AS AN
+ASSERTION, not a sentence in a report. E2 as overruled, both
+directions pinned; the many-case naming every declaring capability
+with the door on the sorted first is a sufficient remedy exactly
+because reach is a disjunction. E3 as written; the measured proof
+(not-granted with no run, reachable after one settings entry) is
+the deny-subtracts-reach sentence finally true in code. The floor
+catching three compile-error mutants as VOID is the
+compile-error≠kill doctrine enforcing itself; M13 (revert the law
+line, eight tests fail) is what makes "derived from the document"
+a measurement.
+
+**Finding 1 becomes a REGISTERED LAW-REVIEW ITEM, and it matters:**
+`rb.promotion-execute` has NO attestable checkpoint — all five
+narrative — so once granted, nothing gates further; the ceremony is
+the grant alone. The agent's pin (a later `attest:` event fails and
+gets read) holds the door open. Registered: attestable checkpoints
+authored into promotion-execute (and its preflight sibling reviewed
+in the same pass) BEFORE any real grant of cap.promote_environment
+is contemplated — owner-reviewed law work, the strict-runbook
+authoring watch item made concrete. Finding 2 (qualified
+agent-dispatch names are the zero case; suffix-matching would invent
+a rule) accepted as stated. **MERGE:** base e959b5b2 or later;
+verbatim-commit the architect's uncommitted record deltas first per
+the standing precedent; tail chronological, one named unit,
+substring-verified.

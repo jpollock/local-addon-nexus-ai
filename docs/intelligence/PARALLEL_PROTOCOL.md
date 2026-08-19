@@ -308,3 +308,11 @@ as six literal characters, and `cat -A` then renders the file's real em
 dash as an escape — confirming the wrong hypothesis with the transforming
 tool's own output. Read the disputed line with a byte-honest tool before
 repairing the file it "mismatches."
+
+**A timeout under multi-packet load is re-measured alone before it is
+believed** (WP-42 finding): a test with 5× headroom timed out at load 6.9
+with three packets running `npm test` concurrently, and passed twice at
+load 4.6. Parallel waves make the machine itself a shared resource; a
+timeout during one is a measurement of the LOAD until a solo re-run says
+otherwise. Same family as the skipped-column rule: read the environment
+before reading the result.
