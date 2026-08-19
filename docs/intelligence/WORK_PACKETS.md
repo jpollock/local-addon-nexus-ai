@@ -12522,3 +12522,125 @@ and imports `resolveCitations` — and which owns the one decision this
 packet deliberately did not pre-make, the `procedureModel.isolation.
 test.ts` blanket ban on `src/intelligence/` in the renderer graph.
 
+
+---
+
+**WP-34 · MERGE ACCEPTED — architect verification; THE CITATION
+CONTRACT IS MODEL-FACING LIVE (2026-08-18).** Stat pulled
+independently (`0a5fe750^1..0a5fe750`): 26 files +3,199/−23, exactly
+ten under `src/`, the claimed set. Fidelity two-for-two on 2a43d4ed
+(0cbfa514…, b40201a2… — blob = the architect's copies). **The
+manifest field accepted as ratified, with its best property named:**
+`citation: { convention, asserted } | null` on BundleManifest, read
+back off the SECTION ARRAY THE CARRIER JOINED and never recomputed —
+the two-halves-individually-right disagreement class pinned by two
+mutations — and `null` meaning no-convention-rode (a bare carrier
+must not have a version put on its record). The skipped-column read
+accepted, fourth occurrence, with the WP-35-in-between delta
+correctly attributed rather than absorbed (7800 − 86 = the base's
+own total; nothing re-verified that wasn't theirs to verify). The
+THREE-WAY tail splice accepted as resolved — base, then delivery,
+then the ruling that judges it, verified by index comparison; the
+pattern generalizes and the verification method rides with it. M11's
+anchor repointed-then-re-killed with the record saying which
+happened — the distinction between repointing an anchor and excusing
+a survivor is now on the record by example. The eleventh
+vacuous-guard shape is adopted with its generalization: **when a
+guard introspects a runtime structure, what that structure omits by
+design is where the mutation will live.** Merged baseline
+580/7798/2 exit 0; runner 17/0/40/21. **Both locks RELEASED.
+Unblocked: the M5 corroboration surface packet** (carries XD-24's
+eight pins, imports the shared join, owns the isolation-ban
+decision with its measurement) **and the WP-20f code packet + the
+stream micro** (host lock free — natural next launches). **Owner's
+session, corrected invocation: the adherence sitting is BOTH specs**
+— `--spec E-01 --runs 3` and `--spec B-03 --runs 3`, §4b of each
+transcript resolving the model's citations through the shared join.
+
+---
+
+**PHASE-1.5 SMOKE (partial) + THE E-01 CITATION SITTING'S FIRST HALF
+— observations, one held question, one regression registered
+(2026-08-19).**
+
+**The companion surface, live — pins visibly holding:** the declared
+block pinned above the transcript; the DIGEST under the approval card
+with its window STATED ("Checkpoints 2 to 4 of 8"), no inner
+scrollbar; the reference exactly once, in the block header
+(`rb.bulk-plugin-update · v1.2.0 · marked strict ·
+cap.bulk_plugin_update`) and NOT on the card; "Show the full
+declaration" opening the full body — all eight checkpoints,
+capability-tense ATTEST_WORDS in full, cp.consult-history ✓ "attested
+by evt_… (task.context.assembled)", the tell-the-user block rendering;
+three marks only; the honest denominator ("1 of 4 provable
+checkpoints attested · 4 on the agent's account only"). NOT yet
+smoked: fold-in-place (no run has completed) and the empty run
+(unreachable until the stream micro, as the record already says).
+One crop to confirm: whether cp.consult-history keeps its badge in
+the attested state.
+
+**One question HELD, not adjudicated:** the screenshots show
+`verify_site_live` executing (✓ Verify Site Live) while the run
+renders halted at cp.approval — and verify_site_live is DECLARED on
+cp.verify-canary, whose gated predecessors have not attested. Under
+WP-31 rule 1 a declared tool is refused until its gated predecessors
+attest — so either (a) the tool ran OUTSIDE the armed task (a
+plain-read turn the sequencer rightly does not govern), which the
+ledger will show, or (b) a declared tool executed early inside the
+run, which is the incident class and a defect. The ledger settles it;
+the query is with the owner. **Also FILED as a finding regardless:**
+the approval card's copy blends the generic tool-confirm template
+("Runs Verify Site Live on your WordPress sites") with cp.approval's
+identity ("This approval is checkpoint cp.approval") — two consents,
+one card, blended copy; XD-8 keeps consent-within-capability and the
+platform's write ceremony as separate acts, and the card copy should
+not read as both at once. Routed to the record for the designer's
+file and the next card-touching packet.
+
+**The E-01 citation sitting: three runs completed, transcripts
+written, ~39k tokens; the judgment sheet degraded.** The harness
+warning is a REGRESSION of the WP-24 rot class, second species:
+`src/main/ipc-handlers.ts:6744` gained `await import('electron')`,
+and ts-node's type pass dies on it when sitting.ts invokes the eval
+runner — verdicts and judging instructions were omitted from the
+sheet (criteria printed, instructions blank). The RUNS are valid; no
+tokens wasted. **REGISTERED: a micro** — the lazy-import discipline
+(WP-24's fix) applied to the new site, plus whatever guard keeps the
+next dynamic electron import from re-opening this class a third
+time. **Remaining for the sitting:** `--spec B-03 --runs 3`, the
+empty-history twin (`--empty-history --runs 3`, criterion 8 judges
+the PAIR), transcripts copied into the repo for the architect's
+trace-vs-claim pre-checks (§4b resolves citations through the real
+join — lookup, not eyeballing), then the owner's judged verdicts
+recorded under WP-13b per the sheet. The sixth must-not's triple ask
+remains open.
+
+---
+
+**THE HELD QUESTION SHARPENS INTO WP-36 — the consent-binding
+investigation (2026-08-19).** The owner's ledger query returned five
+rows for the window: four `task.context.assembled` and ONE
+`task.rationale.recorded` (00:39:01Z — tool `verify_site_live`,
+decision `approved`, prompt "Runbook rb.bulk-plugin-update v1.2.0,
+marked strict — checkpoint cp.approval. Approve this step to let the
+runbook continue."). Read against `sequenceGuard.ts`, the ADMISSION
+path may be WP-26's designed mechanism (the approval card rides the
+guard's refusal on exactly the checkpoint an approval would attest) —
+but three things do not yet reconcile, and none may be guessed at:
+**(1)** the consent RECORD binds cp.approval's prompt to the approval
+of a live re-verify — whether the attestation that resulted is scoped
+to the act the user actually approved, or reads as plan-approval to a
+future auditor, is the incident family's exact question; **(2)**
+`verify_site_live` is declared on cp.verify-canary, and cp.backup —
+a gated predecessor — was unattested when it executed; rule 1 as
+written should have refused it a second time after the approval;
+**(3)** the window contains NO `task.action.executed` for the verify
+at all — the tool ran and the gateway recorded nothing, which is
+either an emission-tier scoping fact (E-02's contract) or a hole.
+**WP-36 · REGISTERED: read-mostly investigation micro** — reconstruct
+the exact call/refusal/attestation sequence from ledger + code,
+answer the three questions with evidence, classify each as
+working-as-designed / copy defect / code defect, propose the minimal
+fix set at its gate (any guard or recording change holds for
+ratification). The blended-card copy finding stands regardless and
+folds into WP-36's scope as the display half of question (1).
