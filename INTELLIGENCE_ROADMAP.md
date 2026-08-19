@@ -1,6 +1,6 @@
 # Intelligence Layer — Roadmap
 
-*Branch: `poc/nexintelligence` · updated 2026-08-18 (evening) · Companion docs:
+*Branch: `poc/nexintelligence` · updated 2026-08-19 · Companion docs:
 [`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (ADRs 1–24, adopted),
 [`docs/intelligence/reconciliation-site-environment-model.md`](docs/intelligence/reconciliation-site-environment-model.md),
 [`docs/intelligence/implementation-audit-three-layer.md`](docs/intelligence/implementation-audit-three-layer.md),
@@ -194,6 +194,43 @@ registry (J-Return's owner); WP-29 stage-consumes-seam; the M5 corroboration
 surface packet (after WP-34); UX build 1.5 (the companion surface, eleven+nine
 pins waiting); micros: WP-19 version-pair widening, renderer-safe extraction,
 run.ts telemetry line.
+
+## Wave 5 — the citation contract end to end, and the loop correcting itself (2026-08-19)
+
+- [x] **WP-34** the citation convention — `cnv_6c2b1195` in the carrier
+      (ratified verbatim), the ONE claim→record join, adherence evals, the
+      `citation` manifest field (absent/null discriminator family).
+- [x] **WP-35** the companion surface (UX build 1.5) — the fold's composite at
+      the shipped 380px; designed, ratified, built, merged in one day.
+- [x] **WP-36** the consent-binding investigation — a phantom incident
+      dissolved by reading every channel; three real defects found and fixed
+      (consent bound to its checkpoint, PanelChat reads isError, the card's
+      subject is the checkpoint). The guard had held all along.
+- [x] **WP-20f** the deny-flip SHIPPED — layer 1 deleted not filtered, three
+      grants materialized visible, the two production caps deny with no
+      carve-out, new capabilities arrive denied. Additive-v0 is over in code.
+- [x] **WP-39** the harness/host seam retired with the guard that ends the
+      class; **WP-37** scope + zero-eligible + planCheckpoint served on the
+      stream (consumer micro WP-40 owed); **WP-38** the M5 corroboration
+      render IN THE PRODUCT — ADR-24's three states drawn, no classifier,
+      allowlist-of-one earned by measurement.
+- [x] **WP-13b** the citation adherence sitting: nine runs, 113 markers, ZERO
+      unresolvable, zero invented ids; document-presence finding filed to
+      ADR-20's watch (full text changes behavior, not just audit).
+
+**The night's theme, worth keeping:** the record corrected its own
+architect twice (the phantom incident; the mis-billed harness diagnosis),
+agents refused two briefs on measurement and were ratified both times, and
+the protocol gained six rules — every one from a live occurrence, none from
+speculation.
+
+**Next wave (three disjoint locks):** the COMPARATOR SURFACE (scope's
+ratified producer — unlocks the empty-run state, J-Inspect's eight, UX
+build 2) · WP-20g (ToolGrant reach half; B-03's gate long satisfied) · the
+registry micro bundle (verdict mechanization + empty-match MET). Micros:
+WP-40 plan-line consumption, citation-peek supply, grant-fold. Owner:
+sixth-must-not sitting + fold-in-place smoke. Designer: cycle four (the
+Govern matrix against the deny-flip law).
 
 ## The design workstream (consolidated 2026-08-18)
 

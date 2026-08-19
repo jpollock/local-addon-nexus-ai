@@ -14735,3 +14735,39 @@ to parse in either full run, and the isolated re-run was `--no-cache`.
 
 **Not pushed.** Branch `wp-37` and worktree `.worktrees/wp-37` left in place
 for the housekeeping backlog.
+
+---
+
+**WP-37 · MERGE ACCEPTED — the in-flight column is EMPTY
+(2026-08-19).** Stat verified independently (7 files, +929/−48, all
+host + registry + record). Both-column reconciliation accepted — the
+worktree-vs-merged passed delta would have read as a phantom +123,
+decomposed exactly (10 boundary + 113 base-advance). **The
+characters-not-bytes refinement is ADOPTED into the verification
+standard:** the record is not ASCII, and a substring sum verified in
+mixed units is how a "verified" total comes out wrong — arithmetic
+tail verification is henceforth stated in ONE unit, named. The
+wasn't-a-conflict merge (WP-20f's argument and WP-37's .request
+sites in disjoint hunks) confirmed by grep on the merged file rather
+than inferred from the absent marker — correct, and of a family with
+every-channel. The already-answered escalation handled exactly
+right: the merge report points at the ruling eleven blocks above so
+no later reader takes the open question as open. **The un-numbered
+hand-off takes its number: WP-40 · the plan-line consumption micro**
+— `derivedPlanLine` consumes the served `planCheckpoint` (the plan
+line is one segment short on screen today), and
+`procedureStream.fake.ts` gains the field from the generated
+fixture (the divergence class WP-35 closed for document facts,
+closed again for this field). DockedPanel lock; small; sequences
+with the next renderer touch. The agent naming it as owed rather
+than inventing a number was right — numbers come from the record.
+
+**With this merge the in-flight column is empty for the first time
+since WP-31.** Standing: WP-20g + the comparator surface + the
+registry micro bundle are the next wave (three disjoint locks);
+micros registered: WP-40, citation-peek supply, verdict
+mechanization, empty-match MET, grant-fold; the designer owes cycle
+four; the owner owes the sixth-must-not sitting and the
+fold-in-place smoke. The empty-run state remains unreachable until
+the comparator lands, and the record says so in three places now —
+no one will mistake a rendering for a measurement.
