@@ -133,6 +133,27 @@ describe('milestoneVerdict — an absence is not a pass', () => {
     );
     expect(verdict).toBe('MILESTONE VERDICT: MET — 1 criteria pass.');
   });
+
+  it('never says MET over a run that evaluated NOTHING (WP-42)', () => {
+    // The vacuous-green family, at this file's own summary line. Every branch
+    // above counts verdicts, and zero of everything falls through to MET — so
+    // `--only <no-match>`, an unreadable evals directory, and a set of specs
+    // that all failed to parse each printed "MET — 0 criteria pass" at exit 0.
+    // Nothing was checked, which is the one thing MET must never mean.
+    const verdict = milestoneVerdict(reportOf([]));
+    expect(verdict).not.toContain('MILESTONE VERDICT: MET');
+    expect(verdict).toContain('NOT MET');
+    expect(verdict).toContain('no criteria were evaluated');
+  });
+
+  it('a zero-criteria run is NOT MET even when the specs loaded cleanly', () => {
+    // Guards the fix against being written as "MET unless there were load
+    // errors": the reproduced defect had no load errors at all — the selector
+    // matched no spec, so the loop simply never ran.
+    const report = reportOf([]);
+    report.loadErrors = [];
+    expect(milestoneVerdict(report)).toContain('NOT MET');
+  });
 });
 
 describe('renderReport', () => {

@@ -18,7 +18,9 @@
  *   1  at least one FAIL — something is broken
  *   2  at least one BLOCKED or SPEC-DEFECT — nothing is broken, but the run
  *      could not answer the question. A distinct code because "we could not
- *      check" and "it failed" call for different responses.
+ *      check" and "it failed" call for different responses. WP-42 adds the
+ *      other way a run answers nothing: an `--only` selector that matched no
+ *      spec. Same family, same code — the question went unanswered.
  */
 // FIRST: maps `electron` and the Local host packages to the same stubs jest
 // uses, so the real production seams this runner drives can be required at
@@ -28,7 +30,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createEvalFixture } from './fixture';
 import { nativeModuleRemedy } from './nativeModule';
-import { runEvals } from './runner';
+import { EVALS_DIR, runEvals } from './runner';
+import { loadEvalSpecs, unmatchedSelector } from './specLoader';
 import { renderReport } from './report';
 import { tally } from './types';
 
@@ -76,7 +79,27 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const report = await runEvals({ only: valueOf('--only') });
+  // WP-42 · refuse an unanswerable selection AT THE DOOR.
+  //
+  // `--only nope` used to select every criterion away, drive the whole probe
+  // suite over a fixture nobody would read, and print "MILESTONE VERDICT:
+  // MET — 0 criteria pass" at exit 0 (filed at the WP-39 adjudication). Two
+  // halves are wrong there and both are fixed: `milestoneVerdict` no longer
+  // calls a zero-criteria run MET, and the selector is checked here, before
+  // `createEvalFixture` spends twenty seconds probing on behalf of nothing.
+  //
+  // The check reads the specs a second time on purpose. `runEvals` owns the
+  // load it adjudicates from; borrowing its result would mean widening its
+  // return shape to report a selector it was never given, and the extra read
+  // is eight YAML files against a fixture build.
+  const only = valueOf('--only');
+  const complaint = unmatchedSelector(loadEvalSpecs(EVALS_DIR).specs, only);
+  if (complaint) {
+    process.stderr.write(`${complaint}\n`);
+    return 2;
+  }
+
+  const report = await runEvals({ only });
 
   if (argv.includes('--json')) {
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
