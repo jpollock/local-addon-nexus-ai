@@ -112,6 +112,31 @@ describe('taught once, re-asserted thereafter', () => {
   });
 });
 
+describe('the manifest reaches the ledger carrying the convention (owner-ratified)', () => {
+  test('task.context.assembled records which convention was in effect, and how it rode', async () => {
+    const first = (await turn('s1', 'any issues with this site?'))!;
+    const second = (await turn('s1', 'and now?'))!;
+
+    const manifests = core.ledger.query({ topicPrefix: 'task.context.assembled', limit: 50 });
+    const byTask = (taskId: string) =>
+      manifests.find((e) => e.correlation === taskId)!.payload as {
+        citation: { convention: string; asserted: string } | null;
+      };
+
+    // The audit claim, end to end: the ledger now answers "which convention
+    // governed this reply" without the full text ever being re-shipped — ADR-20's
+    // argument, applied to ADR-24.
+    expect(byTask(first.taskId).citation).toEqual({
+      convention: CITATION_CONVENTION_VERSION,
+      asserted: 'full',
+    });
+    expect(byTask(second.taskId).citation).toEqual({
+      convention: CITATION_CONVENTION_VERSION,
+      asserted: 'hash',
+    });
+  });
+});
+
 describe('the turn publishes what it made citable', () => {
   test('citationSupply carries the retrieved event ids and the carrier lines that rode', async () => {
     const result = (await turn('s1', 'any issues with this site?'))!;

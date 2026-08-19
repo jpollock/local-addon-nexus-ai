@@ -176,3 +176,53 @@ describe('what rode and what is citable are one list', () => {
     );
   });
 });
+
+describe('the manifest records which convention governed the reply (owner-ratified)', () => {
+  test('full assertion is recorded as full', async () => {
+    const b = await assemble(request(), deps());
+    expect(b.manifest.citation).toEqual({
+      convention: CITATION_CONVENTION_VERSION,
+      asserted: 'full',
+    });
+  });
+
+  test('a hash re-assert is recorded as hash — the ADR-20 claim, stated not implied', async () => {
+    const b = await assemble(
+      request({ context: { citationConventionHash: CITATION_CONVENTION_VERSION } }),
+      deps()
+    );
+    expect(b.manifest.citation).toEqual({
+      convention: CITATION_CONVENTION_VERSION,
+      asserted: 'hash',
+    });
+  });
+
+  test('null when no convention rode — never a version the actor never saw', async () => {
+    // The audit claim is "convention vX was IN EFFECT for this reply". A turn
+    // that taught nothing and re-asserted nothing put no convention in effect,
+    // and recording one would be the manifest asserting a fact about the reply
+    // that the reply's own carrier contradicts.
+    const empty = await assemble(request(), { now: () => NOW });
+    expect(empty.blocks.turn).toBeNull();
+    expect(empty.manifest.citation).toBeNull();
+
+    const refused = await assemble(
+      request({ actor: { id: 'act_a', kind: 'agent', autonomy: 'autonomous' } }),
+      { now: () => NOW }
+    );
+    expect(refused.failClosed).toBe(true);
+    expect(refused.manifest.citation).toBeNull();
+  });
+
+  test('the manifest cannot disagree with the carrier — one decision, read back', async () => {
+    // Not a recomputation of "was it full or hash": the field is read off the
+    // SAME section array the carrier joined. A second evaluation of the
+    // condition is how a manifest starts claiming one thing while the text
+    // says another.
+    for (const carried of [undefined, CITATION_CONVENTION_VERSION]) {
+      const b = await assemble(request({ context: { citationConventionHash: carried } }), deps());
+      const rodeFull = (b.blocks.turn ?? '').includes(CITATION_CONVENTION_BODY);
+      expect(b.manifest.citation?.asserted).toBe(rodeFull ? 'full' : 'hash');
+    }
+  });
+});

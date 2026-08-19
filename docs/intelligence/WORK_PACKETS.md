@@ -11663,11 +11663,21 @@ separate and carries the designer's eight pins.
 ---
 
 **WP-34 · DELIVERED — the citation contract's model-facing half.
-GATE HOLD OPEN: the carrier instruction block awaits ratification.**
+GATE CLEARED 2026-08-18: the carrier block is RATIFIED VERBATIM
+(`cnv_6c2b11952046`, no amendment), `[[cite:none]]` is RULED as built,
+and the manifest field is RATIFIED and now shipped — see the
+MANIFEST FIELD section below for its name and write-site.**
 Branch `wp-34` at worktree `.worktrees/wp-34`, cut from `e85cfefc`.
-**NOT merged, not pushed** — the carrier text below is presented
-verbatim for the owner's ruling, and merge-path work stops here per
-the packet's own instruction.
+The carrier text is reproduced below as ratified; it was verified
+byte-identical to the shipped constant programmatically before the
+ruling and again after it.
+
+**A consequence the owner recorded for the designer's file, carried
+here so it is not lost between documents:** XD-24's *uncited factual
+claim* state binds to the MODEL'S OWN DECLARATION (`[[cite:none]]`).
+The forgotten-bare case — a factual specific with no marker at all —
+belongs to the eval, not to the render, because the render cannot and
+must not classify.
 
 **1 · THE SPAN CONVENTION.** `[[cite:<ref>]]`, four forms:
 
@@ -11854,15 +11864,18 @@ manufactured.
   12 skipped / 7678 total, exit 0** — exit captured before any pipe.
   Identical to WP-33b's worktree baseline including the twelve-skipped
   column, so the both-ways gate is accounted for rather than assumed.
-- **After: 579 suites / 7747 passed / 12 skipped / 7759 total, exit 0.**
+- **After: 579 suites / 7752 passed / 12 skipped / 7764 total, exit 0.**
   **The skipped column is unchanged**, so the delta is a real gain and
-  not a gate flip. **+6 suites and +81 tests, accounted for exactly:**
+  not a gate flip. **+6 suites and +86 tests, accounted for exactly:**
   53 in the six new suites; 13 in `checks.test.ts`'s new describe
   (12 generated across 2 specs × 3 criteria × 2 directions, plus 1);
   **12 from `checks.test.ts`'s two `it.each` loops** — one over every
   criterion and one over every registered check, each gaining 6 because
   the family adds 6 of each; 2 in `probes.test.ts`; 1 in
-  `sitting.test.ts`. 53+13+12+2+1 = 81.
+  `sitting.test.ts`; and **5 for the ratified manifest field** (4 in
+  `citationCarrier.test.ts`, 1 end-to-end in `citationCarrierWiring.
+  test.ts` reading the field back out of the ledger).
+  53+13+12+2+1+5 = 86.
 - `npm run typecheck` clean. `npx eslint src/intelligence/citation`
   clean — the seam rule is not weakened anywhere.
 - Runner: **17 PASS / 0 FAIL / 40 BLOCKED / 21 OWNER-PENDING**, exit 2
@@ -11875,7 +11888,10 @@ manufactured.
   check the standing WP-02 precedent uses for verbatim commits. A gate
   ruling on text that differs from what ships would be worthless.
 
-**MUTATION BATTERY: 19/19 KILLED, CONTROL SURVIVED, on a frozen tree.**
+**MUTATION BATTERY: 21/21 KILLED, CONTROL SURVIVED, on a frozen tree.**
+(19 at the gate report; the ratified manifest field added two more, and
+one existing anchor — M11 — was repointed when `citationSection` was
+refactored to carry `asserted`, then re-killed.)
 Every run `--no-cache`, explicit argv, count-floored. The battery
 verifies the tree is pristine before it starts and after it ends, and
 refuses to run if it is not — see the finding below for why that is
@@ -11939,14 +11955,36 @@ raised for the owner:**
   carrier text says so to the model in as many words.
 - Assembler change beyond the carrier: none. `renderTurnBlock`'s
   output for a turn with no convention is byte-identical to before.
-- **RAISED, NOT DECIDED: the manifest does not record which citation
-  convention was in effect.** ADR-20's audit claim ("policy vX was in
-  effect") has no citation equivalent, because adding one is a
-  `context.assembled/1` payload widening — the escalation class WP-20c
-  had ratified before it widened `procedure` in place. The hash rides
-  the carrier and is testable; it is not in the stored record. If the
-  owner wants "convention vX governed this reply" provable after the
-  fact, that is a one-field ruling.
+- **RAISED AND RATIFIED AT THE GATE — THE MANIFEST FIELD, now shipped.**
+
+  **Field name: `citation`, on `BundleManifest`** (`src/intelligence/
+  assemble/types.ts`), shaped
+  `{ convention: string; asserted: 'full' | 'hash' } | null` — the same
+  two questions `policy` already answers, in the same words.
+
+  **Write-site: `assemble()` in `src/intelligence/assemble/assembler.ts`,
+  via `citationManifest(turnSections)`,** inside the one `manifest`
+  object literal. It reaches the ledger with no further wiring:
+  `emitManifest` (`chatAssembly.ts`) passes the whole manifest as the
+  `task.context.assembled` payload, so the field is on
+  `context.assembled/1` from the first turn after this merge. There is
+  no JSON payload schema for that topic — only the ENVELOPE schema —
+  so this is a TypeScript-level widening exactly as WP-20c's
+  `procedure` was.
+
+  **It is READ BACK off the section array the carrier joined, never
+  recomputed.** `TurnSection` gains an optional `asserted`, set where
+  the full-or-hash decision is actually made. Recomputing the condition
+  downstream is how a manifest starts claiming `full` while the carrier
+  shows one line — a disagreement nothing would surface, because each
+  half is individually right. Two mutations pin it: one making the
+  manifest claim `full` against a hash re-assert (3 tests red), one
+  recording a convention in effect for a turn that taught none (1 red).
+
+  **`null` means no convention rode** — a bare carrier, or a fail-closed
+  refusal. It never means one rode and is not being named. A refusal
+  teaches nothing, so naming a version there would put a convention on
+  the record for a reply that was told to take no action at all.
 - **REGISTERED FOR THE M5 SURFACE PACKET, deliberately not
   pre-decided here:** `procedureModel.isolation.test.ts` bans
   `src/intelligence/` from the renderer graph wholesale. Nothing in the

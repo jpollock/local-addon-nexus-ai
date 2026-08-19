@@ -687,6 +687,16 @@ export function renderRoutingBlock(records: RoutingRecord[], frame: TaskFrame): 
 export interface TurnSection {
   key: string;
   text: string;
+  /**
+   * For the sections that re-assert by hash (ADR-20): what actually rode.
+   *
+   * Recorded HERE rather than recomputed by the manifest, and that is the
+   * point. `asserted` is the answer to a condition the renderer already
+   * evaluated; evaluating it a second time downstream is how a manifest starts
+   * claiming `full` while the carrier says one line — a disagreement nothing
+   * would surface, because each half is individually right.
+   */
+  asserted?: 'full' | 'hash';
 }
 
 /**
@@ -765,13 +775,11 @@ export function renderTurnSections(
  */
 function citationSection(req: AssembleRequest, anythingElse: boolean): TurnSection | null {
   if (!anythingElse) return null;
-  const carried = req.context?.citationConventionHash;
+  const carrying = req.context?.citationConventionHash === CITATION_CONVENTION_VERSION;
   return {
     key: 'citation-convention',
-    text:
-      carried === CITATION_CONVENTION_VERSION
-        ? renderCitationConventionReassert()
-        : renderCitationConventionBlock(),
+    text: carrying ? renderCitationConventionReassert() : renderCitationConventionBlock(),
+    asserted: carrying ? 'hash' : 'full',
   };
 }
 
@@ -986,6 +994,10 @@ export async function assemble(
         }
       : null,
     procedure: procedureManifest(resolvedProcedure),
+    // WP-34 · ADR-24, owner-ratified at the gate. Read off the section array
+    // the carrier JOINED — never recomputed — so "convention vX was in effect
+    // for this reply" cannot disagree with the reply's own carrier.
+    citation: citationManifest(turnSections),
     tools: [],
     retrieval: retrievalRecords,
     // Absent, not empty, when the caller sent no frame — see the field's note.
@@ -1013,6 +1025,21 @@ export async function assemble(
     },
     failClosed: false,
   };
+}
+
+/**
+ * The manifest's citation record — the stored answer to "which output
+ * convention governed this reply, and did the actor receive it this turn".
+ *
+ * ADR-20's argument, verbatim: the hash is sufficient for the audit claim.
+ * "Convention vX was in effect" is provable without re-shipping X, exactly as
+ * it is for the policy set. `null` means no convention rode — never "one rode
+ * and we are not saying".
+ */
+function citationManifest(sections: TurnSection[]): BundleManifest['citation'] {
+  const section = sections.find((s) => s.key === 'citation-convention');
+  if (!section?.asserted) return null;
+  return { convention: CITATION_CONVENTION_VERSION, asserted: section.asserted };
 }
 
 /**
@@ -1097,6 +1124,11 @@ function failClosedBundle(
       surface: req.surface,
       policy: null,
       procedure: procedureManifest(procedure ?? null),
+      // A refusal teaches no convention, so none was in effect for it. `null`
+      // is the honest answer; naming a version the actor never received here
+      // would put a citation convention on the record for a reply that was
+      // told to take no action at all.
+      citation: null,
       tools: [],
       retrieval: [],
       freshness_report: [],

@@ -490,6 +490,29 @@ export interface BundleManifest {
       actual_hash?: string;
     };
   } | null;
+  /**
+   * WP-34 · which citation convention (ADR-24) governed this reply, and whether
+   * the actor received it in full this turn.
+   *
+   * OWNER-RATIFIED at WP-34's gate. Widened IN PLACE inside
+   * `context.assembled/1` — the second time this manifest has grown that way
+   * (WP-20c's `procedure` was the first, ratified on the same reasoning): the
+   * field answers a question the record could not previously answer, and a
+   * reader that ignores it is unaffected either way.
+   *
+   * ADR-20's argument applies verbatim. "Convention vX was in effect" is
+   * provable from the hash without the full text ever being re-shipped, which
+   * is exactly the claim `policy.asserted` already makes for the policy set.
+   *
+   * `null` means NO convention rode this turn — a bare carrier, or a
+   * fail-closed refusal. It never means one rode and is not being named.
+   */
+  citation: {
+    /** The convention's version hash, `cnv_<12 hex>` over its own text. */
+    convention: string;
+    /** What actually rode — the ADR-20 claim, stated not implied. */
+    asserted: 'full' | 'hash';
+  } | null;
   tools: string[];
   retrieval: RetrievalRecord[];
   /**
