@@ -17384,7 +17384,7 @@ touching `bulk-plugin-update.md` or the guided runbooks.
 
 ## WP-45 · DELIVERY — the law review applied (2026-08-19)
 
-**Merge `0e3d5272` + `<repin-fix>` on branch `wp-45`, worktree
+**Commits `0e3d5272`, `29dbaef1`, `96ae787c` on branch `wp-45`, worktree
 `.worktrees/wp-45`, cut from `poc/nexintelligence` at `6fc40ced`.**
 
 ### P2 · the four denominators, DERIVED
