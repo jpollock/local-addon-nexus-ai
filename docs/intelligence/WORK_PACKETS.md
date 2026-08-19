@@ -14892,3 +14892,221 @@ land as SEPARATE COMMITS on `wp-41`, so the flip can be dropped, deferred behind
 WP-42, or merged independently without touching the surface. Nothing here
 changes a check WP-42 owns. Flagged rather than improvised, per the
 "two packets turn out to need the same file" trigger.
+
+---
+
+**WP-41 · GATE REPORT — the comparator surface, the walk, ScopeBlock mounted,
+and one escalation that changes what the empty-run smoke can be (2026-08-19).**
+Branch `wp-41` at worktree `.worktrees/wp-41`, cut from `dae1c637`. Four
+commits, deliberately separable: `598e474d` (the surface), `69c632c0` (the eval
+flip — WP-42's locked directory, see the escalation), `f8a…` (the non-fatal
+fix), and the battery's two added pins.
+
+**WHAT SHIPPED, against the four deliverables.**
+
+1. **The comparator surface.** `src/main/comparator/siteAtPlaces.ts` derives the
+   site-at-places matrix from the shipped derivations; `SiteAtPlaces.tsx` draws
+   it. All four XD-9 boundary conditions are implemented rather than restated,
+   and boundary 1 is structural: `markFor` takes ONE cell and has no second
+   argument, so there is no expression in the surface that could turn `a !== b`
+   into a mark. `differsFrom` renders plain difference and cannot reach it.
+2. **The walk, live.** `armFromSelection.ts` is `deriveScope`'s first production
+   caller and `recordArmingRequest`'s first scope-carrying one — the hole WP-37
+   measured (`deriveScope(` production callers: ZERO). The from-line resolves to
+   the matrix render, `surface: 'comparator'`, the only ratified variant.
+3. **`ScopeBlock` mounted.** WP-32's unmount condition is SATISFIED, not waived:
+   a procedure with no scope still mounts nothing, which is every armed run in
+   the product today. The empty run mounts it too — XD-21 refuses the container,
+   not the block, and the `Excludes:` lines and the barred door are the
+   refusal's whole content.
+4. **The WP-40 items.** `derivedPlanLine` consumes the served `planCheckpoint`
+   and reaches the sheet's four-segment form; the generator emits the field
+   (shape version 1 → 2) and `procedureStream.fake.ts` takes it from the
+   generated fixture.
+
+**ESCALATION 1 — THE HALTED-SITES SMOKE CANNOT BE RUN AS WRITTEN, AND THE
+REASON IS A MISSING PRODUCER, NOT A MISSING SURFACE.** WP-37's runnable check
+was: halt `t1`/`t2`, ask, and see both sites under `Excludes:` "carrying the
+record that observed them halted."
+
+Measured on this branch — the ledger's ENTIRE emitted topic set is
+`state.plugin.observed`, `state.plugin.removed`, `state.theme.observed`,
+`state.user.observed`, `state.site.observed` (site_initialized only),
+`semantic.content.changed`, `state.drift.detected`, and the incident topic.
+**Nothing records a site as halted.** `scopeModel.FIXTURE_SELECTION` cites
+`topic: 'site.status.observed'` — a topic that has never existed. Legitimate in
+a fixture; it is why the smoke read as though a path stood behind it.
+
+`WorldExclusionRecord.causedBy` is `{recordId, topic, observedAt}`, and
+`procedureScope.ts` states the rule in its own words: *"the reason is copied
+from the record, never composed beside it — 'Excludes: Foxtrot — halted, and
+said so' is only honest if something recorded that it said so."* So
+`comparatorRead.ts` supplies NO exclusions rather than reading halted-ness from
+Local's live site store: a live read would compose the reason beside the data
+and put a `causedBy` on screen pointing at no record. The seam takes a producer
+the day one exists, with no change downstream.
+
+**THE EMPTY-RUN STATE IS REACHABLE ANYWAY, BY THE OTHER ROUTE, AND IT IS THE
+ROUTE THE DESIGNER'S OWN SHEET DRAWS.** `bulk-plugin-update` declares
+`environments: [local, wpe_staging, wpe_development]`. A selection of
+production cells alone therefore derives `runnable: []`, `barred: 2`,
+`opensRun: false` — the ratified EMPTY-RUN state, with the plan line at
+`0 cells eligible`, no container, and the barred group's DOOR. Driven end to
+end against the real `law/` directory in `armFromSelection.test.ts` ("THE EMPTY
+RUN — a wholly barred selection still arms, and opens no container").
+
+Stated precisely, because the two refusal states differ and the fold names
+both: the barred route carries a **grant door**; the halted route carries the
+**world-state** ("or the world-state that must change first"), and it is the
+halted route that is blocked. An all-excluded scope has no `governDoor` and
+must not be given one — starting a halted site in order to update it is the
+refusal reworded, which the fold forbids.
+
+**ESCALATION 2 — TWO PACKETS, ONE FILE, ANNOUNCED BEFORE THE WORK STARTED.**
+`tests/intelligence-evals/` is locked by WP-42 (`35cf0d32`), and this packet's
+acceptance frame lives inside it: J-Inspect's eight criteria are registered
+there as `journeyGapCheck` entries that return BLOCKED unconditionally. Wave
+6's registration says the three locks are disjoint; on this point it is wrong.
+*Hunk-level they are disjoint* — WP-42 owns the WP-13b sitting verdicts and
+`run.ts`'s no-match error, this owns the eight `J_INSPECT` entries and the pins
+that count them — so the eval flip is a SEPARATE COMMIT (`69c632c0`) and can be
+dropped, deferred or re-sequenced without touching the surface.
+
+Note also that the surface alone FORCES a change in that directory:
+`probes.test.ts` pins `siteAtPlaces.renderer` at 0, and building the comparator
+flips it. That is the per-token pin working exactly as its own comment says it
+should, and it is not optional.
+
+**CORROBORATION FOR WP-42, observed while running this packet's eval:**
+`npx ts-node tests/intelligence-evals/run.ts --only J-Inspect` (a prefix, not
+the full id) prints `specs 0` and a clean all-zero TOTALS block, exit 0. The
+vacuous-green at the runner's summary line, reproduced live.
+
+**J-INSPECT: 8 CRITERIA — 6 PASS, 1 BLOCKED, 1 OWNER-PENDING. Each earned.**
+The six PASS are DRIVEN: each check requires the real modules and runs them in
+process, and the evidence is what it observed (`<table> at element 2, preceded
+only by: div, div`; `two cells that merely disagree render [null,null]`;
+`markFor is unary (arity 1)`). The BLOCKED is the history badge — the criterion
+asks for lineage AND a badge where the component has bitten before; lineage
+ships, nothing joins WP-25's incidents to a cell, and a PASS would credit half
+a criterion as whole. The OWNER-PENDING is "a claim in the surrounding prose
+that no cell supplies": the surface's own text is fully derived and that half
+is driven, but the subject is prose a live model writes, which is a person
+reading a turn. It carries a runnable sitting script.
+
+**Every one of the eight gates on the probe FIRST and falls back to BLOCKED —
+never FAIL — when the surface is absent.** "The screen is gone" and "the screen
+is wrong" are different findings, and only the second is a defect. Pinned in
+both directions, so neither the flip nor the fallback is assumed.
+
+**MUTATION BATTERY: 21 KILLED, 0 SURVIVORS, control survived.** Must-nots
+first-class and first in the list. Every run `--no-cache`, argv an explicit
+list with the resolved command printed, counts PARSED from the summary block,
+count-floored at the measured green, tree verified byte-pristine before and
+after with a `finally` restore.
+
+**The battery found two REAL weak guards, and they were fixed rather than
+excused.** M06 (`renderValue` returning `'8.0'` instead of `undefined`)
+survived because no test had ever fed the derivation a plugin fact without a
+version — the house's own never-default invariant had no pin at this surface.
+M15 (`siteOf` falling back to `ensure()`, i.e. minting) survived because every
+entity in the pinned worlds already had a Site, so the minting line was
+unreachable from the test set and the byte-identical-tables pin was passing
+over a path it never took. Both now have pins; both mutations now die.
+
+**M09 was VOID, not a survivor, and the distinction is the count floor doing
+its job:** the mutation as first written was syntactically invalid, the suite
+count fell from 448 to 438, and the floor reported VOID rather than letting an
+uncompilable tree read as a kill. Rewritten valid, it kills 4.
+
+**THE INTERRUPTED-BATTERY RULE FIRED, AND IS CONFIRMED AGAIN (WP-34's
+finding).** The first battery ran the FULL suite × 22 mutations and was killed
+at the ten-minute wall. SIGTERM skipped the `finally`, and M01 was left on disk
+— found by running `git status` before anything else, restored by `git
+checkout`, verified pristine before proceeding. The battery was then SCOPED to
+the twelve suites that can observe these mutations, with the floor re-measured
+against that argv.
+
+**A SEVENTH POISONED-CACHE OCCURRENCE, in its documented form.** A mid-run
+`npm test` reported 3 suites failed / 2 tests failed — the signature of suites
+failing to PARSE rather than to assert, and one of them
+(`tests/intelligence-evals/sitting.test.ts`) was a file this packet never
+touched. `npx jest --clearCache` then re-measure: two of the three vanished.
+Diagnosed as the environment before the code, per the rule.
+
+**ONE REAL DEFECT FOUND BY AN EXISTING SUITE, and it was mine.**
+`chat-all-cleared.test.ts` uses a double whose `invoke` returns `undefined` for
+channels it does not know. `loadComparatorFacts` called `.then` on it and threw
+straight out of `componentDidMount`, taking the WHOLE panel down — comparator
+and chat alike. That is the seam's one prohibition ("an intelligence-layer
+failure must never break a surface that predates the intelligence layer"). Now
+guarded for a non-thenable return AND for an `invoke` that throws, and pinned.
+
+**PARITY HOLDS AGAINST THE ORIGINAL FIXTURE — `panelChat-parity-base.json` did
+NOT need regenerating.** The first attempt did break it: an always-visible
+"Compare across places" control changed the tree for every user. The pin's own
+instruction offers regeneration, and it was the wrong remedy — a user with
+nothing to compare should see the panel unchanged, not a panel whose baseline
+moved. The comparator is now SPREAD from an array that is empty until the
+records can serve one, which is the same shape and the same reason as
+`renderProcedurePlan`. M18 mutates the guard and kills 2.
+
+**INTERIM, NAMED AS SUCH (XD-1 sweep, nothing invented):**
+- `MARK_AHEAD` (`→`). XD-9 ratified `←` for a behind verdict and said nothing
+  about ahead; the comparator computes both, and dropping a computed verdict
+  for want of a glyph would be the mirror of inventing one. Listed in
+  `INTERIM_MARKS`, which a test asserts is exactly that one mark.
+- The disclosure that opens the comparator, its wording and placement; the
+  fact picker's shape; the selected-cell treatment; column widths.
+- Everything else on screen is derived or ratified: `scopeBlockLines` verbatim
+  from the seam, `placeLabel` for every place, draft 2 §2's headline shape
+  ("5 cells selected · 3 can run now"), XD-9 boundary 4's sentence verbatim.
+
+**ESCALATION 3 — a wording collision I did NOT resolve locally.** XD-9's prose
+calls it "the your-copy column" and Controlled Vocabulary v1 says **your copy**,
+never working copy or sandbox. But the shipped `placeLabel` renders
+`{host:'local'}` as `local`, and the scope block two inches away uses that same
+function. Rendering `your copy` in the grid and `local` in the block would break
+the one wording the seam exists to keep single, so the heading uses
+`placeLabel` and the collision goes to the designer's cycle-four family. A test
+pins the current answer so the choice is visible rather than accidental.
+
+**ESCALATION 4 — no "behind newest" filter, deliberately.** The designer's
+sheet shows one. "Newest" is an update-availability fact, and CLAUDE.md records
+that update availability is persisted NOWHERE — every `updateAvailable` in the
+codebase is computed live at query time. A fleet-relative maximum would be a
+different fact wearing that word's clothes. The filter that ships is the fact
+key, which is served.
+
+**A MEASURED LIMIT, REPORTED RATHER THAN PAPERED OVER.** There is no
+environment-vs-environment comparator in the shipped derivations: `divergence()`
+is copy-vs-upstream. So a WPE staging cell and a WPE production cell holding
+different versions get NO verdict — correctly, per boundary 1. Rather than
+leave that to be discovered, `SiteAtPlacesMatrix.verdictCoverage`
+(`{cells, verdicts}`) measures it on every render, so the surface can always
+state how much of what it drew the comparator actually judged.
+
+**A PRE-EXISTING COPY DEFECT, NOT FIXED HERE.** `checkDryRunTargets` composes
+"1 selected target **are** absent from the plan" — a plural mismatch in shipped
+WP-32 copy, visible in this packet's own eval evidence. Left alone: it is
+ruled territory and a copy change belongs at the gate, not in a packet that
+happened to print it.
+
+**BASELINES BOTH SIDES, in the worktree, exit captured before any pipe.**
+Before: **590 suites / 7952 passed / 12 skipped / 7964 total, exit 0.**
+After: **593 / 8019 / 12 / 8031, exit 0.** **+3 suites and +67 tests; the
+skipped column is UNCHANGED at 12**, so the passed-column delta is the whole
+story. The three new suites are `siteAtPlaces.test.ts`,
+`armFromSelection.test.ts` and `comparator.test.tsx`.
+`npx tsc -p . --noEmit` clean throughout; `npx eslint` clean on both touched
+directories; `npm run fixtures:procedures:check` reports the tracked fixture
+up to date.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` (its `pretest` hook
+rebuilt better-sqlite3 for the shell's Node), many `npx jest` runs, and two
+mutation batteries. **`npm run rebuild` before loading Local** — which the
+OWNER-PENDING sitting above wants anyway, since it happens inside Local.
+
+**NOT MERGED, and not pushed.** Held for the gate: the eval flip sits in
+WP-42's locked directory and wants the owner's sequencing, and escalations 1
+and 3 change what the record should say about the empty-run smoke.
