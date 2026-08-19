@@ -16736,3 +16736,119 @@ asserted.
 
 **THE `src/main/intelligence-host/` AND SETTINGS-RENDERER LOCKS ARE HELD
 until this packet merges.**
+
+---
+
+**WP-44 · REGISTERED AND SCOPED — the Govern matrix surface (M7), the
+control the grant is made AT (2026-08-19).** Branch `wp-44`, worktree
+`.worktrees/wp-44`, cut from `a6d65956`. Acceptance criteria are the
+designer's NINE PINS (`from-designer-08-govern-matrix.md`) plus the three
+rulings in `for-designer-govern-matrix-response.md`, XD-25, and XD-8.
+
+**BASELINE, measured in the worktree, tree held still:** 598 suites,
+**8,108 passed / 12 skipped / 8,120 total**, exit 0, `npm test`. The 12
+skipped are the embedding-model gate documented in this protocol.
+
+**THE SUBSTRATE WAS MEASURED BEFORE A LINE WAS DESIGNED, and it says the
+sheet is derivable to the character.** All seven capabilities the sheet
+draws are served by the shipped registry, and every column it renders has
+a source:
+
+    capability              runbook                 ver     strict  cp  attestable  steps
+    cap.bulk_plugin_update  rb.bulk-plugin-update   1.2.0   strict   8      4         0
+    cap.incident_containment rb.incident-containment 1.1.0  strict   5      0         0
+    cap.promotion_preflight rb.promotion-preflight  1.1.0   strict   4      0         0
+    cap.promote_environment rb.promotion-execute    1.2.0   strict   5      0         0
+    cap.incident_remediation rb.incident-remediation 1.1.0  strict   6      0         0
+    cap.wpe_pull            rb.wpe-pull             1.0.0   guided   0      0         8
+    cap.diagnose_site       rb.diagnose-site        1.0.0   guided   0      0         8
+
+The gates column's finding reproduces exactly: **four strict capabilities
+have zero attestable checkpoints**, and the sheet's "4 of 8" for the
+anchor is 3 `event` + 1 `manifest` out of 8.
+
+**ONE FACT ON THE SHEET IS ALREADY STALE, AND THAT IS THE PIN PASSING ITS
+FIRST TEST IN THE WILD.** The sheet drew `cap.promote_environment` as
+`rb.promotion-execute · 1.1.0 · sha256:d5fa9bc67d`. WP-20g bumped that
+document to **1.2.0**, and its hash is now `sha256:c17d4bc08e`. The
+surface must render 1.2.0 — because the ratified pin is not the sentence,
+it is *the column moves when the document does*. A surface that rendered
+the sheet's numbers would be a screenshot, and it would already be wrong
+on the day it shipped. Recorded here so no reviewer reads the difference
+as a transcription error.
+
+**THE FIVE STATES, AND WHERE EACH IS DERIVED FROM.** Rows come from the
+registry's capability set; state comes from the live grant record, never
+from the documents:
+
+  - `materialized` — in `grants` with `source: 'shipped'`. The migration's
+    explicit record put it in the live set.
+  - `granted-by-you` — in `grants` with `source: 'settings'`. Only an
+    explicit entry a person made put it there. This is the state the
+    deny-flip demands for the two mandated capabilities.
+  - `disarmed` — in `disarmed` with any reason other than
+    `requires-explicit-grant`. Granted and NOT IN FORCE.
+  - `never-by-default` — in `disarmed` with `requires-explicit-grant`.
+  - `denied` — served by the registry and in neither list.
+
+The fifth exists because the guided capabilities are in NEITHER of the
+resolver's two lists: strict-only materialization never names them and no
+settings entry covers them, so a matrix that rendered only what
+`resolveCapabilityGrants` returns would have **silently dropped two of the
+seven rows** — the exact "no hiding of ungranted capabilities" absence the
+sheet forbids. The row set is the registry's, and the grant record only
+colours it.
+
+**THREE COPY DECISIONS WHERE THE SHEET WRITES A SENTENCE ONCE AND THE
+SURFACE MUST DECIDE WHETHER TO REPEAT IT.** All three are gate items,
+stated here before they are built rather than defended afterwards:
+
+1. **The gates column's long form.** The sheet spells out "All 5
+   checkpoints are narrative — the platform can verify none of them, so
+   nothing downstream of this grant is provable" on the FIRST
+   zero-attestable row and shortens it to "All 4 checkpoints are
+   narrative." on the next three. Building it that way would make a row's
+   copy depend on *which other rows exist* — the column would stop being
+   derived from the document, which is the one property the ruling made
+   load-bearing. **Decision: render the full form on every zero-attestable
+   row, count derived per row.** Strictly louder everywhere and softer
+   nowhere, so it cannot violate "unsoftened".
+2. **"as above" on the second guided row.** Same shape, same decision: the
+   full sentence renders on both.
+3. **The second mandated row's contingent sentence.** The sheet writes
+   "Containment is granted and remediation is not: stopping the bleeding
+   and changing production are two different permissions" on
+   `cap.incident_remediation`. That sentence is true only while
+   `cap.incident_containment` is granted — revoke containment and the
+   surface asserts a falsehood about its own state. **Decision: both
+   mandated rows render the non-contingent sentence** ("Production
+   consequence is not a default, so nothing but a grant you make yourself
+   reaches this"). The contingent phrasing is an argument the sheet makes
+   to a reader, not a fact the row can keep.
+
+**THE ACT, AND WHY IT IS A NEW CHANNEL RATHER THAN A SETTINGS WRITE.**
+`UPDATE_SETTINGS` already re-syncs grants (`src/main/index.ts`'s
+`onSettingsUpdated` calls `syncCapabilityGrants`), so a generic settings
+write would emit the right events. It is still the wrong shape: the pin is
+that the grant is made AT THE CONTROL, and a channel that takes an
+arbitrary settings patch cannot say which act made the grant. The new
+channels are read/act split the way WP-41 split the comparator's, and for
+the same measured reason — one of them has a side effect.
+
+**A PAYLOAD OBSERVATION, CARRIED TO THE GATE RATHER THAN FIXED IN
+FLIGHT.** `emitChanges` stamps `reason: 'materialized'` on every first
+issuance, including one a user makes at this control. The payload also
+carries `grant_source`, so the *state* is derivable without touching the
+producer and this packet does not need a widening to render its rows. But
+a `control.grant.issued` that says `materialized` about an act a person
+performed misdescribes that act in the compliance record. Recorded as a
+finding for the gate; not changed under this packet's own authority,
+because the producer is WP-20b's and the topic's payload is ratified.
+
+**LOCKS HELD:** `src/main/intelligence-host/` and the Settings renderer
+surface. **MUST-NOTS PINNED AS FIRST-CLASS TESTS:** no grant-all, no
+recommended set, no bulk enable; no health score or grant count as a
+posture; no invented capability labels (v1.3 rows, id in mono beside); no
+hidden ungranted rows; no severity theatre on the production rows; no
+conversational route in, out, or around — nothing on this page reachable,
+widened, or confirmed from chat.
