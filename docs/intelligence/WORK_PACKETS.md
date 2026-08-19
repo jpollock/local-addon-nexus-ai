@@ -13308,3 +13308,150 @@ not read as a weakened test.
 
 **Held here for ratification of the payload and the mechanics above
 before any implementation lands.**
+
+---
+
+**WP-20f · DELIVERED — the deny-flip, its migration, and the guard that
+keeps it flipped (2026-08-18).** Branch `wp-20f` at 92b56c8c. Gate
+ratified across the board; E1 ruled (a), E2 routed to WP-20g, E3 as
+proposed. Built the three points and nothing beyond them.
+
+**Point 1 — removed, not bypassed.** Layer 1 of
+`resolveCapabilityGrants` — "every strict runbook the registry SERVES
+gets an enabled grant" — is DELETED. The structural pin is the first
+test in the new suite: a full `law/` directory with no materialized list
+now grants NOTHING, and the near-miss shape (an explicit empty list
+falling back to the shipped set) is pinned separately, because
+`materialized ?? deriveEverything()` would have passed the first
+assertion and failed the second. The two mandated capabilities are
+refused TWICE: the migration never writes them, and the materialized
+path refuses them even when the stored record names one — M01 drives
+exactly that poisoned-marker case, which is the only route by which a
+default could come back. The positive control is pinned beside it: an
+explicit settings grant still arms either capability, so the packet
+cannot be confused with having deleted them.
+
+**Point 2 — materialization, and one honest widening.** The events are
+WP-20b's producer verbatim, as ratified: existing topic, existing
+schema, `reason: 'materialized'`, `grant_source: 'shipped'`, the hash
+pinned per grant, `entity: {}`. Three fire on a fresh machine
+(`cap.bulk_plugin_update`, `cap.incident_containment`,
+`cap.promotion_preflight`); the two mandated emit nothing.
+
+**The one data-shape change this packet makes, disclosed rather than
+buried:** `DisarmReason` gains `requires-explicit-grant`. It is not
+decoration — point 1 is not honestly RECORDABLE without it. On a machine
+crossing the flip the two mandated capabilities are already in the
+issuance marker and are revoked at the first sync, and every pre-existing
+reason would have misdescribed why: the revocation would have gone into
+the compliance record reading `runbook-unavailable` about a runbook that
+is present and serving. M06 mutates exactly that value and is killed by
+the upgrade test, which drives the whole path — WP-20b's marker
+reconstructed from the real documents, the revocation's reason, its
+system actor (nobody clicked anything; the law changed), and its
+causation chain back to the issuance it answers. The same value gives
+the future Settings matrix its honest row: not-granted WITH a reason and
+the document to grant against, rather than an absence a reader must infer.
+
+**Point 3 — structural, not ruled.** Nothing appends to the materialized
+record after the migration writes it, so a strict runbook shipping
+tomorrow is SERVED and NOT GRANTED. Driven end to end over a fixture
+registry that gains a capability between the migration and the
+resolution, with its own positive control: the new capability is
+grantable the moment someone grants it. Denied, never unreachable.
+
+**Idempotence, as ratified — and one correction to my own gate text.**
+Dedup layer 2 was described at the gate as "a set union that never
+re-adds a listed capability". What is BUILT is stronger and simpler: the
+migration early-returns on a stored record and there is no union at all,
+so nothing can append to the list on any later boot. A union would in
+fact have destroyed point 3 by sweeping in each release's new
+capabilities. Layer 1 is the record's PRESENCE, and presence is
+deliberately not "a non-empty list" — a machine that materialized zero
+capabilities has a COMPLETED migration, and M03 (gate on content instead
+of presence) is killed by that case. Layer 3 is WP-20b's
+`(capability, runbookId, runbookHash)` event gate, untouched: losing the
+materialized record alone re-derives the identical set and still emits
+nothing, which is pinned.
+
+**Acceptance, all three met and driven:**
+- An arming of either mandated capability without an explicit grant
+  refuses with the Govern door. `nexus_load_procedure` renders every
+  field of the guard's own `governDoorTarget`, built by the guard's own
+  `governDoorFor` — one builder, so a model's refusal and a human's
+  cannot point at different places. The premise is asserted before the
+  message is read (both capabilities ARE served here and are NOT
+  granted), so a refusal that passed because nothing served the
+  capability would fail. It records no arming request, and it states the
+  law rather than apologising for a missing default — "NEVER granted by
+  default … nothing you can do in this turn grants it", because the
+  2026-08-18 lesson is that a model reads "not yet" as an invitation to
+  retry. A capability NOTHING serves is told that instead and is
+  deliberately not sent to the Govern door: pointing someone at a switch
+  for a capability this machine does not have is a fabricated remedy.
+- Every previously-enabled capability has exactly ONE grant event after
+  two boots — taken literally, as two `initIntelligenceCore` calls, over
+  the whole materialized set rather than the anchor, with the two
+  mandated capabilities pinned at zero events across both.
+- A freshly registered capability is denied until granted.
+
+**BATTERY: 14 mutations, 14 KILLED, `--no-cache` throughout,
+count-floored, tree verified PRISTINE before and after.** The floor is
+the sum of the per-suite green counts measured immediately before the
+run, so a mutant that reduced the executed count would be VOID rather
+than green. Two process notes worth the record:
+
+*A crashed battery still restored, and the check that proved it.* The
+first run died on a missing floor key mid-mutation. The exception
+propagated THROUGH the `finally`, so the restore ran — but WP-34's rule
+is that a battery killed mid-mutation leaves the mutation on disk, so
+the tree was verified rather than assumed before continuing. It was
+clean.
+
+*The anchor that matched nothing was a quoting fault, not a missing
+line.* M14 reported `0 matches` against a line that is plainly in the
+file: a `—` escape written into a quoted heredoc reaches Python as
+the six literal characters, never the em dash. `cat -A` then rendered
+the file's real em dash AS `\u{2014}`, which reads as confirmation of the
+wrong hypothesis. Two mutations carried the fault (M14's anchor, M12's
+replacement); both repaired against the real characters and both killed.
+Filed as an addition to the anchor-fail family: **an anchor that fails
+to match is a fault in the anchor until the line is read with a tool
+that does not transform it** — the same shape as the NUL finding, where
+the tool that would show you the problem is the one the problem disables.
+
+**Baselines, both sides, skipped column read first.** Before: 583 suites
+/ 7,817 passed / 12 skipped. After: 584 suites / 7,839 passed / 12
+skipped. Skipped unchanged, so the delta is real and not a gate-in:
++1 suite and +22 tests, reconciling exactly — 16 (`capabilityDenyFlip`)
++ 5 (`loadProcedure`) + 1 (`bootstrapGrants`). `npx tsc -p . --noEmit`
+clean throughout. Post-battery baseline re-run and identical.
+
+**The signature ripple IS the proof, and it is why three suites outside
+this packet changed.** `resolveCapabilityGrants` with no `materialized`
+list now grants nothing, so every caller that relied on the shipped
+derivation had to say where it stands. All three now derive it through
+`materializableCapabilities` — the migration's own function — rather
+than listing capabilities by hand, so none of them can quietly re-encode
+what the flip enables. `tests/intelligence-evals/probes.test.ts` is one
+of them: the WP-33b stale-pin journey is about the OVERLAY and needs its
+capability granted to be observable at all. Its assertions are unchanged;
+only the machine it stands on is named. Flagged because it is an eval
+file — no eval semantics were touched.
+
+**E2 STANDS ON THE RECORD, unchanged by anything built here:** v0 grants
+remain ADDITIVE over the tool surface, so denying these two subtracts
+CEREMONY and not REACH. `wpe_promote_environment` is reachable today
+with no procedure at all; the sequence guard skips an ungranted
+capability by its own rule. Their production consequence rests meanwhile
+on `isOperationAllowed` — a real gate, and a different one. WP-20g owns
+the reach half.
+
+**Registered follow-on (not built):** rebuilding the materialized set
+from the ledger's own `control.grant.issued`/`revoked` history, which
+closes the disclosed both-markers-lost direction. It is a grant FOLD —
+architecture.md's own "the grant table is itself a fold view" — and more
+machinery than the three points ask for.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and
+a 14-mutation battery. **`npm run rebuild` before loading Local.**
