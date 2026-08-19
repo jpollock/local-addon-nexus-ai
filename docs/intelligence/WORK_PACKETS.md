@@ -16852,3 +16852,202 @@ posture; no invented capability labels (v1.3 rows, id in mono beside); no
 hidden ungranted rows; no severity theatre on the production rows; no
 conversational route in, out, or around — nothing on this page reachable,
 widened, or confirmed from chat.
+
+---
+
+**WP-44 · DELIVERY REPORT — the Govern matrix, the act at the control, and
+the door that lands on a row (2026-08-19).**
+
+**MEASUREMENTS.** Baseline 598 suites / 8,108 passed / 12 skipped, exit 0.
+Final **601 suites / 8,184 passed / 12 skipped, exit 0** — +3 suites, +76
+tests, and the **skipped column unchanged**, so the delta is real rather
+than a gate-in. `npx tsc -p . --noEmit` clean; eslint clean on every file
+touched. Mutation battery **27/27 killed**, control survived, tree
+verified pristine before and after.
+
+**J-Refusal: 4 PASS / 7 BLOCKED / 1 OWNER-PENDING → 5 PASS / 6 BLOCKED /
+1 OWNER-PENDING.**
+
+**THE NINE PINS, EACH WITH WHERE IT IS DRIVEN.**
+
+1. *Every row a capability the registry serves, every fact derived.* Rows
+   come from `runbooks.runbooks()`, not from `resolveCapabilityGrants` —
+   see finding 1. Document, version, hash and the attestable split are all
+   read off the runbook.
+2. *A capability arrives denied; no row is granted because a document
+   exists.* `buildGovernMatrix` with no materialized list produces not one
+   granted row on a full `law/` tree.
+3. *The production rows render never-granted-by-default.* Both mandated
+   capabilities, disclosed with the mandate's sentence and an actionable
+   switch.
+4. *A door lands on the ROW.* `resolveGovernDoor`, plus the whole-path
+   suite: refusal → panel → store → dashboard → shell → marked row.
+5. *A grant states which act made it, from its own event.* The row cites
+   the `control.grant.issued` id the ledger actually holds.
+6. *A disarmed grant renders granted-and-disarmed, never denied.* Switch
+   on, chip loud, band with reason and door.
+7. *The gates column is derived and never softened, and the PIN is the
+   property.* The first test in the seam's suite authors an attestable
+   checkpoint into a fixture document and requires the column to move,
+   with nothing in `src/` edited between the two reads.
+8. *The act is a control; nothing reachable, widened or confirmed from a
+   conversation.* No tool, no GraphQL mutation, no `src/cli` caller —
+   measured by the probe, not promised.
+9. *Every widening recorded and reversible from the same row.* Driven end
+   to end against the real ledger.
+
+**FIVE FINDINGS, IN THE ORDER THEY WERE MEASURED.**
+
+**1 · The resolver's two lists are not the capability set, and a matrix
+built on them hides two of seven rows.** `resolveCapabilityGrants`
+returns `grants` and `disarmed` and looks complete. The two GUIDED
+capabilities are in NEITHER: strict-only materialization never names them
+and no settings entry covers them. A surface built the obvious way would
+have rendered five rows, looked finished, and silently removed
+`cap.wpe_pull` and `cap.diagnose_site` from the only place a person can
+act on them — the exact absence the sheet forbids. The row set is the
+registry's; the grant record only colours it.
+
+**2 · `disabled-by-settings` is not a disarm, and rendering it as one
+inverts the ruling that was just made.** The resolver reports a user's own
+switch-off with the same `DisarmedGrant` shape it uses for a hash
+mismatch. Ruling 3 says the switch renders CONSENT and that disarmed is
+the platform's report about a document, never a revocation. Taking the
+resolver's shape at face value would have left the switch **ON** for a
+capability its owner had just switched **OFF**. `stateFor` splits on the
+reason's CLASS: `hash-mismatch` and `runbook-unavailable` are the
+platform's reports (disarmed, consent intact); everything else is
+ungranted, and a production capability returns to "Never by default"
+rather than to a bare denial, because the mandate did not stop being true
+while the grant existed.
+
+**3 · The sheet's copy varies by row position in three places, and
+reproducing that would have cost the ruled property.** The full "nothing
+downstream of this grant is provable" sentence is drawn on the first
+zero-attestable row and shortened on the next three; "as above" stands in
+on the second guided row; and the remediation row argues "containment is
+granted and remediation is not". The first two make a row's copy depend on
+which OTHER rows exist — the column stops being a function of the
+document, which is exactly what the ruling made load-bearing. The third is
+worse: it is true only while containment is granted, so revoking
+containment would make the surface assert a falsehood about its own state.
+All three render per-row and derived. The first two are strictly louder
+everywhere and softer nowhere, so "unsoftened" is not at risk.
+
+**4 · The battery's one survivor was not an equivalent mutant.** M01
+swapped `attest === 'event' || attest === 'manifest'` for
+`attest !== 'narrative'`. With exactly three attest classes shipped these
+agree on every authorable value, and the mutation survived 115 tests. They
+differ in the direction that matters: a fourth class added tomorrow counts
+as PROVABLE under one and as narrative under the other, on a surface whose
+whole claim is what the platform can verify. Closed with a pin that drives
+the production function over a class the registry's own schema will not
+parse. **A survivor that looks equivalent under today's enum is a
+fail-open default waiting for the enum to grow.**
+
+**5 · The sheet is already stale in one row, and that is the pin working.**
+It drew `cap.promote_environment` as `rb.promotion-execute · 1.1.0 ·
+sha256:d5fa9bc67d`; WP-20g bumped that document to **1.2.0 ·
+`sha256:c17d4bc08e`** and the surface renders 1.2.0. Recorded at
+registration, before the build, so no reviewer reads it as a transcription
+error.
+
+**THE EVAL REGISTRY, MEASURED RATHER THAN ASSUMED — AND IT DID NOT SPLIT
+TWO-AND-TWO.** The launch instruction expected two criteria to flip and
+two to re-own to WP-30. Measured, **exactly two criteria in the whole
+registry ever named UX3** (`grep -n UX3 checks.ts`), and the response
+document's "four remaining BLOCKED criteria" does not match the registry —
+five of J-Refusal's seven BLOCKED name UX build 1.5, which is WP-38's
+successor and not this packet. What was done instead of forcing the
+expected shape:
+
+- **"Crossing into Settings and back…" FLIPPED to a driven check.**
+  `probeWidening` drives a real door onto a real row, makes a real grant at
+  the control, reads the real `control.grant.issued` back out of the
+  ledger, and reverses it from the same row into a real
+  `control.grant.revoked` attributed to a person. The evidence carries the
+  actual event ids and the causation chain. The criterion is a CONJUNCTION
+  and the probe answers one conjunct; the PASS says so in its own evidence
+  and names WP-30, following `probeRefusalPayload`'s ratified
+  disclosed-limit precedent rather than borrowing the strength of the
+  measurements beside it.
+- **"A re-ask of anything the session already established" RE-OWNED to
+  WP-30 alone,** with a `standing` recording what the excursion half now
+  delivers. Leaving UX3 on it after UX3 shipped would be a BLOCKED naming
+  a shipped packet, which the file's own rule says understates progress
+  exactly as an overstated gap misleads.
+
+**One flip and one honest re-own, not two and two.** The registry is the
+measurement and the launch's expectation was an estimate; forcing a second
+flip would have meant crediting this surface with a criterion it does not
+own. Raised here rather than resolved quietly.
+
+**TWO GUARD TESTS CAUGHT A REAL WEAKNESS, and were not worked around.**
+`checks.test.ts`'s "no journey check is PASS on an absent surface" and
+"every BLOCKED names its owner" both went red because the new check had no
+absent-surface behaviour. It now splits the PREMISE from the measurements
+— no matrix is BLOCKED ("the screen is gone"), a matrix whose widening
+does not work is FAIL ("the screen is wrong") — the same split
+`jRefusalSat` makes on `refused`. Five new pins hold the check to it,
+including each conjunct falsified independently.
+
+**TWO TEST-HARNESS WEAKNESSES, fixed rather than routed around.** The
+serialized-tree walk flattened one level and reported "no door rendered"
+against a block that had in fact rendered two — a component that spreads an
+array of children produces a child that is itself an array. And a
+hand-built `ProcedureScope` had two fields in shapes the comparator cannot
+produce; the fixture is now derived by `deriveScope` itself, which is the
+function the running refusal calls.
+
+**THE POISONED ts-jest CACHE, SEVENTH OCCURRENCE.** The first final
+full-suite run reported 2 failed suites and 8,109 tests — 74 fewer than the
+run twenty minutes earlier. Both failures were `Jest encountered an
+unexpected token` in `tests/intelligence-evals/`, a directory whose 409
+tests had passed under `--no-cache` minutes before. `npx jest --clearCache`
+then a clean re-measure: 601 / 8,184 / 12, exit 0. Believed the protocol
+rather than the red, as written.
+
+**GATE ITEMS — five, for ratification.**
+
+1. **The IPC payload for the act is NEW.** `GOVERN_SET_GRANT` takes
+   `{ capability: string; grant: boolean }` and carries no list. Two
+   channels rather than one with a mode flag, because exactly one has a
+   side effect. Presented per the standing rule.
+2. **The three copy decisions** in finding 3 — the gates column's long
+   form on every zero-attestable row, the guided sentence on both guided
+   rows, and the non-contingent sentence on both mandated rows. Each is a
+   departure from the sheet as drawn, each in the direction the ruled
+   property required.
+3. **Two sentences this packet authored** and the sheet does not carry:
+   `'Revoked by you. Grantable again from this row.'` for a row the user
+   switched off (the generic denial reads as something that never happened,
+   on a row where something did), and `'No grant covers this. A capability
+   arrives denied; grantable by an entry you make.'` for a served,
+   unmandated, ungranted strict capability — a state the shipped tree does
+   not currently reach but which the row set can produce. Plus the four
+   refusal sentences in `GovernSection`'s `REFUSAL_COPY`, which are about
+   the CLICK rather than about a capability.
+4. **A producer finding, carried rather than fixed.** `emitChanges` stamps
+   `reason: 'materialized'` on every first issuance, including one a person
+   makes at this control. The payload also carries `grant_source`, so the
+   row's STATE is derivable without touching the producer and this packet
+   needed no widening. But a `control.grant.issued` that says
+   `materialized` about an act a person performed misdescribes that act in
+   the compliance record. Not changed under this packet's authority: the
+   producer is WP-20b's and the topic's payload is ratified.
+5. **The eval split** — one flip, one re-own, not two and two, with the
+   measurement above.
+
+**THE LAW REVIEW'S CHARTER IS NOW EXECUTABLE.** The re-scoped review
+(attestable checkpoints across all four attestation-free strict runbooks)
+has a test that will notice when it lands: author one `attest: event`
+checkpoint into any of those documents and the Govern matrix's gates column
+changes with no code change. The pin is not a description of that property,
+it is a driver of it.
+
+**ABI STATE ON EXIT: this session ran `npm test`, so `better-sqlite3` is
+built for SYSTEM NODE.** Local cannot load the addon until
+`npm run rebuild` is run. Stated in words per the protocol's requirement.
+
+**LOCKS STILL HELD** (`src/main/intelligence-host/`, the Settings renderer
+surface) until this packet merges.
