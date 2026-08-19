@@ -13951,3 +13951,125 @@ construction using the join's own nouns for them. No third vocabulary.
 
 **ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and a
 30-mutation battery. **`npm run rebuild` before loading Local.**
+
+---
+
+**WP-38 · MERGED, LOCK RELEASED (2026-08-19).** Merge `7e1dbe88` on
+`poc/nexintelligence`; **11 files, +2,345 / −6 against its first parent.**
+Gate ratified across the board — all six items, the isolation resolution
+accepted exactly as measured, and one condition attached to (2) and (6),
+discharged below.
+
+    docs/intelligence/WORK_PACKETS.md                        | 214 +++
+    src/renderer/components/DockedPanel/CitationSpans.tsx     | 333 +++
+    src/renderer/components/DockedPanel/PanelChat.tsx         |  33 +-
+    src/renderer/components/DockedPanel/citationModel.ts      | 506 +++
+    src/renderer/components/DockedPanel/citationTurn.fake.ts  |  85 +++
+    src/renderer/styles/agent-console.css                     |  11 +
+    tests/unit/renderer/citationFixture.test.ts               | 164 +++
+    tests/unit/renderer/citationModel.test.ts                 | 432 +++
+    tests/unit/renderer/citationSpans.test.tsx                | 337 +++
+    tests/unit/renderer/panelChat-citation.test.tsx           | 127 +++
+    tests/unit/renderer/procedureModel.isolation.test.ts      | 109 ++-
+
+**THE GATE CONDITION, DISCHARGED — the copy that ships, verbatim.**
+Extracted programmatically from the merged `citationModel.ts`, not
+retyped, for the same reason WP-34's carrier block was: a record of copy
+that differs from what ships is worthless.
+
+*New sentence, one, for the state the sheet does not draw (gate item 2).*
+`UNRESOLVED_MALFORMED`:
+
+> The platform could not read this marker, so it cannot say which record was meant. The claim above may still be true — the platform cannot say, and will not guess.
+
+Beside it, unchanged, the ratified `UNRESOLVED_NOT_IN_SUPPLY` it is
+derived from — the second sentence is shared word for word, and only the
+first is replaced, because its subject ("this id") is false when the body
+did not parse:
+
+> No record with this id was supplied to this task. The claim above may still be true — the platform cannot say, and will not guess.
+
+*The three supply sentences (gate item 6).* The first is ruling §3's,
+ratified as drawn; the other two extend the same construction using the
+join's own nouns for those kinds, and introduce no third vocabulary:
+
+    event   → Supplied to this task by the ledger.
+    tool    → Supplied to this task by a tool call this task made.
+    carrier → Supplied to this task by the platform context of this turn.
+
+*For completeness, the two strings that ship VERBATIM from the sheet and
+were not this packet's to write.* `PREDATES_CONVENTION_NOTICE`:
+
+> This session predates the citation convention. Nothing in it is linked, and the platform cannot say now what supplied each sentence. Read it as a transcript, not as evidence.
+
+`RECORD_PEEK_NOTE`:
+
+> A citation is a route, not a copy. The reply never renders the record’s contents — this is identity, trust label, and the door.
+
+**MERGED-TREE VERIFICATION.** `npx tsc -p . --noEmit` clean; full suite
+**588 suites / 7,934 passed / 2 skipped / 7,936 total, exit 0.** Against
+the worktree's 588 / 7,924 / 12 / 7,936: **the TOTAL is identical and the
+skipped column moved by exactly ten** — the documented WP-20c boundary
+effect (the primary checkout holds both embedding model files where a
+worktree holds one). Read the skipped column first: a comparison of the
+passed column alone would have reported a phantom gain of exactly ten,
+which is the third packet in a row to meet this and the reason the
+protocol paragraph exists.
+
+**THE TAIL CONFLICT — both halves verbatim, substring-verified rather
+than eyeballed.** The tail was crowded exactly as the verdict warned. The
+common base (827,649 chars) is intact as a prefix of the resolved file;
+the architect's half (8,588 chars — the WP-13b citation-adherence sitting
+record) and this packet's half (12,221 chars) each appear as EXACT
+substrings, and the architect's precedes this packet's, which is the
+chronological order: the sitting was recorded while this packet was
+building, and the delivery report was written at the end of it. Verified
+by string containment in the resolved file, not by reading the diff.
+
+**ARCHITECT WORK FOUND UNCOMMITTED IN THE PRIMARY CHECKOUT, committed
+VERBATIM as `6ee01419`** before the merge, per the standing WP-02
+precedent — flagged here so the architect can verify fidelity. Two files,
+**pure append, 166 insertions / 0 deletions**: `WORK_PACKETS.md` (the
+WP-13b sitting record, 155 lines) and `PARALLEL_PROTOCOL.md` (the
+`pwd`-before-you-commit addendum from the WP-39 incident, 11 lines).
+Fidelity checked programmatically — md5 of each working copy before
+staging and after committing, identical both times:
+`fcee6681d3acc44dd2f077914b746530` (PARALLEL_PROTOCOL.md),
+`eafe09d3852fd04554d5fef93e073950` (WORK_PACKETS.md). Neither was edited;
+neither is folded into this packet's commits. The untracked
+`sitting-transcripts/` trees were NOT touched — they blocked nothing, and
+the precedent unblocks merges only.
+
+*A note on that addendum, since it landed mid-merge and is about exactly
+this hazard:* this session's commits were verified with `pwd` and
+`git branch --show-current` printed in the same command as every
+`git commit`. The packet's own commit (`2b0036f9`) is on `wp-38` in
+`.worktrees/wp-38`; the two commits on base are the lock announce and the
+architect's verbatim commit, both deliberate.
+
+**THE `src/renderer/components/DockedPanel/` LOCK IS RELEASED.**
+
+**Board after this merge.** The DockedPanel renderer surface is free.
+Registered as a consequence of this packet, and NOT built here:
+
+- **The citation-peek supply micro** (host family, per the gate ruling) —
+  widen `SuppliedEvent` so the peek can render the record's TIME and its
+  one-line machine summary, the two fields of the sheet's peek this
+  packet renders as ABSENT rather than invented. It is a change to
+  `src/intelligence/citation/resolve.ts`, i.e. the core lock.
+- **Host → renderer delivery.** WP-34 already publishes `citationSupply`
+  on `ChatAssemblyResult`; nothing yet puts it on a panel message's
+  `citation` field. Until it lands, a model that cites writes visible
+  `[[cite:…]]` syntax into the bubble — disclosed, and pinned as a test,
+  because a renderer that stripped markers it was never told how to
+  resolve would hide the one fact worth reporting.
+- **The two doors** (`Open in the record, against its runbook`; `Search
+  the ledger for this id`) render only when a handler is supplied, and
+  nothing supplies one yet. Pinned in both directions.
+- **The four unruled moments** (Inspect, Act-small, Act-big, Return) are
+  pinned ABSENT from `STRICTNESS_BY_MOMENT`. Widening the union is a
+  vocabulary-loop question, not a renderer default.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and
+a 30-mutation battery, in the worktree and again on the merged tree.
+**`npm run rebuild` before loading Local.**
