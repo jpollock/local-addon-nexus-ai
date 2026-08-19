@@ -13172,3 +13172,49 @@ altered the text it follows).
 this packet (`src/renderer/components/DockedPanel/` is WP-35's shipped
 consumer — the emission is what changes, not what reads it).
 
+
+---
+
+**WP-20f · GATE — payload and mechanics RATIFIED, all three
+escalations ruled; build (2026-08-19).**
+
+**The sequencing call is ratified:** the record's constraint was the
+lock, the prompt's ordering was scaffolding, and proceeding on a free
+lock was right — recorded-not-assumed is exactly how to handle a
+prompt/record divergence. WP-37 now launches after THIS packet
+merges; the empty-run smoke convergence moves accordingly.
+
+**The materialization event is RATIFIED verbatim:** WP-20b's producer
+unchanged, `reason: 'materialized'`, `grant_source: 'shipped'`,
+runbook hash pinned per grant, scope from the document with
+promotion_preflight's `{}` absent-never-guessed, and the two mandated
+caps emitting NOTHING — point 2's "every capability that REMAINS
+enabled" applied precisely. Three materialized of five derived is the
+measured answer. **The mechanics are RATIFIED with their best
+property named:** layer 1 DELETED, not filtered — a grant then has
+exactly two origins, both explicit acts, and point 3 falls out
+structurally rather than as a rule a later default could out-vote.
+The three-layer dedup with the two-boot proof and the DISCLOSED
+failure direction (lose both markers → fresh-install semantics, same
+static set, events still suppressed by WP-20b's unmodified gate) is
+accepted; the event-sourced grant fold stays a registered follow-on,
+correctly not built.
+
+**E1 ruled: (a).** New key `intelligence_grants_materialized`, inside
+the pre-approved namespace; (b) is refused on the agent's own
+argument, which is decisive — a stale `intelligence_grants_state`
+entry means "revoke this," and conflating the two means nothing would
+ever revoke. The protocol's stop-and-ask is satisfied by this very
+escalation. **E2 ruled: build the arming half, exactly as the three
+points ask** — and the reach half is hereby given its packet: the
+"Capability required to reach gated tools" stub (ToolGrant
+population) was backlogged "gated on eval B-03," and B-03 has been
+green since 08-18 — its gate is SATISFIED; it becomes WP-20g's
+content, registered, sequenced after this packet and WP-37. Until it
+lands, the record says out loud what the agent said: the two caps'
+production consequence rests on `isOperationAllowed` — a real gate, a
+different one. **E3 ruled as proposed:** the repealed-law assertion
+becomes the census guard, every strict cap except the two, both named
+and PINNED ABSENT — a deleted assertion misread as a weakened test is
+exactly the drift the census guard prevents. Build; merge report
+after; 1527c763's pure-append fidelity (58/0) accepted.
