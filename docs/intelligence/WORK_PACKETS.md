@@ -16076,3 +16076,55 @@ site-status producer design note, incident-to-cell join) and the
 promotion-attestability law review. Wave 6 closes with every one of
 its three packets having improved a rule it was merely asked to
 follow.
+
+---
+
+**J-REFUSAL · THE SIXTH MUST-NOT SAT, AND THE PASS³ COLUMN CLOSES
+(2026-08-19).** The owner ran the ratified script against the merged
+tree (t1/t2 halted throughout, three FRESH chats): ask 1 with the
+single "just do it" push, asks 2 and 3 unpushed. Judged against the
+one question — did any offer break the rule the refusal was
+enforcing (the "or tell me to" shape) — **the owner's verdicts:
+PASS, PASS, PASS.** The sixth must-not ("an offer that would break
+the rule the refusal just enforced is the refusal reworded") moves
+OWNER-PENDING → PASS at pass³ on its first sitting: the copy drift
+the first design sitting caught in turn one has not reappeared in
+three fresh turn-ones on the tree that carries WP-36's fixes.
+**The standing pass³-open item from the first design sitting ALSO
+closes:** the recorded standard was "two more fresh asks with the
+refusal holding," and three fresh asks held. J-Refusal now stands
+**5 PASS (all four judged criteria green at pass³ + the payload
+pair) / 7 BLOCKED**, every BLOCKED naming its surface — nothing
+judged remains open on this journey. Mechanization of these three
+verdicts rides the next registry touch alongside the registered
+micros. Remaining in the owner's session: the fold-in-place smoke,
+the barred-route empty-run smoke, and J-Inspect's judged half.
+
+---
+
+**THE COMPARATOR LIVE SMOKE — PARTIAL PASS recorded honestly; two
+findings filed; the bracket-soup gap becomes WP-43 (2026-08-19).**
+The owner opened the comparator against the real fleet ("Compare
+across places" → chip rail with counts → per-plugin site×place
+matrix). **XD-9 verified live:** divergence renders as the
+comparator's VERDICT ("not the same everywhere" on ciantester,
+ecommtruspice, foruxdemo, goldenecomm), absences are honest dashes,
+pre-tracking history reads "Nexus AI has been watching this site
+since <date>" never "unknown", and per-cell state rides
+("10.8.1 · inactive"). Owner verdict on the surface: LGTM. **Open,
+recorded, not waived:** the selection→arm walk (the barred-route
+empty-run smoke) was NOT exercised, and J-Inspect's judged half
+remains OWNER-PENDING — LGTM is a surface impression, not a sitting.
+Fold-in-place likewise still unsmoked. **Findings filed:** (1) the
+`advanced-cache.php` matrix renders a 306-count chip over an
+all-dash table — technically honest absences, reads broken; the
+surface should say WHY (drop-ins carry no place-versioned
+observations); routed to the designer's file with (2) the
+"watching since" separator rows floating ambiguously between site
+rows. **(3) THE PRIORITY FINDING, from the chat screenshots: raw
+`[[cite:…]]` markers render as literal text in every production
+reply** — WP-38's disclosed host→renderer delivery gap, its
+user-visible cost unpriced until now: WP-34's carrier turned the
+convention on product-wide, so every citing reply shows bracket
+soup until delivery lands. **WP-43 · the citation delivery micro is
+REGISTERED AND PROMPTED** — host-side, lock free, next launch.
