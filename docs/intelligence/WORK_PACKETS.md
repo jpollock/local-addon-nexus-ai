@@ -16736,3 +16736,89 @@ asserted.
 
 **THE `src/main/intelligence-host/` AND SETTINGS-RENDERER LOCKS ARE HELD
 until this packet merges.**
+
+---
+
+**WP-43 · MERGE ACCEPTED — the bracket soup is gone from the product
+(2026-08-19).** Stat verified (15 files, +2,103/−27); the clean
+both-column reconciliation (+3/+42, no boundary effect to reason
+past) and the merged-tree battery re-run (24/24) accepted. **Two of
+this report's findings become PROTOCOL:** the diff3 blank-line trap
+(hunk surgery silently dropped the `---` separator; the diff looked
+fine; the substring check caught six characters) elevates
+concatenation-from-blobs with four-way verification from practice to
+STANDARD; and the pure-append fidelity form gains its guard — a
+zero-deletion diffstat is not proof of a pure append, read the diff
+(the agent did exactly this for XD-25 and the v1.3 table, which is
+why the fidelity claim held). **The battery pristine-check fix
+accepted as the better rule:** "no tracked modification + untracked
+set compared before against after, ignored set PRINTED" states what
+pristine means instead of testing for emptiness — strictness that
+was wrong, fixed by naming the invariant. Fidelity on 3aa7f751
+verified by the agent's read-first diligence; both locks RELEASED.
+**Standing: WP-44 launches now** (the prompt is issued; it is the
+handler the doors have been waiting for). The reopened-session
+unknown-arm position rides the next designer relay.
+
+---
+
+**THE ATTESTATION LAW REVIEW · P1–P6 RATIFIED (2026-08-19, owner:
+"I have reviewed and approved").** All six positions of
+`law-review-attestation-note.md` are law from this entry: the
+derivation rule (P1), the proposed classes with containment's
+body-dependent candidates falling to narrative on any mismatch (P2),
+the quoted-from-the-body tool declarations (P3), the re-pin ruling —
+the two materialized grants re-issued at the new hashes as explicit
+`control.grant.issued` events, `reason: 'law-review re-pin'`, at the
+packet's gate (P4), the standing mechanics (P5), and the refusal
+that nothing becomes provable by wording (P6). **WP-45 · the
+attestation law packet is REGISTERED and PROMPTED — launches after
+WP-44's merge** (the re-pin mechanism needs the intelligence-host
+lock WP-44 holds).
+
+---
+
+**WP-44 · GATE — five items ruled (one condition rides to the merge
+report); the reason-fix folds into WP-45; MERGE (2026-08-19).**
+
+**(1) `GOVERN_SET_GRANT` `{capability, grant}` RATIFIED** — no list
+(XD-25's one-at-a-time law at the IPC layer), two channels because
+exactly one has a side effect. **(2) the three copy departures
+RATIFIED on the ruled property's authority:** a row's copy must not
+depend on which other rows exist — the sheet's position-dependent
+variants were a fixture accident and the property outranks the
+instance; routed to the designer's file as an FYI, not a question.
+**(3) the two authored sentences RATIFIED as interim copy**
+("Revoked by you. Grantable again from this row." — the act and the
+remedy, in the ratified verb; "No grant covers this…" — the
+arrive-denied words extended honestly to a reachable state), with
+the standing designer-refinement path open; **the four
+`REFUSAL_COPY` sentences are copy the gate has not SEEN — condition:
+verbatim in the merge report, extracted from source per the WP-38
+standard.** **(4) the producer finding RULED, and the fix FOLDS INTO
+WP-45:** `reason: 'materialized'` stamped on a human act
+misdescribes it in the compliance record — a real honesty defect,
+correctly carried (the producer is WP-20b's, the payload ratified).
+WP-45 must supply a caller reason for its re-pin anyway, so the
+mechanism lands there once: caller-supplied `reason` with a ratified
+vocabulary (`materialized` · `granted-at-control` · `law-review
+re-pin`), presented at WP-45's gate as one item. The WP-45 prompt is
+AMENDED by this entry to include it. **(5) the eval split correction
+ACCEPTED and the error owned:** the response doc's "four remaining
+BLOCKED" was the architect's estimate; the registry is the
+measurement — one driven flip, one honest re-own to WP-30, J-Refusal
+5 PASS / 6 BLOCKED, and refusing to credit the surface with a
+criterion it does not own is the discipline at its best.
+
+**Accepted with approval:** the property pin as a DRIVER (law copied
+to temp, one authored checkpoint, the column must move with nothing
+in src/ edited between reads — the law review's charter is now
+executable); findings 1–3 (the resolver's lists are not the
+capability set; disabled-by-settings is not a disarm — ruling 3
+would have inverted at face value); the premise-vs-measurement split
+in the guard tests; both harness fixes (the array-child flattening,
+the deriveScope-derived fixture); the fail-open survivor closed with
+the floor raised. The cache occurrence joins the RECORD'S running
+count, which is past the packet's own numbering — the count is the
+record's, not each packet's memory. Merge; tail by the blob-rebuild
+standard; WP-45 launches on the merge with its amended scope.

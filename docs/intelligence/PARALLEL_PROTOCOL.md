@@ -379,3 +379,15 @@ prefix of every edit against your worktree root before editing; the tell,
 when it slips, is tsc failing on symbols you just wrote — they landed
 somewhere else. The recovery is the primary-restoration drill, verified
 not assumed.
+
+**Record merges are rebuilt from the three blobs, never hunk-edited — and
+a zero-deletion diffstat is not proof of a pure append** (two WP-43
+findings, one rule): diff3 matched both appends' leading blank line and
+rule as common context, so hunk-level surgery silently dropped the `---`
+separator — six characters the diff view showed as fine and only the
+substring check caught. Concatenation-from-blobs with the four-way
+verification (ancestor as exact prefix, each half as exact substring,
+chronological order, arithmetic in one named unit) is the STANDARD, not
+one resolution style among several. And before invoking the pure-append
+fidelity form, READ the diff: an insertion mid-file also shows zero
+deletions.
