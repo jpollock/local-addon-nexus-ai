@@ -17644,8 +17644,11 @@ seam — not a raised ceiling.** Owed to whoever next edits those two.
   gave the figure above. **Eighth occurrence, and a NINTH followed** on the
   final full run — same two suites, same signature, same fix. The rule earned
   its capitals again.
-- **Final full suite: `602 suites / 8,209 passed / 12 skipped / 8,221 total`,
-  exit 0** (+1 suite, +25 tests; skipped column unchanged).
+- **Final full suite: `602 suites / 8,210 passed / 12 skipped / 8,222 total`,
+  exit 0** (+1 suite, +26 tests; skipped column unchanged). Measured AFTER the
+  M09/M14 fix commit — an earlier draft of this report carried `8,209 / 8,221`,
+  which was the pre-fix run and is one test short. The number here is the one
+  the tree at `96ae787c` produces.
 - **Mutation battery `scripts/wp45-battery.py`: 16/16 KILLED**, control
   SURVIVED (correct), tree verified PRISTINE before and after. `--no-cache`,
   count-floored at 178, both summary lines parsed.
