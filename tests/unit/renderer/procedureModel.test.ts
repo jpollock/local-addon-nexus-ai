@@ -386,6 +386,27 @@ describe('the fake emitter', () => {
   it('is shaped like what the seam actually derives, key for key', () => {
     // A fixture that drifts from `deriveDeclaredProcedure`'s output would let the
     // surface be built against a procedure the platform never emits.
+    //
+    // WP-41 · the derivation is now driven WITH a document, because
+    // `planCheckpoint` is derived from one. Two checkpoints are the whole
+    // requirement `planCheckpointOf` states — something narrative, then a
+    // consent gate attested by `task.rationale.recorded` — and the fake carries
+    // the field, so a document-less derivation would compare the fake against a
+    // shape the seam only produces for a runbook that declares no gate.
+    const runbook = {
+      id: 'rb.bulk-plugin-update',
+      version: '1.0.0',
+      capability: 'cap.bulk_plugin_update',
+      hash: 'sha256:abc',
+      strictness: 'strict',
+      body: '',
+      frontmatter: {},
+      steps: [],
+      checkpoints: [
+        { id: 'cp.dry-run', attest: 'narrative' },
+        { id: 'cp.approval', attest: 'event', evidence: { topic: 'task.rationale.recorded' } },
+      ],
+    };
     const derived = seam.deriveDeclaredProcedure({
       outcome: {
         status: 'armed',
@@ -396,7 +417,11 @@ describe('the fake emitter', () => {
         hash: 'sha256:abc',
         armedBy: 'predicate',
       } as never,
+      runbook: runbook as never,
     })!;
+    // The guard on the guard: if the document stopped yielding a plan
+    // checkpoint, the key-set comparison below would pass for the wrong reason.
+    expect(derived.planCheckpoint?.checkpointId).toBe('cp.dry-run');
     expect(Object.keys(armedFixture().procedure).sort()).toEqual(Object.keys(derived).sort());
   });
 });

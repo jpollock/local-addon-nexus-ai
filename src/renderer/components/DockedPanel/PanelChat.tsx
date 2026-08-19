@@ -4,6 +4,7 @@ import { IPC_CHANNELS, UI_COLORS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
 import { ProcedureApprovalCard } from './ProcedureApprovalCard';
 import { SiteContextStrip, type SiteChoice } from './SiteContextStrip';
+import { ComparatorPanel, type ComparableFact } from './ComparatorPanel';
 import { ProcedureSurfaces } from './ProcedureSurfaces';
 import { CitationSpans } from './CitationSpans';
 import {
@@ -98,6 +99,17 @@ interface Props {
   onStreamingStatusChange?: (status: string | null) => void;
 }
 
+/**
+ * WP-41 · the capability a comparator selection would arm.
+ *
+ * Named here rather than chosen by the comparator: a surface picking which
+ * procedure governs an act would be authoring the governance. The anchor
+ * capability is the one the matrix's plugin rows are about, and an ungranted
+ * one simply produces a scope in which nothing runs — which is a real answer
+ * the block already renders, not an error state to guard against.
+ */
+const COMPARATOR_CAPABILITY = 'cap.bulk_plugin_update';
+
 interface State {
   messages: UIMessage[];
   input: string;
@@ -121,6 +133,28 @@ interface State {
    * what keeps a rail from being rebuilt on every character of output.
    */
   procedure: ProcedureStreamState;
+  /**
+   * WP-41 · the comparator, open or not.
+   *
+   * INTERIM, and named so at the gate: a disclosure above the composer is this
+   * packet's own choice, not a ratified one. What IS ratified is that the shape
+   * comes before any prose about it, so opening the comparator draws the matrix
+   * rather than a description of it.
+   */
+  comparatorOpen: boolean;
+  /**
+   * WP-41 · the comparisons this machine can draw, or none.
+   *
+   * **PARITY.** It lives here rather than inside the comparator because the
+   * panel must render NO comparator chrome at all for a user who has nothing to
+   * compare — a dark core, an unfolded ledger, a fleet recorded at one place.
+   * `panelChat-procedure-parity.test.tsx` pins that panel byte-identical to the
+   * pre-WP-27 tree, and React children are positional: a `null` child is not the
+   * same tree as no child. So the comparator is SPREAD from an array that is
+   * empty until there is something to offer — the same shape, and the same
+   * reason, as `renderProcedurePlan`.
+   */
+  comparatorFacts: ComparableFact[];
 }
 
 const styles = {
@@ -315,6 +349,8 @@ export class PanelChat extends React.Component<Props, State> {
       retentionDays: 30,
       expandedTools: new Set<string>(),
       procedure: emptyProcedureState(),
+      comparatorOpen: false,
+      comparatorFacts: [],
     };
     this.handleInput = this.handleInput.bind(this);
     this.handleSend = this.handleSend.bind(this);
@@ -331,6 +367,8 @@ export class PanelChat extends React.Component<Props, State> {
       this.onStreamEvent(event);
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM, this.streamListener);
+
+    this.loadComparatorFacts();
 
     // Listen for action count updates
     this.actionListener = (_event: any, sessionId: string, _data: { sessionId: string; actionCount: number }) => {
@@ -980,6 +1018,69 @@ export class PanelChat extends React.Component<Props, State> {
     ];
   }
 
+  /**
+   * WP-41 · the comparator and its disclosure, or NOTHING.
+   *
+   * An empty array, not a `null` child: React children are positional, and the
+   * parity fixture is a serialized tree captured before any of this existed. A
+   * user with no comparable facts must get the identical tree, which means the
+   * chrome cannot merely be hidden — it has to be absent.
+   *
+   * INTERIM: the disclosure's wording and placement are this packet's own, not
+   * ratified. What is ratified is that opening it draws the SHAPE rather than a
+   * description of it.
+   */
+  renderComparator(): React.ReactNode[] {
+    const { comparatorFacts, comparatorOpen } = this.state;
+    if (!comparatorFacts.length) return [];
+    return [
+      comparatorOpen
+        ? React.createElement(ComparatorPanel, {
+            key: 'comparator',
+            electron: this.props.electron,
+            capability: COMPARATOR_CAPABILITY,
+            facts: comparatorFacts,
+          })
+        : null,
+      React.createElement(
+        'button',
+        {
+          key: 'comparator-toggle',
+          type: 'button',
+          style: {
+            alignSelf: 'flex-start' as const,
+            margin: '0 10px 4px',
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            font: 'inherit',
+            fontSize: 11,
+            color: UI_COLORS.WPE_BRAND,
+            cursor: 'pointer',
+          },
+          'data-comparator-toggle': String(comparatorOpen),
+          onClick: () => this.setState((prev) => ({ comparatorOpen: !prev.comparatorOpen })),
+        },
+        comparatorOpen ? 'Close the comparison' : 'Compare across places',
+      ),
+    ];
+  }
+
+  /**
+   * WP-41 · ask once, on mount, what can be compared at all. Failure is silence:
+   * the array stays empty and the panel is exactly what it was.
+   */
+  private loadComparatorFacts(): void {
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.COMPARATOR_FACTS)
+      .then((facts: unknown) => {
+        if (Array.isArray(facts) && facts.length) {
+          this.setState({ comparatorFacts: facts as ComparableFact[] });
+        }
+      })
+      .catch(() => { /* nothing to compare is not an error */ });
+  }
+
   render() {
     const { messages, input, streaming, offline, providerId, model } = this.state;
 
@@ -1015,6 +1116,9 @@ export class PanelChat extends React.Component<Props, State> {
       // is scoped to is true whether or not the network is. It is also the disclosure
       // that scope moved when the user navigates mid-session — no toast, no modal, the
       // band just changes, and the next turn carries the new id.
+      // WP-41 · the comparator, spread from an array — empty when there is
+      // nothing to compare, so a user it cannot serve sees the panel unchanged.
+      ...this.renderComparator(),
       React.createElement(SiteContextStrip, this.props.siteContext),
       offline
         ? React.createElement(

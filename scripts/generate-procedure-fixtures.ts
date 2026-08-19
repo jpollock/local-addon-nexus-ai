@@ -57,7 +57,7 @@ const OUT_FILE = path.join(REPO_ROOT, 'docs', 'intelligence', 'design-fixtures',
  * consumer that reads it can tell a shape change from a runbook change — the
  * two look identical in a diff and mean completely different things.
  */
-const FIXTURE_SHAPE_VERSION = 1;
+const FIXTURE_SHAPE_VERSION = 2;
 
 /** Recursively sort object keys so the output is diffable and stable. */
 function stable<T>(value: T): T {
@@ -116,6 +116,15 @@ function fixtureFor(runbook: Runbook): Record<string, unknown> {
       reason: state.reason,
     })),
     steps: runbook.steps,
+    /**
+     * WP-41 · the checkpoint that PRODUCED the plan, and the reason its own
+     * heading gave — `planCheckpointOf`'s derivation, ratified at the WP-37
+     * gate. It lands here for the same reason every other line does: the
+     * sketch and the product must read one document. `null` when this runbook
+     * declares no consent gate, or nothing narrative before it — which is the
+     * document declining to answer, not a field the generator may fill.
+     */
+    planCheckpoint: declared.planCheckpoint ?? null,
     /** The honest denominator: how many of these the platform can prove AT ALL. */
     verifiableCount: declared.verifiableCount,
     checkpointCount: declared.checkpoints.length,

@@ -78,6 +78,8 @@ import {
   type ProcedureAbortedEvent,
   type SiteOutcomeRow,
 } from './procedureModel';
+import { ScopeBlock } from './ScopeBlock';
+import type { GovernDoorTarget } from '../../../main/intelligence-host/sequenceGuard';
 
 export interface ProcedureSurfacesProps {
   procedure: DeclaredProcedure | null;
@@ -94,6 +96,16 @@ export interface ProcedureSurfacesProps {
    * it. Absent ⇒ the active checkpoint stands in (`checkpointWindow`).
    */
   gateCheckpointId?: string | null;
+  /**
+   * WP-41 · the barred group's door, forwarded to `ScopeBlock`.
+   *
+   * Absent · the door renders as text only. That is `ScopeBlock`'s own
+   * contract and it is the right degradation: J-Refusal requires the refusal to
+   * NAME what would make it yes, which the text does, and XD-8 requires the
+   * grant itself to be made at a control rather than elicited here. A missing
+   * launcher costs the shortcut, never the naming.
+   */
+  onGovern?: (door: GovernDoorTarget) => void;
 }
 
 interface State {
@@ -458,12 +470,46 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
     return children;
   }
 
+  /**
+   * WP-41 · THE SCOPE BLOCK, MOUNTED. WP-32 built this component and
+   * deliberately left it unmounted, on a judgment the record ratified: *"the
+   * comparator that produces a real selection is a later packet, and a fixture
+   * selection mounted in the shipped panel would be an authored plan on a live
+   * surface."* That condition ends by being satisfied rather than waived — this
+   * packet builds the comparator, so the selections exist and the block renders
+   * the one that armed.
+   *
+   * **A procedure with no scope still mounts nothing**, which is the same rule
+   * unchanged, not a relaxation of it: every armed run in the product today
+   * carries no scope, and `procedure.scope` absent means there is no selection
+   * to render rather than an empty one. `opensContainer`'s own header makes the
+   * distinction and this reads the same field.
+   *
+   * `companion-head` is the surface, and the frame is all that word changes —
+   * the lines are byte-identical to the selection bar's by construction, because
+   * `scopeBlockLines` is one function and there is no density parameter.
+   */
+  renderScopeBlock(procedure: DeclaredProcedure, key: string): React.ReactNode {
+    if (!procedure.scope) return null;
+    return React.createElement(ScopeBlock, {
+      key,
+      scope: procedure.scope,
+      surface: 'companion-head',
+      ...(this.props.onGovern ? { onGovern: this.props.onGovern } : {}),
+    });
+  }
+
   renderDeclared(procedure: DeclaredProcedure): React.ReactNode {
     if (procedure.unavailable) return this.renderDisarm(procedure);
 
     const finished = runIsFinished(procedure);
     const digest = this.isDigest(procedure);
     const children: React.ReactNode[] = [this.renderHeader(procedure, finished)];
+
+    // Draft 2 §3: "The declaration opens with the block she just made." At the
+    // head, before the body, and not restated in prose anywhere below it.
+    const scope = this.renderScopeBlock(procedure, 'scope');
+    if (scope && !(finished && !this.state.expanded)) children.push(scope);
 
     if (finished) {
       // Folded in place: one row, and the record opens beneath the same row
@@ -522,6 +568,16 @@ export class ProcedureSurfaces extends React.Component<ProcedureSurfacesProps, S
       'div',
       { style: styles.planAttachment, 'data-procedure-plan': procedure.capability },
       plan,
+      // WP-41 · the block rides the empty run too, and it must.
+      //
+      // The container is what XD-21 refuses; the BLOCK is not the container. The
+      // refusal's whole content lives here: the `Excludes:` lines carrying the
+      // record that observed each site, and — where a grant rather than the
+      // world is the answer — the barred group's head and its door, which the
+      // fold's pin says never defer. A plan line alone would be a refusal that
+      // states a count and withholds the reason, which is the opposite of
+      // "inspectable, not asserted".
+      this.renderScopeBlock(procedure, 'scope-empty'),
     );
   }
 

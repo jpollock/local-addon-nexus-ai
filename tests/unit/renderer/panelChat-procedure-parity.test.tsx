@@ -73,6 +73,28 @@ describe('parity — the panel a user without a procedure sees', () => {
     expect(serializeTree(chat().render())).toEqual(baseTree);
   });
 
+  it('WP-41 · grows NO comparator chrome for a user with nothing to compare', () => {
+    // The comparator is spread from an array, not rendered as a conditional
+    // child, for exactly the reason the header gives about the band: React
+    // children are positional and a `null` is not the same tree as no child.
+    // This is why the fixture above did not need regenerating for WP-41 — the
+    // panel a user without comparable facts sees is byte-identical still.
+    const tree = JSON.stringify(serializeTree(chat().render()));
+    expect(tree).not.toContain('ComparatorPanel');
+    expect(tree).not.toContain('comparator-toggle');
+    expect(tree).not.toContain('Compare across places');
+  });
+
+  it('WP-41 · offers the comparator once the records can actually serve one', () => {
+    // The other side, so the pin above cannot pass by the feature being dead.
+    const instance = chat();
+    instance.state.comparatorFacts = [{ fact: 'plugin:woocommerce', label: 'woocommerce', places: 3 }];
+    const tree = JSON.stringify(serializeTree(instance.render()));
+    expect(tree).toContain('Compare across places');
+    // Offered, not opened: the shape appears when she asks for it.
+    expect(tree).not.toContain('ComparatorPanel');
+  });
+
   it('puts no procedure node in the tree', () => {
     expect(JSON.stringify(serializeTree(chat().render()))).not.toContain('ProcedureSurfaces');
   });
