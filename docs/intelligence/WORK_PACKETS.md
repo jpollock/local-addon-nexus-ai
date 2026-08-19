@@ -15613,3 +15613,101 @@ known boundary rather than a surprise.
 `ts-node` derivation probes, the WP-32 fixture generator and an 18-run mutation
 battery. **`npm run rebuild` before loading Local.**
 
+
+---
+
+**WP-20g · MERGED, LOCK RELEASED (2026-08-19).** Merge `809ca230` on
+`poc/nexintelligence`; **8 files, +1,012/−18** against its first parent:
+
+```
+ docs/intelligence/WORK_PACKETS.md                  | 321 +++++++++++++++
+ .../anchor-slice/runbooks/promotion-execute.md     |   3 +-
+ .../design-fixtures/declared-procedures.json       |   4 +-
+ law/runbooks/promotion-execute.md                  |   3 +-
+ src/intelligence/__tests__/shippedRunbooks.test.ts |   8 +-
+ .../intelligence-host/__tests__/armingGap.test.ts  |  49 ++-
+ .../intelligence-host/__tests__/toolReach.test.ts  | 453 +++++++++++++++++++++
+ src/main/intelligence-host/sequenceGuard.ts        | 189 ++++++++-
+```
+
+**THE `src/main/intelligence-host/` LOCK IS RELEASED.**
+
+**Architect work committed VERBATIM before the merge, as `0d359001`**, and its
+fidelity was verified rather than eyeballed: both files are **pure appends** —
+`PARALLEL_PROTOCOL.md` +459 characters, `WORK_PACKETS.md` +4,631 characters,
+each file's committed content intact as an exact prefix of the working copy, and
+**zero deletion lines** in the diff. Unedited, and flagged here so the architect
+can check it.
+
+**Tail resolved BOTH HALVES VERBATIM, base tail first, verified arithmetically
+in CHARACTERS** — one unit, named, per the standard WP-37 established: common
+base **900,351** chars intact as a prefix; base tail (WP-42's merge record)
+**25,499** chars verbatim at offset 900,351; this packet's tail **20,876** chars
+verbatim at offset 925,850; resolved length **946,726** = the exact sum; **zero
+conflict markers**. Base tail first for the reason the discipline gives — WP-42's
+entry was written before this packet's existed and is not answered by it.
+
+**No code conflict, and that is a measurement not an inference.** Git reported
+exactly one `UU` path (`WORK_PACKETS.md`); every other file came through as `M`
+or `A` with no both-sides edit. The one file two packets could plausibly have
+raced on — the guard — was touched only here.
+
+**MERGED-TREE VERIFICATION.** `npx tsc -p . --noEmit` clean; `npx tsc -p
+tsconfig.test.json --noEmit` clean. Full suite **592 suites / 8,009 passed / 2
+skipped / 8,011 total, exit 0, zero FAIL lines** (exit captured before any
+pipe). Run TWICE, identically — the second time after the recovery described
+below, because a tree that has been repaired is not verified until it is
+re-measured.
+
+**Both deltas read, and both reconcile.** The pre-merge baseline was measured on
+the base **in this checkout with the tree held still** (detached at `0d359001`,
+nothing uncommitted), not carried over from a worktree figure: **591 suites /
+7,990 passed / 2 skipped / 7,992 total, exit 0.**
+
+| | suites | passed | skipped | total |
+|---|---|---|---|---|
+| base, pre-merge (primary, measured) | 591 | 7,990 | 2 | 7,992 |
+| merged tree (primary) | 592 | 8,009 | 2 | 8,011 |
+| worktree, after (for reference) | 591 | 7,971 | 12 | 7,983 |
+
+Against the base: **+1 suite, +19 tests, skipped unchanged** — exactly
+`toolReach.test.ts`, and the flat skipped column is what says so. Against the
+worktree's own after-figure the passed column alone would read as **+38**; both
+halves resolve it — **7,971 + 28 + 10 = 8,009**, where **+28** is the base
+advancing under this worktree after it was cut at `bbc9a14e` (WP-42 merged in
+between, +1 suite / +28 tests) and **+10** is the documented WP-20c boundary
+effect (skipped 12 → 2). Suites reconcile the same way: 591 + 1 = 592.
+
+**AN INCIDENT DURING THE MERGE, AND A PROPOSED PROTOCOL AMENDMENT.** Taking the
+pre-merge baseline honestly meant a detached checkout of `0d359001` and back.
+The return `git checkout` **failed on a stale, ZERO-BYTE `.git/index.lock`**
+(created 10:33:53, no git process on this repository — the only two live git
+processes were cloning an unrelated plugin marketplace). It failed **after
+partially rewriting the working file**: `WORK_PACKETS.md` was left at **928,692
+characters**, matching NEITHER commit (`0d359001` is 925,850; the merge is
+946,726) — a partial write that belongs to nothing, sitting in the tree looking
+like an edit.
+
+Recovery: the lock removed only after confirming it was zero bytes and owned by
+no live process, then `git checkout -f`, then the file verified **byte-for-byte
+identical to the merge commit** (946,726 = 946,726, zero conflict markers) and
+`git fsck` clean. **The merge object was never at risk** — only the working
+copy was damaged, which is exactly why the check is against the committed blob
+and not against a remembered length.
+
+**PROPOSED for `PARALLEL_PROTOCOL.md`** (recorded here rather than written
+there, since that file is owner-approval): *a git operation that fails on a lock
+may have already half-written your working tree.* This is the
+poisoned-artifact family's git form — same shape as the killed-battery rule
+(WP-34) and the generator-writes-the-tracked-fixture rule (WP-32): **an
+interrupted writer leaves its partial output on disk, and a `git status` that
+says `M` is describing damage, not an edit.** After ANY aborted git command,
+compare the file to its committed blob before believing either the file or the
+status line. And during multi-agent operation a `.git/index.lock` is checked —
+size, age, owning process — never assumed stale and never assumed live.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` (five times), `npx
+jest`, two `ts-node` derivation probes, the WP-32 fixture generator and an
+18-run mutation battery. **`npm run rebuild` before loading Local.** **Not
+pushed**; branch `wp-20g` and worktree `.worktrees/wp-20g` left in place.
+
