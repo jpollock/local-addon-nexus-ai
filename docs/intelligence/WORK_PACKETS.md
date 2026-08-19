@@ -14349,3 +14349,64 @@ DockedPanel lock on base while this packet ran). WP-39 touches neither
 WP-13b entry both landing after this packet's base. Resolve it the way the
 board already does: **both halves verbatim**, verified as exact substrings of
 the resolved file rather than eyeballed.
+
+---
+
+**WP-39 · MERGED (2026-08-19).** Merge `79010d1a` on `poc/nexintelligence`;
+**5 files, +534/−6** against its first parent:
+
+```
+ docs/intelligence/WORK_PACKETS.md         | 214 ++++++++++++++
+ src/main/ipc-handlers.ts                  |  14 +-
+ tests/intelligence-evals/hostSeam.test.ts | 149 +++++++++++
+ tests/intelligence-evals/hostSeamProbe.ts | 132 ++++++++++
+ tests/intelligence-evals/sitting.ts       |  31 ++-
+```
+
+**Architect work committed verbatim first, per the standing precedent (fifth
+exercise):** `dd62d3d9` carries the consolidated adjudication
+(`WORK_PACKETS.md`) and the two new protocol rules (`PARALLEL_PROTOCOL.md`),
+unedited, in its own attributed commit — it blocked this merge. **Fidelity
+verified by hash, not by eye:** the committed blobs are md5-identical to the
+working copies taken before the commit (`489abf6f…` and `a004c4e9…`). The
+untracked `sitting-transcripts/cite-b03`, `cite-empty` and
+`extracts-for-architect.txt` did NOT block and were left exactly as found —
+the same choice WP-38's merge made.
+
+**Tail conflict resolved BOTH HALVES VERBATIM, chronological, and verified as
+exact substrings** rather than eyeballed: common base 826,198 chars intact;
+base tail 32,667 chars present verbatim; this packet's tail 13,130 chars
+present verbatim; resolved length 871,995 = the exact sum; zero conflict
+markers. Base tail first — the adjudication's "WP-39: cleared to merge" line
+is what this packet's entry answers.
+
+**MERGED-TREE VERIFICATION.** `npx tsc -p . --noEmit` clean; `npx tsc -p
+tsconfig.test.json --noEmit` clean. Full suite: **589 suites, 7,940 passed,
+2 skipped, 7,942 total, exit 0, zero FAIL lines.** The new guard suite runs
+in it and passes 6/6 on the merged tree (`--no-cache`, re-run separately).
+
+**The delta against the worktree's after-run reconciles to the byte, and both
+halves are read** — passed-column-only would have shown a phantom +95:
+
+| | suites | passed | skipped | total |
+|---|---|---|---|---|
+| worktree, after | 585 | 7,845 | 12 | 7,857 |
+| merged tree | 589 | 7,940 | 2 | 7,942 |
+
+`7,857 + 85 = 7,942`, where **+85 is WP-38's reconciling suite**, merged onto
+base after this worktree was cut (its own report states +85). The remaining
+movement is entirely the documented boundary effect: **skipped 12 → 2**, the
+ten `embedding-service` tests the primary gates IN and a worktree gates out —
+`7,845 + 10 + 85 = 7,940` passed, exact. Read the skipped column first.
+
+**Base drift handled, not merely noted:** this worktree was cut at `216affbf`;
+base was at `dd9813de` by merge time (WP-38's merge and its report, plus the
+architect's WP-13b commit, all landed in between). No file contention — WP-39
+touches neither `procedureStream.ts` nor the renderer.
+
+**ABI ON EXIT: SYSTEM NODE.** `npm test` was run on the merged tree.
+Measured: `node -v` **v25.9.0**, `node -p process.versions.modules` **141**.
+**`npm run rebuild` before loading Local.**
+
+**Not pushed.** Branch `wp-39` and worktree `.worktrees/wp-39` left in place
+for the housekeeping backlog.
