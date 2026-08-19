@@ -635,10 +635,23 @@ export function setCapabilityGrant(opts: {
       return { ok: false, reason: 'unwritable', matrix: readGovernMatrix({ core, storage }) };
     }
 
-    // WP-20b's producer, unchanged. This is what emits the control event, and
-    // it is what makes the widening visible and revocable rather than merely
-    // configured.
-    syncCapabilityGrants({ core, storage, logger: { ...logger, warn: logger.info } });
+    // WP-20b's producer, unchanged in role. This is what emits the control
+    // event, and it is what makes the widening visible and revocable rather
+    // than merely configured.
+    //
+    // WP-45 · IT CARRIES THE REASON, because only this caller knows it. The
+    // producer stamped `materialized` on every first issuance, including the
+    // one a person makes right here — WP-44's gate found it, and a
+    // `control.grant.issued` that calls a human act a migration misdescribes
+    // that act in the compliance record. Scoped to the ONE capability this act
+    // touched: a sync re-resolves the whole set, and a reason applied to the
+    // call would put this person's word on grants they did not make.
+    syncCapabilityGrants({
+      core,
+      storage,
+      logger: { ...logger, warn: logger.info },
+      ...(grant ? { issueReasons: new Map([[capability, 'granted-at-control' as const]]) } : {}),
+    });
     logger.info(`[Intelligence] capability ${grant ? 'granted' : 'revoked'} at the control: ${capability}`);
 
     return { ok: true, matrix: readGovernMatrix({ core, storage }) };

@@ -220,13 +220,13 @@
         "the snapshot id(s) and their verification status, before any cleanup runs",
         "the entry-vector hypothesis with the log evidence it rests on — or an explicit statement that the entry vector is unknown"
       ],
-      "hash": "sha256:fedec1dfb1a6b1e43ac978d356c3e75aad48be9b44ed05aca2f0e4f0b3e689df",
+      "hash": "sha256:d1c8740a3dd5e363300dd523cf80ea072d8b6ae1c56683e83d50309410558976",
       "planCheckpoint": null,
       "runbookId": "rb.incident-containment",
       "steps": [],
       "strictness": "strict",
       "verifiableCount": 0,
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     "rb.incident-remediation": {
       "armedBy": "model-request",
@@ -247,8 +247,8 @@
           "verified": false
         },
         {
-          "attest": "narrative",
-          "attestWords": "on your account only — the platform cannot verify this",
+          "attest": "event",
+          "attestWords": "the platform can verify this from records",
           "badge": null,
           "id": "cp.approval",
           "reason": "per destructive step, not per plan",
@@ -309,13 +309,16 @@
         "the blind spots this investigation cannot see — runtime behaviour and premium/paid component internals — stated in the post-mortem, not omitted because the news is good",
         "anything left uncleaned because a permission was refused, named as such"
       ],
-      "hash": "sha256:bb707ba844bd8fcbdb4bba0bbe7a2433ea9fe82c2e73e2767c296c9b07b7337b",
-      "planCheckpoint": null,
+      "hash": "sha256:e81b52ebf22a7ff935a840846083d6d94367c8f71b805a2728b8ae9150f051b1",
+      "planCheckpoint": {
+        "checkpointId": "cp.cleanup-plan",
+        "reason": "the exact commands, in full, before approval"
+      },
       "runbookId": "rb.incident-remediation",
       "steps": [],
       "strictness": "strict",
-      "verifiableCount": 0,
-      "version": "1.1.0"
+      "verifiableCount": 1,
+      "version": "1.2.0"
     },
     "rb.promotion-execute": {
       "armedBy": "model-request",
@@ -323,8 +326,8 @@
       "checkpointCount": 5,
       "checkpoints": [
         {
-          "attest": "narrative",
-          "attestWords": "on your account only — the platform cannot verify this",
+          "attest": "event",
+          "attestWords": "the platform can verify this from records",
           "badge": null,
           "id": "cp.backup",
           "reason": "before anything writes",
@@ -333,8 +336,8 @@
           "verified": false
         },
         {
-          "attest": "narrative",
-          "attestWords": "on your account only — the platform cannot verify this",
+          "attest": "event",
+          "attestWords": "the platform can verify this from records",
           "badge": null,
           "id": "cp.approval",
           "reason": "explicit, informed consent",
@@ -343,8 +346,8 @@
           "verified": false
         },
         {
-          "attest": "narrative",
-          "attestWords": "on your account only — the platform cannot verify this",
+          "attest": "event",
+          "attestWords": "the platform can verify this from records",
           "badge": null,
           "id": "cp.promote",
           "reason": "execute, with the ids you resolved",
@@ -380,13 +383,13 @@
         "the destination backup id and its verification status",
         "the post-promotion verification result, or that verification could not be completed"
       ],
-      "hash": "sha256:c17d4bc08e648c2007c96cae83f7439c089ffa1beee08ae558908bcedec32f41",
+      "hash": "sha256:f6da72399966f52ab3f1954cd4e1903cced7a912e1c50fc3a6cda6cfea3163c4",
       "planCheckpoint": null,
       "runbookId": "rb.promotion-execute",
       "steps": [],
       "strictness": "strict",
-      "verifiableCount": 0,
-      "version": "1.2.0"
+      "verifiableCount": 3,
+      "version": "1.3.0"
     },
     "rb.promotion-preflight": {
       "armedBy": "model-request",
@@ -414,8 +417,8 @@
           "verified": false
         },
         {
-          "attest": "narrative",
-          "attestWords": "on your account only — the platform cannot verify this",
+          "attest": "manifest",
+          "attestWords": "the platform can verify this from what it supplied",
           "badge": {
             "label": "runbook added this",
             "reason": "has this pair bitten us before?"
@@ -446,13 +449,13 @@
         "what the pre-flight diff showed (what is about to be replaced)",
         "anything cp.consult-history surfaced about these two environments"
       ],
-      "hash": "sha256:ae5a1678d2471c58d21a0c11f532245accb5e1511923113d694adff3673f3a86",
+      "hash": "sha256:4913c8b5ce94fc33d091efeb8d68cc8f395181cd6cbba54af60e2dcd8260801e",
       "planCheckpoint": null,
       "runbookId": "rb.promotion-preflight",
       "steps": [],
       "strictness": "strict",
-      "verifiableCount": 0,
-      "version": "1.1.0"
+      "verifiableCount": 1,
+      "version": "1.2.0"
     },
     "rb.wpe-pull": {
       "armedBy": "model-request",

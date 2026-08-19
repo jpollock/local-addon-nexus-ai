@@ -1,7 +1,7 @@
 ---
 id: rb.promotion-execute
 kind: runbook
-version: 1.2.0
+version: 1.3.0
 strictness: strict
 capability: cap.promote_environment    # unchanged from rb.staging-promotion: this half is the write the capability names
 owner: ops
@@ -11,6 +11,7 @@ review_triggers:
   - any change to wpeOperationPermissions semantics (the M4 family is its harness)
   - any change to wpe_promote_environment / wpe_create_backup / wpe_backup_and_verify signatures
   - WP Engine changing promotion behaviour (what a promotion copies, what it leaves)
+  - attestation classes changed
 scope:
   sources: [wpe_staging, wpe_development]        # a promotion always flows upward
   destinations: [wpe_production, wpe_staging]    # production destination is the normal case here
@@ -36,13 +37,28 @@ checkpoints:                     # ordered; strict — gated calls out of sequen
   # promotion, not for it to be checked afterwards. The backup, the approval and
   # the report are the platform's ceremony around any write; cp.promote is the
   # request itself.
+  # attest: what the PLATFORM can prove, never how well the step was done.
+  # Three of five are provable and two are not. The backup, the consent and the
+  # promotion each leave a gateway record; whether the destination came back up
+  # is a reading, and the report is prose. A reader who could not tell which was
+  # which would read a narrative tick as a verified one (WP-20 design note §4).
   - id: cp.backup                # eval 05 (backup the destination before promoting; wait for it or use backup_and_verify)
+    attest: event
+    evidence: { topic: task.action.executed, tool: wpe_backup_and_verify }
+    tools: [wpe_create_backup, wpe_backup_and_verify]   # both paths this step's body offers
   - id: cp.approval              # eval 05 (explicit confirmation before executing)
+    attest: event
+    evidence: { topic: task.rationale.recorded, decision: approved }
   - id: cp.promote               # eval 05 (executes promotion with correct install ids)
+    attest: event
+    evidence: { topic: task.action.executed, tool: wpe_promote_environment }
     tools: [wpe_promote_environment]   # the write this capability names (WP-20g): declared, so the reach check can bind it
   - id: cp.verify-destination    # eval 05 (a promotion claimed but unverified is not a completed promotion)
+    attest: narrative            # verify_site_live re-observes the destination; nothing proves "site responds, admin reachable"
+    tools: [verify_site_live]    # the instrument this step has (WP-31 precedent): declared, so the gate permits it here
     unrequested: true
   - id: cp.report
+    attest: narrative
 aborts:
   - id: ab.backup-failed
     on: cp.backup failure, timeout, or a backup whose completion cannot be verified

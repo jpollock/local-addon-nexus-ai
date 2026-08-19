@@ -1,7 +1,7 @@
 ---
 id: rb.incident-containment
 kind: runbook
-version: 1.1.0
+version: 1.2.0
 strictness: strict
 capability: cap.incident_containment
 owner: ops
@@ -10,6 +10,7 @@ hands_off_to: rb.incident-remediation  # that half removes things, under its own
 review_triggers:
   - any change to the sentinel signal set or its severities (its fixture is this runbook's harness)
   - any change to wpeOperationPermissions semantics (delete / wpcli / wpcli_read)
+  - attestation classes changed
 scope:
   environments: [wpe_production, wpe_staging, wpe_development, local, external]
   note: production is IN scope by necessity — compromises happen on live sites; this half
@@ -39,13 +40,23 @@ checkpoints:                     # ordered; strict — gated calls out of sequen
   # snapshot (preserving the infected state before touching it), entry-vector
   # (how they got in, which is work beyond "clean this up"). Triage and the
   # integrity diff ARE the investigation that was asked for.
+  # attest: what the PLATFORM can prove, never how well the step was done.
+  # NONE of the five. cp.snapshot and cp.isolate were reviewed as event
+  # candidates and fall to narrative on this document's own text: neither names
+  # a gateway tool, and the registry ships none for isolation or snapshotting.
+  # A class is never assigned because we wish it were provable (note P1).
   - id: cp.triage
+    attest: narrative
   - id: cp.isolate
+    attest: narrative
     unrequested: true
   - id: cp.snapshot         # evidence before cleanup, always
+    attest: narrative
     unrequested: true
   - id: cp.integrity-diff
+    attest: narrative
   - id: cp.entry-vector
+    attest: narrative
     unrequested: true
 aborts:
   - id: ab.evidence-not-preserved

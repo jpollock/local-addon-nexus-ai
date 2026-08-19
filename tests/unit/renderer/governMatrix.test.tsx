@@ -231,16 +231,43 @@ describe('WP-44 render · the gates column, unsoftened', () => {
     const s = section();
     const text = allText(s);
     const occurrences = text.split('The grant itself, and nothing after it.').length - 1;
-    // Four strict capabilities have no attestable checkpoint, and the sentence
-    // is on every one of them — not only on the first, and not only on the
-    // denied ones.
-    expect(occurrences).toBe(4);
-    expect(text).toContain('All 5 checkpoints are narrative');
-    expect(text).toContain('All 6 checkpoints are narrative');
+    // WP-45 · THIS COUNT IS DERIVED FROM THE DOCUMENTS, NOT TYPED BESIDE THEM.
+    // It was 4 when four strict runbooks had no attestable checkpoint; the
+    // ratified law review left exactly one (`rb.incident-containment`, whose
+    // cp.snapshot and cp.isolate were verified against its body and fall to
+    // narrative). Computing the expectation from the registry is what makes
+    // this render test move WITH the law instead of having to be re-typed
+    // after it — the designer's ratified property, applied to the surface.
+    const zeroAttestable = registry
+      .runbooks({ strictness: 'strict' })
+      .filter((rb) => rb.checkpoints.every((c) => c.attest === 'narrative'));
+    expect(zeroAttestable.map((rb) => rb.id)).toEqual(['rb.incident-containment']);
+    expect(occurrences).toBe(zeroAttestable.length);
+    for (const rb of zeroAttestable) {
+      expect(text).toContain(`All ${rb.checkpoints.length} checkpoints are narrative`);
+    }
   });
 
   test('the anchor row renders the split the document declares', () => {
     expect(allText(section())).toContain('4 of 8 checkpoints the platform can verify.');
+  });
+
+  /**
+   * WP-45 · the law review reaching the SURFACE, which is the half a gates
+   * column cannot prove on its own.
+   *
+   * The three documents that gained attestable checkpoints must render their
+   * new denominators here, with nothing in the renderer edited. The numbers are
+   * derived from the registry for the same reason as above.
+   */
+  test('the three reviewed documents render their new denominators', () => {
+    const text = allText(section());
+    for (const cap of ['cap.promote_environment', 'cap.promotion_preflight', 'cap.incident_remediation']) {
+      const rb = registry.byCapability(cap)!;
+      const attestable = rb.checkpoints.filter((c) => c.attest !== 'narrative').length;
+      expect(attestable).toBeGreaterThan(0);
+      expect(text).toContain(`${attestable} of ${rb.checkpoints.length} checkpoints the platform can verify.`);
+    }
   });
 });
 

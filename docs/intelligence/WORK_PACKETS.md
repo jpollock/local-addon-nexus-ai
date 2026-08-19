@@ -17382,6 +17382,314 @@ touching `bulk-plugin-update.md` or the guided runbooks.
 
 ---
 
+## WP-45 · DELIVERY — the law review applied (2026-08-19)
+
+**Commits `0e3d5272`, `29dbaef1`, `96ae787c` on branch `wp-45`, worktree
+`.worktrees/wp-45`, cut from `poc/nexintelligence` at `6fc40ced`.**
+
+### P2 · the four denominators, DERIVED
+
+| document | before | after | the classes |
+|---|---|---|---|
+| `rb.promotion-execute` v1.3.0 | 0 of 5 | **3 of 5** | cp.backup·event, cp.approval·event, cp.promote·event |
+| `rb.promotion-preflight` v1.2.0 | 0 of 4 | **1 of 4** | cp.consult-history·manifest |
+| `rb.incident-remediation` v1.2.0 | 0 of 6 | **1 of 6** | cp.approval·event |
+| `rb.incident-containment` v1.2.0 | 0 of 5 | **0 of 5** | none — measured |
+
+### GATE HOLD 1 · the containment body-verification
+
+**Both event-candidates FALL TO NARRATIVE, and the mismatch is named rather
+than stretched.** Verified against the document's own body and against the
+tool registry, not against the note's expectation:
+
+- **`cp.snapshot`** — the body says *"Snapshot before cleanup: a backup of the
+  site as it stands, plus copies of the artifact files and the account
+  inventory… Attest the snapshot id and verify it completed."* It names an
+  OBLIGATION and no instrument. The whole document names no backup tool
+  anywhere — not in the body, not in `requires_sources`, not in
+  `review_triggers`. Contrast `rb.promotion-execute`, which names both backup
+  tools twice in frontmatter; that contrast is the whole difference between
+  3-of-5 and 0-of-5.
+- **`cp.isolate`** — *"Reduce reachability before touching anything:
+  maintenance mode, restricted access, or the host's equivalent."* No tool, and
+  "or the host's equivalent" is explicitly not a platform act.
+- **The registry has neither.** Swept all **193** shipped tool names: there is
+  no snapshot tool and no isolation/maintenance-mode tool. So even a document
+  that DID name one would be naming something that does not exist.
+- Containment's scope also includes `local` and `external`, where the `wpe_*`
+  backup tools do not apply at all — a second, independent reason the
+  candidate could not have been honoured wholesale.
+
+**FINDING (named, per the note's instruction):** the note's P2 anticipated
+"0 to 2 of 5, body-dependent" and the measured answer is **0**. Pinned as a
+test (`containment declares no tool at cp.snapshot or cp.isolate`), asserted
+over the document, so ADDING such a declaration fails and gets read. This is
+also why WP-44's existing property pin still passes untouched: its `before`
+state — "All 5 checkpoints are narrative" — is still containment's `after`.
+
+### GATE HOLD 2 · the tool declarations, quoted from the body
+
+**`cp.backup` → `tools: [wpe_create_backup, wpe_backup_and_verify]`.** The
+document names both, three times:
+
+> `- { class: platform, type: state,      need: the destination's backup state and completion, via: wpe_create_backup / wpe_backup_and_verify }`
+
+> `  - any change to wpe_promote_environment / wpe_create_backup / wpe_backup_and_verify signatures`
+
+> *"Create a backup of the **destination** and verify it completed. Use the
+> verify-in-one path where available; otherwise poll to completion — a backup
+> request is not a backup."*
+
+`evidence.tool` is `wpe_backup_and_verify` **alone**, and that is derived from
+the third quote rather than chosen: `evidence.tool` takes one tool, and the
+document itself says a REQUEST is not a backup. A `wpe_create_backup` outcome
+proves a request succeeded, not that a backup completed, so attesting on it
+would manufacture the verification claim the checkpoint exists to demand. Both
+tools are still DECLARED, so both are permitted at the step.
+
+**`cp.verify-destination` → `tools: [verify_site_live]`**, narrative, the
+WP-31 `cp.verify-canary` precedent exactly:
+
+> *"Verify the destination live: site responds, admin reachable, core/plugin
+> versions now match what the source carried…"*
+
+**Stated honestly:** this quote names the instrument by FUNCTION, where
+`cp.backup`'s quotes name their tools verbatim. P3 ratifies this declaration
+by precedent, so it is made — but the two quotes are not equally strong and
+the report says so rather than presenting them as one thing. No body text was
+edited to make the quote stronger; that would be authoring the evidence.
+
+### The reach and ordering consequences, the WP-20g way
+
+- **`wpe_backup_and_verify` — WIDENED.** Already declared by the anchor. Reach
+  is a disjunction, so a second declarer only adds a way in. Pinned.
+- **`verify_site_live` — WIDENED**, same reasoning.
+- **`wpe_create_backup` — NARROWED, and this is the one to read.** It had
+  **zero** declaring capabilities, so rule 7's zero case left it on the legacy
+  surface, reachable with no grant. It now has exactly one, and that capability
+  is MANDATED-EXPLICIT — so on a default machine the tool moves from reachable
+  to **refused**. That is WP-20d's permanently-narrowed-surface trap in
+  miniature. Accepted (P3 is ratified, and rule 7's claim is exactly that a
+  write bound to a capability is unreachable without it), but disclosed as a
+  test rather than as a sentence: `WP-45: wpe_create_backup leaves the zero
+  case and is now grant-gated`, which also drives the grant restoring it.
+- **ORDERING — WP-20g's own tripwire fired.** Its test
+  *"THE HONEST ASTERISK: once granted, rb.promotion-execute gates nothing
+  further"* was written to FAIL "the day a law edit adds `attest: event` to
+  cp.backup or cp.approval… rather than silently changing what this suite
+  believes." It failed. Rewritten to the measured new truth: a granted, armed
+  promotion run now **refuses `wpe_promote_environment` at `cp.backup`** —
+  driven, not asserted. The backup that makes a live-environment overwrite
+  recoverable is no longer a step a run can skip.
+
+### GATE HOLD 3 · the re-pin events, VERBATIM
+
+**First, the note's premise was corrected by driving it.** P4 states both
+grants "hold MATERIALIZED grants pinned to the current hashes" and that a
+version bump "disarms both via the stale-pin rule". Measured
+(`lawReviewRePin.test.ts`, both directions):
+
+- **A grant made at the Govern control DOES disarm** (`hash-mismatch`) — it
+  carries the hash it was made against. The note is right about this shape.
+- **A purely MATERIALIZED grant does NOT.** The materialized set is a list of
+  capability NAMES with no hash on it, so there is nothing for the stale-pin
+  rule to compare: the grant **silently survives** the hash change and re-pins
+  itself to text nobody re-reviewed. That is the first half of P4's promise
+  failing, in the direction the note did not anticipate.
+
+So the re-pin does two jobs. Both are driven by one `from → to` table
+(`LAW_REVIEW_REPIN`), **idempotent across restarts by construction and with no
+storage marker of its own** — once applied, the recorded hash IS `to`, so
+`from` can never match again. That is strictly stronger than a stored flag
+(which can be lost) and it leaves the protected `intelligence_grants_*`
+namespace untouched. A grant pinned to any OTHER hash still disarms: the table
+is one transition, never a standing exemption.
+
+The two events, exactly as a migrated machine emits them:
+
+```json
+{
+  "topic": "control.grant.issued",
+  "schema": "grant.issued/1",
+  "entity": {},
+  "actor": { "id": "act_grant_materializer", "kind": "system", "via": "sat_…" },
+  "source": { "class": "expertise", "system": "law:capability-grants", "trust": "authored" },
+  "access": { "tenant": "local" },
+  "causation": "evt_…  (the issuance this supersedes)",
+  "payload": {
+    "capability": "cap.incident_containment",
+    "runbook_id": "rb.incident-containment",
+    "runbook_hash": "sha256:d1c8740a3dd5e363300dd523cf80ea072d8b6ae1c56683e83d50309410558976",
+    "strictness": "strict",
+    "scope": { "environments": ["wpe_production","wpe_staging","wpe_development","local","external"] },
+    "grant_source": "shipped",
+    "reason": "law-review re-pin",
+    "previous_runbook_hash": "sha256:fedec1dfb1a6b1e43ac978d356c3e75aad48be9b44ed05aca2f0e4f0b3e689df"
+  }
+}
+```
+
+```json
+{
+  "topic": "control.grant.issued",
+  "schema": "grant.issued/1",
+  "entity": {},
+  "actor": { "id": "act_grant_materializer", "kind": "system", "via": "sat_…" },
+  "source": { "class": "expertise", "system": "law:capability-grants", "trust": "authored" },
+  "access": { "tenant": "local" },
+  "causation": "evt_…  (the issuance this supersedes)",
+  "payload": {
+    "capability": "cap.promotion_preflight",
+    "runbook_id": "rb.promotion-preflight",
+    "runbook_hash": "sha256:4913c8b5ce94fc33d091efeb8d68cc8f395181cd6cbba54af60e2dcd8260801e",
+    "strictness": "strict",
+    "scope": {},
+    "grant_source": "shipped",
+    "reason": "law-review re-pin",
+    "previous_runbook_hash": "sha256:ae5a1678d2471c58d21a0c11f532245accb5e1511923113d694adff3673f3a86"
+  }
+}
+```
+
+**`scope: {}` on the second is PRE-EXISTING and deliberate, not a WP-45
+regression** — `scopeFromRunbook` models only `environments:`, and
+`rb.promotion-preflight` declares `sources`/`destinations`/`excluded`
+(WP-20a finding 5: "absent, not wrong"). Flagged because the event is
+presented verbatim and a reader would otherwise have to guess.
+
+### The reason vocabulary — WP-44's gate finding, closed
+
+Ratified three, plus the derived one the producer keeps:
+
+- `materialized` — the WP-20f migration. Nobody chose it; the word says so.
+- `granted-at-control` — a person granted it, at the Govern matrix.
+- `law-review re-pin` — a ratified review re-issued it at the new hash.
+- `repinned` — **deliberately NOT one of the ratified three.** It is what the
+  producer says when a document moved under a grant and nothing reviewed the
+  move. Telling that apart from a reviewed re-pin is the vocabulary's whole
+  point, and a mutation collapsing the two is killed (M15).
+
+Supplied **per capability, not per call** (`issueReasons: Map`): one sync
+re-resolves the WHOLE grant set, so a reason attached to the call would stamp
+one person's act onto every grant that happened to change in the same pass.
+Killed as M14.
+
+### P6 · the surfaces moved BY THEMSELVES
+
+**Seven pre-existing assertions went red on the law edit alone, with nothing
+in `src/` changed.** That is the property, observed rather than claimed:
+
+1. `gates column MOVES` (ROW half) — preflight's probe is now the SECOND
+   attestable checkpoint: 1 of 5 → 2 of 5.
+2. `zero attestable renders the full sentence on EVERY such row` — the shipped
+   zero-attestable population fell 4 → 1. **Rebuilt rather than re-typed:** the
+   both-populations half now FORKS law and strips one attestable checkpoint off
+   a mandated capability, so the property stays a property of `gatesLines`
+   instead of an accident of what shipped that day.
+3. `a mandated capability IS grantable` — **the review's acceptance criterion.**
+   `cap.promote_environment` moved from "The grant itself, and nothing after
+   it." to "3 of 5 checkpoints the platform can verify."
+4. `the document column says the mismatch` — v1.1.0/`ae5a1678d2` → v1.2.0/`4913c8b5ce`.
+5. `toolReach` — WP-20g's asterisk (above).
+6. `shippedRunbooks` byte table.
+7. Renderer `the zero-attestable rows say it` — **now derives its own count
+   from the registry** instead of carrying the literal `4`, so the render test
+   moves WITH the law rather than needing a re-type after it.
+
+Extended per P6 with `WP-45 · the four reviewed documents, derived`: the four
+denominators, the ruled gates wording, **every checkpoint's class per id** (a
+count can be right while the wrong checkpoint carries the class — on cp.backup
+that would mean the step making an overwrite recoverable is the unprovable
+one), the containment verification, and the `review_triggers` entry on all four.
+
+### P5 · mechanics
+
+Version bumps on all four; `review_triggers` gains "attestation classes
+changed" on each; the four anchor-slice copies re-verified **byte-identical**
+(`cmp`), including after the battery; `declared-procedures.json` **REGENERATED**
+(never spliced) and `fixtures:procedures:check` green.
+
+**FIELD READ-BACK** (the ratified rule — `:check` proves the file matches the
+generator, not that both contributions survived): generator side `$shapeVersion
+2` and `$notDerived` present, `planCheckpoint` still populated on
+`rb.incident-remediation` (`cp.cleanup-plan`); law side all four at their new
+versions and hashes, with every `attest` and its rendered `attestWords`
+correct — `event` → "the platform can verify this from records", `manifest` →
+"…from what it supplied", `narrative` → "on your account only…".
+
+### FINDING · the near-ceiling margin is spent
+
+| document | bytes | margin to the 9,216 WARN |
+|---|---|---|
+| `rb.incident-containment` | 8,673 → **9,195** | **21** |
+| `rb.incident-remediation` | 8,714 → **9,210** | **6** |
+| `rb.promotion-preflight` | 8,184 → 8,969 | 247 |
+| `rb.promotion-execute` | 7,026 → 8,095 | 1,121 |
+
+WP-45's comments were trimmed **twice** to land under the caution rather than
+crossing it quietly. The next author to add a line to either incident half
+trips it. Asserted as a test (the margins, not only the totals) so the finding
+re-runs. **The remedy when it comes is the WP-20c one — split at a checkpoint
+seam — not a raised ceiling.** Owed to whoever next edits those two.
+
+### Measurements
+
+- **Baselines, both sides.** Worktree `601 suites / 8,184 passed / 12 skipped /
+  8,196 total`, exit 0. Primary `601 / 8,194 / 2 skipped / 8,196`, exit 0 —
+  same total, ten tests moved between the passed and skipped columns, which is
+  the documented embedding-model boundary effect, read skipped-first.
+- **The primary baseline was RED on first measurement** (2 suites, 8,121
+  total) with the poisoned-cache parse signature in two `tests/intelligence-evals/`
+  suites this packet never touched. `npx jest --clearCache` then re-measure
+  gave the figure above. **Eighth occurrence, and a NINTH followed** on the
+  final full run — same two suites, same signature, same fix. The rule earned
+  its capitals again.
+- **Final full suite: `602 suites / 8,210 passed / 12 skipped / 8,222 total`,
+  exit 0** (+1 suite, +26 tests; skipped column unchanged). Measured AFTER the
+  M09/M14 fix commit — an earlier draft of this report carried `8,209 / 8,221`,
+  which was the pre-fix run and is one test short. The number here is the one
+  the tree at `96ae787c` produces.
+- **Mutation battery `scripts/wp45-battery.py`: 16/16 KILLED**, control
+  SURVIVED (correct), tree verified PRISTINE before and after. `--no-cache`,
+  count-floored at 178, both summary lines parsed.
+  - **Two survived the first run and were real gaps in this packet's own
+    pins** — both vacuous-guard shapes, fixed and re-driven:
+    - **M09** (the matcher's `to` half) survived because in every behavioural
+      case the shipped hash IS `to`, so dropping the check changed nothing
+      observable. Now pinned directly on `lawReviewRePinFor`, with the real
+      future case named: edit the document again and `to` goes stale, at which
+      point a re-pin would record a review as approving text it never produced.
+    - **M14** (reason scoping) survived because both scoping tests compared
+      against an event the BOOTSTRAP emitted — a different sync, which a
+      widening bug leaves untouched. Both now rewind another capability's
+      marker so it re-pins in the SAME sync, and assert the premise (two
+      issuances in one pass) before the claim.
+  - **Attribution note:** a mutation to a `law/` document is also caught by the
+    derived-fixture check and the copy-drift lint, since both are functions of
+    those documents. Real guards and real kills, but M01–M07's kills are
+    therefore not evidence that the gates column ALONE would have caught them —
+    the column has its own direct pins in `governMatrix.test.ts`.
+- A test-authoring trap worth recording: `Emitter.emit` validates `causation`,
+  and the grant producer is non-fatal by construction, so a fixture seeding a
+  FABRICATED prior event id produces a test that passes **with no event
+  emitted** — the error is logged at `error`, which a silent test logger
+  swallows. Found by driving it; the fixture now reuses the bootstrap's real ids
+  and asserts the rewind actually rewound something.
+
+### Escalated, not built
+
+- **No new ledger topic.** The policy-engine decision recording stays refused
+  per the note, so `cp.grant-check` and `cp.resolve-endpoints` remain narrative.
+- **No checkpoint whose class had to be argued for.** Containment's two
+  candidates were derived to narrative and the mismatch reported.
+- **`bulk-plugin-update.md` and the two guided runbooks are untouched** — read
+  as the formatting precedent only.
+
+**LOCKS `law/runbooks/` AND `src/main/intelligence-host/` ARE STILL HELD**
+pending the gate ruling.
+
+---
+
 ## WP-45 · GATE RULING — the law review applied (2026-08-19, architect adjudication)
 
 **Verdict: PASS. Cleared to merge** — with one owner-seal item flagged

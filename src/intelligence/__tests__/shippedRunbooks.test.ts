@@ -296,15 +296,41 @@ describe('the shipped law/ directory', () => {
     // NAMED for is one the derived tool→capability binding can bind. +124 bytes,
     // the same authoring shape WP-31 used on the anchor, and 3,214 clear of the
     // near-ceiling WARN.
+    //
+    // ALL FOUR ATTESTATION-FREE STRICT DOCUMENTS MOVED 2026-08-19 (WP-45, the
+    // ratified attestation law review): each gains `attest:` on every
+    // checkpoint, a `review_triggers` entry, and — on rb.promotion-execute —
+    // P3's two tool declarations. The growth is where the margin now is:
+    //
+    //   rb.promotion-execute    7,026 → 8,095  (+1,069; 1,121 clear of the WARN)
+    //   rb.promotion-preflight  8,184 → 8,969  (  +785;   247 clear)
+    //   rb.incident-containment 8,673 → 9,195  (  +522;    21 clear)
+    //   rb.incident-remediation 8,714 → 9,210  (  +496;     6 clear)
+    //
+    // THE TWO INCIDENT HALVES ARE NOW SIX AND TWENTY-ONE BYTES UNDER THE WARN,
+    // and that is a finding rather than a comfortable pass: their authoring
+    // budget is spent, and the next author to add a line to either trips the
+    // caution this table exists to make visible. WP-45's own comments were
+    // trimmed twice to land under it rather than crossing it quietly. The
+    // remedy, when it is needed, is the WP-20c one — split at a checkpoint
+    // seam — not a raised ceiling.
     expect(bytes).toEqual({
       'rb.bulk-plugin-update': 7463,
       'rb.diagnose-site': 8970,
-      'rb.incident-containment': 8673,
-      'rb.incident-remediation': 8714,
-      'rb.promotion-execute': 7026,
-      'rb.promotion-preflight': 8184,
+      'rb.incident-containment': 9195,
+      'rb.incident-remediation': 9210,
+      'rb.promotion-execute': 8095,
+      'rb.promotion-preflight': 8969,
       'rb.wpe-pull': 8361,
     });
+    // The margin, asserted rather than only described — so the finding above is
+    // a test and not a paragraph. Under the WARN, and by how little.
+    for (const [id, margin] of [
+      ['rb.incident-containment', 21],
+      ['rb.incident-remediation', 6],
+    ] as const) {
+      expect([id, RUNBOOK_NEAR_CEILING_BYTES - bytes[id]]).toEqual([id, margin]);
+    }
     // The ceiling was raised 8,192 → 10,240 at the WP-20c gate, on the evidence
     // this table carries: the two incident halves cleared 8,192 by 138 and 88
     // bytes, and what sits at that size is contract, not prose. At 10,240 the
