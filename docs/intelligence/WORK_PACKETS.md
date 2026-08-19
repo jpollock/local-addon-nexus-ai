@@ -14895,6 +14895,724 @@ changes a check WP-42 owns. Flagged rather than improvised, per the
 
 ---
 
+### [x] WP-42 · The registry bundle — the WP-13b verdicts carried, the empty selection refused  *(2026-08-19)*
+
+Branch `wp-42` at worktree `.worktrees/wp-42`, cut from `35cf0d32` (this file's
+WP-42 lock announce, committed to the base before the work started). The commit
+beneath it, `18273a52`, is the architect's Wave 6 registration — found
+uncommitted in the primary checkout and committed VERBATIM in its own
+attributed commit, per the protocol's standing precedent, because the announce
+appends to the same file.
+
+**Worktree baseline before any edit: 590 suites / 7,952 passed / 12 skipped /
+7,964 total, exit 0** — exit captured before any pipe. The twelve-skipped column
+is unmoved from WP-38's figure; the passed count is the base advancing.
+
+**Eval-runner baseline, measured rather than assumed:** PASS 17 · FAIL 0 ·
+BLOCKED 40 · OWNER-PENDING 21 · SPEC-DEFECT 0.
+
+---
+
+## 1 · The twelve verdicts, carried
+
+`checks.ts` gains one section and twelve criteria change verdict. The pattern is
+WP-33b's, applied at six times the scale: the record's own sentence is quoted as
+evidence, the report says it carried the verdict rather than computing one, and
+the criterion FALLS TO BLOCKED the moment the substrate that made those replies
+possible stops holding.
+
+**Which twelve, and the arithmetic.** E-01 had ten criteria, nine of them
+OWNER-PENDING (`key_step[0]` is programmatic and was already PASS); B-03's three
+citation criteria were OWNER-PENDING. Nine plus three is the twelve the
+registration named, and the printed count moved exactly that far:
+
+| | before | after |
+|---|---|---|
+| PASS | 17 | **29** |
+| OWNER-PENDING | 21 | **9** |
+
+BLOCKED (40), FAIL (0) and SPEC-DEFECT (0) are unmoved. The milestone verdict is
+unchanged — NOT MET, on the forty BLOCKED — which is correct: this packet
+retires no capability gap, it stops asking a person to re-judge what they judged.
+
+**Transcription: nothing was reworded, and the one transformation is named.**
+Every carried string is a verbatim substring of the record. Two of the twelve
+are wrapped in markdown emphasis there (criterion 4's, and B-03's — where the
+closing `**` falls mid-sentence, between `PASS³` and the marker counts), and the
+`**` markers are dropped. That is formatting, not words, and the pin permits
+exactly two normalisations — whitespace (the record hard-wraps; the code carries
+one line) and `**`. Every other character must match. No verdict needed
+rewording, so there is no escalation on this half.
+
+**The asterisk survived, and a test exists to keep it alive.** Criterion 4 prints
+PASS with `PASS AT pass@1 ONLY`, `pass³ OPEN`, and the record's own reason (run 2
+ordered the gateway sites last and offered a hold but never named checkout)
+attached. Three pins hold it: the exact record sentence, the absence of a clean
+`— PASS³` form for that criterion, and a count assertion that it is the ONLY
+carried verdict with an open column — so a second asterisk appearing means either
+the record gained one this file has not read, or this file invented one.
+
+**Because the prompts are gone, the open column had nowhere to live.** A carried
+PASS carries no `ownerPrompt`, so nothing on screen told anyone how to close
+criterion 4. Its evidence now names the two-run command and the one question to
+judge. This was not in the brief; leaving the only open column in the sitting
+with no route to closing it would have been a worse reading of it.
+
+**Two premises, named separately because they fail separately.** The brief's
+condition was the convention riding and the join keeping shape; that is the floor
+and it is enforced on all six citation criteria (`probeCitationContract`). The
+other six E-01 verdicts are about a plan reflecting a history, and rest on
+`probeIncidentProducer` — the producer emitting, the wired assembler returning it
+for the flagged site, and a summary line rendering. This is ADDITIVE to the
+brief, not a substitution: a plan cannot visibly reflect a finding the turn no
+longer carries, and the judgment sheet measured that supply per run before the
+owner read a word. The fabricated-memory verdict takes BOTH, because it cites a
+`[[cite:none]]` use and is a claim about history; a pin drives it dead from
+either side.
+
+**The thirteenth verdict enriches rather than replaces.** The sitting also judged
+E-01's `key_step[0]` — "(1) history queried before the plan — PASS³" — which the
+runner already scores programmatically about the SUBSTRATE. That verdict rides as
+evidence, explicitly labelled "carried here as evidence, never as this criterion's
+verdict", and only when the probe is ok. With the substrate broken the criterion
+still reports FAIL and the sitting line disappears — pinned, because a human PASS
+laid over a broken chain is the exact stale green the fall-to-BLOCKED rule exists
+to prevent.
+
+**A property WP-34 pinned had to be rewritten, and this is the judgment call to
+look at first.** `checks.test.ts` carried "NONE of them can ever return PASS —
+the platform never judges support", with a docblock explaining that a citation
+PASS would be the harness claiming an authority ADR-24 withholds from it. That
+was right about the HARNESS and is still enforced, in its true form: no PASS may
+be derived from the probe, and every citation PASS must quote the sitting and say
+it did not compute one. What changed is who is speaking — ADR-24 withholds that
+authority from the platform, never from the owner. If that reading is wrong, this
+is the line to reverse, and reversing it is one function.
+
+---
+
+## 2 · `--only <no-match>` is an error, never a MET
+
+Reproduced first, on the base:
+
+```
+$ npx ts-node --project tsconfig.test.json tests/intelligence-evals/run.ts --only nope-not-a-spec
+  …37 seconds of probing…
+  specs         0
+  MILESTONE VERDICT: MET — 0 criteria pass.        exit 0
+```
+
+Fixed in two places, because the lie had two halves.
+
+**The selector is checked at the door.** `unmatchedSelector` (`specLoader.ts`,
+which owns "which specs exist") returns the whole complaint — the selector
+quoted, every available id listed — and `run.ts` prints it to stderr and returns
+2 BEFORE `createEvalFixture` runs. Matching is EXACT: a prefix match here would
+be worse than no check at all, since the runner's own filter is `spec.id !==
+only`, so anything this helper accepts that the filter rejects selects nothing
+and reports MET. `E-01` — the sitting harness's own spelling — is the live
+near-miss, and it is the case the pin uses. Exit 2 rather than a new code: the
+documented meaning of 2 is "nothing is broken, but the run could not answer the
+question", and a run that selected nothing answered nothing.
+
+**And the summary line no longer calls zero criteria MET.** Every branch of
+`milestoneVerdict` counts verdicts, so zero of everything fell through to MET.
+`--only` was the reproduced route; an unreadable evals directory and a set of
+specs that all failed to parse are the others, and they need no selector at all.
+This is the same false-completeness one level down, at the line the file's own
+header already promised would never render as MET, so it is fixed rather than
+filed.
+
+**Pinned by three suites, one of which spawns the real CLI.** `run.ts` calls
+`main()` at module scope and cannot be imported (`hostSeamProbe.ts` excludes it
+for the same reason), so an in-process assertion would be pinning a re-implementation.
+`runCli.test.ts` spawns ts-node, asserts non-zero, asserts the anchored
+`MILESTONE VERDICT: MET` is absent (per WP-32 — `MET` alone is a substring of
+`NOT MET`), asserts every real id is listed, and asserts **stdout is empty** —
+which measures that no probe ran and no report rendered, since both write there.
+(It does NOT bound the fixture build, which is silent on stdout — see M04 in the
+battery below, the one survivor, where that is measured rather than assumed.)
+The positive control runs a
+REAL spec id through the same CLI, because a guard that refuses every selector
+would satisfy the first case completely.
+
+One thing the fix taught itself: the first draft of the complaint ended with the
+sentence *"an empty report used to print MILESTONE VERDICT: MET"* — and the test
+that forbids that string in the output failed on the error message that exists to
+prevent it. The message now says "score the milestone as met".
+
+---
+
+## 3 · Mutation battery — 13 attempted, 12 killed, 1 SURVIVOR disclosed
+
+Every run `--no-cache` (WP-31: a poisoned cache can mask a mutation as a false
+survival). Tree verified pristine before and after; the harness refuses to start
+otherwise and restores in a `finally`, so an interrupted run cannot leave a
+mutation on disk (WP-34).
+
+| | mutation | outcome |
+|---|---|---|
+| M01 | exact id match becomes `includes` — `E-01` accepted, selects nothing | KILLED |
+| M02 | the selector check never complains | KILLED |
+| M03 | the complaint prints, the run continues to a vacuous MET at exit 0 | KILLED |
+| M04 | a fixture is built before the selector is checked | **SURVIVED** |
+| M05 | `evaluated` counts specs instead of criteria | KILLED |
+| M06 | the zero-criteria rule fires only when specs failed to load | KILLED |
+| M07 | a carried verdict survives its premise dying | KILLED |
+| M08 | criterion 4 upgraded to a clean pass³ | KILLED |
+| M09 | the spot-check bound stops riding with the pass | KILLED |
+| M10 | the fabricated-memory verdict stops dying with its history half | KILLED |
+| M11 | a human PASS is carried over a broken substrate chain | KILLED |
+| M12 | B-03's run-1 disclosure authored onto E-01 | KILLED |
+| M13 | the carried verdict stops naming its sitting | KILLED |
+
+**M04 is a survivor, not an equivalent, and here is exactly what it leaves
+unguarded.** Moving the selector check to AFTER a `createEvalFixture()` left both
+runCli pins green, because the fixture build writes nothing to stdout — so
+`expect(result.stdout).toBe('')` bounds the PROBES and the REPORT, which is what
+it claims in its comment, but not the fixture. Consequence: a future edit could
+push the refusal behind the fixture build and no test would notice; the
+user-visible contract (non-zero, names the selector, lists the ids, never MET)
+would still hold, and only the one-second-instead-of-thirty property would go.
+Not pinned harder because the honest instruments are brittle — a wall-clock bound
+would fail under exactly the multi-agent load this packet measured (F4), and a
+temp-directory diff races every sibling packet's own fixture. The check's
+position is instead structural and commented: it is the first statement after the
+ABI guard.
+
+---
+
+## 4 · Findings, filed not fixed
+
+**(F1) The WP-13b sitting was judged from a DEGRADED judgment sheet, and the
+artifacts on disk show it.** Three independent signals in
+`sitting-transcripts/cite/judgment-sheet.txt` and `cite-b03/judgment-sheet.txt`:
+the E-01 sheet counts **10** OWNER-PENDING criteria where the runner reports nine
+(`key_step[0]` is PASS); every criterion prints "(the runner recorded no judging
+instruction for this criterion)", including the six that demonstrably had
+prompts; and neither sheet carries the "N criteria are already decided
+programmatically — do NOT re-judge them" block the runner-backed path prints.
+That is `sitting.ts`'s `catch` around `runEvals` — the WP-39 defect, whose own
+guard header describes this exact symptom ("a judgment sheet degraded
+mid-sitting: criteria printed, judging instructions blank"). **What it does and
+does not mean:** the owner judged the criterion TEXT, which is the obligation, and
+the sheet's own hardcoded notes (the tool-trace instruction on fabricated memory,
+the twin-variant instruction on the refusal must_not) did print. It is recorded
+because the verdicts this packet mechanizes were reached without the runner's
+judge-only sentences, and a later reader comparing sheet to registry would
+otherwise find a discrepancy with no explanation. WP-39's fix means a re-sit
+would not degrade this way.
+
+**(F2) `run.ts --json` does not emit parseable JSON.** The runner's own header
+advertises `--json > report.json`; the debug logger writes to stdout alongside
+the payload, so the file is 400 lines of `[DEBUG] [ToolRegistry] …` with a JSON
+document somewhere inside it. Found while writing the positive control, which
+now asserts on the rendered report instead. Not fixed here: it is the logger's
+stream, not the selector, and redirecting it is a change with reach beyond this
+lock.
+
+**(F3) The judgment sheet calls a carried verdict "decided programmatically".**
+With twelve criteria now PASS-by-sitting, `renderJudgmentSheet` prints them under
+"N criteria are already decided programmatically — do NOT re-judge them". The
+instruction is right and the reason is wrong for those twelve. Copy is ruled
+territory (WP-38), so it is not touched: the suggested string, for a ruling, is
+"already decided — do NOT re-judge them (programmatically, or at a recorded
+sitting)".
+
+**(F4) Multi-agent load can time a test out at 5× its own headroom.**
+`tests/unit/credentials/CredentialManager.test.ts`'s retry-backoff case runs in
+**6.0s** against a 30s jest budget, and it EXCEEDED 30s in the first full run of
+this packet, at load average 6.9 with three Wave 6 packets running `npm test`
+concurrently. It passed twice in isolation immediately afterwards, at load 4.6 —
+once `--no-cache` (6.011s) and once cached (6.007s), which is what separates this
+from the poisoned-cache class: the same cache that "failed" passes when the load
+drops. Proposed for PARALLEL_PROTOCOL's Test-environment section, alongside the
+mid-session ABI flip: during multi-agent operation a red must be re-measured at
+low load before it is believed, and a wall-clock timeout is the signature.
+
+---
+
+## 5 · What this packet did NOT do
+
+- No `src/` change; no new topic, payload version, envelope field or storage
+  marker; `wpeOperationPermissions` untouched.
+- No spec YAML was edited. The criteria texts are the designer's and the
+  architect's; only their verdicts moved.
+- E-01 now has ZERO owner-pending criteria, so `sitting.ts --spec E-01` produces
+  a sheet with nothing to judge. That is the honest state (they are judged) and
+  the runner-test that used to require six E-01 prompts is inverted into a
+  positive assertion rather than left to pass over an empty list.
+- Two dead prompt builders (`ownerInstructions`, `citationSitting`) are deleted,
+  each with a comment in its place saying what stood there and why it went.
+
+---
+
+## 6 · Receipts
+
+- **Full suite after: 591 suites / 7,980 passed / 12 skipped / 7,992 total, exit 0** (exit captured before any pipe). Baseline was
+  590 / 7,952 / 12 / 7,964. Delta **+1 suite, +28 tests, skipped column unmoved** —
+  and the 28 decompose exactly: `runCli.test.ts` 2 (new suite), `specLoader.test.ts`
+  +5, `report.test.ts` +2, `checks.test.ts` +19, `runner.test.ts` +0 (three claims
+  rewritten in place, none added).
+- **Eval runner after:** PASS **29** · FAIL 0 · BLOCKED 40 · OWNER-PENDING **9** ·
+  SPEC-DEFECT 0; milestone verdict unchanged (NOT MET, on the forty BLOCKED).
+  E-01 reads `10 criteria — 10 PASS`; B-03 reads 8 PASS / 7 OWNER-PENDING.
+- `npx tsc -p . --noEmit` clean.
+- **One poisoned-cache occurrence, eighth on the record, and it was the textbook
+  signature**: `probes.test.ts` and `sitting.test.ts` failed to run with
+  `SyntaxError: Invalid or unexpected token` pointing at `sitting.ts:1` — its own
+  shebang — in a file this packet never opened, while eight sibling suites were
+  green. `npx jest --clearCache` then 10/10, 394 tests. Believed nothing until
+  after the clear. Worth noting for multi-agent operation: the jest cache
+  directory is under the shared OS temp path, so three concurrent packets share
+  one.
+- **ABI ON EXIT: SYSTEM NODE.** Measured, not assumed: `node -v` **v25.9.0**,
+  `node -p process.versions.modules` **141**; `.nvmrc` pins **22.16.0 → 127**,
+  which is what CI sees. jest ran many times on this checkout, so **`npm run
+  rebuild` is required before loading Local**.
+- **Not pushed.** Nothing tagged, no version touched.
+
+---
+
+**WP-42 · MERGED to `poc/nexintelligence` — receipts (2026-08-19).**
+Merge `ebabe944`, `git diff --stat ebabe944^1 ebabe944`:
+
+```
+ docs/intelligence/WORK_PACKETS.md           | 279 +++++++++++++
+ tests/intelligence-evals/checks.test.ts     | 318 +++++++++++++--
+ tests/intelligence-evals/checks.ts          | 580 +++++++++++++++++-----------
+ tests/intelligence-evals/report.test.ts     |  21 +
+ tests/intelligence-evals/report.ts          |  15 +
+ tests/intelligence-evals/run.ts             |  29 +-
+ tests/intelligence-evals/runCli.test.ts     |  97 +++++
+ tests/intelligence-evals/runner.test.ts     |  82 +++-
+ tests/intelligence-evals/specLoader.test.ts |  53 ++-
+ tests/intelligence-evals/specLoader.ts      |  32 ++
+ 10 files changed, 1229 insertions(+), 277 deletions(-)
+```
+
+**No conflict resolution to trust, because there was no conflict.** The base
+had advanced by exactly 78 lines of `WORK_PACKETS.md` — WP-20g's and WP-41's
+lock announces, no code — so the base was merged INTO the branch first
+(`cc01d7b4`) and this packet's entry appended after it. The record tail is
+chronological by construction rather than by a hand-ordered three-way
+resolution: announce (WP-42), announce (WP-20g), announce (WP-41), delivery
+entry (WP-42), this block.
+
+**Verified on the MERGED tree, not inferred from the branch:** `npx tsc -p .
+--noEmit` clean; `npx jest tests/intelligence-evals/` 10 suites / 394 tests
+green; the runner prints PASS **29** · FAIL 0 · BLOCKED 40 · OWNER-PENDING **9**
+with `E-01 — 10 criteria, 10 PASS` and `B-03 — 15 criteria, 8 PASS, 7
+OWNER-PENDING`; and `run.ts --only E-01` exits **2** with the complaint on
+stderr and **0 bytes** on stdout. Full suite on the identical tree (the branch
+head, which the merge reproduces file-for-file): **591 suites / 7,980 passed /
+12 skipped / 7,992 total, exit 0**.
+
+**ABI ON EXIT: SYSTEM NODE** — measured `v25.9.0` / modules `141` (`.nvmrc`
+pins 22.16.0 → 127, which is what CI sees). `npm run rebuild` before loading
+Local. **Not pushed**; branch `wp-42` and worktree `.worktrees/wp-42` left in
+place.
+
+---
+
+**WP-42 · MERGE ACCEPTED — the sitting mechanized at scale, the last
+vacuous green closed (2026-08-19).** Stat verified (10 files,
++1,229/−277); the no-conflict merge (base→branch first, append after)
+accepted as the clean case of the crowded-tail discipline. **Item 1
+accepted with its three judgment calls RATIFIED:** the asterisk held
+by three pins including the count assertion (exactly one carried
+verdict with an open column — a mechanization that could quietly
+gain a second asterisk would be hiding one); the ** emphasis
+transformation named-and-permitted is transcription discipline
+applied at the character level; the SECOND premise (incident supply
+for the six history verdicts) is correct — a fall-to-BLOCKED binding
+that watched only the convention would keep a history verdict alive
+after its history stopped riding. **The WP-34 pin rewrite is
+RATIFIED as the true form:** "no PASS may be derived from the PROBE;
+every citation PASS must quote the sitting" — ADR-24 withholds the
+support judgment from the platform, never from the owner; the old
+wording accidentally withheld it from both. Runner 29/0/40/9 with
+the milestone verdict still honestly NOT MET — mechanizing consent
+to a judgment retires re-asking, not the capability gap. **Item 2
+accepted:** exit 2, selector named, ids listed, zero stdout bytes;
+`milestoneVerdict` refusing zero-criteria MET closes the family at
+the summary line. M04's disclosed survivor accepted as bounded-and-
+measured. **Count correction:** the poisoned-cache occurrence logged
+here as the eighth is the NINTH (WP-36 logged the eighth); the count
+is the record's, not each packet's memory. **The filed item that
+matters, RULED:** the WP-13b verdicts were judged from a
+WP-39-degraded sheet (no judge-only sentences; a 10-vs-9 count
+slip). The verdicts STAND — the owner judged the criterion TEXT,
+which is the obligation, and the architect's trace-vs-claim
+pre-checks did the work the instructions would have directed, all
+stated in the sitting's provenance — and the degraded-sheet fact now
+JOINS that provenance: any future E-01 re-sit runs under the
+repaired sheet, and criterion 4's two-run close will naturally do
+so. **Registered:** the --json/stdout micro (a logger sharing stdout
+makes --json unparseable); the "decided programmatically" copy
+correction adopted from the record's suggested string at the next
+registry touch. The load-timeout finding enters the PROTOCOL
+(re-measure alone before believing a timeout under multi-packet
+load).
+
+---
+
+**WP-20g · BUILD ACCEPTED at the merge boundary; MERGE AUTHORIZED
+(2026-08-19).** Both rulings applied exactly. E1(a) with both riders:
+promotion-execute 1.1.0 → 1.2.0, the anchor-slice copy edited under
+its copy-drift lint, and rider 1 VERIFIED rather than assumed — zero
+live grants rippled, because the deny-flip never materialized the
+capability; the flip paid for the law edit, measured. **Rider 2
+resolved the honest way:** cp.execute-cleanup names no instrument —
+the only tool-shaped name in the document is a READ in
+requires_sources, which the design note forbids deriving from — so
+the remediation half is fixture-proven with the gap recorded AS AN
+ASSERTION, not a sentence in a report. E2 as overruled, both
+directions pinned; the many-case naming every declaring capability
+with the door on the sorted first is a sufficient remedy exactly
+because reach is a disjunction. E3 as written; the measured proof
+(not-granted with no run, reachable after one settings entry) is
+the deny-subtracts-reach sentence finally true in code. The floor
+catching three compile-error mutants as VOID is the
+compile-error≠kill doctrine enforcing itself; M13 (revert the law
+line, eight tests fail) is what makes "derived from the document"
+a measurement.
+
+**Finding 1 becomes a REGISTERED LAW-REVIEW ITEM, and it matters:**
+`rb.promotion-execute` has NO attestable checkpoint — all five
+narrative — so once granted, nothing gates further; the ceremony is
+the grant alone. The agent's pin (a later `attest:` event fails and
+gets read) holds the door open. Registered: attestable checkpoints
+authored into promotion-execute (and its preflight sibling reviewed
+in the same pass) BEFORE any real grant of cap.promote_environment
+is contemplated — owner-reviewed law work, the strict-runbook
+authoring watch item made concrete. Finding 2 (qualified
+agent-dispatch names are the zero case; suffix-matching would invent
+a rule) accepted as stated. **MERGE:** base e959b5b2 or later;
+verbatim-commit the architect's uncommitted record deltas first per
+the standing precedent; tail chronological, one named unit,
+substring-verified.
+
+---
+
+**WP-20g · BASELINE AND THE GATE HOLD — the derived binding, measured, and
+three escalations one of which blocks the packet's own acceptance
+(2026-08-19).** Worktree `.worktrees/wp-20g`, branch `wp-20g`, base
+`poc/nexintelligence` @ `bbc9a14e` (this packet's own announce on base, which
+sits on WP-42's announce and the architect's Wave 6 registration).
+
+**Baseline (worktree, `npm test`, exit captured before any pipe): 590 suites
+passed / 590 total; 7,952 passed, 12 skipped, 7,964 total, exit 0.** Reconciles
+to WP-37's post-merge primary figure (590 / 7,962 / 2 / 7,964) exactly the
+documented way: **the TOTAL is identical and the skipped column moved by ten** —
+the WP-20c boundary effect, the primary holding both embedding model files where
+a worktree holds one. Read the skipped column first; the passed column alone
+would read as a phantom −10. `npx tsc -p . --noEmit` and `npx tsc -p
+tsconfig.test.json --noEmit` both clean.
+
+**THE DERIVED BINDING, FOR RATIFICATION — and it is three tools, all of one
+capability.** Produced by loading the shipped `law/` through the real
+`loadLawDirectory` + `RunbookRegistry.build`, not by reading the files by eye;
+zero loader errors, zero registry errors. Tier is `getToolSafety(name).tier`,
+the same table the audit chokepoint and WP-19's producer read, and
+`GATED_TIER_FLOOR` is 2.
+
+| tool | capability | runbook | declaring checkpoint(s) | source line in law | tier | gated |
+|---|---|---|---|---|---|---|
+| `wpe_backup_and_verify` | `cap.bulk_plugin_update` | `rb.bulk-plugin-update` | `cp.backup` | `law/runbooks/bulk-plugin-update.md:49` — `tools: [wpe_backup_and_verify]` | 2 | yes |
+| `bulk_plugin_update` | `cap.bulk_plugin_update` | `rb.bulk-plugin-update` | `cp.canary`, `cp.roll-fleet` | `:52` and `:61` — `tools: [bulk_plugin_update]` | 2 | yes |
+| `verify_site_live` | `cap.bulk_plugin_update` | `rb.bulk-plugin-update` | `cp.verify-canary` | `:56` — `tools: [verify_site_live]` | 2 | yes |
+
+**That is the whole table.** Every other checkpoint of every other runbook
+declares no tool at all — measured across all 28 checkpoints of the five strict
+runbooks, and the two guided documents carry `steps:` (not checkpoints) which
+declare none either. `grep -rn "tools:" law/` returns those four lines and
+nothing else. All five strict runbooks are `tool_scope: exclusive`; both guided
+ones are `advisory`.
+
+**E1 — THE PACKET'S OWN ACCEPTANCE IS BLOCKED BY LAW, AND THIS IS THE
+ESCALATION THE CHARTER NAMES.** The launch instruction makes the two mandated
+capabilities the proof: *"with WP-20f's deny in place, `wpe_promote_environment`
+becomes UNREACHABLE without a grant — a test pins it, and a second pins that
+granting restores reach through the full ceremony."* **`wpe_promote_environment`
+is bound to nothing.** `rb.promotion-execute`'s `cp.promote` declares no
+`tools:` and no `evidence.tool`; the name appears in that document exactly once,
+in `review_triggers` (`law/runbooks/promotion-execute.md:12`), which is prose
+about signature changes and not a declaration. `cap.incident_remediation` — the
+other mandated capability — binds nothing either. **Derived from law, the two
+mandated caps bind zero tools, so denying them still subtracts no reach.** The
+only way to the stated acceptance is a `law/` edit, and "anything touching the
+runbooks" is an escalation trigger in this packet's own charter. Options, with a
+recommendation rather than a survey:
+
+- **(a) RECOMMENDED — one line of frontmatter: `tools: [wpe_promote_environment]`
+  on `cp.promote`.** This is the design note §5's own position applied, not an
+  invention: *"Add `tools:` to strict-runbook frontmatter — an explicit
+  allow-list of tool names, per checkpoint. Derived from nothing; inferred from
+  nothing … The runbook must say which tools it means."* It makes the packet's
+  acceptance real and keeps the binding authored where law lives. **Its
+  disclosed side effect, which is why it is an escalation and not a detail:**
+  WP-31 rule 5 already reads that list. Today `cp.promote` declares nothing, so
+  an armed promotion run is told "`cp.promote` declares no tool of its own, so
+  no write belongs at this point in the procedure" and every write is refused
+  under `exclusive-scope`. Adding the tool changes that refusal into a
+  permission — a widening of what an armed run may call, in a packet whose
+  subject is narrowing. It is the right answer and it is still a second change.
+  The document's own `review_triggers` names `wpe_promote_environment`, so a
+  human review is what it asks for by construction.
+- **(b) Build the mechanism, pin it over FIXTURE runbooks, and say out loud that
+  the shipped mandated caps bind nothing.** Smaller and fully honest, but the
+  acceptance shrinks from "`wpe_promote_environment` is unreachable" to "the
+  reach check works" — and the two caps' production consequence keeps resting
+  entirely on `isOperationAllowed`, which is exactly the sentence WP-20f wrote
+  and this packet was created to retire.
+- **(c) Hand-author a tool list in code.** Refused by the charter, and correctly:
+  a binding nobody can read in law is a binding nobody ratified.
+
+**E2 — the ambiguity fall direction, following `abortForTool` literally.**
+Proposal: the binding is tool → capability, and **zero or more than one
+CAPABILITY yields no binding**, exactly as `abortForTool` yields nothing on zero
+or many aborts. A tool two capabilities' runbooks both declare has no single
+governing grant, and picking one would be a guess recorded as an enforcement
+decision. No-binding means the call falls to the existing rules unchanged —
+permissive — which is the seam invariant's direction: an internal ambiguity in
+this layer must never take reach away from the legacy tool surface. Note the
+case that does NOT trigger it: `bulk_plugin_update` is declared by two
+CHECKPOINTS of one runbook, which is one capability and binds cleanly. **No
+ambiguous tool exists in the shipped set today** — the rule is built and pinned
+against a fixture, as defence for the day a second runbook declares an existing
+tool.
+
+**E3 — what "not granted" means, and which reason the refusal carries.**
+Proposal: the reach check consults `getCapabilityGrants()` — the LIVE set — and
+refuses when the bound capability is absent from it. When
+`getDisarmedCapabilityGrants()` holds a row for that capability, the refusal
+carries **that** row's reason in its message, because `hash-mismatch` (the
+document on disk is not the document that was reviewed) and
+`requires-explicit-grant` (never granted by default) are different things to
+tell a user and WP-20f built the row precisely so the surface would not have to
+infer. The door is built by `governDoorFor` — the existing builder, not a second
+one; WP-20f exported it for exactly this reason and the repo has the
+two-builders-drift lesson recorded twice.
+
+**Two mechanics proposed with them, not escalations but ratifiable:**
+(i) **the check lives inside `checkCheckpointSequence`**, before `runForTask`,
+returning a `SequenceRefusal` with a new `reason: 'not-granted'`. All three
+chokepoints then inherit it with **zero edits outside this packet's lock** —
+`tool-registry.ts`, `AgentDispatcher.ts` and `ChatService.ts` are untouched, and
+`ChatService`'s approval card, which gates on `reason === 'sequence'`, cannot
+fire on it. (ii) **reads are untouched**: the check applies only at
+`tier >= GATED_TIER_FLOOR`, the same boundary rule 5 uses. All three bound tools
+are tier 2 today, so nothing rests on the distinction yet; it is pinned anyway.
+
+**E4 — a DISCLOSURE, not a question, and the record should carry it before the
+code does.** On a machine that has crossed WP-20f's flip, `cap.bulk_plugin_update`
+is in the default materialized set (strict, not mandated — WP-20f's "three fire
+on a fresh machine"). It is the only capability that binds any tool. **So the
+reach half, built exactly as charted and with law as it stands, refuses nothing
+on a default machine.** It bites when a user switches that capability off, when
+its runbook hash stops matching what was reviewed, or on a future capability
+that binds tools and is not materialized — real cases, all three, and none of
+them the headline. Whoever reads "WP-20g made the deny-flip subtract reach"
+should find this paragraph in the same breath. E1(a) is what would change it.
+
+**HOLDING for ratification of the table and E1–E3 before building.** Nothing
+under `src/` has been touched; the tree is the base plus this note. `npm test`,
+`npx tsc` and two `ts-node` derivation probes were run (the probes deleted, tree
+verified clean). **ABI ON EXIT: SYSTEM NODE — `npm run rebuild` before loading
+Local.**
+
+
+---
+
+**WP-20g · DELIVERED — rule 7, the half that subtracts REACH (2026-08-19).**
+Branch `wp-20g` at `5d8c13f6`. Gate ratified: E1 (a) with two riders, E2
+overruled to fail-closed on the MANY case, E3 as written. Built those and
+nothing beyond them.
+
+**The sentence this packet retires**, quoted so nobody has to go find it: WP-20f
+delivered "v0 grants remain ADDITIVE over the tool surface, so denying these two
+subtracts CEREMONY and not REACH. `wpe_promote_environment` is reachable today
+with no procedure at all." **It is not, now.**
+
+**Rule 7, and why it runs FIRST.** Rules 1–6 all presuppose an armed run or a
+pending arming request — they govern the ceremony around a capability someone
+already holds. Rule 7 asks the prior question, and it has to answer it with **no
+run in existence**, which is exactly the state WP-20f left reachable. So it is
+the first thing `checkCheckpointSequence` does, and the ordering is not
+cosmetic: M15 mutates only the ORDER (rule 7 after the `runForTask` early
+return) and nine tests fail.
+
+**The binding is derived from law and nothing in the guard names a tool.** A
+capability's tools are the tools its runbook declares — a checkpoint's `tools:`
+list or its `evidence.tool`, the two places `abortForTool` reads, for the reason
+that function gives: a document that edits its checkpoints changes the mapping
+the same day. **The structural pin greps this repo's own guard source** with
+comments stripped and asserts that five shipped tool names appear nowhere in its
+code. Every behavioural test in the suite would pass against a hand-authored map
+in `sequenceGuard.ts`; that pin is the one that would not.
+
+**E2 as ruled, not as proposed.** Zero declaring capabilities falls through
+unchanged — the legacy surface, and narrowing it would be WP-20d's
+permanently-narrowed-surface trap. Two or more fails CLOSED unless at least one
+declaring capability is granted. The ruling's reasoning is recorded in the code
+because it is the part a later reader would get wrong: this is **not**
+`abortForTool`'s exactly-one-candidate territory, since that function must pick
+WHICH abort and ambiguity there is a guess, whereas reach needs only
+any-granted — a disjunction, and a disjunction resolves nothing wrongly. The
+packet's own permissive proposal would have let a second runbook declaring an
+already-protected tool silently un-protect it. **The branch is dormant in
+shipped law** (no tool is declared by two capabilities), so it is pinned over
+fixtures, both directions: grant `cap.alpha` → reachable, grant `cap.beta`
+instead → reachable. An implementation consulting only the capability its door
+names passes the first half and fails the second.
+
+**The many-case door, and why one capability in it is not a lie.** The payload
+carries one `(capability, runbookId)` pair. Because reach is a DISJUNCTION,
+granting the one the door names resolves the refusal completely — the door is a
+sufficient remedy, not a partial one — and the message still names every
+declaring capability and says "granting ANY ONE of …". The named one is the
+sorted first, so the remedy does not move between two identical boots (M07
+mutates only the sort and is killed).
+
+**E3 as written.** Refusal on absence from the LIVE grant set; the disarmed
+row's own reason rides the message, because `hash-mismatch` ("the document on
+disk is not the document that was reviewed") and `requires-explicit-grant`
+("never granted by default") are different things to tell a user and WP-20f
+built that row precisely so a surface would not have to infer. `governDoorFor`
+is the only builder. Reads are untouched at `tier >= GATED_TIER_FLOOR` — the
+same classification rule 5, the audit chokepoint and WP-19's producer all read.
+
+**No file outside the lock was edited to wire it.** Rule 7 returns a
+`SequenceRefusal`, so `tool-registry.ts`, `AgentDispatcher.ts` and
+`ChatService.ts` inherit it unchanged — including the audit write on refusal and
+the deliberate absence of `task.action.executed`. `ChatService`'s approval card
+gates on `reason === 'sequence'` and cannot fire on `not-granted`.
+
+**THE LAW EDIT, and the rider that made it cheap.**
+`law/runbooks/promotion-execute.md` 1.1.0 → 1.2.0: `cp.promote` declares
+`tools: [wpe_promote_environment]`. Same authoring shape WP-31 used on the
+anchor at cp.verify-canary, and the document's own `review_triggers` names that
+tool, so this is the document saying out loud what it already meant.
+`docs/intelligence/anchor-slice/runbooks/promotion-execute.md` is edited
+identically — `shippedRunbooks.test.ts` IS the copy-drift lint and the two must
+stay byte-identical. 6,902 → 7,026 canonical bytes; the ceiling table is updated
+with the reason, and 3,214 clear of the near-ceiling WARN.
+
+**The hash ripple touches ZERO live grants, exactly as the rider said.**
+`cap.promote_environment` is mandated-explicit, so WP-20f's migration never
+materialized it and no stored grant pins the old hash — no stale-pin disarm can
+fire on any machine. **The deny-flip paid for this edit before it was
+proposed.** The disclosed side effect is accepted as disclosed: rule 5 now has a
+declared tool at `cp.promote` where it previously had none, so an armed
+promotion run gains a permitted write — but under the deny-flip no promotion run
+can arm without an explicit human grant, so that write exists only downstream of
+a consent that does not exist by default.
+
+**RIDER 2 RESOLVED BY THE DOCUMENT, not by anyone's memory.**
+`rb.incident-remediation`'s `cp.execute-cleanup` **names no instrument.** Its
+body enumerates a CATALOGUE of destructive classes and says "Execute item by
+item"; the one tool-shaped name anywhere in the document is `wp_plugin_list`, in
+`requires_sources` — a READ, in the bill of intelligence, which the design note
+§5 explicitly forbids deriving from ("a bill of intelligence for a human
+reviewer, not a tool map, and deriving tool names from it would be guessing").
+So the remediation half takes the ruling's second path: **fixture-proven, with
+the gap recorded IN THE ACCEPTANCE** — and recorded as an assertion, not as a
+sentence in a report nobody re-runs. `cap.incident_remediation` binds no tool in
+shipped law, and reach cannot bite for it until a document says otherwise.
+
+**A SECOND FINDING FROM THE SAME READING, recorded and NOT folded in.**
+`rb.promotion-execute` declares **no attestable checkpoint at all** — every one
+of its five defaults to `narrative`. So once `cap.promote_environment` is
+granted, the sequencer gates nothing further: an armed run reaches
+`wpe_promote_environment` with nothing in front of it, and rule 5 refuses
+nothing either (`nextGatedCheckpoint` returns undefined, which WP-31 documents
+as correct — a permanently-closed surface is the broken-gate shape). **So
+"granting restores reach through the full ceremony" is true of the GRANT, which
+is the ceremony this document's gate can enforce, and NOT of an attestation
+sequence.** Said out loud here and pinned as a test, so a law edit adding
+`attest: event` to `cp.backup` or `cp.approval` fails that pin and gets read.
+Whether the promotion document SHOULD carry attestable checkpoints the way the
+anchor does is law authoring and belongs to whoever holds that decision — it is
+registered, not improvised.
+
+**E4 STANDS AS DISCLOSED AT THE GATE, and it is now a test.**
+`cap.bulk_plugin_update` is strict and not mandated, so WP-20f's migration
+materializes it, and it is the only OTHER capability that binds tools. **On a
+default machine rule 7 therefore refuses exactly one thing —
+`wpe_promote_environment` — and nothing else moves.** The three anchor tools
+stay reachable, pinned. Rule 7 also bites when a user switches a capability off,
+when its hash stops matching what was reviewed, and on a future capability that
+binds tools and is not materialized. Anyone reading "WP-20g made the deny-flip
+subtract reach" should read this paragraph in the same breath.
+
+**Three suites outside the packet changed, all three because the packet is
+real.** (1) `shippedRunbooks.test.ts` — the canonical-bytes table, updated with
+the reason and the margin. (2) `designFixtures.test.ts` — WP-32's generated
+fixture regenerated through its real invocation (hash + version only; the
+fixture does not carry `tools`). (3) **`armingGap.test.ts`'s whole-tool-surface
+parity pin, and this one deserves reading.** WP-31 asserted that with nothing
+armed the guard refuses NOTHING across every name the tier table knows. Rule 7
+makes that false on purpose. Weakening it to `not.toContain(...)` or deleting it
+would hide exactly the reach this packet takes away, so the expected set is now
+**DERIVED FROM THE DOCUMENTS IN THE TEST ITSELF**, independently of the guard's
+own derivation, and compared: the refused set must equal the tools shipped law
+binds to a capability nothing grants, and it is asserted non-empty so it cannot
+pass vacuously. A runbook declaring a new tool tomorrow appears there and is
+READ rather than absorbed by an exclusion someone typed.
+
+**BATTERY: 15 mutations, 15 KILLED, `--no-cache` throughout, count-floored,
+tree verified PRISTINE before and after both runs.** Two process notes worth the
+record:
+
+*The count floor earned its keep on its first outing.* M08/M09/M10 were written
+as renames of a `case` label on a typed union — a COMPILE error, so ts-jest
+refused three suites and jest reported `21 passed / 2 failed` out of 23 executed
+where the floor is 96. Read as a pass/fail line those are kills; read against
+the floor they are **VOID**, which is what they were recorded as. Repaired to
+mutations that compile (each case's body replaced with the generic message —
+the actual defect) and all three then killed on evidence. **A mutation that
+does not compile has not been tested; it has been skipped, and a battery
+without a floor cannot tell the two apart.**
+
+*The battery covers the LAW, not only the code.* M13 reverts the one-line
+frontmatter edit and eight tests fail. That is what makes "derived from the
+document" a measured property rather than a design intention: the binding
+follows the file, and the file is what a human reviews.
+
+**Baselines, both sides, skipped column read first.** Before: **590 suites /
+7,952 passed / 12 skipped / 7,964 total, exit 0** (exit captured before any
+pipe) — which reconciles to WP-37's post-merge primary figure of 590 / 7,962 / 2
+/ 7,964 the documented way: TOTAL identical, skipped moved by exactly ten, the
+WP-20c embedding-model boundary effect. After: **591 / 7,971 / 12 / 7,983, exit
+0.** Skipped unchanged, so the delta is real: **+1 suite, +19 tests**, and it
+reconciles exactly — `toolReach.test.ts` is 19 tests and the three edited suites
+changed assertions without changing counts. Post-battery baseline re-run and
+identical. `npx tsc -p . --noEmit` and `npx tsc -p tsconfig.test.json --noEmit`
+clean throughout. Legacy suites touching the changed files
+(`tests/unit/renderer/procedureSurfaces.test.tsx`, `companionDensity.test.tsx`)
+run green, and the eval runner is **17 PASS / 0 FAIL / 40 BLOCKED / 21
+OWNER-PENDING, exit 2** — unchanged, no eval semantics touched.
+
+**`isOperationAllowed` was NOT touched**, and neither were
+`wpeOperationPermissions` semantics or the M4 family. It remains a real gate and
+a different one; what changed is that it is no longer the ONLY thing standing
+between an ungranted `cap.promote_environment` and its tool.
+
+**Registered, not built:** (i) whether `rb.promotion-execute` should carry
+attestable checkpoints the way the anchor does — law authoring, see the finding
+above; (ii) an instrument for `rb.incident-remediation`'s `cp.execute-cleanup`,
+if the document ever names one, which would close the remediation half by the
+same derivation with no code change; (iii) the qualified-name gap —
+`AgentDispatcher` passes `agent/tool`, which matches no declared bare name, so
+an agent-contributed call is not reach-gated. That is the zero case behaving as
+ruled, and matching on a suffix would be inventing a rule; recorded so it is a
+known boundary rather than a surprise.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest`, two
+`ts-node` derivation probes, the WP-32 fixture generator and an 18-run mutation
+battery. **`npm run rebuild` before loading Local.**
+
 **WP-41 · GATE REPORT — the comparator surface, the walk, ScopeBlock mounted,
 and one escalation that changes what the empty-run smoke can be (2026-08-19).**
 Branch `wp-41` at worktree `.worktrees/wp-41`, cut from `dae1c637`. Four

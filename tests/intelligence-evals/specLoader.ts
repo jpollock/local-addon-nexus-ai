@@ -121,3 +121,35 @@ export function criteriaOf(spec: EvalSpec): Criterion[] {
   );
   return out;
 }
+
+/**
+ * WP-42 · Is this `--only` selector answerable at all?
+ *
+ * Returns undefined when the selector is absent or names a spec that loaded,
+ * and otherwise the whole complaint — the selector quoted, and every id that
+ * DOES exist — ready to print.
+ *
+ * It exists because the runner's own filter (`spec.id !== only`) cannot tell
+ * "select this one" from "select nothing": an unmatched selector produced an
+ * empty report, and an empty report scored `MILESTONE VERDICT: MET` at exit 0
+ * (WP-39's filed finding). The check therefore has to happen where the
+ * selector is still a selector, before it becomes an absence of criteria.
+ *
+ * Matching is EXACT. A prefix or case-fold match here would be worse than no
+ * check at all: this helper would accept `E-01`, the filter would reject it,
+ * and the run would report MET over nothing having satisfied its own guard.
+ */
+export function unmatchedSelector(specs: EvalSpec[], only: string | undefined): string | undefined {
+  if (only === undefined) return undefined;
+  if (specs.some((spec) => spec.id === only)) return undefined;
+
+  const ids = specs.map((spec) => spec.id).sort((a, b) => a.localeCompare(b));
+  return [
+    `no eval spec matched --only "${only}".`,
+    ids.length
+      ? `  available spec ids (${ids.length}):\n${ids.map((id) => `    ${id}`).join('\n')}`
+      : '  there are no eval specs loaded at all — check the evals directory and any load errors above.',
+    '  Nothing was evaluated, so this run has no verdict to report. Selecting nothing is an',
+    '  error here rather than a pass: an empty report used to score the milestone as met.',
+  ].join('\n');
+}

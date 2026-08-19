@@ -12,7 +12,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { criteriaOf, loadEvalSpecs, parseEvalSpec } from './specLoader';
+import { criteriaOf, loadEvalSpecs, parseEvalSpec, unmatchedSelector } from './specLoader';
 import { EVALS_DIR } from './runner';
 
 const MINIMAL = `
@@ -130,5 +130,56 @@ describe('criteriaOf', () => {
     const criteria = criteriaOf(spec as never);
     expect(criteria.map((c) => c.kind)).toEqual(['key_step', 'must_not']);
     expect(criteria.map((c) => c.id)).toEqual(['T-01#key_step[0]', 'T-01#must_not[0]']);
+  });
+});
+
+/**
+ * WP-42 · the `--only` selector, refused rather than silently emptied.
+ *
+ * `run.ts --only <no-match>` used to run the whole probe suite, report zero
+ * criteria and print "MILESTONE VERDICT: MET — 0 criteria pass" at exit 0
+ * (filed at the WP-39 adjudication). The selector is checked against the
+ * loaded ids BEFORE the fixture is built, so the run refuses at the door
+ * rather than after twenty seconds of probing nothing.
+ */
+describe('unmatchedSelector — an empty selection is an error, never a pass', () => {
+  const specs = loadEvalSpecs(EVALS_DIR).specs;
+
+  it('says nothing when there is no selector at all', () => {
+    expect(unmatchedSelector(specs, undefined)).toBeUndefined();
+  });
+
+  it('says nothing when the selector names a spec that loaded', () => {
+    expect(unmatchedSelector(specs, specs[0].id)).toBeUndefined();
+  });
+
+  it('names the unmatched selector and lists every available id', () => {
+    const message = unmatchedSelector(specs, 'E-01')!;
+    expect(message).toBeDefined();
+    // The selector itself, quoted — a message that only says "no specs
+    // matched" leaves the reader guessing which of their flags was wrong.
+    expect(message).toContain('"E-01"');
+    // And every id, so the fix is in the message rather than in a directory
+    // listing the reader has to go and find. E-01 is the live near-miss: the
+    // sitting harness takes `--spec E-01` and the runner takes the full id.
+    for (const spec of specs) expect(message).toContain(spec.id);
+    expect(message).toContain('E-01-consult-before-risk');
+  });
+
+  it('is not satisfied by a prefix, a suffix or a case fold', () => {
+    // Substring matching here would resurrect the defect in a quieter form:
+    // the runner's own filter is `spec.id !== only`, so anything this helper
+    // accepts that the filter rejects selects nothing and reports MET.
+    for (const near of ['E-01-consult-before-ris', 'e-01-consult-before-risk', 'consult-before-risk']) {
+      expect(unmatchedSelector(specs, near)).toBeDefined();
+    }
+  });
+
+  it('reports honestly when NO specs loaded at all', () => {
+    // The other route to zero criteria: an unreadable directory. "available
+    // ids: " followed by nothing reads as a formatting bug; say it plainly.
+    const message = unmatchedSelector([], 'anything')!;
+    expect(message).toContain('"anything"');
+    expect(message).toContain('no eval specs loaded');
   });
 });

@@ -380,13 +380,13 @@
         "the destination backup id and its verification status",
         "the post-promotion verification result, or that verification could not be completed"
       ],
-      "hash": "sha256:d5fa9bc67d769cb134a3c64260a56a07cd046882b08b6c29f9c2093890059221",
+      "hash": "sha256:c17d4bc08e648c2007c96cae83f7439c089ffa1beee08ae558908bcedec32f41",
       "planCheckpoint": null,
       "runbookId": "rb.promotion-execute",
       "steps": [],
       "strictness": "strict",
       "verifiableCount": 0,
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     "rb.promotion-preflight": {
       "armedBy": "model-request",

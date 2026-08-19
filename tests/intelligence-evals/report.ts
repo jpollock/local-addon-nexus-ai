@@ -123,6 +123,21 @@ export function milestoneVerdict(report: RunReport): string {
   const counts = tally(report);
   const defects = report.specs.flatMap((s) => s.findings.filter((f) => f.kind === 'SPEC-DEFECT'));
 
+  // WP-42 · zero of everything used to fall through every branch below and
+  // land on MET. It is the same false-completeness one level down: not
+  // "blocked criteria reported as green", but NO criteria reported as green.
+  // `--only <no-match>` was the reproduced route; an unreadable evals
+  // directory and a set of specs that all failed to parse are the others.
+  const evaluated = report.specs.reduce((n, s) => n + s.results.length, 0);
+  if (evaluated === 0) {
+    return [
+      'MILESTONE VERDICT: NOT MET — no criteria were evaluated.',
+      `  ${report.specs.length} spec(s) were in scope and none of them yielded a criterion.`,
+      '  A run that checked nothing cannot report a milestone; see any --only selector,',
+      '  the evals directory, and the spec load errors above.',
+    ].join('\n');
+  }
+
   if (counts.FAIL > 0) {
     return `MILESTONE VERDICT: NOT MET — ${counts.FAIL} criterion/criteria FAILED against the real core.`;
   }

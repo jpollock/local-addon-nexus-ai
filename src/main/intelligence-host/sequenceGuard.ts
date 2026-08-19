@@ -91,15 +91,29 @@
  * A refusal under either new rule emits NO `task.action.executed` — WP-19's
  * producer is explicit that a refused call did not execute — and is written to
  * `operation-audit.log` by both chokepoints, exactly as WP-20d's refusals are.
+ *
+ * AND ONE MORE, ADDED BY WP-20g — THE ONE THAT SUBTRACTS REACH.
+ *
+ * 7. **A WRITE BOUND TO A CAPABILITY IS UNREACHABLE WITHOUT A GRANT.** Every
+ *    rule above presupposes an armed run or a pending request: they govern the
+ *    ceremony around a capability someone already holds. So WP-20f's deny-flip
+ *    subtracted ceremony and not reach, and its own delivery note said so.
+ *    Rule 7 asks the prior question — is this capability held at all — and it
+ *    asks it with no run in existence, which is why it runs FIRST. The
+ *    tool→capability binding is DERIVED FROM LAW (a checkpoint's `tools:` or
+ *    its `evidence.tool`); nothing in this file names a tool. Zero declaring
+ *    capabilities falls through unchanged; two or more fails CLOSED unless one
+ *    of them is granted. Reads are untouched. See the block above
+ *    `capabilitiesDeclaringTool` for the full reasoning and its ruling.
  */
 import { getIntelligenceCore } from './coreRegistry';
 import { foldProcedureCursor, runForTask, ProcedureCursorState } from './procedureCursor';
 import { peekArmingRequests } from './procedureArming';
-import { getCapabilityGrants } from './capabilityGrants';
+import { getCapabilityGrants, getDisarmedCapabilityGrants } from './capabilityGrants';
 import { GATED_TIER_FLOOR } from './actionProducer';
 import { getToolSafety } from '../mcp/safety';
 import { nextGatedCheckpoint } from '../../intelligence';
-import type { Runbook, RunbookCheckpoint } from '../../intelligence';
+import type { Runbook, RunbookCheckpoint, RunbookRegistry } from '../../intelligence';
 
 /**
  * WHY THE REFUSALS ARE DISCRIMINATED (WP-31).
@@ -121,7 +135,9 @@ export type SequenceRefusalReason =
   /** WP-31 rule 5: a write the current checkpoint does not declare. */
   | 'exclusive-scope'
   /** WP-31 rule 6: a write between the acknowledgement and the procedure's delivery. */
-  | 'arming-gap';
+  | 'arming-gap'
+  /** WP-20g rule 7: a write bound to a capability, and no grant covers it. */
+  | 'not-granted';
 
 /**
  * WP-31 · THE REFUSAL PAYLOAD CONTRACT (inherited requirement, ruled at the
@@ -401,6 +417,167 @@ function armingGapRefusal(toolName: string): SequenceRefusal | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// WP-20g · rule 7 — REACH
+// ---------------------------------------------------------------------------
+
+/**
+ * **RULE 7. A write bound to a capability is unreachable without a grant.**
+ *
+ * Rules 1–6 all presuppose an armed run or a pending arming request: they
+ * govern the CEREMONY around a capability someone already holds. WP-20f's
+ * deny-flip therefore subtracted ceremony and not reach, and said so in its own
+ * delivery note — `wpe_promote_environment` was reachable with no procedure at
+ * all, because the sequence guard skips an ungranted capability by its own
+ * rule. This is the other half.
+ *
+ * THE BINDING IS DERIVED FROM LAW, NEVER AUTHORED HERE. A capability's tools
+ * are the tools its runbook declares — a checkpoint's `tools:` list or its
+ * `evidence.tool`, the same two places `abortForTool` reads for the same
+ * reason: a document that edits its checkpoints changes this mapping the same
+ * day, which is the property a hardcoded list would not have. Nothing in this
+ * file names a tool.
+ *
+ * **THE ZERO CASE FALLS THROUGH; THE MANY CASE FAILS CLOSED** (ruled
+ * 2026-08-19, overruling the packet's own proposal on the second half).
+ *
+ *  - **Zero declaring capabilities** — no runbook declares this tool — is the
+ *    legacy surface, and it stays exactly as it was. Narrowing it would be
+ *    WP-20d's permanently-narrowed-surface trap.
+ *  - **Two or more** declaring capabilities means the tool is MORE governed,
+ *    not less, so it is refused unless AT LEAST ONE of them is granted. The
+ *    permissive reading would have let a second runbook declaring an
+ *    already-protected tool silently un-protect it — a future law edit
+ *    weakening reach as a side effect nobody chose.
+ *
+ * Note what this is NOT: it is not `abortForTool`'s exactly-one-candidate
+ * discipline. That function must pick WHICH abort, so ambiguity there is a
+ * guess. This one needs only "is any of them granted" — a disjunction, and a
+ * disjunction resolves nothing wrongly.
+ *
+ * **Reads are untouched.** The check applies at `tier >= GATED_TIER_FLOOR`,
+ * the same classification rule 5 uses and the same one the audit chokepoint
+ * and WP-19's producer read. A tier-1 tool a runbook happens to name is not
+ * made unreachable by this.
+ *
+ * **Self-contained fault handling, and it is load-bearing rather than
+ * defensive habit.** This runs FIRST, before `runForTask`, because a grant is
+ * prior to a run. So a fault in it — a registry that cannot enumerate, a core
+ * mid-teardown — must not fall into `checkCheckpointSequence`'s own catch and
+ * silently disable rules 1–6 as well. It degrades to `null` on its own, which
+ * means "not in the path", which is the seam invariant.
+ */
+function capabilitiesDeclaringTool(runbooks: RunbookRegistry, toolName: string): string[] {
+  const out = new Set<string>();
+  for (const rb of runbooks.runbooks()) {
+    const declares = (rb.checkpoints ?? []).some(
+      (c) => c.evidence?.tool === toolName || (c.tools ?? []).some((t) => t.name === toolName)
+    );
+    if (declares) out.add(rb.capability);
+  }
+  // Sorted so the door a refusal names is deterministic across boots — a
+  // remedy that moves between two identical runs is not a remedy.
+  return [...out].sort();
+}
+
+/**
+ * Why this capability is not granted, in the words WP-20f already chose.
+ *
+ * `resolveCapabilityGrants` builds a disarmed row precisely so a surface does
+ * not have to infer the reason, and the reasons are not interchangeable:
+ * `hash-mismatch` says the document on disk is not the document that was
+ * reviewed, and `requires-explicit-grant` says the platform may never grant
+ * this on its own. Telling a user "not granted" when the truth is "the law
+ * changed under your grant" is the same class of falsehood WP-20f added that
+ * reason value to prevent.
+ */
+function notGrantedBecause(capability: string): string {
+  const row = getDisarmedCapabilityGrants().find((d) => d.capability === capability);
+  switch (row?.reason) {
+    case 'requires-explicit-grant':
+      return (
+        `${capability} is NEVER granted by default — production consequence is not a default. ` +
+        'Nothing you can do in this turn grants it: a person grants it against the reviewed ' +
+        'document, in settings, before a run that needs it begins.'
+      );
+    case 'hash-mismatch':
+      return (
+        `${capability} is granted against a different document than the one on disk` +
+        `${row.detail ? ` (${row.detail})` : ''}. That is integrity, not staleness — the ` +
+        'grant has to be made again against the current file before this tool is reachable.'
+      );
+    case 'disabled-by-settings':
+      return `${capability} is granted but switched OFF in settings. Switching it back on restores this tool.`;
+    case 'runbook-unavailable':
+      return (
+        `${capability} names a runbook this machine does not serve` +
+        `${row.detail ? ` (${row.detail})` : ''}, so nothing can grant it here.`
+      );
+    default:
+      return `${capability} is not granted on this machine. A person grants it against its runbook, in settings.`;
+  }
+}
+
+function reachRefusal(toolName: string): SequenceRefusal | null {
+  try {
+    // Reads are untouched — the parity floor, and the same boundary as rule 5.
+    if (!isWriteTool(toolName)) return null;
+
+    const runbooks = getIntelligenceCore()?.law?.runbooks;
+    if (!runbooks) return null;
+
+    const declaring = capabilitiesDeclaringTool(runbooks, toolName);
+    // The zero case: the legacy tool surface, unchanged.
+    if (declaring.length === 0) return null;
+
+    const granted = getCapabilityGrants();
+    // The disjunction. ANY declaring capability being granted is reach.
+    if (declaring.some((c) => granted.some((g) => g.capability === c))) return null;
+
+    // The door names ONE capability because the payload contract carries one
+    // pair — and that is honest here precisely BECAUSE this is a disjunction:
+    // granting the capability the door names resolves the refusal completely,
+    // so the door is a sufficient remedy and not a partial one. The message
+    // still names every declaring capability, because a refusal that mentioned
+    // one of three alternatives would be hiding the other two.
+    const primary = declaring[0];
+    const primaryRunbook = runbooks.byCapability(primary);
+    if (!primaryRunbook) return null;
+
+    const claimedBy = primaryRunbook.checkpoints.find(
+      (c) => c.evidence?.tool === toolName || (c.tools ?? []).some((t) => t.name === toolName)
+    );
+    // The binding said this runbook declares the tool, so a checkpoint must
+    // exist. If it somehow does not, the binding is not one this gate can
+    // explain, and a refusal it cannot explain is one it does not make.
+    if (!claimedBy) return null;
+
+    const others = declaring.slice(1);
+    const alternatives = others.length
+      ? ` This tool is also declared by ${others.join(', ')}; granting ANY ONE of ` +
+        `${declaring.join(', ')} makes it reachable, and none of them is granted.`
+      : '';
+
+    return {
+      capability: primary,
+      runbookId: primaryRunbook.id,
+      checkpoint: claimedBy.id,
+      claimedBy: claimedBy.id,
+      reason: 'not-granted',
+      governDoor: governDoorFor(primary, primaryRunbook.id),
+      message:
+        `REFUSED: ${toolName} is a write that ${primaryRunbook.id} declares at ${claimedBy.id}, ` +
+        `so it belongs to ${primary} — and that capability is not granted. ` +
+        `${notGrantedBecause(primary)}${alternatives} Until then this tool cannot run on any ` +
+        'surface, and reaching the same effect through another tool is the thing the grant ' +
+        'exists to gate. Report that the capability is ungranted and stop.',
+    };
+  } catch {
+    // Not in the path. Never take the tool surface, or rules 1-6, down with it.
+    return null;
+  }
+}
+
 /**
  * The guard. Returns `null` for "not sequenced, or sequence satisfied" — which
  * is every call on every surface until a strict capability is armed.
@@ -410,6 +587,12 @@ export function checkCheckpointSequence(
   taskId: string | undefined
 ): SequenceRefusal | null {
   try {
+    // WP-20g rule 7, FIRST: a grant is prior to a run. Every rule below governs
+    // the ceremony around a capability someone already holds; this one asks
+    // whether they hold it at all, and it must answer with no run in existence.
+    const reach = reachRefusal(toolName);
+    if (reach) return reach;
+
     const run = runForTask(taskId);
     // WP-31 rule 6. No run does NOT mean no procedure: the model may have asked
     // for one whose body arrives next turn. That gap is where the 2026-08-18

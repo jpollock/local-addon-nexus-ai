@@ -1,7 +1,7 @@
 ---
 id: rb.promotion-execute
 kind: runbook
-version: 1.1.0
+version: 1.2.0
 strictness: strict
 capability: cap.promote_environment    # unchanged from rb.staging-promotion: this half is the write the capability names
 owner: ops
@@ -39,6 +39,7 @@ checkpoints:                     # ordered; strict — gated calls out of sequen
   - id: cp.backup                # eval 05 (backup the destination before promoting; wait for it or use backup_and_verify)
   - id: cp.approval              # eval 05 (explicit confirmation before executing)
   - id: cp.promote               # eval 05 (executes promotion with correct install ids)
+    tools: [wpe_promote_environment]   # the write this capability names (WP-20g): declared, so the reach check can bind it
   - id: cp.verify-destination    # eval 05 (a promotion claimed but unverified is not a completed promotion)
     unrequested: true
   - id: cp.report
