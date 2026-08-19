@@ -260,6 +260,42 @@ describe('the unit is the CELL, not the site', () => {
   });
 });
 
+describe('never a plausible default for something unobserved', () => {
+  it('renders NO value when the fact carries no version string', () => {
+    // The house invariant, at this surface: "never default an unknown input to
+    // a plausible value". `php_version || '8.0'` is this repo's own worked
+    // example of what it costs — a fabricated version earning real security and
+    // performance credit for something never observed. A version-less plugin
+    // fact must produce an ABSENT cell, which the grid draws as its honest dash.
+    //
+    // ADDED BY THE MUTATION BATTERY: M06 replaced `return undefined` with
+    // `return '8.0'` and SURVIVED, because nothing here had ever fed the
+    // derivation a fact without a version.
+    const w = makeWorld();
+    w.emitter.emit({
+      observed_at: daysAgo(1),
+      topic: 'state.plugin.observed',
+      schema: 'plugin.observed/1',
+      entity: { environment: w.production },
+      actor: { id: 'act_test', kind: 'system' },
+      source: { class: 'platform', system: 'test', trust: 'observed' },
+      payload: { slug: 'woocommerce', active: true },
+    });
+    observePlugin(w, w.staging, '9.5.0', daysAgo(1));
+    fold(w);
+
+    const m = buildSiteAtPlaces(FACT, 'plugin=woocommerce', w.deps);
+    const row = rowOf(m.rows, 'Alpha');
+    expect(row.cells[0]!.value).toBeUndefined();
+    expect(row.cells[0]!.observedAt).toBeUndefined();
+    // …and the un-valued cell is not counted as covered, so the coverage figure
+    // cannot be inflated by cells that hold nothing.
+    expect(m.verdictCoverage.cells).toBe(1);
+    expect(JSON.stringify(m)).not.toContain('8.0');
+    w.close();
+  });
+});
+
 describe('the read never mints, and never throws', () => {
   it('leaves the entity tables byte-identical', () => {
     const w = makeWorld();
@@ -270,6 +306,32 @@ describe('the read never mints, and never throws', () => {
     const before = count();
     buildSiteAtPlaces(FACT, 'plugin=woocommerce', w.deps);
     expect(count()).toBe(before);
+    w.close();
+  });
+
+  it('mints NOTHING for an entity that belongs to no Site — it drops the row', () => {
+    // ADR-21 froze entity ids: a comparison that registered an entity for
+    // whatever handle it was passed would split the history it exists to join
+    // (audit A7). The dropped row is visible; a minted one is not.
+    //
+    // ADDED BY THE MUTATION BATTERY: M15 made `siteOf` fall back to `ensure()`
+    // and SURVIVED, because every entity in the pinned worlds already had a
+    // Site — the fallback line was unreachable from the test set, so the
+    // byte-identical-tables pin above was passing over a path it never took.
+    const w = makeWorld();
+    const orphan = w.entities.ensure('env', 'local.site_id', 'row-orphan');
+    observePlugin(w, orphan, '9.5.0', daysAgo(1));
+    observePlugin(w, w.production, '9.5.0', daysAgo(1));
+    fold(w);
+
+    const count = () =>
+      (w.ledger.raw().prepare('SELECT COUNT(*) c FROM entities').get() as { c: number }).c;
+    const before = count();
+    const m = buildSiteAtPlaces(FACT, 'plugin=woocommerce', w.deps);
+    expect(count()).toBe(before);
+    // The orphan produced no row, rather than a row under an invented Site.
+    expect(m.rows).toHaveLength(1);
+    expect(m.rows[0].siteEntityId).toBe(w.site);
     w.close();
   });
 
