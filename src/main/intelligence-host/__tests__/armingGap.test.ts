@@ -75,19 +75,48 @@ describe('parity — nothing armed, nothing pending', () => {
     expect(checkCheckpointSequence('wp_plugin_update', undefined)).toBeNull();
   });
 
-  test('THE WHOLE TOOL SURFACE passes — every name the tier table knows, plus unknowns', () => {
-    // The parity floor this packet rests on, taken over the population rather
-    // than over a handful: with no run and no pending request the guard returns
-    // null before it reads a runbook, a grant or a ledger, so the unarmed path
-    // is instruction-for-instruction what it was. A single refusal here would
-    // mean the flip reached a surface that never opted into a procedure.
+  test('THE WHOLE TOOL SURFACE passes — except exactly what law binds to an ungranted capability', () => {
+    // WP-31's parity floor, taken over the population rather than over a
+    // handful: with no run and no pending request the guard used to return null
+    // before it read a runbook, a grant or a ledger, so the unarmed path was
+    // instruction-for-instruction what it was.
+    //
+    // **WP-20g CHANGED THIS ASSERTION, DELIBERATELY, AND IT IS THE PACKET.**
+    // Rule 7 runs with nothing armed — a grant is prior to a run — so the
+    // unarmed path is no longer empty of refusals. Weakening the test to
+    // `not.toContain('wpe_promote_environment')`, or deleting it, would hide
+    // precisely the reach this packet was built to take away and the parity it
+    // must still preserve.
+    //
+    // So the expected set is DERIVED FROM THE DOCUMENTS HERE, independently of
+    // the guard's own derivation, and compared: the tools refused must be
+    // exactly the tools shipped law binds to a capability nothing grants. A
+    // runbook that declares a new tool tomorrow appears in this list and is
+    // READ; a refusal that appears for any other reason fails.
     const names = Object.keys(TIER_OVERRIDES);
     expect(names.length).toBeGreaterThan(50); // guard the guard: an empty table would pass vacuously
 
-    const refused = [...names, 'a_tool_nobody_registered', 'acme/contributed_tool']
-      .filter((tool) => checkCheckpointSequence(tool, task) !== null);
+    const grantedCaps = new Set(getCapabilityGrants().map((g) => g.capability));
+    const boundToUngranted = (tool: string): boolean => {
+      const caps = core
+        .law!.runbooks.runbooks()
+        .filter((rb) =>
+          (rb.checkpoints ?? []).some(
+            (c) => c.evidence?.tool === tool || (c.tools ?? []).some((t) => t.name === tool)
+          )
+        )
+        .map((rb) => rb.capability);
+      return caps.length > 0 && !caps.some((c) => grantedCaps.has(c));
+    };
 
-    expect(refused).toEqual([]);
+    const population = [...names, 'a_tool_nobody_registered', 'acme/contributed_tool'];
+    const refused = population.filter((tool) => checkCheckpointSequence(tool, task) !== null);
+    const expected = population.filter(boundToUngranted);
+
+    // Not vacuous in either direction: shipped law binds at least one tool to a
+    // capability that is never granted by default, and this says so out loud.
+    expect(expected.length).toBeGreaterThan(0);
+    expect(refused).toEqual(expected);
   });
 });
 

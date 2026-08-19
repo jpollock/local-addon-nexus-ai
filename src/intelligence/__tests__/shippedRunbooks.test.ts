@@ -290,12 +290,18 @@ describe('the shipped law/ directory', () => {
     // gains `tools: [verify_site_live]` and the body names the instrument and
     // restates what the gateway still cannot see. +461 bytes, and the margin to
     // the near-ceiling WARN is 1,753 — the ceiling pins below still hold.
+    //
+    // `rb.promotion-execute` moved 2026-08-19 (WP-20g, 6,902 → 7,026): cp.promote
+    // gains `tools: [wpe_promote_environment]`, so the write the capability is
+    // NAMED for is one the derived tool→capability binding can bind. +124 bytes,
+    // the same authoring shape WP-31 used on the anchor, and 3,214 clear of the
+    // near-ceiling WARN.
     expect(bytes).toEqual({
       'rb.bulk-plugin-update': 7463,
       'rb.diagnose-site': 8970,
       'rb.incident-containment': 8673,
       'rb.incident-remediation': 8714,
-      'rb.promotion-execute': 6902,
+      'rb.promotion-execute': 7026,
       'rb.promotion-preflight': 8184,
       'rb.wpe-pull': 8361,
     });
