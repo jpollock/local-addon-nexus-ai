@@ -14814,3 +14814,34 @@ and listing the available spec ids — never MET, never exit 0 (the vacuous-gree
 family at the runner's own summary line, filed at the WP-39 adjudication). No
 `src/`, no new topic, payload version, envelope field or storage marker,
 `wpeOperationPermissions` untouched.
+
+---
+
+**WP-20g ANNOUNCED 2026-08-19 — LOCK TAKEN: `src/main/intelligence-host/`.**
+Worktree `.worktrees/wp-20g`, branch `wp-20g`, base `poc/nexintelligence` @
+`35cf0d32`. **This announce sits on the base before the work starts**, per the
+WP-20f/WP-37 crossed-claim rule — the whole point of that rule is that a
+worktree announce is invisible to the agent it warns.
+
+**The lock was CONFIRMED FREE, measured rather than assumed.** WP-20f released
+it at its merge ("the intelligence-host lock is RELEASED", `f971272e`); WP-37,
+the only claim after it, merged at `f7bf7feb` and the architect's acceptance
+records the in-flight column as EMPTY. Wave 6's registration assigns this
+surface to WP-20g and the other two packets elsewhere (WP-41 the DockedPanel
+renderer, WP-42 the eval registry). `git status --porcelain --
+src/main/intelligence-host` is empty in the primary checkout and in every
+worktree `git worktree list` reports — run, not inferred.
+
+**Scope: the REACH half of E2**, ruled at the WP-20f gate and stated in that
+packet's own delivery note — "v0 grants remain ADDITIVE over the tool surface,
+so denying these two subtracts CEREMONY and not REACH … WP-20g owns the reach
+half." A gated-tier tool bound to a capability becomes unreachable without a
+grant; the check joins the chokepoints the sequence guard already guards and
+refuses with WP-31's `governDoor` payload contract. The tool→capability binding
+is DERIVED FROM LAW and is presented as a table for ratification before any of
+it is built — a binding the gate can read is a binding nobody authored silently.
+
+**`isOperationAllowed` is NOT touched.** It is a real gate and a different one,
+and the record says so twice already. `wpeOperationPermissions` semantics are
+untouched; the M4 eval family is not in this packet's path.
+
