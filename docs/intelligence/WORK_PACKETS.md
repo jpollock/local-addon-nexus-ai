@@ -13092,3 +13092,61 @@ that no test actually ran.
 
 **ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and an
 18-mutation battery. **`npm run rebuild` before loading Local.**
+
+---
+
+**WP-36 · MERGE ACCEPTED — architect verification; THE CONSENT HOLE
+IS CLOSED (2026-08-19).** Stat verified independently (15 files,
++1,488/−26); fidelity TWO-FOR-TWO on 901b5236 by md5 (2c89c776…,
+d21932af… — blob = the architect's copies), and 45445728's pure-
+append shape (122 insertions, 0 deletions) accepted with the agent's
+own argument: an append cannot have altered the text it follows.
+**F1 landed exactly as ruled**, and two details exceed the ruling's
+ask: the binding comes from the SAME procedure object that decided
+`gatedOnApproval` — so the consent's subject derives from the
+condition that raised the card, structurally, not from a parallel
+computation that could disagree — and M08 proves the always-written
+null load-bearing (mutate the write to conditional → a present-day
+plain confirm falls into the legacy lane and attests cp.approval;
+killed). The gate's sign-flipped sibling (an unrelated denial ending
+the run via `decisions.length > 0`) is fixed in the same lanes.
+**F3:** isError read, outcome carried by an aria-labelled mark, not
+colour alone — accepted. **F4:** the card titles from the runbook's
+own `## cp.x — reason` heading and passes NO effect; the
+two-refused-tools-produce-the-identical-card pin is
+derived-never-authored made testable at the exact surface that
+taught us the lesson. **Battery honesty at the margin, all
+accepted:** VOID-at-ran=0 distinguished from green by the count
+floor; two equivalent mutants (JSON-round-trip-indistinguishable
+forms) repointed to the distinguishable form and killed; one
+unobservable mutation converted to a compile-time
+`@ts-expect-error` pin; the TWELFTH vacuous-guard shape adopted —
+**a mutation aimed at a discriminator is equivalent whenever the
+discriminated states cannot both reach the code.** Eighth
+poisoned-cache occurrence logged (Suites-failed beside
+Tests-0-failed, pointing at a file's own first line — a new mask
+noted). Baselines reconcile with the skipped column read first;
+tsc clean throughout. **Board after the close:** the phantom-turned-
+real incident chain (unrelated approval → cardless writes) is dead
+before it ever fired in anger; the F4 designer copy brief rides the
+next relay; still queued — the stream micro + WP-20f code packet
+(host lock now free), the M5 surface packet, and the owner's sitting
+list (B-03 ×3, empty twin ×3, transcripts into the repo, the
+triple ask).
+
+---
+
+**WP-37 · REGISTERED AND PROMPTED — the stream micro takes its number;
+WP-20f's code prompt issued behind it (2026-08-19).** The registered
+stream micro becomes WP-37: scope on the emission from the shipped
+carrier, the zero-eligible signal (flipping WP-35's `opensContainer`
+to the ratified no-container state while M20's legacy default holds),
+and the plan-line's producing-checkpoint fact. Gate hold: the
+emission shape. Both packets are host-side and SERIALIZE on the
+intelligence-host lock: WP-37 launches now, WP-20f (the deny-flip as
+ruled: carve-out-free flip for the two caps, idempotent grant
+materialization with its mechanics held at gate, deny-by-default
+registration) launches on WP-37's merge. Convergence noted for the
+owner: after WP-37 merges, the pending triple t1/t2 ask doubles as
+the empty-run live smoke — the sixth must-not's sitting and XD-21's
+first product rendering land in the same three asks.
