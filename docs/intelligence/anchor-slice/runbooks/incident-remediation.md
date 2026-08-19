@@ -1,7 +1,7 @@
 ---
 id: rb.incident-remediation
 kind: runbook
-version: 1.1.0
+version: 1.2.0
 strictness: strict
 capability: cap.incident_remediation
 owner: ops
@@ -11,6 +11,7 @@ review_triggers:
   - any change to SentinelExecutor's gating (which class maps to which permission)
   - any change to wpeOperationPermissions semantics (delete / wpcli / wpcli_read)
   - a new remediation class (anything destructive not in the catalogue below)
+  - attestation classes changed
 scope:
   environments: [wpe_production, wpe_staging, wpe_development, local, external]
   note: production is in scope because compromises happen on live sites.
@@ -38,15 +39,26 @@ checkpoints:                     # ordered; strict — gated calls out of sequen
   # (nobody asks to be logged out of their own site), and re-scanning from
   # scratch afterwards. Executing the cleanup is the request; approval and the
   # post-mortem are the platform's own ceremony.
+  # attest: what the PLATFORM can prove, never how well the step was done.
+  # One of six: consent is a gateway record, the rest are readings. This
+  # document names no instrument for cp.execute-cleanup; that gap is
+  # recorded, not papered over (design note §4).
   - id: cp.cleanup-plan
+    attest: narrative
     unrequested: true
   - id: cp.approval
+    attest: event
+    evidence: { topic: task.rationale.recorded, decision: approved }
   - id: cp.execute-cleanup
+    attest: narrative
   - id: cp.rotate-credentials
+    attest: narrative
     unrequested: true
   - id: cp.verify-clean          # unverified cleanup is a claim, not a result
+    attest: narrative
     unrequested: true
   - id: cp.post-mortem
+    attest: narrative
 aborts:
   - id: ab.grant-refused
     on: a remediation step is refused by the policy gate (delete is denied on every

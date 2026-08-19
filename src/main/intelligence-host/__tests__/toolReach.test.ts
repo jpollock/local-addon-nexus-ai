@@ -148,25 +148,39 @@ describe('the mandated capabilities, on a machine that has crossed the flip', ()
     expect(checkCheckpointSequence(PROMOTE_TOOL, task)).toBeNull();
   });
 
-  test('THE HONEST ASTERISK: once granted, rb.promotion-execute gates nothing further — it has no attestable checkpoint', () => {
-    // Recorded rather than implied. "Granting restores reach through the full
-    // ceremony" is true of the GRANT, which is the ceremony this document's
-    // gate can enforce; it is NOT true of an attestation sequence, because
-    // every checkpoint of rb.promotion-execute defaults to narrative. So an
-    // armed, granted promotion run reaches its tool with nothing in front of
-    // it, exactly as it did before this packet — the difference is the grant.
+  test('THE ASTERISK IS RETIRED (WP-45): a granted promotion run is now SEQUENCED, not merely reachable', () => {
+    // WP-20g recorded an honest asterisk here: granting `cap.promote_environment`
+    // restored REACH but gated nothing after it, because every checkpoint of
+    // rb.promotion-execute defaulted to narrative. That tripwire was written to
+    // FAIL the day a law edit added `attest: event` to cp.backup or cp.approval,
+    // "rather than silently changing what this suite believes". The ratified
+    // attestation law review is that edit, and this is the tripwire being read.
     //
-    // Pinned so that a law edit adding `attest: event` to cp.backup or
-    // cp.approval FAILS here and gets read, rather than silently changing what
-    // this suite believes.
+    // Read from the document through the real registry — nothing here is typed
+    // from the review note.
     const rb = core.law!.runbooks.byCapability(PROMOTE)!;
-    expect(rb.checkpoints.map((c) => c.attest)).toEqual(['narrative', 'narrative', 'narrative', 'narrative', 'narrative']);
+    expect(rb.checkpoints.map((c) => c.attest)).toEqual([
+      'event',      // cp.backup
+      'event',      // cp.approval
+      'event',      // cp.promote
+      'narrative',  // cp.verify-destination
+      'narrative',  // cp.report
+    ]);
 
     grant(PROMOTE);
     armProcedureRun({ sessionId: 's1', capability: PROMOTE, runbookId: rb.id, runbookHash: rb.hash });
     registerProcedureTurn({ sessionId: 's1', taskId: task });
 
-    expect(checkCheckpointSequence(PROMOTE_TOOL, task)).toBeNull();
+    // The grant is held and reach is restored — rule 7 is satisfied — and the
+    // write is STILL refused, by the sequencer, because the backup and the
+    // consent in front of it are now checkpoints the platform can require.
+    // This is the review's acceptance criterion at the gate rather than in the
+    // gates column: the backup that makes the overwrite recoverable is no
+    // longer something a run can simply skip.
+    const refusal = checkCheckpointSequence(PROMOTE_TOOL, task)!;
+    expect(refusal).not.toBeNull();
+    expect(refusal.reason).not.toBe('not-granted');
+    expect(refusal.checkpoint).toBe('cp.backup');
   });
 
   test('THE RECORDED GAP: cap.incident_remediation binds NO tool in shipped law, so reach cannot bite for it', () => {
@@ -204,6 +218,51 @@ describe('the parity floor', () => {
     for (const tool of ['bulk_plugin_update', 'wpe_backup_and_verify', 'verify_site_live']) {
       expect([tool, checkCheckpointSequence(tool, task)]).toEqual([tool, null]);
     }
+  });
+
+  /**
+   * WP-45 · THE ONE REACH NARROWING THIS PACKET INTRODUCES, disclosed as a test
+   * rather than as a sentence in a report.
+   *
+   * P3 gives cp.backup `tools: [wpe_create_backup, wpe_backup_and_verify]`,
+   * quoted from the document's own text. The second was already declared by the
+   * anchor, so adding a declarer only WIDENS it — reach is a disjunction. The
+   * FIRST was declared by nothing, which put it in rule 7's zero case: the
+   * legacy surface, reachable with no grant at all. It now has exactly one
+   * declaring capability, and that capability is MANDATED-EXPLICIT, so on a
+   * default machine `wpe_create_backup` moves from reachable to refused.
+   *
+   * That is WP-20d's permanently-narrowed-surface trap in miniature, and it is
+   * accepted here rather than overlooked: the tool creates a backup on a WP
+   * Engine install, the document that names it is the one governing overwrites
+   * of live environments, and rule 7's whole claim is that a write bound to a
+   * capability is unreachable without it. Recorded so the next reader finds the
+   * consequence beside the declaration instead of discovering it in the field.
+   */
+  test('WP-45: wpe_create_backup leaves the zero case and is now grant-gated', () => {
+    const rb = core.law!.runbooks.byCapability(PROMOTE)!;
+    const backup = rb.checkpoints.find((c) => c.id === 'cp.backup')!;
+    expect(backup.tools.map((t) => t.name)).toEqual(['wpe_create_backup', 'wpe_backup_and_verify']);
+
+    // Ungranted (cap.promote_environment is never granted by default): refused.
+    expect(granted()).not.toContain(PROMOTE);
+    const refusal = checkCheckpointSequence('wpe_create_backup', task)!;
+    expect(refusal.reason).toBe('not-granted');
+    expect(refusal.capability).toBe(PROMOTE);
+    expect(refusal.checkpoint).toBe('cp.backup');
+
+    // And the grant restores it, which is what makes this a gate and not a ban.
+    grant(PROMOTE);
+    expect(checkCheckpointSequence('wpe_create_backup', task)).toBeNull();
+  });
+
+  test('WP-45: wpe_backup_and_verify was already declared, so it only WIDENED', () => {
+    // Two declaring capabilities now. Reach is a disjunction, so the anchor's
+    // materialized grant still reaches it with cap.promote_environment denied —
+    // the direction that proves nothing was taken away here.
+    expect(granted()).toContain(ANCHOR);
+    expect(granted()).not.toContain(PROMOTE);
+    expect(checkCheckpointSequence('wpe_backup_and_verify', task)).toBeNull();
   });
 
   test('a tool NO runbook declares is untouched — the zero case falls through', () => {

@@ -78,6 +78,101 @@ export const GRANT_ISSUED_SCHEMA = 'grant.issued/1';
 export const GRANT_REVOKED_SCHEMA = 'grant.revoked/1';
 
 /**
+ * WP-45 · WHY AN ISSUANCE HAPPENED, in a closed vocabulary.
+ *
+ * The WP-44 gate found the producer stamping `materialized` on EVERY first
+ * issuance — including one a person makes at the Govern control. A
+ * `control.grant.issued` that says `materialized` about a human act
+ * misdescribes that act in the compliance record, which is the one thing this
+ * event exists to get right.
+ *
+ *  - `materialized`       — WP-20f's migration converted a WP-20b derivation
+ *                           into an explicit list. Nobody chose it that day;
+ *                           the word says so.
+ *  - `granted-at-control` — a person granted it, at the Govern matrix.
+ *  - `law-review re-pin`  — a ratified law review re-issued it at the document's
+ *                           new hash (see `LAW_REVIEW_REPIN`).
+ *  - `repinned`           — the document under a grant changed and the grant
+ *                           followed it MECHANICALLY, with no review behind the
+ *                           move. Deliberately NOT in the ratified three: it is
+ *                           what the producer says when it has nothing better to
+ *                           say, and telling it apart from a reviewed re-pin is
+ *                           the whole point of the vocabulary.
+ */
+export const GRANT_ISSUE_REASONS = [
+  'materialized',
+  'granted-at-control',
+  'law-review re-pin',
+  'repinned',
+] as const;
+export type GrantIssueReason = (typeof GRANT_ISSUE_REASONS)[number];
+
+/**
+ * WP-45 · P4's RE-PIN — the law review, as a table the producer can apply.
+ *
+ * The attestation law review changed four documents, two of which carry live
+ * grants. P4's promise is that **no grant silently survives a hash change and
+ * none silently dies of one**, so the review re-issues those two at their new
+ * hashes with a reason that names the review.
+ *
+ * PINNED FROM-AND-TO, NEVER "follow the document". Each row is one transition
+ * between two exact hashes: the text the review READ, and the text it PRODUCED.
+ * A grant pinned to any other hash is not covered — that grant was made against
+ * text this review never read, and it disarms as `hash-mismatch` exactly as it
+ * would have without this table. This is what keeps the row from generalising
+ * into "a grant follows its runbook", which is the rule WP-20c's split ruling
+ * exists to forbid.
+ *
+ * IDEMPOTENT ACROSS RESTARTS BY CONSTRUCTION, with no marker of its own. Once
+ * the transition has been applied the grant's recorded hash IS `to`, so `from`
+ * no longer matches and the row can never fire twice. That is strictly stronger
+ * than a stored flag, which can be lost — and it adds no storage key, so the
+ * protected `intelligence_grants_*` namespace is untouched.
+ *
+ * MEASURED, NOT ASSUMED. The review note proposed that a version bump would
+ * DISARM both grants via the stale-pin rule. Driven as a test
+ * (`lawReviewRePin.test.ts`), that is true only of a grant carrying an explicit
+ * hash — the shape the Govern control writes. A purely MATERIALIZED grant
+ * carries no hash pin, so it silently re-pins itself and stays granted. Both
+ * paths are covered here: the re-pin names the act in the first case, and
+ * restores the grant in the second.
+ */
+export interface LawReviewRePin {
+  capability: string;
+  runbookId: string;
+  /** The hash the review read. */
+  from: string;
+  /** The hash the review produced. */
+  to: string;
+}
+
+export const LAW_REVIEW_REPIN: readonly LawReviewRePin[] = [
+  {
+    capability: 'cap.incident_containment',
+    runbookId: 'rb.incident-containment',
+    from: 'sha256:fedec1dfb1a6b1e43ac978d356c3e75aad48be9b44ed05aca2f0e4f0b3e689df',
+    to: 'sha256:d1c8740a3dd5e363300dd523cf80ea072d8b6ae1c56683e83d50309410558976',
+  },
+  {
+    capability: 'cap.promotion_preflight',
+    runbookId: 'rb.promotion-preflight',
+    from: 'sha256:ae5a1678d2471c58d21a0c11f532245accb5e1511923113d694adff3673f3a86',
+    to: 'sha256:4913c8b5ce94fc33d091efeb8d68cc8f395181cd6cbba54af60e2dcd8260801e',
+  },
+];
+
+/** The re-pin row governing this exact transition, or nothing. */
+export function lawReviewRePinFor(
+  capability: string,
+  fromHash: string | undefined,
+  toHash: string
+): LawReviewRePin | undefined {
+  return LAW_REVIEW_REPIN.find(
+    (r) => r.capability === capability && r.from === fromHash && r.to === toHash
+  );
+}
+
+/**
  * The storage marker (pre-approved at the WP-20 phase-1 ruling, and listed in
  * CLAUDE.md's protected set as `intelligence_grants_*`). OWNED BY THIS MODULE:
  * nothing else reads or writes it.
@@ -446,6 +541,16 @@ export function syncCapabilityGrants(opts: {
   core: IntelligenceCore | undefined;
   storage: MinimalStorage;
   logger: MinimalLogger;
+  /**
+   * WP-45 · why THIS sync's issuances happened, per capability, from the
+   * caller that knows. The Govern control passes `granted-at-control` for the
+   * one capability it acted on; nothing else passes anything, and an absent
+   * entry falls back to what the producer can derive. Scoped per capability
+   * rather than per call because one sync re-resolves the WHOLE set: a single
+   * reason for the call would stamp the caller's word onto every other grant
+   * that happened to change in the same pass.
+   */
+  issueReasons?: ReadonlyMap<string, GrantIssueReason>;
   /** Injected for tests; production passes nothing. */
   now?: Date;
 }): GrantResolution {
@@ -466,6 +571,12 @@ export function syncCapabilityGrants(opts: {
     // that announce it describe the same moment, and two `new Date()` calls
     // would let them disagree by a millisecond for no reason.
     const now = opts.now ?? new Date();
+    // WP-45 · P4. Before anything resolves: any settings grant still pinned to a
+    // hash the ratified law review READ is moved to the hash it PRODUCED. Done
+    // here rather than in the resolver because the resolver is pure by contract
+    // and this writes; done before it rather than after because otherwise the
+    // grant disarms as `hash-mismatch` and there is nothing left to re-pin.
+    applyLawReviewRePin(storage, logger);
     const materialized = materializeShippedGrants(runbooks, storage, now, logger);
     const resolution = resolveCapabilityGrants({
       runbooks,
@@ -482,13 +593,66 @@ export function syncCapabilityGrants(opts: {
       );
     }
 
-    emitChanges(core, storage, resolution, now, logger);
+    emitChanges(core, storage, resolution, now, logger, opts.issueReasons);
     return resolution;
   } catch (err) {
     // A grant surface that could break startup would be a worse failure than
     // the absent procedure it is trying to describe.
     logger.error(`[Intelligence] capability grant sync failed (non-fatal): ${(err as Error).message}`);
     return { grants: liveGrants, disarmed: liveDisarmed };
+  }
+}
+
+/**
+ * WP-45 · P4's re-pin, on the SETTINGS overlay — the half that would otherwise
+ * die rather than survive.
+ *
+ * There are two grant shapes and the hash change lands on them differently, as
+ * `lawReviewRePin.test.ts` drives:
+ *
+ *  - A **materialized** grant carries no hash pin, so it re-pins itself and
+ *    stays granted. Nothing to restore; the only defect is that the ledger
+ *    would call a reviewed re-pin `repinned`, which `emitChanges` fixes.
+ *  - A grant made **at the Govern control** carries the hash it was made
+ *    against, so a version bump disarms it as `hash-mismatch` — correct in
+ *    general, and wrong here: the review IS the review of the new text.
+ *
+ * So this upgrades exactly the second shape, and only across a transition the
+ * review actually performed. Anything else keeps `hash-mismatch`, which is the
+ * behaviour that makes a grant mean "reviewed against THIS text".
+ *
+ * WRITES NOTHING WHEN NOTHING MATCHES — the common case by far, since the table
+ * is spent the moment it applies. Best-effort like every other write here: a
+ * failed rewrite leaves the grant disarmed with an actionable reason, which is
+ * the right direction for this failure to fall.
+ */
+function applyLawReviewRePin(storage: MinimalStorage, logger: MinimalLogger): void {
+  try {
+    const settings = readSettings(storage);
+    const entries = Array.isArray(settings?.capabilityGrants) ? settings!.capabilityGrants : [];
+    if (entries.length === 0) return;
+
+    let changed = false;
+    const next = entries.map((entry) => {
+      if (!entry?.runbookHash) return entry;
+      // Matched on `from` alone: the `to` is what this is about to WRITE, so
+      // requiring it as an input would be circular. `lawReviewRePinFor` is the
+      // emitter's matcher, where both ends are already known facts.
+      const pin = LAW_REVIEW_REPIN.find(
+        (r) => r.capability === entry.capability && r.from === entry.runbookHash
+      );
+      if (!pin) return entry;
+      changed = true;
+      logger.info(
+        `[Intelligence] law-review re-pin: ${entry.capability} moved from ${pin.from} to ${pin.to}`
+      );
+      return { ...entry, runbookId: pin.runbookId, runbookHash: pin.to };
+    });
+
+    if (!changed) return;
+    storage.set(STORAGE_KEYS.SETTINGS, { ...(settings ?? {}), capabilityGrants: next });
+  } catch (err) {
+    logger.error(`[Intelligence] law-review re-pin failed (non-fatal): ${(err as Error).message}`);
   }
 }
 
@@ -644,7 +808,8 @@ function emitChanges(
   storage: MinimalStorage,
   resolution: GrantResolution,
   now: Date,
-  logger: MinimalLogger
+  logger: MinimalLogger,
+  issueReasons?: ReadonlyMap<string, GrantIssueReason>
 ): void {
   const previous = readMarker(storage);
   const priorByCapability = new Map(previous.grants.map((g) => [g.capability, g]));
@@ -665,6 +830,19 @@ function emitChanges(
     // was never withdrawn, only the document it points at changed. Chained to
     // the grant it supersedes so the trail reads in order.
     const repinned = Boolean(prior);
+    // WP-45 · the reason, in precedence order, most-specific first:
+    //  1. what the CALLER knows and the producer cannot see — a person acting
+    //     at the Govern control;
+    //  2. the ratified law review, matched on the exact hash transition;
+    //  3. what the producer can derive on its own, which is the least it can
+    //     say rather than the most.
+    const reason: GrantIssueReason =
+      issueReasons?.get(grant.capability) ??
+      (lawReviewRePinFor(grant.capability, prior?.runbookHash, grant.runbookHash)
+        ? 'law-review re-pin'
+        : repinned
+          ? 'repinned'
+          : 'materialized');
     const id = emit(core, logger, {
       topic: GRANT_ISSUED_TOPIC,
       schema: GRANT_ISSUED_SCHEMA,
@@ -682,7 +860,7 @@ function emitChanges(
         strictness: grant.strictness,
         scope: grant.scope,
         grant_source: grant.source,
-        reason: repinned ? 'repinned' : 'materialized',
+        reason,
         ...(repinned ? { previous_runbook_hash: prior!.runbookHash } : {}),
       },
     });

@@ -1,7 +1,7 @@
 ---
 id: rb.promotion-preflight
 kind: runbook
-version: 1.1.0
+version: 1.2.0
 strictness: strict
 capability: cap.promotion_preflight
 owner: ops
@@ -11,6 +11,7 @@ review_triggers:
   - any change to wpeOperationPermissions semantics (the M4 family is its harness)
   - any change to wpe_environment_diff / wpe_get_installs signatures
   - a new environment kind appearing in scope resolution
+  - attestation classes changed
 scope:
   sources: [wpe_staging, wpe_development]        # a promotion always flows upward
   destinations: [wpe_production, wpe_staging]    # production destination is the normal case here
@@ -40,11 +41,23 @@ checkpoints:                     # ordered; strict — gated calls out of sequen
   # overwritten. Resolving which way the promotion runs and checking the grant
   # are not additions — they are doing the requested write correctly, and the
   # grant gate applies to the write with or without this document.
+  # attest: what the PLATFORM can prove, never how well the step was done.
+  # One of four is provable. The retrieval is the assembler's own supply, which
+  # is a manifest fact. The other three are readings: resolution and the grant
+  # lookup ARE recordable, but "the direction is not reversed" and "no grant
+  # applies" are judgements about what was read, and the policy engine's own
+  # decision has no ledger topic — inventing one is a separate review, refused
+  # here. Nothing becomes provable by wording (WP-20 design note §4).
   - id: cp.resolve-endpoints     # eval 05 (must_not: get source/destination reversed)
+    attest: narrative
   - id: cp.grant-check           # M4-08 / M4-09 (production write is grant-gated; exceptions override the global default)
+    attest: narrative
   - id: cp.consult-history       # E-01 (consult-before-risk, made structural)
+    attest: manifest             # the assembler's own episodic retrieval — the SUPPLY side only
+    evidence: { topic: task.context.assembled }
     unrequested: true
   - id: cp.preflight-diff        # eval 05 (warns that promotion overwrites production)
+    attest: narrative
     unrequested: true
 aborts:
   - id: ab.direction-ambiguous

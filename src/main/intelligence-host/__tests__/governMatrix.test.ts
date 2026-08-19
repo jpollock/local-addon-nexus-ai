@@ -130,10 +130,14 @@ describe('WP-44 · the gates column MOVES when the document does', () => {
     const row = buildGovernMatrix({ runbooks: registryFrom(dir) }).rows.find(
       (r) => r.capability === 'cap.promotion_preflight'
     )!;
-    expect(row.gates).toEqual({ kind: 'strict', attestable: 1, checkpoints: 5, steps: 0 });
+    // WP-45 moved this by editing the DOCUMENT, which is the property under
+    // test: rb.promotion-preflight's cp.consult-history is now `attest:
+    // manifest`, so the probe added here is the SECOND attestable checkpoint,
+    // not the first. Nothing in `src/` changed between the two readings.
+    expect(row.gates).toEqual({ kind: 'strict', attestable: 2, checkpoints: 5, steps: 0 });
     expect(row.gatesLines).toEqual([
-      '1 of 5 checkpoints the platform can verify.',
-      "4 are on the agent's account only.",
+      '2 of 5 checkpoints the platform can verify.',
+      "3 are on the agent's account only.",
     ]);
   });
 
@@ -150,6 +154,138 @@ describe('WP-44 · the gates column MOVES when the document does', () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+// WP-45 · the ratified law review, AS THE COLUMN READS IT
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * P6 EXECUTED, ACROSS ALL FOUR DOCUMENTS.
+ *
+ * The existing pin above proves the column MOVES when a document does. This one
+ * proves it landed where the ratified review says it should, for each of the
+ * four documents the review covered — and it reads every number off the shipped
+ * registry, so a document edited back would fail here rather than pass quietly.
+ *
+ * THE FOURTH ROW IS THE HONEST ONE. `rb.incident-containment` was carried into
+ * this packet with TWO event-CANDIDATES (cp.snapshot, cp.isolate), to be
+ * assigned only if the document's own body named gateway tools for them. It
+ * names none, and the tool registry ships none for isolation or for
+ * snapshotting, so both fell to narrative and the row still reads "the grant
+ * itself, and nothing after it". That is a measured result, not a shortfall to
+ * be tidied: no checkpoint becomes provable by wording (design note P1/P6).
+ */
+describe('WP-45 · the four reviewed documents, derived', () => {
+  const EXPECTED = [
+    { capability: 'cap.promote_environment', id: 'rb.promotion-execute', attestable: 3, checkpoints: 5 },
+    { capability: 'cap.promotion_preflight', id: 'rb.promotion-preflight', attestable: 1, checkpoints: 4 },
+    { capability: 'cap.incident_remediation', id: 'rb.incident-remediation', attestable: 1, checkpoints: 6 },
+    { capability: 'cap.incident_containment', id: 'rb.incident-containment', attestable: 0, checkpoints: 5 },
+  ] as const;
+
+  test.each(EXPECTED)('$id gates $attestable of $checkpoints', ({ capability, id, attestable, checkpoints }) => {
+    const rb = shipped().byCapability(capability)!;
+    expect(rb.id).toBe(id);
+    expect(gatesForRunbook(rb)).toEqual({ kind: 'strict', attestable, checkpoints, steps: 0 });
+  });
+
+  test('the gates column renders the new denominators, in the ruled words', () => {
+    const rows = buildGovernMatrix({ runbooks: shipped(), materialized: allMaterialized() }).rows;
+    const line = (cap: string) => rows.find((r) => r.capability === cap)!.gatesLines;
+
+    expect(line('cap.promote_environment')).toEqual([
+      '3 of 5 checkpoints the platform can verify.',
+      "2 are on the agent's account only.",
+    ]);
+    expect(line('cap.promotion_preflight')).toEqual([
+      '1 of 4 checkpoints the platform can verify.',
+      "3 are on the agent's account only.",
+    ]);
+    expect(line('cap.incident_remediation')).toEqual([
+      '1 of 6 checkpoints the platform can verify.',
+      "5 are on the agent's account only.",
+    ]);
+    // Containment's MEASURED result — unsoftened, and it must stay the long form.
+    expect(line('cap.incident_containment')).toEqual([
+      'The grant itself, and nothing after it.',
+      'All 5 checkpoints are narrative — the platform can verify none of them, ' +
+        'so nothing downstream of this grant is provable.',
+    ]);
+  });
+
+  /**
+   * The CLASS of every checkpoint, from the documents — the derivation P1 asks
+   * for, pinned per id rather than only as a count. A count can be right while
+   * the wrong checkpoint carries the class, which on cp.backup would mean the
+   * step that makes an overwrite recoverable is the one nobody can prove.
+   */
+  test('each checkpoint carries the class the review derived for it', () => {
+    const classes = (cap: string) =>
+      shipped().byCapability(cap)!.checkpoints.map((c) => [c.id, c.attest]);
+
+    expect(classes('cap.promote_environment')).toEqual([
+      ['cp.backup', 'event'],
+      ['cp.approval', 'event'],
+      ['cp.promote', 'event'],
+      ['cp.verify-destination', 'narrative'],
+      ['cp.report', 'narrative'],
+    ]);
+    expect(classes('cap.promotion_preflight')).toEqual([
+      ['cp.resolve-endpoints', 'narrative'],
+      ['cp.grant-check', 'narrative'],
+      ['cp.consult-history', 'manifest'],
+      ['cp.preflight-diff', 'narrative'],
+    ]);
+    expect(classes('cap.incident_remediation')).toEqual([
+      ['cp.cleanup-plan', 'narrative'],
+      ['cp.approval', 'event'],
+      ['cp.execute-cleanup', 'narrative'],
+      ['cp.rotate-credentials', 'narrative'],
+      ['cp.verify-clean', 'narrative'],
+      ['cp.post-mortem', 'narrative'],
+    ]);
+    expect(classes('cap.incident_containment')).toEqual([
+      ['cp.triage', 'narrative'],
+      ['cp.isolate', 'narrative'],
+      ['cp.snapshot', 'narrative'],
+      ['cp.integrity-diff', 'narrative'],
+      ['cp.entry-vector', 'narrative'],
+    ]);
+  });
+
+  /**
+   * THE CONTAINMENT VERIFICATION, as a test rather than as a sentence in a
+   * report nobody re-runs — the same discipline WP-20g used for its own
+   * recorded gap.
+   *
+   * The candidates would have been assignable if the body named a gateway tool.
+   * It names none: the document declares no tool on any checkpoint, and its
+   * `requires_sources` names only READS (`wp_user_list`, `wp_plugin_list`,
+   * `scan_site_files`), which the design note explicitly forbids deriving an
+   * attestation from. Asserted over the document so that ADDING such a
+   * declaration fails here and gets read.
+   */
+  test('containment declares no tool at cp.snapshot or cp.isolate — the review, verified', () => {
+    const rb = shipped().byCapability('cap.incident_containment')!;
+    for (const id of ['cp.snapshot', 'cp.isolate']) {
+      const cp = rb.checkpoints.find((c) => c.id === id)!;
+      expect([id, cp.tools.map((t) => t.name), cp.evidence ?? null]).toEqual([id, [], null]);
+    }
+    // And the document names no tool ANYWHERE on its checkpoints, which is why
+    // no candidate survived rather than only these two.
+    expect(rb.checkpoints.flatMap((c) => c.tools.map((t) => t.name))).toEqual([]);
+  });
+
+  test('every reviewed document carries the review trigger, so the next edit is prompted', () => {
+    for (const { capability } of EXPECTED) {
+      const rb = shipped().byCapability(capability)!;
+      expect([rb.id, rb.frontmatter.review_triggers]).toEqual([
+        rb.id,
+        expect.arrayContaining(['attestation classes changed']),
+      ]);
+    }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 // The gates column's wording — unsoftened, and identical on granted rows
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -158,9 +294,39 @@ describe('WP-44 · the gates column is never softened', () => {
     // The sheet spells the consequence out once and shortens it on the next
     // three rows. Reproducing that would make a row's copy depend on which other
     // rows exist. This asserts the opposite: same force everywhere.
-    const matrix = buildGovernMatrix({ runbooks: shipped(), materialized: allMaterialized() });
+    //
+    // WP-45 · THE POPULATION IS NOW BUILT, NOT FOUND, and that is the point.
+    // Four shipped documents were attestation-free when this was written; after
+    // the law review exactly ONE is (`rb.incident-containment`), and it is
+    // materialized — so the shipped tree alone can no longer exhibit an
+    // UNGRANTED zero-attestable row, and the "as loudly on granted rows as
+    // denied ones" half would silently stop being tested. Stripping the one
+    // attestable checkpoint off a MANDATED capability's document in a fork
+    // rebuilds both populations, and keeps the property under test a property
+    // of `gatesLines` rather than an accident of what shipped that day.
+    const dir = forkLaw();
+    const file = path.join(dir, 'runbooks', 'incident-remediation.md');
+    const stripped = fs
+      .readFileSync(file, 'utf-8')
+      .replace(/^ {4}attest: event\n {4}evidence: \{ topic: task\.rationale\.recorded.*\n/m, '');
+    expect(stripped).not.toBe(fs.readFileSync(file, 'utf-8'));
+    fs.writeFileSync(file, stripped);
+
+    const runbooks = registryFrom(dir);
+    const matrix = buildGovernMatrix({
+      runbooks,
+      // cap.incident_remediation is MANDATED-EXPLICIT, so it is never in this
+      // list: it supplies the ungranted half by construction.
+      materialized: runbooks
+        .runbooks({ strictness: 'strict' })
+        .map((rb) => rb.capability)
+        .filter((c) => !MANDATED_EXPLICIT_CAPABILITIES.includes(c)),
+    });
     const zero = matrix.rows.filter((r) => r.gates.kind === 'strict' && r.gates.attestable === 0);
-    expect(zero.length).toBeGreaterThanOrEqual(4);
+    expect(zero.map((r) => r.capability).sort()).toEqual([
+      'cap.incident_containment',
+      'cap.incident_remediation',
+    ]);
     const granted = zero.filter((r) => r.state === 'materialized' || r.state === 'granted-by-you');
     const ungranted = zero.filter((r) => r.state !== 'materialized' && r.state !== 'granted-by-you');
     // Both populations are non-empty, or this test proves nothing about "as
@@ -362,7 +528,14 @@ describe('WP-44 · the five states, each from the grant record', () => {
     expect(row.state).toBe('granted-by-you');
     expect(row.inForce).toBe(true);
     // And the gates column tells the granter what that buys, in the same row.
-    expect(row.gatesLines[0]).toBe('The grant itself, and nothing after it.');
+    //
+    // WP-45 · THIS LINE IS THE LAW REVIEW'S ACCEPTANCE CRITERION, and it moved
+    // because `law/runbooks/promotion-execute.md` moved. Granting the capability
+    // that overwrites a live environment used to buy "the grant itself, and
+    // nothing after it". It now gates three provable checkpoints — including the
+    // backup that makes the overwrite recoverable.
+    expect(row.gatesLines[0]).toBe('3 of 5 checkpoints the platform can verify.');
+    expect(row.gatesLines[1]).toBe("2 are on the agent's account only.");
   });
 });
 
@@ -416,7 +589,7 @@ describe('WP-44 · the disarmed row, as ruled', () => {
 
   test('the document column says the mismatch too, where a reader checks the file', () => {
     expect(mismatched().documentLine).toMatch(/ — no longer matches$/);
-    expect(mismatched().documentLine).toContain('rb.promotion-preflight · 1.1.0 · strict · sha256:ae5a1678d2');
+    expect(mismatched().documentLine).toContain('rb.promotion-preflight · 1.2.0 · strict · sha256:4913c8b5ce');
   });
 
   /**
@@ -500,6 +673,56 @@ describe('WP-44 · the act, at the control', () => {
     // carries — including which layer granted it.
     expect(issued[0].payload.grant_source).toBe('settings');
     expect(issued[0].payload.runbook_id).toBe('rb.promotion-execute');
+  });
+
+  /**
+   * WP-45 · WP-44's GATE FINDING, CLOSED.
+   *
+   * The producer stamped `reason: 'materialized'` on every first issuance —
+   * including this one, which is a person granting a production capability at
+   * this control. `materialized` is WP-20f's migration word: it means "nobody
+   * chose this, a derivation was converted into a list". Saying it about a
+   * human act misdescribes that act in the compliance record, which is the one
+   * thing this event exists to get right.
+   *
+   * The reason is supplied BY THIS CALLER because it is the only one that
+   * knows. The producer cannot see the difference between a settings entry a
+   * person typed at this control and a settings entry that was already there.
+   */
+  test('the act at the control says `granted-at-control`, not `materialized`', () => {
+    boot();
+    act('cap.promote_environment', true);
+
+    const issued = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment');
+    expect(issued).toHaveLength(1);
+    expect(issued[0].payload.reason).toBe('granted-at-control');
+  });
+
+  test('and it stamps ONLY the capability that was acted on', () => {
+    // A sync re-resolves the WHOLE grant set. A reason applied to the CALL
+    // rather than to the capability would put this person's act on every grant
+    // that happened to change in the same pass — including the migration's own
+    // first issuances, which nobody chose.
+    boot();
+    act('cap.promote_environment', true);
+
+    const others = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability !== 'cap.promote_environment');
+    expect(others.length).toBeGreaterThan(0);
+    for (const event of others) {
+      expect([event.payload.capability, event.payload.reason]).toEqual([
+        event.payload.capability,
+        'materialized',
+      ]);
+    }
+  });
+
+  test('a REVOCATION carries no issuance reason — there is no issuance to describe', () => {
+    boot();
+    act('cap.bulk_plugin_update', false);
+    const revoked = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === 'cap.bulk_plugin_update');
+    expect(revoked).toHaveLength(1);
+    // The revoked event's own vocabulary is the DISARM reason, untouched here.
+    expect(revoked[0].payload.reason).toBe('disabled-by-settings');
   });
 
   test('the row then STATES which act made it, from that event', () => {
