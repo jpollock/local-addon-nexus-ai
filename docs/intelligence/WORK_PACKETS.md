@@ -13150,3 +13150,25 @@ registration) launches on WP-37's merge. Convergence noted for the
 owner: after WP-37 merges, the pending triple t1/t2 ask doubles as
 the empty-run live smoke — the sixth must-not's sitting and XD-21's
 first product rendering land in the same three asks.
+
+---
+
+**WP-37 · LOCK ANNOUNCE (2026-08-19).** `src/main/intelligence-host/` is
+CLAIMED by WP-37 from this commit, per the registration's own sequencing
+("WP-37 launches now, WP-20f … launches on WP-37's merge"). **Confirmed
+free first:** WP-36 was the prior holder and its merge (`e7b88678`) is on
+the base; a grep of this file finds no WP-20f lock announce, and the
+registration puts WP-20f behind WP-37 rather than beside it. Worktree
+`.worktrees/wp-37`, branch `wp-37`, cut from `1527c763` — which is the
+WP-20f agent's verbatim commit of the architect's WP-36 acceptance + the
+WP-37 registration, flagged here so the architect can verify fidelity
+(md5 of the committed file: `8d995db33ae9b778f50bbf1021cf79a3`; the
+commit is pure-append, 58 insertions / 0 deletions, so it cannot have
+altered the text it follows).
+
+**Scope of the claim, stated so WP-20f can see its own boundary:**
+`procedureStream.ts`, `procedureArming.ts`, `procedureView.ts`,
+`chatAssembly.ts` and the tests beside them. The renderer is READ ONLY
+this packet (`src/renderer/components/DockedPanel/` is WP-35's shipped
+consumer — the emission is what changes, not what reads it).
+
