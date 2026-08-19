@@ -13729,3 +13729,42 @@ Local.** The eval CLIs and the guard both run under system Node and do not need
 the rebuild; Local does.
 
 **Not pushed. Not merged.** Branch `wp-39` is left for the owner.
+
+**WP-39 · INCIDENT, disclosed because the protocol is the place for it: this
+packet briefly committed the architect's in-flight work in the PRIMARY
+checkout, and reset it.** Two traps composed, and neither is in the protocol
+yet.
+
+**(a) The agent shell's working directory PERSISTS ACROSS COMMANDS.** One
+`cd` into the primary checkout — made to run the protocol's own "confirm
+nothing of yours landed in the primary" check — silently became the cwd for
+everything after it. A `jest` run I reported as the worktree's was the
+primary's (8 suites / 360 tests, not 9 / 366 — the missing suite is the one
+this packet adds, which is exactly how it was caught), and a `git add -A &&
+git commit` intended for the worktree landed on `poc/nexintelligence`.
+**Anchor every command at an absolute path** — `cd <worktree> && …` in the
+same invocation — rather than trusting the shell to still be where you left
+it. The WP-20b near-miss rule ("new files go where your `pwd` is") has a
+sibling: so do commits, and so do test results.
+
+**(b) `git status` in a shared checkout is a MEASUREMENT WITH A SHELF LIFE.**
+The primary was checked and showed three untracked sitting-transcript
+directories and no modified files. Roughly half a minute later `git add -A`
+staged a **175-line uncommitted `WORK_PACKETS.md` delta** — the architect's
+WP-13b citation-sitting entry, written into the file in the interval. The
+standing precedent (commit architect work VERBATIM in a separate,
+clearly-attributed commit) exists for an agent whose MERGE is blocked; nothing
+here was blocked, so the right move was `git reset --mixed HEAD~1`, which
+restored the primary to `594064f3` with every byte of that delta and every
+transcript exactly as found. Verified after the fact, not assumed.
+**`git add -A` in a checkout another session is writing is a race**; prefer
+naming your paths, and re-read status inside the same command that commits.
+
+**Base drift, noted for the merge:** this worktree was cut at `216affbf`;
+`poc/nexintelligence` is now at `594064f3` (WP-38 registered and announced a
+DockedPanel lock on base while this packet ran). WP-39 touches neither
+`procedureStream.ts` nor the renderer, so there is no contention — but the
+`WORK_PACKETS.md` tail WILL conflict, with WP-38's entry and the architect's
+WP-13b entry both landing after this packet's base. Resolve it the way the
+board already does: **both halves verbatim**, verified as exact substrings of
+the resolved file rather than eyeballed.
