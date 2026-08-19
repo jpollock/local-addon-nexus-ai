@@ -13523,3 +13523,34 @@ machinery than the three points ask for.
 
 **ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and
 a 14-mutation battery. **`npm run rebuild` before loading Local.**
+
+---
+
+**WP-20f · MERGED, LOCK RELEASED (2026-08-18).** Merge `f971272e` on
+`poc/nexintelligence`; 10 files, +1,256/−52 against its first parent. The
+WORK_PACKETS tail conflict resolved with BOTH HALVES VERBATIM and
+verified as such rather than eyeballed: the architect's tail (3,733
+chars) and this packet's (17,308) each appear as exact substrings of the
+resolved file, and the common base is intact. **The intelligence-host
+lock is RELEASED.**
+
+**Lock note for WP-37.** `240da7fd` claimed `src/main/intelligence-host/`
+for WP-37 while WP-20f held it — the two claims crossed, because WP-20f's
+lock announcement lived on its branch until this merge and the base could
+not see it. No harm done: the packets touch different files
+(`capabilityGrants.ts`/`sequenceGuard.ts` here, `procedureStream.ts`
+there) and the tree is green. WP-37 should take `f971272e` as its base.
+The general lesson is the one the protocol already implies and this pair
+demonstrates — **a lock announced only on a worktree is not visible to
+the agent it is meant to warn**; the announcement wants to reach base
+before the work starts, or the sequencing has to come from the owner, as
+it did here.
+
+**Merged-tree verification.** `npx tsc -p . --noEmit` clean; full suite
+584 suites / 7,849 passed / 2 skipped / 7,851 total, exit 0. Against the
+worktree's 584 / 7,839 / 12 / 7,851: **the TOTAL is identical and the
+skipped column moved by exactly ten** — the documented WP-20c boundary
+effect (the primary checkout holds both embedding model files where a
+worktree holds one, so ten tests move from skipped to passed). Read the
+skipped column first: a comparison of the passed column alone would have
+reported a phantom gain of exactly ten.
