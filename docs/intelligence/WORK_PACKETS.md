@@ -13554,3 +13554,178 @@ effect (the primary checkout holds both embedding model files where a
 worktree holds one, so ten tests move from skipped to passed). Read the
 skipped column first: a comparison of the passed column alone would have
 reported a phantom gain of exactly ten.
+
+---
+
+### [x] WP-39 · The harness/host seam — the third occurrence retired, and the guard that ends the class  *(2026-08-19)*
+
+**Lock announced and taken, narrow:** `src/main/ipc-handlers.ts` (one line,
+wiring-level, no handler-chain refactor — the WP-04 ruling's terms) and the
+eval-harness files under `tests/intelligence-evals/`. Neither the intelligence
+host nor the DockedPanel renderer was touched. Worktree `.worktrees/wp-39`,
+branch `wp-39`, cut from `poc/nexintelligence` @ `216affbf`.
+
+**THE HEADLINE INVERTS THE SMOKE'S DIAGNOSIS, and both halves are measured.**
+The PHASE-1.5 SMOKE registered this as "`src/main/ipc-handlers.ts:6744` gained
+`await import('electron')`, and ts-node's type pass dies on it." The line is
+real and the error is real — reproduced first, before anything was changed:
+
+```
+src/main/ipc-handlers.ts(6744,38): error TS2307: Cannot find module 'electron'
+```
+
+**But that line was not the cause, and fixing it alone fixes nothing.** Two
+measurements, each run against the other's absence:
+
+| tree | sheet phase (`runEvals({only:'E-01-consult-before-risk'})`) |
+|---|---|
+| as found | `TS2307` at `ipc-handlers.ts:6744` — sheet degraded |
+| 6744 made a `require`, `sitting.ts` unchanged | `TS2307` at **`KeyVault.ts:20`** — sheet degraded |
+| 6744 left as `await import`, `sitting.ts` imports `./hostShim` | **10 criteria, verdicts `{PASS:1, OWNER-PENDING:9}`, zero degraded-fallback rows** |
+| both changes | same, clean |
+
+`6744` was simply the first file on the chain to be compiled. Behind it sit
+**five more compile-visible `electron` imports in `src/`** — `index.ts:3`,
+`KeyVault.ts:20`, `token-manager.ts:6`, `CredentialTokenVault.ts:1`,
+`OAuthFlowRunner.ts:3` — every one of them legitimate, none of them removable,
+and `iw-tools.ts:91` carrying the same `await import('electron')` shape. Chasing
+them one at a time is the rot class, not the cure.
+
+**THE ACTUAL DEFECT: `sitting.ts` never imported `./hostShim`; `run.ts` always
+did.** `hostShim.ts` (WP-19) does two things in one file — aliases `electron`
+and the `@getflywheel` packages to the SAME `tests/__mocks__` files jest uses,
+and carries a `/// <reference path="../../src/types/electron.d.ts" />` that is
+the only way ts-node ever loads the ambient declaration (it type-checks per
+file and does not read the tsconfig `include`). That asymmetry between the two
+CLIs is the whole bug, and it is why `run.ts` has been clean throughout while
+the sitting degraded.
+
+**Why WP-24's verification could not have caught it, stated so the lesson is
+transferable.** WP-24 verified at `--help` and at "no anthropic API key" — both
+exit BEFORE the sheet phase. And loading is not the whole run: the sheet calls
+`runEvals`, and `probeGatewayEmission` constructs a REAL `AgentDispatcher` on
+purpose (`AgentDispatcher.ts:13` value-imports `../ipc-handlers`). **No amount
+of laziness can remove an edge a probe exists to exercise.** WP-24's own lesson
+was "verify the fix on the path that exercises it, not the path that exits
+first"; this packet is that lesson's second bill.
+
+**(1) The occurrence — retired.** `sitting.ts` gains `import './hostShim';` as
+its first import, identical to `run.ts`'s line, and its header — which told the
+next reader to make things lazy rather than shim, advice that cannot work
+here — now says which half laziness owns and which half the shim owns. The shim
+is NOT the deleted `-r electron-node-stub.cjs` hook: in-process, same mocks as
+jest, **typechecking stays ON** — verified here rather than inherited from WP-24: a
+deliberate `const x: number = 'str'` planted on the harness graph is reported as
+`nativeModule.ts(48,14): error TS2322` under the very invocation the guard runs. No `TS_NODE_TRANSPILE_ONLY`, no tsconfig
+exclusion.
+
+`ipc-handlers.ts:6744` is still changed to `require('electron')`, matching the
+five other electron uses in that same file, on the narrower claim it actually
+supports: one less compile-time specifier on the busiest module on that chain.
+Its comment says outright that it was not the cause, so nobody inherits the
+wrong lesson from a green diff.
+
+**(2) The guard — `tests/intelligence-evals/hostSeam.test.ts` + `hostSeamProbe.ts`, 6 pins.**
+
+The literal brief — *fail if any module reachable from the harness's import
+graph acquires a compile-time electron dependency* — **is the wrong invariant
+for this tree, and the measurement is above**: six modules on that graph already
+have one, legitimately, and the harness reaches them by design. Written
+literally the guard would be red on arrival. Stating it that way is how the
+class keeps coming back. The enforceable invariant it becomes:
+
+> every ts-node entry point in the harness installs `hostShim` before it loads
+> anything, and the whole graph it then loads compiles and resolves.
+
+- **It spawns a real ts-node child**, because it has to. Under jest `electron`
+  is mapped by `moduleNameMapper` and the program is type-checked whole, so
+  **every form of this defect is invisible in-process** — an in-process
+  assertion cannot see the thing it guards.
+- **Entry points are found by shebang, not by a list**, so a fourth CLI is
+  covered the day it is written. One exemption, named and reasoned in the test:
+  the probe itself, which must not import the shim or it would mask the
+  regression it exists for.
+- **The lazy host edges are read out of the source**, not remembered — WP-24's
+  `require('../../src/main/agent-runtime/AgentDispatcher')` is invisible to
+  every static reader, which is exactly why a future one must not depend on
+  anyone adding it to a list.
+- **The failure message names the three shapes and their fixes** (TS2307 → a
+  lost shim import or a lost `/// <reference>`; TS2305 → an electron surface
+  `src/types/electron.d.ts` does not declare; MODULE_NOT_FOUND on a
+  `@getflywheel` package → `hostShim`'s ALIASES), and says not to reach for
+  `TS_NODE_TRANSPILE_ONLY` or a tsconfig exclusion.
+- Pass condition is a **line-anchored regex with the counts parsed and compared
+  to the source of truth**, per WP-32 — "OK" as a substring is satisfiable by a
+  line saying the probe is not OK, and a zero count would mean the child proved
+  nothing by loading nothing.
+
+**MUTATION BATTERY — 8 mutations, 7 killed, 1 documented equivalent. `--no-cache`
+throughout; the tree verified PRISTINE before and after every mutation, restored
+in a `finally`.**
+
+| # | mutation | result |
+|---|---|---|
+| M01 | `sitting.ts` loses its `hostShim` import (**the exact pre-fix shape**) | KILLED — both the static pin and the ts-node child |
+| M02 | a module in `src/` uses an electron surface the stub does not declare (value import **and** a runtime use, per WP-24's elision trap) | KILLED — TS2305 in the child |
+| M03 | `hostShim` loses its `/// <reference>` | KILLED — TS2307 in the child |
+| M04 | the probe stops discovering lazy host edges | KILLED — two pins |
+| M05 | the probe stops loading the entry point first | KILLED — structural pin |
+| M06 | `ipc-handlers.ts` regains `await import('electron')` | **SURVIVED — equivalent, and measured so** (see the table above: harmless once the shim is in place) |
+| M07 | `hostShim` stops aliasing `electron` at runtime | KILLED — MODULE_NOT_FOUND in the child |
+| M08 | the probe re-includes `hostShim.ts` in its own sweep | KILLED — structural pin |
+
+**M08 is the battery's own finding, and it is the reason the battery was run
+twice.** The first probe swept every harness module including `hostShim.ts` —
+which installed the shim with **no entry point having asked**, leaving the child
+green while `sitting.ts` had no shim at all. M01 was killed by the static pin
+alone and the expensive pin proved nothing. The shim must arrive the way
+production arrives at it, through the entry point's own first import; it is
+excluded from the sweep and pinned excluded. **A guard that supplies its own
+subject's precondition is not a guard** — same family as the vacuous-guard
+shapes already on this board, in a new form: not a mutation the compiler erases
+(WP-24), not an assertion whose subject is absent (WP-26), but a harness that
+satisfies the invariant on the code's behalf.
+
+M06 is recorded as an equivalent mutant with its measurement attached rather
+than dressed up as a kill, per the WP-31 M01/M05 precedent.
+
+**Baselines** — same worktree, `npm test`, exit code captured BEFORE any pipe:
+
+| | suites | passed | skipped | total | exit |
+|---|---|---|---|---|---|
+| before | 584 | 7,839 | 12 | 7,851 | 0 |
+| after | 585 | 7,845 | 12 | 7,857 | 0 |
+
+Delta **+1 suite / +6 tests** — exactly `hostSeam.test.ts`'s six pins. **Skipped
+column unmoved**, so the delta is real and not a gating artefact. Zero FAIL
+lines in either run. `npx tsc -p . --noEmit` clean and `npx tsc -p
+tsconfig.test.json --noEmit` clean. `npm run lint`: 0 errors, 6 warnings, all
+pre-existing and none in a file this packet touched.
+
+**Filed, NOT fixed — out of this packet's lock, and each one measured:**
+
+- **`src/main/mcp/modules/iw/iw-tools.ts:91` carries the identical
+  `await import('electron')` shape** that `ipc-handlers.ts:6744` had. **Measured,
+  not assumed: it is NOT on the harness's graph** — after loading `sitting.ts`
+  and the lazy `AgentDispatcher` edge, `require.cache` holds `ipc-handlers` (1)
+  and `KeyVault` (1) and `iw-tools` (**0**). So the guard does not cover it and
+  it costs the sitting nothing today. Left alone rather than swept up; if the
+  "make it a `require`" hygiene is worth applying, that is the other site.
+- **`run.ts` emits telemetry on every eval run.** Still true; WP-24 filed it and
+  nothing has changed. `sitting.ts` sets `NEXUS_TELEMETRY='0'` in `main()`; the
+  runner CLI has no such line, so developer eval traffic is in the product's
+  analytics stream. One line, in a file this packet had no reason to open.
+- **`run.ts --only <id>` silently matches nothing** when given a short id: it
+  filters on the full spec id (`E-01-consult-before-risk`), so
+  `run.ts --only E-01` prints `MILESTONE VERDICT: MET — 0 criteria pass` and
+  **exits 0**. A filter that matches nothing reporting MET is the same
+  absence-reads-as-pass shape the runner's own exit codes were designed against.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` twice, `npx jest`
+repeatedly, an 8-mutation battery and several `ts-node` CLIs. Measured here, not
+quoted: `node -v` → **v25.9.0**, `node -p process.versions.modules` → **141**
+(`.nvmrc`/CI is 22.16.0 → 127). **`npm run rebuild` is required before loading
+Local.** The eval CLIs and the guard both run under system Node and do not need
+the rebuild; Local does.
+
+**Not pushed. Not merged.** Branch `wp-39` is left for the owner.

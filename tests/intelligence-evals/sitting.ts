@@ -14,14 +14,30 @@
  * THAT IS THE WHOLE INVOCATION — no `-r` require hook, no
  * `TS_NODE_TRANSPILE_ONLY=1`, and ts-node typechecks as it goes. It briefly was
  * not: WP-20e's probes imported `AgentDispatcher` at module scope, which
- * reaches `electron` through `buildAgentContext → ipc-handlers → getAIProvider
- * → KeyVault`. Under jest that resolves to `tests/__mocks__/electron.ts`; in
+ * reaches `electron` through `buildAgentContext -> ipc-handlers -> getAIProvider
+ * -> KeyVault`. Under jest that resolves to `tests/__mocks__/electron.ts`; in
  * this plain-Node CLI it resolved to nothing, and the 2026-08-18 sitting had to
  * be run behind a stub require-hook (`electron-node-stub.cjs`, now deleted) with
  * typechecking switched off to get past what the stub then dragged in. WP-24
- * made that import lazy in `probes.ts` instead. IF YOU EVER NEED A FLAG BACK
- * HERE, something on this file's require chain has re-acquired electron — find
- * it and make it lazy rather than re-adding the hook.
+ * made that import lazy in `probes.ts` instead, so this file LOADS with no
+ * electron on its chain at all.
+ *
+ * WP-39 - WHAT WP-24 DID NOT COVER, and what the first import line below now
+ * does. Loading is not the whole run: the judgment sheet calls `runEvals`, and
+ * `probeGatewayEmission` constructs a REAL `AgentDispatcher` on purpose - so the
+ * sheet phase reaches the host chain BY DESIGN, and no amount of laziness can
+ * remove an edge a probe exists to exercise. `run.ts` has always imported
+ * `./hostShim` for exactly that reason; this file did not, so the 2026-08-19
+ * sitting's sheet died on a TYPE error in `ipc-handlers.ts` and printed criteria
+ * with blank judging instructions. The shim is NOT the deleted hook: it is
+ * in-process, it maps to the SAME `tests/__mocks__` files jest uses, and
+ * typechecking stays ON (its `/// <reference>` is what makes the ambient
+ * `electron` declaration reachable, since ts-node does not read the tsconfig
+ * `include`).
+ *
+ * IF YOU EVER NEED A FLAG BACK HERE, something has re-acquired electron in a
+ * shape the shim cannot answer - find it and make it lazy rather than re-adding
+ * the hook. `hostSeam.test.ts` pins both halves and fails before you get there.
  *
  * ⚠️ THIS SPENDS REAL API TOKENS AND IS NEVER PART OF `npm test`. It is a CLI,
  * not a jest suite: `main()` runs only when this file is invoked directly
@@ -54,6 +70,11 @@
  *   cannot be clicked; it renders as text in the transcript and this harness
  *   answers it (see `--approvals`).
  */
+// FIRST, before anything that transitively pulls a host module: maps `electron`
+// and the Local host packages to the same stubs jest uses, and reaches the
+// ambient `electron` declaration ts-node would otherwise never load. `run.ts`
+// carries the identical line. See hostShim.ts.
+import './hostShim';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
