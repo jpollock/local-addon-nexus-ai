@@ -270,3 +270,13 @@ baseline rather than trusting the tree. Corollary from the same packet:
 "a baseline is only a baseline if the tree held still" applies to the
 battery itself — editing any file, including a test file, during a
 battery invalidates that battery's run.
+
+**An investigation reads every channel a decision can land in** (WP-36
+finding — the phantom incident): the ledger records ACTS; the
+operation-audit log records REFUSALS. Reconstructing an event from the
+ledger alone produced a phantom incident — a tool that "executed" had in
+fact been refused 2ms after the approval, and the panel's own defect
+(painting ✓ on a refusal) made the phantom look photographed. Before
+classifying anything as an incident, enumerate the channels a decision
+could have landed in and read all of them; a UI state is not a channel,
+it is a rendering of one, and it can lie.

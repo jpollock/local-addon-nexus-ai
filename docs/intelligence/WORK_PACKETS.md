@@ -12644,3 +12644,58 @@ working-as-designed / copy defect / code defect, propose the minimal
 fix set at its gate (any guard or recording change holds for
 ratification). The blended-card copy finding stands regardless and
 folds into WP-36's scope as the display half of question (1).
+
+---
+
+**WP-36 · GATE — the phantom dissolved, three real defects; F1's
+shape RULED, F3/F4 ratified, build the fix set (2026-08-19).**
+
+**The headline is accepted and owned on both sides:** verify_site_live
+NEVER EXECUTED — operation-audit.log 00:39:01.047Z holds the refusal,
+2ms after the approval, naming cp.verify-canary and the unattested
+cp.backup clause-for-clause as rule 1 promises. The guard held. The
+architect's held question had assumed the screenshot's ✓ was an
+execution — it was F3's defect rendering a refusal as success, which
+is precisely why the question was HELD and not adjudicated. "The
+ledger records acts; the audit log records refusals" is now a
+PROTOCOL rule (an investigation reads every channel a decision can
+land in; a UI state is a rendering, not a channel).
+
+**The classifications are accepted as made.** (2) guard:
+working-as-designed, reproduced clause-by-clause, no change — the
+card-rides-refusal mechanism and the re-ask after approval both did
+their jobs. (3) no action event: working-as-designed, a refusal is
+not an act, demonstrated against the same tool's 08-17 real
+executions.
+
+**(1) is the real defect and F1's escalated shape is RULED here:**
+`task.rationale.recorded` gains a `checkpoint` field, ALWAYS WRITTEN
+from the flip forward — the checkpoint this consent attests when the
+card fired as the procedure's approval, `null` for a plain tool
+confirm. The fold attests (and denies — the symmetric half is part of
+the ruling) ONLY from events whose `checkpoint` matches; present-but-
+null or present-but-other never attests; ABSENT means legacy and
+grandfathers exactly as it folded before, so history renders
+unchanged while the hole closes forward. The always-written null is
+what makes absence an unambiguous discriminator — a new plain
+confirm must not be confusable with a legacy procedure approval.
+The pinned consequence chain (unrelated approval → cp.approval
+attested → backup admitted cardless → bulk_plugin_update passes with
+no second card; symmetric denial ending the run) is the severity
+statement of record: consent transference reaching the incident's
+own tool. **F3 RATIFIED** — PanelChat reads `isError`; a green ✓ on
+a refusal is the ack-copy root cause's UI sibling, completion-state
+fabrication by rendering; the parity fixture pins the tree. **F4
+RATIFIED with its interim named:** the card's subject is the
+CHECKPOINT — title and body derive from the checkpoint and the
+recorded cardText composition (which was always right on the record
+side), never from whichever tool the model reached for; the
+designer's refined card copy follows through the loop, and the
+structural fix does not wait for it. **F2: no change, accepted.**
+
+**The gate converts this packet to its fix half:** build F1 (as
+ruled), F3, F4-structural, with battery discipline; the payload
+widening is hereby ratified so no further hold is needed unless the
+build finds the shape wrong — that discovery would be an escalation,
+not a deviation. Baselines both sides; merge report after. The
+architect batch at 45445728 awaits fidelity check at merge.
