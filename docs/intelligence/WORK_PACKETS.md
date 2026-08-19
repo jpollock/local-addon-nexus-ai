@@ -14771,3 +14771,18 @@ four; the owner owes the sixth-must-not sitting and the
 fold-in-place smoke. The empty-run state remains unreachable until
 the comparator lands, and the record says so in three places now —
 no one will mistake a rendering for a measurement.
+
+---
+
+**WAVE 6 REGISTERED AND LAUNCHING — three packets, three disjoint
+locks (2026-08-19).** **WP-41 · the comparator surface** (renderer,
+DockedPanel + a comparator view): the scope's ratified producer per
+the WP-37 ruling — J-Inspect's eight BLOCKED criteria are its
+acceptance frame; FOLDS IN WP-40 (plan-line consumption + the fake's
+planCheckpoint), since both sit under the same lock and WP-40 said
+"sequences with the next renderer touch." **WP-20g · the ToolGrant
+reach half** (intelligence-host): capability required to reach gated
+tools — deny finally subtracts reach, not just ceremony; B-03's gate
+satisfied since 08-18. **WP-42 · the registry bundle** (eval
+registry): the WP-13b verdict mechanization + the empty-match MET
+fix. Prompts issued; all three launch together.
