@@ -481,13 +481,28 @@ export class PanelChat extends React.Component<Props, State> {
         })),
       }));
     } else if (event.type === 'tool_call_result') {
-      // Tool finished — mark done and capture the result for expansion
+      // Tool finished — capture the result, AND whether it succeeded.
+      //
+      // WP-36 · `isError` used to be dropped here, and the cost was not
+      // cosmetic. On 2026-08-19 the sequence guard REFUSED `verify_site_live`
+      // (`cp.backup is not attested`) and this panel painted a green ✓ beside
+      // it; the smoke read the screenshot as a declared tool executing out of
+      // sequence and opened an incident investigation into a thing that never
+      // happened. A fired gate rendered as a completed act is completion-state
+      // fabrication by rendering — the same class as claiming a verification
+      // the platform does not have, committed by a status field instead of a
+      // sentence. `ToolCallState` has always DECLARED an `'error'` status;
+      // nothing assigned it, which is where the defect lived.
       this.setState((s) => ({
         messages: s.messages.map((m) => ({
           ...m,
           toolCalls: (m.toolCalls ?? []).map((tc) =>
             tc.id === event.id
-              ? { ...tc, status: 'done' as const, result: event.result ?? '' }
+              ? {
+                  ...tc,
+                  status: (event.isError ? 'error' : 'done') as 'error' | 'done',
+                  result: event.result ?? '',
+                }
               : tc,
           ),
         })),
@@ -719,8 +734,18 @@ export class PanelChat extends React.Component<Props, State> {
       .map((tc) => tc.procedure
         ? React.createElement(ProcedureApprovalCard, {
             key: tc.id,
-            title: toolDisplayName(tc.name),
-            effect: toolEffect(tc.name),
+            // WP-36 · THE SUBJECT IS THE CHECKPOINT, not the tool.
+            //
+            // These two props read `tc.name` before this fix, and on 2026-08-19
+            // that produced "Verify Site Live" over "Runs Verify Site Live on
+            // your WordPress sites." — a read-shaped tool name heading the card
+            // that attests `cp.approval`, the runbook's "explicit, informed
+            // consent" to the whole update plan. The tool is incidental here:
+            // `cp.approval` declares none, and the card is raised for whichever
+            // one the guard happened to be refusing. The runbook's own heading
+            // for the step is the subject; no effect line is passed, because
+            // the honest one is absent rather than tool-shaped.
+            title: tc.procedure.checkpointReason ?? tc.procedure.checkpointId,
             warning: tc.warning ?? '',
             procedure: tc.procedure,
             onApprove: (canaryPolicy?: string) => {
@@ -743,15 +768,25 @@ export class PanelChat extends React.Component<Props, State> {
         onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
       }));
 
-    // Done chips — group repeated calls to the same tool into one row
-    const doneCalls = allCalls.filter((tc) => tc.status === 'done' && tc.result !== undefined);
+    // Settled chips — group repeated calls to the same tool into one row.
+    //
+    // Grouped by tool AND status (WP-36): a refused call and a successful call
+    // of the same tool are different outcomes, and folding them into one row
+    // would put a single mark on two different answers — which is the defect
+    // this fix exists to close, reintroduced one level up.
+    const doneCalls = allCalls.filter(
+      (tc) => (tc.status === 'done' || tc.status === 'error') && tc.result !== undefined,
+    );
     const doneGroups = new Map<string, typeof doneCalls>();
     for (const tc of doneCalls) {
-      if (!doneGroups.has(tc.name)) doneGroups.set(tc.name, []);
-      doneGroups.get(tc.name)!.push(tc);
+      const key = `${tc.status}|${tc.name}`;
+      if (!doneGroups.has(key)) doneGroups.set(key, []);
+      doneGroups.get(key)!.push(tc);
     }
-    const doneChips = Array.from(doneGroups.entries()).map(([name, calls]) => {
-      const groupKey = `group-${msg.id}-${name}`;
+    const doneChips = Array.from(doneGroups.entries()).map(([key, calls]) => {
+      const name = calls[0].name;
+      const failed = calls[0].status === 'error';
+      const groupKey = `group-${msg.id}-${key}`;
       const isExpanded = expandedTools.has(groupKey);
       const label = calls.length > 1
         ? `${toolDisplayName(name)} · ${calls.length}`
@@ -769,7 +804,20 @@ export class PanelChat extends React.Component<Props, State> {
               return { expandedTools: next };
             }),
           },
-          React.createElement('span', { style: { color: UI_COLORS.STATUS_RUNNING, fontSize: 13 } }, '✓'),
+          React.createElement(
+            'span',
+            {
+              style: {
+                color: failed ? UI_COLORS.STATUS_ERROR : UI_COLORS.STATUS_RUNNING,
+                fontSize: 13,
+              },
+              // The mark carries the outcome for a reader who cannot see colour;
+              // colour alone would leave a refusal and a success identical to
+              // them, which is the same failure with a narrower audience.
+              'aria-label': failed ? 'did not run' : 'completed',
+            },
+            failed ? '✕' : '✓',
+          ),
           React.createElement('span', null, label),
           React.createElement('span', { style: { fontSize: 10, opacity: 0.6, marginLeft: 2 } }, isExpanded ? '▾' : '▸'),
         ),

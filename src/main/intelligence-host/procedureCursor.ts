@@ -213,20 +213,73 @@ export function foldProcedureCursor(
     }
   }
 
-  // The LATEST decision per tool governs. `.some(approved)` would let a run
-  // proceed after a denial simply because an earlier turn had approved
-  // something — the exact shape ab.approval-denied forbids.
-  const latestDecision = new Map<string, string>();
-  const decisionEvent = new Map<string, string>();
+  // -------------------------------------------------------------------------
+  // Rationales — WP-36 · TWO LANES, and which lane an event is in is decided by
+  // whether its payload CARRIES a `checkpoint` key at all.
+  //
+  // THE DEFECT THIS REPLACES. The old join built `latestDecision` keyed by tool
+  // and then threw the keys away: `[...latestDecision.values()]`. Every
+  // rationale-attested checkpoint asked only "is there an approved decision
+  // anywhere in this run?", so on 2026-08-19 an approval whose subject was a
+  // live re-verify of one site attested `cp.approval` — "explicit, informed
+  // consent" to the presented bulk-update plan. Pinned consequence: that
+  // attestation then admitted `wpe_backup_and_verify` with no card, and once a
+  // backup ran, `bulk_plugin_update` passed the guard with no second card at
+  // all. One decision about one read-shaped act became the consent for a
+  // fleet-wide write. The blindness was symmetric: an unrelated DENIAL marked
+  // `cp.approval` denied, which ends the run.
+  //
+  // BOUND (the key is present). The producer writes `checkpoint` on every
+  // approval from the flip forward — an id when WP-26's card fired as the
+  // procedure's approval, `null` for a plain tool confirm. A bound event
+  // governs the checkpoint it names and no other. `null` and a foreign id are
+  // the same answer: no. Such an event therefore attests nothing AND denies
+  // nothing — it is not evidence about this checkpoint in either direction, and
+  // treating a plain confirm's denial as a runbook denial would recreate the
+  // old bug with the sign flipped.
+  //
+  // LEGACY (the key is absent). Events written before the flip, folded exactly
+  // as they folded before — tool-keyed, latest-per-tool, subject-blind. History
+  // renders unchanged while the hole closes forward, which is the whole reason
+  // the null is written rather than omitted: omission is what marks an event
+  // legacy, so a present-day plain confirm must not be able to produce it.
+  //
+  // In both lanes the LATEST decision governs. `.some(approved)` would let a
+  // run proceed after a denial simply because an earlier turn had approved
+  // something — the exact shape ab.approval-denied forbids — and `events` is
+  // ULID-ordered, so last write wins is last in time.
+  // -------------------------------------------------------------------------
+  const legacyLatest = new Map<string, string>(); // tool → decision
+  const legacyEvent = new Map<string, string>(); // decision → event id
+  // One map, not a pair keyed on a composite string: the decision and the event
+  // that carried it are one fact about one checkpoint, and splitting them across
+  // two maps is how `decisionEvent` came to be keyed by DECISION — which is what
+  // made the old evidence id the last event with that decision rather than the
+  // one that governed.
+  const boundLatest = new Map<string, { decision: string; eventId: string }>();
+
   for (const event of events) {
     if (event.topic !== RATIONALE_TOPIC) continue;
     const payload = payloadOf(event);
-    if (typeof payload.tool === 'string' && typeof payload.decision === 'string') {
-      latestDecision.set(payload.tool, payload.decision);
-      decisionEvent.set(payload.decision, event.id);
+    if (typeof payload.decision !== 'string') continue;
+
+    if (!('checkpoint' in payload)) {
+      // Legacy lane — byte-for-byte the old rule, `tool` requirement included.
+      if (typeof payload.tool === 'string') {
+        legacyLatest.set(payload.tool, payload.decision);
+        legacyEvent.set(payload.decision, event.id);
+      }
+      continue;
     }
+
+    // Bound lane. A non-string checkpoint — `null`, the plain-confirm case — is
+    // deliberately dropped here rather than falling through to legacy: falling
+    // through is precisely the confusion the always-written null exists to make
+    // impossible.
+    if (typeof payload.checkpoint !== 'string') continue;
+    boundLatest.set(payload.checkpoint, { decision: payload.decision, eventId: event.id });
   }
-  const decisions = [...latestDecision.values()];
+  const legacyDecisions = [...legacyLatest.values()];
 
   // The assembler's own retrieval — the SUPPLY side, which is all a manifest
   // attestation ever claims. `returned: 0` still attests: the query ran, and an
@@ -258,11 +311,27 @@ export function foldProcedureCursor(
     const evidence = checkpoint.evidence ?? {};
     if (evidence.topic === RATIONALE_TOPIC) {
       const wanted = evidence.decision ?? 'approved';
-      if (decisions.includes(wanted)) {
+
+      // A consent bound to THIS checkpoint governs it, and nothing else can
+      // overrule it — including an older legacy event, which is both
+      // subject-blind and earlier.
+      const bound = boundLatest.get(checkpoint.id);
+      if (bound) {
+        if (bound.decision === wanted) {
+          attested.push(checkpoint.id);
+          evidenceById[checkpoint.id] = { eventId: bound.eventId, topic: RATIONALE_TOPIC };
+        } else denied.push(checkpoint.id);
+        continue;
+      }
+
+      // No consent named this checkpoint. Legacy events still speak for it —
+      // grandfathered — and post-flip events never reach here unless they named
+      // it, so a plain confirm and a foreign checkpoint both leave it pending.
+      if (legacyDecisions.includes(wanted)) {
         attested.push(checkpoint.id);
-        const eventId = decisionEvent.get(wanted);
+        const eventId = legacyEvent.get(wanted);
         if (eventId) evidenceById[checkpoint.id] = { eventId, topic: RATIONALE_TOPIC };
-      } else if (decisions.length > 0) denied.push(checkpoint.id);
+      } else if (legacyDecisions.length > 0) denied.push(checkpoint.id);
       continue;
     }
     if (evidence.topic === ACTION_TOPIC && evidence.tool) {

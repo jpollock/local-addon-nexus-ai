@@ -262,6 +262,22 @@ describe('parity — nothing armed', () => {
     const [rationale] = rationales();
     expect(rationale.payload as Record<string, unknown>).not.toHaveProperty('canary_policy');
   });
+
+  test('WP-36 · a plain tool confirm records `checkpoint: null`, PRESENT and null', async () => {
+    mockProviderInstance = toolCallingProvider({ id: 'c1', name: ORDINARY_TOOL, arguments: { code: 'x' } });
+    const { service } = harness(() => ({ approved: true }));
+
+    await send(service);
+
+    const payload = rationales()[0].payload as Record<string, unknown>;
+    // BOTH halves, and the first is the load-bearing one. The key must EXIST —
+    // an absent key is the legacy discriminator, and a present-day plain
+    // confirm landing in the legacy lane is exactly the confusion this field
+    // exists to make impossible. `toHaveProperty` alone would pass on an
+    // absent key set to undefined, so presence is asserted on `in`.
+    expect('checkpoint' in payload).toBe(true);
+    expect(payload.checkpoint).toBeNull();
+  });
 });
 
 describe('a strict run standing at its approval checkpoint', () => {
@@ -294,6 +310,10 @@ describe('a strict run standing at its approval checkpoint', () => {
       version: '1.2.0',
       strictness: 'strict',
       checkpointId: 'cp.approval',
+      // WP-36 · the checkpoint's own authored reason, which is what the card
+      // now takes its TITLE from. Before it, the title was the display name of
+      // whichever tool the guard was refusing.
+      checkpointReason: 'explicit, informed consent',
       offersCanaryPolicy: true,
       unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: 'show what would change' },
     });
@@ -358,6 +378,22 @@ describe('a strict run standing at its approval checkpoint', () => {
     const [rationale] = rationales();
     expect((rationale.payload as Record<string, unknown>).prompt).toContain('rb.bulk-plugin-update');
     expect((rationale.payload as Record<string, unknown>).prompt).toContain('cp.approval');
+  });
+
+  test('WP-36 · the recorded consent is BOUND to the checkpoint the card fired for', async () => {
+    // The prompt above names the checkpoint in prose; this is the same fact as
+    // a field the fold can join on. The 2026-08-19 event had only the prose,
+    // which is why an approval of a live re-verify read as consent to the plan.
+    armAtApproval();
+    mockProviderInstance = toolCallingProvider({ id: 'c1', name: GATED_TOOL, arguments: {} });
+    const { service } = harness(() => ({ approved: true }));
+
+    await send(service);
+
+    const payload = rationales()[0].payload as Record<string, unknown>;
+    expect(payload.checkpoint).toBe('cp.approval');
+    // And it is the checkpoint the CARD carried, not one derived from the tool
+    // — `cp.approval` declares no tools at all.
   });
 
   test('DENY is final: recorded as a denial, and the fold reports it', async () => {

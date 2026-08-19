@@ -458,6 +458,11 @@ describe('the approval context — what the card is allowed to render', () => {
       version: '1.0.0',
       strictness: 'strict',
       checkpointId: 'cp.approval',
+      // WP-36 · read from this fixture's own body heading, exactly as
+      // `unverifiablePrecedent.reason` is — and `null` there, on the same
+      // document, is the pin that the two are read separately rather than one
+      // being derived from the other.
+      checkpointReason: 'explicit, informed consent',
       offersCanaryPolicy: true,
       unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: null },
     });

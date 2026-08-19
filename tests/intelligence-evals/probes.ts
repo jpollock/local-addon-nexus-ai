@@ -302,6 +302,11 @@ export async function probeProcedureRun(fixture: EvalFixture): Promise<Procedure
     args: bulkArgs,
     cardText: 'Update WooCommerce on 2 staging sites.',
     decision: 'denied',
+    // WP-36 · the probe stands in for WP-26's card, which fires as the
+    // procedure's approval — so the consent is bound to that checkpoint. M4's
+    // semantics are unchanged BY binding it: `null` here would be a plain tool
+    // confirm, and the fold would rightly stop reading it as cp.approval.
+    checkpoint: 'cp.approval',
     taskId,
     services,
   });
@@ -313,6 +318,7 @@ export async function probeProcedureRun(fixture: EvalFixture): Promise<Procedure
     args: bulkArgs,
     cardText: 'Update WooCommerce on 2 staging sites.',
     decision: 'approved',
+    checkpoint: 'cp.approval',
     taskId,
     services,
   });
@@ -609,6 +615,7 @@ export async function probeDeniedApproval(fixture: EvalFixture): Promise<DeniedA
     args: { site_ids: [flagged.siteId] },
     cardText: 'Update WooCommerce on 1 staging site.',
     decision: 'denied',
+    checkpoint: 'cp.approval',
     taskId,
     services,
   });
@@ -1209,6 +1216,9 @@ export async function probeGatewayEmission(fixture: EvalFixture): Promise<Gatewa
     args: { site: siteA.siteId, plugin: 'woocommerce' },
     cardText: 'This updates WooCommerce on a site with prior checkout breakage.',
     decision: 'approved',
+    // A plain Tier-3 tool confirm, not a procedure checkpoint — nothing here is
+    // standing at a runbook's approval step, so the consent names none.
+    checkpoint: null,
     taskId,
     services,
   });
