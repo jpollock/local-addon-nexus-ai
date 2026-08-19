@@ -273,6 +273,17 @@
 .nexus-md blockquote { border-left: 3px solid var(--ag-teal); margin: 8px 0; padding: 4px 12px; color: var(--ag-text-secondary); }
 .nexus-md hr { border: none; border-top: 1px solid var(--ag-border); margin: 12px 0; }
 
+/* ── WP-38 · the corroboration render (ADR-24) ──────────────────────────
+   The citation marker is TRAILING: a door where the sentence ends, never a
+   superscript and never a footnote (for-designer-corroboration-response §2).
+   A prose run is markdown, so it closes with a block-level <p>; without this
+   rule the chip would drop to the next line and detach from the claim it
+   belongs to. Only the LAST paragraph of a run goes inline — a multi-paragraph
+   run keeps its shape, and only its final sentence carries the marker. */
+.nexus-cite-run { display: inline; }
+.nexus-cite-run > p:last-child { display: inline; }
+.nexus-cite-body { font-size: 13px; line-height: 1.55; }
+
 /* ── Typing indicator ───────────────────────────────────────────────────── */
 @keyframes nexus-dot {
   0%, 60%, 100% { opacity: 0.2; transform: scale(1); }
