@@ -17330,3 +17330,52 @@ J-Inspect, as registered.
 
 **WP-45 (the law review applied) is CLEAR TO CUT** from the base at
 `601eed47` or later — after WP-44's merge, as its prompt instructs.
+
+---
+
+## WP-45 · LOCK ANNOUNCE (2026-08-19) — the law review applied
+
+Branch `wp-45`, worktree `.worktrees/wp-45`, cut from `poc/nexintelligence`
+at `d6ca06e5` (WP-44 merged at `73f8b67b`, its merge acceptance at
+`d6ca06e5`, which states "WP-45 … is CLEAR TO CUT from the base at
+`601eed47` or later").
+
+**TWO LOCKS CLAIMED, both verified free before the claim, on the base,
+per the WP-20f/WP-37 crossed-claim rule:**
+
+1. **`law/runbooks/`** — the four attestation-free strict runbooks
+   (`rb.promotion-execute`, `rb.promotion-preflight`,
+   `rb.incident-containment`, `rb.incident-remediation`) gain `attest:`
+   keys per the owner-ratified `law-review-attestation-note.md`. Last
+   held by WP-20g for `promotion-execute.md`; WP-20g merged and released
+   at `9b6d1531`'s merge. No lock announce for `law/` stands open in this
+   record.
+2. **`src/main/intelligence-host/`** — the re-pin (P4) and the
+   caller-supplied-reason mechanism folded in from WP-44's gate ruling.
+   Released by WP-44's merge report ("THE `src/main/intelligence-host/`
+   AND SETTINGS-RENDERER LOCKS ARE RELEASED", `601eed47`) and again in
+   the architect's merge acceptance. Verified by
+   `git merge-base --is-ancestor wp-44 poc/nexintelligence` → true,
+   not by reading the claim.
+
+**NOT CLAIMED, and deliberately:** `law/runbooks/bulk-plugin-update.md`
+(the anchor — this packet reads it as the formatting precedent and does
+not edit it), the two guided runbooks (`diagnose-site.md`, `wpe-pull.md`),
+and `src/main/index.ts` (no new call site is needed; the re-pin rides
+inside the sync bootstrap already calls).
+
+**Scope, from the ratified note:** P2 classes on all four documents, with
+containment's two event-candidates verified against the document's own
+body and the tool registry before assignment; P3 tool declarations quoted
+from the body; P5 mechanics (version bumps, `review_triggers`,
+anchor-slice copies, `declared-procedures.json` REGENERATED with the
+field read-back); P4's re-pin of `cap.incident_containment` and
+`cap.promotion_preflight` as explicit `control.grant.issued` events; P6
+as a test over the new denominators. Folded from the WP-44 gate ruling:
+the WP-20b `reason` finding, with the ratified vocabulary
+`materialized` · `granted-at-control` · `law-review re-pin`.
+
+**Escalate, don't build:** any new ledger topic (the policy-engine
+decision recording stays refused per the note), any checkpoint whose
+class would have to be argued for rather than derived, and anything
+touching `bulk-plugin-update.md` or the guided runbooks.
