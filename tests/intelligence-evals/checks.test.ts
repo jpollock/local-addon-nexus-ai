@@ -474,7 +474,11 @@ describe('the journey checks (WP-33)', () => {
       '`capabilityGrants`: 0 file(s) under src/renderer, 14 under src/ — the surface that would render it does not exist',
       '`siteAtPlaces`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
       '`scopeBlock`: 2 file(s) under src/renderer, 4 under src/ — present',
-      '`sessionRegistry`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
+      // WP-30: the fold shipped, the renderer did not. Kept accurate even
+      // though no check reads this line any more (the three criteria it used to
+      // serve are driven now) — a stub carrying a number that stopped being
+      // true is the kind of thing a later reader takes for a measurement.
+      '`sessionRegistry`: 0 file(s) under src/renderer, 2 under src/ — the surface that would render it does not exist',
       '`refusalTurn`: 0 file(s) under src/renderer, 0 under src/ — the surface that would render it does not exist',
     ],
   };

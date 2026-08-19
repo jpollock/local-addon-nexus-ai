@@ -18129,3 +18129,341 @@ the record-merge blob standard (four-way verification, one named
 unit); full suite both sides read skipped-first; battery re-run on the
 merged tree; receipts pasted after they print; locks released only
 after acceptance.
+
+---
+
+## WP-30 · GATE REPORT — the session registry. HOLDING. (2026-08-19)
+
+Branch `wp-30`, worktree `.worktrees/wp-30`, cut from `ff9601dc` (the lock
+announce, whose parent is the architect-work commit above `a9346d8b`). **Not
+merged. Holding at the gate** for the query contract and three escalations.
+
+Three commits, `git diff --stat poc/nexintelligence...wp-30` — **8 files,
++4,146/−57**:
+
+```
+ scripts/wp30-battery.py                            |  393 +++++
+ .../__tests__/sessionRegistry.test.ts              | 1716 ++++++++++++++++++++
+ src/main/intelligence-host/sessionRegistry.ts      | 1485 +++++++++++++++++
+ tests/intelligence-evals/checks.test.ts            |    6 +-
+ tests/intelligence-evals/checks.ts                 |  280 +++-
+ tests/intelligence-evals/probes.test.ts            |   14 +
+ tests/intelligence-evals/probes.ts                 |  300 +++-
+ tests/intelligence-evals/runner.ts                 |    9 +
+ 8 files changed, 4146 insertions(+), 57 deletions(-)
+```
+
+**NO RENDERER FILE. NO NEW LEDGER TOPIC. NO STORAGE MARKER. NO TABLE.** The
+registry is a READ: it derives and writes nothing. Nothing escalation-grade was
+needed, which was the expectation and is now the measurement.
+
+### 1 · THE QUERY CONTRACT — GATE-HELD, presented verbatim
+
+Host-side, in `src/main/intelligence-host/sessionRegistry.ts`. M6's surfaces
+consume it over IPC in UX build 2; the designer and that build both consume it,
+so it is ruled territory and nothing below is merged until it is ruled.
+
+```ts
+export type ConsequenceTier = 1 | 2 | 4;   // no 3: tier 3 is structure (tear 3)
+export type TriageColumn    = 'waiting' | 'changed';
+export type SessionStatus   = 'waiting' | 'running' | 'halted' | 'complete';
+export type GateAwaits      = 'approval' | 'evidence';
+
+export interface PendingGate {
+  checkpointId: string;      // the WHERE, by gate id
+  index: number;             // 1-based position in the document's own list
+  of: number;
+  awaits: GateAwaits;
+  runbookId: string;
+  capability: string;
+}
+
+export interface PendingApproval {
+  checkpointId: string;
+  state: 'pending' | 'approved' | 'denied';
+  eventId?: string;          // approved only — see LIMIT 2
+  decidedAt?: string;        // ISO, the rationale event's observed_at
+}
+
+export interface PlaceSet {
+  tokens: string[];          // highest-consequence first
+  highest: string | null;    // the member that ORDERS the row
+  atHighest: number;
+  total: number;
+  unresolved: number;        // never guessed
+  summary: string;           // "touches production on 2 of 5"
+}
+
+export interface FailedTarget {
+  entityId: string; outcomeEventId: string; observedAt: string; tool: string;
+}
+
+export interface SessionOutcomes {
+  succeeded: string[];       // entity ids
+  failed: FailedTarget[];
+  writeLanded: boolean;      // T1's first arm
+  writeEventId?: string;
+}
+
+export interface DerivedDeadline { at: string; from: string; }
+
+export interface SessionRow {
+  id: string;                // `sess_<first turn's TaskId>` — derived, stable
+  capability: string;
+  runbookId: string | null;
+  runbookHash: string;
+  taskIds: string[];         // turn correlations, oldest first
+  status: SessionStatus;
+  gate?: PendingGate;
+  checkpoints?: CheckpointState[];   // procedureView's own type
+  approvals: PendingApproval[];
+  outcomes: SessionOutcomes;
+  places: PlaceSet;
+  startedAt: string;
+  lastActivityAt: string;
+  lastEventId: string;       // the change cursor
+  documentUnavailable?: boolean;
+  idProvisional?: true;      // at most one per snapshot — see LIMIT 3
+}
+
+export interface SituationPart {
+  kind: 'run' | 'outcome' | 'incident';   // the GATE is not a part
+  eventId?: string; topic?: string; observedAt?: string; summary: string;
+}
+
+export interface Situation {
+  id: string;                // the session id, or the incident event id
+  kind: 'session' | 'incident';
+  column: TriageColumn;
+  tier: ConsequenceTier;
+  tierReason: string;        // derived, names its evidence
+  sessionId?: string;
+  gate?: PendingGate;
+  places: PlaceSet;
+  since: string;             // the oldest part — the age the sort uses
+  lastEventId: string;
+  parts: SituationPart[];
+}
+
+export interface ReservedRow {
+  headline: string;          // one sentence, derived from the counts
+  dark: Array<{ system: string; label: string; detail?: string }>;
+  staleCount: number;        // counted, never promoted to a row
+  verdict: 'OK' | 'STALE' | 'DARK';
+  degraded: boolean;
+}
+
+export interface TriageView {
+  waiting: Situation[]; reserved: ReservedRow; changed: Situation[]; cursor: string;
+}
+
+export interface ChangeSet {
+  cursor: string; sessions: SessionRow[]; situations: Situation[];
+  cursorUnknown: boolean;
+}
+
+export interface SessionRegistrySnapshot {
+  at: string;
+  sessions: SessionRow[];
+  situations: Situation[];   // ONE ranked list; the columns are a filter
+  reserved: ReservedRow;
+  cursor: string;
+  horizon: { manifestsRead: number; limit: number; truncated: boolean;
+             oldestManifestId: string | null };
+  concurrencyLimit: string;  // LIMIT 1, on every snapshot
+  deadlineSource: string;    // LIMIT 4, on every snapshot
+}
+
+export interface SessionRegistry {
+  sessions(): SessionRow[];
+  session(id: string): SessionRow | undefined;
+  triage(): TriageView;
+  changedSince(cursor?: string): ChangeSet;
+  snapshot(): SessionRegistrySnapshot;
+}
+
+export function createSessionRegistry(deps?: SessionRegistryDeps): SessionRegistry;
+export function foldSessionRegistry(deps?: SessionRegistryDeps): SessionRegistrySnapshot;
+export function rankSituations(situations: readonly Situation[]): Situation[];
+```
+
+**THE DESIGNER'S THREE REQUIREMENTS, adopted as contract law at the cycle-five
+adjudication (`for-designer-return-response.md` §4; XD-26) and satisfied here:**
+
+1. **Session × cursor gate resolves to a CHECKPOINT ID, never a run and an
+   offset** — `PendingGate.checkpointId`, with its position in the document's
+   own ordered list, from `deriveCheckpointStates`'s `active`. **And the
+   stronger half**: `SessionRow.checkpoints` supplies the whole declared list
+   as `CheckpointState[]`, so a resumed declaration renders its marks from the
+   record rather than inferring them from position. It is `procedureView`'s own
+   type from the same derivation the two densities render — "a difference
+   between the densities and this sheet would be a defect in one of them", kept
+   true by there being one shape rather than by a promise. **Absent, not empty,
+   when the pinned document is not served**: an empty array claims a document
+   with no checkpoints, and 6c is written on that distinction.
+2. **Pending approvals as a SET of {checkpoint, decision, moment}** —
+   `PendingApproval`, with `decidedAt` off the rationale event's `observed_at`
+   (the click), never `recorded_at`. "Approved at cp.approval, yesterday 21:40"
+   is writable from the payload alone.
+3. **Consequence rank PER SITUATION, with coalesced parts and the placing
+   rule** — `Situation.tier` / `.tierReason` / `.parts`. Every derivation is in
+   this fold; the render path derives nothing.
+
+**ONE NAMING QUESTION FOR THE GATE.** Requirement 2 says "decision"; the field
+is `state`, because it is three-valued and `pending` is the ABSENCE of a
+decision rather than one. If the gate prefers `decision`, it is a rename and
+nothing else — flagged rather than silently decided.
+
+### 2 · THE FOUR MEASURED LIMITS, on the contract rather than in a footnote
+
+1. **The ledger records no chat-session id.** Two chats whose runs are BOTH IN
+   FLIGHT at one capability and one document hash are ONE session here. The
+   terminal cut bounds this to genuinely concurrent runs — sequential ones
+   separate — but does not close it. Closing it means a session id on an event
+   payload, which is escalation-grade; `procedureArming.ts` records the
+   identical limit for its own queue. Carried on every snapshot as
+   `concurrencyLimit` so no consumer has to know to ask.
+2. **`eventId`/`decidedAt` are present for `approved`, absent for `denied`** —
+   inherited, not chosen: `ProcedureCursorState.evidence` carries no evidence
+   for a denial (WP-20e). Re-deriving one here would put a second copy of the
+   bound/legacy rationale rule beside `foldProcedureCursor`'s, which is how a
+   reader and a fold start disagreeing about what a run contains.
+3. **The manifest read is bounded** (`MANIFEST_SCAN_LIMIT`, 2000, newest-first
+   for the ledger's own WP-03 reason). A truncated read can misplace the START
+   of exactly one session — the one owning the oldest manifest read — and that
+   session alone is flagged `idProvisional`. Not all of them, and not silently.
+4. **§4a's deadline arm of T1 has no producer.** Nothing records a dry-run
+   staleness clock or a maintenance window, so in production T1 is reached by
+   the write-landed arm alone. The rule is IMPLEMENTED behind a `deadlineFor`
+   port and pinned by its own test, because dropping a ruled rule silently is
+   worse than carrying an unfed one; the absence is stated on every snapshot as
+   `deadlineSource`.
+
+### 3 · THREE ESCALATIONS, for ruling before merge
+
+**ESCALATION 1 — the world-state rule applied to HALTS, not only to gates.**
+§4a tear 4's letter is about gates. Its principle is that classifying by an
+item's KIND rather than by the world behind it is the error, and a halt with
+nothing written is a run that stopped in an untouched world. So a halt is T1
+only when a write landed; calling it T1 because "halt" sounds urgent is the
+same mistake with a different noun. The designer's own morning agrees — Charlie
+is T1 *because* two sites are done and standing. **This generalises a ruling
+past its stated scope and wants a ruling of its own.** Pinned either way by
+`a HALT with nothing written is T2 too`.
+
+**ESCALATION 2 — a denial is TERMINAL for the registry, and the guard
+disagrees.** `armProcedureRun` keeps a denied run armed at the same key; this
+fold cuts there and opens a new session on the next turn. **The eval found why
+it must**: the report's own ledger folded a freshly-armed run into an unrelated
+denied one, the fresh run inherited the denial, reported `halted`, and its
+pending consent gate vanished out of the waiting column. For a triage whose job
+is "what needs you", losing a waiting row is the worst available failure, and
+two chats doing ordinary things reach it. **The residue, stated**: the same chat
+re-arming after its own denial reads here as a new session at a fresh gate while
+the guard goes on refusing it. The registry gates nothing, so the disagreement
+costs a row that looks more alive than it is — the opposite direction from
+losing one. Ruling wanted on the direction, not on the fix.
+
+**ESCALATION 3 — `idProvisional` is a new honesty field on a horizon nobody has
+ruled.** 2000 manifests is chosen, not derived. If the gate prefers a
+time-horizon, or prefers the fold to refuse rather than flag, say so.
+
+### 4 · THE EVAL REGISTRY — MEASURED, and it diverged from the expectation once
+
+Baseline measured on the base (`ff9601dc`, primary checkout) rather than
+derived: **36 PASS / 0 FAIL / 32 BLOCKED / 10 OWNER-PENDING**.
+After, in the worktree: **40 PASS / 0 FAIL / 28 BLOCKED / 10 OWNER-PENDING**.
+Four flips, no regressions, no criterion moved that this packet does not own.
+
+- **J-Return: 2 → 3 PASS / 0 FAIL / 5 BLOCKED.** Gate-level addressing;
+  promotion identity across re-entry; the pending-approval invariant.
+- **J-Refusal: 5 → 6 PASS / 0 FAIL / 5 BLOCKED / 1 OWNER-PENDING.** The re-ask
+  must-not, re-owned to this packet at WP-44.
+- **Every `needsYou`-token criterion stays BLOCKED on UX build 2.** Nothing was
+  flipped that this packet does not own.
+
+**THE DIVERGENCE FROM THE EXPECTATION, raised rather than forced.** The launch
+expected the registry-owned criteria to become drivable, and three did — but
+the FOURTH J-Return criterion the expectation grouped with them ("a needs-you
+row that knows that but not where") is about a RENDER, and stays BLOCKED. The
+line the registry can honour is not "criteria WP-30 was named on" but "criteria
+about the ANSWER rather than about its rendering". Four gaps that still named
+WP-30 as a blocker after it shipped are re-owned to UX2 with WP-30's
+contribution recorded as `standing`, and the `UX2` constant itself — which said
+"gated on WP-25 and WP-30", both shipped — now says it is gated on nothing but
+itself. That is the WP-44 rule (a BLOCKED naming a shipped packet understates
+progress exactly as an overstated gap misleads) applied to this packet's own
+arrival.
+
+**AND THE PROBE HAD TO BUILD ITS OWN SUBJECT.** Driven first, the gate criterion
+FAILED — correctly. Both runs the report already contained are TERMINAL
+(`probeProcedureRun` drives one to completion, `probeDeniedApproval` one to a
+denial), so the report held no run standing at a gate and the WHERE had nothing
+to be adjudicated against. `probeSessionRegistry` now arms one that stops at
+`cp.approval` before measuring. A criterion adjudicated against a fixture with
+no gates in it would have been a green over nothing.
+
+### 5 · RECEIPTS, pasted after they printed
+
+- **Baseline, worktree, tree held still, exit captured before any pipe:**
+  `602 suites / 8,210 passed / 12 skipped / 8,222 total, exit 0` — matching the
+  WP-45 merge report's worktree figure exactly.
+- **After, worktree:** `603 suites / 8,265 passed / 12 skipped / 8,277 total,
+  exit 0`. Delta **+1 suite, +55 tests** — 54 in the new suite plus one probe
+  pin, fully accounted. The skipped column is unmoved at 12; the ten-test
+  embedding boundary is a worktree-vs-primary difference and both figures here
+  are the worktree's.
+- **Mutation battery `scripts/wp30-battery.py`: 29/29 KILLED**, control
+  SURVIVED (correct), tree verified PRISTINE before and after. `--no-cache`
+  throughout, count-floored at 400 against a 413-test pristine baseline, both
+  summary lines parsed.
+- **Two survivors on the first drive, both closed**, and both were gaps in the
+  PIN rather than in the code: M03 (the refusal case emitted `status:'refused'`
+  AND `hash:null`, so the hash guard caught it and the status guard was
+  unpinned — the drift case now pins it alone) and M20 (every reserved-slot
+  case supplied DARK producers or none, so widening the dark filter to
+  "anything not OK" changed no assertion).
+- **tsc clean, eslint clean.**
+
+### 6 · A NUL BYTE, IN FRESHLY AUTHORED SOURCE — the eighth of its family
+
+`sessionRegistry.ts` line 683 carried a literal NUL where the run-key separator
+should have been. **It passed `tsc`, `eslint` and 48 tests.** It announced
+itself only when `grep` answered `Binary file matches` — WP-25's finding, and
+the first time this family has appeared in source written from scratch rather
+than pasted. Replaced with a visible `@`; every file this packet touches was
+swept byte-by-byte and is clean; and the battery now REFUSES TO RUN over a
+source file carrying non-printing characters, so the sweep is a gate rather
+than a habit. The protocol's sentence held exactly: a grep that calls a source
+file binary is a finding, not an inconvenience.
+
+**One process note, recorded because it nearly cost a measurement.** A `cd`
+into the primary checkout for the eval baseline persisted, and a subsequent
+"tsc clean / no tests found" pair was measured against the WRONG TREE while the
+edits — made with absolute paths — sat correctly in the worktree. WP-39's pwd
+rule and WP-43's edit-tool form, both live in one incident. No damage: the
+primary's `git status` showed only the architect's own five files. Every command
+after it prints `pwd` in the same breath.
+
+### 7 · ABI STATE, disclosed
+
+**This session ran `npm test`, `npx jest` and the battery repeatedly, so
+better-sqlite3 is built for SYSTEM NODE** (this machine: v25.9.0, ABI 141).
+**Local cannot load the addon until `npm run rebuild`.**
+
+### 8 · ARCHITECT WORK IN THE PRIMARY CHECKOUT, uncommitted at the time of
+writing
+
+Found while measuring the eval baseline, NOT touched by this agent, and it will
+be committed verbatim in its own attributed commit before any merge, per the
+protocol's standing rule: `docs/intelligence/DESIGN_DECISIONS.md` (XD-26),
+`docs/intelligence/WORK_PACKETS.md` (the cycle-five adjudications),
+`docs/intelligence/for-designer-return-response.md`,
+`docs/intelligence/from-designer/from-designer-09-return-arrival.md`, and
+`docs/intelligence/from-designer/fixtures/`. This report's WORK_PACKETS entry
+will conflict with the architect's on the tail and is resolved by the
+record-merge blob standard with four-way verification.
+
+**LOCKS `src/main/intelligence-host/` AND `tests/intelligence-evals/` REMAIN
+HELD. HOLDING AT THE GATE — the contract, the naming question and the three
+escalations are ruled before anything merges.**

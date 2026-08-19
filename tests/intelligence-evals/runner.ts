@@ -25,6 +25,7 @@ import {
   probeProcedureRun,
   probeRefusalPayload,
   probeRendererSurfaces,
+  probeSessionRegistry,
   probeTimestampDiscipline,
   probeTopicFamily,
 } from './probes';
@@ -179,6 +180,14 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
       gateway: await probeGatewayEmission(fixture),
       schema: probeEnvelopeSchema(fixture),
       timestamps: probeTimestampDiscipline(fixture),
+      // WP-30. LAST, and it has to be: it is the only probe that DESTROYS host
+      // state rather than adding to the ledger — the simulated boot empties
+      // `procedureCursor`'s in-memory run map, which `probeProcedureRun` warmed
+      // and the sequence guard reads. Any probe after this one would be reading
+      // a process rebooted underneath it. Placing it here is not tidiness; a
+      // probe that ran after it and consulted `runForTask` would silently
+      // measure the wrong world.
+      sessionRegistry: await probeSessionRegistry(fixture),
       taskFamily: (prefix: string) => probeTopicFamily(fixture, prefix),
     };
     const ctx = { fixture, probes };

@@ -223,6 +223,20 @@ describe('probeRendererSurfaces', () => {
     expect(surfaces.ok).toBe(false);
   });
 
+  it('WP-30 shipped a FOLD and no UI — both halves pinned, because both are the packet', () => {
+    // "No UI. Not one renderer file." is an acceptance criterion, and an
+    // acceptance criterion nothing checks is a sentence. These two lines are
+    // the check, and they fail in opposite directions: the first goes red if
+    // someone renders the registry before UX build 2 rules how, and the second
+    // goes red if the fold is deleted or renamed while criteria still cite it.
+    //
+    // The pair is also what keeps the renderer zero from being free. A `0` that
+    // could be produced by a scanner that finds nothing proves nothing; a `0`
+    // beside a positive count from the SAME scan is a measurement.
+    expect(surfaces.counts.sessionRegistry.renderer).toBe(0);
+    expect(surfaces.counts.sessionRegistry.all).toBeGreaterThan(0);
+  });
+
   it('the scanner can actually find a token — otherwise every absence is free', () => {
     // The vacuous shape this guards: a walker with a broken path or a bad
     // extension filter reports zero for everything, and every BLOCKED verdict
