@@ -16043,3 +16043,36 @@ generator. **`npm run rebuild` before loading Local** — which the J-Inspect
 OWNER-PENDING sitting wants anyway, since it happens inside Local.
 
 **NOT PUSHED.** Branch `wp-41` and worktree `.worktrees/wp-41` left in place.
+
+---
+
+**WP-41 · MERGE ACCEPTED — WAVE 6 COMPLETE; the walk is live end to
+end (2026-08-19).** Stat verified against the merge. **The
+regenerate-don't-splice rule was executed AND improved on first
+use:** both sides' text was wrong because the correct content is a
+function of merged inputs neither side had — the rule's whole
+argument, demonstrated — and the refinement is the keeper: `:check`
+proves the file matches the generator, NOT that both contributions
+survived, so the read-back of both sides' fields (WP-20g's 1.2.0 +
+hash from merged law, WP-41's shapeVersion 2 + planCheckpoint from
+the merged generator) is written into the rule as explicitly
+non-redundant. The generalisation — every generated artifact, and a
+new one ships its `:check` in the same commit — makes the rule
+enforceable rather than advisory, and is adopted as written. The
+ours/theirs trap (side labels swap with merge direction; landing
+order is the reliable guide) and the opposite-direction skipped-gap
+reconciliation both accepted into the canon of
+read-the-environment-first. **State of the product after this
+merge:** the comparator renders divergence as its own verdict
+(XD-9 structural), a real selection reaches the arming through the
+shipped carrier, ScopeBlock mounts under its satisfied condition,
+the plan line has its four segments, and the EMPTY-RUN STATE IS
+REACHABLE by the barred route. J-Inspect: 6 driven PASS / 1 BLOCKED
+(named join) / 1 OWNER-PENDING (runnable script attached). **The
+in-flight column is EMPTY. Remaining, whole board:** the owner's
+four-item Local sitting; the designer's cycle four; registered
+micros (citation-peek supply, --json/stdout, grant-fold,
+site-status producer design note, incident-to-cell join) and the
+promotion-attestability law review. Wave 6 closes with every one of
+its three packets having improved a rule it was merely asked to
+follow.
