@@ -13150,3 +13150,161 @@ registration) launches on WP-37's merge. Convergence noted for the
 owner: after WP-37 merges, the pending triple t1/t2 ask doubles as
 the empty-run live smoke — the sixth must-not's sitting and XD-21's
 first product rendering land in the same three asks.
+
+---
+
+**WP-20f · LOCK TAKEN, BASELINE, AND THE GATE HOLD (2026-08-18).**
+Worktree `.worktrees/wp-20f`, branch `wp-20f`, cut from
+`poc/nexintelligence` at 1527c763. **Intelligence-host lock CONFIRMED
+FREE and TAKEN** — `src/main/intelligence-host/`.
+
+**Sequencing discrepancy, recorded rather than assumed.** The prompt
+places this packet after WP-37's merge; WP-37 has neither branch,
+worktree nor commit in this repository — it is registered and not
+started. The constraint the record actually states is serialization on
+the host lock, and the lock is free, so this packet proceeds. When
+WP-37 launches it will find the lock held here.
+
+**Baseline (worktree, `npm test`, exit captured before any pipe):**
+583 suites passed / 583 total; 7,817 passed, 12 skipped, 7,829 total.
+Matches WP-36's post-merge figure. Architect work found uncommitted in
+the primary checkout (WORK_PACKETS.md, the WP-36 merge acceptance and
+the WP-37 registration) was committed VERBATIM as 1527c763 before the
+worktree was cut — pure append, 58 insertions, 0 deletions.
+
+**GATE HOLD — the ruling's point 2 mechanics, for ratification.**
+
+*The shipped set today.* Layer 1 of `resolveCapabilityGrants` derives
+an enabled grant for every STRICT runbook the registry serves. Measured
+against `law/` at this commit, that is five: `cap.bulk_plugin_update`
+(rb.bulk-plugin-update v1.2.0), `cap.incident_containment`
+(rb.incident-containment v1.1.0), `cap.incident_remediation`
+(rb.incident-remediation v1.1.0), `cap.promote_environment`
+(rb.promotion-execute v1.1.0), `cap.promotion_preflight`
+(rb.promotion-preflight v1.1.0). The two guided runbooks are outside it
+and stay outside it.
+
+*The proposed shape.* Layer 1 is DELETED — not filtered, not
+carved-out. After this packet a grant has exactly two origins, both
+explicit acts: a MATERIALIZED list written once by the migration, and
+the settings overlay. No capability is ever granted because a document
+exists, which is point 3 obtained structurally rather than by a rule
+that a later default could out-vote.
+
+*The materialization event.* No new topic, no new envelope field, no
+new schema version, no new payload key, no new `reason` value. The
+migration's events are `control.grant.issued` / `grant.issued/1` from
+WP-20b's own producer with `reason: 'materialized'` — the value that
+already means "first issuance of this grant" and the word the ruling
+itself uses for the act. Three events fire, one per materialized
+capability. Verbatim, the anchor's:
+
+    topic:       control.grant.issued
+    schema:      grant.issued/1
+    entity:      {}
+    actor:       { id: 'act_grant_materializer', kind: 'system' }
+    source:      { class: 'expertise', system: 'law:capability-grants',
+                   trust: 'authored' }
+    causation:   (absent — no prior grant to supersede)
+    payload:
+      capability:    'cap.bulk_plugin_update'
+      runbook_id:    'rb.bulk-plugin-update'
+      runbook_hash:  'sha256:0646cfe11c1b813db994d6c95832ae2c6e97528c3748f7eb2aa44e3c736237c8'
+      strictness:    'strict'
+      scope:         { environments: ['local','wpe_staging','wpe_development'] }
+      grant_source:  'shipped'
+      reason:        'materialized'
+
+The other two are the same shape: `cap.incident_containment` /
+rb.incident-containment / `sha256:fedec1df…` / scope carrying its five
+environments; `cap.promotion_preflight` / rb.promotion-preflight /
+`sha256:ae5a1678…` / scope `{}` — that runbook declares
+`sources`/`destinations`/`excluded` rather than `environments`, and
+`scopeFromRunbook` records absent rather than guessing (WP-20a finding
+5, unchanged here). `cap.promote_environment` and
+`cap.incident_remediation` emit NOTHING: they are not materialized, and
+point 1 is the reason.
+
+*Trigger.* Inside `syncCapabilityGrants`, before resolution, on the
+same call bootstrap and `onSettingsUpdated` already make. No new call
+site, no new wiring in `index.ts`, so the integration lock is not
+touched.
+
+*Dedup key — three independent layers, and each alone is sufficient.*
+(1) The materialized record's PRESENCE, not a timestamp or a count:
+`intelligence_grants_materialized` present ⇒ the migration never runs
+again. (2) The migration is a set union that never re-adds a capability
+already listed, so even a re-run changes no content. (3) The pre-existing
+event gate, untouched: `intelligence_grants_state` keyed on
+`(capability, runbookId, runbookHash)` — an unchanged triple emits
+nothing. That third layer is WP-20b's change-gate discipline and this
+packet does not modify it.
+
+*Idempotence proof.* Boot 1: materialized marker absent → migrate → the
+three capabilities recorded → resolution yields three grants → three
+`control.grant.issued` → `intelligence_grants_state` records all three
+triples. Boot 2: marker present → migration is a no-op → resolution
+yields the same three grants → each triple matches its prior → `unchanged`
+→ ZERO emissions. Exactly one issued event per capability after two
+boots, which is the acceptance criterion and is a test. The two markers
+also cover each other in one direction: lose
+`intelligence_grants_materialized` alone and the migration re-derives the
+identical set while layer 3 still suppresses every event.
+
+*The failure direction, disclosed rather than engineered away.* Lose
+BOTH markers and the machine is indistinguishable from a fresh install,
+so the migration re-runs over whatever is shipped THEN — a capability
+added after this packet would be materialized as though it were day-one,
+which is point 3's hole under total storage loss. The event-sourced fix
+is to rebuild the materialized set from the ledger's own
+`control.grant.issued`/`revoked` history (architecture.md §320: "the
+grant table is itself a fold view"). That is a grant FOLD, it is more
+machinery than the three ruled points ask for, and it is registered here
+as a follow-on rather than built.
+
+**ESCALATIONS — three, held for the owner.**
+
+*E1 · A new storage marker is a stated escalation trigger.* The protocol
+lists "a new storage marker" among the stop-and-ask items; CLAUDE.md
+lists `intelligence_grants_*` as pre-approved at the phase-1 ruling and
+owned by `capabilityGrants.ts`. A new key inside that pre-approved
+prefix is arguably inside the pre-approval, but the trigger is explicit,
+so it is asked rather than assumed. Two options: (a)
+`intelligence_grants_materialized`, a new key under the pre-approved
+prefix — RECOMMENDED, because WP-20b deliberately separated "what is
+configured" from "what was last ISSUED", and `intelligence_grants_state`
+is documented as the latter; folding the grant set into it would make a
+stale entry mean both "revoke this" and "this is granted", and nothing
+would ever revoke. (b) A new field inside the existing key — no new
+marker, at the cost of that conflation.
+
+*E2 · The flip governs ARMING, not tool reach — and for the two
+mandated caps that is LESS ceremony, not more.* v0 grants are ADDITIVE
+by P2's ruling: a grant ADDS a procedure and the sequence guard's
+ordering over that capability's tools; no grant leaves the bare tool
+surface untouched. So denying `cap.promote_environment` removes
+`wpe_promote_environment` from the guard's path entirely — with no grant
+there is no armed run, `armingGapRefusal` skips an ungranted capability
+by its own rule, and the call proceeds unsequenced. The same holds for
+`cap.incident_remediation`. The ruling's three points speak about
+arming ("a run needs an explicit grant made before it arms"), and the
+acceptance criterion is an arming refusal, so this packet builds that;
+but the packet STUB registered at WP-20 is titled "Capability required
+to reach gated tools", and that half is what would make the deny-flip
+subtract reach instead of subtracting ceremony. Until it lands, "production
+consequence is never a default" for these two caps rests on
+`isOperationAllowed` (push/delete refused on production by default) — a
+real gate, but a different one from the procedure. Flagged rather than
+folded in: making a capability required is a breaking change to the tool
+surface with its own eval family, by the stub's own terms.
+
+*E3 · One existing test encodes the old law and must change.*
+`capabilityGrants.test.ts` — "covers the strict runbooks the registry
+SERVES, and nothing else" — asserts the grant set EQUALS the strict set.
+That is precisely the sentence the ruling repeals. It becomes the census
+guard: every strict capability except the two mandated, with the two
+named and pinned absent. Noted so the diff's one deleted assertion is
+not read as a weakened test.
+
+**Held here for ratification of the payload and the mechanics above
+before any implementation lands.**
