@@ -6741,7 +6741,19 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       // to user_admin_url() (dashboard) regardless of the originating URL.
       const hubAdminUrl = `${siteUrl}/wp-admin/admin.php?page=wpe-hub-settings`;
 
-      const { shell } = await import('electron');
+      // WP-39 · `require`, not `await import`, matching the five other electron
+      // uses in this file. A dynamic `import('electron')` is a MODULE SPECIFIER
+      // the type checker must resolve; a `require` is not — so this line was the
+      // first thing to fail (TS2307) when the eval harness compiled this module
+      // without `src/types/electron.d.ts` in reach, and it is the line the
+      // 2026-08-19 smoke named. MEASURED, and stated so nobody inherits the
+      // wrong lesson: this was NOT the cause. Reverting it while `sitting.ts`
+      // imports `hostShim` leaves the sheet working, and fixing it while
+      // `sitting.ts` does not just moves the same error to `KeyVault.ts:20`.
+      // The retirement is the shim; this is one less compile-time specifier on
+      // the busiest module on that chain. Keep it a `require`.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { shell } = require('electron');
       shell.openExternal(hubAdminUrl);
 
       return { ok: true, polling: true, hubAdminUrl };
