@@ -12644,3 +12644,260 @@ working-as-designed / copy defect / code defect, propose the minimal
 fix set at its gate (any guard or recording change holds for
 ratification). The blended-card copy finding stands regardless and
 folds into WP-36's scope as the display half of question (1).
+
+---
+
+**WP-36 · LOCK ANNOUNCED — read-mostly claim on the sequencer/card surface
+(2026-08-19).** Worktree `wp-36`, branch `wp-36`, cut from
+`poc/nexintelligence` at 45445728. Claim covers, READ-ONLY except for tests:
+`src/main/intelligence-host/sequenceGuard.ts`, `procedureCursor.ts`,
+`src/main/chat/ChatService.ts` (the WP-26 card path), and
+`src/renderer/components/DockedPanel/PanelChat.tsx`. Nothing but test files
+is written before the gate ratifies; the fix set is proposed, not applied.
+The architect's uncommitted `WORK_PACKETS.md` delta (the PHASE-1.5 SMOKE
+entry and this packet's own registration) was committed VERBATIM at
+45445728 per the standing precedent — fourth exercise.
+
+**WP-36 · AT THE GATE — three questions answered from the ledger, the audit
+log and the code; ONE incident-class premise FALSIFIED, two defects
+confirmed, no guard change proposed (2026-08-19).**
+
+**THE HEADLINE, first, because it inverts the packet's own framing.**
+`verify_site_live` **did not execute.** The sequencer refused it, correctly,
+2ms after the approval was recorded. The held question asked why a declared
+tool ran with `cp.backup` unattested; it did not run. What produced the
+appearance that it did is a renderer that drops `isError` — so the screenshot
+that opened this investigation was the Docked Panel painting a green ✓ on a
+refusal. The gate held and the panel said it hadn't. **The incident class is
+NOT open.** What IS open, and is worse than the thing we were looking for, is
+what the approval attested.
+
+**THE EVIDENCE (primary, not reconstructed).**
+
+`~/Library/Application Support/Local/nexus-ai/ledger.db`, the five task.*
+rows of the window, read directly:
+
+| event | at | topic | correlation |
+|---|---|---|---|
+| `evt_01M0BQ77K6…` | 00:37:28.294Z | `task.context.assembled` | `task_01M0BQ76FY…` (`procedure: null`) |
+| `evt_01M0BQ8B5Z…` | 00:38:04.735Z | `task.context.assembled` | `task_01M0BQ8AGN…` — procedure **delivered**, strict, `attested: 0`, retrieval carries a `store: "ledger"` query |
+| `evt_01M0BQA25N…` | 00:39:01.045Z | `task.rationale.recorded` | `task_01M0BQ8AGN…` — **same turn** |
+| `evt_01M0BQBSHN…` | 00:39:57.749Z | `task.context.assembled` | `task_01M0BQBRVT…` (`procedure: null`, different site) |
+| `evt_01M0BQCHTJ…` | 00:40:22.610Z | `task.context.assembled` | `task_01M0BQCH5E…` (procedure delivered again) |
+
+The rationale payload, verbatim:
+
+```json
+{"tool":"verify_site_live","decision":"approved",
+ "prompt":"Runbook rb.bulk-plugin-update v1.2.0, marked strict — checkpoint
+  cp.approval. Approve this step to let the runbook continue.",
+ "args":{"site":"Local Labs"},"source":"approval-card",
+ "canary_policy":"pause-after-canary"}
+```
+
+**And the line nobody had looked at — `operation-audit.log`, 00:39:01.047Z:**
+
+```
+verify_site_live | outcome=failure
+REFUSED by procedure rb.bulk-plugin-update (cap.bulk_plugin_update):
+verify_site_live belongs to checkpoint cp.verify-canary, and cp.backup is not
+attested. What would attest it: a task.action.executed event for
+wpe_backup_and_verify, completing successfully. Attested so far:
+cp.consult-history, cp.approval. …
+```
+
+Exactly one 2026-08-19 entry in the whole file, and it is a refusal. The
+compliance record answered the question the episodic spine could not, which is
+the four-sinks design working: **the ledger records acts, the audit log records
+refusals, and reading only one of them produced a phantom incident.**
+
+---
+
+**(1) WHAT THE APPROVAL ATTESTED — CODE DEFECT (consent record).**
+
+Traced through `foldProcedureCursor`. The join at
+`procedureCursor.ts:219-229` builds `latestDecision` as a map **keyed by
+tool**, then immediately discards the keys: `const decisions =
+[...latestDecision.values()]`. The checkpoint arm (`:259-266`) asks only
+`decisions.includes('approved')`. **`cp.approval`'s evidence clause names a
+topic and a decision and nothing about the subject, and the fold honours that
+literally: ANY approved rationale anywhere in the run attests it.**
+
+So an approval whose subject was "re-verify Local Labs' live plugin state,
+one site, read-shaped" attested `cp.approval`, whose authored meaning is
+"**explicit, informed consent** … Proceed only on explicit approval of the
+presented plan." The guard's own refusal message says it out loud —
+`Attested so far: cp.consult-history, cp.approval`.
+
+**What a future auditor concludes, and whether it is true.** The audit view
+renders `attested by evt_01M0BQA25N… (task.rationale.recorded)`
+(`procedureView.ts:458`). A reader who opens that event finds `tool:
+verify_site_live` — so the record is *traceable*. But every surface that reads
+the cursor rather than the event says `cp.approval` is attested, and the
+runbook says what that means. **The conclusion an auditor draws from the fold
+is that the operator gave informed consent to the presented bulk-update plan.
+That conclusion is false.** The user consented to a live re-check of one site.
+
+**And the reach is not academic — pinned by test.** With `cp.approval`
+attested off that verify approval, `wpe_backup_and_verify` is admitted with no
+card (its only unmet prerequisite was `cp.approval`); once the backup runs,
+`bulk_plugin_update` — claimed at `cp.canary`, prerequisites
+`cp.consult-history` + `cp.approval` + `cp.backup` — **passes the guard, and
+WP-26 does not raise a second card, because the guard is no longer refusing at
+all.** One human decision about one read-shaped act on one site is, in the
+ledger, the consent that unlocks the fleet-wide update. Consent escalation by
+conflation.
+
+**The blindness is symmetric and the inverse is live too.** `else if
+(decisions.length > 0) denied.push(...)` (`:265`) — denying an unrelated
+confirmation (a `wp_eval` card, say) marks `cp.approval` **DENIED**, which the
+guard renders as "A denial ends the run: record it and stop." A fix to the
+approving half that leaves the denying half is a half-fix; both are pinned.
+
+**THE DISPLAY HALF (the blended card) — COPY DEFECT.** `PanelChat.tsx:719-721`
+composes the card from the TOOL: `title: toolDisplayName(tc.name)` →
+"Verify Site Live", `effect: toolEffect(tc.name)` → the generic fallback
+`Runs Verify Site Live on your WordPress sites.` (`:283`). Beside them the
+card prints `This approval is checkpoint cp.approval.`
+(`ProcedureApprovalCard.tsx:220-224`). **The subject is wrong, not merely
+doubled:** `cp.approval` declares NO tools at all, and
+`procedureStream.approvalCheckpoint` finds it by its evidence clause without
+reference to the call — so the tool named on the card is whichever one the
+model happened to reach for when `cp.approval` became the first unmet
+prerequisite. It would have read "Wpe Backup And Verify" just as readily. A
+card headed with an incidental tool name, in read-shaped words, asking for the
+consent that gates a fleet write, is the display half of defect (1) and the
+reason it is easy to grant. XD-8 is not reopened by fixing this — XD-8 keeps
+consent-within-capability and the platform's write ceremony as separate acts,
+and this card is currently performing both.
+
+---
+
+**(2) WHY `verify_site_live` EXECUTED WITH `cp.backup` UNATTESTED — IT DID
+NOT. WORKING AS DESIGNED.**
+
+Reproduced in `src/main/intelligence-host/__tests__/wp36ConsentBinding.test.ts`
+against the SHIPPED runbook, with the cursor in exactly the state the ledger
+shows (manifest with a ledger retrieval; the live rationale, byte-for-byte in
+the fields the fold reads; no backup action). The guard returns
+`reason: 'sequence'`, `checkpoint: 'cp.backup'`, `claimedBy:
+'cp.verify-canary'`, and its message reproduces the live audit line clause by
+clause including `Attested so far: cp.consult-history, cp.approval`.
+
+The full path, named: the model called `verify_site_live` on turn
+`task_01M0BQ8A…`; `checkCheckpointSequence` (ChatService.ts:437) refused it on
+`cp.approval`; `gatedOnApproval` matched, so WP-26 raised the card — **the
+designed mechanism, the approval riding the guard's refusal, exactly as
+`sequenceGuard.ts`'s header describes.** The human approved;
+`recordApprovalRationale` wrote the rationale; ChatService then called
+`registry.call(...)`, which hit the SAME guard again at the chokepoint
+(`tool-registry.ts:241`) — now with `cp.approval` attested — and refused on
+the next unmet attestable prerequisite, `cp.backup`. Refusal audited at
+`:246-254`, tool result returned `isError: true`.
+
+**Rule 1 as shipped does NOT admit a declared tool whose gated predecessors
+are unattested, under any condition reachable here.** There is no door in the
+chokepoint, the call was not outside the run, and the approval admitted
+nothing — it cleared one checkpoint and the guard immediately asked for the
+next. **No guard change is proposed.** The one thing rule 1 cannot police is
+what the *attestation itself* is worth, and that is question (1), not a
+sequencer question.
+
+---
+
+**(3) WHY THERE IS NO `task.action.executed` — WORKING AS DESIGNED, AND
+POSITIVELY DEMONSTRATED.**
+
+Not tier scoping. `verify_site_live` is absent from `TIER_OVERRIDES`, so
+`getToolSafety` returns Tier **2** (`safety.ts:341`), at
+`GATED_TIER_FLOOR` — above the emission floor, not below it. WP-19's contract
+is the reason, stated at the refusal branch itself: *"Deliberately NO
+`task.action.executed`: the call did not execute, and WP-19's producer says a
+refusal is not an act"* (`tool-registry.ts:255-256`). The chokepoint returns
+before `recordGatedAction` is reached.
+
+**Demonstrated rather than argued:** the same tool DID emit
+`task.action.executed` with `tier: 2` on the two occasions it actually ran —
+`evt_01M08SR1JH…` (2026-08-17T21:23:53.041Z) and `evt_01M08SWA0S…`
+(21:26:12.761Z), each matching an `operation-audit.log` entry at the same
+millisecond. The emission path covers this tool at this tier. Its absence on
+2026-08-19 is evidence of non-execution, and is the third independent
+witness — with the audit line and the guard reproduction — to the same fact.
+**No hole. Nothing to fix here.**
+
+*(Separate observation, NOT part of this packet's scope and NOT explained
+here: six successful `verify_site_live` audit entries at 2026-08-17T13:51–13:52
+have no ledger action events, while the 21:23/21:26 pair do. Recorded so it is
+not later mistaken for this packet's finding.)*
+
+---
+
+**THE THIRD DEFECT, found while answering (2) — CODE DEFECT (display).**
+
+`PanelChat.onStreamEvent`'s `tool_call_result` branch (`:483-493`) hardcodes
+`status: 'done'` and never reads `event.isError`. The field is on the event
+(`chat-types.ts:55`) and the LEGACY surface reads it —
+`ChatTab.tsx:418`, `status: event.isError ? 'error' : 'completed'`. `PanelChat`
+contains **zero** occurrences of `isError`, while `ToolCallState` (`:44`)
+*declares* an `'error'` status nothing ever assigns — the eleventh
+vacuous-guard shape's cousin: what the structure omits by design is where the
+defect lives. The done chip (`:772`) then paints a green ✓ for every result.
+
+**This is the defect that manufactured the incident.** It is not cosmetic: it
+makes a fired gate indistinguishable from a completed act on the surface the
+user is actually looking at, and it cost a packet number to discover. Pinned in
+`tests/unit/renderer/panelChat-refusal-render.test.tsx`, including the
+assertion that matters most — an errored and a successful result are
+**indistinguishable in panel state**, so no care in the chip renderer could
+have saved the screenshot.
+
+---
+
+**THE MINIMAL FIX SET — all four HELD for ratification, none applied.**
+
+**F1 · The consent record binds to a checkpoint, not a tool. ESCALATION —
+it wants a payload field.** The fold cannot be repaired without giving the
+rationale a subject: the checkpoint id exists only inside the free-text
+`prompt`, and matching on prose is not a fix. The shape: carry the checkpoint
+on `task.rationale.recorded` and have `foldProcedureCursor` match on it
+(approving AND denying arms together). It is a plumb-through, not a new
+derivation — `ChatService.ts:461-463` already composes `cardText` from
+`procedure.checkpointId` and could pass the id itself. **But
+`rationale.recorded/1` is a versioned payload schema, and PARALLEL_PROTOCOL
+names "a new payload schema version" an escalation trigger. This packet does
+not choose the shape and does not write it.** Two sub-questions for whoever
+rules: whether a bare tool-confirm approval (no procedure context) should
+attest nothing, and whether the fix is `/1` additive or `/2`.
+
+**F2 · The guard: NO CHANGE.** Stated as a deliverable, not an omission.
+
+**F3 · `PanelChat` reads `isError`.** Two lines: set `status: 'error'` on a
+failing result, and give the error chip a mark distinct from ✓.
+`ToolCallState` already declares the status. **Holds** — the panel's tree is
+pinned by `__fixtures__/panelChat-parity-base.json`, so whoever lands it must
+check the parity snapshot and say what moved.
+
+**F4 · The card's subject is the checkpoint, not the tool.** When `procedure`
+is present, `title`/`effect` should describe what the checkpoint asks consent
+FOR; the generic `Runs <Tool> on your WordPress sites.` template does not
+belong on a plan-approval card. **Holds — ruled territory** (XD-8, XD-10,
+Controlled Vocabulary v1.1, WP-35's reference-exactly-once fold). Routed to
+the designer; this packet proposes the boundary, not the words.
+
+**BATTERY DISCIPLINE.** No mutation battery: this packet ships no production
+change, so there is no production line to mutate. Every test run
+`--no-cache`, explicit argv, counts read from the summary block. The three
+findings each rest on primary artifacts (ledger rows, the audit line, the
+source) *and* an executing reproduction, which is the standard this packet
+could meet in place of a battery.
+
+**BASELINES BOTH SIDES.** Pre: **580 suites / 7788 passed / 12 skipped /
+7800 total, exit 0** (`npm test`, measured in the worktree, skipped column
+read). Post: **582 / 7797 / 12 / 7809, exit 0** — +2 suites, +9 tests, skipped
+column unchanged. Final post, with the reach pin: **582 / 7798 / 12 / 7810, exit 0** — +10 tests over base, skipped column unchanged throughout. `npx tsc -p .
+--noEmit` clean. Only two files added, both tests; nothing under
+`src/main/intelligence-host/`, `src/main/chat/` or `src/renderer/` was
+modified.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and `npx jest`
+repeatedly. **`npm run rebuild` before loading Local.**
