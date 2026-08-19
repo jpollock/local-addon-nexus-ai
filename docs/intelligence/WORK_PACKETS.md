@@ -16535,3 +16535,151 @@ loading Local.**
 
 **THE `src/main/intelligence-host/` AND `src/intelligence/` LOCKS ARE HELD
 until this packet merges.**
+
+---
+
+**WP-43 · MERGED, LOCKS RELEASED (2026-08-19).** Merge `04011b77` on
+`poc/nexintelligence`; **15 files, +2,103 / −27 against its first parent.**
+Gate ratified across the board — all five items, with the two elaborated
+rulings recorded in the architect's gate entry above and restated here in the
+form they govern future work.
+
+    docs/intelligence/WORK_PACKETS.md                        | 284 +++
+    scripts/wp43-battery.py                                  | 272 +++
+    src/common/chat-types.ts                                 |  34 +
+    src/intelligence/assemble/__tests__/citationCarrier.test.ts |  17 +-
+    src/intelligence/citation/resolve.ts                     |  57 +-
+    src/main/chat/ChatService.ts                             |  65 +-
+    src/main/intelligence-host/__tests__/citationDelivery.test.ts | 333 +++
+    src/main/intelligence-host/chatAssembly.ts               |  25 +-
+    src/main/intelligence-host/citationDelivery.ts           | 124 +++
+    src/renderer/components/DockedPanel/CitationSpans.tsx    |  33 +-
+    src/renderer/components/DockedPanel/PanelChat.tsx        |  17 +
+    src/renderer/components/DockedPanel/citationModel.ts     |  60 +-
+    tests/unit/chat/chat-citation-delivery.test.ts           | 341 +++
+    tests/unit/renderer/citationModel.test.ts                |  61 +-
+    tests/unit/renderer/panelChat-citation-delivery.test.tsx | 407 +++
+
+**THE THREE RULINGS AS THEY GOVERN FUTURE WORK**, in the owner's words and
+kept where the next reader of this seam will hit them:
+
+- **The dedicated stream event wins over a field on `done` — and the
+  `endTurn` chokepoint is the better half of the fix.** No exit path can
+  forget the delivery. That is the property, and it is the one to preserve: a
+  future exit added to `runAgentLoop` inherits the delivery by construction,
+  and `chat-citation-delivery.test.ts`'s chokepoint test goes red the moment a
+  bare `this.emit(…, {type:'done'})` reappears anywhere in the file.
+- **The core widening stands with ABSENT-NEVER-INVENTED HELD.** `observedAt`
+  and `summary` are carry-through, and the peek draws nothing for a field it
+  was not given. Four mutations in the battery attack this from both
+  directions (M11/M12 invent at the join, M19/M22/M23 invent at the render);
+  all four are witnesses, not decoration.
+- **The census move is ratified because the forbidden list guards
+  COMPOSITION, and the field is now CARRIED.** That is the general rule the
+  ruling establishes, and it is narrower than "the list can move": `body`,
+  `payload`, `contents` and `text` stay forbidden precisely because nothing
+  carries them, and the day something did the same argument would have to be
+  made again on its own facts.
+
+**MERGED-TREE VERIFICATION, and the pre-merge baseline taken on THIS
+checkout with the tree held still** (WP-20g's form, because it removes the
+boundary effect rather than reasoning about it):
+
+| | suites | passed | skipped | total | exit |
+|---|---|---|---|---|---|
+| pre-merge, this checkout | 595 | 8,076 | 2 | 8,078 | 0 |
+| post-merge, this checkout | **598** | **8,118** | **2** | **8,120** | **0** |
+
+**+3 suites, +42 tests, skipped unchanged — exact in both columns**, and no
+WP-20c boundary effect to read past, because both numbers come from the same
+checkout. The cross-check against the worktree's own after-figure (598 /
+8,108 / **12** / 8,120) is the boundary effect appearing exactly where it
+should: **the TOTAL is identical and the skipped column differs by exactly
+ten**, the primary holding both embedding model files where the worktree holds
+one. The worktree's before-figure (595 / 8,066 / 12 / 8,078) reconciles with
+this checkout's pre-merge figure the same way. Read the skipped column first;
+a comparison of the passed column across that boundary reports a phantom ten
+in whichever direction you happen to be looking.
+
+`npx tsc -p . --noEmit` clean on the merged tree, before the merge commit was
+written. **MUTATION BATTERY RE-RUN ON THE MERGED TREE: 24/24 KILLED**, control
+survived, tree pristine before and after — a merge can silently weaken a pin,
+and this is that checked rather than assumed.
+
+**THE TAIL CONFLICT — resolved as a CONCATENATION, not by choosing hunks.**
+Both sides were pure appends to the same ancestor, which is a property that can
+be asserted rather than eyeballed, so the resolution was rebuilt from the three
+blobs: `base + architectHalf + packetHalf`. Verified four ways — the common
+ancestor (979,677 chars) intact as an exact PREFIX; the architect's half
+(4,724 chars) and this packet's (16,658) each present as EXACT SUBSTRINGS; the
+architect's preceding the packet's, which is the chronological order (the
+cycle-four record was written while this packet was building); and the
+arithmetic exact in one unit — **979,677 + 4,724 + 16,658 = 1,001,059**, the
+resolved file's length.
+
+*A first attempt at the resolution was line surgery on the conflict hunks, and
+it silently dropped the `\n---\n` separator between the two records* — git's
+diff3 had matched the leading blank line and rule of BOTH additions as common
+context, so only one copy existed above the `<<<<<<<` marker and the two
+records ran together with no separator. The substring check is what caught it:
+the packet's half was NOT present verbatim, by exactly six characters. **A
+resolution that "looks right" in a diff can be six characters wrong; the
+containment check is cheap and does not have opinions.** Rebuilding from blobs
+rather than from hunks also removes the class — there is nothing to choose.
+
+**ARCHITECT WORK FOUND UNCOMMITTED IN THE PRIMARY CHECKOUT, committed VERBATIM
+as `3aa7f751`** before the merge, per the standing WP-02 precedent — flagged
+here so the architect can verify fidelity. Four files, **125 insertions / 0
+deletions**, md5 of every working copy identical before staging and after
+committing. **Two are NOT pure appends and were READ before staging rather
+than inferred from the zero-deletion diffstat**: `DESIGN_DECISIONS.md` gains
+XD-25 above "How a ruling gets here", and `user-docs/your-copy-and-the-live-
+site.md` gains a v1.3 vocabulary table above "PRESSURE-TEST FINDINGS". Both are
+clean insertions at section boundaries. The other two are pure appends with the
+committed content intact as an exact prefix (`PARALLEL_PROTOCOL.md` +517 chars,
+`WORK_PACKETS.md` +4,764). *The prefix test is worth keeping for this reason
+alone: a zero-deletion diffstat does NOT mean a pure append, and the two are
+easy to conflate when the fidelity claim is the whole point of the commit.*
+
+**Three untracked architect files were NOT touched** —
+`for-designer-cycle-four-bundle.md`, `for-designer-govern-matrix-response.md`,
+`from-designer/from-designer-08-govern-matrix.md`. They blocked nothing, and
+the precedent unblocks merges only. They are still untracked on the base.
+
+**A POST-MERGE FIX TO THIS PACKET'S OWN BATTERY (`d76e83b0`).** Those three
+untracked files made the battery REFUSE to run on the merge checkout: its
+pristine check tested `git status --porcelain` for emptiness. That was not
+merely strict, it was wrong — every mutation in this battery rewrites a
+TRACKED file in place, so an untracked file is evidence of nothing. Loosening
+the check to ignore them silently would have been the bad fix. It now states
+what it means: no tracked modification, and the untracked SET captured before
+and compared after, so a generator-style leftover that writes a NEW file
+(WP-32's poisoned-artifact form) is still caught, and what is being ignored is
+PRINTED rather than assumed. **Generalisation for any future battery here: the
+pristine check is about tracked modifications and about the untracked set not
+MOVING — not about the untracked set being empty.**
+
+**THE `src/main/intelligence-host/` AND `src/intelligence/` LOCKS ARE
+RELEASED.** The `src/renderer/components/DockedPanel/` surface was touched
+additively and was not locked by this packet; the touches are named in §1 of
+the delivery report above.
+
+**Board after this merge.** Raw `[[cite:…]]` markers no longer reach a live
+reply. Registered as a consequence of this packet, and NOT built here:
+
+- **The reopened-session residual**, ruled at the gate toward the UNKNOWN-ARM
+  route rather than a schema change, and routed to the designer as a small
+  position: a reopened transcript whose supply is gone is a fourth epistemic
+  state, which makes it COPY plus a WP-38 parity touch. Micro after the ruling.
+- **The two doors** stay unrendered, now pinned from the delivery side as well
+  as the render side. Building the record rank or a ledger-search surface is a
+  designer-loop question.
+- **The four unruled moments** are still pinned ABSENT. The host now names one
+  of the two ruled ones; if a sitting shows Investigate's loudness misfiring in
+  chat, the ratified remedy is a moment signal from a SURFACE through the loop,
+  never an ask classifier.
+
+**ABI ON EXIT: SYSTEM NODE** (this machine's shell — Node 25.9.0 → ABI 141;
+`.nvmrc`/CI is 22.16.0 → ABI 127). This session ran `npm test` five times,
+`npx jest` many times, and three 24-mutation batteries, in the worktree and
+again on the merged tree. **`npm run rebuild` before loading Local.**
