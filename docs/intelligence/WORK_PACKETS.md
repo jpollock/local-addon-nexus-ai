@@ -17760,3 +17760,114 @@ confirmed; the reason vocabulary confirmed as a closed set.
 read skipped-first; locks released only after. Nothing escalation-grade
 was built and nothing beyond the approved scope was touched — the gate
 confirms the packet's own claim.
+
+---
+
+## WP-45 · MERGED, LOCKS RELEASED (2026-08-19)
+
+**Merge `a74cdcfa` on `poc/nexintelligence`.** Branch `wp-45`, four commits
+(`0e3d5272` impl · `29dbaef1` the M09/M14 fix · `96ae787c` delivery report ·
+`8a5e25c7` the re-measured final figure), plus `81ae7743`.
+
+**"RULED" — THE P4 AMENDMENT IS SEALED.** The owner-approved note's P4 assumed
+disarm-then-reissue. Driven, the failure is inverted on the flank the note did
+not cover: a purely MATERIALIZED grant carries no hash pin, so it silently
+SURVIVES the change and re-pins itself to text nobody re-reviewed — the exact
+silence P4 existed to prevent. P4's INTENT is unchanged and is what shipped:
+*no grant silently survives a hash change, and none silently dies of one.* Only
+its mechanism is amended, to the two-shape `from → to` table.
+
+### RECEIPTS — `git diff --stat a74cdcfa^1 a74cdcfa`
+
+```
+ docs/intelligence/WORK_PACKETS.md                  | 308 +++++++++++++++++
+ .../anchor-slice/runbooks/incident-containment.md  |  13 +-
+ .../anchor-slice/runbooks/incident-remediation.md  |  14 +-
+ .../anchor-slice/runbooks/promotion-execute.md     |  18 +-
+ .../anchor-slice/runbooks/promotion-preflight.md   |  15 +-
+ .../design-fixtures/declared-procedures.json       |  47 +--
+ law/runbooks/incident-containment.md               |  13 +-
+ law/runbooks/incident-remediation.md               |  14 +-
+ law/runbooks/promotion-execute.md                  |  18 +-
+ law/runbooks/promotion-preflight.md                |  15 +-
+ scripts/wp45-battery.py                            | 286 ++++++++++++++++
+ src/intelligence/__tests__/shippedRunbooks.test.ts |  34 +-
+ .../__tests__/governMatrix.test.ts                 | 258 ++++++++++++++-
+ .../__tests__/lawReviewRePin.test.ts               | 364 +++++++++++++++++++++
+ .../intelligence-host/__tests__/toolReach.test.ts  |  83 ++++-
+ src/main/intelligence-host/capabilityGrants.ts     | 184 ++++++++++-
+ src/main/intelligence-host/governMatrix.ts         |  21 +-
+ tests/unit/renderer/governMatrix.test.tsx          |  39 ++-
+ 18 files changed, 1678 insertions(+), 66 deletions(-)
+```
+
+### THE ARCHITECT'S UNCOMMITTED WORK WAS COMMITTED FIRST (`42a4f395`), VERBATIM
+
+Per the standing WP-02 precedent: not edited, not folded into any WP-45 commit.
+Two files, both **pure appends verified BY SUBSTRING, not by diffstat** — the
+ancestor blob is an exact PREFIX of each result, and the arithmetic closes in
+one named unit (bytes):
+
+| file | ancestor | added | result | md5 of the committed blob |
+|---|---|---|---|---|
+| `PARALLEL_PROTOCOL.md` | 23,671 | 524 | 24,195 | `9b17e96b64936211d7b8eee1d793e514` |
+| `WORK_PACKETS.md` | 1,057,438 | 4,185 | 1,061,623 | `25a0456cd8784312e0cb1375f041a06c` |
+
+Contents: vacuous-guard **shape #15** (the non-fatal producer behind a
+validating emitter) and the WP-45 gate ruling. *(The commit message was amended
+once before merging: its first draft carried a FABRICATED md5 for
+`PARALLEL_PROTOCOL.md`, written before the real values were measured. In a
+record whose only purpose is checkable fidelity, an invented hash is the defect
+the record exists to prevent, so it was corrected rather than left.)*
+
+### THE RECORD MERGE — rebuilt from three blobs, four-way verified
+
+`WORK_PACKETS.md` was the only conflict: both sides appended. Per the standing
+rule, rebuilt by concatenation from the three blobs, never hunk-edited.
+
+1. ancestor (`6fc40ced`) is an exact **PREFIX** of the result — true.
+2. each half is an exact **SUBSTRING** of the result — true for both.
+3. **chronological**: the DELIVERY report precedes the GATE RULING that
+   adjudicates it — asserted by content, index-compared.
+4. **arithmetic in ONE named unit (bytes):** 1,057,438 + 16,820 + 4,185 =
+   **1,078,443**, closing exactly. The `\n---\n` separator — WP-43's six
+   characters — asserted present in BOTH halves.
+
+md5 of the merged record: `66ed2c54b5cda6b6dd54dcdb39243d03`.
+
+**A NOTE ON THE MARKER CHECK, because it produced a false alarm and the false
+alarm is the lesson.** A naive `'<<<<<<<' not in result` reported markers left
+behind. There is exactly ONE occurrence and it is PROSE — WP-43's own finding
+at line 16623 *describing* the marker, present in the ancestor and therefore in
+every correct result. Line-anchored, the real count is **zero**. This is WP-32's
+substring finding wearing new clothes: a check satisfiable by a string that
+merely CONTAINS the token answers a different question than the one asked.
+Anchor the match.
+
+### Verification on the MERGED tree
+
+- **Full suite: `602 suites / 8,220 passed / 2 skipped / 8,222 total`, exit 0.**
+  Read skipped-first: the worktree measured `8,210 passed / 12 skipped / 8,222`,
+  the same TOTAL with ten tests moved between columns — the documented
+  embedding-model boundary effect, not a gain.
+- **Battery re-run on the merged tree: 16/16 KILLED**, control SURVIVED,
+  tree PRISTINE before and after.
+- `fixtures:procedures:check` **green** on the merged tree; all five affected
+  `law/` documents re-verified **byte-identical** to their anchor-slice
+  originals by `cmp`, the anchor included.
+
+### Carried forward
+
+- **The near-ceiling margins (21 and 6 bytes) are the live item.** The gate
+  ruling raises the WP-20c split's priority to *sequenced, not optional*, with
+  no raised ceiling. The margins are asserted as a test, so the finding re-runs
+  rather than needing to be remembered.
+- Poisoned ts-jest cache: **eighth and ninth** occurrences this session, both
+  the same two untouched `tests/intelligence-evals/` suites, both cleared by
+  `npx jest --clearCache` then re-measure.
+
+**ABI STATE ON EXIT: `better-sqlite3` is built for SYSTEM NODE** — this session
+ran `npm test` and the battery repeatedly. Local cannot load the addon until
+`npm run rebuild` is run.
+
+**THE `law/runbooks/` AND `src/main/intelligence-host/` LOCKS ARE RELEASED.**
