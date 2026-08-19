@@ -14845,3 +14845,50 @@ it is built — a binding the gate can read is a binding nobody authored silentl
 and the record says so twice already. `wpeOperationPermissions` semantics are
 untouched; the M4 eval family is not in this packet's path.
 
+
+---
+
+**WP-41 ANNOUNCED 2026-08-19 — LOCK TAKEN: the comparator surface
+(`src/renderer/components/DockedPanel/` + the new comparator view files), plus
+the WP-40 items (`src/renderer/components/DockedPanel/procedureModel.ts`,
+`procedureStream.fake.ts`, `scripts/generate-procedure-fixtures.ts` and its
+generated `docs/intelligence/design-fixtures/declared-procedures.json`).**
+Worktree `.worktrees/wp-41`, branch `wp-41`, base `poc/nexintelligence` @
+`bbc9a14e` — this announce sits ON THE BASE before the work starts, per the
+WP-20f/WP-37 crossed-claim rule.
+
+**Contention check, run and not assumed.** `git status --porcelain` over each
+locked path is EMPTY in the primary checkout and in every worktree `git
+worktree list` reports.
+
+**Mandate: candidate A, ruled at the WP-37 gate** — the comparator surface is
+the scope's ratified provenance, `ScopeFrom.surface: 'comparator'` is the only
+ratified variant, and B stays refused. Four deliverables: the site-at-places
+matrix per XD-9; the selection→scope walk live (`deriveScope` gains its first
+production caller, the selection reaches `recordArmingRequest` through the
+shipped carrier); `ScopeBlock` mounted, ending WP-32's ratified unmount
+condition by creating the selections it was waiting for; and the two WP-40
+items. Acceptance is J-Inspect's eight criteria and the empty-run smoke WP-37
+measured unreachable.
+
+**ESCALATION — TWO PACKETS, ONE SURFACE. `tests/intelligence-evals/` is locked
+by WP-42 (`35cf0d32`) and this packet's acceptance frame lives inside it.**
+WP-42's announce states "WP-41 the DockedPanel renderer … Neither touches this
+surface," and the Wave 6 registration states three disjoint locks. Both are
+wrong on this point, and the error is the registration's rather than WP-42's:
+J-Inspect's eight criteria are registered in `tests/intelligence-evals/
+checks.ts` as `journeyGapCheck` entries that return BLOCKED unconditionally, so
+"J-Inspect criteria flip from BLOCKED to honest verdicts" CANNOT happen without
+editing that file. The `siteAtPlaces` probe evidence flips on its own — it
+counts files — but a `journeyGapCheck` never returns anything but BLOCKED.
+
+*Hunk-level the two are disjoint*: WP-42 owns the WP-13b sitting verdicts and
+`run.ts`'s no-match error; this packet owns the eight `J_INSPECT` entries in
+`JOURNEY_GAPS` and the `checks.test.ts` pins that count them. So this is a
+same-file, different-region collision, not a contested rule.
+
+**Handling, pending the owner's sequencing:** the surface work and the eval flip
+land as SEPARATE COMMITS on `wp-41`, so the flip can be dropped, deferred behind
+WP-42, or merged independently without touching the surface. Nothing here
+changes a check WP-42 owns. Flagged rather than improvised, per the
+"two packets turn out to need the same file" trigger.
