@@ -14845,3 +14845,133 @@ it is built — a binding the gate can read is a binding nobody authored silentl
 and the record says so twice already. `wpeOperationPermissions` semantics are
 untouched; the M4 eval family is not in this packet's path.
 
+
+---
+
+**WP-20g · BASELINE AND THE GATE HOLD — the derived binding, measured, and
+three escalations one of which blocks the packet's own acceptance
+(2026-08-19).** Worktree `.worktrees/wp-20g`, branch `wp-20g`, base
+`poc/nexintelligence` @ `bbc9a14e` (this packet's own announce on base, which
+sits on WP-42's announce and the architect's Wave 6 registration).
+
+**Baseline (worktree, `npm test`, exit captured before any pipe): 590 suites
+passed / 590 total; 7,952 passed, 12 skipped, 7,964 total, exit 0.** Reconciles
+to WP-37's post-merge primary figure (590 / 7,962 / 2 / 7,964) exactly the
+documented way: **the TOTAL is identical and the skipped column moved by ten** —
+the WP-20c boundary effect, the primary holding both embedding model files where
+a worktree holds one. Read the skipped column first; the passed column alone
+would read as a phantom −10. `npx tsc -p . --noEmit` and `npx tsc -p
+tsconfig.test.json --noEmit` both clean.
+
+**THE DERIVED BINDING, FOR RATIFICATION — and it is three tools, all of one
+capability.** Produced by loading the shipped `law/` through the real
+`loadLawDirectory` + `RunbookRegistry.build`, not by reading the files by eye;
+zero loader errors, zero registry errors. Tier is `getToolSafety(name).tier`,
+the same table the audit chokepoint and WP-19's producer read, and
+`GATED_TIER_FLOOR` is 2.
+
+| tool | capability | runbook | declaring checkpoint(s) | source line in law | tier | gated |
+|---|---|---|---|---|---|---|
+| `wpe_backup_and_verify` | `cap.bulk_plugin_update` | `rb.bulk-plugin-update` | `cp.backup` | `law/runbooks/bulk-plugin-update.md:49` — `tools: [wpe_backup_and_verify]` | 2 | yes |
+| `bulk_plugin_update` | `cap.bulk_plugin_update` | `rb.bulk-plugin-update` | `cp.canary`, `cp.roll-fleet` | `:52` and `:61` — `tools: [bulk_plugin_update]` | 2 | yes |
+| `verify_site_live` | `cap.bulk_plugin_update` | `rb.bulk-plugin-update` | `cp.verify-canary` | `:56` — `tools: [verify_site_live]` | 2 | yes |
+
+**That is the whole table.** Every other checkpoint of every other runbook
+declares no tool at all — measured across all 28 checkpoints of the five strict
+runbooks, and the two guided documents carry `steps:` (not checkpoints) which
+declare none either. `grep -rn "tools:" law/` returns those four lines and
+nothing else. All five strict runbooks are `tool_scope: exclusive`; both guided
+ones are `advisory`.
+
+**E1 — THE PACKET'S OWN ACCEPTANCE IS BLOCKED BY LAW, AND THIS IS THE
+ESCALATION THE CHARTER NAMES.** The launch instruction makes the two mandated
+capabilities the proof: *"with WP-20f's deny in place, `wpe_promote_environment`
+becomes UNREACHABLE without a grant — a test pins it, and a second pins that
+granting restores reach through the full ceremony."* **`wpe_promote_environment`
+is bound to nothing.** `rb.promotion-execute`'s `cp.promote` declares no
+`tools:` and no `evidence.tool`; the name appears in that document exactly once,
+in `review_triggers` (`law/runbooks/promotion-execute.md:12`), which is prose
+about signature changes and not a declaration. `cap.incident_remediation` — the
+other mandated capability — binds nothing either. **Derived from law, the two
+mandated caps bind zero tools, so denying them still subtracts no reach.** The
+only way to the stated acceptance is a `law/` edit, and "anything touching the
+runbooks" is an escalation trigger in this packet's own charter. Options, with a
+recommendation rather than a survey:
+
+- **(a) RECOMMENDED — one line of frontmatter: `tools: [wpe_promote_environment]`
+  on `cp.promote`.** This is the design note §5's own position applied, not an
+  invention: *"Add `tools:` to strict-runbook frontmatter — an explicit
+  allow-list of tool names, per checkpoint. Derived from nothing; inferred from
+  nothing … The runbook must say which tools it means."* It makes the packet's
+  acceptance real and keeps the binding authored where law lives. **Its
+  disclosed side effect, which is why it is an escalation and not a detail:**
+  WP-31 rule 5 already reads that list. Today `cp.promote` declares nothing, so
+  an armed promotion run is told "`cp.promote` declares no tool of its own, so
+  no write belongs at this point in the procedure" and every write is refused
+  under `exclusive-scope`. Adding the tool changes that refusal into a
+  permission — a widening of what an armed run may call, in a packet whose
+  subject is narrowing. It is the right answer and it is still a second change.
+  The document's own `review_triggers` names `wpe_promote_environment`, so a
+  human review is what it asks for by construction.
+- **(b) Build the mechanism, pin it over FIXTURE runbooks, and say out loud that
+  the shipped mandated caps bind nothing.** Smaller and fully honest, but the
+  acceptance shrinks from "`wpe_promote_environment` is unreachable" to "the
+  reach check works" — and the two caps' production consequence keeps resting
+  entirely on `isOperationAllowed`, which is exactly the sentence WP-20f wrote
+  and this packet was created to retire.
+- **(c) Hand-author a tool list in code.** Refused by the charter, and correctly:
+  a binding nobody can read in law is a binding nobody ratified.
+
+**E2 — the ambiguity fall direction, following `abortForTool` literally.**
+Proposal: the binding is tool → capability, and **zero or more than one
+CAPABILITY yields no binding**, exactly as `abortForTool` yields nothing on zero
+or many aborts. A tool two capabilities' runbooks both declare has no single
+governing grant, and picking one would be a guess recorded as an enforcement
+decision. No-binding means the call falls to the existing rules unchanged —
+permissive — which is the seam invariant's direction: an internal ambiguity in
+this layer must never take reach away from the legacy tool surface. Note the
+case that does NOT trigger it: `bulk_plugin_update` is declared by two
+CHECKPOINTS of one runbook, which is one capability and binds cleanly. **No
+ambiguous tool exists in the shipped set today** — the rule is built and pinned
+against a fixture, as defence for the day a second runbook declares an existing
+tool.
+
+**E3 — what "not granted" means, and which reason the refusal carries.**
+Proposal: the reach check consults `getCapabilityGrants()` — the LIVE set — and
+refuses when the bound capability is absent from it. When
+`getDisarmedCapabilityGrants()` holds a row for that capability, the refusal
+carries **that** row's reason in its message, because `hash-mismatch` (the
+document on disk is not the document that was reviewed) and
+`requires-explicit-grant` (never granted by default) are different things to
+tell a user and WP-20f built the row precisely so the surface would not have to
+infer. The door is built by `governDoorFor` — the existing builder, not a second
+one; WP-20f exported it for exactly this reason and the repo has the
+two-builders-drift lesson recorded twice.
+
+**Two mechanics proposed with them, not escalations but ratifiable:**
+(i) **the check lives inside `checkCheckpointSequence`**, before `runForTask`,
+returning a `SequenceRefusal` with a new `reason: 'not-granted'`. All three
+chokepoints then inherit it with **zero edits outside this packet's lock** —
+`tool-registry.ts`, `AgentDispatcher.ts` and `ChatService.ts` are untouched, and
+`ChatService`'s approval card, which gates on `reason === 'sequence'`, cannot
+fire on it. (ii) **reads are untouched**: the check applies only at
+`tier >= GATED_TIER_FLOOR`, the same boundary rule 5 uses. All three bound tools
+are tier 2 today, so nothing rests on the distinction yet; it is pinned anyway.
+
+**E4 — a DISCLOSURE, not a question, and the record should carry it before the
+code does.** On a machine that has crossed WP-20f's flip, `cap.bulk_plugin_update`
+is in the default materialized set (strict, not mandated — WP-20f's "three fire
+on a fresh machine"). It is the only capability that binds any tool. **So the
+reach half, built exactly as charted and with law as it stands, refuses nothing
+on a default machine.** It bites when a user switches that capability off, when
+its runbook hash stops matching what was reviewed, or on a future capability
+that binds tools and is not materialized — real cases, all three, and none of
+them the headline. Whoever reads "WP-20g made the deny-flip subtract reach"
+should find this paragraph in the same breath. E1(a) is what would change it.
+
+**HOLDING for ratification of the table and E1–E3 before building.** Nothing
+under `src/` has been touched; the tree is the base plus this note. `npm test`,
+`npx tsc` and two `ts-node` derivation probes were run (the probes deleted, tree
+verified clean). **ABI ON EXIT: SYSTEM NODE — `npm run rebuild` before loading
+Local.**
+
