@@ -162,9 +162,49 @@ def run(argv):
     return subprocess.run(argv, capture_output=True, text=True)
 
 
-def pristine():
-    out = run(["git", "status", "--porcelain"]).stdout.strip()
-    return out == ""
+def tracked_changes():
+    """Modifications to TRACKED files — what a leftover mutation looks like."""
+    return [l for l in run(["git", "status", "--porcelain"]).stdout.splitlines()
+            if not l.startswith("??")]
+
+
+def untracked():
+    """The untracked set, as a sorted list. Compared before against after."""
+    return sorted(l for l in run(["git", "status", "--porcelain"]).stdout.splitlines()
+                  if l.startswith("??"))
+
+
+def pristine_report(before=None):
+    """
+    Pristine, stated precisely rather than as `git status` being empty.
+
+    The check exists for two things: refuse to run over somebody's edits, and
+    prove afterwards that every mutation was restored (WP-34's finding — a
+    battery killed mid-mutation skips its `finally` and leaves the mutant on
+    disk). Neither concern is about UNTRACKED files: every mutation here is an
+    in-place rewrite of a tracked file named in `MUTATIONS`.
+
+    Refusing on untracked files was not merely strict, it was WRONG in the case
+    that actually arose — the merge checkout legitimately holds three untracked
+    architect design docs, and the battery declined to run at all. Loosening the
+    check to ignore them silently would have been the bad fix, so instead the
+    untracked SET is captured and compared before against after: a
+    generator-style leftover that writes a NEW file is still caught (WP-32's
+    poisoned-artifact form), and what is being ignored is printed rather than
+    assumed.
+    """
+    changed = tracked_changes()
+    now = untracked()
+    if changed:
+        return False, "tracked files are modified:\n" + "\n".join(changed)
+    if before is not None and now != before:
+        appeared = [f for f in now if f not in before]
+        vanished = [f for f in before if f not in now]
+        return False, f"the untracked set moved — appeared {appeared}, vanished {vanished}"
+    if now:
+        print(f"  (ignoring {len(now)} untracked file(s), unchanged across the run: "
+              + ", ".join(f.removeprefix('?? ') for f in now) + ")")
+    return True, ""
 
 
 def jest():
@@ -207,9 +247,10 @@ def restore(path, original):
 
 
 def main():
-    if not pristine():
-        print("REFUSING: tree is not pristine before the battery.")
-        print(run(["git", "status", "--porcelain"]).stdout)
+    before_untracked = untracked()
+    ok, why = pristine_report()
+    if not ok:
+        print(f"REFUSING: tree is not pristine before the battery — {why}")
         return 2
 
     failed, suitesFailed, total, _ = jest()
@@ -255,9 +296,9 @@ def main():
         ok = (f == 0 and sf == 0 and t is not None and t >= FLOOR)
         print(f"CONTROL  {'SURVIVED (correct)' if ok else 'KILLED (BATTERY IS WRONG)'}  {f} failed / {t} total")
 
-    if not pristine():
-        print("ALARM: tree is NOT pristine after the battery.")
-        print(run(["git", "status", "--porcelain"]).stdout)
+    ok, why = pristine_report(before_untracked)
+    if not ok:
+        print(f"ALARM: tree is NOT pristine after the battery — {why}")
         return 2
 
     killed = sum(1 for r in results if r[1] == "KILLED")
