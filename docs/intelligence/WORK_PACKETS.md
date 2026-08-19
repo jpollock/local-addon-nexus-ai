@@ -18467,3 +18467,117 @@ record-merge blob standard with four-way verification.
 **LOCKS `src/main/intelligence-host/` AND `tests/intelligence-evals/` REMAIN
 HELD. HOLDING AT THE GATE — the contract, the naming question and the three
 escalations are ruled before anything merges.**
+
+---
+
+## WP-30 · MERGED, LOCKS RELEASED (2026-08-19)
+
+Gate PASSED with no owner-seal item — everything ruled sits inside already-
+ratified law, so the three escalations and the `state`/`decision` naming stand
+as built. Merge `3dc8df01` on `poc/nexintelligence`. **Nothing pushed; no tag,
+no version bump.**
+
+**MERGE RECEIPT — `git diff --stat 3dc8df01^1 3dc8df01`, pasted from the print:**
+
+```
+ docs/intelligence/WORK_PACKETS.md                  |  338 ++++
+ scripts/wp30-battery.py                            |  393 +++++
+ .../__tests__/sessionRegistry.test.ts              | 1716 ++++++++++++++++++++
+ src/main/intelligence-host/sessionRegistry.ts      | 1485 +++++++++++++++++
+ tests/intelligence-evals/checks.test.ts            |    6 +-
+ tests/intelligence-evals/checks.ts                 |  280 +++-
+ tests/intelligence-evals/probes.test.ts            |   14 +
+ tests/intelligence-evals/probes.ts                 |  300 +++-
+ tests/intelligence-evals/runner.ts                 |    9 +
+ 9 files changed, 4484 insertions(+), 57 deletions(-)
+```
+
+### The record merge — rebuilt from the three blobs, four-way verified
+
+`docs/intelligence/WORK_PACKETS.md` was the only conflict, and it was resolved
+by concatenation from the three blobs per the WP-43 standard, never
+hunk-edited. Receipts pasted from the verification's own output:
+
+```
+1 ancestor is an exact PREFIX of the merged blob     : True
+2 each half is an exact SUBSTRING, exactly once      : True (architect @1090964, gate @1098972)
+3 CHRONOLOGICAL: architect's cycle-five before gate  : True
+4 ARITHMETIC, BYTES: 1090964 + 8008 + 16824 = 1115796 vs merged 1115796, residual 0
+  no conflict markers, line-anchored                 : True
+```
+
+Both junctions were re-read after the write: the `---` separators are present
+at each, which is the six characters WP-43's hunk surgery silently dropped and
+the reason concatenation is the standard rather than one style among several.
+
+### The architect's work, committed verbatim first
+
+`83c4c769`, its own attributed commit, SEVEN files, none authored or edited by
+this agent — XD-26, the two cycle-five adjudications, the NUL rule extended
+after this packet's finding, the ratification response, the designer's position
+document and both scenario fixtures. Every committed blob md5-verified, and the
+three the architect had already hashed (`from-designer-09` /
+`scenario-return.js` / `scenario-govern.js`) matched their recorded values
+exactly — independent verification of their receipts rather than a restatement.
+The commit message was AMENDED before anything built on it: the first version
+said "six files" while listing seven and omitted `PARALLEL_PROTOCOL.md` from
+the receipt block. A receipt block that does not cover every file it claims to
+cover is the same defect as a pre-written one.
+
+### The merged tree, measured
+
+- **`npx tsc -p . --noEmit` clean. `npm test`: 603 suites / 8,275 passed / 2
+  skipped / 8,277 total, exit 0** (exit captured before any pipe).
+- **Read skipped-first**, per the standing rule: the worktree's own after-run
+  was **603 / 8,265 / 12 / 8,277** — SAME TOTAL, and the passed/skipped split
+  differs by exactly ten in the documented direction (12 − 2 = 10 = 8,275 −
+  8,265). The primary holds both embedding-model files and gates ten tests IN
+  that a worktree skips. No gain is claimed and none is real.
+- Against the pre-merge worktree baseline (**602 / 8,210 / 12 / 8,222**) the
+  packet's delta is **+1 suite, +55 tests** — 54 in `sessionRegistry.test.ts`
+  plus one surface pin in `probes.test.ts`, fully accounted off the diff.
+- **Mutation battery re-run ON THE MERGED TREE: 29/29 KILLED**, control
+  SURVIVED (correct), tree verified PRISTINE before and after. `--no-cache`
+  throughout, count-floored at 400 against a 413-test pristine baseline.
+- **Eval registry on the merged tree: 40 PASS / 0 FAIL / 28 BLOCKED / 10
+  OWNER-PENDING.** J-Return **3 / 0 / 5 / 0**; J-Refusal **6 / 0 / 5 / 1**.
+  Against the baseline measured on the base before the work (**36 / 0 / 32 /
+  10**) that is four flips, no regressions, and no criterion moved that this
+  packet does not own.
+
+### What this packet leaves behind, besides the fold
+
+- **A protocol rule**, already recorded by the architect: the NUL family's
+  first occurrence in FRESHLY AUTHORED source. It passed tsc, eslint and 48
+  tests and was caught only by `grep` answering `Binary file matches`.
+  Batteries now refuse to run over sources carrying non-printing characters,
+  and the sweep after any such finding is a byte scan rather than an eye.
+- **A defect found by the eval rather than by its own suite**, which is the
+  harness earning its keep: a freshly-armed run folded into an unrelated denied
+  one and its pending consent gate vanished out of the waiting column. The
+  denial cut is the fix and `sessionRegistry.test.ts` pins it directly.
+- **A pwd incident, recorded because it nearly cost a measurement.** A `cd`
+  into the primary for the eval baseline persisted, and a "tsc clean / no tests
+  found" pair was measured against the wrong tree while the edits — made with
+  absolute paths — sat correctly in the worktree. WP-39's rule and WP-43's
+  edit-tool form in one incident; no damage, because the primary's `git status`
+  showed only the architect's own files.
+
+### ABI state, disclosed
+
+**This session ran `npm test`, `npx jest` and the battery repeatedly, so
+better-sqlite3 is built for SYSTEM NODE** (this machine: v25.9.0, ABI 141).
+**Local cannot load the addon until `npm run rebuild` is run.**
+
+### What is now reachable
+
+UX build 2 has its substrate. The arrival the designer drew (XD-26) is
+renderable from its first day: every waiting row's gate resolves to a
+checkpoint id with its position in the document's own list, the attested set
+rides beside it so marks come from the record, standing approvals carry the
+moment they were given, and consequence rank arrives per situation with its
+coalesced parts and the rule that placed it. Nothing in the render path derives
+anything.
+
+**THE `src/main/intelligence-host/` AND `tests/intelligence-evals/` LOCKS ARE
+RELEASED.**
