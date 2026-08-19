@@ -32,7 +32,7 @@ import {
   recordArmingRequest,
 } from '../../src/main/intelligence-host/procedureArming';
 import { foldProcedureCursor, runForTask } from '../../src/main/intelligence-host/procedureCursor';
-import { checkCheckpointSequence } from '../../src/main/intelligence-host/sequenceGuard';
+import { checkCheckpointSequence, governDoorFor } from '../../src/main/intelligence-host/sequenceGuard';
 import {
   deriveProcedureAudit,
   ProcedureAuditRow,
@@ -76,6 +76,16 @@ import {
   resolveCitations,
   supplyFromBundle,
 } from '../../src/intelligence/citation/resolve';
+
+import {
+  readGovernMatrix,
+  resolveGovernDoor,
+  setCapabilityGrant,
+} from '../../src/main/intelligence-host/governMatrix';
+import {
+  GRANT_ISSUED_TOPIC,
+  GRANT_REVOKED_TOPIC,
+} from '../../src/main/intelligence-host/capabilityGrants';
 
 export const ENVELOPE_SCHEMA_PATH = path.join(
   __dirname,
@@ -1710,5 +1720,200 @@ export async function probeCitationContract(
         'claim it trails. ADR-24 P1/P4 reserve that for the eval and the sitting — the platform ' +
         'checks existence and will not guess at support',
     ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// WP-44 · the widening, driven — the Govern matrix's half of J-Refusal
+// ---------------------------------------------------------------------------
+
+export interface WideningProbe extends Probe {
+  /**
+   * Is there a matrix at all?
+   *
+   * The PREMISE, kept separate from every measurement below it. No law registry
+   * means there is no surface for the walk to be taken on, which is a BLOCKED —
+   * "the screen is gone" and "the screen is wrong" are different findings, and a
+   * probe that reported the first as the second would send someone hunting a
+   * defect that does not exist. Same split `jRefusalSat` makes on `refused`.
+   */
+  premisePresent: boolean;
+  /** The refusal's structured target resolves to one row of the live matrix. */
+  doorLandsOnRow: boolean;
+  /** The row it lands on, so a report names it rather than claiming one exists. */
+  landedCapability?: string;
+  /** An act at the control produced a real `control.grant.issued` in the ledger. */
+  recordedAsControlEvent: boolean;
+  issuedEventId?: string;
+  /** The matrix shows the grant, citing that event — "visible". */
+  visibleOnTheRow: boolean;
+  /** The same row reverses it, producing a real `control.grant.revoked`. */
+  revocableFromTheSameRow: boolean;
+  revokedEventId?: string;
+  /** The revocation is attributed to a person, not to the platform. */
+  revocationIsAHumanAct: boolean;
+  /** Nothing under src/ reaches the act except the Settings surface's own channel. */
+  noConversationalRoute: boolean;
+}
+
+/**
+ * WP-44 · drive the widening end to end against the REAL seam.
+ *
+ * WHAT THIS MEASURES, and it is the half of J-Refusal's excursion criterion the
+ * Govern matrix owns: a door resolves to a specific row; an act made at that row
+ * is recorded as a `control.grant.issued` in the real ledger by WP-20b's own
+ * producer; the row then states that event; and the same row reverses it into a
+ * real `control.grant.revoked` attributed to a person.
+ *
+ * WHAT IT DOES NOT MEASURE, stated here rather than left for a reader to infer,
+ * because the criterion is a CONJUNCTION and this probe answers one conjunct.
+ * "Resumes the same session with the act still armed and its scope intact" needs
+ * a session identity to be measured against, and that is WP-30. What can be
+ * observed today is structural and is reported as structural: the excursion is
+ * an in-app publish onto a shared store, so nothing on the path unmounts the
+ * panel, clears its armed procedure, or rewrites its scope — there is no
+ * teardown to survive. That is weaker than a session registry proving it, and
+ * the evidence says so in those words rather than borrowing the strength of the
+ * measurements beside it.
+ *
+ * IT USES A THROWAWAY CAPABILITY STATE AND PUTS IT BACK. The act writes real
+ * settings and emits real events into the fixture's ledger; the fixture is
+ * per-run and discarded, and the probe still revokes what it granted so a reader
+ * of the ledger sees a complete issue/revoke pair rather than a dangling grant.
+ */
+export async function probeWidening(fixture: EvalFixture): Promise<WideningProbe> {
+  const evidence: string[] = [];
+  setIntelligenceCore(fixture.core);
+
+  const kv = new Map<string, unknown>();
+  const storage = { get: (k: string) => kv.get(k) ?? null, set: (k: string, v: unknown) => kv.set(k, v) };
+  const silent = { info: () => {}, error: () => {} };
+
+  const matrix = readGovernMatrix({ core: fixture.core, storage });
+  if (!matrix) {
+    return {
+      ok: false,
+      premisePresent: false,
+      doorLandsOnRow: false,
+      recordedAsControlEvent: false,
+      visibleOnTheRow: false,
+      revocableFromTheSameRow: false,
+      revocationIsAHumanAct: false,
+      noConversationalRoute: false,
+      evidence: ['no law registry in this fixture — there is no matrix for a door to land on'],
+    };
+  }
+  evidence.push(
+    `the matrix serves ${matrix.rows.length} rows, one per capability the registry serves ` +
+      '(derived from the documents, not from a fixture)'
+  );
+
+  // The capability a real gated refusal names, and the sheet's own second
+  // example: "a gated tool refused with a governDoor lands on
+  // cap.promote_environment".
+  const capability = 'cap.promote_environment';
+  const runbookId = matrix.rows.find((r) => r.capability === capability)?.document?.runbookId ?? '';
+  const landed = resolveGovernDoor(matrix, governDoorFor(capability, runbookId));
+  const doorLandsOnRow = !!landed && landed.capability === capability;
+  evidence.push(
+    doorLandsOnRow
+      ? `the refusal's structured target resolves to the row for ${capability} — one row of ` +
+        `${matrix.rows.length}, not the top of the page`
+      : `the refusal's target resolved to NO row (${capability} is not served here)`
+  );
+
+  // The act, at the control.
+  const issued = setCapabilityGrant({ core: fixture.core, storage, logger: silent, capability, grant: true });
+  const issuedEvents = fixture.core.ledger
+    .query({ topicPrefix: GRANT_ISSUED_TOPIC, limit: 500 })
+    .filter((e) => e.payload.capability === capability);
+  const recordedAsControlEvent = issued.ok && issuedEvents.length > 0;
+  const issuedEventId = issuedEvents[issuedEvents.length - 1]?.id;
+  evidence.push(
+    recordedAsControlEvent
+      ? `the act wrote a real control.grant.issued (${issuedEventId}) through WP-20b's producer — ` +
+        'this probe emitted nothing itself'
+      : 'the act produced no control.grant.issued'
+  );
+
+  const grantedRow = issued.matrix?.rows.find((r) => r.capability === capability);
+  const visibleOnTheRow =
+    !!grantedRow && grantedRow.inForce && grantedRow.issuance?.eventId === issuedEventId;
+  evidence.push(
+    visibleOnTheRow
+      ? `the row states the act that made it, citing that same event id — "${grantedRow!.stateLine}"`
+      : 'the row does not cite the event that granted it'
+  );
+  if (grantedRow) {
+    // The gates column tells the granter what the grant buys, in the same row.
+    // Reported because it is the sheet's own finding and it is what makes a
+    // grant of this capability an informed one.
+    evidence.push(`what that grant gates, on the row that made it: "${grantedRow.gatesLines.join(' ')}"`);
+  }
+
+  // Reversible from the same row.
+  const revoked = setCapabilityGrant({ core: fixture.core, storage, logger: silent, capability, grant: false });
+  const revokedEvents = fixture.core.ledger
+    .query({ topicPrefix: GRANT_REVOKED_TOPIC, limit: 500 })
+    .filter((e) => e.payload.capability === capability);
+  const revokedEvent = revokedEvents[revokedEvents.length - 1];
+  const revokedRow = revoked.matrix?.rows.find((r) => r.capability === capability);
+  const revocableFromTheSameRow = revoked.ok && !!revokedEvent && !!revokedRow && !revokedRow.inForce;
+  const revocationIsAHumanAct = revokedEvent?.actor.kind === 'human' && revokedEvent?.source.class === 'intent';
+  evidence.push(
+    revocableFromTheSameRow
+      ? `the same row reversed it: control.grant.revoked (${revokedEvent!.id}), chained to the ` +
+        `issuance it answers (${revokedEvent!.causation ?? 'none'})`
+      : 'the widening could not be reversed from the row that made it'
+  );
+  evidence.push(
+    revocationIsAHumanAct
+      ? 'the revocation is recorded as a PERSON\'s act (actor.kind=human, source.class=intent), not ' +
+        'as a platform observation — which is what makes it their decision in the compliance record'
+      : 'the revocation was not attributed to a person'
+  );
+
+  // No conversational route, measured rather than promised.
+  const root = path.join(__dirname, '..', '..', 'src');
+  const reachable = ['mcp', 'agent-runtime', 'chat']
+    .map((sub) => ({ sub, n: countFiles(path.join(root, 'main', sub), 'setCapabilityGrant') }))
+    .filter((r) => r.n > 0);
+  const noConversationalRoute = reachable.length === 0;
+  evidence.push(
+    noConversationalRoute
+      ? 'no file under src/main/mcp, src/main/agent-runtime or src/main/chat references ' +
+        'setCapabilityGrant — the act is not a tool, and XD-8 is kept by there being no path ' +
+        'rather than by a check that refuses one'
+      : `the act is reachable from ${reachable.map((r) => r.sub).join(', ')} — a conversational route exists`
+  );
+
+  evidence.push(
+    'MEASURED LIMIT, reported rather than glossed: this probe answers the WIDENING conjunct of ' +
+      'the criterion. "Resumes the same session with the act still armed and its scope intact" ' +
+      'needs a session identity to be measured against, which is WP-30. What is observable today ' +
+      'is structural and is reported as structural — the excursion publishes a target onto a ' +
+      'store shared by two React roots, so nothing on the path unmounts the panel, clears its ' +
+      'armed procedure or rewrites its scope. That is weaker than a session registry proving it'
+  );
+
+  return {
+    ok:
+      doorLandsOnRow &&
+      recordedAsControlEvent &&
+      visibleOnTheRow &&
+      revocableFromTheSameRow &&
+      revocationIsAHumanAct &&
+      noConversationalRoute,
+    premisePresent: true,
+    doorLandsOnRow,
+    ...(landed ? { landedCapability: landed.capability } : {}),
+    recordedAsControlEvent,
+    ...(issuedEventId ? { issuedEventId } : {}),
+    visibleOnTheRow,
+    revocableFromTheSameRow,
+    ...(revokedEvent ? { revokedEventId: revokedEvent.id } : {}),
+    revocationIsAHumanAct,
+    noConversationalRoute,
+    evidence,
   };
 }

@@ -601,6 +601,34 @@ function readSettings(storage: MinimalStorage): Pick<NexusSettings, 'capabilityG
   }
 }
 
+/**
+ * WP-44 · what the issuance marker holds, for the surface that renders it.
+ *
+ * The Govern matrix's granted rows must state WHICH ACT made the grant, from
+ * the grant's own `control.grant.issued` event — pin 5. That event id lives in
+ * this module's marker and nowhere else, so the alternative to this accessor is
+ * the matrix reading `GRANTS_STORAGE_KEY` itself. It must not: the marker is
+ * documented OWNED BY THIS MODULE, and a second reader that learns its shape is
+ * how a storage key acquires two owners with different ideas of what it means.
+ *
+ * READ-ONLY BY CONSTRUCTION. It returns a fresh map of plain values; there is no
+ * write path here and the matrix has no business writing one. A grant changes by
+ * going through `syncCapabilityGrants` like every other grant change, so the
+ * event that announces it is emitted by the one producer that may emit it.
+ */
+export function readGrantIssuance(storage: MinimalStorage): Map<string, { eventId: string; issuedAt: string }> {
+  const out = new Map<string, { eventId: string; issuedAt: string }>();
+  for (const entry of readMarker(storage).grants) {
+    if (entry && typeof entry.capability === 'string' && typeof entry.eventId === 'string') {
+      out.set(entry.capability, {
+        eventId: entry.eventId,
+        issuedAt: typeof entry.issuedAt === 'string' ? entry.issuedAt : '',
+      });
+    }
+  }
+  return out;
+}
+
 function readMarker(storage: MinimalStorage): MarkerState {
   try {
     const raw = storage.get(GRANTS_STORAGE_KEY) as MarkerState | null;

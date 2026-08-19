@@ -23,6 +23,7 @@ import { SiteGroupsPanel } from './SiteGroupsPanel';
 // them. localDay stays: the run-complete handler below still needs its ICU guard.
 import { localDay } from './localDay';
 import { SettingsTab } from './SettingsTab';
+import type { GovernDoorTarget } from '../../main/intelligence-host/sequenceGuard';
 import { AssistantPanel } from './AssistantPanel';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
 import { agentStore } from './agents/AgentStore';
@@ -135,6 +136,8 @@ interface NexusOverviewState {
   loading: boolean;
   error: string | null;
   activeTab: TabKey;
+  /** WP-44 · the refusal door this dashboard is currently honouring. */
+  governDoor: GovernDoorTarget | null;
   /** Sites table. `siteRowsFailed` is distinct from an empty list — see SitesTab. */
   siteRows: SiteRow[];
   siteRowsTotal: PopulationCount;
@@ -272,6 +275,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     loading: true,
     error: null,
     activeTab: 'sites',
+    governDoor: null,
     siteRows: [],
     // Not zero-with-a-scope: nothing has been read yet, and the empty scope
     // string is what `loaded: false` renders behind anyway.
@@ -376,6 +380,16 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       if (!this.mounted) return;
       const req = nexusStore.get().credentialConnectRequest;
       this.setState({ credentialRequest: req ?? null });
+
+      // WP-44 · a door a refusal opened in the docked panel. Switching to the
+      // Settings tab is only half of honouring it — the target travels down to
+      // the Govern matrix, which lands it on the capability's own row. The tab
+      // switch alone would be "the top of Settings", which is the failure
+      // J-Refusal's criterion names by name.
+      const door = nexusStore.get().governDoorRequest;
+      if (door && door.section === 'capabilities') {
+        this.setState({ activeTab: 'settings', governDoor: door });
+      }
     });
 
     // Refresh indexEntries immediately when any site finishes indexing — don't
@@ -1079,7 +1093,16 @@ renderTabBar(): React.ReactNode {
         }),
       );
       case 'activity': return this.renderActivityTab();
-      case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
+      case 'settings': return React.createElement(SettingsTab, {
+        electron: this.props.electron,
+        door: this.state.governDoor,
+        // Cleared by its consumer, so re-rendering the dashboard for any other
+        // reason does not re-open the section and re-mark the row.
+        onDoorHandled: () => {
+          nexusStore.update({ governDoorRequest: null });
+          if (this.mounted) this.setState({ governDoor: null });
+        },
+      });
       // 'agents' case handled in render() directly (no stats dependency)
       // Sites is the landing tab; fallback points there to handle any stale/in-flight 'overview' value
       default: return React.createElement(SitesTab, {

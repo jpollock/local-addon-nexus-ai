@@ -34,6 +34,31 @@ export const IPC_CHANNELS = {
   COMPARATOR_MATRIX: `${ADDON_PREFIX}:comparator:matrix`,
   COMPARATOR_PREVIEW_SCOPE: `${ADDON_PREFIX}:comparator:preview-scope`,
   COMPARATOR_ARM_SELECTION: `${ADDON_PREFIX}:comparator:arm-selection`,
+  /**
+   * WP-44 · the Govern matrix's two channels — one read, one act.
+   *
+   * SPLIT FOR THE SAME MEASURED REASON WP-41 SPLIT THE COMPARATOR'S: exactly one
+   * of them has a side effect. `GOVERN_MATRIX` runs on every open of the
+   * Settings section and on every act's completion; `GOVERN_SET_GRANT` widens or
+   * narrows what agents may do and writes a control event to the ledger. A
+   * single channel with a mode flag is the shape that eventually gets passed the
+   * wrong way round, and here the failure would be a permission change nobody
+   * asked for.
+   *
+   * THE ACT'S PAYLOAD IS `{ capability: string; grant: boolean }` AND CARRIES NO
+   * LIST. One capability per call, because a widening is one capability at a
+   * time — that is the unit a person can weigh, and a plural parameter is the
+   * seed of a bulk enable even with no caller for one.
+   *
+   * NEITHER IS EVER A TOOL. These are ipcMain/ipcRenderer channels with no
+   * GraphQL mutation and no caller in src/cli — the same boundary
+   * TRUST_EXTERNAL_HOST_KEY uses, and for the same reason: the renderer and the
+   * CLI hit one endpoint with one token, so a mutation the CLI merely does not
+   * call is not a boundary. XD-8's rule that consent recorded is made at a
+   * control and never elicited in chat is kept by there being no path.
+   */
+  GOVERN_MATRIX: `${ADDON_PREFIX}:govern:matrix`,
+  GOVERN_SET_GRANT: `${ADDON_PREFIX}:govern:set-grant`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
   GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
   START_SITE: `${ADDON_PREFIX}:start-site`,

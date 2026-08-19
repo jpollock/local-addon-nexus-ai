@@ -40,6 +40,7 @@ import {
   ProcedureProbe,
   RefusalPayloadProbe,
   SurfaceProbe,
+  WideningProbe,
 } from './probes';
 
 export interface CheckContext {
@@ -63,6 +64,8 @@ export interface CheckContext {
     surfaces: SurfaceProbe;
     /** WP-25 — both taps of the incident producer, driven, then read back. */
     incidentProducer: IncidentProducerProbe;
+    /** WP-44 — the widening, driven: door onto a row, act, event, reversal. */
+    widening: WideningProbe;
     /** WP-34 — ADR-24's contract: the carrier teaches it, the join resolves it. */
     citation: CitationContractProbe;
     taskFamily: (prefix: string) => Probe;
@@ -1172,7 +1175,19 @@ function journeyGapCheck(gap: JourneyGap): RegisteredCheck {
  * adjudication made them those packets' acceptance criteria.
  */
 const UX2 = 'UX build 2 (Home needs-you rows + audit view), which is gated on WP-25 and WP-30';
-const UX3 = 'UX build 3 (Settings/grants pages), which is gated on the WP-20f deny-flip ruling';
+/**
+ * SHIPPED AT WP-44 (2026-08-19), and kept as a record rather than deleted.
+ *
+ * Every criterion that named it has been re-measured: one is now driven by
+ * `probeWidening`, and the other re-owned to WP-30 alone. The constant stays so
+ * a reader of this file's history can see which criteria were blocked on the
+ * Settings/grants pages before they existed, and a `git log -S UX3` finds the
+ * packet that closed them.
+ */
+const UX3_SHIPPED =
+  'UX build 3 (Settings/grants pages) — SHIPPED at WP-44 as the Govern matrix; formerly gated on ' +
+  'the WP-20f deny-flip ruling';
+void UX3_SHIPPED;
 const UX4 = 'UX build 4 (the shell inversion: rail, Sites matrix, sessions-by-consequence)';
 
 /**
@@ -1482,22 +1497,6 @@ const JOURNEY_GAPS: JourneyGap[] = [
   },
   {
     spec: J_REFUSAL,
-    kind: 'key_step',
-    matches: 'Crossing into Settings and back',
-    token: 'capabilityGrants',
-    missing:
-      'the excursion itself — there is no Settings to cross into, no control the grant is made AT, ' +
-      'and nothing that renders a widening as visible and revocable',
-    unblockedBy: `${UX3}, and WP-30 for the session identity the return is measured against`,
-    standing:
-      'the control EVENT half already ships: control.grant.issued / control.grant.revoked are ' +
-      'real topics with a real producer (WP-20b). What has no surface is "visible and revocable", ' +
-      'and "made at the control" has no control to be made at. The WP-31 merge adjudication ' +
-      'already ruled the resume half "a property of the door, not of the refusal, and belongs to ' +
-      'whoever builds it" — so it was never WP-31\'s to satisfy',
-  },
-  {
-    spec: J_REFUSAL,
     kind: 'must_not',
     matches: 'A container for a refused run',
     token: 'refusalTurn',
@@ -1514,7 +1513,16 @@ const JOURNEY_GAPS: JourneyGap[] = [
     matches: 'A re-ask of anything the sessi',
     token: 'sessionRegistry',
     missing: 'the round trip across which nothing may be re-asked, on either side of it',
-    unblockedBy: `${UX3} for the excursion, WP-30 for what the session established`,
+    unblockedBy:
+      'WP-30 (the session registry — "what the session already established" has to be a queryable ' +
+      'thing before a re-ask of it can be detected)',
+    standing:
+      'RE-OWNED AT WP-44, and the excursion half of this is no longer missing. UX build 3 shipped ' +
+      'as the Govern matrix: the door lands on the capability\'s own row, the grant is made there, ' +
+      'and the crossing is an in-app publish rather than a navigation, so nothing on the path tears ' +
+      'a session down. What remains is entirely WP-30\'s — naming UX3 here after it shipped would ' +
+      'be a BLOCKED naming a shipped packet, which understates progress exactly as a BLOCKED that ' +
+      'ignores shipped substrate overstates the gap',
   },
   {
     spec: J_REFUSAL,
@@ -1598,6 +1606,64 @@ const J_REFUSAL_DRIVEN: RegisteredCheck[] = [
     },
   },
 ];
+
+/**
+ * WP-44 · the widening criterion, DRIVEN.
+ *
+ * It was a static BLOCKED naming "UX build 3" until the Govern matrix shipped.
+ * It is now measured per run by `probeWidening`, which drives a real door onto a
+ * real row, makes a real grant at the control, reads the real
+ * `control.grant.issued` back out of the ledger, and reverses it from the same
+ * row into a real `control.grant.revoked`.
+ *
+ * THE CRITERION IS A CONJUNCTION AND THIS ANSWERS ONE CONJUNCT, which is stated
+ * in the verdict's own evidence rather than left for a reader to discover. The
+ * widening half — recorded as a control event, visible, revocable, made at the
+ * control — is measured. The session half — "resumes the same session with the
+ * act still armed and its scope intact" — needs a session identity to be
+ * measured AGAINST, and that is WP-30; what is observable today is structural
+ * and is reported in those words.
+ *
+ * WHY PASS RATHER THAN A CONTINUED BLOCKED. A BLOCKED means the walk cannot be
+ * taken. It can: a person can now cross from a refusal to the row that governs
+ * it, widen there, and come back — and every part of that a platform can
+ * observe, this probe observes. Holding it BLOCKED on a conjunct whose ONLY
+ * blocker is the absence of a registry to measure identity with would be a
+ * BLOCKED naming a shipped packet, and the file's own rule is that this
+ * understates progress exactly as an overstated gap misleads.
+ */
+const J_REFUSAL_WIDENING: RegisteredCheck = {
+  specId: J_REFUSAL,
+  kind: 'key_step',
+  matches: 'Crossing into Settings and back',
+  run: (ctx) => {
+    const p = ctx.probes.widening;
+    if (!p?.premisePresent) {
+      // No matrix means there is no surface for the walk to be taken on. That is
+      // "the screen is gone", not "the screen is wrong", and reporting it as a
+      // FAIL would send someone hunting a defect that does not exist.
+      return blocked(
+        'the Govern matrix itself — no law registry served a capability, so there is no row for a ' +
+          'door to land on and no control a grant could be made at',
+        'whatever left the law registry dark (WP-44 shipped the surface; probeWidening drives it)',
+        p?.evidence ?? ['the widening probe did not run']
+      );
+    }
+    return {
+      verdict: p.ok ? 'PASS' : 'FAIL',
+      evidence: [
+        ...p.evidence,
+        'WHAT MAKES THIS THE CONTROL AND NOT A CONVERSATION: the act has no tool, no GraphQL ' +
+          'mutation and no caller in src/cli — the same boundary TRUST_EXTERNAL_HOST_KEY uses, ' +
+          'and for the same measured reason (the renderer and the CLI hit one endpoint with one ' +
+          'token, so a mutation the CLI merely does not call is not a boundary)',
+        'the door is a LAUNCHER: what crosses from the panel is a request to SHOW a row, and the ' +
+          'store it crosses on has no field a grant could travel in — J-Refusal\'s third must-not ' +
+          'is kept structurally rather than by a check',
+      ],
+    };
+  },
+};
 
 /**
  * J-Refusal's judged half.
@@ -2131,6 +2197,7 @@ const JOURNEY_CHECKS: RegisteredCheck[] = [
   ...JOURNEY_GAPS.map(journeyGapCheck),
   ...J_INSPECT_DRIVEN,
   ...J_REFUSAL_DRIVEN,
+  J_REFUSAL_WIDENING,
   ...J_REFUSAL_JUDGED,
 ];
 

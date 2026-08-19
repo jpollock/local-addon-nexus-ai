@@ -13,6 +13,7 @@
  * Main process pushes via NEXUS_STATE_UPDATE IPC channel with a Partial<NexusState> patch.
  */
 
+import type { GovernDoorTarget } from '../../main/intelligence-host/sequenceGuard';
 import type {
   FleetCompleteness,
   IndexEntry,
@@ -79,6 +80,22 @@ export interface NexusState {
    * whereas store state can be read on mount.
    */
   overlayOpen?: boolean;
+  /**
+   * WP-44 · a door a refusal opened, on its way to the Govern matrix.
+   *
+   * The DockedPanel and the Nexus AI dashboard are separate React roots that
+   * share this store and nothing else, so a door clicked on a refusal in the
+   * panel reaches the Settings section through here — the same bridge
+   * `credentialConnectRequest` already uses, and cleared by its consumer for the
+   * same reason: a request left in the store re-opens the section every time
+   * anything else in the store changes.
+   *
+   * It carries the WHOLE structured target rather than a section name. The
+   * criterion is that the door lands on the ROW, and a bridge that dropped the
+   * capability on the way would deliver a person to the top of Settings while
+   * every component along the path believed it had honoured the door.
+   */
+  governDoorRequest?: GovernDoorTarget | null;
   credentialConnectRequest?: {
     provider: string;
     agentId: string;

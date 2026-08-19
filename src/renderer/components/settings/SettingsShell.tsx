@@ -15,6 +15,23 @@ import { ChatSection } from './ChatSection';
 import { BackgroundWorkSection } from './BackgroundWorkSection';
 import { PermissionsSection } from './PermissionsSection';
 import { AdvancedSection } from './AdvancedSection';
+import { GovernSection } from './GovernSection';
+import type { GovernDoorTarget } from '../../../main/intelligence-host/sequenceGuard';
+
+/**
+ * WP-44 · a door a refusal opened, handed down to the section that owns it.
+ *
+ * The section name in `GovernDoorTarget` is `'capabilities'`, which is why the
+ * Section union gained that member rather than reusing `'permissions'` — the
+ * refusal's structured target is the addressing scheme, and a shell that mapped
+ * one section name onto a different one would be a translation table nobody
+ * asked for and the first thing to drift.
+ */
+export interface SettingsShellProps {
+  electron: any;
+  door?: GovernDoorTarget | null;
+  onDoorHandled?: () => void;
+}
 
 export interface SectionProps<T> {
   data: T;
@@ -22,7 +39,7 @@ export interface SectionProps<T> {
   electron: any;
 }
 
-type Section = 'connections' | 'chat' | 'background' | 'permissions' | 'advanced';
+type Section = 'connections' | 'chat' | 'background' | 'permissions' | 'capabilities' | 'advanced';
 
 interface SiteItem { id: string; name: string; status: string; }
 interface WpeAccount { id: string; name: string; nickname?: string; }
@@ -42,7 +59,7 @@ interface SettingsShellState {
   mcpInfo: { port: number; stdioPath: string } | null;
 }
 
-export class SettingsShell extends React.Component<{ electron: any }, SettingsShellState> {
+export class SettingsShell extends React.Component<SettingsShellProps, SettingsShellState> {
   static displayName = 'SettingsTab';
   private mounted = false;
 
@@ -64,6 +81,17 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
     this.mounted = true;
     injectThemeVars();
     this.loadAll();
+    // A door that arrived with the mount must open the section it names. Without
+    // this the shell would land on its default section and the refusal's deep
+    // link would degrade to "the top of Settings" — the exact failure J-Refusal
+    // names, reached by doing nothing rather than by doing something wrong.
+    if (this.props.door?.section === 'capabilities') this.setState({ active: 'capabilities' });
+  }
+
+  componentDidUpdate(prev: SettingsShellProps): void {
+    if (prev.door !== this.props.door && this.props.door?.section === 'capabilities') {
+      this.setState({ active: 'capabilities' });
+    }
   }
 
   componentWillUnmount(): void {
@@ -231,6 +259,7 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
       navItem('chat', 'Chat'),
       navItem('background', 'Background work'),
       navItem('permissions', 'What agents may do'),
+      navItem('capabilities', 'Capabilities agents may use'),
       navItem('advanced', 'Advanced'),
     );
 
@@ -272,6 +301,15 @@ export class SettingsShell extends React.Component<{ electron: any }, SettingsSh
         externalHosts,
         wpeAccounts,
         onSave: this.saveSetting,
+      });
+    } else if (active === 'capabilities') {
+      // WP-44 · the Govern matrix. It fetches its own rows: every fact on them
+      // is derived in the seam from the law registry and the live grant record,
+      // and none of it is in the settings blob this shell already loaded.
+      sectionContent = React.createElement(GovernSection, {
+        electron: this.props.electron,
+        door: this.props.door ?? null,
+        ...(this.props.onDoorHandled ? { onDoorHandled: this.props.onDoorHandled } : {}),
       });
     } else {
       // advanced
