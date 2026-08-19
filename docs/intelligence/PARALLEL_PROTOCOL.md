@@ -370,3 +370,12 @@ bytes, no git process owning THIS repo), remove it, force-checkout,
 verify the file byte-for-byte against the blob it should be, `git fsck`,
 and RE-MEASURE the full suite — a repaired tree is not verified until it
 is re-measured.
+
+**The pwd rule's edit-tool form** (WP-43 near-miss — worse than the
+documented one): an editor that takes ABSOLUTE paths is not governed by
+your cwd at all, and an edit to a TRACKED file in the wrong checkout
+leaves nothing your own worktree's `git status` can show. Verify the path
+prefix of every edit against your worktree root before editing; the tell,
+when it slips, is tsc failing on symbols you just wrote — they landed
+somewhere else. The recovery is the primary-restoration drill, verified
+not assumed.

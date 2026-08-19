@@ -16166,3 +16166,88 @@ disclosed rather than filled, plus the smoke finding that priced them:
 
 A payload or emission widening presents at this packet's GATE for
 ratification per the standing rule; no new event topic is invented.
+
+---
+
+**DESIGN ADJUDICATION — the Govern matrix; CYCLE FOUR CLOSES, and
+the surface widened the law review (2026-08-19).** The designer's
+cycle-four sheet arrived same-day against the field bundle, with
+both 5b fixes already drawn. RATIFIED WHOLE in
+`for-designer-govern-matrix-response.md`; nine pins inherited as
+WP-44's acceptance criteria. **The three asks, ruled:** (1) all
+seven capability labels RATIFIED as Controlled Vocabulary v1.3 rows,
+id in mono beside the label — the refusals cite ids, and hiding the
+id breaks the door's vocabulary; (2) "the grant itself, and nothing
+after it" stands unsoftened on granted rows, and the PIN is the
+property (the column moves when the document does — derived or
+nothing); (3) the disarmed switch stays ON — the switch renders
+CONSENT, the chip renders FORCE; an integrity failure is the
+platform's report, never a revocation. **The sheet's finding WIDENS
+the registered law review:** rendered from the documents, FOUR
+strict capabilities have no attestable checkpoint (not just
+promotion-execute), and two are granted today — the review is
+re-scoped to all four in one pass, with the designer's sentence as
+its charter. **The 5b fixes adopted as comparator pins**
+(class-derived absence sentence; history line anchored in the
+site's row). **XD-25 enters the register. WP-44 · the Govern matrix
+surface is REGISTERED** — renders against the real
+`control.grant.issued` records; owner of J-Refusal's four remaining
+BLOCKED criteria. Position doc (from-designer-08) owed with the
+next handoff. Four cycles, four ratified surfaces — this one ends
+with the design correcting the law's backlog.
+
+---
+
+**DESIGN — cycle four's position committed; the design record is
+complete through eight positions (2026-08-19).**
+`from-designer-08-govern-matrix.md` committed verbatim under
+`from-designer/`, its frontmatter carrying the full adjudication
+state (nine pins → WP-44, XD-25, vocabulary v1.3, the law review at
+four runbooks). Every cycle's position and response are now both on
+the record, protocol-complete. The designer's desk is clear pending
+WP-44's build and the law review; the loop's next design input is
+whichever ships first.
+
+---
+
+**WP-43 · GATE — all five items RATIFIED; the bracket soup ends;
+MERGE (2026-08-19).** The defect's anatomy accepted as diagnosed:
+WP-34 turned citing on product-wide, nothing ever delivered the
+supply, `msg.citation` was always absent. **(1) the dedicated
+`citation_supply` stream event RATIFIED over a field on done** — and
+the `endTurn` chokepoint replacing four bare emissions is the better
+half of the fix: no exit path, error paths included, can forget the
+delivery. **(2) `ChatAssemblyResult.citationManifest` ratified.
+(3) the core widening ratified** — observedAt + summary as pure
+carry-through, the peek drawing NOTHING when the supply carried
+neither (absent-never-invented held at the new seam). **(4) the chat
+surface's citation moment: CONSTANT INVESTIGATE, RATIFIED** — with
+the consequence stated as a choice, not an accident: every uncited
+factual claim in chat renders loud, which is the product's epistemic
+posture; reading the moment off the ask would be the forbidden
+classifier. The door stays open the ratified way: if a sitting shows
+the loudness misfiring, the remedy is a moment signal from a
+SURFACE, ratified through the loop — never an ask classifier.
+**(5) the census move ratified:** `summary` off RecordPeek's
+forbidden list because the list guards COMPOSITION and the field is
+now carried — flagged-not-folded was the right manner, ratified is
+the answer. **The doors stay unrendered on measurement** (zero
+by-id renderers, zero ledger IPC, M24 red on a faked handler) —
+doors-need-handlers holding until WP-44 IS the handler.
+
+**The edit-tool near-miss becomes the pwd rule's SECOND FORM,
+written into PARALLEL_PROTOCOL** — an absolute-path editor is not
+governed by cwd, a tracked-file edit in the wrong checkout is
+invisible to the worktree's own status, and tsc-failing-on-your-own-
+symbols is the tell. The battery-parse finding noted (a
+type-breaking mutant contributes zero Tests-line tests — kills
+misread as VOID are the count-floor family's inverse face);
+scoped-run-is-not-the-DoD-run reinforced. **Owed item ruled:** the
+reopened-session raw markers close via the UNKNOWN-ARM route, not
+the schema — a reopened transcript whose supply is gone is a fourth
+epistemic state ("citations cannot be resolved for a reopened
+session"), which is COPY and a WP-38 parity touch: routed to the
+designer as a small position, micro after their ruling. Registered.
+Receipts accepted (598/8,108/12 exit 0, +42 reconciling; 24/24 at
+floor 105; fidelity on 3f8815ea pure-append). **Merge; WP-44
+launches on it.**

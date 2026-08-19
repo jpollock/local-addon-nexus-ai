@@ -176,6 +176,18 @@ prototype's usage conforms.
 | wake condition (ends a deferral) | **wake** — "wakes when <condition>"; the deferral ends, full escalation returns, the condition is named | expires/expiry (a wake can be an event, not only a date), reminder |
 | ending a deferral early | **end the deferral** — a session act, recorded like the deferral it ends | cancel, undo, dismiss |
 
+### v1.3 additions (2026-08-19 — the Govern matrix's label set, designer-proposed, ratified)
+
+| Concept (internal) | User-facing term | Never say |
+|---|---|---|
+| cap.bulk_plugin_update | **Update plugins across sites** (id in mono beside) | invented friendlier names; hiding the id |
+| cap.incident_containment | **Contain an incident** | — |
+| cap.incident_remediation | **Remediate an incident** | — |
+| cap.promotion_preflight | **Check a promotion before it runs** | — |
+| cap.promote_environment | **Promote one environment to another** | — |
+| cap.wpe_pull | **Pull a site from WP Engine** | — |
+| cap.diagnose_site | **Diagnose a site** | — |
+
 ## PRESSURE-TEST FINDINGS (№2)
 
 1. **The model survived the harder test.** Every future behavior was

@@ -160,6 +160,25 @@ produced these; nothing enters by drift. XD = experience decision.)*
   render" sheet, ratified in
   `for-designer-corroboration-response.md`.
 
+- **XD-25 · The Govern matrix** — every row a capability the registry
+  serves, every fact derived (document, version, pinned hash, the
+  attestable-vs-narrative split from the checkpoints themselves); a
+  capability arrives denied and no row is granted because a document
+  exists; the production rows render "Never by default" — disclosed
+  and actionable, not quietly absent; a door lands on the ROW; a
+  grant states the act that made it from its own event; DISARMED is
+  granted-and-not-in-force, never denied (the switch renders consent,
+  the chip renders force — an integrity failure is the platform's
+  report, not a revocation); the gates column is derived and never
+  softened ("the grant itself, and nothing after it" on granted rows
+  as loudly as denied), and its PIN is the property that it moves
+  when the document does; the act is a control — no conversational
+  route in or out; one capability at a time; no health score; no
+  runbook copy. Labels are ratified vocabulary rows with the id in
+  mono beside them — the refusals cite ids. Source: designer "Govern
+  matrix" sheet, ratified in
+  `for-designer-govern-matrix-response.md`.
+
 ## How a ruling gets here
 
 Designer position or architect note → ratification response (both
