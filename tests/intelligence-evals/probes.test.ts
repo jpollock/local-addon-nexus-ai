@@ -25,6 +25,7 @@ import {
 } from './probes';
 import {
   getCapabilityGrants,
+  materializableCapabilities,
   resolveCapabilityGrants,
   syncCapabilityGrants,
   DisarmedGrant,
@@ -311,6 +312,16 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
   const NEVER_THE_FILE_HASH = `sha256:${'0'.repeat(64)}`;
 
   const runbooks = (): RunbookRegistry => fixture.core.law!.runbooks;
+  /**
+   * WP-20f · where a migrated machine stands.
+   *
+   * The journey's subject is the STALE PIN, which is a settings-overlay
+   * behaviour and needs the capability granted to be observable at all. After
+   * the deny-flip the resolver grants nothing without the materialized set, so
+   * it is supplied — derived through the migration's own function, never listed,
+   * so this eval cannot quietly re-encode which capabilities the flip enables.
+   */
+  const migrated = (): string[] => materializableCapabilities(runbooks());
   const grantFor = (res: GrantResolution, capability: string): ResolvedGrant | undefined =>
     res.grants.find((g) => g.capability === capability);
   const disarmFor = (res: GrantResolution, capability: string): DisarmedGrant | undefined =>
@@ -319,7 +330,10 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
   it('the healthy state is the one the survivor describes: one document, two readers', () => {
     // The premise of the whole follow-up, driven rather than recalled.
     const served = runbooks().byCapability(CAP)!;
-    const healthy = grantFor(resolveCapabilityGrants({ runbooks: runbooks(), settings: null }), CAP)!;
+    const healthy = grantFor(
+      resolveCapabilityGrants({ runbooks: runbooks(), settings: null, materialized: migrated() }),
+      CAP
+    )!;
     expect(healthy.runbookId).toBe(served.id);
     expect(healthy.runbookHash).toBe(served.hash);
   });
@@ -328,6 +342,7 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
     const res = resolveCapabilityGrants({
       runbooks: runbooks(),
       settings: { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
+      materialized: migrated(),
     });
     expect(grantFor(res, CAP)).toBeUndefined();
     const disarmed = disarmFor(res, CAP)!;
@@ -344,6 +359,7 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
     const res = resolveCapabilityGrants({
       runbooks: runbooks(),
       settings: { capabilityGrants: [{ capability: CAP, runbookId: 'rb.some-other-document' }] },
+      materialized: migrated(),
     });
     expect(grantFor(res, CAP)).toBeUndefined();
     expect(disarmFor(res, CAP)!.reason).toBe('hash-mismatch');
@@ -365,7 +381,7 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
       { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
     ];
     for (const settings of overlays) {
-      const res = resolveCapabilityGrants({ runbooks: runbooks(), settings });
+      const res = resolveCapabilityGrants({ runbooks: runbooks(), settings, materialized: migrated() });
       expect(res.grants.length).toBeGreaterThan(0);
       for (const grant of res.grants) {
         const served = runbooks().byCapability(grant.capability)!;

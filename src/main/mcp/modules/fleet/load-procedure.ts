@@ -38,7 +38,11 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
-import { getCapabilityGrants } from '../../../intelligence-host/capabilityGrants';
+import {
+  getCapabilityGrants,
+  requiresExplicitGrant,
+} from '../../../intelligence-host/capabilityGrants';
+import { governDoorFor } from '../../../intelligence-host/sequenceGuard';
 import { recordArmingRequest } from '../../../intelligence-host/procedureArming';
 /**
  * How a checkpoint's attestation class reads to whoever is looking at it.
@@ -106,8 +110,14 @@ export const loadProcedureHandler: McpToolHandler = {
       const runbook = grant ? core.law.runbooks.byCapability(capability) : undefined;
       if (!grant || !runbook) {
         // Not an error: an ungranted capability is an ordinary answer, and the
-        // useful half of it is what IS granted.
-        return ok(`\`${capability}\` is not granted on this machine. ${granted().summary}`);
+        // useful half of it is what IS granted — plus, since WP-20f, WHERE it
+        // would be granted, because after the deny-flip "not granted" is the
+        // ordinary state of a newly shipped capability rather than a fault.
+        return ok(
+          `\`${capability}\` is not granted on this machine.` +
+            ungrantedGuidance(capability) +
+            ` ${granted().summary}`
+        );
       }
 
       recordArmingRequest(capability);
@@ -123,6 +133,43 @@ export const loadProcedureHandler: McpToolHandler = {
     }
   },
 };
+
+/**
+ * WP-20f · where this capability WOULD be granted, and — for the two mandated
+ * ones — why it is not granted here.
+ *
+ * The Govern door is the structured target the sequence guard already carries
+ * on every refusal (`governDoorFor`), rendered into the one sentence this
+ * surface can carry. Same pair of ids, same destination: a model told to ask a
+ * human where to enable something must not be sent somewhere else than the
+ * refusal a human reads points at.
+ *
+ * The mandated clause is deliberately a STATEMENT OF LAW rather than an
+ * apology. The 2026-08-18 incident's lesson is that a model reading a
+ * capability label as a progress report will act on it; "not yet granted"
+ * invites a retry, "never granted by default, a person grants it" does not.
+ */
+function ungrantedGuidance(capability: string): string {
+  const core = getIntelligenceCore();
+  const runbook = core?.law?.runbooks.byCapability(capability);
+  if (!runbook) {
+    // Nothing serves it: this is not a permissions answer, and pointing at the
+    // Govern door would send someone to switch on a capability that does not
+    // exist here.
+    return ' No procedure on this machine serves that capability.';
+  }
+
+  const door = governDoorFor(capability, runbook.id);
+  const where =
+    ` It is governed in ${door.surface} → ${door.section}, as \`${door.capability}\`` +
+    ` against ${door.runbookId} — a person grants it there.`;
+
+  return requiresExplicitGrant(capability)
+    ? ` This capability is NEVER granted by default: production consequence is not a default,` +
+        ` so it requires an explicit grant made before anything arms.${where}` +
+        ' Nothing you can do in this turn grants it.'
+    : where;
+}
 
 function granted(): { summary: string } {
   const grants = getCapabilityGrants();
