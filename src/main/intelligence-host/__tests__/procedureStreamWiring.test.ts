@@ -149,6 +149,10 @@ describe('the armed run, through the real assembler', () => {
       args: {},
       cardText: 'Updates plugins on 3 sites.',
       decision: 'approved',
+      // WP-36 · the card fired AS this checkpoint's approval, so the consent is
+      // bound to it. Passing `null` here would be a plain tool confirm, and the
+      // fold would rightly refuse to read it as cp.approval.
+      checkpoint: 'cp.approval',
       taskId: first!.taskId,
     });
 
@@ -170,6 +174,7 @@ describe('the armed run, through the real assembler', () => {
       args: {},
       cardText: 'Updates plugins on 3 sites.',
       decision: 'denied',
+      checkpoint: 'cp.approval',
       taskId: first!.taskId,
     });
 
@@ -220,6 +225,12 @@ describe('the approval context the card is emitted with', () => {
       version: '1.2.0',
       strictness: 'strict',
       checkpointId: 'cp.approval',
+      // WP-36 · the CHECKPOINT's own authored reason, read off the real
+      // document's `## cp.approval — …` heading. This is what the card now
+      // takes its title from; before this field the title was
+      // `toolDisplayName(tool)`, which on 2026-08-19 headed a fleet-write
+      // consent with "Verify Site Live".
+      checkpointReason: 'explicit, informed consent',
       offersCanaryPolicy: true,
       // The real document's own authored reason, read off its body.
       unverifiablePrecedent: { checkpointId: 'cp.dry-run', reason: 'show what would change' },
@@ -233,6 +244,7 @@ describe('the approval context the card is emitted with', () => {
       args: {},
       cardText: 'card',
       decision: 'approved',
+      checkpoint: 'cp.approval',
       taskId: first!.taskId,
     });
     await turn(armed());

@@ -12901,3 +12901,139 @@ modified.
 
 **ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and `npx jest`
 repeatedly. **`npm run rebuild` before loading Local.**
+
+---
+
+**WP-36 · FIX HALF DELIVERED — the consent record binds to a checkpoint;
+the panel stops fabricating completion; the card's subject is the step
+(2026-08-19).**
+
+**F1 · `task.rationale.recorded` gains `checkpoint`, built exactly as ruled.**
+
+- **Producer** (`actionProducer.ts`). `ApprovalRationaleRecord.checkpoint:
+  string | null` — **required**, not optional, and written unconditionally into
+  the payload rather than spread. `ChatService` passes
+  `procedure?.checkpointId ?? null`, read from the SAME `procedure` object that
+  decided `gatedOnApproval`, so the binding comes from the condition that
+  raised the card and never from the tool.
+- **Fold** (`procedureCursor.ts`) — TWO LANES, discriminated by whether the
+  payload carries the key at all.
+  - **BOUND** (key present): governs the checkpoint it names and no other.
+    `null` and a foreign id are the same answer — such an event attests
+    nothing **and denies nothing**. Reading a plain confirm's denial as a
+    runbook denial would be the old bug with the sign flipped, and the old bug
+    HAD that sign: `else if (decisions.length > 0)` marked `cp.approval` DENIED
+    off any denied rationale, so declining an unrelated confirmation ended the
+    run. Both signs were blind; both are bound now.
+  - **LEGACY** (key absent): folded byte-for-byte as before — tool-keyed,
+    latest-per-tool, subject-blind. History renders unchanged. Grandfathering
+    is not politeness: rewriting how an event already on disk is read would
+    change what the ledger says about a decision a human already made, which is
+    the one thing an append-only record must never do.
+  - Latest governs in both lanes; a bound consent overrules a legacy one for
+    the same checkpoint (it is both later and actually about it).
+  - The bound lane keeps decision and event id in ONE map. The old pair split
+    them, and `decisionEvent` was keyed by DECISION — which is why the evidence
+    id was "the last event carrying that decision" rather than the one that
+    governed. Pinned by M05.
+- **Why the always-written null is the load-bearing half, demonstrated:**
+  M08 mutates the payload write to `...(record.checkpoint ? {…} : {})` — the
+  "write it only when we have one" shape — and a present-day plain confirm
+  lands in the legacy lane and attests `cp.approval`. Killed. M18 makes the
+  field optional; killed by a compile-time `@ts-expect-error` pin, because
+  "always written" is a promise about call sites that do not exist yet and no
+  runtime test can observe a surface nobody has written.
+- **The severity statement, kept and now paired.** The pinned consequence chain
+  stands as the record of what the legacy shape reaches
+  (`THE SEVERITY STATEMENT: the legacy shape unlocks the fleet write`), and a
+  second test replays the identical human act through today's producer: the
+  chain stops at its first link, `wpe_backup_and_verify` refused at
+  `cp.approval`.
+
+**F2 · guard: NO CHANGE.** As accepted. `sequenceGuard.ts` is untouched by
+this packet.
+
+**F3 · `PanelChat` reads `isError`.** `status: event.isError ? 'error' :
+'done'`; settled chips grouped by tool **AND** status, because grouping by tool
+alone puts one mark on two different answers — the same defect one level up;
+the mark itself carries the outcome (`✕` in `STATUS_ERROR`, with an aria-label)
+rather than colour alone, which would leave the two identical to a reader who
+cannot see it. `ToolCallState` has always declared an `'error'` status; nothing
+assigned it, which is where the defect lived — the eleventh vacuous-guard
+shape's cousin, and its generalization holds: **what a structure omits by
+design is where the mutation will live.**
+
+**F4 · the card's subject is the CHECKPOINT.** `ProcedureApprovalContext` gains
+`checkpointReason` — the tail of the runbook's own `## cp.x — reason` heading,
+read by the existing `checkpointReason`, the same author-quoting rule
+`unverifiablePrecedentOf` already follows. `PanelChat` passes it as the card's
+`title` (falling back to the checkpoint id) and passes **no `effect` at all**;
+the prop is now optional and the tool-mechanics line is gone. Absence beats a
+sentence about the wrong subject, and the declared block above the transcript
+already carries the document's account of the step. The tool was never the
+subject: `cp.approval` declares none, and `approvalCheckpoint` finds it by its
+evidence clause without reference to the call — pinned by a test showing two
+different refused tools produce the identical card. WP-35's
+reference-exactly-once fold still holds (the card names no runbook). The
+designer's refined copy follows through the loop; the structure did not wait
+for it.
+
+**M4's semantics are preserved BY binding, not changed.** `tests/
+intelligence-evals/probes.ts` stands in for WP-26's card in the refusal →
+denial → approval → backup walk, so its three rationales carry
+`checkpoint: 'cp.approval'` and E-02's plain Tier-3 approval carries `null`.
+All 8 eval suites, 360 tests, green. Nothing in
+`wpeOperationPermissions` was touched.
+
+**BATTERY: 18/18 KILLED, control survived (50 tests), tree verified pristine
+before and after each mutation.** Every run `--no-cache`, explicit argv,
+counts PARSED from the summary block rather than grepped, and every mutation
+count-floored — a suite that runs zero tests is a measurement of nothing, not a
+kill. **Five did not kill on the first pass and none was excused:**
+
+- **M02, M06 — VOID, ran 0.** Not survivors: the mutations were not valid
+  programs (TS narrowed `payload.checkpoint` past the inverted guard; `if
+  (false)` made `bound` provably unreachable). Rewritten as programs expressing
+  the same property, then killed. **A mutation that does not compile has not
+  been tested** — the count floor is what told the difference between that and
+  a green.
+- **M01, M05 — EQUIVALENT MUTANTS, and this is the WP-24 family.** `'checkpoint'
+  in payload` → `=== undefined` cannot be distinguished by any event that can
+  exist: the fold reads JSON out of the ledger and a round-trip cannot produce
+  `undefined`. M05's `legacyEvent.get(wanted) ?? bound.eventId` always fell
+  through in a fixture with no legacy events. Both were repointed to the
+  DISTINGUISHABLE form of the same property — truthiness (`!payload.checkpoint`,
+  which does put a null in the legacy lane) and "the last rationale in the run"
+  (the old decision-keyed map's real shape) — and both then killed. Repointing
+  an anchor is not excusing a survivor, and as with WP-34's M11 the distinction
+  is recorded because the battery's honesty depends on it.
+- **M18 — unobservable, converted to a measured pin.** Making the field
+  optional broke nothing, because every current call site passes it. Rather
+  than drop it, the property was given a guard it can fail: a
+  `@ts-expect-error` on a record missing `checkpoint`, which goes unused
+  (TS2578) the moment the field is optional. WP-33's move, applied again.
+
+**A NEW VACUOUS-GUARD SHAPE, twelfth, from M01/M05:** *a mutation aimed at a
+discriminator is equivalent whenever the discriminated states cannot both
+reach the code.* The fold's inputs survive a JSON round-trip, so `absent` and
+`undefined` are one state there and no test can separate them. Before crediting
+a survivor as "the guard is weak," ask whether the two branches are reachable
+by any value the producer can actually write.
+
+**BASELINES BOTH SIDES.** Pre (investigation half, this worktree): **580 /
+7788 passed / 12 skipped / 7800, exit 0**. Post: **583 / 7817 passed / 12
+skipped / 7829, exit 0** — +3 suites, +29 tests, skipped column unchanged
+throughout. `npx tsc -p . --noEmit` clean.
+
+**THE POISONED ts-jest CACHE, EIGHTH OCCURRENCE — and it wore the standard
+mask.** A settled-tree run reported `Test Suites: 2 failed` with `Tests: 0
+failed`: `probes.test.ts` and `sitting.test.ts` failed to PARSE, pointing at
+`tests/intelligence-evals/sitting.ts:1` — its own first line — while the same
+files had run green with `--no-cache` minutes earlier. `npx jest --clearCache`,
+re-measure, 583/583. Recorded because the protocol's own rule is what caught
+it: **a parse failure in one suite you did not edit is the cache until proven
+otherwise**, and `Tests: 0 failed` beside `Test Suites: 2 failed` is the tell
+that no test actually ran.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and an
+18-mutation battery. **`npm run rebuild` before loading Local.**

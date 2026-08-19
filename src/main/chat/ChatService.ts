@@ -494,6 +494,13 @@ export class ChatService {
         decision: approved ? 'approved' : 'denied',
         taskId,
         services: this.services,
+        // WP-36 · what this consent is FOR. `procedure` is the platform's own
+        // answer to "did the card fire as a procedure's approval" — the same
+        // object that decided `gatedOnApproval` above — so the binding is read
+        // from the condition that raised the card, never inferred from the
+        // tool. `null` on a plain tool confirm, ALWAYS written; the producer's
+        // field comment says why the null is the load-bearing half.
+        checkpoint: procedure?.checkpointId ?? null,
         // WP-26: the canary policy is part of the approval, not a separate act.
         // The producer validates it and drops it on a denial — nothing is
         // authored here, and absence stays meaningful.

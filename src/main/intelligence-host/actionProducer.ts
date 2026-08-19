@@ -126,6 +126,31 @@ export interface ApprovalRationaleRecord {
    * never defaulted here, never inferred.
    */
   canaryPolicy?: CanaryPolicy;
+  /**
+   * WP-36 · THE CHECKPOINT THIS CONSENT ATTESTS — and `null` is a value here,
+   * not a missing one.
+   *
+   * The 2026-08-19 incident: a human approved a live re-verify of one site, and
+   * the fold read that approval as `cp.approval` — the runbook's "explicit,
+   * informed consent" to the presented plan — because the join asked only
+   * "is there an approved rationale in this run?" and nothing about its
+   * subject. `foldProcedureCursor` discarded the tool key it had built. The
+   * repair cannot live in the fold alone: the checkpoint existed only inside
+   * the free-text `prompt`, and matching on prose is not a join.
+   *
+   * **ALWAYS WRITTEN from the flip forward** (ruled at the WP-36 gate): the
+   * checkpoint id when WP-26's card fired as a procedure's approval, and
+   * `null` for a plain tool confirm. The always-written null is the
+   * load-bearing half. It makes ABSENCE of the key an unambiguous legacy
+   * discriminator, so a new plain confirm can never be mistaken for an old
+   * procedure approval — which is exactly what a "write it only when we have
+   * one" shape would have allowed, and it would have been indistinguishable
+   * from the pre-fix events it must not resemble.
+   *
+   * `null` and a foreign checkpoint id are the same answer to any checkpoint
+   * asking whether this consent was for it: no.
+   */
+  checkpoint: string | null;
 }
 
 /**
@@ -263,6 +288,11 @@ export function recordApprovalRationale(record: ApprovalRationaleRecord): string
         prompt: record.cardText,
         args: redactParams(record.args),
         source: 'approval-card',
+        // WP-36 · written on EVERY approval, `null` included. Not spread
+        // conditionally: a key that appears only sometimes is the shape whose
+        // absence the fold reads as "legacy, grandfathered", and a present-day
+        // plain confirm must never land in that lane.
+        checkpoint: record.checkpoint,
         // Validated against the vocabulary HERE, at the producer, so no call
         // site can widen the field by passing something else through. A denial
         // carries none: there is no canary to have a policy about.

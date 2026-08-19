@@ -312,6 +312,7 @@ test('the outcome is caused by its action', () => {
 describe('WP-26 · the canary policy the approval carried', () => {
   test('the chosen policy rides on the approval, as the approval', () => {
     recordApprovalRationale({
+      checkpoint: 'cp.approval',
       toolName: 'bulk_plugin_update',
       args: { site_ids: ['alpha'] },
       cardText: 'Updates plugins on 3 sites.',
@@ -330,6 +331,7 @@ describe('WP-26 · the canary policy the approval carried', () => {
     // gateway-authored default would make that flag a lie: the surface would then
     // render "pause after the canary" as a decision the human made.
     recordApprovalRationale({
+      checkpoint: 'cp.approval',
       toolName: 'bulk_plugin_update',
       args: { site_ids: ['alpha'] },
       cardText: 'Updates plugins on 3 sites.',
@@ -342,6 +344,7 @@ describe('WP-26 · the canary policy the approval carried', () => {
 
   test('a value outside the vocabulary is not recorded at all', () => {
     recordApprovalRationale({
+      checkpoint: 'cp.approval',
       toolName: 'bulk_plugin_update',
       args: {},
       cardText: 'card',
@@ -355,6 +358,7 @@ describe('WP-26 · the canary policy the approval carried', () => {
 
   test('a DENIAL carries no policy: there is no canary to have a policy about', () => {
     recordApprovalRationale({
+      checkpoint: 'cp.approval',
       toolName: 'bulk_plugin_update',
       args: {},
       cardText: 'card',
@@ -371,6 +375,7 @@ describe('WP-26 · the canary policy the approval carried', () => {
     // The producer and the reader are pinned together: a field written under a
     // name the reader does not look for is a field that does not exist.
     recordApprovalRationale({
+      checkpoint: 'cp.approval',
       toolName: 'bulk_plugin_update',
       args: {},
       cardText: 'card',
@@ -389,6 +394,7 @@ describe('WP-26 · the canary policy the approval carried', () => {
 
 test('an approval chains rationale -> action -> outcome', () => {
   const rationaleId = recordApprovalRationale({
+    checkpoint: null,
     toolName: 'wpe_delete_install',
     args: { install_name: 'someproduction' },
     cardText: 'This permanently deletes the install.',
@@ -435,6 +441,7 @@ test('a direct (unapproved) call carries NO causation — absence is honest', ()
 
 test('the rationale is the card text and the args, and nothing invented', () => {
   recordApprovalRationale({
+    checkpoint: null,
     toolName: 'wp_eval',
     args: { site: SITE_A, code: 'return 1;' },
     cardText: 'Runs arbitrary PHP on this site.',
@@ -456,6 +463,7 @@ test('the rationale is the card text and the args, and nothing invented', () => 
 
 test('the approved ARGUMENTS are redacted too — an approval card can carry a credential', () => {
   recordApprovalRationale({
+    checkpoint: null,
     toolName: 'wp_user_create',
     args: { site: SITE_A, user_pass: 'hunter2-correct-horse-battery' },
     cardText: 'Creates an administrator account.',
@@ -470,6 +478,7 @@ test('the approved ARGUMENTS are redacted too — an approval card can carry a c
 
 test('a DENIED approval is recorded — that record is what makes "proceeded anyway" checkable', () => {
   recordApprovalRationale({
+    checkpoint: null,
     toolName: 'wpe_delete_install',
     args: { install_name: 'someproduction' },
     cardText: 'This permanently deletes the install.',
@@ -502,6 +511,7 @@ test('a throwing emitter costs the record, never the call', () => {
   ).not.toThrow();
   expect(() =>
     recordApprovalRationale({
+      checkpoint: null,
       toolName: 'wp_eval',
       args: {},
       cardText: 'x',
@@ -522,6 +532,12 @@ test('with no intelligence core at all, both producers are silent no-ops', () =>
     })
   ).toBeUndefined();
   expect(
-    recordApprovalRationale({ toolName: 'wp_eval', args: {}, cardText: 'x', decision: 'approved' })
+    recordApprovalRationale({
+      toolName: 'wp_eval',
+      args: {},
+      cardText: 'x',
+      decision: 'approved',
+      checkpoint: null,
+    })
   ).toBeUndefined();
 });

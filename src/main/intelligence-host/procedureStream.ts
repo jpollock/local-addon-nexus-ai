@@ -91,6 +91,26 @@ export interface ProcedureApprovalContext {
   /** The checkpoint this approval would attest, from the runbook's own declaration. */
   checkpointId: string;
   /**
+   * WP-36 · the checkpoint's OWN authored reason — the tail of its
+   * `## cp.x — reason` heading, read by `checkpointReason`.
+   *
+   * The card's subject used to be the TOOL: `toolDisplayName(name)` for its
+   * title and `Runs <Tool> on your WordPress sites.` for its body. That is the
+   * wrong subject, not merely a doubled one. `cp.approval` declares no tools at
+   * all, and `approvalCheckpoint` below finds it by its evidence clause without
+   * reference to the call — so the tool on the card was whichever one the model
+   * happened to reach for when the approval became the first unmet
+   * prerequisite. On 2026-08-19 that was `verify_site_live`, and a card headed
+   * "Verify Site Live · Runs Verify Site Live on your WordPress sites" asked
+   * for the consent that gates a fleet-wide write.
+   *
+   * The author's own sentence is the honest subject, and it is quoted rather
+   * than paraphrased — the same rule `unverifiablePrecedentOf` already follows
+   * for the precedent caveat. `null` when the document wrote no reason, and the
+   * surface then says less rather than inventing more.
+   */
+  checkpointReason: string | null;
+  /**
    * True only when the runbook DECLARES a canary checkpoint. A canary policy
    * offered on a runbook with no canary would be a choice about nothing — the
    * same fabricated-consent error as rendering the default as a decision.
@@ -274,6 +294,7 @@ function approvalContextOf(
     version: declared.version,
     strictness: 'strict',
     checkpointId: checkpoint.id,
+    checkpointReason: runbook ? checkpointReason(runbook, checkpoint.id) : null,
     offersCanaryPolicy: declaresCanary(runbook),
     ...(precedent ? { unverifiablePrecedent: precedent } : {}),
   };

@@ -41,8 +41,22 @@ const POLICY_LABELS: Record<CanaryPolicy, string> = {
 };
 
 interface Props {
+  /**
+   * WP-36 · derived from the CHECKPOINT, never from the tool the model reached
+   * for. See `ProcedureApprovalContext.checkpointReason` for the incident that
+   * made this a rule.
+   */
   title: string;
-  effect: string;
+  /**
+   * Optional, and its absence is deliberate (WP-36). This used to carry
+   * `Runs <Tool> on your WordPress sites.` — a sentence about the tool's
+   * mechanics on a card asking consent for a checkpoint. There is nothing true
+   * to put in its place client-side, and the declared block above the
+   * transcript carries the runbook's own account of the step, so the card says
+   * less rather than saying the wrong thing. The plain `ActionCard` path still
+   * passes one: for a bare tool confirm the tool IS the subject.
+   */
+  effect?: string;
   /** The card text the platform composed — recorded verbatim as the rationale. */
   warning: string;
   procedure: ProcedureApprovalContext;
@@ -222,7 +236,7 @@ export class ProcedureApprovalCard extends React.Component<Props, State> {
         { style: styles.reference },
         `This approval is checkpoint ${procedure.checkpointId}.`,
       ),
-      React.createElement('div', { style: styles.effect }, effect),
+      effect ? React.createElement('div', { style: styles.effect }, effect) : null,
       React.createElement('div', { style: styles.effect }, warning),
       this.renderPrecedent(),
       this.renderPolicy(),
