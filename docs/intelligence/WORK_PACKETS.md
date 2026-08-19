@@ -16128,3 +16128,41 @@ user-visible cost unpriced until now: WP-34's carrier turned the
 convention on product-wide, so every citing reply shows bracket
 soup until delivery lands. **WP-43 · the citation delivery micro is
 REGISTERED AND PROMPTED** — host-side, lock free, next launch.
+
+---
+
+**WP-43 · LOCK ANNOUNCE (2026-08-19).** `src/main/intelligence-host/` is
+TAKEN, and with it the core (`src/intelligence/`) — the ownership map
+serializes the two under one owner-lock, and deliverable 2 (the
+`SuppliedEvent` widening WP-38 left owed) is a core change by definition.
+Both verified FREE before the claim, read off the base rather than off a
+branch: WP-20g's merge released `intelligence-host` (`809ca230`, "THE
+`src/main/intelligence-host/` LOCK IS RELEASED"), the WP-20g acceptance
+entry restates it as board state ("the intelligence-host lock is
+RELEASED"), and no announce has been taken since. WP-38's merge released
+`src/renderer/components/DockedPanel/`; this packet touches that surface
+only where the wiring demands it, ADDITIVELY, and every such touch is
+named in the delivery report.
+
+This announce lands ON THE BASE before the work starts, per the
+WP-20f/WP-37 crossed-claim rule.
+
+**The charter, in the record's own words** — the three items WP-38
+disclosed rather than filled, plus the smoke finding that priced them:
+
+1. **Host → renderer delivery of the turn's citation supply.** WP-34
+   publishes `citationSupply` on `ChatAssemblyResult`; nothing puts it (or
+   the manifest's `citation` field) on a panel message. The user-visible
+   cost, measured by the owner's comparator smoke: raw `[[cite:…]]`
+   markers render as literal text in **every** production reply, because
+   WP-34's carrier turned the convention on product-wide. That is the
+   defect this packet exists to end.
+2. **The `SuppliedEvent` widening** so the peek can draw the sheet's TIME
+   and one-line machine summary — the two fields WP-38 rendered ABSENT
+   rather than invented.
+3. **The two doors' handlers**, wired only if the delivery makes their
+   targets resolvable. A door that opens nothing is worse than no door;
+   doors-need-handlers is ratified law and no handler will be faked.
+
+A payload or emission widening presents at this packet's GATE for
+ratification per the standing rule; no new event topic is invented.
