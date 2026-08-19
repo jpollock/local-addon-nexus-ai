@@ -15171,3 +15171,44 @@ low load before it is believed, and a wall-clock timeout is the signature.
   which is what CI sees. jest ran many times on this checkout, so **`npm run
   rebuild` is required before loading Local**.
 - **Not pushed.** Nothing tagged, no version touched.
+
+---
+
+**WP-42 · MERGED to `poc/nexintelligence` — receipts (2026-08-19).**
+Merge `ebabe944`, `git diff --stat ebabe944^1 ebabe944`:
+
+```
+ docs/intelligence/WORK_PACKETS.md           | 279 +++++++++++++
+ tests/intelligence-evals/checks.test.ts     | 318 +++++++++++++--
+ tests/intelligence-evals/checks.ts          | 580 +++++++++++++++++-----------
+ tests/intelligence-evals/report.test.ts     |  21 +
+ tests/intelligence-evals/report.ts          |  15 +
+ tests/intelligence-evals/run.ts             |  29 +-
+ tests/intelligence-evals/runCli.test.ts     |  97 +++++
+ tests/intelligence-evals/runner.test.ts     |  82 +++-
+ tests/intelligence-evals/specLoader.test.ts |  53 ++-
+ tests/intelligence-evals/specLoader.ts      |  32 ++
+ 10 files changed, 1229 insertions(+), 277 deletions(-)
+```
+
+**No conflict resolution to trust, because there was no conflict.** The base
+had advanced by exactly 78 lines of `WORK_PACKETS.md` — WP-20g's and WP-41's
+lock announces, no code — so the base was merged INTO the branch first
+(`cc01d7b4`) and this packet's entry appended after it. The record tail is
+chronological by construction rather than by a hand-ordered three-way
+resolution: announce (WP-42), announce (WP-20g), announce (WP-41), delivery
+entry (WP-42), this block.
+
+**Verified on the MERGED tree, not inferred from the branch:** `npx tsc -p .
+--noEmit` clean; `npx jest tests/intelligence-evals/` 10 suites / 394 tests
+green; the runner prints PASS **29** · FAIL 0 · BLOCKED 40 · OWNER-PENDING **9**
+with `E-01 — 10 criteria, 10 PASS` and `B-03 — 15 criteria, 8 PASS, 7
+OWNER-PENDING`; and `run.ts --only E-01` exits **2** with the complaint on
+stderr and **0 bytes** on stdout. Full suite on the identical tree (the branch
+head, which the merge reproduces file-for-file): **591 suites / 7,980 passed /
+12 skipped / 7,992 total, exit 0**.
+
+**ABI ON EXIT: SYSTEM NODE** — measured `v25.9.0` / modules `141` (`.nvmrc`
+pins 22.16.0 → 127, which is what CI sees). `npm run rebuild` before loading
+Local. **Not pushed**; branch `wp-42` and worktree `.worktrees/wp-42` left in
+place.
