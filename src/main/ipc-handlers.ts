@@ -112,6 +112,8 @@ import { createExternalBulkOps } from './bulk/externalBulkOps';
 import { collectSystemHealth } from './health/collectSystemHealth';
 import { enrichSiteFinderPlugins, summarizeSiteFinderTwins } from './intelligence-host/siteFinderTwins';
 import { readSiteContentStatus } from './intelligence-host/siteContentStatus';
+import { readGovernMatrix, setCapabilityGrant } from './intelligence-host/governMatrix';
+import { getIntelligenceCore } from './intelligence-host/coreRegistry';
 import { listComparableFacts, readSiteAtPlaces } from './comparator/comparatorRead';
 import { armFromSelection, previewScope } from './comparator/armFromSelection';
 
@@ -851,6 +853,29 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     previewScope(args?.capability, args?.selection));
   safeHandle(IPC_CHANNELS.COMPARATOR_ARM_SELECTION, (_event: any, args: any) =>
     armFromSelection(args?.capability, args?.selection));
+
+  // WP-44 · the Govern matrix. Wiring only — every derivation and the act itself
+  // live in src/main/intelligence-host/governMatrix.ts, per the integration lock.
+  // The act is the ONE side-effecting channel of the two, and it goes through
+  // WP-20b's producer rather than emitting anything of its own.
+  //
+  // The storage adapter is the SAME shape src/main/index.ts builds for the
+  // intelligence core, over the same RegistryStorage — the grant overlay and the
+  // markers this reads are the ones the running gate reads, not a copy.
+  const governStorage = {
+    get: (key: string) => registryStorage.get(key),
+    set: (key: string, value: unknown) => registryStorage.set(key, value as never),
+  };
+  safeHandle(IPC_CHANNELS.GOVERN_MATRIX, () =>
+    readGovernMatrix({ core: getIntelligenceCore(), storage: governStorage }));
+  safeHandle(IPC_CHANNELS.GOVERN_SET_GRANT, (_event: any, args: any) =>
+    setCapabilityGrant({
+      core: getIntelligenceCore(),
+      storage: governStorage,
+      logger: localLogger,
+      capability: String(args?.capability ?? ''),
+      grant: args?.grant === true,
+    }));
 
   safeHandle(IPC_CHANNELS.GET_FLEET_LIST, async () => {
     try {

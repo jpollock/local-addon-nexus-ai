@@ -6,6 +6,8 @@ import { ProcedureApprovalCard } from './ProcedureApprovalCard';
 import { SiteContextStrip, type SiteChoice } from './SiteContextStrip';
 import { ComparatorPanel, type ComparableFact } from './ComparatorPanel';
 import { ProcedureSurfaces } from './ProcedureSurfaces';
+import { nexusStore } from '../../store/NexusStateManager';
+import type { GovernDoorTarget } from '../../../main/intelligence-host/sequenceGuard';
 import { CitationSpans } from './CitationSpans';
 import {
   applyProcedureEvent,
@@ -1003,6 +1005,24 @@ export class PanelChat extends React.Component<Props, State> {
    * in a children array is still an entry in it, and the parity pin says this
    * tree is byte-identical to the pre-WP-27 one whenever nothing is armed.
    */
+  /**
+   * WP-44 · THE DOOR'S HANDLER. Doors-need-handlers is law, and this is it.
+   *
+   * Until now every `onGovern` prop in this tree was left undefined, so
+   * `ScopeBlock` rendered its door DISABLED — deliberately honest, because a
+   * door that opens nothing is worse than no door. The Govern matrix is the
+   * thing behind it, so the door now opens.
+   *
+   * IT PUBLISHES THE TARGET; IT DOES NOT GRANT ANYTHING. XD-8: consent that must
+   * be recorded is made at a control, never elicited in chat — and a grant made
+   * from inside the panel that is refusing would be exactly the conversational
+   * shortcut J-Refusal's third must-not forbids. What crosses this boundary is a
+   * request to SHOW a row, and the act stays on the row.
+   */
+  private handleGovernDoor = (door: GovernDoorTarget): void => {
+    nexusStore.update({ governDoorRequest: door });
+  };
+
   renderProcedureSurfaces(): React.ReactNode[] {
     if (!hasProcedureSurface(this.state.procedure)) return [];
     const { procedure, abort } = this.state.procedure;
@@ -1015,6 +1035,7 @@ export class PanelChat extends React.Component<Props, State> {
         abort,
         approvalPending: !!approval,
         gateCheckpointId: approval ? approval.checkpointId : null,
+        onGovern: this.handleGovernDoor,
       }),
     ];
   }
@@ -1031,6 +1052,7 @@ export class PanelChat extends React.Component<Props, State> {
         key: 'procedure-plan',
         procedure,
         abort: null,
+        onGovern: this.handleGovernDoor,
       }),
     ];
   }
@@ -1057,6 +1079,7 @@ export class PanelChat extends React.Component<Props, State> {
             electron: this.props.electron,
             capability: COMPARATOR_CAPABILITY,
             facts: comparatorFacts,
+            onGovern: this.handleGovernDoor,
           })
         : null,
       React.createElement(
