@@ -45,7 +45,7 @@ import subprocess
 import sys
 import re
 
-FLOOR = 177
+FLOOR = 178
 
 SUITES = [
     # WP-45's own suites first.

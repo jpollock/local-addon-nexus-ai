@@ -31,6 +31,7 @@ import {
 import {
   GRANT_ISSUED_TOPIC,
   GRANT_REVOKED_TOPIC,
+  GRANTS_STORAGE_KEY,
   MANDATED_EXPLICIT_CAPABILITIES,
   syncCapabilityGrants,
 } from '../capabilityGrants';
@@ -703,17 +704,37 @@ describe('WP-44 · the act, at the control', () => {
     // rather than to the capability would put this person's act on every grant
     // that happened to change in the same pass — including the migration's own
     // first issuances, which nobody chose.
+    //
+    // THE OTHER CAPABILITY HAS TO MOVE IN THE **SAME** SYNC. Comparing against
+    // the bootstrap's events would read a different sync, which any scoping bug
+    // would leave untouched — the first draft of this test did exactly that and
+    // a mutation widening the scope survived it. So the anchor's recorded hash
+    // is rewound first, and it re-pins inside the act's own sync.
     boot();
+    const anchor = 'cap.bulk_plugin_update';
+    const marker = kv.get(GRANTS_STORAGE_KEY) as {
+      version: number;
+      grants: { capability: string; runbookHash: string }[];
+    };
+    expect(marker.grants.some((g) => g.capability === anchor)).toBe(true);
+    kv.set(GRANTS_STORAGE_KEY, {
+      ...marker,
+      grants: marker.grants.map((g) =>
+        g.capability === anchor ? { ...g, runbookHash: `sha256:${'f'.repeat(64)}` } : g
+      ),
+    });
+
     act('cap.promote_environment', true);
 
-    const others = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability !== 'cap.promote_environment');
-    expect(others.length).toBeGreaterThan(0);
-    for (const event of others) {
-      expect([event.payload.capability, event.payload.reason]).toEqual([
-        event.payload.capability,
-        'materialized',
-      ]);
-    }
+    const acted = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment');
+    const anchorEvents = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === anchor);
+    // Both issued in this one sync — the premise, before the claim.
+    expect(acted).toHaveLength(1);
+    expect(anchorEvents).toHaveLength(2);
+
+    expect(acted[0].payload.reason).toBe('granted-at-control');
+    // The one that moved BESIDE the act kept the derived word, not the person's.
+    expect(anchorEvents[1].payload.reason).toBe('repinned');
   });
 
   test('a REVOCATION carries no issuance reason — there is no issuance to describe', () => {

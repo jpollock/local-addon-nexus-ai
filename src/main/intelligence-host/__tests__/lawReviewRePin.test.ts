@@ -39,6 +39,7 @@ import {
   GRANT_ISSUE_REASONS,
   GRANTS_STORAGE_KEY,
   LAW_REVIEW_REPIN,
+  lawReviewRePinFor,
   materializableCapabilities,
   resolveCapabilityGrants,
   syncCapabilityGrants,
@@ -191,6 +192,30 @@ describe('WP-45 · the re-pin, on both grant shapes', () => {
     }
   });
 
+  /**
+   * M09 · THE `to` HALF OF THE MATCH, which no behavioural case above can
+   * exercise: in every one of them the shipped hash IS `to`, so dropping the
+   * `to` check changes nothing observable and the mutation survives.
+   *
+   * The case it guards is a REAL future one. Edit `incident-containment.md`
+   * again and the table's `to` goes stale. A grant sitting at `from` would then
+   * be re-pinned onto text this review never produced, and the ledger would
+   * record a review as having approved it. `repinned` is the honest word there,
+   * and the matcher must decline.
+   */
+  test('the matcher declines a transition whose destination is not the reviewed text', () => {
+    const row = LAW_REVIEW_REPIN[0];
+    const elsewhere = 'sha256:' + 'e'.repeat(64);
+
+    expect(lawReviewRePinFor(row.capability, row.from, row.to)).toEqual(row);
+    // The document moved AGAIN after the review: not this review's transition.
+    expect(lawReviewRePinFor(row.capability, row.from, elsewhere)).toBeUndefined();
+    // And the `from` half, for symmetry — a grant made against other text.
+    expect(lawReviewRePinFor(row.capability, elsewhere, row.to)).toBeUndefined();
+    // A capability the review never touched, at both of another row's hashes.
+    expect(lawReviewRePinFor('cap.bulk_plugin_update', row.from, row.to)).toBeUndefined();
+  });
+
   test('a control-made grant at the reviewed FROM hash is restored, not disarmed', () => {
     const rows = LAW_REVIEW_REPIN;
     writeSettings(
@@ -309,17 +334,31 @@ describe('WP-45 · a caller-supplied reason, in the ratified vocabulary', () => 
     // The scoping that makes this safe: one sync re-resolves the whole set, so
     // a reason applied to the CALL would stamp one person's act onto every
     // grant that happened to change in the same pass.
+    //
+    // THE OTHER CAPABILITY MUST ISSUE IN THE **SAME** SYNC, or this proves
+    // nothing (M14 survived the first draft for exactly this reason): comparing
+    // against an event the BOOTSTRAP emitted reads a different sync entirely,
+    // and any scoping bug would leave that earlier event untouched. So the
+    // anchor's marker is rewound first, which makes it re-pin in the very sync
+    // the supplied reason is passed to.
     const target = 'cap.wpe_pull';
-    const served = core.law!.runbooks.byCapability(target);
+    const anchor = 'cap.bulk_plugin_update';
     // Guarded rather than assumed: if the shipped set stops serving this, the
     // test must say so instead of passing vacuously.
-    expect(served).toBeDefined();
+    expect(core.law!.runbooks.byCapability(target)).toBeDefined();
 
+    rewindMarkerTo(new Map([[anchor, 'sha256:' + 'f'.repeat(64)]]));
     writeSettings([{ capability: target, enabled: true }]);
     sync(new Map([[target, 'granted-at-control' as const]]));
 
-    expect((issued(target)[0].payload as Record<string, unknown>).reason).toBe('granted-at-control');
-    // Everything else in the same sync kept the derived word.
-    expect((issued('cap.bulk_plugin_update')[0].payload as Record<string, unknown>).reason).toBe('materialized');
+    const targetEvents = issued(target);
+    const anchorEvents = issued(anchor);
+    // Both moved in this one sync — the premise, asserted before the claim.
+    expect(targetEvents).toHaveLength(1);
+    expect(anchorEvents).toHaveLength(2);
+
+    expect((targetEvents[0].payload as Record<string, unknown>).reason).toBe('granted-at-control');
+    // The anchor changed in the SAME pass and kept the DERIVED word.
+    expect((anchorEvents[1].payload as Record<string, unknown>).reason).toBe('repinned');
   });
 });
