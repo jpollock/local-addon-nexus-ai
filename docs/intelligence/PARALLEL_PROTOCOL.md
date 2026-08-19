@@ -280,3 +280,14 @@ fact been refused 2ms after the approval, and the panel's own defect
 classifying anything as an incident, enumerate the channels a decision
 could have landed in and read all of them; a UI state is not a channel,
 it is a rendering of one, and it can lie.
+
+**`pwd` before you commit** (WP-39 incident): the shell's cwd persists
+across a session, and a `cd` into the primary checkout hours earlier makes
+`git add -A && git commit` land on the base — sweeping in the architect's
+uncommitted record and anything else lying in the tree. Before ANY commit:
+print the cwd and the branch in the same breath as the command. The same
+persistence poisons measurements: a jest run "in the worktree" that was
+actually the primary's reports the wrong tree's numbers, and the missing
+suite count is how it surfaces. Recovery, when it happens: `git reset
+--mixed HEAD~1` restores the working tree byte-for-byte — verify the
+restoration, never assume it.

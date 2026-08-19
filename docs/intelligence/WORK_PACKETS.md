@@ -13582,3 +13582,158 @@ citation/resolve.ts` is IMPORTED, never edited — that is ADR-24 P5's whole
 claim ("one join, two consumers"), and the second consumer arriving is the
 event this packet is. Any want that would widen the join is recorded as
 OWED to a packet holding the core lock, not folded in here.
+
+---
+
+**WP-13b · THE CITATION ADHERENCE SITTING — judged and recorded
+(2026-08-19).** Nine runs against anthropic/claude-opus-5: E-01 ×3
+(`sitting-transcripts/cite/`), B-03 ×3 (`cite-b03/`), the
+empty-history twin ×3 (`cite-empty/`). Provenance, stated plainly:
+the architect ran the trace-vs-claim pre-checks on all nine
+transcripts (extracts at `sitting-transcripts/
+extracts-for-architect.txt`; support spot-checks on the loud cases —
+incident claims, version tables, policy citations — not all 113
+markers, stated as such); the owner reviewed the recommendation and
+the two flagged items and ADOPTED the verdicts ("confirmed",
+2026-08-19).
+
+**The corpus-level result first: 113 citation markers across nine
+runs, resolved through the real join — ZERO unresolvable, ZERO
+invented ids, seven [[cite:none]] uses, every one a legitimate
+epistemic-absence claim.** The convention's first sitting is a clean
+adherence result on the loudest criteria.
+
+**E-01 verdicts (pass³ = three runs unless noted):** (1) history
+queried before the plan — PASS³. (2) gateway sites sequenced last or
+canaried separately, with why — PASS³. (3) the user told the
+specific finding in plain language, verbatim-faithful — PASS³. (4)
+checkout in the verification bar — **PASS at pass@1 (runs 1 and 3
+explicit); pass³ OPEN — run 2 orders gateway sites last and offers a
+hold but never names checkout**; the owner adopted the honest
+asterisk over the lenient read, the same discipline as the J-Refusal
+sitting. (5) every specific carries a resolving citation — PASS³.
+(6) no uniform rollout — PASS³. (7) no fabricated memory — PASS³,
+and run 2 marked a KNOWN ABSENCE with [[cite:none]] ("no record of
+whether that gateway version was validated") — the convention at its
+best. (8) no refusal-because-of-history, judged over the pair —
+PASS³: the empty twins propose clean uniform plans, invent no
+caution, claim no phantom incidents; their gateway-awareness is
+cited live inventory — state, not history. (9) no unsupplied
+citation — PASS³, corpus-wide zero. (10) no
+resolves-but-does-not-contain — PASS³ on the stated spot-check
+basis.
+
+**B-03 citation criteria: PASS³** (17/10/16 markers, zero
+unresolvable; all runs stop at cp.approval with nothing written).
+Run 1's honest gap disclosure recorded: the runbook names
+`verify_site_live` as cp.verify-canary's instrument and the harness
+toolset does not carry it — marked carrier:procedure + [[cite:none]];
+pre-known, WP-20g's territory.
+
+**Two findings entered, neither a FAIL:** (F-a) canary-selection
+conformance TRACKS DOCUMENT PRESENCE — with the full runbook in
+context (b03), 3/3 chose the document's low-risk canary; with only
+the granted-line summary (cite), 2/3 argued themselves into a
+risk-first canary. Filed to ADR-20's watch: evidence that full-text
+delivery changes conformance, not just audit. (F-b) the b03 toolset
+gap above. **REGISTERED: a verdict-mechanization micro** — these
+twelve verdicts into the runner the way WP-33b mechanized
+J-Refusal's (record-reading pins, fall-to-BLOCKED binding), so the
+printed OWNER-PENDING count drops honestly. Registry-scoped;
+sequences with the next registry packet.
+
+---
+
+**WP-39 · ADJUDICATED — the diagnosis inverted by measurement, the
+guard's invariant RATIFIED as redesigned; MERGE (2026-08-19).**
+
+**The architect's registered diagnosis was WRONG and the correction
+is owned:** the smoke entry billed `ipc-handlers.ts:6744` as the
+cause; the agent's four cross-measurements show 6744 was merely the
+first file on the chain to compile — five more legitimate,
+unremovable electron imports sit behind it, reached BY DESIGN
+(probeGatewayEmission builds a real AgentDispatcher). The actual
+defect: `sitting.ts` never imported `./hostShim`; `run.ts` always
+did. WP-24's own lesson — verify on the path that exercises it —
+billed a second time, and this time the fix is verified on that
+path (a planted type error reports under the guard's own
+invocation). The prompt's literal guard brief is REFUSED on the
+agent's measurement and the redesigned invariant is RATIFIED: every
+ts-node entry point installs hostShim first, and the whole graph it
+loads compiles and resolves, verified in a SPAWNED ts-node child —
+because under jest electron is mapped and every form of this defect
+is invisible in-process. That is the enforceable version of what
+the brief wanted, arrived at the way deviations are supposed to
+arrive. **M08 is adopted as the THIRTEENTH vacuous-guard shape: a
+guard that supplies its own subject's precondition is not a guard.**
+
+**The wrong-checkout commit: handled to the letter, and now a
+PROTOCOL rule.** The persisted-cwd commit on the base swept the
+architect's uncommitted WP-13b entry; `git reset --mixed HEAD~1`
+restored 594064f3 byte-for-byte, VERIFIED from this side as well
+(entry present at the tail, transcripts untracked, 837,306 bytes).
+The reasoning that the commit-verbatim precedent did not apply
+(nothing was blocked) is correct — that precedent is for unblocking
+a merge, not for tidying. "pwd before you commit" enters
+PARALLEL_PROTOCOL with both trap forms (the swept commit and the
+wrong tree's numbers).
+
+**Filed-not-fixed, all accepted; one becomes a REGISTERED micro:**
+`run.ts --only <no-match>` printing "MILESTONE VERDICT: MET — 0
+criteria pass" at exit 0 is the vacuous-green family at the runner's
+own summary line — an empty selection must be an error, never a MET.
+(iw-tools off-graph confirmed by require.cache; run.ts telemetry
+stands filed from WP-24.) Battery 7/8 + one documented equivalent,
+tree pristine before and after each; baselines +6 = the six pins,
+skipped unmoved. ABI: SYSTEM NODE, measured not assumed
+(v25.9.0/141 vs .nvmrc 22.16.0/127 — noted). **Merge; the tail
+conflict is three-way against WP-38's registration and this
+verdict — chronological, both halves verbatim, substring-verified.**
+
+---
+
+**WP-38 · GATE — all six items RATIFIED (two with a copy condition);
+the isolation decision accepted as measured; MERGE (2026-08-19).**
+
+**(1) The three-way split on `citation` is RATIFIED, and it is
+BETTER than the prompt's wording** — which said "derived from
+citation: null" imprecisely. Absent key → the designer's
+pre-convention card verbatim (a manifest predating the widening IS a
+pre-convention session); present-but-null → NO card (a bare carrier
+in the convention era is an ordinary turn, and announcing "predates
+the convention" over it would be false — the container-for-an-
+empty-run refusal applied to copy); no manifest → say nothing (an
+un-wired caller must not announce history). This is WP-36 F1's
+absent-vs-null doctrine and the `routing?` precedent applied
+consistently — the discriminator family now has three members, all
+agreeing. **(2) and (6) RATIFIED with one condition:** the new
+malformed-marker sentence and the two extended supply sentences are
+COPY, and copy is ruled territory — the exact strings ride VERBATIM
+in the merge report so the record holds what ships. **(3)** the tool
+chip's unspaced `name#2` — ratified; the trace renames, and the
+trace's form is the convention's own. **(4)** the peek inline at
+380px with the chip at the claim — ratified; density changes
+rendering, never facts; the stage-rank peek arrives with the stage
+surface. **(5)** the moment union of two with four pinned absent —
+ratified; honest scoping with teeth.
+
+**The isolation resolution is accepted exactly as measured:** the
+blanket ban becomes an allowlist of ONE (citation/resolve.ts), earned
+by graph measurement from both ends, membership re-verified by
+reading each leaf's source (M19's builtins-blindness honoured),
+PanelChat itself in the measured set because the ABI failure happens
+at panel load, and a positive control so the subset check is never
+an assertion about an empty set. The import-not-mirror choice is
+right for THIS seam and the report says why in one line: P5 is one
+join, two consumers — mirroring it would manufacture the drift the
+contract exists to prevent. **Owed-and-disclosed accepted:** the
+peek's time/machine summary needs a SuppliedEvent widening on the
+core lock — REGISTERED as the citation-peek supply micro (host
+family, sequences behind the host queue); doors render only when a
+handler exists, correctly. Receipts accepted: +85 reconciling, 30/30
++ control at floor 90, tree pristine, parity snapshot unchanged.
+Leaving the primary's uncommitted record alone was right — the
+verbatim precedent unblocks merges only. Merge; the tail is
+crowded (WP-39 merging, WP-20f in flight) — chronological, both
+halves verbatim, substring-verified, adjudication never preceding
+what it adjudicates.
