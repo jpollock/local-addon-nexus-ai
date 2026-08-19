@@ -18581,3 +18581,57 @@ anything.
 
 **THE `src/main/intelligence-host/` AND `tests/intelligence-evals/` LOCKS ARE
 RELEASED.**
+
+---
+
+## WP-30 · MERGE ACCEPTED — the session registry (2026-08-19, architect adjudication)
+
+**Independent verification, every number reproduced rather than
+trusted:**
+- `git diff --stat 3dc8df01^1 3dc8df01`: **9 files, +4,484/−57** — exact.
+- **The record merge's four-way verification RE-RUN from the blobs by
+  the architect**: halves measure 8,008 (architect) and 16,824 (agent);
+  each an exact substring EXACTLY ONCE at the reported offsets
+  (1,090,964 and 1,098,972); **1,090,964 + 8,008 + 16,824 = 1,115,796,
+  residual zero** against the merge commit's own blob; line-anchored
+  conflict markers: zero. Both junction separators confirmed present —
+  WP-43's six-character lesson holding.
+- **Fidelity through a second hand**: the three cycle-five designer
+  files re-hashed on the merged tree —
+  `41822cbbc0bd3294b5e1bda087c40402` /
+  `a623afc4cea1e1615b6ea88106343bdb` /
+  `57ee24eb4d1efaddbc9f46236b078e8d` — identical to the architect's
+  recorded values through the agent's own attributed commit
+  (`83c4c769`, seven files). The agent's amendment of its own commit
+  message BEFORE building on it (it said "six files" while listing
+  seven) is accepted with approval — the fabricated-receipt rule
+  applied to a count, self-caught, in the same session the rule was
+  written.
+- **The unpushed confirmation, properly this time**: no
+  `origin/poc/nexintelligence`, no upstream — the absent remote branch
+  is the evidence, and the earlier "0 unpushed" is recorded as the
+  false zero it was.
+- **Tree state accepted**: 603 / 8,275 / 2 skipped / 8,277 exit 0;
+  worktree split 8,265/12, same total, the ten-test embedding boundary
+  read skipped-first; +1 suite / +55 tests fully accounted against the
+  8,222 baseline; battery 29/29 on the merged tree. Eval registry
+  **40 PASS / 0 FAIL / 28 BLOCKED / 10 OWNER-PENDING** — four flips
+  from the measured baseline, none forced, every needsYou criterion
+  honestly held on UX2.
+
+**WP-30 is CLOSED.** The session registry is live: one fold over the
+ledger, no state of its own (re-fold-on-boot is the construction —
+the test kills the only in-memory map and the answers return
+identical), the query contract shipped as ruled with the designer's
+three requirements satisfied in the types, and the eval catching a
+real defect the unit suite missed (the fresh-arm-inherits-denial fold)
+before it ever rendered anywhere.
+
+**What this unlocks, registered:** **UX build 2 — the arrival and the
+re-entry** (M6, the audit view + Home needs-you rows) now has its
+substrate and its ratified drawing: acceptance criteria are XD-26's
+nine pins + the shipped query contract + the triage design's eleven
+pins (XD-23). The designer FYI bundle for the next handoff carries
+two items from this packet: the `state` naming ruling and the
+world-state-to-halts generalization of their tear. The owner's items
+stand: three open smokes + the promotion ceremony sitting.
