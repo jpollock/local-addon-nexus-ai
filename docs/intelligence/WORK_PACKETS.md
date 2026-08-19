@@ -17930,3 +17930,58 @@ micro bundle and the owner's three open smokes stand as registered. The
 promotion ceremony sitting becomes REACHABLE for the first time — B-03's
 backup/approval/promote attesting end to end — and is registered as an
 owner sitting to schedule.
+
+---
+
+## WP-30 · LOCK ANNOUNCE (2026-08-19) — the session registry
+
+Branch `wp-30`, worktree `.worktrees/wp-30`, cut from `poc/nexintelligence`
+at `dadff9c1` (this announce's parent is the architect-work commit, which is
+itself a child of `a9346d8b`, the WP-45 merge report). Per the WP-20f/WP-37
+rule, this announce lands **on the base before the work starts**; the base is
+not mid-merge, so no owner sequencing is needed.
+
+**TWO LOCKS CLAIMED, both verified free on the base rather than assumed:**
+
+- **`src/main/intelligence-host/`** — released in the record's own words at
+  the tail: "**THE `law/runbooks/` AND `src/main/intelligence-host/` LOCKS ARE
+  RELEASED.**" (WP-45 merge report, the last line of this file before this
+  entry). `grep -n "LOCK" … | tail` over the last 350 lines returns exactly
+  one HELD (WP-45's, at its own gate) and one RELEASED (WP-45's, after its
+  merge). Nothing after it re-claims the directory.
+- **`tests/intelligence-evals/`** — WP-42 announced this one at `35cf0d32`
+  and WP-42 is **merged and closed** (`ebabe944`, "WP-42 · MERGED", and the
+  architect's "WP-42 · MERGE ACCEPTED"). Two later packets edited the
+  directory without re-claiming it — WP-44's merge stat carries
+  `checks.test.ts`, `checks.ts`, `probes.ts` and `runner.ts`, and WP-45's
+  carries four test files and the battery — so the lock did not survive its
+  packet, which is the convention this file already records for the
+  eval-registry lock twice ("the eval-registry lock is RELEASED", at the
+  WP-33b and WP-34 boards). Claimed here explicitly so the next agent does
+  not have to re-derive that.
+
+**Scope, as the registration fixes it** (`### [ ] WP-30 · The session
+registry`, above): the fold (`sessionRegistry.ts`, host-side) over `task.*`
+and `control.*` — TaskId correlation × cursor state × pending approvals ×
+outcomes × consequence rank, with SITUATIONS as the unit and causal
+coalescing from the record's own links; the consequence rank at
+moments-model 1.3 §4a, pinned by the designer's "one morning, both ways";
+a host-side query API whose full contract is **GATE-HELD**; re-fold-on-boot
+proved by a test that kills the in-memory state; **no UI, not one renderer
+file**; derived, nothing stored outside the ledger.
+
+**The registry is a READ.** It derives; it does not write. No new ledger
+topic is expected and none will be added — if one turns out to be needed the
+packet stops at the gate and escalates rather than building it.
+
+**Eval registry: measured, never assumed.** The expectation carried in the
+launch instruction is that J-Return's registry-owned criteria (gate-level
+addressing; promotion identity; the pending-approval invariant) and
+J-Refusal's re-owned re-ask criterion become drivable at the registry level,
+while every `needsYou`-token criterion stays BLOCKED on UX build 2. That is
+an expectation, not a finding. Whatever the registry actually measures wins,
+and any divergence is raised in the gate report rather than forced into the
+expected shape.
+
+**THE `src/main/intelligence-host/` AND `tests/intelligence-evals/` LOCKS
+ARE HELD BY WP-30 UNTIL ITS MERGE REPORT SAYS OTHERWISE.**
