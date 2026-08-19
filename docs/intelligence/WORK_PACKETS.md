@@ -14073,3 +14073,65 @@ Registered as a consequence of this packet, and NOT built here:
 **ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and
 a 30-mutation battery, in the worktree and again on the merged tree.
 **`npm run rebuild` before loading Local.**
+
+---
+
+**CONSOLIDATED ADJUDICATION — the relay gap closed: WP-20f and WP-38
+merges ACCEPTED, WP-37's gate RULED, WP-39 still awaiting its merge
+(2026-08-19).** The owner's confusion surfaced a real process gap:
+three reports reached the record without reaching the architect. All
+read from the record and adjudicated here.
+
+**WP-20f · MERGE ACCEPTED** (f971272e; 10 files +1,256/−52 verified).
+The signature ripple accepted AS the proof — three outside suites now
+derive the enabled set through `materializableCapabilities`, so no
+caller can quietly re-encode what the flip enables. The em-dash
+anchor finding enters the PROTOCOL (the transforming-tool family,
+beside the NUL). E2's restatement stands: deny subtracts ceremony not
+reach until WP-20g. The grant-fold follow-on stays registered. **The
+crossed-lock claim with WP-37 becomes a PROTOCOL rule: lock announces
+land on the BASE before work starts**; announce-on-branch is only for
+a mid-merge base, with owner sequencing stated.
+
+**WP-38 · MERGE ACCEPTED** (7e1dbe88; 11 files +2,345/−6 verified;
++85 reconciling; 30/30 at floor 90; the base-commit parity snapshot
+unchanged — additive-parity measured). The M5 corroboration render is
+IN THE PRODUCT; cycle three is closed fully built.
+
+**WP-37 · GATE RULED.** The emission shape is RATIFIED as presented —
+two optional fields riding once, five rules each with a witness; the
+toBe-not-toEqual hand-off pin and the zero-runnable-scope-still-rides
+rule are exactly right. **`planCheckpoint` KEEPS ITS NAME:** the
+derivation is WP-26's ratified `unverifiablePrecedentOf`, now ONE
+function with two consumers and an equality pin (the audit-columns
+discipline again); the name states the semantic role, the epistemic
+class is already carried by the attest words at render, and the
+claim is bounded by what a consent gate IS. **The producer ruling:
+candidate A** — the comparator surface is the scope's ratified
+provenance (XD-15's from-line resolves to the matrix selection);
+**B is REFUSED**: a model-named selection is a different provenance,
+and widening `ScopeFrom.surface` by tool default would put words in
+a designer-ratified artifact — if ever wanted, it arrives as a
+designer position proposing the variant, through the loop.
+Consequence stated plainly, as the agent stated it: **the empty-run
+state remains UNREACHABLE in the product until the comparator lands
+(UX build 2 / WP-29 family), and the owner's triple ask does NOT yet
+double as the empty-run smoke** — it shows an ordinary armed run,
+which is correct behavior; reporting a rendering as a measurement is
+the WP-36 finding, refused prospectively here with approval. The
+renderer hand-off (plan-line consumption + the fake's
+`planCheckpoint` from the generated fixture) is REGISTERED as a
+DockedPanel micro. **The FOURTEENTH vacuous-guard shape is adopted
+as the twelfth's generalisation:** a mutation is equivalent whenever
+a DOWNSTREAM guard collapses the two states it distinguishes; the
+test for both — find the line that actually holds the property and
+mutate THAT. WP-37: MERGE (base f971272e or later; tail three-way,
+chronological, verbatim).
+
+**WP-39: cleared to merge at its adjudication and still on its
+branch** — the verdict relay is re-issued with this entry. **Process
+correction, owned by the architect:** the owner launches and relays
+in batches; from here, any packet that merges without an
+architect-accepted report gets its acceptance read from the record
+at the next contact, exactly as done here — the loop degrades to
+eventual adjudication, never to silence.

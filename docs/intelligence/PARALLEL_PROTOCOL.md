@@ -291,3 +291,20 @@ actually the primary's reports the wrong tree's numbers, and the missing
 suite count is how it surfaces. Recovery, when it happens: `git reset
 --mixed HEAD~1` restores the working tree byte-for-byte — verify the
 restoration, never assume it.
+
+**A lock announced only on a worktree is not visible to the agent it warns**
+(the WP-20f/WP-37 crossed claim): WP-37 claimed the intelligence-host lock
+while WP-20f held it, because WP-20f's announcement lived on its branch and
+the base could not show it. No harm that time — disjoint files — but the
+rule is now explicit: the lock-announce commit lands ON THE BASE before the
+work starts (WP-32's pattern). When the base is mid-merge and cannot take
+it, the announce goes on the branch AND the sequencing comes from the owner,
+stated in the launch instruction.
+
+**An anchor that fails to match is a fault in the anchor until the line is
+read with a tool that does not transform it** (WP-20f finding, the em-dash
+form of the NUL family): a `—` escape in a quoted heredoc reaches Python
+as six literal characters, and `cat -A` then renders the file's real em
+dash as an escape — confirming the wrong hypothesis with the transforming
+tool's own output. Read the disputed line with a byte-honest tool before
+repairing the file it "mismatches."
