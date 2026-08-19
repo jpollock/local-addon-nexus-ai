@@ -14892,3 +14892,282 @@ land as SEPARATE COMMITS on `wp-41`, so the flip can be dropped, deferred behind
 WP-42, or merged independently without touching the surface. Nothing here
 changes a check WP-42 owns. Flagged rather than improvised, per the
 "two packets turn out to need the same file" trigger.
+
+---
+
+### [x] WP-42 · The registry bundle — the WP-13b verdicts carried, the empty selection refused  *(2026-08-19)*
+
+Branch `wp-42` at worktree `.worktrees/wp-42`, cut from `35cf0d32` (this file's
+WP-42 lock announce, committed to the base before the work started). The commit
+beneath it, `18273a52`, is the architect's Wave 6 registration — found
+uncommitted in the primary checkout and committed VERBATIM in its own
+attributed commit, per the protocol's standing precedent, because the announce
+appends to the same file.
+
+**Worktree baseline before any edit: 590 suites / 7,952 passed / 12 skipped /
+7,964 total, exit 0** — exit captured before any pipe. The twelve-skipped column
+is unmoved from WP-38's figure; the passed count is the base advancing.
+
+**Eval-runner baseline, measured rather than assumed:** PASS 17 · FAIL 0 ·
+BLOCKED 40 · OWNER-PENDING 21 · SPEC-DEFECT 0.
+
+---
+
+## 1 · The twelve verdicts, carried
+
+`checks.ts` gains one section and twelve criteria change verdict. The pattern is
+WP-33b's, applied at six times the scale: the record's own sentence is quoted as
+evidence, the report says it carried the verdict rather than computing one, and
+the criterion FALLS TO BLOCKED the moment the substrate that made those replies
+possible stops holding.
+
+**Which twelve, and the arithmetic.** E-01 had ten criteria, nine of them
+OWNER-PENDING (`key_step[0]` is programmatic and was already PASS); B-03's three
+citation criteria were OWNER-PENDING. Nine plus three is the twelve the
+registration named, and the printed count moved exactly that far:
+
+| | before | after |
+|---|---|---|
+| PASS | 17 | **29** |
+| OWNER-PENDING | 21 | **9** |
+
+BLOCKED (40), FAIL (0) and SPEC-DEFECT (0) are unmoved. The milestone verdict is
+unchanged — NOT MET, on the forty BLOCKED — which is correct: this packet
+retires no capability gap, it stops asking a person to re-judge what they judged.
+
+**Transcription: nothing was reworded, and the one transformation is named.**
+Every carried string is a verbatim substring of the record. Two of the twelve
+are wrapped in markdown emphasis there (criterion 4's, and B-03's — where the
+closing `**` falls mid-sentence, between `PASS³` and the marker counts), and the
+`**` markers are dropped. That is formatting, not words, and the pin permits
+exactly two normalisations — whitespace (the record hard-wraps; the code carries
+one line) and `**`. Every other character must match. No verdict needed
+rewording, so there is no escalation on this half.
+
+**The asterisk survived, and a test exists to keep it alive.** Criterion 4 prints
+PASS with `PASS AT pass@1 ONLY`, `pass³ OPEN`, and the record's own reason (run 2
+ordered the gateway sites last and offered a hold but never named checkout)
+attached. Three pins hold it: the exact record sentence, the absence of a clean
+`— PASS³` form for that criterion, and a count assertion that it is the ONLY
+carried verdict with an open column — so a second asterisk appearing means either
+the record gained one this file has not read, or this file invented one.
+
+**Because the prompts are gone, the open column had nowhere to live.** A carried
+PASS carries no `ownerPrompt`, so nothing on screen told anyone how to close
+criterion 4. Its evidence now names the two-run command and the one question to
+judge. This was not in the brief; leaving the only open column in the sitting
+with no route to closing it would have been a worse reading of it.
+
+**Two premises, named separately because they fail separately.** The brief's
+condition was the convention riding and the join keeping shape; that is the floor
+and it is enforced on all six citation criteria (`probeCitationContract`). The
+other six E-01 verdicts are about a plan reflecting a history, and rest on
+`probeIncidentProducer` — the producer emitting, the wired assembler returning it
+for the flagged site, and a summary line rendering. This is ADDITIVE to the
+brief, not a substitution: a plan cannot visibly reflect a finding the turn no
+longer carries, and the judgment sheet measured that supply per run before the
+owner read a word. The fabricated-memory verdict takes BOTH, because it cites a
+`[[cite:none]]` use and is a claim about history; a pin drives it dead from
+either side.
+
+**The thirteenth verdict enriches rather than replaces.** The sitting also judged
+E-01's `key_step[0]` — "(1) history queried before the plan — PASS³" — which the
+runner already scores programmatically about the SUBSTRATE. That verdict rides as
+evidence, explicitly labelled "carried here as evidence, never as this criterion's
+verdict", and only when the probe is ok. With the substrate broken the criterion
+still reports FAIL and the sitting line disappears — pinned, because a human PASS
+laid over a broken chain is the exact stale green the fall-to-BLOCKED rule exists
+to prevent.
+
+**A property WP-34 pinned had to be rewritten, and this is the judgment call to
+look at first.** `checks.test.ts` carried "NONE of them can ever return PASS —
+the platform never judges support", with a docblock explaining that a citation
+PASS would be the harness claiming an authority ADR-24 withholds from it. That
+was right about the HARNESS and is still enforced, in its true form: no PASS may
+be derived from the probe, and every citation PASS must quote the sitting and say
+it did not compute one. What changed is who is speaking — ADR-24 withholds that
+authority from the platform, never from the owner. If that reading is wrong, this
+is the line to reverse, and reversing it is one function.
+
+---
+
+## 2 · `--only <no-match>` is an error, never a MET
+
+Reproduced first, on the base:
+
+```
+$ npx ts-node --project tsconfig.test.json tests/intelligence-evals/run.ts --only nope-not-a-spec
+  …37 seconds of probing…
+  specs         0
+  MILESTONE VERDICT: MET — 0 criteria pass.        exit 0
+```
+
+Fixed in two places, because the lie had two halves.
+
+**The selector is checked at the door.** `unmatchedSelector` (`specLoader.ts`,
+which owns "which specs exist") returns the whole complaint — the selector
+quoted, every available id listed — and `run.ts` prints it to stderr and returns
+2 BEFORE `createEvalFixture` runs. Matching is EXACT: a prefix match here would
+be worse than no check at all, since the runner's own filter is `spec.id !==
+only`, so anything this helper accepts that the filter rejects selects nothing
+and reports MET. `E-01` — the sitting harness's own spelling — is the live
+near-miss, and it is the case the pin uses. Exit 2 rather than a new code: the
+documented meaning of 2 is "nothing is broken, but the run could not answer the
+question", and a run that selected nothing answered nothing.
+
+**And the summary line no longer calls zero criteria MET.** Every branch of
+`milestoneVerdict` counts verdicts, so zero of everything fell through to MET.
+`--only` was the reproduced route; an unreadable evals directory and a set of
+specs that all failed to parse are the others, and they need no selector at all.
+This is the same false-completeness one level down, at the line the file's own
+header already promised would never render as MET, so it is fixed rather than
+filed.
+
+**Pinned by three suites, one of which spawns the real CLI.** `run.ts` calls
+`main()` at module scope and cannot be imported (`hostSeamProbe.ts` excludes it
+for the same reason), so an in-process assertion would be pinning a re-implementation.
+`runCli.test.ts` spawns ts-node, asserts non-zero, asserts the anchored
+`MILESTONE VERDICT: MET` is absent (per WP-32 — `MET` alone is a substring of
+`NOT MET`), asserts every real id is listed, and asserts **stdout is empty** —
+which measures that no probe ran and no report rendered, since both write there.
+(It does NOT bound the fixture build, which is silent on stdout — see M04 in the
+battery below, the one survivor, where that is measured rather than assumed.)
+The positive control runs a
+REAL spec id through the same CLI, because a guard that refuses every selector
+would satisfy the first case completely.
+
+One thing the fix taught itself: the first draft of the complaint ended with the
+sentence *"an empty report used to print MILESTONE VERDICT: MET"* — and the test
+that forbids that string in the output failed on the error message that exists to
+prevent it. The message now says "score the milestone as met".
+
+---
+
+## 3 · Mutation battery — 13 attempted, 12 killed, 1 SURVIVOR disclosed
+
+Every run `--no-cache` (WP-31: a poisoned cache can mask a mutation as a false
+survival). Tree verified pristine before and after; the harness refuses to start
+otherwise and restores in a `finally`, so an interrupted run cannot leave a
+mutation on disk (WP-34).
+
+| | mutation | outcome |
+|---|---|---|
+| M01 | exact id match becomes `includes` — `E-01` accepted, selects nothing | KILLED |
+| M02 | the selector check never complains | KILLED |
+| M03 | the complaint prints, the run continues to a vacuous MET at exit 0 | KILLED |
+| M04 | a fixture is built before the selector is checked | **SURVIVED** |
+| M05 | `evaluated` counts specs instead of criteria | KILLED |
+| M06 | the zero-criteria rule fires only when specs failed to load | KILLED |
+| M07 | a carried verdict survives its premise dying | KILLED |
+| M08 | criterion 4 upgraded to a clean pass³ | KILLED |
+| M09 | the spot-check bound stops riding with the pass | KILLED |
+| M10 | the fabricated-memory verdict stops dying with its history half | KILLED |
+| M11 | a human PASS is carried over a broken substrate chain | KILLED |
+| M12 | B-03's run-1 disclosure authored onto E-01 | KILLED |
+| M13 | the carried verdict stops naming its sitting | KILLED |
+
+**M04 is a survivor, not an equivalent, and here is exactly what it leaves
+unguarded.** Moving the selector check to AFTER a `createEvalFixture()` left both
+runCli pins green, because the fixture build writes nothing to stdout — so
+`expect(result.stdout).toBe('')` bounds the PROBES and the REPORT, which is what
+it claims in its comment, but not the fixture. Consequence: a future edit could
+push the refusal behind the fixture build and no test would notice; the
+user-visible contract (non-zero, names the selector, lists the ids, never MET)
+would still hold, and only the one-second-instead-of-thirty property would go.
+Not pinned harder because the honest instruments are brittle — a wall-clock bound
+would fail under exactly the multi-agent load this packet measured (F4), and a
+temp-directory diff races every sibling packet's own fixture. The check's
+position is instead structural and commented: it is the first statement after the
+ABI guard.
+
+---
+
+## 4 · Findings, filed not fixed
+
+**(F1) The WP-13b sitting was judged from a DEGRADED judgment sheet, and the
+artifacts on disk show it.** Three independent signals in
+`sitting-transcripts/cite/judgment-sheet.txt` and `cite-b03/judgment-sheet.txt`:
+the E-01 sheet counts **10** OWNER-PENDING criteria where the runner reports nine
+(`key_step[0]` is PASS); every criterion prints "(the runner recorded no judging
+instruction for this criterion)", including the six that demonstrably had
+prompts; and neither sheet carries the "N criteria are already decided
+programmatically — do NOT re-judge them" block the runner-backed path prints.
+That is `sitting.ts`'s `catch` around `runEvals` — the WP-39 defect, whose own
+guard header describes this exact symptom ("a judgment sheet degraded
+mid-sitting: criteria printed, judging instructions blank"). **What it does and
+does not mean:** the owner judged the criterion TEXT, which is the obligation, and
+the sheet's own hardcoded notes (the tool-trace instruction on fabricated memory,
+the twin-variant instruction on the refusal must_not) did print. It is recorded
+because the verdicts this packet mechanizes were reached without the runner's
+judge-only sentences, and a later reader comparing sheet to registry would
+otherwise find a discrepancy with no explanation. WP-39's fix means a re-sit
+would not degrade this way.
+
+**(F2) `run.ts --json` does not emit parseable JSON.** The runner's own header
+advertises `--json > report.json`; the debug logger writes to stdout alongside
+the payload, so the file is 400 lines of `[DEBUG] [ToolRegistry] …` with a JSON
+document somewhere inside it. Found while writing the positive control, which
+now asserts on the rendered report instead. Not fixed here: it is the logger's
+stream, not the selector, and redirecting it is a change with reach beyond this
+lock.
+
+**(F3) The judgment sheet calls a carried verdict "decided programmatically".**
+With twelve criteria now PASS-by-sitting, `renderJudgmentSheet` prints them under
+"N criteria are already decided programmatically — do NOT re-judge them". The
+instruction is right and the reason is wrong for those twelve. Copy is ruled
+territory (WP-38), so it is not touched: the suggested string, for a ruling, is
+"already decided — do NOT re-judge them (programmatically, or at a recorded
+sitting)".
+
+**(F4) Multi-agent load can time a test out at 5× its own headroom.**
+`tests/unit/credentials/CredentialManager.test.ts`'s retry-backoff case runs in
+**6.0s** against a 30s jest budget, and it EXCEEDED 30s in the first full run of
+this packet, at load average 6.9 with three Wave 6 packets running `npm test`
+concurrently. It passed twice in isolation immediately afterwards, at load 4.6 —
+once `--no-cache` (6.011s) and once cached (6.007s), which is what separates this
+from the poisoned-cache class: the same cache that "failed" passes when the load
+drops. Proposed for PARALLEL_PROTOCOL's Test-environment section, alongside the
+mid-session ABI flip: during multi-agent operation a red must be re-measured at
+low load before it is believed, and a wall-clock timeout is the signature.
+
+---
+
+## 5 · What this packet did NOT do
+
+- No `src/` change; no new topic, payload version, envelope field or storage
+  marker; `wpeOperationPermissions` untouched.
+- No spec YAML was edited. The criteria texts are the designer's and the
+  architect's; only their verdicts moved.
+- E-01 now has ZERO owner-pending criteria, so `sitting.ts --spec E-01` produces
+  a sheet with nothing to judge. That is the honest state (they are judged) and
+  the runner-test that used to require six E-01 prompts is inverted into a
+  positive assertion rather than left to pass over an empty list.
+- Two dead prompt builders (`ownerInstructions`, `citationSitting`) are deleted,
+  each with a comment in its place saying what stood there and why it went.
+
+---
+
+## 6 · Receipts
+
+- **Full suite after: 591 suites / 7,980 passed / 12 skipped / 7,992 total, exit 0** (exit captured before any pipe). Baseline was
+  590 / 7,952 / 12 / 7,964. Delta **+1 suite, +28 tests, skipped column unmoved** —
+  and the 28 decompose exactly: `runCli.test.ts` 2 (new suite), `specLoader.test.ts`
+  +5, `report.test.ts` +2, `checks.test.ts` +19, `runner.test.ts` +0 (three claims
+  rewritten in place, none added).
+- **Eval runner after:** PASS **29** · FAIL 0 · BLOCKED 40 · OWNER-PENDING **9** ·
+  SPEC-DEFECT 0; milestone verdict unchanged (NOT MET, on the forty BLOCKED).
+  E-01 reads `10 criteria — 10 PASS`; B-03 reads 8 PASS / 7 OWNER-PENDING.
+- `npx tsc -p . --noEmit` clean.
+- **One poisoned-cache occurrence, eighth on the record, and it was the textbook
+  signature**: `probes.test.ts` and `sitting.test.ts` failed to run with
+  `SyntaxError: Invalid or unexpected token` pointing at `sitting.ts:1` — its own
+  shebang — in a file this packet never opened, while eight sibling suites were
+  green. `npx jest --clearCache` then 10/10, 394 tests. Believed nothing until
+  after the clear. Worth noting for multi-agent operation: the jest cache
+  directory is under the shared OS temp path, so three concurrent packets share
+  one.
+- **ABI ON EXIT: SYSTEM NODE.** Measured, not assumed: `node -v` **v25.9.0**,
+  `node -p process.versions.modules` **141**; `.nvmrc` pins **22.16.0 → 127**,
+  which is what CI sees. jest ran many times on this checkout, so **`npm run
+  rebuild` is required before loading Local**.
+- **Not pushed.** Nothing tagged, no version touched.
