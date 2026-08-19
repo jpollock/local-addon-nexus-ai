@@ -1,0 +1,95 @@
+{
+  "$answers": "from-designer-07-corroboration-render.md §4a — six spans, three states",
+  "$doNotEdit": "Every `state`, `record` and `reason` below is the output of resolveCitations() — the production join the eval sheet and the M5 render share. Editing this file by hand authors a platform answer the platform never gave. Regenerate instead — npm run fixtures:citations.",
+  "$generatedBy": "scripts/generate-citation-fixtures.ts (WP-34)",
+  "$notDerived": "The event ids and their topics are the DESIGNER'S illustrative ones from from-designer-07-corroboration-render.md §4a, kept verbatim so this fixture reads beside that sheet. Real ledger ids are evt_<ULID> and real topics come from the closed vocabulary (episodic.incident.recorded, task.action.executed). The join treats every id as opaque, so nothing derived here depends on their shape.",
+  "$shapeVersion": 1,
+  "reply": "Checkout has been returning 500s on Charlie since 02:14 this morning. [[cite:evt_9c41]]\n\nThe WooCommerce update landed at 02:07, seven minutes before the first error. [[cite:evt_8f21]]\n\npayment-gateway-x was updated on the same site forty minutes earlier. [[cite:evt_8e90]]\n\nBoth sites that broke on a WooCommerce update before were running that same gateway version. [[cite:none]]\n\nThat points at the gateway rather than at WooCommerce itself, but I have not proved it.\n\nThe backup taken before the update is verified and fourteen minutes older than the failure. [[cite:tool:wpe_backup_and_verify#2]]",
+  "spans": [
+    {
+      "claim": "Checkout has been returning 500s on Charlie since 02:14 this morning.",
+      "marker": "[[cite:evt_9c41]]",
+      "record": {
+        "id": "evt_9c41",
+        "kind": "event",
+        "topic": "incident.opened",
+        "trust": "emitted"
+      },
+      "state": "cited-and-resolves"
+    },
+    {
+      "claim": "The WooCommerce update landed at 02:07, seven minutes before the first error.",
+      "marker": "[[cite:evt_8f21]]",
+      "record": {
+        "id": "evt_8f21",
+        "kind": "event",
+        "topic": "task.action.executed",
+        "trust": "emitted"
+      },
+      "state": "cited-and-resolves"
+    },
+    {
+      "claim": "payment-gateway-x was updated on the same site forty minutes earlier.",
+      "marker": "[[cite:evt_8e90]]",
+      "reason": "not-in-supply",
+      "state": "cited-but-unresolvable"
+    },
+    {
+      "claim": "Both sites that broke on a WooCommerce update before were running that same gateway version.",
+      "marker": "[[cite:none]]",
+      "state": "uncited-factual-claim"
+    },
+    {
+      "claim": "That points at the gateway rather than at WooCommerce itself, but I have not proved it.",
+      "marker": null,
+      "note": "no marker — hedged inference, legitimately uncited (ADR-24 P3)",
+      "state": null
+    },
+    {
+      "claim": "The backup taken before the update is verified and fourteen minutes older than the failure.",
+      "marker": "[[cite:tool:wpe_backup_and_verify#2]]",
+      "record": {
+        "id": "wpe_backup_and_verify#2",
+        "kind": "tool"
+      },
+      "state": "cited-and-resolves"
+    }
+  ],
+  "supply": {
+    "carrierLines": [
+      {
+        "key": "freshness"
+      },
+      {
+        "key": "retrieved"
+      }
+    ],
+    "events": [
+      {
+        "id": "evt_9c41",
+        "topic": "incident.opened",
+        "trust": "emitted"
+      },
+      {
+        "id": "evt_8f21",
+        "topic": "task.action.executed",
+        "trust": "emitted"
+      }
+    ],
+    "toolCalls": [
+      {
+        "index": 1,
+        "name": "wpe_backup_and_verify"
+      },
+      {
+        "index": 2,
+        "name": "wpe_backup_and_verify"
+      }
+    ]
+  },
+  "tally": {
+    "cited-and-resolves": 3,
+    "cited-but-unresolvable": 1,
+    "uncited-factual-claim": 1
+  }
+}

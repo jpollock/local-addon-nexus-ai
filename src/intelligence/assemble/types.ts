@@ -310,6 +310,18 @@ export interface AssembleRequest {
      * there is no other copy for the carrier to defer to.
      */
     procedureHash?: string;
+    /**
+     * WP-34: the same ADR-20 mechanism again, for the citation convention
+     * (ADR-24). The convention's version hash the actor's context already
+     * carries. Equal ⇒ the carrier re-asserts in one line; different or absent
+     * ⇒ the full instruction block rides.
+     *
+     * Like `procedureHash` and unlike `policyVersionHash`,
+     * `rebuildingDurableContext` does NOT suppress it: the convention never
+     * rides the system prompt, so there is no other copy for the carrier to
+     * defer to.
+     */
+    citationConventionHash?: string;
   };
   /**
    * Divergences the host's `verifyMirror()` reported at assembly time. Non-zero
@@ -514,6 +526,16 @@ export interface ContextBundle {
     ambient: string | null;
     /** Per-turn carrier: policy re-assert + freshness + retrieval. */
     turn: string | null;
+    /**
+     * WP-34 · the citable keys of the sections that actually rode this turn,
+     * in order — the `carrier:` half of ADR-24's supply universe.
+     *
+     * Derived from the same array `renderTurnBlock` joined, never recomputed:
+     * a citation of a carrier line that did not render, and a rendered line
+     * that cannot be cited, are both drift this field exists to make
+     * impossible. Empty when no carrier rode.
+     */
+    turnSections: readonly string[];
   };
   /** ADR-7: an autonomous actor with no policy set gets a refusal bundle. */
   failClosed: boolean;

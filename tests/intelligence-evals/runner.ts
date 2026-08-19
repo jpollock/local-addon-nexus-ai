@@ -14,6 +14,7 @@ import { criteriaOf, loadEvalSpecs } from './specLoader';
 import { checkFor } from './checks';
 import {
   probeArmingGap,
+  probeCitationContract,
   probeDeniedApproval,
   probeEnvelopeSchema,
   probeEpisodicRetrieval,
@@ -156,6 +157,11 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
       // the same ledger. In the other order the "planted" count would include
       // them and the report would lose the distinction it exists to keep.
       incidentProducer: await probeIncidentProducer(fixture),
+      // WP-34. AFTER the incident producer, deliberately: it drives the wired
+      // chat carrier over a site whose history this report has finished
+      // planting, so the ids it reports as citable are the ids a sitting would
+      // actually be handed.
+      citation: await probeCitationContract(fixture),
       manifest: await probeManifestEvent(fixture),
       // WP-19. Runs BEFORE the schema/timestamp probes below read the ledger,
       // so those two validate the gateway's own envelopes rather than a corpus

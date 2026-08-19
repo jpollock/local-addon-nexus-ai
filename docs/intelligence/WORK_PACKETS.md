@@ -11633,3 +11633,331 @@ which the two open sittings need anyway, since a sitting happens inside Local.
 launch.** Still owed and recorded open, not held: a sitting for J-Refusal's
 sixth must-not, and pass³ on the two sat must-nots — both fold into the owner's
 next Local session.
+
+---
+
+**WP-34 ANNOUNCED 2026-08-18 — LOCKS TAKEN: the eval registry AND
+`src/main/intelligence-host/` + `src/intelligence/` (the carrier).**
+Both verified free before the claim: the intelligence-host lock was
+released at the WP-25 merge and the eval-registry lock at WP-33b's,
+each stated in its own merge entry above. The two are one lock by the
+ownership map (`src/main/intelligence-host/` is "serialized with the
+core, same owner-lock"), and this packet needs the core half because
+the carrier's rendering lives in `src/intelligence/assemble/`, not in
+the host — the host holds the per-session hash memory that drives it.
+
+Worktree `wp-34`, branch `wp-34`, cut from `poc/nexintelligence` at
+`e85cfefc` (after WP-33b's merge). **Worktree baseline: 573 suites,
+7666 passed, 12 skipped, 7678 total, exit 0** — exit captured before
+any pipe; identical to WP-33b's worktree baseline, including the
+twelve-skipped column (the primary checkout reads 2 skipped / 7676
+passed at the same total, the documented both-ways gate).
+
+Scope, model-facing only, NO UI: the span convention (ADR-24 P2), the
+carrier instruction block that teaches it (**a CARRIER CHANGE → GATE
+HOLD**, presented verbatim for ratification before merge-path work),
+the shared claim→record resolution (P5's one join, two consumers), and
+the eval half plus adherence fixtures (P4). The M5 surface packet is
+separate and carries the designer's eight pins.
+
+---
+
+**WP-34 · DELIVERED — the citation contract's model-facing half.
+GATE HOLD OPEN: the carrier instruction block awaits ratification.**
+Branch `wp-34` at worktree `.worktrees/wp-34`, cut from `e85cfefc`.
+**NOT merged, not pushed** — the carrier text below is presented
+verbatim for the owner's ruling, and merge-path work stops here per
+the packet's own instruction.
+
+**1 · THE SPAN CONVENTION.** `[[cite:<ref>]]`, four forms:
+
+```
+[[cite:evt_01J9Z4KDQ8]]            a ledger event of this task's supply
+[[cite:tool:wp_plugin_list#1]]     a tool call of this task — name, then WHICH
+                                   call of that tool, counting from 1
+[[cite:carrier:freshness]]         an addressable carrier line
+[[cite:none]]                      a factual claim with NO record behind it
+```
+
+Trailing, after the claim's final punctuation — the designer's
+ratified position (`for-designer-corroboration-response.md` §2), never
+a superscript. Four decisions worth the owner's eye:
+
+- **The literal word `cite` is the anti-collision device, not the
+  brackets.** `[[…]]` alone is a wiki link and occurs in real
+  WordPress content — which can be ECHOED into a reply, because
+  retrieved site content rides the same turn wrapped as untrusted
+  data. The discriminator had to survive that, not merely look tidy.
+- **The kind is recoverable from the marker alone.** Three grammars,
+  one alternative each; the parse result is a discriminated union with
+  `kind` on it. That is the constraint the designer's ratification
+  flowed back: a trailing door has to know what it points at AND what
+  kind of thing that is. A consumer re-deriving the kind from the id's
+  shape would be a second parser.
+- **The most common case pays nothing for the kind.** `evt_` is
+  already a kind word, so an event citation is the bare id. Only the
+  two forms that need a discriminator carry one.
+- **`[[cite:none]]` is A DECISION THE PACKET MADE, and the owner
+  should rule on it explicitly.** ADR-24 names three render states,
+  and the third — *uncited factual claim* — is drawn LOUD on the
+  designer's sheet (`from-designer-07` §4a, row 4: "*no record* · a
+  fact with nothing offered for it"). But P3 also forbids the renderer
+  from classifying, and there is *no NLP in the render path*. Those two
+  cannot both hold unless the model marks the third state itself. So it
+  does. The consequence, stated rather than hidden: a model that simply
+  FORGETS produces no third state and the sentence renders bare — and
+  catching that is the eval's job (criterion 1 below), which is exactly
+  where P3 puts the "is this a factual claim" classifier. The
+  alternative — a classifier in the render path — is the one thing the
+  surface exists to prove it does not do.
+
+**2 · THE CARRIER INSTRUCTION BLOCK — VERBATIM, FOR RATIFICATION.**
+Rides the per-turn carrier after the policy re-assert and before the
+evidence, versioned `cnv_<12 hex>` over its own text and re-asserted by
+hash per ADR-20 (full text once per session, one line thereafter;
+`rebuildingDurableContext` does NOT suppress it, because the block
+never rides the system prompt — same reasoning as `procedureHash`).
+It rides only when the carrier has at least one other section, so a
+turn that previously produced no carrier still produces none — the
+additive-parity precondition, pinned.
+
+```
+## How to cite what you say — output convention cnv_6c2b11952046
+When you state a specific fact that came from a record above — something that
+happened, a current-state value, a number, a date, a version, an id — end the
+claim with a marker naming the record that supplied it. The marker goes at the
+END of the claim, after its final punctuation, never mid-sentence.
+
+Write exactly one of these four forms. No spaces inside the brackets:
+
+  [[cite:evt_01J9Z4KDQ8]]            a ledger event listed above, by its own id
+  [[cite:tool:wp_plugin_list#1]]     a tool call YOU made this task: the tool name,
+                                     then # and which call of that tool it was,
+                                     counting from 1
+  [[cite:carrier:freshness]]         a line of this platform context block. The
+                                     citable lines are: policy, procedure, routing,
+                                     freshness, retrieved
+  [[cite:none]]                      you are stating a fact and NOTHING above
+                                     supplies it
+
+Rules:
+- Cite only ids that appear above, and only tool calls you actually made this
+  task. Never invent an id, never adapt one, never cite a record you were not
+  given. A citation of a record nobody supplied is worse than no citation at
+  all: it looks like evidence.
+- Conversational glue, reasoning, and clearly hedged inference carry no marker.
+  "That points at the gateway, but I have not proved it" needs nothing.
+- A fact you cannot source takes [[cite:none]] rather than silence. Say the
+  fact if it is worth saying, and mark that nothing here backs it.
+- One claim may carry more than one marker. Put them side by side at the end.
+
+What the platform does with these: it checks that the record you named EXISTS
+in what this task was supplied, and links it. It does NOT check that the record
+supports the claim — that is not something it can know, and it will not guess.
+No reply is ever refused for citing badly. This convention changes how you
+attribute what you say; it changes nothing about what you are allowed to do.
+```
+
+The last paragraph is the one to read hardest. A model told the
+platform verifies its citations would reasonably present a cited claim
+as *checked*, which is the single belief this contract must never
+create; and a model that thought a bad citation could be refused would
+cite defensively. Both sentences are pinned by test.
+
+**3 · THE SHARED JOIN — ONE JOIN, TWO CONSUMERS (P5).**
+`src/intelligence/citation/resolve.ts`. The eval sheet imports it now;
+the M5 render imports the same functions later.
+
+- **Renderer-safe, MEASURED two ways.** Zero runtime imports — every
+  import is `import type`, erased at emit. `citationJoin.isolation.
+  test.ts` walks `require.cache` (exactly one `src/` module enters:
+  itself) AND reads the source, because a cache walk **cannot see node
+  builtins** and a builtin in a renderer bundle is a polyfill, i.e. a
+  second implementation of the one thing P5 says there must be one of.
+  The hashing therefore lives in a sibling `convention.ts`, core-only,
+  and a test pins that the join cannot reach it.
+- **Three states, distinguishable in the RETURN SHAPE.** A
+  discriminated union on `state`; `record` exists only on the arm that
+  found one, `reason` only on the arm that did not. A consumer cannot
+  read a record off an unresolvable citation — the compiler stops it —
+  and cannot tell the states apart by matching a string.
+- **`reason` is a closed machine channel** (`malformed` |
+  `not-in-supply`), not a message. The platform could not READ what was
+  written, versus it read it fine and nobody supplied that record, are
+  different facts leading to different follow-ups.
+- **Existence only.** A test drives a resolving citation on a claim the
+  record contradicts and requires it to still resolve. The join has no
+  opinion; P4 reserves that.
+- **The universe is one derivation.** `supplyFromBundle` reads the
+  bundle; `ChatAssemblyResult` now publishes `citationSupply` so the
+  host has it too; `blocks.turnSections` is the array the carrier
+  JOINED, so a carrier line cannot be citable without having rendered
+  or render without being citable.
+
+**4 · THE EVAL HALF + ADHERENCE FIXTURES.**
+Three criteria on **E-01** and on **B-03** — 6 new, all OWNER-PENDING,
+runner now **17 PASS / 0 FAIL / 40 BLOCKED / 21 OWNER-PENDING**, exit 2
+(was 17/0/40/15; the delta is exactly +6 and nothing else moved).
+
+- **All six are judged, and that is the claim rather than a
+  shortfall.** The platform verifies existence and refuses to verify
+  support, so "did it cite honestly" is a question no probe may answer.
+  `checks.test.ts` pins that none of them can EVER return PASS.
+- **Each is earned per run.** They gate on `probeCitationContract` —
+  which drives the wired chat carrier and the shared join — and fall to
+  **BLOCKED** if the convention did not ride. J-Refusal's
+  refusal-gated shape, same reasoning. The probe's own failure
+  direction is DRIVEN (`probes.test.ts`), through a reachable degraded
+  world (WP-17's law-registry stage can fail; `syncCapabilityGrants`
+  with no core is the production path to no grants).
+- **The third criterion is the one the platform structurally cannot
+  catch, and the check says so in its own evidence:** a citation that
+  resolves to a record not containing the cited fact passes every
+  existence check by construction. Only a judge following the link sees
+  it. P4 ranks it worse than honest omission, and that ranking is
+  carried into the sitting instructions as an instruction to the judge.
+- **The sitting is mechanized before the surface exists.** `sitting.ts`
+  gains section **4b**, resolving the model's real reply through the
+  shared join and printing the three states as a table — v6 Q10's ask
+  ("the fabrication check drops from an hour to minutes") delivered
+  against a transcript rather than a render. Two limits print WITH the
+  table: the event ids are scraped from the rendered carrier (pinned
+  against `assembleForChatTurn`'s own supply — two derivations of one
+  universe, pinned like `localDay`), and every citable carrier line is
+  admitted unchecked, because a `carrier:` citation shown unresolvable
+  on a technicality the sheet cannot verify would be a FALSE loud
+  state, and the loud state is the one a judge acts on.
+- **Adherence fixtures line up against `from-designer-07` §4a, row for
+  row.** `docs/intelligence/design-fixtures/citation-spans.json`,
+  `npm run fixtures:citations`. The claims are the designer's own
+  sentences; the markers are the convention's; **every state is
+  `resolveCitations`'s output**, never typed. The test RE-EXTRACTS the
+  designer's six-row table from their committed markdown and requires
+  the derived states to equal it — transcription pinned to its source,
+  the journey-spec discipline applied to a design fixture. Derived
+  tally: **3 resolve · 1 unresolvable · 1 with nothing offered**, which
+  is the designer's own header line. The sixth row (uncited glue)
+  carries NO marker: an absence, not a fourth state.
+  Two fields have no platform behind them and the file's header says
+  so — the event ids and topics are the designer's illustrative ones
+  (`evt_9c41`, `incident.opened`), not `evt_<ULID>` and the closed
+  topic vocabulary.
+
+**D-02 DOES NOT EXIST AS A SPEC**, and nothing here pretends it does.
+The design note says "D-02 when it runs"; it is a design in
+`eval-stress-test-set.md` with no YAML. Recorded rather than
+manufactured.
+
+**RECEIPTS.**
+
+- **Baseline (worktree, before any edit): 573 suites / 7666 passed /
+  12 skipped / 7678 total, exit 0** — exit captured before any pipe.
+  Identical to WP-33b's worktree baseline including the twelve-skipped
+  column, so the both-ways gate is accounted for rather than assumed.
+- **After: 579 suites / 7747 passed / 12 skipped / 7759 total, exit 0.**
+  **The skipped column is unchanged**, so the delta is a real gain and
+  not a gate flip. **+6 suites and +81 tests, accounted for exactly:**
+  53 in the six new suites; 13 in `checks.test.ts`'s new describe
+  (12 generated across 2 specs × 3 criteria × 2 directions, plus 1);
+  **12 from `checks.test.ts`'s two `it.each` loops** — one over every
+  criterion and one over every registered check, each gaining 6 because
+  the family adds 6 of each; 2 in `probes.test.ts`; 1 in
+  `sitting.test.ts`. 53+13+12+2+1 = 81.
+- `npm run typecheck` clean. `npx eslint src/intelligence/citation`
+  clean — the seam rule is not weakened anywhere.
+- Runner: **17 PASS / 0 FAIL / 40 BLOCKED / 21 OWNER-PENDING**, exit 2
+  (was 17/0/40/15; +6 and nothing else moved).
+- Both design fixtures report current:
+  `citation-spans.json is current`, `up to date:
+  declared-procedures.json`.
+- **The carrier text quoted above was verified byte-identical to the
+  shipped constant programmatically**, not by eye — the same fidelity
+  check the standing WP-02 precedent uses for verbatim commits. A gate
+  ruling on text that differs from what ships would be worthless.
+
+**MUTATION BATTERY: 19/19 KILLED, CONTROL SURVIVED, on a frozen tree.**
+Every run `--no-cache`, explicit argv, count-floored. The battery
+verifies the tree is pristine before it starts and after it ends, and
+refuses to run if it is not — see the finding below for why that is
+now part of it.
+
+**THREE GENUINE SURVIVORS WERE FOUND AND CLOSED, not disclosed.** The
+first battery reported 15/19, and the three misses were all real gaps
+rather than equivalent mutants:
+
+- **M09** — a task-wide call index passed as readily as a per-tool one,
+  because nothing measured the difference. `wp_plugin_list#3` meaning
+  "the third call of the task" is a different record from "the third
+  call of that tool", and a reader cannot check the first without
+  counting every other tool's calls too. Closed with a case pinning the
+  numbering and a resolution across an interleaved trace.
+- **M17** — `probeCitationContract` could be hardcoded to `ok: true`
+  and nothing went red, which would make the six judged verdicts a
+  constant. Closed by DRIVING the probe's failure direction through a
+  reachable degraded world (no law registry, no grants — WP-17's own
+  init stage can fail, and `syncCapabilityGrants` with no core is the
+  production path to no grants).
+- **M19 — the packet's best finding.** The isolation pin walked
+  `require.cache`, and **`require.cache` cannot see node builtins**: an
+  added `import { createHash } from 'crypto'` slipped through a pin
+  written specifically to keep imports out of the renderer-safe join.
+  `crypto` is exactly the import that had to stay out (a builtin in a
+  renderer bundle is a polyfill, i.e. the second implementation P5
+  forbids). Closed by reading the SOURCE as well as the graph and
+  requiring every import in the file to be `import type`. **A graph
+  measurement is blind to builtins — a pin that guards against runtime
+  imports needs both halves.**
+
+**FINDING — a battery killed mid-mutation leaves the mutation on
+disk.** Worth the protocol's attention as the KILL form of the
+poisoned-artifact rule (WP-32 recorded the generator form). A run was
+stopped because the tree had moved under it; the stop skipped the
+`finally: restore()`, and M05's regex stayed in `resolve.ts`. The next
+baseline went red on a file nobody had edited — the poisoned-cache
+signature exactly, and it would have read as a real regression to
+anyone who had not just run a battery. **What caught it was taking a
+fresh baseline before re-running rather than trusting the tree**, and
+the fix is now in the harness: the battery verifies every anchor is in
+its original form before it starts and after it finishes, and refuses
+to run on a tree that is not pristine. *Proposed as a
+`PARALLEL_PROTOCOL.md` addendum beside the generator form; not written
+there by this packet, since that file is owner-approved.*
+
+**Second, smaller process note, recorded because it cost a run:** the
+first clean-battery attempt was invalidated by my own edit to a test
+file WHILE it ran. "A baseline is only a baseline if the tree held
+still" applies to a mutation battery exactly as it applies to a jest
+baseline, and for the same reason — each mutation's run reads the tree
+as it reaches it.
+
+**ESCALATIONS — none taken, three refused as the packet directs, one
+raised for the owner:**
+
+- A structured citations channel beyond inline spans: NOT built. The
+  four forms carry everything the render needs.
+- Gateway enforcement / refusal of uncited replies: NOT built, and the
+  carrier text says so to the model in as many words.
+- Assembler change beyond the carrier: none. `renderTurnBlock`'s
+  output for a turn with no convention is byte-identical to before.
+- **RAISED, NOT DECIDED: the manifest does not record which citation
+  convention was in effect.** ADR-20's audit claim ("policy vX was in
+  effect") has no citation equivalent, because adding one is a
+  `context.assembled/1` payload widening — the escalation class WP-20c
+  had ratified before it widened `procedure` in place. The hash rides
+  the carrier and is testable; it is not in the stored record. If the
+  owner wants "convention vX governed this reply" provable after the
+  fact, that is a one-field ruling.
+- **REGISTERED FOR THE M5 SURFACE PACKET, deliberately not
+  pre-decided here:** `procedureModel.isolation.test.ts` bans
+  `src/intelligence/` from the renderer graph wholesale. Nothing in the
+  renderer imports the join today, so the suite is green and untouched —
+  pre-weakening a guard for a consumer that does not exist is the wrong
+  direction. When M5 imports it, that blanket assertion needs to become
+  one that admits provably-pure leaves; this packet supplies the
+  measurement that makes the decision cheap (the join loads exactly one
+  file, and every import in it is a type import).
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and jest
+repeatedly. **`npm run rebuild` before loading Local** — which the
+adherence sittings need anyway, since a sitting happens inside Local.
+
