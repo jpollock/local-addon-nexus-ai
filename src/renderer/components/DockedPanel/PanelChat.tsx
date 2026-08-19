@@ -563,6 +563,23 @@ export class PanelChat extends React.Component<Props, State> {
         ],
       }));
       this.props.onStreamingStatusChange?.(null);
+    } else if (event.type === 'citation_supply') {
+      // WP-43 · THE SWAP POINT WP-38 NAMED, taken. The host delivers this
+      // turn's supply and manifest once, immediately before `done`; the field
+      // it lands on is the whole contract, and everything downstream —
+      // `citationRender`, the three faces, the peek — is WP-38's, unchanged.
+      //
+      // Attached to the STREAMING message and to no other. A payload written
+      // across the whole list would re-render every earlier reply in the
+      // session against this turn's supply, which is retroactive citation: the
+      // one thing the sheet says "would make every link untrustworthy".
+      this.setState((s) => ({
+        messages: s.messages.map((m) =>
+          m.id === streamingId
+            ? { ...m, citation: { supply: event.supply, manifest: event.manifest, moment: event.moment } }
+            : m,
+        ),
+      }));
     } else if (
       event.type === 'procedure_armed' ||
       event.type === 'checkpoint_changed' ||

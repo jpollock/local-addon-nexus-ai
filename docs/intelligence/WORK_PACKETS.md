@@ -16251,3 +16251,287 @@ designer as a small position, micro after their ruling. Registered.
 Receipts accepted (598/8,108/12 exit 0, +42 reconciling; 24/24 at
 floor 105; fidelity on 3f8815ea pure-append). **Merge; WP-44
 launches on it.**
+
+---
+
+**WP-43 · DELIVERED, HELD AT THE GATE — the citation delivery micro
+(2026-08-19).** Branch `wp-43` at worktree `.worktrees/wp-43`, cut from
+`9a956bdc` (this file's WP-43 lock announce, committed to base before the work
+started, after the architect's registration was committed verbatim as
+`3f8815ea`).
+
+**Worktree baseline before any edit: 595 suites / 8,066 passed / 12 skipped /
+8,078 total, exit 0** — exit captured before any pipe.
+
+---
+
+## 1 · What was built
+
+The defect, stated once so the rest reads against it: WP-34's carrier turned
+the citation convention on **product-wide**, so models cite. WP-38 built the
+render and pinned it. Nothing ever put a turn's supply on a panel message. So
+`msg.citation` was always absent, the parity branch rendered the reply through
+plain markdown, and **raw `[[cite:…]]` markers reached the screen as literal
+text in every citing production reply**. That is what the owner's comparator
+smoke photographed, and it is what this closes.
+
+**Host — `src/main/intelligence-host/citationDelivery.ts` (new).**
+`citationDeliveryFor(assembly, toolCallNames)` builds exactly the renderer's
+`CitationTurn` minus the reply: the supply, the manifest's `citation` field,
+and the surface's moment. `null` when the layer contributed nothing.
+
+**Host — `chatAssembly.ts`.** `ChatAssemblyResult` gains `citationManifest`,
+read verbatim off `bundle.manifest.citation` — the same object the manifest
+event carried, so what the panel renders and what the ledger records cannot
+come apart.
+
+**Host — `ChatService.ts`.** One turn-exit chokepoint, `endTurn`, replacing
+**four** bare `done` emissions (the stream's error branch, the
+no-more-tool-calls completion, the catch block, the max-iterations tail). The
+citation event goes first, `done` second, and the delivery is wrapped so it can
+never cost a turn its ending. The turn's tool-call names accumulate across
+every iteration of the agent loop and are recorded **before** execution.
+
+**Seam — `common/chat-types.ts`.** A new `citation_supply` stream event
+carrying `CitationDelivery` verbatim. WP-26's precedent: new shapes join the
+chat stream, and a renderer that does not handle them ignores them.
+
+**Core — `src/intelligence/citation/resolve.ts`.** `SuppliedEvent` and
+`CitationRecord` widen by `observedAt` and `summary`; `supplyFromBundle` carries
+both through from the retrieved item. This is WP-38's second owed item.
+
+**Renderer (additive, and named as the report requires).** `PanelChat.tsx`
+gains ONE branch in `onStreamEvent`. `citationModel.ts` gains the two peek
+fields and `peekTime`. `CitationSpans.tsx` draws them when supplied.
+
+---
+
+## 2 · GATE ITEMS — held for ruling
+
+**G1 · THE EMISSION WIDENING: a new `citation_supply` stream event.** Presented
+per the standing rule. A field on the existing `done` event was the
+alternative and was refused: `done` fires from four places, so the payload
+would have to be threaded through all four and would be silently absent from
+any fifth added later. As a separate event it rides the WP-26 seam, `done`
+stays byte-identical, and the panel attaches it to a specific message. It
+carries no reply — the panel holds the streamed text, and a second copy is the
+sheet's own objection to copying a record into the chat, turned on the chat.
+
+**G2 · THE PAYLOAD WIDENING: `ChatAssemblyResult.citationManifest`.** WP-34
+published the supply and not the manifest field, so the renderer had the
+universe and no way to know whether the reply was under the convention at all.
+Handed across as the same object, never re-derived.
+
+**G3 · THE CORE WIDENING: `SuppliedEvent.observedAt` + `.summary`.** WP-38's
+owed item, filled. Both optional, both pure carry-through, both ABSENT rather
+than defaulted when the supply did not carry them. `observedAt` is the event's
+`observed_at` — the layer invariant, and the one place this widening could have
+broken it; a resolver stamping "now" would launder a six-hour-old fact as
+current, and the battery's M11 is the witness. `summary` is WP-13c's bounded
+line, composed from an explicit allow-list, already shown to the model.
+
+**G4 · THE MOMENT IS A CONSTANT OF THE SURFACE, and the surface is
+Investigate.** Pin 4 says strictness comes from the moment, not the renderer —
+so somebody other than the renderer must say which moment a surface is in, and
+the host is the only party that knows what surface it assembles for
+(`CHAT_SURFACE = 'chat.docked-panel'` already exists for that class of reason).
+Investigate and not Glance because `moments-model.md` M5 says it in its own
+words: center "the evidence chain — findings, incidents, the claims-linked-to-
+records rendering", rank affinity "stage — this is conversational work by
+nature". Glance's center is "pre-answered state" and "a glance that argues its
+sources is no longer a glance". **The load-bearing half is that it does not
+vary by ask.** Reading the moment off the user's message — "update plugins" is
+Act-small, "why is checkout failing" is Investigate — would be a classifier
+deciding how strictly a reply's evidence renders, i.e. pin 4's prohibition
+performed one layer down where it is harder to see. Pinned as a member of the
+renderer's own `CITATION_MOMENTS` by a test that imports both halves; main and
+renderer share no bundle, so this is the `localDay` /
+`resolveAgentCron`-`effectiveCadenceExpression` shape.
+
+**G5 · A WP-38 CENSUS MOVED, and this is the argument.** `citationModel.test.
+ts`'s "is a ROUTE, never a copy" pin listed `summary` on the FORBIDDEN side of
+`RecordPeek`. That was right when it was written and for a reason that has
+since changed: the join carried no summary, so the only way one could have
+appeared was for the render to compose it, which is authoring. It is now
+CARRIED, from the field the sheet itself asks the peek to draw — "identity,
+topic, time, the derived supply sentence, a one-line machine summary and the
+door". The distinction the list is really drawing is between the record's
+CONTENTS and a bounded line ABOUT it; `body`, `payload`, `contents` and `text`
+remain forbidden and are still asserted. **This is the one place this packet
+edits another packet's pin, and it is flagged rather than folded in.** The
+alternative — widen `SuppliedEvent` and then decline to render the summary —
+was considered and refused: it satisfies the words of deliverable 2 and none of
+its purpose, and would leave the sheet's peek permanently incomplete behind a
+field nothing reads.
+
+---
+
+## 3 · THE TWO DOORS — measured, and they stay unrendered
+
+Doors-need-handlers is ratified law and no handler was faked. The delivery does
+not make either target resolvable, and that is a measurement rather than an
+assumption — every channel a target could live in was enumerated and read:
+
+- **"Open in the record, against its runbook"** wants the RECORD RANK.
+  `moments-model.md` names it; nothing builds it. **Zero** renderer components
+  render a ledger event by id; **zero** IPC channels reach the ledger
+  (`grep getIntelligenceCore src/main/ipc-handlers.ts` → nothing);
+  `Ledger.get(id)` has **zero callers anywhere outside its own class**.
+- **"Search the ledger for this id"** wants a ledger search surface. No IPC
+  channel, no GraphQL field, no component.
+
+Both therefore stay unrendered exactly as WP-38 pinned them, and the pin is now
+also asserted from the DELIVERY side: `panelChat-citation-delivery.test.tsx`
+requires `PanelChat` to supply neither handler and requires the opened peek to
+contain no `button`. Battery M24 is the witness — adding a no-op handler goes
+red. Building either surface is a designer-loop question, not a delivery micro.
+
+---
+
+## 4 · Findings
+
+**F1 · THE WP-20b NEAR-MISS HAPPENED, WAS CAUGHT BEFORE ANY COMMIT, AND THE
+PROTOCOL PARAGRAPH SHOULD NAME THE TOOL.** Every file edit in the first
+implementation pass landed in the PRIMARY checkout, not the worktree: the edit
+tool takes an ABSOLUTE path, and a path anchored at the repo root is the
+primary's copy even when the shell's `pwd` is the worktree. The protocol
+already warns about this ("New files go where your `pwd` is, not where your
+packet is") but frames it as a *new file* hazard; it is worse than that,
+because an EDIT to an existing tracked file produces no untracked artifact and
+`git status` in the worktree stays clean. What surfaced it was neither `git
+status` nor review — it was **`tsc` failing on symbols that had just been
+written**, because a shell-run `python3` script had edited the worktree's copy
+of the same file while the edit tool edited the primary's. The two halves of
+one change were in two trees. Recovery: copy the eight files across, `git
+checkout --` the seven tracked ones in the primary, delete the one new file
+there, re-apply the shell-side edit in the worktree. The primary was verified
+back to exactly its committed state (`git status --porcelain` showing only the
+architect's untracked `for-designer-cycle-four-bundle.md`, which was not
+touched). **Proposed protocol amendment, for the architect to write or
+refuse:** the `pwd`-before-you-commit paragraph gains a sibling — *a
+path-taking tool is not governed by `pwd`; anchor every write at the
+worktree root and verify with a `git status` in the PRIMARY checkout before
+the first commit, because an edit to a tracked file leaves no trace a
+worktree-side `git status` can show.*
+
+**F2 · THE BATTERY'S OWN PASS-CONDITION READ THE WRONG LINE — WP-32's finding
+in a new form.** The first battery run reported M02 and M07 as **VOID**
+("executed 85 < floor 101"). Both were in fact KILLS: the mutants broke the
+type check, so a suite failed to COMPILE and contributed zero tests, which
+dropped the count below the floor. The battery parsed only jest's `Tests:` line,
+so a suite-level failure was invisible to it, and the floor rule — which exists
+to catch a mutant that makes tests silently not run — converted the two
+clearest kills in the set into unmeasurables. Fixed by parsing `Test Suites:`
+as well and checking RED **before** the floor. The generalisation is WP-32's:
+a verdict computed from one summary line can be produced by a different fact
+than the one it names.
+
+**F3 · THREE COVERAGE HOLES, ALL FOUND BY THE BATTERY, NONE BY REVIEW.**
+- *M05.* The test named "REPLACES the assembler's empty tool list rather than
+  appending to it" asserted a length that is right **either way**, because
+  `citationSupply.toolCalls` is `[]` by contract. Its own comment admitted as
+  much and the test shipped anyway — a vacuous guard that passes against the
+  bug it names. Closed by fabricating a non-empty assembler list.
+- *M15 / M16.* The `ChatService` suite exercised **no tool call at all**, so
+  deleting the trace push survived, and so did moving it behind a success
+  check. The second is the more dangerous: skipping a failed call renumbers
+  every later call of that tool, so a citation the model wrote against `#2`
+  resolves to `#3`'s record — a WRONG record, which is worse than an
+  unresolvable one *and quieter*, because it draws the neutral chip. Closed by
+  three tests that run tool calls through the real loop. **The refusal has to be
+  an `isError` result, not a throw**: a throw unwinds the agent loop and ends
+  the turn, so the second call never happens and there is nothing to renumber —
+  the state the defect lives in only exists for a refusal, which is what the
+  sequence guard and the permission gate actually produce.
+
+**F4 · AN ANCHOR THAT MATCHED THREE BRANCHES.** M17's one-line anchor
+(`m.id === streamingId`) occurs three times in `PanelChat.tsx`. The battery
+reported ANCHOR-MISS rather than mutating the wrong one, which is the
+protection working; re-anchored on two lines per WP-24's rule.
+
+**F5 · A SCOPED TEST RUN IS NOT THE DoD RUN.** `src/intelligence/assemble/
+__tests__/citationCarrier.test.ts` pins `supply.events` by exact equality and
+went red on the widened `observedAt`. It was not in the scoped set (`npx jest
+src/intelligence/citation`) because it lives one directory over. The full suite
+caught it; nothing else would have. The pin was kept as an exact equality
+rather than relaxed to a subset match — it is a whole-shape pin, and relaxing
+it would let a future widening slip an invented field into the supply with
+nothing going red.
+
+---
+
+## 5 · OWED, and disclosed rather than filled
+
+**A REOPENED SESSION STILL SHOWS RAW MARKERS, and the reachability is
+measured.** `PanelChat.persistSession` maps only `id/role/content/timestamp/
+incomplete` onto `ChatMessage`, and `loadSession` maps the same four back;
+`chat_messages` has no citation column. So a session closed and reopened loses
+`msg.citation`, falls to the pre-WP-38 parity branch, and renders `[[cite:…]]`
+as literal text again. **This packet did not close it, deliberately**, and the
+reason is that both available closures are gate-grade rather than wiring:
+
+1. **Persist the payload** — a `chat_messages` column and a migration. A
+   schema change, and it also raises a question this packet cannot answer:
+   whether a stored supply is still the truth about a turn weeks later.
+2. **Route a reloaded transcript through the model with no manifest** —
+   `conventionState` would return `unknown`, `citationRender` would strip the
+   markers, and the reply would read as ordinary prose. Cheap, and it is the
+   model's OWN ruled behaviour for that state ("a surface with no record in hand
+   must say nothing"). But it changes what a message with no citation data
+   renders as, which is the additive-parity precondition WP-38's
+   `panelChat-procedure-parity.test.tsx` pins byte-for-byte — and it is a
+   ruling about old transcripts, which is exactly what the
+   `predates-convention` card exists for and exactly the kind of decision the
+   loop makes rather than a delivery micro.
+
+Recommendation, not a decision: (2) with a designer ruling, because the leak is
+user-visible today and (1) does not remove it for any session written before
+the column existed.
+
+**The four unruled moments** (Inspect, Act-small, Act-big, Return) are still
+pinned ABSENT from `STRICTNESS_BY_MOMENT`, unchanged by this packet. The host
+now names one of the two ruled ones; widening the union is still a vocabulary
+question.
+
+---
+
+## 6 · Receipts
+
+- **Baselines, both sides, skipped column read first.** Before: 595 suites /
+  8,066 passed / 12 skipped / 8,078 total, exit 0. After: **598 / 8,108 / 12 /
+  8,120, exit 0.** Skipped unchanged at 12 on both sides, so the delta is real
+  and carries no WP-20c boundary effect: **+3 suites, +42 tests, reconciling
+  exactly** — 17 (`citationDelivery`) + 11 (`chat-citation-delivery`) + 12
+  (`panelChat-citation-delivery`) = 40 in the three new suites, plus **2 in
+  `citationModel.test.ts`** (the widened-fields carry-through and the
+  local-zone time formatter). `citationCarrier.test.ts` is unchanged in count:
+  one existing assertion was edited, none added.
+- `npx tsc -p . --noEmit` clean. `npx eslint` clean on all fourteen changed
+  `.ts`/`.tsx` files; the seam rule is untouched and `resolve.ts` keeps its zero
+  runtime imports (the two new fields are interface members).
+- **MUTATION BATTERY: 24 mutations, 24 KILLED, control survived, tree verified
+  PRISTINE before and after.** Every run `--no-cache`, explicit argv (never a
+  shell-split variable), **count-floored at 105** — the sum of the six suites'
+  pristine green counts, so a mutant that reduced the executed count is VOID
+  rather than green. **The first run was 18/24**; the six non-kills are F2, F3
+  and F4 above, and every one of them was a real defect in the battery or in
+  the tests rather than an equivalent mutant. Each mutation names the lie it
+  would ship: the moment (M01–M02), the degraded-layer silence (M03), the three
+  supply kinds (M04–M06), WP-38's G1 absent-vs-null split (M07–M08), the
+  widening and its two invention directions (M09–M12), the four turn exits and
+  the trace's numbering (M13–M16), retroactive citation (M17), the dropped
+  manifest (M18), the peek's honest absences (M19–M23), and the faked door
+  (M24).
+- Commits on `wp-43`: `3e4eab92` (the delivery), `86a17d93` (the battery),
+  `3e0d6043` (the three coverage holes + the parser fix), `b610aeef` (the
+  WP-34 supply-shape pin), and this report. Two commits on base
+  before the work: `3f8815ea` (architect's registration, VERBATIM, md5
+  identical before and after staging, pure append, zero deletion lines) and
+  `9a956bdc` (the lock announce).
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` three times, `npx
+jest` many times, and two 24-mutation batteries. **`npm run rebuild` before
+loading Local.**
+
+**THE `src/main/intelligence-host/` AND `src/intelligence/` LOCKS ARE HELD
+until this packet merges.**

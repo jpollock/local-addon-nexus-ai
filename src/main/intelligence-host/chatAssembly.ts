@@ -26,7 +26,7 @@ import {
   SemanticHit,
   TaskFrame,
 } from '../../intelligence';
-import type { Runbook } from '../../intelligence';
+import type { BundleManifest, Runbook } from '../../intelligence';
 import { CITATION_CONVENTION_VERSION } from '../../intelligence/citation/convention';
 import { supplyFromBundle } from '../../intelligence/citation/resolve';
 import type { CitationSupply } from '../../intelligence/citation/resolve';
@@ -119,6 +119,25 @@ export interface ChatAssemblyResult {
    * looking at two different universes (P5).
    */
   citationSupply: CitationSupply;
+  /**
+   * WP-43 · the manifest's own `citation` field, handed across verbatim.
+   *
+   * The supply above says what this turn made CITABLE; this says whether the
+   * turn was under the convention at all, and it is the second half the render
+   * needs — `conventionState` reads this and nothing else. Publishing it beside
+   * the supply rather than making the renderer re-derive it is the P5 discipline
+   * again: the manifest is the record of what governed the reply, and a surface
+   * inferring that from the presence of markers would be a second opinion about
+   * a fact the platform already wrote down.
+   *
+   * `null` carries through with its ratified meaning — "no convention rode this
+   * turn" — and is a different fact from the field being ABSENT, which means the
+   * caller predates the convention entirely. This field is never absent on a
+   * successful assembly, because `BundleManifest.citation` is not optional; a
+   * live turn is therefore always `in-effect` or `did-not-ride`, never the
+   * legacy card. That is deliberate and pinned.
+   */
+  citationManifest: BundleManifest['citation'];
 }
 
 /**
@@ -305,6 +324,10 @@ export async function assembleForChatTurn(
       grants: bundle.tools.length > 0 ? bundle.tools.map((t) => t.name) : undefined,
       procedure: bundle.procedure,
       citationSupply: supplyFromBundle(bundle),
+      // WP-43 · verbatim off the manifest that was just emitted to the ledger,
+      // so what the panel renders and what the record says are the same value
+      // read once, not two derivations that can drift.
+      citationManifest: bundle.manifest.citation,
     };
   } catch {
     return null; // swallow everything: a chat turn is never broken by this layer

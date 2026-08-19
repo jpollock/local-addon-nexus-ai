@@ -43,6 +43,7 @@ import React from 'react';
 import {
   chipFor,
   citationRender,
+  peekTime,
   recordPeek,
   unresolvedPanel,
   LEDGER_SEARCH_DOOR_LABEL,
@@ -116,6 +117,12 @@ const styles = {
   },
   panelId: { fontFamily: 'monospace', fontSize: 11, fontWeight: 700 },
   panelMeta: { color: 'var(--nxai-card-sub)', marginTop: 2 },
+  /**
+   * WP-43 · the machine summary reads as prose, so it takes the panel's own
+   * text colour rather than the muted metadata colour the identifiers use. No
+   * new token: `--nxai-card-text` is what the panel already sets.
+   */
+  panelSummary: { color: 'var(--nxai-card-text)', marginTop: 4 },
   panelNote: {
     color: 'var(--nxai-card-sub)',
     marginTop: 6,
@@ -223,23 +230,35 @@ export class CitationSpans extends React.Component<Props, State> {
   }
 
   /**
-   * Identity, trust label, and the door — the peek, and nothing more.
+   * Identity, time, the machine summary, trust label, and the door — the peek,
+   * and nothing more.
    *
-   * The sheet also draws a time and a one-line machine summary. Neither is
-   * rendered, because neither is carried: the shared join's record is id, kind,
-   * topic and trust, and widening it is a change to `src/intelligence/`. An
-   * invented timestamp here would be the render authoring evidence, which is the
-   * one thing this surface exists to prove it does not do. Disclosed as owed,
-   * never filled in.
+   * WP-43 closes the two lines WP-38 disclosed as owed. Both are CARRIED from
+   * the supply through the widened join, and each renders only when it was
+   * actually supplied: an absent time draws no time row, an absent summary
+   * draws no summary row. The alternative — a placeholder, a dash, "unknown" —
+   * is a word standing in for a fact, and this is the one surface whose entire
+   * subject is the difference between the two.
+   *
+   * The summary is a bounded line about what the event was ABOUT, not the
+   * record's contents. "A citation is a route, not a copy" survives it: the
+   * route now names where it goes, which is what the sheet asked for.
    */
   private renderPeek(resolution: Extract<CitationResolution, { state: 'cited-and-resolves' }>): React.ReactNode {
     const peek = recordPeek(resolution.record);
+    const time = peekTime(peek);
     const { onOpenRecord } = this.props;
     return React.createElement(
       'div',
       { style: styles.panel, 'data-citation-panel': 'record-peek' },
       React.createElement('div', { style: styles.panelId }, peek.id),
       peek.topic ? React.createElement('div', { style: styles.panelMeta }, peek.topic) : null,
+      time
+        ? React.createElement('div', { style: styles.panelMeta, 'data-peek-field': 'time' }, time)
+        : null,
+      peek.summary
+        ? React.createElement('div', { style: styles.panelSummary, 'data-peek-field': 'summary' }, peek.summary)
+        : null,
       React.createElement('div', { style: styles.panelMeta }, peek.supplySentence),
       React.createElement('div', { style: styles.panelNote }, peek.note),
       // A door that opens nothing is worse than no door. It renders only when a

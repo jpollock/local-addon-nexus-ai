@@ -331,14 +331,22 @@ export function chipFor(resolution: CitationResolution): CitationChip {
 // ---------------------------------------------------------------------------
 
 /**
- * Identity, trust label, and the door — and nothing else, ever.
+ * Identity, time, the machine summary, trust label, and the door.
  *
- * `time` and the one-line machine summary the sheet draws are NOT here, and
- * their absence is disclosed rather than filled: the shared join carries id,
- * kind, topic and trust, and widening it is a change to `src/intelligence/`,
- * which this packet does not hold the lock for. An invented timestamp on a
- * record peek would be the render authoring evidence, which is the surface's
- * one prohibition.
+ * WP-38 shipped this WITHOUT the sheet's time and one-line machine summary and
+ * disclosed the omission rather than inventing either: the shared join carried
+ * id, kind, topic and trust and nothing else. WP-43 widened `SuppliedEvent` and
+ * `CitationRecord` at the source, so both are now CARRIED — never derived, and
+ * never defaulted. `null` on either means the supply did not carry it, and the
+ * surface then draws no line at all. An omission is honest; an invented
+ * timestamp on a record peek would be the render authoring evidence, which is
+ * this surface's one prohibition, and it does not become less so for being a
+ * plausible value.
+ *
+ * Only an EVENT can populate them today, because only `SuppliedEvent` carries
+ * them. A tool call's supply is a name and an index and a carrier line's is a
+ * key; neither has an observation time of its own in this task's supply, and
+ * the peek for those kinds draws the same three lines it always did.
  */
 export interface RecordPeek {
   id: string;
@@ -350,6 +358,15 @@ export interface RecordPeek {
    * ruling has it; never rendered, per ruling §3.
    */
   trust: string | null;
+  /**
+   * WP-43 · when the fact was true AT ITS SOURCE, carried verbatim as the
+   * supply gave it — an ISO timestamp, not a formatted one. Formatting is the
+   * surface's job and `peekTime` does it in one place; keeping the raw value
+   * here means a test can pin the carry-through without pinning a locale.
+   */
+  observedAt: string | null;
+  /** WP-43 · the one-line machine summary, carried. `null` when not supplied. */
+  summary: string | null;
   supplySentence: string;
   note: string;
   doorLabel: string;
@@ -361,10 +378,39 @@ export function recordPeek(record: CitationRecord): RecordPeek {
     kind: record.kind,
     topic: record.topic ?? null,
     trust: record.trust ?? null,
+    observedAt: record.observedAt ?? null,
+    summary: record.summary ?? null,
     supplySentence: SUPPLY_SENTENCE[record.kind],
     note: RECORD_PEEK_NOTE,
     doorLabel: RECORD_DOOR_LABEL,
   };
+}
+
+/**
+ * The peek's time line, or `null` when there is nothing to draw.
+ *
+ * Formatted in the LOCAL zone, for the reason `comparatorModel.historyLine`
+ * states next door and this repo has already paid for once in the event log's
+ * filenames: `toISOString()` prints the previous day for the seven hours a day
+ * PDT is behind UTC. An unparseable value yields `null` rather than
+ * `Invalid Date` — a surface that prints a broken timestamp beside a claim is
+ * asking to be read as evidence of when something happened.
+ *
+ * DATE AND TIME, not date alone. The sheet's own specimen turn is an incident
+ * at 02:14 whose whole argument is that an update landed seven minutes before
+ * the first error; a peek that said only "8 August" would drop the half of the
+ * timestamp the claim turns on.
+ */
+export function peekTime(peek: RecordPeek): string | null {
+  if (!peek.observedAt) return null;
+  const when = new Date(peek.observedAt);
+  if (Number.isNaN(when.getTime())) return null;
+  return when.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export interface UnresolvedPanel {

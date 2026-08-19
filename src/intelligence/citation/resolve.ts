@@ -125,15 +125,42 @@ export interface ParsedCitation {
 // ---------------------------------------------------------------------------
 
 /**
- * A ledger event that rode this task. `topic` and `trust` are carried THROUGH,
+ * A ledger event that rode this task. Every field but `id` is carried THROUGH,
  * never invented: ADR-24 gives the citation the cited record's trust label
  * verbatim, and a resolver that filled in a plausible label would be authoring
  * the one field the surface exists to prove it does not author.
+ *
+ * WP-43 widens this by two fields, which is the item WP-38 disclosed as owed
+ * rather than filled: the sheet's record peek draws "identity, topic, time, the
+ * derived supply sentence, a one-line machine summary and the door", and the
+ * two middle ones had nowhere to come from. Both are OPTIONAL and both are
+ * pure carry-through from the retrieved item — an absent one renders as absent,
+ * never as a plausible value. An invented timestamp on a record peek would be
+ * the render authoring evidence, which is this surface's one prohibition.
  */
 export interface SuppliedEvent {
   id: string;
   topic?: string;
   trust?: string;
+  /**
+   * When the fact was true AT ITS SOURCE — the event's `observed_at`, never its
+   * `recorded_at`. The distinction is a layer invariant, and it is the whole
+   * value of the field here: a peek that showed when the platform happened to
+   * write the row would date the evidence to the ledger's clock rather than to
+   * the world's, which is the same class of lie as inventing the time outright.
+   */
+  observedAt?: string;
+  /**
+   * The one-line machine summary — WP-13c's `summary`, "what the event was
+   * ABOUT, in prose, composed from an explicit allow-list of payload fields,
+   * never a dump of the payload".
+   *
+   * This is NOT a copy of the record: it is the same bounded line the assembler
+   * already put in front of the model, carried to the human who is being asked
+   * to trust what the model said about it. "A citation is a route, not a copy"
+   * still holds — the route now names where it goes.
+   */
+  summary?: string;
 }
 
 /** A tool call of this task. `index` counts that tool's calls, from 1. */
@@ -186,7 +213,20 @@ export type CitationState = (typeof CITATION_STATES)[number];
  */
 export type UnresolvableReason = 'malformed' | 'not-in-supply';
 
-/** Identity, kind and trust label — a ROUTE to the record, never a copy of it. */
+/**
+ * Identity, kind and trust label — a ROUTE to the record, never a copy of it.
+ *
+ * WP-43 adds `observedAt` and `summary` on the same terms as `topic`/`trust`:
+ * carried through from the supply, ABSENT when the supply did not carry them.
+ * Absence here is a real answer — the peek draws nothing for a field it was not
+ * given, which is the honest form of "the platform cannot say".
+ *
+ * Only the `event` arm can populate the two new fields today, because only
+ * `SuppliedEvent` carries them: a tool call's supply is a name and an index,
+ * and a carrier line's is a key. That is not a gap to fill with a plausible
+ * value — a tool call has no observation time of its own in this task's supply,
+ * and inventing one would be exactly what the widening exists to avoid.
+ */
 export interface CitationRecord {
   kind: 'event' | 'tool' | 'carrier';
   /** The record's own id, as the render prints it. */
@@ -194,6 +234,10 @@ export interface CitationRecord {
   /** Carried through from the supply. Absent when the supply did not carry it. */
   topic?: string;
   trust?: string;
+  /** WP-43 · the source-truth time. Carried through; absent when not supplied. */
+  observedAt?: string;
+  /** WP-43 · the one-line machine summary. Carried through; absent when not supplied. */
+  summary?: string;
 }
 
 /**
@@ -274,6 +318,8 @@ function recordFor(ref: CitationRef, supply: CitationSupply): CitationRecord | n
         id: hit.id,
         ...(hit.topic !== undefined ? { topic: hit.topic } : {}),
         ...(hit.trust !== undefined ? { trust: hit.trust } : {}),
+        ...(hit.observedAt !== undefined ? { observedAt: hit.observedAt } : {}),
+        ...(hit.summary !== undefined ? { summary: hit.summary } : {}),
       };
     }
     case 'tool': {
@@ -383,6 +429,13 @@ export function supplyFromBundle(
         // through under the name the render uses, never re-derived.
         ...(i.title !== undefined ? { topic: i.title } : {}),
         ...(i.trust !== undefined ? { trust: i.trust } : {}),
+        // WP-43 · the peek's two owed fields, carried from the SAME item the
+        // three above come from. `observedAt` on a RetrievedItem is already the
+        // event's `observed_at` (assembler.ts's episodic collector sets it from
+        // `e.observed_at`), so the source-truth semantics survive the hop
+        // without this file having to know what a ledger row looks like.
+        ...(i.observedAt !== undefined ? { observedAt: i.observedAt } : {}),
+        ...(i.summary !== undefined ? { summary: i.summary } : {}),
       })),
     toolCalls: [...toolCalls],
     carrierLines: (bundle.blocks.turnSections ?? [])

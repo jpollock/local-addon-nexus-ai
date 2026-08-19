@@ -23,6 +23,7 @@ import {
   chipFor,
   citationRender,
   conventionState,
+  peekTime,
   recordPeek,
   segmentReply,
   stripMarkers,
@@ -265,11 +266,16 @@ describe('the record peek', () => {
     )! as Extract<CitationResolution, { state: 'cited-and-resolves' }>;
 
   it('carries identity, the topic it was supplied with, and the derived sentence', () => {
+    // WP-43 widened this by two fields (`observedAt`, `summary`). The fixture
+    // supply carries neither, so both are NULL here — which is the honest-
+    // absence half of the widening asserted in the same breath as the rest.
     expect(recordPeek(resolving().record)).toEqual({
       id: 'evt_9c41',
       kind: 'event',
       topic: 'incident.opened',
       trust: 'emitted',
+      observedAt: null,
+      summary: null,
       supplySentence: 'Supplied to this task by the ledger.',
       note: RECORD_PEEK_NOTE,
       doorLabel: RECORD_DOOR_LABEL,
@@ -299,16 +305,63 @@ describe('the record peek', () => {
   });
 
   it('is a ROUTE, never a copy — the note says so and no field carries contents', () => {
+    // THE CENSUS MOVED ONCE, AND ONLY ONCE, AND THIS IS THE ARGUMENT.
+    //
+    // WP-38 wrote this list with `summary` on the FORBIDDEN side. That was
+    // right at the time and for a reason that has since changed: the join
+    // carried no summary, so the only way one could have appeared here was for
+    // the render to compose it — which is authoring, and is what the forbidden
+    // list is for. WP-43 widened `SuppliedEvent` at the source, so `summary` is
+    // now CARRIED, and it is carried from the field the sheet itself asks the
+    // peek to draw: "identity, topic, time, the derived supply sentence, a
+    // one-line machine summary and the door."
+    //
+    // The distinction the list is really drawing is between the record's
+    // CONTENTS and a bounded line ABOUT the record. `summary` is WP-13c's:
+    // composed from an explicit allow-list of payload fields, never a dump,
+    // and already shown to the model. `body`, `payload`, `contents` and `text`
+    // remain forbidden and are asserted below — a copy is still a second place
+    // a fact can be wrong, and the note above the peek still says so.
     const peek = recordPeek(resolving().record);
     expect(peek.note).toContain('A citation is a route, not a copy.');
     expect(Object.keys(peek).sort()).toEqual(
-      ['doorLabel', 'id', 'kind', 'note', 'supplySentence', 'topic', 'trust'].sort()
+      ['doorLabel', 'id', 'kind', 'note', 'observedAt', 'summary', 'supplySentence', 'topic', 'trust'].sort()
     );
-    // Named so a future edit has to argue for it: there is no `summary`, no
-    // `body`, no `payload`. A copy is a second place a fact can be wrong.
-    for (const forbidden of ['summary', 'body', 'payload', 'contents', 'text']) {
+    for (const forbidden of ['body', 'payload', 'contents', 'text']) {
       expect(Object.prototype.hasOwnProperty.call(peek, forbidden)).toBe(false);
     }
+  });
+
+  it('carries the widened fields VERBATIM, and null when the supply had none', () => {
+    // WP-43. Same discipline as `trust` one test up: carried, never authored.
+    const full = recordPeek({
+      kind: 'event',
+      id: 'evt_z',
+      observedAt: '2026-08-13T09:41:00.000Z',
+      summary: 'woocommerce 9.1.4 → 9.2.1; resolved',
+    });
+    expect(full.observedAt).toBe('2026-08-13T09:41:00.000Z');
+    expect(full.summary).toBe('woocommerce 9.1.4 → 9.2.1; resolved');
+    const bare = recordPeek({ kind: 'tool', id: 'wp_plugin_list#1' });
+    expect(bare.observedAt).toBeNull();
+    expect(bare.summary).toBeNull();
+  });
+
+  it('formats the time in the LOCAL zone, and refuses a value it cannot read', () => {
+    // `toISOString()` here would print the previous day for the seven hours a
+    // day PDT is behind UTC — this repo has paid for that once, in the event
+    // log's filenames, and `comparatorModel.historyLine` says so next door.
+    const at = '2026-08-13T09:41:00.000Z';
+    const peek = recordPeek({ kind: 'event', id: 'evt_z', observedAt: at });
+    expect(peekTime(peek)).toBe(
+      new Date(at).toLocaleString(undefined, {
+        day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+      })
+    );
+    // Null rather than "Invalid Date": a broken timestamp beside a claim is
+    // asking to be read as evidence of when something happened.
+    expect(peekTime(recordPeek({ kind: 'event', id: 'evt_z', observedAt: 'not a date' }))).toBeNull();
+    expect(peekTime(recordPeek({ kind: 'event', id: 'evt_z' }))).toBeNull();
   });
 });
 
