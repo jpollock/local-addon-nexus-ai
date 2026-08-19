@@ -158,9 +158,24 @@ describe('what rode and what is citable are one list', () => {
   test('the supply carries the retrieved events by id, with topic and trust verbatim', async () => {
     const b = await assemble(request(), deps());
     const supply = supplyFromBundle(b);
+    // WP-43 widened `SuppliedEvent` by `observedAt` and `summary`, both pure
+    // carry-through from the retrieved item. `observedAt` is present here
+    // because the seeded event has one; `summary` is ABSENT because this
+    // fixture's payload carries none of the fields `episodicSummary` reads,
+    // and an absent field is the honest answer rather than an empty string.
+    //
+    // Written as an exact equality still, deliberately: this is a whole-shape
+    // pin, and relaxing it to a subset match would let a future widening slip
+    // an invented field into the supply without anything going red.
     expect(supply.events).toEqual([
-      { id: EVT, topic: 'episodic.incident.recorded', trust: 'emitted' },
+      {
+        id: EVT,
+        topic: 'episodic.incident.recorded',
+        trust: 'emitted',
+        observedAt: new Date(NOW.getTime() - 3 * HOUR).toISOString(),
+      },
     ]);
+    expect(supply.events[0]).not.toHaveProperty('summary');
 
     const [r] = resolveCitations(`Checkout returned 500s. [[cite:${EVT}]]`, supply);
     expect(r.state).toBe('cited-and-resolves');
