@@ -1069,16 +1069,30 @@ export class PanelChat extends React.Component<Props, State> {
   /**
    * WP-41 · ask once, on mount, what can be compared at all. Failure is silence:
    * the array stays empty and the panel is exactly what it was.
+   *
+   * **THE RESULT IS NOT ASSUMED THENABLE.** `invoke` returning something that
+   * is not a promise — an older host, a partial test double, a channel with no
+   * registered handler — used to throw straight out of `componentDidMount` and
+   * take the WHOLE PANEL down with it, comparator and chat alike. That is the
+   * seam's one prohibition ("intelligence-layer failures must never break a
+   * surface that predates the intelligence layer"), and it was caught by
+   * `chat-all-cleared.test.ts`, whose double returns `undefined` for channels
+   * it does not know. Everything here is inside the guard for that reason.
    */
   private loadComparatorFacts(): void {
-    this.props.electron.ipcRenderer
-      .invoke(IPC_CHANNELS.COMPARATOR_FACTS)
-      .then((facts: unknown) => {
-        if (Array.isArray(facts) && facts.length) {
-          this.setState({ comparatorFacts: facts as ComparableFact[] });
-        }
-      })
-      .catch(() => { /* nothing to compare is not an error */ });
+    try {
+      const pending = this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.COMPARATOR_FACTS);
+      if (!pending || typeof (pending as { then?: unknown }).then !== 'function') return;
+      Promise.resolve(pending)
+        .then((facts: unknown) => {
+          if (Array.isArray(facts) && facts.length) {
+            this.setState({ comparatorFacts: facts as ComparableFact[] });
+          }
+        })
+        .catch(() => { /* nothing to compare is not an error */ });
+    } catch {
+      /* a host without this channel is a host with nothing to compare */
+    }
   }
 
   render() {
