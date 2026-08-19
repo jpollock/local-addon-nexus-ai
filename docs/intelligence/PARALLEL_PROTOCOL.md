@@ -401,3 +401,13 @@ because there wasn't one. Any test of a non-fatal producer must FIRST
 assert the event exists (count or id read-back) before asserting
 anything about its content. A green test over an empty emission is shape
 #15's tell.
+
+## Receipts are pasted, never pre-written (WP-45 merge)
+
+Every receipt in a report or commit message — md5, byte total, suite
+count, diffstat line — is COPIED from the command's actual printed
+output, after it runs. A receipt authored in anticipation is a
+fabricated receipt even if the value later matches: the record's purpose
+is checkable fidelity, and a pre-written value checks nothing. The
+WP-45 merge caught its own (an md5 written before the print, amended en
+route); the amendment is the standard, and so is the catch.

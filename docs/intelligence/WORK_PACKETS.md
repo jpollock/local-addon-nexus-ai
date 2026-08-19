@@ -17871,3 +17871,62 @@ ran `npm test` and the battery repeatedly. Local cannot load the addon until
 `npm run rebuild` is run.
 
 **THE `law/runbooks/` AND `src/main/intelligence-host/` LOCKS ARE RELEASED.**
+
+---
+
+## WP-45 · MERGE ACCEPTED — the law review applied (2026-08-19, architect adjudication)
+
+**Independent verification, all reproduced rather than trusted:**
+- `git diff --stat a74cdcfa^1 a74cdcfa`: **18 files, +1678/−66** — exact
+  match. The four law documents, their four anchor-slice copies, the
+  regenerated fixture, producer and control, four test files, the battery.
+- **The record merge's four-way verification re-run from the blobs by the
+  architect**: ancestor (1,057,438) an exact byte-prefix of the merged
+  file; the delivery half (16,820) an exact substring at the ancestor
+  boundary; the gate half (4,185) an exact substring after it; DELIVERY
+  before GATE RULING; **1,057,438 + 16,820 + 4,185 = 1,078,443, residual
+  zero** against the merged blob's own measure. The merge-commit blob
+  matches; the working file's larger figure is the merge-report entry
+  appended after, coherent.
+- **The marker false-alarm, ratified as recorded** — with one wry
+  addendum: the unanchored count is now TWO, because the merge report's
+  own sentence describing WP-43's marker added a second occurrence. Each
+  report that describes the marker will add one. The line-anchored count
+  is zero, which is the check that means anything; the unanchored count
+  will now grow monotonically with honesty. WP-32's substring finding,
+  third fitting.
+- **The fabricated-md5 correction: ACCEPTED, and elevated to protocol.**
+  A hash written before the command printed it is an invented receipt
+  even if it later matches — in a record whose whole purpose is checkable
+  fidelity, that is the exact defect the record exists to prevent, and
+  the agent caught its own. Amending rather than leaving it was right.
+  New protocol rule appended: receipts (hashes, counts, byte totals) are
+  PASTED from actual output after the command runs, never authored in
+  anticipation.
+- **Tree state accepted**: 602 / 8,220 / 2 skipped / 8,222 exit 0, the
+  ten-test embedding boundary read skipped-first against the worktree's
+  8,210/12 — same total, no gain claimed. Battery 16/16 on the merged
+  tree, control survived, tree pristine both sides. Fixture :check green;
+  all five documents byte-identical to anchor-slice by cmp.
+- The owner's seal on the P4 amendment is in the record: intent
+  unchanged, mechanism amended to the measured two-shape rule.
+
+**WP-45 is CLOSED. The law review is APPLIED.** The gates column now
+reads 3-of-5 / 1-of-4 / 1-of-6 / 0-of-5 — derived, honest about the
+rest — and granting cap.promote_environment no longer gates "the grant
+itself, and nothing after it": it gates three provable checkpoints
+including the backup that makes the overwrite recoverable. The two
+re-pinned grants render with the review as their issuing act. The reason
+vocabulary is closed at three members, supplied per capability.
+
+**Carried forward, standing:** WP-20c (the incident split) is SEQUENCED
+— margins of 21 and 6 bytes are asserted as a test that re-runs. The
+Emitter test-trap is shape #15. Cache count stands at nine.
+
+**Next, per the post-45 sequencing already given:** WP-30 (session
+registry) is the next major packet; the designer bundle (copy-departure
+FYI + two open rulings + the M6/Return brief) rides in parallel; the
+micro bundle and the owner's three open smokes stand as registered. The
+promotion ceremony sitting becomes REACHABLE for the first time — B-03's
+backup/approval/promote attesting end to end — and is registered as an
+owner sitting to schedule.
