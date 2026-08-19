@@ -260,3 +260,13 @@ version check tells you about YOUR node, not about what the shared
 `initIntelligenceCore` directly with a printing logger; the real
 `NODE_MODULE_VERSION <n>` line names the mismatch. `npm rebuild
 better-sqlite3` recovers, as documented.
+
+**A battery killed mid-mutation leaves the mutation on disk** (WP-34
+finding — the kill form of the poisoned-artifact rule): a stopped run
+skips its `finally: restore()`, and the next baseline goes red on a file
+nobody edited. Batteries verify the tree PRISTINE before and after and
+refuse to run otherwise; after any interrupted battery, take a fresh
+baseline rather than trusting the tree. Corollary from the same packet:
+"a baseline is only a baseline if the tree held still" applies to the
+battery itself — editing any file, including a test file, during a
+battery invalidates that battery's run.

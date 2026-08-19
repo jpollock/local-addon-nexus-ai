@@ -11987,3 +11987,79 @@ ABI 141) and will throw `NODE_MODULE_VERSION` inside Local until rebuilt.
 **Run `npm run rebuild` before loading Local** — which this packet wants
 anyway: the companion density is a thing you look at, and looking at it is a
 Local session.
+
+---
+
+**WP-35 · MERGE ACCEPTED — architect verification; UX BUILD 1.5 IS
+IN THE PRODUCT (2026-08-18).** Stat pulled independently
+(`62f03139^1..62f03139`): 10 files, +1,568/−110, five renderer files
++ four renderer test files + the record; `-- src/main` EMPTY on my
+pull as on theirs — the renderer-only claim held to the merge.
+**The condition is DISCHARGED, and answered better than asked:**
+ChatService untouched, `cardText` still composes the runbook
+reference into the recorded `task.rationale.recorded` prompt, and
+the agent re-ran WP-28's own record-half pin against the branch
+(13/13, --no-cache) — the display moved, the record kept naming the
+document the decision was taken under, no ruling reopens. **Fidelity
+independently confirmed** on 54aa5fb9 (db33d8b8… blob = the
+architect's copy) — two-for-two this window across 1227ad3e and the
+verdict commit. Skipped-column read accepted, third occurrence
+(12→2, total 7714 unchanged — "read on the passed column alone it
+would look like a phantom gain of exactly ten" is the both-ways
+gate's best one-line statement yet). Merged baseline 574/7712/2 exit
+0, typecheck clean. Conflict resolution verified programmatically
+with the prefix-intact check — the standard holding. **Board:** the
+DockedPanel lock is RELEASED; WP-34 in flight, untouched; the stream
+micro queued behind its lock (until it lands, the empty-run
+rendering is built, pinned, and unreachable — said out loud, as the
+record requires). **The companion surface awaits its live smoke:**
+the owner's next Local session naturally stacks three acts — the
+phase-1.5 smoke of the new composite (block pinned, digest under a
+card, fold-in-place), the sixth must-not's sitting, and pass³ on the
+two sat must-nots. One rebuild, one session, three open items close.
+
+---
+
+**WP-34 · GATE — the carrier block RATIFIED VERBATIM; [[cite:none]]
+RULED; the manifest field RATIFIED; proceed (2026-08-18).**
+
+**The carrier instruction block is ratified as presented, byte-for-
+byte** (`cnv_6c2b11952046`). It satisfies every constraint it was
+born under: trailing position after final punctuation (the consuming
+contract honored), four addressable forms, the no-invented-ids rule
+carrying the doctrine's own sentence ("worse than no citation at all:
+it looks like evidence"), glue uncited, existence-only checking
+STATED TO THE MODEL, no refusal ever, placement after the policy
+re-assert and before the evidence, hash-re-asserted per ADR-20, and
+silent when the carrier is silent. No amendment.
+
+**[[cite:none]] is RULED as built, and it is the right resolution of
+the P3 tension:** the model marks the third state itself; a model
+that forgets produces a bare sentence the RENDER cannot and must not
+see (no NLP in the render path), and criterion 1 of the eval family
+is exactly where that classifier lives, per P3's own words. One
+consequence flagged for the designer's file, not a change: XD-24's
+"uncited factual claim" state binds to the model's own [[cite:none]]
+declaration — the forgotten-bare case belongs to the eval, never the
+surface. **The manifest field is RATIFIED:** one field on
+`context.assembled` recording the convention in effect — the ADR-20
+argument verbatim ("policy vX was in effect" must be provable after
+the fact, and the convention IS policy); a payload widening within
+the held lock; state the field name and write-site in the merge
+report. **Accepted with approval:** the join's discriminated union
+with the closed reason channel, and above all the test that drives a
+resolving citation on a claim its record CONTRADICTS and requires it
+to still resolve — existence-never-support enforced by a test that
+would catch anyone ever "improving" it; the six OWNER-PENDING
+criteria earned per run and falling to BLOCKED if the convention
+did not ride; D-02 recorded-not-manufactured; the three battery
+survivors CLOSED rather than disclosed, including the
+node-builtins-blind purity pin (require.cache never holds builtins —
+a guard written to keep crypto out was blind to exactly crypto).
+**Both protocol findings adopted and WRITTEN** (the kill form of the
+poisoned artifact + tree-held-still applies to the battery itself).
+The isolation blanket ban stays untouched, registered for M5 with
+its measurement. **Owner's queue gains one item:** the three-run
+citation adherence sitting (harness-side, `NEXUS_EVAL_API_KEY`),
+whenever convenient — the six criteria wait on it, honestly.
+Proceed to merge; tail conflict as always.
