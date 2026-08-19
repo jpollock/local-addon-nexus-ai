@@ -16683,3 +16683,56 @@ reply. Registered as a consequence of this packet, and NOT built here:
 `.nvmrc`/CI is 22.16.0 → ABI 127). This session ran `npm test` five times,
 `npx jest` many times, and three 24-mutation batteries, in the worktree and
 again on the merged tree. **`npm run rebuild` before loading Local.**
+
+---
+
+**WP-44 · LOCK ANNOUNCE (2026-08-19) — the Govern matrix surface.**
+Branch `wp-44`, worktree `.worktrees/wp-44`, cut from `poc/nexintelligence`
+at `60c71911` (WP-43 merged at `04011b77`, its locks released at `02870edf`).
+
+**TWO LOCKS CLAIMED, both verified free before the claim rather than
+after — the WP-20f/WP-37 crossed-claim rule applied in the direction it
+was written for:**
+
+1. **`src/main/intelligence-host/`** — released by WP-43's merge report,
+   which says so in its own subject line. Verified by
+   `git merge-base --is-ancestor wp-43 poc/nexintelligence` returning
+   true, not by reading the report's claim. WP-44 needs
+   `capabilityGrants.ts` (a read accessor over the issuance marker, so a
+   row can state which act made its grant) and one new module for the
+   matrix derivation.
+2. **The Settings renderer surface** (`src/renderer/components/settings/`)
+   — a NEW area for this layer. `grep` over the whole of
+   `WORK_PACKETS.md` finds zero prior claims on it: 16,685 lines, no
+   mention of `settings/`, `SettingsShell`, or the renderer settings
+   path. Unclaimed rather than assumed-free.
+
+**A PRECONDITION IN THE LAUNCH INSTRUCTION WAS FALSE WHEN CHECKED, AND
+THE CHECK IS THE REASON THIS PARAGRAPH EXISTS.** The instruction said to
+cut after WP-43's merge and to confirm both locks free. At first
+measurement WP-43 was NOT an ancestor of the base — its four commits sat
+on its branch and the base HEAD was its *lock announce*, not its merge.
+The file sets were disjoint (WP-43: `chatAssembly.ts` + new
+`citationDelivery.ts`; WP-44: `capabilityGrants.ts` + a new module), which
+is exactly the shape the WP-20f/WP-37 crossed claim had — so the temptation
+was to proceed on disjointness. The protocol's own ruling on that case is
+that the sequencing comes from the OWNER, so it was escalated instead, and
+WP-43 merged during the exchange. Recorded because the escalation cost one
+round trip and the alternative was a second crossed claim; a disjoint file
+set is not a released lock, and the two are easy to confuse when the diff
+looks safe.
+
+**THE THREE ARCHITECT FILES ARE NOW COMMITTED (`60c71911`), and WP-43 was
+right not to.** WP-43's merge left `for-designer-cycle-four-bundle.md`,
+`for-designer-govern-matrix-response.md` and
+`from-designer/from-designer-08-govern-matrix.md` untracked on the correct
+reasoning that they blocked nothing and the precedent unblocks merges only.
+They block WP-44 specifically: they ARE its acceptance criteria — the
+designer's nine pins, the three rulings, the id-in-mono condition — and a
+worktree cut from a base without them would build against documents it
+could not read. Committed VERBATIM in a separate attributed commit, md5s
+recorded in the commit message so fidelity is checkable rather than
+asserted.
+
+**THE `src/main/intelligence-host/` AND SETTINGS-RENDERER LOCKS ARE HELD
+until this packet merges.**
