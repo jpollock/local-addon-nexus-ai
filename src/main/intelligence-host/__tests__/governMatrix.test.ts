@@ -201,6 +201,37 @@ describe('WP-44 · the gates column is never softened', () => {
     }
   });
 
+  /**
+   * FAIL-CLOSED ON A CLASS THAT DOES NOT EXIST YET — the hole the battery found.
+   *
+   * `attest` has exactly three values today (`event`, `manifest`, `narrative`),
+   * so `attest === 'event' || attest === 'manifest'` and `attest !== 'narrative'`
+   * agree on every value that can currently be authored, and the battery's M01
+   * mutation between them SURVIVED. They are not equivalent in the direction
+   * that matters: a fourth class added tomorrow would count as PROVABLE under
+   * the second and as narrative under the first.
+   *
+   * This surface's whole claim is about what the platform can verify, so the
+   * unknown must fall on the unverifiable side. The class is cast in, because
+   * the registry's own schema will not parse one that is not in the enum — the
+   * test drives the production function over the value directly.
+   */
+  test('an attest class nobody has declared yet is NOT counted as attestable', () => {
+    const runbook = shipped().byCapability('cap.incident_containment')!;
+    const future = {
+      ...runbook,
+      checkpoints: [
+        ...runbook.checkpoints,
+        { id: 'cp.future', attest: 'oracle' as never, tools: [] },
+      ],
+    };
+    const gates = gatesForRunbook(future);
+    expect(gates.checkpoints).toBe(6);
+    // Six checkpoints, still zero the platform can verify.
+    expect(gates.attestable).toBe(0);
+    expect(gatesLines(gates)[0]).toBe('The grant itself, and nothing after it.');
+  });
+
   test('the anchor renders the split the documents actually declare', () => {
     const row = buildGovernMatrix({ runbooks: shipped() }).rows.find(
       (r) => r.capability === 'cap.bulk_plugin_update'
