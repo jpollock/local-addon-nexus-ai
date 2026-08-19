@@ -179,12 +179,39 @@ export interface PendingGate {
  * It is folded from `task.rationale.recorded` through `foldProcedureCursor`, so
  * it survives a restart for the same reason the cursor does — it was never in
  * memory.
+ *
+ * A SET OF {checkpoint, decision, moment}, NEVER A COUNT OR A BOOLEAN — the
+ * designer's second contract requirement (from-designer-09 §"What I need from
+ * WP-30's query contract"; adopted into this contract at the cycle-five
+ * adjudication). XD-26 renders the standing approval as its own block above the
+ * gate — "You approved this plan yesterday at 12:11. That approval still stands
+ * — you are not being asked again." A boolean makes that sentence unwriteable,
+ * and a count makes it a lie about which plan.
  */
 export interface PendingApproval {
   checkpointId: string;
   state: 'pending' | 'approved' | 'denied';
-  /** The rationale event that decided it. Absent while pending. */
+  /**
+   * The rationale event that decided it.
+   *
+   * PRESENT FOR `approved`, ABSENT FOR `denied`, and that asymmetry is
+   * inherited rather than chosen: `ProcedureCursorState.evidence` is populated
+   * "only for checkpoints in `attested` … never for denied ones, whose evidence
+   * says no" (WP-20e). Re-deriving a denial's event here would put a second
+   * copy of the bound/legacy rationale rule beside `foldProcedureCursor`'s,
+   * which is how a reader and a fold start disagreeing about what a run
+   * contains. Reported as a measured limit instead.
+   */
   eventId?: string;
+  /**
+   * WHEN the human decided — `observed_at` on the rationale event, which is the
+   * moment of the click. Deliberately not `recorded_at`: the sentence XD-26
+   * renders is about when the person approved, and conflating the two is the
+   * one thing the envelope rules forbid outright.
+   *
+   * Same presence rule as `eventId`, and for the same inherited reason.
+   */
+  decidedAt?: string;
 }
 
 /**
@@ -264,6 +291,26 @@ export interface SessionRow {
   status: SessionStatus;
   /** Absent when nothing is pending — a complete run has no gate. */
   gate?: PendingGate;
+  /**
+   * THE WHOLE DECLARED LIST AND WHAT THE RECORD SAYS OF EACH — the designer's
+   * first contract requirement, in its stronger half.
+   *
+   * The gate id alone tells a surface where the run stands; this tells it which
+   * checkpoints were attested BEFORE the excursion, so a resumed declaration
+   * renders its marks from the record rather than from the cursor's position.
+   * XD-26's marks discipline depends on the difference: the tick belongs only
+   * to an attested PROVABLE checkpoint and a reached narrative one takes the
+   * neutral recorded-not-proved dot, which a position cannot distinguish.
+   *
+   * It is `CheckpointState` — `procedureView`'s own type, from
+   * `deriveCheckpointStates`, the SAME derivation the two densities render.
+   * "A difference between the densities and this sheet would be a defect in one
+   * of them" (XD-26), and one shape from one derivation is how that is kept
+   * true rather than promised.
+   *
+   * Absent when `documentUnavailable`: there is no declared list to report.
+   */
+  checkpoints?: CheckpointState[];
   /** Every consent gate the document declares, with its standing. */
   approvals: PendingApproval[];
   outcomes: SessionOutcomes;
@@ -850,7 +897,7 @@ function foldOneSession(
     deps.describePlace
   );
   const gate = deriveGate(states, checkpoints, candidate, document);
-  const approvals = deriveApprovals(checkpoints, cursor);
+  const approvals = deriveApprovals(checkpoints, cursor, events);
 
   const lastEventId = maxId(events.map((e) => e.id));
   // Derived from this run's own events, so a cut session's halves get their own
@@ -868,6 +915,7 @@ function foldOneSession(
     taskIds: [...candidate.taskIds],
     status: deriveStatus(states, gate, cursor?.denied ?? []),
     ...(gate ? { gate } : {}),
+    ...(document ? { checkpoints: states } : {}),
     approvals,
     outcomes,
     places,
@@ -1075,8 +1123,15 @@ function deriveGate(
  */
 function deriveApprovals(
   checkpoints: readonly RunbookCheckpoint[],
-  cursor: ReturnType<typeof foldProcedureCursor> | undefined
+  cursor: ReturnType<typeof foldProcedureCursor> | undefined,
+  events: readonly EventEnvelope[]
 ): PendingApproval[] {
+  // The MOMENT comes off the deciding event itself, never off a clock read
+  // here: "you approved this yesterday at 12:11" is a claim about the record,
+  // and a time this function invented would be a claim about this function.
+  const observedAt = new Map<string, string>();
+  for (const event of events) observedAt.set(event.id, event.observed_at);
+
   const out: PendingApproval[] = [];
   for (const checkpoint of checkpoints) {
     if (checkpoint.attest !== 'event') continue;
@@ -1087,10 +1142,15 @@ function deriveApprovals(
       : cursor?.denied.includes(checkpoint.id)
         ? 'denied'
         : 'pending';
+    const decidedAt = evidence ? observedAt.get(evidence.eventId) : undefined;
     out.push({
       checkpointId: checkpoint.id,
       state,
       ...(state !== 'pending' && evidence ? { eventId: evidence.eventId } : {}),
+      // A decided approval with no readable moment reports no moment rather
+      // than a plausible one — the surface then omits the time clause instead
+      // of printing a time nothing observed.
+      ...(state !== 'pending' && decidedAt ? { decidedAt } : {}),
     });
   }
   return out;

@@ -748,7 +748,7 @@ describe('promotion identity across re-entry — the re-fold, WP-30\'s acceptanc
     const before = registry.snapshot();
     expect(before.sessions).toHaveLength(1);
     expect(before.sessions[0].approvals).toEqual([
-      { checkpointId: 'cp.approval', state: 'approved', eventId: approvalId },
+      { checkpointId: 'cp.approval', state: 'approved', eventId: approvalId, decidedAt: hoursAgo(5) },
     ]);
 
     // --- the excursion: everything host memory knew is gone -----------------
@@ -789,10 +789,115 @@ describe('promotion identity across re-entry — the re-fold, WP-30\'s acceptanc
 
     // The gate moved PAST the approval: it is not what the run is waiting on.
     expect(session.approvals).toEqual([
-      { checkpointId: 'cp.approval', state: 'approved', eventId: expect.any(String) },
+      {
+        checkpointId: 'cp.approval',
+        state: 'approved',
+        eventId: expect.any(String),
+        decidedAt: hoursAgo(6),
+      },
     ]);
     expect(session.gate?.checkpointId).not.toBe('cp.approval');
     expect(session.gate?.awaits).toBe('evidence');
+  });
+
+  /**
+   * The designer's THREE query-contract requirements (from-designer-09,
+   * "What I need from WP-30's query contract"), adopted into this gate-held
+   * contract at the cycle-five adjudication and pinned here one by one.
+   *
+   * Requirement 3 — rank per SITUATION with coalesced parts and the placing
+   * rule — is pinned by the golden fixture and by the coalescing describe, so
+   * it is not repeated here.
+   */
+  test('contract requirement 1 — the gate resolves to a CHECKPOINT ID, and the attested set rides with it', () => {
+    const t1 = mintTaskId();
+    emitManifest({
+      taskId: t1,
+      observedAt: hoursAgo(5),
+      procedure: {
+        capability: RB_REMEDIATE.capability,
+        runbook: RB_REMEDIATE.id,
+        hash: RB_REMEDIATE.hash,
+        status: 'delivered',
+      },
+      consulted: true,
+    });
+    emitAct({ taskId: t1, observedAt: hoursAgo(5), tool: 'contain_site', targets: [BRAVO] });
+
+    expect(ledgerCount(ACTION_EXECUTED_TOPIC)).toBe(1); // shape #15
+
+    const [session] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).sessions;
+
+    // "not to a run and an offset" — a checkpoint id the document declares.
+    expect(session.gate?.checkpointId).toBe('cp.approval');
+    expect(RB_REMEDIATE.checkpoints.map((c) => c.id)).toContain(session.gate?.checkpointId);
+
+    // The stronger half: which checkpoints the record attested BEFORE the
+    // excursion, so a resumed declaration renders marks from the record rather
+    // than from the cursor's position. XD-26's marks discipline needs the
+    // difference — the tick belongs to an attested PROVABLE checkpoint, and a
+    // reached narrative one takes the neutral dot, which a position cannot tell
+    // apart.
+    expect(session.checkpoints).toHaveLength(RB_REMEDIATE.checkpoints.length);
+    const byId = Object.fromEntries((session.checkpoints ?? []).map((c) => [c.id, c]));
+    expect(byId['cp.consult-history']).toMatchObject({ status: 'attested', verified: true });
+    expect(byId['cp.canary']).toMatchObject({ status: 'attested', verified: true });
+    expect(byId['cp.approval']).toMatchObject({ status: 'active', verified: false });
+    // A narrative step is never `verified`, whatever else it is.
+    expect(byId['cp.verify']).toMatchObject({ attest: 'narrative', verified: false });
+  });
+
+  test('contract requirement 2 — approvals are a SET of {checkpoint, decision, moment}, not a count', () => {
+    const t1 = mintTaskId();
+    const approvedAt = hoursAgo(5);
+    emitManifest({
+      taskId: t1,
+      observedAt: approvedAt,
+      procedure: {
+        capability: RB_REMEDIATE.capability,
+        runbook: RB_REMEDIATE.id,
+        hash: RB_REMEDIATE.hash,
+        status: 'delivered',
+      },
+      consulted: true,
+    });
+    emitAct({ taskId: t1, observedAt: approvedAt, tool: 'contain_site', targets: [BRAVO] });
+    const eventId = emitRationale({
+      taskId: t1,
+      observedAt: approvedAt,
+      decision: 'approved',
+      checkpoint: 'cp.approval',
+    });
+
+    expect(core.ledger.get(eventId)).toBeDefined(); // shape #15
+
+    const [session] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).sessions;
+
+    // The three fields XD-26's standing-approval block is written from:
+    // "You approved this plan yesterday at 12:11. That approval still stands."
+    expect(session.approvals).toEqual([
+      { checkpointId: 'cp.approval', state: 'approved', eventId, decidedAt: approvedAt },
+    ]);
+    // And the moment is the RECORD's, not this fold's clock.
+    expect(session.approvals[0].decidedAt).toBe(core.ledger.get(eventId)!.observed_at);
+  });
+
+  test('a documentUnavailable session reports no declared list rather than an empty one', () => {
+    const t1 = mintTaskId();
+    emitManifest({
+      taskId: t1,
+      observedAt: hoursAgo(1),
+      procedure: { capability: RB_BULK.capability, runbook: RB_BULK.id, hash: 'sha256:gone', status: 'delivered' },
+      consulted: true,
+    });
+
+    expect(ledgerCount(MANIFEST_TOPIC)).toBe(1);
+
+    const [session] = foldSessionRegistry(deps({ runbooks: lookup(RB_BULK) })).sessions;
+    // An empty array claims a document with no checkpoints; absence says the
+    // document is not here. XD-26's 6c is written on that distinction.
+    expect(session.documentUnavailable).toBe(true);
+    expect(session.checkpoints).toBeUndefined();
   });
 
   test('a DENIED approval is not a pending one — the decision exists and it was no', () => {

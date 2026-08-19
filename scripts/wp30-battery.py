@@ -198,6 +198,30 @@ MUTATIONS = [
      "        cursorUnknown: false,",
      "a cursor older than the retained ledger poses as a delta, so a full re-read is reported as "
      "'nothing else moved'"),
+
+    # --- family 7: the designer's three contract requirements ---------------
+    # Adopted verbatim into this gate-held contract at the cycle-five
+    # adjudication (for-designer-return-response.md §4). Requirement 3 (rank per
+    # situation, coalesced parts, placing rule) is already carried by M14–M18
+    # and M23; these two pin the halves that arrived with the addendum.
+    ("M27", REG,
+     "    ...(document ? { checkpoints: states } : {}),",
+     "    ...(document ? {} : {}),",
+     "REQUIREMENT 1's stronger half dies: the attested-before-the-excursion set is withheld, so a "
+     "resumed declaration has to infer its marks from the cursor's position — and a position "
+     "cannot tell an attested provable checkpoint from a reached narrative one, which is the "
+     "whole of XD-26's marks discipline"),
+    ("M28", REG,
+     "      ...(state !== 'pending' && decidedAt ? { decidedAt } : {}),",
+     "      ...(state !== 'pending' && decidedAt && false ? { decidedAt } : {}),",
+     "REQUIREMENT 2 collapses toward a boolean: the standing-approval block cannot write "
+     "\"you approved this yesterday at 12:11\" from the payload, so either the time is dropped or "
+     "the surface invents one"),
+    ("M29", REG,
+     "  for (const event of events) observedAt.set(event.id, event.observed_at);",
+     "  for (const event of events) observedAt.set(event.id, event.recorded_at);",
+     "the moment shown is when the LEDGER HEARD rather than when the person clicked — "
+     "observed_at/recorded_at conflated in the one field a human reads as their own act"),
 ]
 
 # A change with no behavioural content. It proves the harness edits, restores,
