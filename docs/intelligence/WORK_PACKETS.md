@@ -15926,3 +15926,120 @@ OWNER-PENDING sitting above wants anyway, since it happens inside Local.
 **NOT MERGED, and not pushed.** Held for the gate: the eval flip sits in
 WP-42's locked directory and wants the owner's sequencing, and escalations 1
 and 3 change what the record should say about the empty-run smoke.
+
+---
+
+**WP-20g · MERGE ACCEPTED; the proposed protocol amendment ADOPTED
+and WRITTEN (2026-08-19).** Stat verified (8 files, +1,012/−18);
+fidelity by the strongest cheap form yet — both architect deltas
+pure appends with the committed file intact as an exact PREFIX, zero
+deletion lines; tail arithmetic in one named unit, exact
+(946,726 = 946,726). The detached-checkout pre-merge baseline —
+measured on THIS checkout with the tree held still rather than
+carried from a worktree — is the honest form of the number and worth
+imitating. **The index.lock incident is accepted as handled to the
+letter and better:** partial rewrite to a length matching neither
+commit, read correctly as damage; the lock confirmed stale by size
+AND by process table before removal; the repaired file verified
+against the blob; fsck; and the full suite re-run because "a
+repaired tree isn't verified until it's re-measured." The agent
+PROPOSED the protocol amendment rather than writing it into an
+owner-approval file — correct — and it is now written by the
+architect: the git form joins the poisoned-artifact family. The
+merge object was never at risk, and the record can prove it rather
+than assert it. **Board: the intelligence-host lock is RELEASED;
+WP-41 merges next** (the advanced base, regenerate-don't-splice on
+declared-procedures.json); after it, the in-flight column empties
+again and what remains is the owner's four-item Local sitting, the
+designer's cycle four, and the registered micros.
+
+---
+
+**WP-41 · MERGED (2026-08-19).** Merge `754413ef` on `poc/nexintelligence`;
+sequenced after WP-42 (`ebabe944`) and WP-20g (`809ca230`) per the owner's
+instruction. `git diff --stat 754413ef^1 754413ef` — 27 files, +3518/−104:
+five new modules under `src/main/comparator/` and
+`src/renderer/components/DockedPanel/`, three new suites, the WP-40 items, the
+J-Inspect flip, and this record.
+
+**BOTH ESCALATIONS RULED IN THIS PACKET'S FAVOUR, and recorded here so the
+next reader does not re-derive them.**
+
+*The no-exclusions call is RATIFIED.* Composing halted-ness live beside the
+data would author the exclusion reason, which is what
+`WorldExclusionRecord.causedBy` exists to prevent. The missing piece is a
+PRODUCER, registered as a design-note item; a new topic is escalation-grade and
+does not get invented by a surface packet. `comparatorRead.ts` supplies no
+exclusions and its header states the measurement (the ledger's entire emitted
+topic set, and the fact that `FIXTURE_SELECTION`'s `site.status.observed` names
+a producer that never existed).
+
+*The empty-run smoke is REDEFINED to the barred route.* A production-only
+selection against `bulk-plugin-update`'s declared
+`[local, wpe_staging, wpe_development]` yields `runnable: []`, `barred: 2`,
+`opensRun: false` — the plan line at `0 cells eligible`, no container, and the
+barred group's door. That is the designer's own split state, driven against
+real `law/` in `armFromSelection.test.ts`. **The halted route follows its
+producer**, and the two refusal states are not interchangeable: the barred one
+carries a grant door, the halted one carries the world-state, and an
+all-excluded scope must never be given a door — starting a halted site in order
+to update it is the refusal reworded.
+
+**THE LOCK OVERLAP WAS THE REGISTRATION'S ERROR, owned in the record.** WP-42's
+merge resolved it by time, and `checks.ts` / `checks.test.ts` AUTO-MERGED at
+this packet's merge — the hunk-level disjointness held exactly as announced.
+**The own-commit isolation of an unavoidable cross-lock touch (`69c632c0`) is
+now the standing pattern**: when a packet must touch a surface another packet
+holds, the touch lands as its own commit so it can be dropped, deferred or
+re-sequenced without disturbing the work around it.
+
+**A NEW PROTOCOL RULE, produced by this collision and now in
+`PARALLEL_PROTOCOL.md`: a generated artifact's merge conflict is resolved by
+RE-RUNNING THE GENERATOR on the merged inputs, never by splicing hunks.**
+`declared-procedures.json` conflicted because WP-20g edited an INPUT
+(`promotion-execute.md`: `1.1.0` → `1.2.0`, plus a `tools:` declaration) and
+WP-41 edited the GENERATOR (a new field, shape version `1` → `2`). Both sides'
+text was wrong: the correct content is a function of the merged inputs, which
+neither side had. Resolved by confirming the inputs merged clean, re-running,
+and proving with `fixtures:procedures:check`.
+
+**The completeness step is NOT redundant with `:check`, and this merge is why
+the rule says so.** `:check` proves the file matches the generator; it cannot
+prove the merge was complete. So both sides' contributions were read back
+directly: WP-20g's `version 1.2.0` and hash `c17d4bc0…` came through from the
+merged `law/`, and WP-41's `$shapeVersion 2` and `planCheckpoint` came through
+from the merged generator. A regeneration that silently dropped one side would
+still have passed `:check`.
+
+**MERGED-TREE VERIFICATION, and the skipped column read first.** Base before
+this merge, measured in the primary checkout: **592 suites / 8009 passed /
+2 skipped / 8011 total, exit 0.** After: **595 / 8076 / 2 / 8078, exit 0.**
+**+3 suites and +67 tests; the skipped column is UNCHANGED at 2**, so the
+passed-column delta is the whole story. `npx tsc -p . --noEmit` clean;
+`fixtures:procedures:check` up to date.
+
+**A CROSS-CHECKOUT RECONCILIATION worth recording, because it would otherwise
+read as a regression.** The same merged tree measured **12 skipped** in the
+worktree and **2 skipped** in the primary — a ten-test difference in the
+opposite direction from the totals. That is WP-20c's documented boundary: the
+primary holds both embedding model files where a worktree has one, so ten
+embedding tests move from skipped to passed across it. In the worktree the
+arithmetic was `+67 total = +57 passed + 10 skipped`; in the primary it was
+`+67 total = +67 passed`. Same change, two checkouts, and the skipped column is
+what tells them apart — read it before the passed column, every time.
+
+**TWO MERGE CONFLICTS IN THIS FILE, both three-way, chronological, verbatim.**
+The first (base into `wp-41`) put WP-42's and WP-20g's entries before this
+packet's gate report; the second (`wp-41` into base) put WP-20g's merge report
+`cccf8edd` — which landed in the interval — before it as well. Nothing was
+edited on either side of either conflict. Note the sides SWAP between the two
+directions: `HEAD` is the base in one and the branch in the other, so
+"ours/theirs" is not a stable guide and landing order is.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` in both the worktree
+and the primary checkout (the `pretest` hook rebuilt better-sqlite3 for the
+shell's Node), many `npx jest` runs, two mutation batteries and the fixture
+generator. **`npm run rebuild` before loading Local** — which the J-Inspect
+OWNER-PENDING sitting wants anyway, since it happens inside Local.
+
+**NOT PUSHED.** Branch `wp-41` and worktree `.worktrees/wp-41` left in place.

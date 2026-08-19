@@ -358,3 +358,15 @@ This generalises to every generated artifact under version control here
 `fixtures:*` script emits). If you add one, give it a `:check` script in the
 same commit — the check is what makes this rule enforceable rather than
 advisory.
+
+**An interrupted git writer leaves partial output on disk, and a
+subsequent `M` is damage, not an edit** (WP-20g merge incident — the git
+form of the poisoned-artifact family, beside WP-32's generator and
+WP-34's battery forms): a checkout that dies on a stale index.lock can
+die AFTER partially rewriting a working file — the file then matches no
+commit, and `git status` reports a plain `M` that reads exactly like
+someone's edit. Recovery, in order: confirm the lock is stale (zero
+bytes, no git process owning THIS repo), remove it, force-checkout,
+verify the file byte-for-byte against the blob it should be, `git fsck`,
+and RE-MEASURE the full suite — a repaired tree is not verified until it
+is re-measured.
