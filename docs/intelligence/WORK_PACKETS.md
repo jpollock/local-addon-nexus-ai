@@ -14410,3 +14410,52 @@ Measured: `node -v` **v25.9.0**, `node -p process.versions.modules` **141**.
 
 **Not pushed.** Branch `wp-39` and worktree `.worktrees/wp-39` left in place
 for the housekeeping backlog.
+
+---
+
+**WP-38 · THE COPY CONDITION DISCHARGED; acceptance complete
+(2026-08-19).** The merge was accepted from the record in the
+consolidated adjudication; the full report now closes its one open
+condition, and better than asked: the strings were EXTRACTED
+PROGRAMMATICALLY from the merged source rather than retyped — the
+record holds what ships by construction. Ratified as shipped:
+UNRESOLVED_MALFORMED replaces only the first sentence and keeps the
+designer's second word for word ("The platform could not read this
+marker, so it cannot say which record was meant. The claim above may
+still be true — the platform cannot say, and will not guess."); the
+three supply sentences derive from the join's own nouns (ledger / a
+tool call this task made / the platform context of this turn); the
+two sheet-verbatim strings recorded alongside. Also noted with
+approval: the pwd-before-commit addendum landed MID-merge and was
+applied same-session — every commit printed pwd and branch in the
+same command; the protocol's newest rule was obeyed before most
+readers have seen it. The DockedPanel lock is RELEASED; the
+registered consequences stand as listed (citation-peek supply,
+host→renderer delivery, doors-need-handlers, four moments pinned
+absent). (Appended device-side: the tail was advancing under two
+concurrent merges and the stage/commit round-trip kept losing the
+race to its own guard — which is the guard working.)
+
+---
+
+**WP-39 · MERGE ACCEPTED — architect verification (2026-08-19).**
+Stat verified independently (5 files, +534/−6 — the shim import, the
+6744 require with its not-the-cause comment, the guard pair, the
+record). Fidelity on dd62d3d9: the PARALLEL_PROTOCOL blob is
+md5-identical to the architect's copy (a004c4e9…) and the
+WORK_PACKETS blob is byte-count-exact (865,610) — sixth exercise of
+the precedent, and the first where the committed delta was ALSO the
+clearance: the agent read "WP-39: cleared to merge" out of the
+verbatim commit rather than assuming it, which is the
+eventual-adjudication rule working from the agent's side. The
+arithmetic tail verification (826,198 + 32,667 + 13,130 = 871,995,
+zero markers) is the resolution standard's strongest form yet. The
+two-column reconciliation accepted: 7,845 + 10 (boundary) + 85
+(WP-38 landed after the cut) = 7,940 — exact in both columns, and
+the passed column alone would have lied twice over. The
+harness/host seam class is CLOSED: sitting.ts shims like run.ts, the
+spawned-child guard ends the class, and the third occurrence now
+fails in CI instead of degrading a judgment sheet mid-sitting.
+**Board: WP-37 is the last packet in flight** — cleared at the
+consolidated adjudication, merge on the agent's relay; then the
+in-flight column is empty for the first time since WP-31.

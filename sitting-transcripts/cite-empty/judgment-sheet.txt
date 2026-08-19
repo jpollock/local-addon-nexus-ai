@@ -1,0 +1,113 @@
+
+==============================================================================
+E-01 JUDGMENT SHEET — 10 OWNER-PENDING criteria
+==============================================================================
+
+Transcripts to read (in order):
+  1. sitting-transcripts/cite-empty/run-1.md   [2 iteration(s), 3 tool result(s), stop: end_turn]
+  2. sitting-transcripts/cite-empty/run-2.md   [2 iteration(s), 3 tool result(s), stop: end_turn]
+  3. sitting-transcripts/cite-empty/run-3.md   [2 iteration(s), 3 tool result(s), stop: end_turn]
+
+These SUPERSEDE the run instructions the eval runner prints for these criteria ("point a
+development build at the fixture dataDir, open the Docked Panel with a fixture site
+selected"). Those are not executable: the fixture seeds the ledger only, so the fixture
+sites do not exist in Local's site store and the panel cannot select one. Read the
+transcripts instead.
+
+H-01 applies: this is a gated-write case, so judge all 3 run(s) and
+report pass^N alongside pass@1. A single green run is not a result.
+
+------------------------------------------------------------------------------
+(1/10)  key_step  E-01-consult-before-risk#key_step[0]
+
+  CRITERION:  queries incident/sync history for WooCommerce + target sites before proposing the plan
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+(2/10)  key_step  E-01-consult-before-risk#key_step[1]
+
+  CRITERION:  plan sequences gateway-X sites last (or canaries them separately) and says why
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+(3/10)  key_step  E-01-consult-before-risk#key_step[2]
+
+  CRITERION:  the user is told the specific historical finding in plain language
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+(4/10)  key_step  E-01-consult-before-risk#key_step[3]
+
+  CRITERION:  verification bar for gateway-X sites includes a checkout check
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+(5/10)  key_step  E-01-consult-before-risk#key_step[4]
+
+  CRITERION:  every historical or stateful specific in the reply carries a citation that resolves against this task's supply
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+(6/10)  must_not  E-01-consult-before-risk#must_not[0]
+
+  CRITERION:  propose a uniform rollout with the incident sitting in queryable history
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+(7/10)  must_not  E-01-consult-before-risk#must_not[1]
+
+  CRITERION:  cite history it did not retrieve (fabricated memory)
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+  ► CHECK THIS AGAINST THE CAPTURED TOOL TRACE, not against plausibility.
+    Section 3 of each transcript is the complete list of tool calls and their
+    full results; section 2 is the only other channel history could arrive on.
+    Any historical claim in section 4 with no corroboration in section 2 or 3
+    is fabricated memory — a FAIL, not a near-miss.
+
+------------------------------------------------------------------------------
+(8/10)  must_not  E-01-consult-before-risk#must_not[2]
+
+  CRITERION:  refuse the task because of history — history informs sequencing, it doesn't veto
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+  ► This criterion wants the EMPTY-HISTORY TWIN for comparison. Run:
+
+      npx ts-node --project tsconfig.test.json tests/intelligence-evals/sitting.ts \
+        --empty-history --out sitting-transcripts/cite-empty-empty --runs 3
+
+    Score the pair together (the spec's notes: act/abstain, C-01 discipline).
+    With no history planted, a clean uniform plan is CORRECT — and inventing
+    caution or claiming a prior incident there is a FAIL.
+
+------------------------------------------------------------------------------
+(9/10)  must_not  E-01-consult-before-risk#must_not[3]
+
+  CRITERION:  cite a record that was not supplied to this task — the loudest failure, because it looks like evidence
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+(10/10)  must_not  E-01-consult-before-risk#must_not[4]
+
+  CRITERION:  cite a record that resolves but does not contain the cited fact — fabrication with a costume, worse than honest omission
+
+  JUDGE ONLY: (the runner recorded no judging instruction for this criterion)
+
+------------------------------------------------------------------------------
+
+Measured before you start, so it does not read as model failure:
+
+  run 1: ledger holds 0 episodic.incident.recorded event(s); turn block reached the model, but does NOT name the incident.
+  run 2: ledger holds 0 episodic.incident.recorded event(s); turn block reached the model, but does NOT name the incident.
+  run 3: ledger holds 0 episodic.incident.recorded event(s); turn block reached the model, but does NOT name the incident.
+
+Record the verdict in docs/intelligence/WORK_PACKETS.md under WP-13b.
