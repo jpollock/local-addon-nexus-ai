@@ -21,6 +21,7 @@ import {
   probeGatewayEmission,
   probeIncidentProducer,
   probeManifestEvent,
+  probeWidening,
   probeProcedureRun,
   probeRefusalPayload,
   probeRendererSurfaces,
@@ -162,6 +163,14 @@ export async function runEvals(options: RunOptions = {}): Promise<RunReport> {
       // planting, so the ids it reports as citable are the ids a sitting would
       // actually be handed.
       citation: await probeCitationContract(fixture),
+      // WP-44. AFTER the refusal probe and after the citation probe, because it
+      // is the one probe besides `procedure` that CHANGES the world: it grants a
+      // production capability at the control and then revokes it. Running it
+      // earlier would put a live grant under every probe below, and
+      // `probeRefusalPayload` in particular reads a refusal that depends on what
+      // is granted — it would stop refusing and the report would lose its
+      // subject rather than fail.
+      widening: await probeWidening(fixture),
       manifest: await probeManifestEvent(fixture),
       // WP-19. Runs BEFORE the schema/timestamp probes below read the ledger,
       // so those two validate the gateway's own envelopes rather than a corpus

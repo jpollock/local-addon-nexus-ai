@@ -482,7 +482,15 @@ describe('the journey checks (WP-33)', () => {
   const ctx = (refusalPayload: unknown = LIVE_REFUSAL) =>
     ({
       fixture: { fleet: [], core: { ledger: { query: () => [] } } },
-      probes: { refusalPayload, surfaces: SURFACES_ABSENT },
+      probes: {
+        refusalPayload,
+        surfaces: SURFACES_ABSENT,
+        // WP-44 · the absent-surface stub for the widening probe. `premisePresent:
+        // false` is what an absent Govern matrix looks like, so the check under
+        // this context must report BLOCKED — which is exactly the property these
+        // three tests exist to hold every journey check to.
+        widening: { ok: false, premisePresent: false, evidence: ['no matrix in this context'] },
+      },
     }) as never;
 
   const journeyChecks = CHECKS.filter((c) => JOURNEY_SPECS.includes(c.specId));
@@ -678,6 +686,74 @@ describe('the journey checks (WP-33)', () => {
         .run(ctx()).evidence.join(' ');
       expect(door).toContain('WHAT THIS RUN DOES NOT MEASURE');
       expect(door).toContain('RENDER half');
+    });
+  });
+
+  describe('J-Refusal — the widening, driven by WP-44', () => {
+    const WIDENING = 'Crossing into Settings and back';
+    const check = () => journeyChecks.find((c) => c.matches === WIDENING)!;
+
+    /** A probe reporting a healthy widening — every conjunct this half can measure. */
+    const live = (over: Record<string, unknown> = {}) => ({
+      ok: true,
+      premisePresent: true,
+      doorLandsOnRow: true,
+      recordedAsControlEvent: true,
+      visibleOnTheRow: true,
+      revocableFromTheSameRow: true,
+      revocationIsAHumanAct: true,
+      noConversationalRoute: true,
+      evidence: ['drove the widening'],
+      ...over,
+    });
+
+    const withWidening = (widening: unknown) =>
+      ({
+        fixture: { fleet: [], core: { ledger: { query: () => [] } } },
+        probes: { refusalPayload: LIVE_REFUSAL, surfaces: SURFACES_ABSENT, widening },
+      }) as never;
+
+    it('PASSES against a driven widening', () => {
+      expect(check().run(withWidening(live())).verdict).toBe('PASS');
+    });
+
+    it('BLOCKS — never FAILS — when there is no matrix to walk', () => {
+      // The premise split. An absent surface and a broken one are different
+      // findings, and only one of them is somebody's bug.
+      const outcome = check().run(withWidening({ ok: false, premisePresent: false, evidence: ['none'] }));
+      expect(outcome.verdict).toBe('BLOCKED');
+      expect(outcome.missing).toMatch(/Govern matrix/);
+      expect(outcome.unblockedBy).toBeTruthy();
+    });
+
+    it('FAILS when the matrix is there and the widening does not work', () => {
+      // Each conjunct on its own, so a check that ignored one would be caught
+      // here rather than by a reader noticing the report was too generous.
+      for (const conjunct of [
+        'doorLandsOnRow',
+        'recordedAsControlEvent',
+        'visibleOnTheRow',
+        'revocableFromTheSameRow',
+        'revocationIsAHumanAct',
+        'noConversationalRoute',
+      ]) {
+        const outcome = check().run(withWidening(live({ ok: false, [conjunct]: false })));
+        expect([conjunct, outcome.verdict]).toEqual([conjunct, 'FAIL']);
+      }
+    });
+
+    it('discloses the conjunct it does NOT measure, on the PASS itself', () => {
+      // The criterion is a conjunction; this half measures the widening and not
+      // the session identity. A PASS that stayed quiet about that would be
+      // claiming a discrimination the probe does not have.
+      const evidence = check().run(withWidening(live({ evidence: ['MEASURED LIMIT, reported rather than glossed: WP-30'] }))).evidence.join(' ');
+      expect(evidence).toMatch(/WP-30/);
+    });
+
+    it('says what makes it a control rather than a conversation', () => {
+      const evidence = check().run(withWidening(live())).evidence.join(' ');
+      expect(evidence).toMatch(/no tool, no GraphQL mutation and no caller in src\/cli/);
+      expect(evidence).toMatch(/request to SHOW a row/);
     });
   });
 
