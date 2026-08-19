@@ -13,6 +13,8 @@ import { buildFleetContext } from '../assistant/AssistantService';
 import { buildWordPressSystemPrompt } from '../assistant/wordpress-knowledge';
 import { getSession, deleteAllSessions } from '../ipc/chat-sessions';
 import { assembleForChatTurn } from '../intelligence-host/chatAssembly';
+import type { ChatAssemblyResult } from '../intelligence-host/chatAssembly';
+import { citationDeliveryFor } from '../intelligence-host/citationDelivery';
 import { recordApprovalRationale } from '../intelligence-host/actionProducer';
 import { procedureApprovalContext, setProcedureStreamSink } from '../intelligence-host/procedureStream';
 import { checkCheckpointSequence } from '../intelligence-host/sequenceGuard';
@@ -235,7 +237,7 @@ export class ChatService {
     // gated act this turn produces joins the assembly manifest on one
     // `WHERE correlation = ?`. Undefined whenever the layer contributed
     // nothing, which is the pre-WP-19 behaviour exactly.
-    await this.runAgentLoop(session, providerConfig.providerId, config, assembly?.grants, assembly?.taskId);
+    await this.runAgentLoop(session, providerConfig.providerId, config, assembly?.grants, assembly?.taskId, assembly);
   }
 
   /**
@@ -248,9 +250,17 @@ export class ChatService {
     config: ChatProviderConfig,
     grants?: string[],
     taskId?: string,
+    assembly?: ChatAssemblyResult | null,
   ): Promise<void> {
     const provider = getProvider(providerId);
     if (!provider) return;
+
+    // WP-43 · this turn's tool calls, IN CALL ORDER, across every iteration of
+    // the loop. The renderer shows one assistant bubble per turn — tokens from
+    // every iteration append to the same streaming message — so the turn, not
+    // the iteration, is the unit a citation supply describes. `numberToolCalls`
+    // turns these into the `name#index` addresses the convention cites.
+    const turnToolCalls: string[] = [];
 
     for (let iteration = 0; iteration < CHAT_DEFAULTS.MAX_AGENT_ITERATIONS; iteration++) {
       if (session.abortController.signal.aborted) break;
@@ -298,7 +308,7 @@ export class ChatService {
             stopReason = event.stopReason;
           } else if (event.type === 'error') {
             this.emit(sessionId(session), event);
-            this.emit(sessionId(session), { type: 'done', stopReason: 'error' });
+            this.endTurn(session, 'error', assembly, turnToolCalls);
             return;
           }
         }
@@ -313,13 +323,23 @@ export class ChatService {
 
         // If no tool calls, we're done
         if (stopReason !== 'tool_use' || toolCalls.length === 0) {
-          this.emit(sessionId(session), { type: 'done', stopReason: stopReason as any });
+          this.endTurn(session, stopReason as any, assembly, turnToolCalls);
           return;
         }
 
         // Execute tool calls and add results to messages
         for (const tc of toolCalls) {
           if (session.abortController.signal.aborted) break;
+
+          // WP-43 · recorded BEFORE execution, and that is deliberate. The
+          // convention's address is "the Nth call of this tool in this task";
+          // a call the model made and cited is part of the task's supply
+          // whether or not the tool succeeded, was refused by the sequence
+          // guard, or errored. Counting only successes would renumber every
+          // later call of the same tool, so a citation the model wrote against
+          // call #2 would resolve to call #3's record — a WRONG record, which
+          // is worse than an unresolvable one and looks quieter.
+          turnToolCalls.push(tc.name);
 
           const result = await this.executeToolCall(session, tc, taskId);
 
@@ -356,7 +376,7 @@ export class ChatService {
             message: `Chat error: ${(err as Error).message}`,
           });
         }
-        this.emit(sessionId(session), { type: 'done', stopReason: 'error' });
+        this.endTurn(session, 'error', assembly, turnToolCalls);
         return;
       }
     }
@@ -366,7 +386,7 @@ export class ChatService {
       type: 'error',
       message: 'Maximum tool call iterations reached. Stopping.',
     });
-    this.emit(sessionId(session), { type: 'done', stopReason: 'end_turn' });
+    this.endTurn(session, 'end_turn', assembly, turnToolCalls);
   }
 
   /**
@@ -881,6 +901,41 @@ export class ChatService {
           `\n[…compressed for context efficiency — ${content.length} chars total]`,
       };
     });
+  }
+
+  /**
+   * WP-43 · the turn's one exit, and the only place `done` is emitted.
+   *
+   * There were four `done` emissions before this — the stream's error branch,
+   * the no-more-tool-calls completion, the catch block, and the max-iterations
+   * tail — and a citation delivery hand-instrumented at each would be four
+   * copies of one rule, which is the drift the audit chokepoints exist to
+   * prevent, applied to the same problem one layer up. A fifth exit added later
+   * gets the delivery for free; a fifth exit that forgot it would be a turn
+   * whose reply keeps its raw markers, which is exactly the defect this packet
+   * closes.
+   *
+   * ORDER IS LOAD-BEARING: the citation event goes FIRST. The panel's `done`
+   * handler ends the stream and persists the session; a supply arriving after
+   * it would attach to a message the panel has already finished with.
+   *
+   * NON-FATAL, like everything on this seam. A delivery that throws must never
+   * cost the user the end of their turn — `done` is what stops the spinner, and
+   * a spinner that never stops is a worse failure than a reply without chips.
+   */
+  private endTurn(
+    session: ChatSession,
+    stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'error',
+    assembly: ChatAssemblyResult | null | undefined,
+    turnToolCalls: readonly string[],
+  ): void {
+    try {
+      const delivery = citationDeliveryFor(assembly, turnToolCalls);
+      // Nothing delivered when the layer contributed nothing: `msg.citation`
+      // stays absent and the bubble renders exactly as it did before WP-38.
+      if (delivery) this.emit(sessionId(session), { type: 'citation_supply', ...delivery });
+    } catch { /* the citation seam never costs a turn its ending */ }
+    this.emit(sessionId(session), { type: 'done', stopReason });
   }
 
   /**
