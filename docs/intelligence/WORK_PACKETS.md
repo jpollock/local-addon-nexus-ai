@@ -13582,3 +13582,217 @@ citation/resolve.ts` is IMPORTED, never edited — that is ADR-24 P5's whole
 claim ("one join, two consumers"), and the second consumer arriving is the
 event this packet is. Any want that would widen the join is recorded as
 OWED to a packet holding the core lock, not folded in here.
+
+---
+
+**WP-38 · DELIVERED, HELD AT THE GATE — the corroboration render
+(2026-08-19).** Branch `wp-38` at worktree `.worktrees/wp-38`, cut from
+`594064f3` (this file's WP-38 registration + lock announce, committed to
+base before the work started). Renderer only; the shared join is imported
+and not edited.
+
+**Worktree baseline before any edit: 584 suites / 7,839 passed / 12
+skipped / 7,851 total, exit 0** — exit captured before any pipe. Identical
+to WP-20f's post-merge worktree figure, twelve-skipped column included.
+
+---
+
+## 1 · What was built
+
+Four files, one CSS block, one wiring line.
+
+- **`citationModel.ts`** — the pure model. `citationRender(turn)` is the one
+  decision: the MOMENT decides first (pin 4), then the manifest decides
+  whether the reply is under the convention at all, then the reply is cut at
+  the join's own offsets into text runs and citations.
+- **`CitationSpans.tsx`** — the surface. Trailing chip per marker, the three
+  ratified faces, the record peek, the unresolved panel, the legacy card.
+- **`citationTurn.fake.ts`** — the sheet's six spans as literals (the
+  `procedureStream.fake.ts` precedent: a renderer has no repo to read at
+  runtime), byte-pinned to the committed adherence fixture.
+- **`agent-console.css`** — `.nexus-cite-run > p:last-child { display:
+  inline }`, which is the whole mechanism by which a markdown paragraph's
+  final sentence keeps its door instead of dropping it to the next line.
+- **`PanelChat.tsx`** — one conditional: a message carrying `citation`
+  renders through the new surface, a message without renders byte-identically
+  to before.
+
+**THE JOIN IS IMPORTED, NOT MIRRORED**, which is the packet's central
+structural claim and the opposite of what `procedureModel.ts` does next
+door. That is ADR-24 P5 — one join, two consumers — and a mirror here would
+be the second implementation P5 exists to forbid. The two seams differ in
+KIND: `procedureView` reaches a native module and must be mirrored;
+`citation/resolve.ts` is a leaf with zero runtime imports and must not be.
+
+---
+
+## 2 · THE REGISTERED DECISION — the isolation ban, resolved WITH its
+measurement
+
+WP-34 left this to the surface packet rather than pre-weakening a guard for
+a consumer that did not exist. **The measurement, re-taken on every run
+inside the pin itself:**
+
+    require('…/DockedPanel/citationModel')  → 2 files of src/, one of them
+                                              src/intelligence/citation/resolve.ts
+    require('…/DockedPanel/CitationSpans')  → 3 files of src/, the SAME one leaf
+    require('…/DockedPanel/PanelChat')      → 11 files of src/, the SAME one leaf
+    better-sqlite3 / intelligence-host / electron: ZERO, in every case
+
+**The resolution: the blanket ban becomes an ALLOWLIST OF ONE**, and the
+allowlist is *earned by measurement rather than by argument*. Three
+properties, each of them the reason this is not a weakening:
+
+1. **It is a whitelist, not a denylist.** A new `src/intelligence/` import of
+   ANY kind fails and has to be argued for — the same discipline
+   `citationJoin.isolation.test.ts` applies inside the join.
+2. **Membership is re-measured here, from the renderer side.** A second
+   describe reads each allowlisted leaf's SOURCE and requires every import in
+   it to be `import type`. That is WP-34's M19 finding honoured rather than
+   cited: `require.cache` cannot see node builtins, so a graph walk alone
+   would let `import { createHash } from 'crypto'` through, and a builtin in a
+   renderer bundle is a polyfill — the second implementation again.
+3. **PanelChat itself is now in the measured set.** The ABI failure this pin
+   exists to prevent happens at PANEL LOAD, not at module load, so the real
+   consumer's whole graph is measured and not just the new leaf's. That is a
+   strengthening the packet added rather than found.
+
+A **positive control** sits beside it: `citationModel` really does load the
+leaf, asserted by equality. Without it every "no intelligence module outside
+the allowlist" assertion would pass just as well against a renderer that
+imported nothing, and the decision would be an assertion about an empty set.
+
+Alternative considered and refused: the `import type` + mirror shape.
+Refused because it is precisely what P5 forbids for this module, and because
+the drift it would create is invisible — both halves would still look right.
+
+---
+
+## 3 · The eight pins, and where each is pinned
+
+| pin | where |
+|---|---|
+| draws what the model marked, nothing else — no similarity, no classifier | `citationModel.test.ts` "never resolves a citation the supply does not carry, however similar the text" (the claim names the record's topic verbatim and still does not resolve) |
+| existence checked against this task's supply; support never | inherited from the shared join, unmodified; the render has no path that could check support |
+| three states, unresolvable loudest | `citationSpans.test.tsx` — the loud face is the ONLY one that fills and the only one that weights its text, asserted against both quiet faces |
+| strictness from the moment | `STRICTNESS_BY_MOMENT`, and the moment decides BEFORE the manifest — a fully-cited turn at Glance draws nothing |
+| a route, not a copy | the peek's exact string list is asserted; `summary`/`body`/`payload`/`contents`/`text` are pinned ABSENT from `RecordPeek` |
+| trust label inherited verbatim, never invented | carried in the model (`told` stays `told`, absent stays `null`) and rendered NOWHERE — ruling §3's "no bare machine words on the chip" |
+| a pre-convention session says so | the legacy card, verbatim, derived from the manifest's shape |
+| one join, judge and user | the import itself, plus §2's measurement |
+
+**The six-span table is pinned twice over.** `citationFixture.test.ts`
+re-extracts the designer's six rows from their committed markdown on every
+run and requires the render's derived state to equal each row's — paired by
+OFFSET, not by segment, because trailing is the whole point and the glue row
+shares a text run with the claim after it. A pairing that took "the next
+citation segment" would hand the glue the backup claim's chip and pass while
+drawing a lie; that near-miss was caught by the test going red, not by
+review.
+
+---
+
+## 4 · GATE ITEMS — held for ruling
+
+**G1 · `citation: null` is NOT the legacy card, and the null arm draws no
+card at all.** The prompt said the pre-convention state derives from
+`citation: null`. The manifest's own neighbouring field says otherwise, and
+it says so in ratified words: `routing?` is "**absent entirely** when the
+request carried no frame — an empty array would claim routing ran and found
+nothing, which is a different fact from *this caller predates the frame*".
+So this packet SPLITS them:
+
+- **absent key** → `predates-convention` → the designer's card, verbatim.
+- **`citation: null`** → `did-not-ride` → **no card**. WP-34's own words for
+  null are "a bare carrier, or a fail-closed refusal" — i.e. an ordinary turn
+  from today. A bare carrier is common, and putting "read it as a transcript,
+  not as evidence" over ordinary conversation would be a container for an
+  empty run in sentence form. **The alternative** — a second card with a
+  derived sentence ("No citation convention rode this turn…") — was built and
+  then removed as authored copy. Ruling wanted.
+- **no manifest at all** → `unknown` → no card, distinguishable in the
+  render's own reason channel. This is the dangerous direction the split
+  protects: an un-wired caller hands the surface nothing and the surface
+  announces that a session predates a convention.
+
+**G2 · New copy, one sentence, for a state the sheet does not draw.** A
+marker the platform could not READ has no id, so the ratified sentence's
+subject ("this id") is false. `UNRESOLVED_MALFORMED` replaces the first
+sentence only and keeps the designer's second word for word. The `reason`
+channel is closed and the two arms are already different facts; this makes
+the two sentences differ too.
+
+**G3 · The tool-call chip prints `wpe_backup_and_verify#2`, not the sheet's
+`wpe_backup_and_verify #2`.** Ruling §4 says the trace is the only party
+entitled to rename a tool call, and inserting a space into an address a user
+may copy IS a rename. The join builds `name#index`; the join wins. Flagged
+because it is a visible departure from the drawing.
+
+**G4 · The peek is an inline disclosure beneath the reply, not a side
+panel.** The sheet is 1440×1024 at STAGE rank; the shipped panel is 380px at
+companion rank, and inventing a second geometry without a sheet is
+authoring. The ratified principle — the door sits where the claim ends — is
+kept exactly: the CHIP is at the claim, and only the opened panel is below.
+
+**G5 · The moment union is TWO, and the other four are pinned absent.**
+`moments-model.md` names six; the sheet rules Glance and Investigate. Inspect,
+Act-small, Act-big and Return have no entry and their absence is asserted
+(WP-20f's census-guard shape). Widening it is a loop question, not a default
+a renderer picks — picking one here would be the renderer setting strictness,
+which is what pin 4 forbids.
+
+**G6 · Two sentences extend the ratified one.** "Supplied to this task by the
+ledger" is ratified for an event. Tool and carrier records get the same
+construction using the join's own nouns for them. No third vocabulary.
+
+---
+
+## 5 · OWED, and disclosed rather than filled
+
+- **The peek's TIME and one-line machine summary are not rendered**, because
+  the shared join's record carries id, kind, topic and trust and nothing
+  else. Widening `SuppliedEvent` is a change to `src/intelligence/`, whose
+  lock this packet does not hold. An invented timestamp on a record peek
+  would be the render authoring evidence — the one prohibition. **Owed to a
+  packet holding the core lock.**
+- **Both doors render only when a handler is supplied, and nothing supplies
+  one yet.** A door that opens nothing is worse than no door (WP-27's
+  launcher discipline). Pinned in both directions.
+- **Host → renderer delivery is not built.** WP-34 already publishes
+  `citationSupply` on `ChatAssemblyResult`; what is missing is delivery to
+  the panel, which is intelligence-host work. Until it lands, a model that
+  cites writes VISIBLE `[[cite:…]]` syntax into the bubble — disclosed and
+  pinned as a test, because a renderer that stripped markers it was never
+  told how to resolve would hide the one fact worth reporting.
+
+---
+
+## 6 · Receipts
+
+- **Baselines, both sides, skipped column read first.** Before: 584 suites /
+  7,839 passed / 12 skipped / 7,851 total. After: **588 / 7,924 / 12 /
+  7,936**, exit 0. Skipped unchanged, so the delta is real: **+4 suites, +85
+  tests, reconciling exactly** — 36 (`citationModel`) + 22 (`citationSpans`)
+  + 8 (`citationFixture`) + 5 (`panelChat-citation`) = 71 in the four new
+  suites, plus **14 in `procedureModel.isolation.test.ts`** (5 → 19: three
+  more modules × two assertions each, the vacuity control, and the two
+  allowlist-is-earned tests).
+- `npx tsc -p . --noEmit` clean. `npx eslint` clean on all three new source
+  files; the seam rule is untouched.
+- All 93 renderer suites green (1,354 tests), including the two pre-existing
+  PanelChat pins — `panelChat-procedure-parity.test.tsx`'s base-commit
+  snapshot passes unchanged, which is the additive-parity claim measured
+  rather than asserted.
+- **MUTATION BATTERY: 30 mutations, 30 KILLED, control survived, tree
+  verified PRISTINE before and after.** Every run `--no-cache`, explicit
+  argv (never a shell-split variable), **count-floored at 90** — the sum of
+  the five suites' pristine green counts, so a mutant that reduced the
+  executed count would be VOID rather than green. Each mutation names the
+  lie it would ship; the set covers every gate item above, both directions of
+  the convention split (M03/M04/M05), the loudness ordering (M10/M19), the
+  invented-label directions (M11/M12), the empty-container rule (M14), the
+  parity conditional (M27), and the isolation allowlist itself (M29 — adding
+  an impure leaf to the allowlist goes red).
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test`, `npx jest` and a
+30-mutation battery. **`npm run rebuild` before loading Local.**

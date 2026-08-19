@@ -5,6 +5,7 @@ import { ActionCard } from './ActionCard';
 import { ProcedureApprovalCard } from './ProcedureApprovalCard';
 import { SiteContextStrip, type SiteChoice } from './SiteContextStrip';
 import { ProcedureSurfaces } from './ProcedureSurfaces';
+import { CitationSpans } from './CitationSpans';
 import {
   applyProcedureEvent,
   emptyProcedureState,
@@ -13,6 +14,7 @@ import {
   type ProcedureStreamState,
 } from './procedureModel';
 import type { SiteContextMode, SiteContentStatus } from './siteContextModel';
+import type { CitationTurn } from './citationModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 import type { ProcedureApprovalContext } from '../../../common/chat-types';
 
@@ -37,6 +39,12 @@ interface UIMessage {
   content: string;
   streaming?: boolean;
   incomplete?: boolean;  // Message was interrupted; response is partial
+  /**
+   * WP-38 · ADR-24's supply and manifest for this reply, when the turn carried
+   * them. `reply` is overwritten from `content` at render time so the streamed
+   * text and the segmented text can never be two different strings.
+   */
+  citation?: Omit<CitationTurn, 'reply'> & { reply?: string };
   toolCalls?: Array<{
     id: string;
     name: string;
@@ -855,14 +863,29 @@ export class PanelChat extends React.Component<Props, State> {
           ),
         );
       } else {
+        // WP-38 · the corroboration render. A turn that carries citation data
+        // draws its claims with trailing doors (ADR-24's three states); a turn
+        // that carries none renders exactly as it did before this packet — the
+        // additive-parity precondition, pinned by `panelChat-citation.test.tsx`.
+        // The whole reply still goes through `renderMarkdown`, so the raw-HTML
+        // suppression above governs both paths.
         bubbleElement = React.createElement(
           'div',
           null,
-          React.createElement('div', {
-            style: { ...styles.assistantBubble, whiteSpace: 'normal' as const },
-            className: 'nexus-md',
-            dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) },
-          }),
+          msg.citation
+            ? React.createElement(
+                'div',
+                { style: { ...styles.assistantBubble, whiteSpace: 'normal' as const } },
+                React.createElement(CitationSpans, {
+                  turn: { ...msg.citation, reply: msg.content },
+                  renderMarkdown,
+                })
+              )
+            : React.createElement('div', {
+                style: { ...styles.assistantBubble, whiteSpace: 'normal' as const },
+                className: 'nexus-md',
+                dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) },
+              }),
           msg.incomplete
             ? React.createElement(
                 'div',
