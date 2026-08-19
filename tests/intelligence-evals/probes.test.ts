@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createEvalFixture, EvalFixture } from './fixture';
 import {
+  probeCitationContract,
   probeIncidentProducer,
   probeRefusalPayload,
   probeRendererSurfaces,
@@ -33,6 +34,11 @@ import {
 import type { RunbookRegistry } from '../../src/intelligence';
 import type { NexusSettings } from '../../src/common/types';
 import { STORAGE_KEYS } from '../../src/common/constants';
+import { assemble, taskId as mintTaskId } from '../../src/intelligence';
+import { supplyFromBundle } from '../../src/intelligence/citation/resolve';
+import { setIntelligenceCore } from '../../src/main/intelligence-host/coreRegistry';
+import { wrapUntrusted } from '../../src/main/mcp/pii';
+import { citedEventIdsOf } from './sitting';
 
 jest.setTimeout(60_000);
 
@@ -396,5 +402,85 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
     // Put the live set back, so a later reader of this module's state sees the
     // tree's real grants rather than this block's disarmed one.
     syncCapabilityGrants({ core: fixture.core, storage: memoryStorageWith({}), logger: quietLogger });
+  });
+});
+
+/**
+ * WP-34 · the two derivations of a task's citation supply must agree.
+ *
+ * `supplyFromBundle` is authoritative — it reads the bundle. The sitting's
+ * `citedEventIdsOf` SCRAPES the rendered carrier instead, because a transcript
+ * holds text and not the bundle it came from. Two derivations of one universe
+ * is exactly the drift this codebase pins elsewhere (`localDay`,
+ * `resolveAgentCron`/`effectiveCadenceExpression`), and the consequence here is
+ * specific and bad: a scrape that misses an id renders a GOOD citation as the
+ * loudest state on a judgment sheet, which is a false accusation handed to a
+ * human. So the copies are pinned together over a real assembled turn.
+ */
+describe('WP-34 · probeCitationContract MEASURES its subject', () => {
+  /**
+   * The probe's failure direction, driven — because a probe that can only ever
+   * report `ok: true` is an assertion wearing a measurement's clothes, and the
+   * three citation criteria gate on exactly that field. If it could not go
+   * false, "OWNER-PENDING" would be a constant and a platform regression that
+   * stopped teaching the convention would still hand an owner six prompts to
+   * sit with citations nobody was asked to write.
+   *
+   * The degraded world is a REACHABLE one, not a contrivance: WP-17's
+   * `law-registry` init stage can fail, `IntelligenceCore.law` is optional for
+   * that reason, and `syncCapabilityGrants` with no core is the production path
+   * for "no law registry ⇒ no grants". With neither, no carrier rides at all.
+   */
+  it('reports ok:false when the wired carrier taught no convention', async () => {
+    const before = getCapabilityGrants();
+    syncCapabilityGrants({
+      core: undefined,
+      storage: memoryStorageWith({}),
+      logger: quietLogger,
+    });
+    try {
+      const probe = await probeCitationContract({
+        ...fixture,
+        core: { ...fixture.core, law: undefined },
+      } as never);
+      expect(probe.conventionRode).toBe(false);
+      expect(probe.ok).toBe(false);
+      expect(probe.evidence.join(' ')).toContain('did NOT teach');
+    } finally {
+      syncCapabilityGrants({ core: fixture.core, storage: memoryStorageWith({}), logger: quietLogger });
+      expect(getCapabilityGrants().length).toBe(before.length);
+    }
+  });
+});
+
+describe('WP-34 · the scraped supply equals the assembled one', () => {
+  it('every event id the bundle makes citable is found in the rendered carrier', async () => {
+    setIntelligenceCore(fixture.core);
+    const flagged = fixture.fleet.find((s) => s.historyFlagged)!;
+    const bundle = await assemble(
+      {
+        actor: { id: 'act_wp34_pin', kind: 'agent', autonomy: 'interactive' },
+        task: { id: mintTaskId(), intent: 'Update WooCommerce across the fleet.' },
+        targets: [
+          { role: 'environment', id: fixture.environmentIdOf(flagged.siteId), label: flagged.name },
+          { role: 'site', id: fixture.siteIdOf(flagged.siteId), label: flagged.name },
+        ],
+        surface: 'eval.wp-34-pin',
+      },
+      {
+        law: fixture.core.law?.registry,
+        ledger: fixture.core.ledger,
+        twins: fixture.core.twins,
+        wrapUntrusted,
+      }
+    );
+
+    const authoritative = supplyFromBundle(bundle).events.map((e) => e.id).sort();
+    // The premise: this turn HAS episodic history. Without it both sides are
+    // empty and the comparison would hold vacuously.
+    expect(authoritative.length).toBeGreaterThan(0);
+
+    const scraped = citedEventIdsOf(bundle.blocks.turn ?? undefined).sort();
+    expect(scraped).toEqual(authoritative);
   });
 });

@@ -27,6 +27,9 @@ import {
   TaskFrame,
 } from '../../intelligence';
 import type { Runbook } from '../../intelligence';
+import { CITATION_CONVENTION_VERSION } from '../../intelligence/citation/convention';
+import { supplyFromBundle } from '../../intelligence/citation/resolve';
+import type { CitationSupply } from '../../intelligence/citation/resolve';
 import { getIntelligenceCore } from './coreRegistry';
 import { procedureRequestForTurn } from './procedureArming';
 import {
@@ -99,6 +102,23 @@ export interface ChatAssemblyResult {
    * is the structured half, for the §7 render shapes and for WP-20d's cursor.
    */
   procedure: ProcedureOutcome | null;
+  /**
+   * WP-34 · what this turn made citable (ADR-24 P1's universe, the half the
+   * platform knows at assembly time): the ledger event ids that rode, and the
+   * carrier lines that rendered.
+   *
+   * `toolCalls` is EMPTY here and that is not an oversight — tool calls happen
+   * after assembly, so the trace is the caller's to add (`numberToolCalls`).
+   * Publishing an empty list rather than omitting the field keeps the shape
+   * honest: "no tool call is citable YET" is a true statement about the moment
+   * a carrier is built, where an absent field would read as "this turn has no
+   * citation supply at all".
+   *
+   * Derived by `supplyFromBundle` — the SAME function the eval sheet and the
+   * M5 render resolve through. One derivation, or the judge and the user are
+   * looking at two different universes (P5).
+   */
+  citationSupply: CitationSupply;
 }
 
 /**
@@ -127,10 +147,25 @@ const sessionPolicyHash = new Map<string, string>();
  */
 const sessionProcedureHash = new Map<string, string>();
 
+/**
+ * WP-34 · the same memory again, for the citation convention (ADR-24 + ADR-20).
+ *
+ * POLICY-SHAPED, not procedure-shaped, and the difference is the whole reason
+ * this is a third map rather than a reuse of the second. A procedure is armed
+ * and disarmed, so its memory is CLEARED the moment a turn stops delivering one
+ * — an actor must not carry checkpoints for a document it was told to stop
+ * following. The citation convention is standing: once an actor has been taught
+ * it, it has been taught it, and a quiet turn is not a retraction. So this map
+ * is only ever written, never cleared by a turn's outcome — only by the session
+ * ending.
+ */
+const sessionCitationHash = new Map<string, string>();
+
 /** Drop a session's remembered assertions (chat clear / session delete). */
 export function forgetChatAssemblySession(sessionId: string): void {
   sessionPolicyHash.delete(sessionId);
   sessionProcedureHash.delete(sessionId);
+  sessionCitationHash.delete(sessionId);
   // WP-20d: and the checkpoint run, which is the same kind of "what has this
   // actor already done" state, held for the same ADR-10 reason.
   forgetProcedureRun(sessionId);
@@ -193,6 +228,7 @@ export async function assembleForChatTurn(
       context: {
         policyVersionHash: sessionPolicyHash.get(req.sessionId),
         procedureHash: sessionProcedureHash.get(req.sessionId),
+        citationConventionHash: sessionCitationHash.get(req.sessionId),
         rebuildingDurableContext: req.buildingSystemPrompt,
       },
       retrieval: { semanticLimit: SEMANTIC_LIMIT },
@@ -210,6 +246,13 @@ export async function assembleForChatTurn(
     });
 
     if (bundle.ambient) sessionPolicyHash.set(req.sessionId, bundle.ambient.versionHash);
+    // WP-34: remembered only when the section ACTUALLY rode. A turn whose
+    // carrier was empty taught nothing, and recording it as taught would leave
+    // the next turn re-asserting a version the actor has never seen — the one
+    // failure mode of a hash re-assert, and the one it is hardest to notice.
+    if (bundle.blocks.turnSections.includes('citation-convention')) {
+      sessionCitationHash.set(req.sessionId, CITATION_CONVENTION_VERSION);
+    }
     if (bundle.procedure?.status === 'delivered') {
       sessionProcedureHash.set(req.sessionId, bundle.procedure.hash);
     } else {
@@ -251,6 +294,7 @@ export async function assembleForChatTurn(
       // See ChatAssemblyResult.grants — [] must never become a filter.
       grants: bundle.tools.length > 0 ? bundle.tools.map((t) => t.name) : undefined,
       procedure: bundle.procedure,
+      citationSupply: supplyFromBundle(bundle),
     };
   } catch {
     return null; // swallow everything: a chat turn is never broken by this layer

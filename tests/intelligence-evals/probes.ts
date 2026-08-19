@@ -67,6 +67,15 @@ import {
 import type { McpToolHandler, NexusServices } from '../../src/main/mcp/types';
 import { validateAgainstJsonSchema } from './jsonSchemaCheck';
 import { EvalFixture, INCIDENT_SOURCE_SYSTEM, INCIDENT_TOPIC } from './fixture';
+import {
+  CITATION_CONVENTION_BODY,
+  CITATION_CONVENTION_VERSION,
+} from '../../src/intelligence/citation/convention';
+import {
+  numberToolCalls,
+  resolveCitations,
+  supplyFromBundle,
+} from '../../src/intelligence/citation/resolve';
 
 export const ENVELOPE_SCHEMA_PATH = path.join(
   __dirname,
@@ -1556,5 +1565,140 @@ export function probeRendererSurfaces(): SurfaceProbe {
     counts,
     absentFromRenderer: (token: string) => (counts[token]?.renderer ?? 0) === 0,
     evidence,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// WP-34 · the citation contract (ADR-24), driven rather than asserted
+// ---------------------------------------------------------------------------
+
+export interface CitationContractProbe extends Probe {
+  /** Did the wired chat carrier actually teach the convention this turn? */
+  conventionRode: boolean;
+  /** The version the block asserted, so a report names what was in effect. */
+  conventionVersion: string;
+  /** Sections that rode, in order — the `carrier:` half of the supply. */
+  carrierLines: string[];
+  /** Ledger event ids this task's supply makes citable. */
+  citableEventIds: number;
+  /** A citation of a SUPPLIED id resolved. */
+  suppliedIdResolves: boolean;
+  /** A citation of an id nobody supplied did NOT resolve. */
+  unsuppliedIdRefused: boolean;
+  /** The three ADR-24 states came back distinguishable in the return shape. */
+  threeStatesDistinguishable: boolean;
+}
+
+/**
+ * WP-34 · what the citation criteria are adjudicated against.
+ *
+ * The criteria in the P4 family are all about a REPLY, so all of them are
+ * judged. This probe exists so that "judged" is earned rather than assumed: it
+ * establishes that the PREMISE of the sitting can be constructed on this tree —
+ * the model is taught the convention on the real chat carrier, and the ids it
+ * is taught to cite are the ids this task's supply makes addressable.
+ *
+ * Rule 2 outranks rule 3 in the check registry: an owner must never be handed a
+ * prompt to judge a run whose premise does not exist. So each citation check
+ * gates on this probe and falls to BLOCKED if the convention did not ride —
+ * exactly as J-Refusal's judged checks gate on a refusal the guard really
+ * produced (WP-33).
+ *
+ * IT MEASURES EXISTENCE MACHINERY, NOT ADHERENCE. Nothing here observes a model
+ * or scores a reply. The two sample resolutions below are run over strings this
+ * probe writes itself, and they are labelled as such in the evidence: they
+ * demonstrate that the join answers, not that anybody cited well.
+ */
+export async function probeCitationContract(
+  fixture: EvalFixture
+): Promise<CitationContractProbe> {
+  setIntelligenceCore(fixture.core);
+  const flagged = fixture.fleet.find((s) => s.historyFlagged)!;
+  const localSites: Record<string, { id: string; name: string; domain: string }> = {};
+  for (const site of fixture.fleet) {
+    localSites[site.siteId] = { id: site.siteId, name: site.name, domain: `${site.siteId}.local` };
+  }
+  const services = {
+    siteData: { getSite: (id: string) => localSites[id], getSites: () => localSites },
+  } as unknown as NexusServices;
+
+  const sessionId = `eval-citation-${mintTaskId()}`;
+  forgetChatAssemblySession(sessionId);
+  const turn = await assembleForChatTurn({
+    services,
+    sessionId,
+    userMessage: 'Update WooCommerce across the fleet.',
+    siteId: flagged.siteId,
+    buildingSystemPrompt: true,
+  });
+
+  const carrier = turn?.turnBlock ?? '';
+  const conventionRode = carrier.includes(CITATION_CONVENTION_BODY);
+
+  // The same assembly the carrier came from, read for its supply. `assemble` is
+  // re-driven here rather than the bundle being threaded out of the host,
+  // because `assembleForChatTurn` returns rendered strings by contract and this
+  // probe must not widen that contract to see inside it.
+  const bundle = await assemble(
+    {
+      actor: { id: 'act_eval_wp34', kind: 'agent', autonomy: 'interactive' },
+      task: { id: mintTaskId(), intent: 'Update WooCommerce across the fleet.' },
+      targets: [
+        { role: 'environment', id: fixture.environmentIdOf(flagged.siteId), label: flagged.name },
+        { role: 'site', id: fixture.siteIdOf(flagged.siteId), label: flagged.name },
+      ],
+      surface: 'eval.wp-34',
+    },
+    {
+      law: fixture.core.law?.registry,
+      ledger: fixture.core.ledger,
+      twins: fixture.core.twins,
+      wrapUntrusted,
+    }
+  );
+
+  const supply = supplyFromBundle(bundle, numberToolCalls(['wp_plugin_list']));
+  const suppliedId = supply.events[0]?.id;
+
+  // Sample resolutions over strings THIS PROBE wrote. They demonstrate that the
+  // join answers; they say nothing about any model's adherence.
+  const sampled = suppliedId
+    ? resolveCitations(
+        `a [[cite:${suppliedId}]] b [[cite:evt_notsupplied]] c [[cite:none]]`,
+        supply
+      )
+    : [];
+  const states = sampled.map((r) => r.state);
+  const suppliedIdResolves = states[0] === 'cited-and-resolves';
+  const unsuppliedIdRefused = states[1] === 'cited-but-unresolvable';
+  const threeStatesDistinguishable = new Set(states).size === 3;
+
+  const carrierLines = supply.carrierLines.map((c) => c.key);
+
+  return {
+    ok: conventionRode && suppliedIdResolves && unsuppliedIdRefused && threeStatesDistinguishable,
+    conventionRode,
+    conventionVersion: CITATION_CONVENTION_VERSION,
+    carrierLines,
+    citableEventIds: supply.events.length,
+    suppliedIdResolves,
+    unsuppliedIdRefused,
+    threeStatesDistinguishable,
+    evidence: [
+      `the WIRED chat carrier (assembleForChatTurn, surface chat.docked-panel) ${
+        conventionRode ? 'TAUGHT' : 'did NOT teach'
+      } the citation convention this turn, version ${CITATION_CONVENTION_VERSION}`,
+      `citable this task: ${supply.events.length} ledger event id(s), ` +
+        `${supply.toolCalls.length} tool call address(es), carrier line(s) [${carrierLines.join(', ')}]`,
+      `the join answers: a SUPPLIED id resolves=${suppliedIdResolves}, an id nobody supplied is ` +
+        `refused=${unsuppliedIdRefused}, and the three ADR-24 states came back distinguishable in ` +
+        `the return shape (not by string matching)=${threeStatesDistinguishable}`,
+      'THE SAMPLE ABOVE IS THIS PROBE\'S OWN STRING, not a model\'s reply: it establishes that ' +
+        'the premise of a citation sitting can be constructed on this tree, and claims nothing ' +
+        'whatever about adherence',
+      'NEVER MEASURED HERE, AND NEVER MEASURABLE HERE: whether a resolving citation SUPPORTS the ' +
+        'claim it trails. ADR-24 P1/P4 reserve that for the eval and the sitting — the platform ' +
+        'checks existence and will not guess at support',
+    ],
   };
 }

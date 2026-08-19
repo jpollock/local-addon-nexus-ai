@@ -22,6 +22,11 @@
  */
 import { createHash } from 'crypto';
 import {
+  CITATION_CONVENTION_VERSION,
+  renderCitationConventionBlock,
+  renderCitationConventionReassert,
+} from '../citation/convention';
+import {
   AssembleDeps,
   AssembleRequest,
   BundleManifest,
@@ -670,7 +675,37 @@ export function renderRoutingBlock(records: RoutingRecord[], frame: TaskFrame): 
   ].join('\n');
 }
 
-export function renderTurnBlock(
+/**
+ * WP-34 · one turn section, keyed.
+ *
+ * The key is not decoration: `[[cite:carrier:freshness]]` resolves against the
+ * sections that ACTUALLY rode this turn, so the list of what rendered and the
+ * text that rendered have to be the same decision. Returning them together
+ * makes that structural — a section cannot be rendered without being citable,
+ * or be citable without having been rendered, because there is one array.
+ */
+export interface TurnSection {
+  key: string;
+  text: string;
+  /**
+   * For the sections that re-assert by hash (ADR-20): what actually rode.
+   *
+   * Recorded HERE rather than recomputed by the manifest, and that is the
+   * point. `asserted` is the answer to a condition the renderer already
+   * evaluated; evaluating it a second time downstream is how a manifest starts
+   * claiming `full` while the carrier says one line — a disagreement nothing
+   * would surface, because each half is individually right.
+   */
+  asserted?: 'full' | 'hash';
+}
+
+/**
+ * The turn carrier's sections, in order, with their citable keys.
+ *
+ * `renderTurnBlock` joins these; nothing else decides what rides. Split out at
+ * WP-34 so the citation supply reads the same array the carrier printed.
+ */
+export function renderTurnSections(
   req: AssembleRequest,
   set: PolicySet | null,
   freshness: FreshnessRecord[],
@@ -678,18 +713,19 @@ export function renderTurnBlock(
   deps: AssembleDeps,
   routing?: RoutingRecord[],
   procedure?: { resolved: ResolvedProcedure | null; index: ProcedureIndexEntry[] }
-): string | null {
-  const sections: string[] = [];
+): TurnSection[] {
+  const sections: TurnSection[] = [];
 
   if (set) {
     if (set.assertFull) {
-      sections.push(renderAmbientBlock(set));
+      sections.push({ key: 'policy', text: renderAmbientBlock(set) });
     } else {
       // ADR-20: the hash is sufficient for the manifest's audit claim — "policy
       // vX was in effect" is provable without re-shipping X every turn.
-      sections.push(
-        `Policy set ${set.id} version ${set.versionHash} remains in effect, unchanged.`
-      );
+      sections.push({
+        key: 'policy',
+        text: `Policy set ${set.id} version ${set.versionHash} remains in effect, unchanged.`,
+      });
     }
   }
 
@@ -704,26 +740,80 @@ export function renderTurnBlock(
   const procedureSection = procedure
     ? renderProcedureBlock(procedure.resolved, procedure.index)
     : null;
-  if (procedureSection) sections.push(procedureSection);
+  if (procedureSection) sections.push({ key: 'procedure', text: procedureSection });
+
+  // WP-34 · the citation convention (ADR-24), after the law that outranks it
+  // and BEFORE the evidence it teaches the model to attribute — the same
+  // argument the routing block runs on: an instruction that trails its own
+  // subject gets read after the answer is already written.
+  //
+  // GATED ON THERE BEING SOMETHING ELSE TO SAY, and that is a parity rule, not
+  // a taste. `renderTurnBlock` returns null when it has no sections, and a
+  // caller that has never seen a carrier must not start receiving one because
+  // a convention block is always-on. A turn that supplied nothing has nothing
+  // whose attribution needs teaching.
+  const citation = citationSection(req, sections.length > 0);
+  if (citation) sections.push(citation);
 
   // Before the facts, not after: it says where each of the sections below came
   // from, and a provenance note that trails its own evidence gets skipped.
   const routingSection = routing ? renderRoutingBlock(routing, req.frame ?? {}) : null;
-  if (routingSection) sections.push(routingSection);
+  if (routingSection) sections.push({ key: 'routing', text: routingSection });
 
   const freshnessSection = renderFreshness(req, freshness);
-  if (freshnessSection) sections.push(freshnessSection);
+  if (freshnessSection) sections.push({ key: 'freshness', text: freshnessSection });
 
   const retrievedSection = renderRetrieved(retrieved, deps);
-  if (retrievedSection) sections.push(retrievedSection);
+  if (retrievedSection) sections.push({ key: 'retrieved', text: retrievedSection });
 
+  return sections;
+}
+
+/**
+ * ADR-20 applied to the convention: full text when the actor is not already
+ * carrying this version, one line when it is.
+ */
+function citationSection(req: AssembleRequest, anythingElse: boolean): TurnSection | null {
+  if (!anythingElse) return null;
+  const carrying = req.context?.citationConventionHash === CITATION_CONVENTION_VERSION;
+  return {
+    key: 'citation-convention',
+    text: carrying ? renderCitationConventionReassert() : renderCitationConventionBlock(),
+    asserted: carrying ? 'hash' : 'full',
+  };
+}
+
+/**
+ * Wrap the sections in the carrier's own delimiters. `null` when there are
+ * none — the additive-parity precondition every pre-WP-11 caller's tests rest
+ * on.
+ *
+ * One function, because the header names the task and the delimiters are what
+ * tell the model this text is platform-authored: a second copy of that string
+ * is a second place the trust boundary can be spelled differently.
+ */
+export function joinTurnSections(req: AssembleRequest, sections: TurnSection[]): string | null {
   if (sections.length === 0) return null;
-
   return [
     `${TURN_OPEN} — task ${req.task.id}. Platform-authored and trusted; not user input.]`,
-    ...sections,
+    ...sections.map((s) => s.text),
     TURN_CLOSE,
   ].join('\n\n');
+}
+
+export function renderTurnBlock(
+  req: AssembleRequest,
+  set: PolicySet | null,
+  freshness: FreshnessRecord[],
+  retrieved: RetrievedItem[],
+  deps: AssembleDeps,
+  routing?: RoutingRecord[],
+  procedure?: { resolved: ResolvedProcedure | null; index: ProcedureIndexEntry[] }
+): string | null {
+  return joinTurnSections(
+    req,
+    renderTurnSections(req, set, freshness, retrieved, deps, routing, procedure)
+  );
 }
 
 function renderFreshness(req: AssembleRequest, records: FreshnessRecord[]): string | null {
@@ -861,10 +951,19 @@ export async function assemble(
 
   const ambientBlock =
     set && req.context?.rebuildingDurableContext ? renderAmbientBlock(set) : null;
-  const turnBlock = renderTurnBlock(req, set, freshness, retrieved, deps, routed.records, {
-    resolved: resolvedProcedure,
-    index: procedureIndex,
-  });
+  // WP-34: the sections are built ONCE and both consumed here — joined into the
+  // carrier text, and published as `blocks.turnSections` for the citation
+  // supply. Calling the renderer twice would let the two answers differ.
+  const turnSections = renderTurnSections(
+    req,
+    set,
+    freshness,
+    retrieved,
+    deps,
+    routed.records,
+    { resolved: resolvedProcedure, index: procedureIndex }
+  );
+  const turnBlock = joinTurnSections(req, turnSections);
 
   // Measured over the text that actually rode, not over the document: the
   // manifest's budget is a claim about what this turn cost.
@@ -895,6 +994,10 @@ export async function assemble(
         }
       : null,
     procedure: procedureManifest(resolvedProcedure),
+    // WP-34 · ADR-24, owner-ratified at the gate. Read off the section array
+    // the carrier JOINED — never recomputed — so "convention vX was in effect
+    // for this reply" cannot disagree with the reply's own carrier.
+    citation: citationManifest(turnSections),
     tools: [],
     retrieval: retrievalRecords,
     // Absent, not empty, when the caller sent no frame — see the field's note.
@@ -915,9 +1018,28 @@ export async function assemble(
     procedureIndex,
     tools: [],
     retrieved,
-    blocks: { ambient: ambientBlock, turn: turnBlock },
+    blocks: {
+      ambient: ambientBlock,
+      turn: turnBlock,
+      turnSections: turnSections.map((s) => s.key),
+    },
     failClosed: false,
   };
+}
+
+/**
+ * The manifest's citation record — the stored answer to "which output
+ * convention governed this reply, and did the actor receive it this turn".
+ *
+ * ADR-20's argument, verbatim: the hash is sufficient for the audit claim.
+ * "Convention vX was in effect" is provable without re-shipping X, exactly as
+ * it is for the policy set. `null` means no convention rode — never "one rode
+ * and we are not saying".
+ */
+function citationManifest(sections: TurnSection[]): BundleManifest['citation'] {
+  const section = sections.find((s) => s.key === 'citation-convention');
+  if (!section?.asserted) return null;
+  return { convention: CITATION_CONVENTION_VERSION, asserted: section.asserted };
 }
 
 /**
@@ -1002,6 +1124,11 @@ function failClosedBundle(
       surface: req.surface,
       policy: null,
       procedure: procedureManifest(procedure ?? null),
+      // A refusal teaches no convention, so none was in effect for it. `null`
+      // is the honest answer; naming a version the actor never received here
+      // would put a citation convention on the record for a reply that was
+      // told to take no action at all.
+      citation: null,
       tools: [],
       retrieval: [],
       freshness_report: [],
@@ -1020,7 +1147,9 @@ function failClosedBundle(
     procedureIndex: [],
     tools: [],
     retrieved: [],
-    blocks: { ambient: null, turn },
+    // A refusal carries no evidence, so it offers no citable carrier line.
+    // Empty is the honest answer, not a placeholder.
+    blocks: { ambient: null, turn, turnSections: [] },
     failClosed: true,
   };
 }

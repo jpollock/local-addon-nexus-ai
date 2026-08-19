@@ -702,6 +702,72 @@ describe('end-to-end capture with the model call scripted (no tokens spent)', ()
     }
   });
 
+  /**
+   * WP-34 · the judgment sheet resolves the model's own citations (ADR-24 P5).
+   *
+   * The three states are driven at once, through the real chat path: a tool
+   * citation that resolves because the model really made that call, an event id
+   * nobody supplied, and an explicit `[[cite:none]]`. The point of the section
+   * is that a judge is handed a LOOKUP instead of an eyeballing exercise — so
+   * what this pins is that the lookup is real and that its limits are printed
+   * with it, not that a model behaves.
+   */
+  test('the citation section resolves the reply through the shared join', async () => {
+    let turn = 0;
+    const { restore } = scriptProvider(async function* () {
+      turn += 1;
+      if (turn === 1) {
+        yield { type: 'token', text: 'Checking the fleet first.' };
+        yield { type: 'tool_call_end', id: 'c1', name: 'nexus_list_sites', arguments: {} };
+        yield { type: 'done', stopReason: 'tool_use' };
+        return;
+      }
+      yield {
+        type: 'token',
+        text:
+          'Six sites are running WooCommerce. [[cite:tool:nexus_list_sites#1]]\n\n' +
+          'The gateway was updated forty minutes earlier. [[cite:evt_01JNOTSUPPLIEDAAAAAAAAAAAA]]\n\n' +
+          'Both of the sites that broke before ran that same gateway. [[cite:none]]\n\n' +
+          'That points at the gateway, but I have not proved it.',
+      };
+      yield { type: 'done', stopReason: 'end_turn' };
+    });
+
+    try {
+      const capture = await runOnce(1, ctx());
+      const md = renderTranscript(capture, ctx());
+
+      // FIRST: the convention actually reached the model, measured from the far
+      // end of the real chat path — the carrier message the provider was sent,
+      // not a second assemble() call. Everything below is about a model that
+      // was taught; if this line ever goes red, the section under it is
+      // judging a model nobody asked to cite.
+      expect(turnBlockOf(capture)).toContain('How to cite what you say');
+      expect(turnBlockOf(capture)).toContain('[[cite:none]]');
+
+      expect(md).toContain('## 4b. Citations, resolved (ADR-24)');
+      expect(md).toContain('**1 resolve · 1 do NOT resolve · 1 marked as having no record.**');
+
+      // The tool call really happened this run, so its citation is a route to a
+      // record in the trace — not a guess about one.
+      expect(md).toContain('| `[[cite:tool:nexus_list_sites#1]]` | resolves | tool `nexus_list_sites#1` |');
+      expect(md).toContain('**DOES NOT RESOLVE** (not-in-supply)');
+      expect(md).toContain('a fact with nothing offered for it');
+
+      // The unhedged glue sentence carries no marker and produces no row — an
+      // absence, not a fourth state.
+      expect(md).not.toContain('but I have not proved it. |');
+
+      // And the section says what it is NOT telling the judge. Without this the
+      // table reads as a corroboration check, which is the one thing ADR-24
+      // forbids the platform from claiming.
+      expect(md).toContain('Every row above is an EXISTENCE answer');
+      expect(md).toContain('reserve that judgement for');
+    } finally {
+      restore();
+    }
+  });
+
   test('the empty-history twin runs the same path with no incident in the turn block', async () => {
     const { restore } = scriptProvider(async function* () {
       yield { type: 'token', text: 'A uniform plan is fine here.' };

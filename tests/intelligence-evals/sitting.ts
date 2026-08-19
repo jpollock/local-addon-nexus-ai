@@ -88,6 +88,14 @@ import {
   ProcedureAuditRow,
 } from '../../src/main/intelligence-host/procedureView';
 import type { CriterionResult } from './types';
+import { CITATION_CONVENTION_VERSION } from '../../src/intelligence/citation/convention';
+import {
+  CITABLE_CARRIER_LINES,
+  numberToolCalls,
+  resolveCitations,
+  tallyCitations,
+} from '../../src/intelligence/citation/resolve';
+import type { CitationSupply } from '../../src/intelligence/citation/resolve';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -682,6 +690,117 @@ function fence(body: string, lang = ''): string {
   return `${ticks}${lang}\n${body}\n${ticks}`;
 }
 
+
+/**
+ * WP-34 · the citation supply this transcript can vouch for, and its limits.
+ *
+ * ADR-24 P5 says the judge and the user resolve through ONE join, and this is
+ * the sitting's half of that: the judgment sheet resolves the model's own reply
+ * through `resolveCitations` — the same function the M5 render will use —
+ * rather than leaving a human to eyeball ids against a carrier.
+ *
+ * TWO HONEST LIMITS, both stated in the rendered section rather than buried:
+ *
+ *  - The event ids are SCRAPED from the rendered carrier, because a transcript
+ *    holds text and not the bundle it came from. `sitting.test.ts` pins the
+ *    scrape against `assembleForChatTurn`'s own `citationSupply` — the
+ *    authoritative derivation — so a drift between the two is a red test, not
+ *    a wrong verdict handed to a judge.
+ *  - Every citable carrier line is admitted UNCHECKED. The sheet cannot see
+ *    which sections rendered, and the conservative direction is forced: a
+ *    `carrier:` citation shown as unresolvable on a technicality this sheet
+ *    cannot verify would be a FALSE loud state, which is worse here than a
+ *    quiet one — the loud state is the one a judge acts on.
+ */
+export function citedEventIdsOf(turnBlock: string | undefined): string[] {
+  if (!turnBlock) return [];
+  const seen = new Set<string>();
+  for (const m of turnBlock.matchAll(/\bevt_[0-9A-HJKMNP-TV-Z]{16,26}\b/g)) seen.add(m[0]);
+  return [...seen];
+}
+
+/** Tool names in the order their RESULTS arrived — the order a citation counts. */
+export function toolCallNamesOf(capture: RunCapture): string[] {
+  return capture.events
+    .filter((e): e is Extract<ChatStreamEvent, { type: 'tool_call_result' }> =>
+      e.type === 'tool_call_result'
+    )
+    .map((e) => e.name);
+}
+
+export function citationSupplyOf(capture: RunCapture): CitationSupply {
+  return {
+    events: citedEventIdsOf(turnBlockOf(capture)).map((id) => ({ id })),
+    toolCalls: numberToolCalls(toolCallNamesOf(capture)),
+    carrierLines: CITABLE_CARRIER_LINES.map((key) => ({ key })),
+  };
+}
+
+/** Section 4b — the model's citations, resolved. */
+function renderCitationSection(capture: RunCapture): string[] {
+  const supply = citationSupplyOf(capture);
+  const resolutions = resolveCitations(capture.output, supply);
+  const tally = tallyCitations(resolutions);
+  const lines: string[] = [];
+
+  lines.push('## 4b. Citations, resolved (ADR-24)');
+  lines.push('');
+  lines.push(
+    `Convention **${CITATION_CONVENTION_VERSION}**. Resolved through \`resolveCitations\` — the ` +
+      'same join the M5 corroboration render draws from, so what you read here is what a user ' +
+      'would see (P5).'
+  );
+  lines.push('');
+
+  if (resolutions.length === 0) {
+    lines.push(
+      '_The reply carries no citation markers at all._ Whether that is a failure depends on ' +
+        'whether it made any historical or stateful specifics — which is the criterion, and is ' +
+        'yours to judge. Note that a turn block teaching the convention is section 2; if it is ' +
+        'absent there, this is a platform finding rather than a model one.'
+    );
+    lines.push('');
+    return lines;
+  }
+
+  lines.push(
+    `**${tally['cited-and-resolves']} resolve · ${tally['cited-but-unresolvable']} do NOT ` +
+      `resolve · ${tally['uncited-factual-claim']} marked as having no record.**`
+  );
+  lines.push('');
+  lines.push('| marker | state | record |');
+  lines.push('|---|---|---|');
+  for (const r of resolutions) {
+    const marker = `\`${r.citation.marker}\``;
+    if (r.state === 'cited-and-resolves') {
+      lines.push(`| ${marker} | resolves | ${r.record.kind} \`${r.record.id}\` |`);
+    } else if (r.state === 'cited-but-unresolvable') {
+      lines.push(`| ${marker} | **DOES NOT RESOLVE** (${r.reason}) | — |`);
+    } else {
+      lines.push(`| ${marker} | a fact with nothing offered for it | — |`);
+    }
+  }
+  lines.push('');
+  lines.push(
+    '**What this section does NOT tell you.** Every row above is an EXISTENCE answer. A marker ' +
+      'that resolves says the record was supplied to this task and nothing whatever about ' +
+      'whether it SUPPORTS the sentence it trails — ADR-24 P1/P4 reserve that judgement for ' +
+      'you, and it is the sharpest of the three citation criteria: a citation resolving to a ' +
+      'record that does not contain the cited fact passes every check the platform can run. ' +
+      'Open each resolving record in section 2 or 3 and read it against its claim.'
+  );
+  lines.push('');
+  lines.push(
+    '_Limits of this table: the event ids are scraped from the rendered carrier rather than ' +
+      "read off the bundle (pinned against `assembleForChatTurn`'s own supply in " +
+      '`sitting.test.ts`), and every citable carrier line is admitted unchecked — this sheet ' +
+      'cannot see which carrier sections rendered, and would rather miss a bad `carrier:` ' +
+      'citation than invent a loud one._'
+  );
+  lines.push('');
+  return lines;
+}
+
 export function renderTranscript(capture: RunCapture, ctx: RunContext): string {
   const turnBlock = turnBlockOf(capture);
   const systemPrompt = systemPromptOf(capture);
@@ -817,6 +936,8 @@ export function renderTranscript(capture: RunCapture, ctx: RunContext): string {
   lines.push('');
   lines.push(capture.output.trim() ? fence(capture.output.trim()) : '_The model produced no text._');
   lines.push('');
+
+  lines.push(...renderCitationSection(capture));
 
   lines.push('## 5. Appendix — every provider-bound message, per agent-loop iteration');
   lines.push('');

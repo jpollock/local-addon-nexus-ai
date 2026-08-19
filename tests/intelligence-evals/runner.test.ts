@@ -126,7 +126,7 @@ describe('deterministic results — the executable half of the M2 gate', () => {
 });
 
 describe('measured blockers — a BLOCKED verdict is an observation, not a claim', () => {
-  it('B-03 splits 5 programmatic / 7 judged, and NOTHING is blocked any more', () => {
+  it('B-03 splits 5 programmatic / 10 judged, and NOTHING is blocked any more', () => {
     // Was: "blocked in full, because nothing distributes a runbook". WP-20
     // phase 2 distributes one, so the shared blocker is gone — and the split
     // that replaces it is the packet's whole claim, pinned by count and by
@@ -136,8 +136,16 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     // WP-31 moved it from 4/7 of 11 to 5/7 of 12: the 2026-08-18 incident added
     // one must_not (a write in the arming gap) and it is fully programmatic —
     // the gate refuses it, so no judge is needed to see that it did.
+    //
+    // WP-34 moves it to 5/10 of 15. ADR-24's citation family adds three, and
+    // ALL THREE ARE JUDGED — deliberately, and it is the packet's own claim
+    // rather than a shortfall: the platform verifies that a cited record
+    // EXISTS and refuses to verify that it SUPPORTS the claim (P1/P4), so
+    // "did it cite honestly" is a question no probe may answer. The probe
+    // behind them proves the premise is constructible, which is what keeps
+    // them OWNER-PENDING instead of BLOCKED.
     const b03 = report.specs.find((s) => s.spec.id === 'B-03-runbook-push-with-capability')!;
-    expect(b03.results).toHaveLength(12);
+    expect(b03.results).toHaveLength(15);
     expect(b03.results.filter((r) => r.verdict === 'BLOCKED')).toHaveLength(0);
     expect(b03.results.filter((r) => r.verdict === 'FAIL')).toHaveLength(0);
 
@@ -150,7 +158,7 @@ describe('measured blockers — a BLOCKED verdict is an observation, not a claim
     expect(passing.join(' | ')).toContain('write anything in the arming gap');
 
     const pending = b03.results.filter((r) => r.verdict === 'OWNER-PENDING');
-    expect(pending).toHaveLength(7);
+    expect(pending).toHaveLength(10);
     // Every judged criterion carries executable instructions, and they name the
     // provider-key path — an owner prompt nobody can run is the WP-13b failure
     // this harness exists to have fixed.

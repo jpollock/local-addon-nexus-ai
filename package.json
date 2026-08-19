@@ -36,6 +36,8 @@
     "compile": "tsc -p .",
     "fixtures:procedures": "ts-node scripts/generate-procedure-fixtures.ts",
     "fixtures:procedures:check": "ts-node scripts/generate-procedure-fixtures.ts --check",
+    "fixtures:citations": "ts-node scripts/generate-citation-fixtures.ts",
+    "fixtures:citations:check": "ts-node scripts/generate-citation-fixtures.ts --check",
     "create-entry-points": "node scripts/create-entry-points.js",
     "sync-wp-plugins": "node scripts/create-entry-points.js",
     "prepublishOnly": "node scripts/prepublish-guard.js",
