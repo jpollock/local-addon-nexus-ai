@@ -456,6 +456,42 @@ describe('sessions, derived from the ledger alone', () => {
   });
 
   /**
+   * BATTERY SURVIVOR M03, and the gap it exposed was in the PIN, not the code.
+   *
+   * The case above emits a refusal the way the assembler emits one today —
+   * `status: 'refused'` AND `hash: null`, because nothing rode. So it was
+   * caught by the hash guard, and mutating the STATUS guard away changed
+   * nothing that any test could see. Two independent guards on two independent
+   * fields, and only one of them was pinned.
+   *
+   * The status guard is what holds if `BundleManifest.procedure`'s "null when
+   * none did" convention ever drifts — a refusal that still names the document
+   * it refused would otherwise be recorded as a turn the actor followed.
+   */
+  test('a refusal that still names its document is STILL not a turn — the status guard, alone', () => {
+    const t1 = mintTaskId();
+    const t2 = mintTaskId();
+    emitManifest({
+      taskId: t1,
+      observedAt: hoursAgo(2),
+      procedure: { capability: RB_BULK.capability, runbook: RB_BULK.id, hash: RB_BULK.hash, status: 'delivered' },
+    });
+    emitManifest({
+      taskId: t2,
+      observedAt: hoursAgo(1),
+      // The drift case: refused, and carrying a hash anyway. The hash guard
+      // cannot see this one; only `status !== 'delivered'` can.
+      procedure: { capability: RB_BULK.capability, runbook: RB_BULK.id, hash: RB_BULK.hash, status: 'refused' },
+    });
+
+    expect(ledgerCount(MANIFEST_TOPIC)).toBe(2); // shape #15
+
+    const snapshot = foldSessionRegistry(deps({ runbooks: lookup(RB_BULK) }));
+    expect(snapshot.sessions).toHaveLength(1);
+    expect(snapshot.sessions[0].taskIds).toEqual([t1]);
+  });
+
+  /**
    * FOUND BY THE EVAL, not by this file — and it lost a waiting row.
    *
    * The eval report's own ledger holds a denied run and a freshly-armed run at
@@ -1157,6 +1193,36 @@ describe('the reserved slot — one folded row, and it cannot grow (tear 3)', ()
     expect(snapshot.reserved).toBeDefined();
     expect(snapshot.reserved.headline).toEqual(expect.any(String));
     expect(createSessionRegistry(deps({})).triage().reserved).toEqual(snapshot.reserved);
+  });
+
+  /**
+   * BATTERY SURVIVOR M20 — again a gap in the pin rather than in the code.
+   *
+   * Every reserved-slot case above supplied DARK producers or none, so
+   * widening the dark filter to "anything not OK" changed no assertion. DARK
+   * and STALE are different sentences: one says a source stopped, the other
+   * says it is behind. Promoting the second into the first overstates the one
+   * line a user is guaranteed to see, which is the line that has to be worth
+   * reading or the reserved slot is furniture.
+   */
+  test('reporting LATE is not going BLIND — a stale producer never enters the dark set', () => {
+    const snapshot = foldSessionRegistry(deps({ health: healthReport({ stale: 3 }) }));
+
+    expect(snapshot.reserved.dark).toEqual([]);
+    expect(snapshot.reserved.staleCount).toBe(3);
+    expect(snapshot.reserved.headline).toBe('the record is reporting late — 3 source(s) behind their SLO');
+    expect(snapshot.reserved.headline).not.toContain('blind');
+  });
+
+  test('dark and late are counted separately when both are true', () => {
+    const snapshot = foldSessionRegistry(
+      deps({ health: healthReport({ dark: ['plugin-inventory'], stale: 2 }) })
+    );
+    expect(snapshot.reserved.dark).toHaveLength(1);
+    expect(snapshot.reserved.staleCount).toBe(2);
+    expect(snapshot.reserved.headline).toBe(
+      'the record is going blind — 1 producer dark, 2 more reporting late'
+    );
   });
 
   test('a health check that could not measure says so rather than reporting all-clear', () => {
