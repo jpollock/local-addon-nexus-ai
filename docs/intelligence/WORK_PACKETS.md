@@ -12428,3 +12428,97 @@ its measurement. **Owner's queue gains one item:** the three-run
 citation adherence sitting (harness-side, `NEXUS_EVAL_API_KEY`),
 whenever convenient — the six criteria wait on it, honestly.
 Proceed to merge; tail conflict as always.
+
+---
+
+**WP-34 · MERGED to `poc/nexintelligence` — receipts (2026-08-18).**
+Merge `0a5fe750`; packet commits `f466ffaa` (the contract) and
+`261518df` (the ratified manifest field).
+
+**Receipts.** `git diff --stat 0a5fe750^1 0a5fe750` — **26 files,
++3199 / −23**: the two new core modules and their three suites, the
+carrier and host changes and their two suites, the isolation pin, the
+fixture generator and its artifact, the two eval YAMLs, six files of
+the eval registry, the registry README, `package.json` (two fixture
+scripts), and this record. `git diff --name-only 0a5fe750^1 0a5fe750
+-- src/` is the ten files the packet claimed and no others: the
+assembler, the assembler's types, `chatAssembly`, the four
+`src/intelligence/citation/` files, and the three new suites beside
+them. **Verified rather than asserted:** the file list of
+`c3ecb8db..HEAD` differs from `0a5fe750^1..0a5fe750` by exactly one
+path, `PARALLEL_PROTOCOL.md` — which is the architect's own verbatim
+commit sitting between them, not part of the merge.
+
+**MERGED-TREE BASELINE: 580 suites, 7798 passed, 2 skipped, 7800
+total, exit 0** (exit captured before any pipe); `npm run typecheck`
+clean; `npx eslint src/intelligence` clean, so the seam rule is
+untouched; both design fixtures report current; the runner exits 2
+with **17 PASS / 0 FAIL / 40 BLOCKED / 21 OWNER-PENDING**, unchanged
+across the boundary.
+
+**THE SKIPPED COLUMN WAS READ FIRST, and it carries half the delta.**
+The branch measured **12 skipped / 7752 passed / 7764 total**; the
+merged tree measures **2 skipped / 7798 passed / 7800 total**. Ten
+`embedding-service` tests crossed from skipped to passed because the
+primary checkout holds both model files where a worktree has one —
+the protocol's documented both-ways gate, for the fourth recorded
+time. Read as a passed-column delta alone, the +46 would look like a
+phantom gain of ten more than the packet added.
+
+**The remaining +36 tests and +1 suite are NOT this packet's**, and
+the arithmetic says so cleanly: the branch was cut at `e85cfefc` and
+merged into `c3ecb8db`, with **WP-35 landing in between** (11 files,
++1808/−141). 7800 − 86 = 7714, which is the base's own total; the
+packet's own contribution is the same **+86** it measured on the
+branch, accounted for line by line above. Nothing here re-verifies
+WP-35 — that is its own packet's receipt.
+
+**Uncommitted architect work found in the primary checkout, committed
+VERBATIM before merging** (`2a43d4ed`, per the standing WP-02
+precedent): the `PARALLEL_PROTOCOL.md` addendum adopting this packet's
+two findings — the kill form of the poisoned artifact, and
+tree-held-still applying to a mutation battery — and a
+`WORK_PACKETS.md` block carrying the WP-35 verification and this
+packet's own gate ruling. **Fidelity checked programmatically, two for
+two:** the md5 of each committed blob equals the md5 of the
+working-tree file it was taken from. Neither was edited; neither was
+folded into the packet's commits.
+
+**Tail conflict resolved as directed: both halves verbatim, ordering
+preserved, and the adjudication does not precede what it
+adjudicates.** One conflict, and it was NOT a simple two-way append —
+the base side held WP-33b's verification, all of WP-35, *and* the
+architect's WP-34 gate ruling at its end. So the resolution is a
+three-way splice: the base's pre-existing entries, then this packet's
+announcement and delivery record, then the gate ruling that judges
+them. Verified programmatically rather than by eye: all three
+segments — 22,313, 20,876 and 2,670 characters — are present verbatim
+in the resolved file, no conflict marker survives, and the two
+ordering properties (`base < packet`, `packet < adjudication`) are
+asserted as index comparisons.
+
+**Battery on the final tree: 21/21 killed, control survived**, every
+run `--no-cache`, explicit argv, count-floored, and the tree verified
+pristine before and after. One anchor (M11) was repointed when
+`citationSection` was refactored to carry `asserted`, then re-killed —
+repointing an anchor is not the same as excusing a survivor, and the
+distinction is recorded because the battery's honesty depends on it.
+
+**ABI ON EXIT: SYSTEM NODE.** This session ran `npm test` and jest
+repeatedly. **`npm run rebuild` before loading Local.**
+
+**Board after this merge:** both locks — the eval registry AND
+`src/main/intelligence-host/` + `src/intelligence/` — are RELEASED.
+**Owed and recorded open, not held: the three-run citation adherence
+sitting** (`sitting.ts --spec E-01 --runs 3` and `--spec B-03 --runs
+3`, `NEXUS_EVAL_API_KEY`), which the six OWNER-PENDING criteria wait
+on; section **4b** of each transcript resolves the model's own
+citations through the shared join, so the sitting is a lookup rather
+than an eyeballing exercise. Still owed from earlier packets and
+unchanged by this one: a sitting for J-Refusal's sixth must-not, and
+pass³ on the two sat must-nots. **Unblocked by this merge: the M5
+corroboration render packet**, which carries the designer's eight pins
+and imports `resolveCitations` — and which owns the one decision this
+packet deliberately did not pre-make, the `procedureModel.isolation.
+test.ts` blanket ban on `src/intelligence/` in the renderer graph.
+
