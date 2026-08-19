@@ -212,13 +212,14 @@ describe('probeRendererSurfaces', () => {
     // tripwire against its own project's progress, so what is pinned is the
     // per-token reading, token by token, with the reason each one matters.
     expect(surfaces.counts.needsYou.renderer).toBe(0); // Glance's row, Return's triage
-    expect(surfaces.counts.siteAtPlaces.renderer).toBe(0); // Inspect's comparator
     expect(surfaces.counts.sessionRegistry.renderer).toBe(0); // WP-30's fold
     expect(surfaces.counts.capabilityGrants.renderer).toBe(0); // Govern's matrix
     expect(surfaces.counts.refusalTurn.renderer).toBe(0); // WP-33b, the empty-run turn
-    // …and the one that HAS landed, pinned as present so its BLOCKED criteria
-    // cannot quietly go on citing it as missing.
+    // …and the ones that HAVE landed, pinned as present so their BLOCKED
+    // criteria cannot quietly go on citing them as missing. This list grows as
+    // the project does — which is the whole reason the pin is per-token.
     expect(surfaces.counts.scopeBlock.renderer).toBeGreaterThan(0); // WP-32, merged
+    expect(surfaces.counts.siteAtPlaces.renderer).toBeGreaterThan(0); // WP-41, the comparator
     expect(surfaces.ok).toBe(false);
   });
 

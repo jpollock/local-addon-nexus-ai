@@ -523,14 +523,17 @@ describe('the journey checks (WP-33)', () => {
     }
   });
 
-  it('the two adjudication-routed criteria name the packets that inherited them', () => {
-    // The §1 adjudication made these acceptance criteria of specific packets;
-    // a BLOCKED that named a vague "future UI" would lose that routing.
-    // J-Inspect's scope identity was routed to WP-32 — which MERGED on
-    // 2026-08-18, so the honest form of that routing is no longer "waiting on
-    // WP-32". The criterion stays BLOCKED on the comparator that would produce
-    // a selection, and the delivered half is stated rather than dropped: a
-    // BLOCKED that keeps naming a shipped packet is how a stale gap survives.
+  it('the routed criterion falls to BLOCKED when its surface is absent — never to FAIL', () => {
+    // WP-41 · the routing this used to assert has RESOLVED. J-Inspect's scope
+    // identity was routed to WP-32 (merged 2026-08-18, the carrier) and then
+    // waited on the comparator that would produce a selection; WP-41 built it,
+    // so against a live tree this criterion is DRIVEN and green (see the
+    // describe below). What is pinned here is the other direction, which is the
+    // property that has to survive: run against an ABSENT surface it returns
+    // BLOCKED, naming what is missing and who owes it — not FAIL. "The screen is
+    // gone" and "the screen is wrong" are different findings, and a harness that
+    // reported the first as the second would send someone hunting a defect that
+    // does not exist.
     const scope = checkFor(
       'J-Inspect-divergence-to-scoped-intent',
       'key_step',
@@ -538,15 +541,90 @@ describe('the journey checks (WP-33)', () => {
     )!;
     const scopeOutcome = scope.run(ctx());
     expect(scopeOutcome.verdict).toBe('BLOCKED');
-    expect(scopeOutcome.unblockedBy).not.toContain('WP-32');
-    expect(scopeOutcome.evidence.join(' ')).toContain('WP-32 MERGED');
+    expect(scopeOutcome.missing).toBeTruthy();
+    expect(scopeOutcome.unblockedBy).toMatch(/WP-\d\d|UX build \d/);
+  });
 
+  it('the promotion criterion still names the packet that inherited it', () => {
     const promotion = checkFor(
       'J-Return-away-during-a-halt',
       'key_step',
       'Opening it resumes the same session at the same gate: nothing re-asked, nothing re-derived, the approval already given still given.'
     )!;
     expect(promotion.run(ctx()).unblockedBy).toContain('WP-30');
+  });
+
+  /**
+   * WP-41 · J-Inspect, against a tree where the comparator EXISTS.
+   *
+   * The suite's other ctx reports every surface absent, which is what keeps "no
+   * journey check is PASS on an absent surface" honest. This one reports the
+   * comparator present — the state of the real tree — and asserts the criteria
+   * are answered by DRIVING the shipped modules, not by the probe's count.
+   *
+   * The two that do NOT go green are the point of the describe as much as the
+   * six that do: a flip where everything turns green at once is a flip nobody
+   * measured.
+   */
+  describe('J-Inspect — driven against the comparator WP-41 built', () => {
+    const SURFACES_PRESENT = {
+      ...SURFACES_ABSENT,
+      absentFromRenderer: (token: string) => token !== 'siteAtPlaces' && token !== 'scopeBlock',
+      evidence: ['`siteAtPlaces`: 1 file(s) under src/renderer, 3 under src/ — present'],
+    };
+    const present = () =>
+      ({
+        fixture: { fleet: [], core: { ledger: { query: () => [] } } },
+        probes: { refusalPayload: LIVE_REFUSAL, surfaces: SURFACES_PRESENT },
+      }) as never;
+
+    const J_INSPECT = 'J-Inspect-divergence-to-scoped-intent';
+
+    const driven = [
+      ['key_step', 'The comparator render is on sc'],
+      ['key_step', 'The verdict on a disagreeing c'],
+      ['key_step', 'The selection becomes the next'],
+      ['must_not', 'A summary standing in for the s'],
+      ['must_not', 'A dead-end fact: any cell with'],
+      ['must_not', 'A scope the user must confirm b'],
+    ] as const;
+
+    it.each(driven)('"%s · %s" PASSES, driven against the shipped comparator', (kind, matches) => {
+      const outcome = checkFor(J_INSPECT, kind, matches)!.run(present());
+      expect(outcome.verdict).toBe('PASS');
+      // A PASS whose evidence is a restatement of the criterion is the shape
+      // this harness exists to refuse. Every one of these ran real code.
+      expect(outcome.evidence.join(' ')).toContain('DRIVEN against the shipped comparator');
+      expect(outcome.evidence.length).toBeGreaterThan(1);
+    });
+
+    it('the history-badge criterion stays BLOCKED, and says which HALF is missing', () => {
+      const outcome = checkFor(J_INSPECT, 'key_step', 'A disagreeing cell explains it')!.run(present());
+      expect(outcome.verdict).toBe('BLOCKED');
+      expect(outcome.missing).toContain('history badge');
+      // Not overstated: the lineage half shipped and the evidence says so.
+      expect(outcome.evidence.join(' ')).toContain('STANDING');
+      expect(outcome.unblockedBy).toContain('WP-25');
+    });
+
+    it('the surrounding-prose criterion is OWNER-PENDING, with a runnable sitting', () => {
+      const outcome = checkFor(J_INSPECT, 'must_not', 'A claim in the surrounding pro')!.run(present());
+      expect(outcome.verdict).toBe('OWNER-PENDING');
+      expect(outcome.ownerPrompt).toContain('Compare across places');
+      expect(outcome.ownerPrompt).toContain('npm run rebuild');
+    });
+
+    it('every one of the eight falls to BLOCKED when the surface is absent', () => {
+      // The guard on the flip: these checks must never FAIL because a screen is
+      // missing, and must never PASS because a probe said a token exists.
+      const all = CHECKS.filter((c) => c.specId === J_INSPECT);
+      expect(all).toHaveLength(8);
+      for (const check of all) {
+        const outcome = check.run(ctx());
+        expect(outcome.verdict).not.toBe('PASS');
+        expect(outcome.verdict).not.toBe('FAIL');
+      }
+    });
   });
 
   describe('J-Refusal — the half WP-31 shipped', () => {
