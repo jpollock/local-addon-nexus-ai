@@ -316,3 +316,45 @@ load 4.6. Parallel waves make the machine itself a shared resource; a
 timeout during one is a measurement of the LOAD until a solo re-run says
 otherwise. Same family as the skipped-column rule: read the environment
 before reading the result.
+
+**A GENERATED ARTIFACT'S MERGE CONFLICT IS RESOLVED BY RE-RUNNING THE
+GENERATOR, NEVER BY SPLICING HUNKS** (WP-41/WP-20g collision, ruled). Two
+packets touched `docs/intelligence/design-fixtures/declared-procedures.json`
+from opposite ends and neither touched the other's lines: WP-20g edited an
+INPUT (`law/runbooks/promotion-execute.md` — a version bump and a `tools:`
+declaration), WP-41 edited the GENERATOR (a new field and a shape-version
+bump). Git saw one conflicted file and offered both sides' text; both sides'
+text was WRONG, because the correct content is a function of the merged inputs
+and neither side had them.
+
+The resolution, in order, and it is mechanical:
+
+1. Confirm the INPUTS merged cleanly — `git status --porcelain` over `law/` and
+   the generator itself. A conflict there is a real conflict and this rule does
+   not apply to it.
+2. Re-run the generator. It overwrites the conflict markers wholesale; there is
+   nothing to hand-merge because nothing in the file was hand-written.
+3. Run the `:check` script. It fails closed on a stale artifact, so a green
+   `:check` is PROOF the committed file is exactly what the merged inputs
+   produce — which is the property a spliced resolution cannot have and cannot
+   be talked into having.
+4. Verify BOTH sides' contributions are present in the result, by reading the
+   fields each side moved. WP-41's merge was checked this way: WP-20g's
+   `version 1.2.0` and its new hash came through from the merged `law/`, and
+   WP-41's `$shapeVersion 2` and `planCheckpoint` came through from the merged
+   generator. A regeneration that silently dropped one side would still pass
+   `:check` — `:check` proves the file matches the generator, not that the
+   merge was complete — so this step is not redundant with step 3.
+
+Why splicing is not merely worse but WRONG: the artifact carries a content
+`hash` per runbook. A hand-merged file can hold WP-20g's checkpoint list beside
+WP-41's shape version beside a hash computed over neither, and every consumer
+that trusts the hash — which is what hash-pinning a run MEANS — then pins to a
+document that never existed. The generator's header already says editing it by
+hand is the defect pin 7 names; a merge is editing it by hand.
+
+This generalises to every generated artifact under version control here
+(`declared-procedures.json`, `citation-spans.json`, and anything a future
+`fixtures:*` script emits). If you add one, give it a `:check` script in the
+same commit — the check is what makes this rule enforceable rather than
+advisory.

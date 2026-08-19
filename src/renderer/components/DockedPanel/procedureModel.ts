@@ -255,19 +255,31 @@ export function opensContainer(procedure: DeclaredProcedure): boolean {
  * there is no plan to attach, and a line invented from the declaration alone
  * would be a plan the platform never derived.
  *
- * THE SHEET'S LINE HAS ONE SEGMENT THIS ONE DOES NOT, and the omission is
- * deliberate: `rb.bulk-plugin-update · v1.2.0 · marked strict · cp.dry-run —
- * 0 cells eligible` names the checkpoint that PRODUCED the plan, and no fact
- * the stream serves identifies it. `cp.dry-run` cannot be the active
- * checkpoint (it is narrative, so `nextGatedCheckpoint` never names it) and it
- * cannot be inferred from the document's shape without guessing. Escalated
- * rather than guessed — see the packet's gate report.
+ * WP-41 · THE MISSING SEGMENT IS NOW SERVED, AND CONSUMED HERE. WP-35 shipped
+ * this line one segment short of the sheet's
+ * `rb.bulk-plugin-update · v1.2.0 · marked strict · cp.dry-run — 0 cells
+ * eligible`, because no served fact identified the checkpoint that PRODUCED the
+ * plan: `cp.dry-run` cannot be the active one (it is narrative, so
+ * `nextGatedCheckpoint` never names it), and the escalation refused to guess.
+ * WP-37 derived it — `planCheckpointOf`, the nearest narrative checkpoint before
+ * the consent gate, ratified at the WP-37 gate under its own name — and the
+ * stream now carries it as `planCheckpoint`. This reads that field; it does not
+ * infer, and it must never fall back to naming a checkpoint the document did not
+ * identify.
+ *
+ * **ABSENT STAYS ABSENT.** A document with no consent gate, or nothing narrative
+ * before it, serves no `planCheckpoint` — and the line then renders in its
+ * three-segment form rather than borrowing a plausible id. That is the same rule
+ * as everywhere else on this surface: the segment names a step the author wrote,
+ * or it is not there.
  */
 export function derivedPlanLine(procedure: DeclaredProcedure): string | null {
   const scope = procedure.scope;
   if (!scope) return null;
   const cells = scope.runnable.length;
-  return `${referenceLine(procedure)} — ${cells} ${cells === 1 ? 'cell' : 'cells'} eligible`;
+  const gate = procedure.planCheckpoint?.checkpointId;
+  const head = gate ? `${referenceLine(procedure)} · ${gate}` : referenceLine(procedure);
+  return `${head} — ${cells} ${cells === 1 ? 'cell' : 'cells'} eligible`;
 }
 
 /**

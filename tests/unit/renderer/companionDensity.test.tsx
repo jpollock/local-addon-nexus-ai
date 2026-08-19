@@ -83,6 +83,8 @@ interface FixtureRunbook {
   checkpoints: FixtureCheckpoint[];
   communication: string[];
   hash: string;
+  /** WP-41 · null when the document declares no consent gate, or nothing narrative before it. */
+  planCheckpoint: { checkpointId: string; reason: string | null } | null;
   runbookId: string;
   strictness: DeclaredProcedure['strictness'];
   verifiableCount: number;
@@ -116,6 +118,9 @@ function declared(over: Partial<DeclaredProcedure> = {}): DeclaredProcedure {
     })),
     verifiableCount: ANCHOR.verifiableCount,
     communication: ANCHOR.communication.slice(),
+    // Absent, never present-undefined: the emission's rule 1, and `derivedPlanLine`
+    // reads the difference. `toEqual` cannot see it, which is why it is spread.
+    ...(ANCHOR.planCheckpoint ? { planCheckpoint: ANCHOR.planCheckpoint } : {}),
     ...over,
   };
 }
@@ -303,6 +308,10 @@ describe('the fixture, not the transcription', () => {
     expect(fake.capability).toBe(ANCHOR.capability);
     expect(fake.verifiableCount).toBe(ANCHOR.verifiableCount);
     expect(fake.communication).toEqual(ANCHOR.communication);
+    // WP-41 · the field WP-37 began serving and WP-35's fake lacked. Compared as
+    // a whole object: the id alone would let the reason drift, and the reason is
+    // the author's own heading rather than a label this surface may reword.
+    expect(fake.planCheckpoint).toEqual(ANCHOR.planCheckpoint ?? undefined);
     expect(fake.checkpoints.map((c) => [c.id, c.attest, c.reason, c.unrequested])).toEqual(
       ANCHOR.checkpoints.map((c) => [c.id, c.attest, c.reason, c.unrequested]),
     );
@@ -579,11 +588,13 @@ describe('pin 5 · the badge appears only on the checkpoints the runbook contrib
 // ---------------------------------------------------------------------------
 
 describe('pin 6 · the scope block’s facts are byte-invariant across densities', () => {
-  it('mounts no scope block, because no comparator selection exists to carry one', () => {
-    // WP-32's ratified judgment, unchanged here: the comparator that produces a
-    // real selection is a later packet, and a fixture selection mounted in the
-    // shipped panel would be an authored plan on a live surface.
-    // `scopeBlock.test.ts` holds the byte-identity property itself.
+  it('mounts no scope block for a procedure that carries no scope', () => {
+    // WP-32's ratified condition, and it is UNCHANGED rather than relaxed. The
+    // judgment was "no comparator selection exists to carry one"; WP-41 built
+    // the comparator, so selections now exist — but a procedure without one
+    // still mounts nothing, because absent scope means there is no selection to
+    // render, not an empty selection to render emptily. Every armed run in the
+    // product today is this case. `scopeBlock.test.ts` holds byte-identity.
     for (const tree of [
       render(surfaces({ procedure: declared() })),
       render(surfaces({ procedure: atTheGate(), approvalPending: true, gateCheckpointId: GATE })),
@@ -593,7 +604,33 @@ describe('pin 6 · the scope block’s facts are byte-invariant across densities
       expect(walk(tree).filter((n) => n?.props?.['aria-label'] === 'Scope')).toEqual([]);
     }
   });
+
+  it('WP-41 · mounts the block at the declaration head once a selection HAS armed', () => {
+    // The other half of the same rule, and the reason the condition above could
+    // be satisfied rather than waived: a scope that arrived on the arming is a
+    // selection a human made, so the declaration opens with the block she made.
+    const tree = render(surfaces({ procedure: declared({ scope: SCOPED.scope }) }));
+    const blocks = walk(tree).filter((n) => String(n?.type).includes('ScopeBlock'));
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].props.surface).toBe('companion-head');
+    expect(blocks[0].props.scope).toBe(SCOPED.scope);
+  });
+
 });
+
+/** A declaration carrying a scope — one runnable staging cell. */
+const SCOPED = {
+  scope: {
+    capability: 'cap.bulk_plugin_update',
+    runbookId: 'rb.bulk-plugin-update',
+    runnable: [{ siteId: 's.alpha', siteName: 'Alpha', place: { host: 'wpe', kind: 'staging' } }],
+    barred: [],
+    excluded: [],
+    places: ['wpe_staging'],
+    from: { surface: 'comparator', comparatorId: 'cmp.x', filter: 'plugin=woocommerce' },
+    opensRun: true,
+  } as DeclaredProcedure['scope'],
+};
 
 // ---------------------------------------------------------------------------
 // Pin 7 · defer explanation, never a fact — and folding is never rewording
@@ -658,9 +695,40 @@ describe('pin 8 · a plan of zero cells opens no container', () => {
     expect(walk(tree).filter((n) => n?.props?.['aria-label'] === 'Procedure')).toEqual([]);
   });
 
-  it('attaches the derived plan verbatim', () => {
+  it('WP-41 · still mounts the scope block, where the refusal\'s whole content lives', () => {
+    // XD-21 refuses the CONTAINER, not the block. The `Excludes:` lines and the
+    // barred group's door ARE the refusal's content — the fold's own pin says
+    // that pair never defers. A plan line alone would state a count and
+    // withhold the reason, which is the opposite of "inspectable, not asserted".
+    const tree = render(surfaces({ procedure: emptyRun() }));
+    const blocks = walk(tree).filter((n) => String(n?.type).includes('ScopeBlock'));
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].props.surface).toBe('companion-head');
+    // ...and the container still does not open.
+    expect(rows(tree)).toHaveLength(0);
+  });
+
+  it('attaches the derived plan verbatim, in the sheet\'s four-segment form', () => {
     expect(text(render(surfaces({ procedure: emptyRun() })))).toContain(derivedPlanLine(emptyRun()));
+    // WP-41 · the fourth segment. WP-35 shipped this line one segment short of
+    // the sheet because no served fact identified the checkpoint that produced
+    // the plan; WP-37 derived it and this consumes it. The id comes from the
+    // GENERATED fixture, so a document whose consent gate moves moves this line.
+    expect(ANCHOR.planCheckpoint).not.toBeNull();
     expect(derivedPlanLine(emptyRun())).toBe(
+      `${ANCHOR.runbookId} · v${ANCHOR.version} · marked strict · ${ANCHOR.planCheckpoint!.checkpointId} — 0 cells eligible`,
+    );
+  });
+
+  it('renders the THREE-segment form when the document identifies no plan checkpoint', () => {
+    // Absent stays absent. Six of the seven shipped runbooks derive `null` here,
+    // and the line must not borrow a plausible id to keep its shape — the guard
+    // against the fourth segment becoming decoration rather than a fact.
+    const { planCheckpoint: _dropped, ...noGate } = emptyRun() as DeclaredProcedure & {
+      planCheckpoint?: unknown;
+    };
+    expect('planCheckpoint' in noGate).toBe(false);
+    expect(derivedPlanLine(noGate as DeclaredProcedure)).toBe(
       `${ANCHOR.runbookId} · v${ANCHOR.version} · marked strict — 0 cells eligible`,
     );
   });

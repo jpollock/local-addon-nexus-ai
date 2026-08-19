@@ -101,6 +101,20 @@ export function armedFixture(): ProcedureArmedEvent {
       armedBy: 'predicate',
       checkpoints: checkpoints(),
       verifiableCount: 4,
+      /**
+       * WP-41 · from the generated fixture, like every other document fact
+       * here. `planCheckpointOf` derives it — the nearest narrative checkpoint
+       * before the consent gate — and the anchor's answer is `cp.dry-run`, with
+       * the reason its own `## cp.dry-run — show what would change` heading
+       * gave. Six of the seven shipped runbooks derive `null` for this, which is
+       * the document declining to answer and not a field to fill.
+       *
+       * It is here because the real stream emits it and this fake must not
+       * diverge from what it stands in for — the same divergence class WP-35
+       * closed for the document facts, caught before it opened rather than
+       * after. `companionDensity.test.tsx` pins it to the generated file.
+       */
+      planCheckpoint: { checkpointId: 'cp.dry-run', reason: 'show what would change' },
       communication: [
         'the dry-run diff, before any write',
         'the backup id(s) and verification status',

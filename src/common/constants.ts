@@ -19,6 +19,21 @@ export const IPC_CHANNELS = {
   // site channel here, which carry INDEX ages (`created_at`, `content_indexed_at`) —
   // when Nexus last read the site, not when the site last pulled from the live one.
   GET_SITE_CONTENT_STATUS: `${ADDON_PREFIX}:site:content-status`,
+  /**
+   * WP-41 · the comparator surface's four channels — three reads and one
+   * arming.
+   *
+   * Three channels rather than one with a mode flag, because exactly one of
+   * them has a side effect. `COMPARATOR_PREVIEW_SCOPE` runs on every click as a
+   * user builds a selection; `COMPARATOR_ARM_SELECTION` records an arming. A
+   * boolean that switches between them is the shape that eventually gets passed
+   * the wrong way round, and the failure would be silent: an arming queued per
+   * keystroke, delivered to whichever turn came next.
+   */
+  COMPARATOR_FACTS: `${ADDON_PREFIX}:comparator:facts`,
+  COMPARATOR_MATRIX: `${ADDON_PREFIX}:comparator:matrix`,
+  COMPARATOR_PREVIEW_SCOPE: `${ADDON_PREFIX}:comparator:preview-scope`,
+  COMPARATOR_ARM_SELECTION: `${ADDON_PREFIX}:comparator:arm-selection`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
   GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
   START_SITE: `${ADDON_PREFIX}:start-site`,

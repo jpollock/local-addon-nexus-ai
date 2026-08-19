@@ -1,7 +1,7 @@
 {
   "$generatedBy": "scripts/generate-procedure-fixtures.ts (WP-32)",
   "$doNotEdit": "Generated from law/ by deriveDeclaredProcedure. Editing this file by hand is the defect pin 7 names: a checkpoint sequence authored anywhere, including in a design fixture, is a defect. Regenerate instead — npm run fixtures:procedures.",
-  "$shapeVersion": 1,
+  "$shapeVersion": 2,
   "$notDerived": "armedBy is a property of the ARMING, not of the document. There is no run here, so the generator supplies 'model-request'. Every other field on every line came out of the reviewed document.",
   "runbooks": {
     "rb.bulk-plugin-update": {
@@ -109,6 +109,10 @@
         "the canary site chosen and the reason it was chosen"
       ],
       "hash": "sha256:0646cfe11c1b813db994d6c95832ae2c6e97528c3748f7eb2aa44e3c736237c8",
+      "planCheckpoint": {
+        "checkpointId": "cp.dry-run",
+        "reason": "show what would change"
+      },
       "runbookId": "rb.bulk-plugin-update",
       "steps": [],
       "strictness": "strict",
@@ -129,6 +133,7 @@
         "the proposed fix as a proposal, with the explicit statement that nothing was changed"
       ],
       "hash": "sha256:f088ac33547274974dc8be19f48fadd12dd789dfcb1023ccc927add25a7627c7",
+      "planCheckpoint": null,
       "runbookId": "rb.diagnose-site",
       "steps": [
         "st.resolve-identity",
@@ -216,6 +221,7 @@
         "the entry-vector hypothesis with the log evidence it rests on — or an explicit statement that the entry vector is unknown"
       ],
       "hash": "sha256:fedec1dfb1a6b1e43ac978d356c3e75aad48be9b44ed05aca2f0e4f0b3e689df",
+      "planCheckpoint": null,
       "runbookId": "rb.incident-containment",
       "steps": [],
       "strictness": "strict",
@@ -304,6 +310,7 @@
         "anything left uncleaned because a permission was refused, named as such"
       ],
       "hash": "sha256:bb707ba844bd8fcbdb4bba0bbe7a2433ea9fe82c2e73e2767c296c9b07b7337b",
+      "planCheckpoint": null,
       "runbookId": "rb.incident-remediation",
       "steps": [],
       "strictness": "strict",
@@ -374,6 +381,7 @@
         "the post-promotion verification result, or that verification could not be completed"
       ],
       "hash": "sha256:c17d4bc08e648c2007c96cae83f7439c089ffa1beee08ae558908bcedec32f41",
+      "planCheckpoint": null,
       "runbookId": "rb.promotion-execute",
       "steps": [],
       "strictness": "strict",
@@ -439,6 +447,7 @@
         "anything cp.consult-history surfaced about these two environments"
       ],
       "hash": "sha256:ae5a1678d2471c58d21a0c11f532245accb5e1511923113d694adff3673f3a86",
+      "planCheckpoint": null,
       "runbookId": "rb.promotion-preflight",
       "steps": [],
       "strictness": "strict",
@@ -458,6 +467,7 @@
         "what was NOT done (no WP Engine write; AI setup / health check handed off, if asked for)"
       ],
       "hash": "sha256:0c052e155ae16df5c1275f64771ec55acd7d3a56e8a4be7197dea0fca8bfaef6",
+      "planCheckpoint": null,
       "runbookId": "rb.wpe-pull",
       "steps": [
         "st.resolve-both-ends",

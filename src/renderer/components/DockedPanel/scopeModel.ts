@@ -34,9 +34,10 @@ import type {
   ScopeFrom,
   ScopePlace,
   ScopeSelection,
+  SelectedCell,
 } from '../../../main/intelligence-host/procedureScope';
 
-export type { ProcedureScope, ScopeCell, ScopeFrom, ScopePlace, ScopeSelection };
+export type { ProcedureScope, ScopeCell, ScopeFrom, ScopePlace, ScopeSelection, SelectedCell };
 
 // ---------------------------------------------------------------------------
 // The mirror (pinned to procedureScope by the shared case table — see header)

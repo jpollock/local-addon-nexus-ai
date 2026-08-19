@@ -112,6 +112,8 @@ import { createExternalBulkOps } from './bulk/externalBulkOps';
 import { collectSystemHealth } from './health/collectSystemHealth';
 import { enrichSiteFinderPlugins, summarizeSiteFinderTwins } from './intelligence-host/siteFinderTwins';
 import { readSiteContentStatus } from './intelligence-host/siteContentStatus';
+import { listComparableFacts, readSiteAtPlaces } from './comparator/comparatorRead';
+import { armFromSelection, previewScope } from './comparator/armFromSelection';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -836,6 +838,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // per the integration lock.
   safeHandle(IPC_CHANNELS.GET_SITE_CONTENT_STATUS, (_event: any, siteId: string) =>
     readSiteContentStatus({ siteData, nexusServices: deps.nexusServices }, siteId));
+
+  // WP-41 · the comparator surface. Wiring only — every derivation lives in
+  // src/main/comparator/, per the integration lock. `armFromSelection` is the
+  // ONE side-effecting channel of the four and is the only production caller of
+  // `deriveScope`; the from-line it stamps resolves to the matrix render that
+  // produced the selection, which is the WP-37 ruling's candidate A.
+  safeHandle(IPC_CHANNELS.COMPARATOR_FACTS, () => listComparableFacts());
+  safeHandle(IPC_CHANNELS.COMPARATOR_MATRIX, (_event: any, fact: string) =>
+    readSiteAtPlaces(deps.nexusServices, fact));
+  safeHandle(IPC_CHANNELS.COMPARATOR_PREVIEW_SCOPE, (_event: any, args: any) =>
+    previewScope(args?.capability, args?.selection));
+  safeHandle(IPC_CHANNELS.COMPARATOR_ARM_SELECTION, (_event: any, args: any) =>
+    armFromSelection(args?.capability, args?.selection));
 
   safeHandle(IPC_CHANNELS.GET_FLEET_LIST, async () => {
     try {

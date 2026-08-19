@@ -1273,80 +1273,7 @@ const JOURNEY_GAPS: JourneyGap[] = [
     unblockedBy: UX2,
   },
 
-  // ---- J-Inspect · M2 ------------------------------------------------------
-  {
-    spec: J_INSPECT,
-    kind: 'key_step',
-    matches: 'The comparator render is on sc',
-    token: 'siteAtPlaces',
-    missing: 'the comparator render — the site-at-places matrix is ruled but unbuilt',
-    unblockedBy: `${UX4}; the designer's cycle-one/two seam`,
-  },
-  {
-    spec: J_INSPECT,
-    kind: 'key_step',
-    matches: 'The verdict on a disagreeing c',
-    token: 'siteAtPlaces',
-    missing: 'the comparator whose verdict provenance this pins',
-    unblockedBy: UX4,
-  },
-  {
-    spec: J_INSPECT,
-    kind: 'key_step',
-    matches: 'A disagreeing cell explains it',
-    token: 'siteAtPlaces',
-    missing: 'the cell, its lineage line, and the history badge',
-    unblockedBy: `WP-25 (the incident producer — nothing emits an incident for a badge to read) then ${UX4}`,
-  },
-  {
-    spec: J_INSPECT,
-    kind: 'key_step',
-    matches: 'The selection becomes the next',
-    missing: 'the comparator render that would PRODUCE a selection — the carrier now has no source',
-    unblockedBy: `${UX4}; the designer's cycle-one/two seam`,
-    token: 'siteAtPlaces',
-    standing:
-      'WP-32 MERGED (2026-08-18): the scope carrier ships, and the §1 adjudication\'s ' +
-      'scope-identity pin — "the ids in the dry-run equal the ids selected, asserted as a set" — ' +
-      'is one of its ratified acceptance criteria, against the governing sheet from-designer-04 ' +
-      '(draft 2). So the HALF this journey routed to a packet is done; what the journey still ' +
-      'cannot do is start, because nothing renders a selection to carry',
-  },
-  {
-    spec: J_INSPECT,
-    kind: 'must_not',
-    matches: 'A summary standing in for the s',
-    token: 'siteAtPlaces',
-    missing: 'the shape a summary could stand in for',
-    unblockedBy: UX4,
-  },
-  {
-    spec: J_INSPECT,
-    kind: 'must_not',
-    matches: 'A dead-end fact: any cell with',
-    token: 'siteAtPlaces',
-    missing: 'the cells whose doors this requires',
-    unblockedBy: UX4,
-  },
-  {
-    spec: J_INSPECT,
-    kind: 'must_not',
-    matches: 'A claim in the surrounding pro',
-    token: 'siteAtPlaces',
-    missing: 'the render whose prose this constrains',
-    unblockedBy: UX4,
-  },
-  {
-    spec: J_INSPECT,
-    kind: 'must_not',
-    matches: 'A scope the user must confirm b',
-    token: 'siteAtPlaces',
-    missing: 'a user-made selection to be asked to re-list',
-    unblockedBy: `${UX4} — WP-32 built the carrier; nothing yet produces what it carries`,
-    standing:
-      'WP-32 MERGED: a run that re-derives its own targets fails its acceptance, so the mechanism ' +
-      'this must-not protects is in place ahead of the surface that would exercise it',
-  },
+  // ---- J-Inspect · M2 · WP-41 — driven, see `J_INSPECT_DRIVEN` below --------
 
   // ---- J-Act-small · M3 ----------------------------------------------------
   {
@@ -1831,8 +1758,378 @@ const J_REFUSAL_JUDGED: RegisteredCheck[] = [
   ),
 ];
 
+
+// ---------------------------------------------------------------------------
+// WP-41 · J-Inspect, DRIVEN — the comparator surface exists, so eight criteria
+//          stop being questions about an unbuilt screen
+// ---------------------------------------------------------------------------
+
+/**
+ * THE SURFACE LANDED, SO THE CRITERIA ARE ANSWERED RATHER THAN DEFERRED.
+ *
+ * Until WP-41 every J-Inspect criterion was a `journeyGapCheck`: a BLOCKED
+ * verdict carrying a measurement of the absence (`siteAtPlaces`: 0 files under
+ * src/renderer). That measurement has flipped, and a BLOCKED that goes on
+ * citing a shipped surface is the stale gap the harness's own rule forbids.
+ *
+ * **EVERY CHECK BELOW STILL GATES ON THE PROBE FIRST.** If the surface ever
+ * disappears — a revert, a rename, a packet that deletes it — these fall back to
+ * BLOCKED rather than failing, because "the screen is gone" is not the same
+ * finding as "the screen is wrong", and only the second is a defect. It also
+ * keeps `checks.test.ts`'s "no journey check is PASS on an absent surface"
+ * meaningful: run against `SURFACES_ABSENT`, none of these is green.
+ *
+ * **WHAT IS DRIVEN AND WHAT IS NOT.** Six criteria are structural properties of
+ * shipped code and are driven against the real modules. One stays BLOCKED on a
+ * half nobody built. One is OWNER-PENDING, because it is a judgement about prose
+ * a live model produces and no programmatic check can stand in for a person
+ * reading it. Fabricating either would be the failure this harness exists to
+ * prevent — a criterion nobody can check must never read as met.
+ */
+const COMPARATOR_TOKEN = 'siteAtPlaces';
+
+/** The renderer's comparator model, required lazily so a check can drive it. */
+function comparatorModel(): {
+  markFor: (cell: unknown) => string | null;
+  differsFrom: (a: unknown, b: unknown) => boolean;
+  cellDoor: (row: unknown, cell: unknown) => { kind: string; label: string };
+  historyLine: (row: unknown) => string | null;
+  buildSelection: (matrix: unknown, selected: readonly string[]) => unknown;
+  cellKey: (cell: unknown) => string;
+  INTERIM_MARKS: readonly string[];
+  MARK_BEHIND: string;
+} {
+  /* eslint-disable @typescript-eslint/no-var-requires */
+  return require('../../src/renderer/components/DockedPanel/comparatorModel');
+}
+
+/** A row the checks drive: two durable places that disagree, one judged copy. */
+function specimenRow(): Record<string, unknown> {
+  return {
+    siteEntityId: 'ent.alpha',
+    siteName: 'Alpha',
+    watchingSince: '2026-08-14T09:00:00.000Z',
+    cells: [
+      { entityId: 'e.prod', place: { host: 'wpe', kind: 'production' }, value: '9.5.0' },
+      { entityId: 'e.stg', place: { host: 'wpe', kind: 'staging' }, value: '9.4.2' },
+      undefined,
+      {
+        entityId: 'e.copy',
+        place: { host: 'local' },
+        value: '9.4.2',
+        verdict: { direction: 'behind', comparedAgainst: 'Alpha', upstreamValue: '9.5.0' },
+      },
+    ],
+  };
+}
+
+function specimenMatrix(): Record<string, unknown> {
+  return {
+    fact: 'plugin:woocommerce',
+    filter: 'plugin=woocommerce',
+    comparatorId: 'cmp.plugin-woocommerce',
+    columns: [
+      { host: 'wpe', kind: 'production' },
+      { host: 'wpe', kind: 'staging' },
+      { host: 'wpe', kind: 'development' },
+      { host: 'local' },
+    ],
+    rows: [specimenRow()],
+    verdictCoverage: { cells: 3, verdicts: 1 },
+  };
+}
+
+/**
+ * A criterion the shipped comparator answers. Gated on the probe, then DRIVEN:
+ * `holds` runs real code and `evidence` reports what it observed, so a green
+ * here is a measurement and not a claim.
+ */
+function comparatorDriven(opts: {
+  matches: string;
+  kind: CriterionKind;
+  holds: () => { ok: boolean; evidence: string[] };
+  missing: string;
+}): RegisteredCheck {
+  return {
+    specId: J_INSPECT,
+    kind: opts.kind,
+    matches: opts.matches,
+    run: (ctx) => {
+      if (ctx.probes.surfaces.absentFromRenderer(COMPARATOR_TOKEN)) {
+        return blocked(opts.missing, `${UX4}; the designer's cycle-one/two seam`, [
+          ...ctx.probes.surfaces.evidence.filter((l) => l.includes(`\`${COMPARATOR_TOKEN}\``)),
+          'this criterion IS driven when the surface is present — it falls back to BLOCKED rather ' +
+            'than FAIL, because "the screen is gone" and "the screen is wrong" are different findings',
+        ]);
+      }
+      let result: { ok: boolean; evidence: string[] };
+      try {
+        result = opts.holds();
+      } catch (err) {
+        return {
+          verdict: 'FAIL',
+          evidence: [`driving the shipped comparator threw: ${(err as Error)?.message ?? String(err)}`],
+        };
+      }
+      return {
+        verdict: result.ok ? 'PASS' : 'FAIL',
+        evidence: [
+          'DRIVEN against the shipped comparator (WP-41), not asserted — the modules below were ' +
+            'required and run in this process',
+          ...result.evidence,
+        ],
+      };
+    },
+  };
+}
+
+const J_INSPECT_DRIVEN: RegisteredCheck[] = [
+  comparatorDriven({
+    kind: 'key_step',
+    matches: 'The comparator render is on sc',
+    missing: 'the comparator render — the site-at-places matrix is ruled but unbuilt',
+    holds: () => {
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const { SiteAtPlaces } = require('../../src/renderer/components/DockedPanel/SiteAtPlaces');
+      const tree = new SiteAtPlaces({ matrix: specimenMatrix(), selected: [], onToggle: () => {} }).render();
+      const types: string[] = [];
+      const walk = (n: unknown): void => {
+        if (Array.isArray(n)) return n.forEach(walk);
+        if (!n || typeof n !== 'object') return;
+        const node = n as { type?: unknown; props?: { children?: unknown } };
+        if (typeof node.type === 'string') types.push(node.type);
+        walk(node.props?.children);
+      };
+      walk(tree);
+      const table = types.indexOf('table');
+      // The SHAPE is first: nothing but layout containers precede the grid.
+      const before = types.slice(0, table);
+      return {
+        ok: table > -1 && before.every((t) => t === 'div'),
+        evidence: [
+          `the rendered tree reaches <table> at element ${table}, preceded only by: ` +
+            `${before.join(', ') || '(nothing)'} — no prose element stands in front of the shape`,
+        ],
+      };
+    },
+  }),
+
+  comparatorDriven({
+    kind: 'key_step',
+    matches: 'The verdict on a disagreeing c',
+    missing: 'the comparator whose verdict provenance this pins',
+    holds: () => {
+      const m = comparatorModel();
+      const row = specimenRow();
+      const cells = row.cells as Array<Record<string, unknown> | undefined>;
+      const judged = m.markFor(cells[3]);
+      const merelyDifferent = [m.markFor(cells[0]), m.markFor(cells[1])];
+      return {
+        ok:
+          judged === m.MARK_BEHIND &&
+          merelyDifferent.every((mk) => mk === null) &&
+          m.differsFrom(cells[0], cells[1]) === true &&
+          m.markFor.length === 1,
+        evidence: [
+          `the cell the comparator judged renders "${judged}" (XD-9's ratified marker)`,
+          `two cells that merely disagree render ${JSON.stringify(merelyDifferent)} — plain ` +
+            'difference, no alarm, which is boundary 1 exactly',
+          `\`markFor\` is unary (arity ${m.markFor.length}), so no expression in the surface can ` +
+            'pass it a neighbour: cell-inequality-as-divergence is unreachable, not merely unused',
+          `the ahead arrow is declared INTERIM (${JSON.stringify(m.INTERIM_MARKS)}) because XD-9 ` +
+            'ratified only the behind marker',
+        ],
+      };
+    },
+  }),
+
+  comparatorDriven({
+    kind: 'must_not',
+    matches: 'A dead-end fact: any cell with',
+    missing: 'the cells whose doors this requires',
+    holds: () => {
+      const m = comparatorModel();
+      const row = specimenRow();
+      const cells = [...(row.cells as unknown[]), undefined];
+      const doors = cells.map((c) => m.cellDoor(row, c));
+      return {
+        ok: doors.every((d) => !!d && typeof d.label === 'string' && d.label.length > 0),
+        evidence: [
+          `${doors.length} cells including the EMPTY column and an absent one; every door: ` +
+            `${JSON.stringify(doors.map((d) => d.kind))}`,
+          '`cellDoor` is a total function — its return type has no null, so a doorless cell cannot ' +
+            'be constructed, let alone rendered',
+        ],
+      };
+    },
+  }),
+
+  comparatorDriven({
+    kind: 'must_not',
+    matches: 'A summary standing in for the s',
+    missing: 'the shape a summary could stand in for',
+    holds: () => {
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const { SiteAtPlaces } = require('../../src/renderer/components/DockedPanel/SiteAtPlaces');
+      const bare = new SiteAtPlaces({ matrix: specimenMatrix(), selected: [], onToggle: () => {} }).render();
+      const json = JSON.stringify(bare);
+      // No count, no headline, no bar until a human has selected something —
+      // the grid is what is on screen, and a summary of it is not offered.
+      return {
+        ok: !json.includes('data-selection-bar') && json.includes('table'),
+        evidence: [
+          'with nothing selected the surface renders the grid and NO selection bar, no headline ' +
+            'and no count — there is no summary to stand in for the shape',
+          'the only counts this surface can render come from the derived scope (`selectionHeadline` ' +
+            'takes the runnable length as an argument rather than tallying its own)',
+        ],
+      };
+    },
+  }),
+
+  comparatorDriven({
+    kind: 'key_step',
+    matches: 'The selection becomes the next',
+    missing: 'the comparator render that would PRODUCE a selection — the carrier now has no source',
+    holds: () => {
+      const m = comparatorModel();
+      const matrix = specimenMatrix();
+      const row = specimenRow();
+      const cells = row.cells as Array<Record<string, unknown> | undefined>;
+      const selection = m.buildSelection(matrix, [m.cellKey(cells[0]!), m.cellKey(cells[3]!)]) as {
+        cells: Array<{ siteName: string; siteId: string }>;
+        from: { surface: string; comparatorId: string; filter: string };
+      };
+      // And the other end of the walk: the host-side producer really is wired.
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const arming = require('../../src/main/comparator/armFromSelection');
+      return {
+        ok:
+          selection.cells.length === 2 &&
+          selection.from.surface === 'comparator' &&
+          selection.from.comparatorId === matrix.comparatorId &&
+          selection.from.filter === matrix.filter &&
+          typeof arming.armFromSelection === 'function',
+        evidence: [
+          `the selection carries ${selection.cells.length} cells built from the clicked cells — ` +
+            'names from the row, places from the cell, ids from the entity; nothing typed',
+          `the from-line resolves to the render that produced it: ${JSON.stringify(selection.from)} ` +
+            "— `surface: 'comparator'` is the WP-37 ruling's candidate A, the only ratified variant",
+          '`armFromSelection` is `deriveScope`\'s first production caller and hands the split to ' +
+            '`recordArmingRequest` — the hole WP-37 measured (deriveScope: ZERO production callers) ' +
+            'is closed, and `armFromSelection.test.ts` pins the handoff with `toBe`, not `toEqual`',
+        ],
+      };
+    },
+  }),
+
+  comparatorDriven({
+    kind: 'must_not',
+    matches: 'A scope the user must confirm b',
+    missing: 'a user-made selection to be asked to re-list',
+    holds: () => {
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const scope = require('../../src/main/intelligence-host/procedureScope');
+      const m = comparatorModel();
+      const matrix = specimenMatrix();
+      const row = specimenRow();
+      const cells = row.cells as Array<Record<string, unknown> | undefined>;
+      const selection = m.buildSelection(matrix, [m.cellKey(cells[0]!)]) as {
+        cells: Array<{ siteId: string; siteName: string; place: unknown }>;
+      };
+      // The set the user selected IS the set the plan is measured against, and a
+      // plan that re-derived its own targets is named rather than executed.
+      const derived = { runnable: selection.cells, capability: 'c', runbookId: 'r' };
+      const matched = scope.checkDryRunTargets(derived, selection.cells);
+      const reDerived = scope.checkDryRunTargets(derived, [
+        { siteId: 'somewhere.else', siteName: 'Elsewhere', place: { host: 'local' } },
+      ]);
+      return {
+        ok: matched.ok === true && reDerived.ok === false && !!reDerived.reason,
+        evidence: [
+          'the selected set and the plan\'s target set compare EQUAL as sets — nothing is re-listed, ' +
+            're-typed or re-confirmed between the click and the run',
+          `a target that came from anywhere else is refused, named: "${reDerived.reason}"`,
+          'no confirm-your-targets step exists on the walk: `armFromSelection` records the arming ' +
+            'and stops — it does not compose a message or ask the set back',
+        ],
+      };
+    },
+  }),
+
+  /**
+   * STILL BLOCKED, and honestly so. The criterion asks for TWO explanations on a
+   * disagreeing cell: its lineage, AND a history badge where the component has
+   * bitten before. The first ships — `verdictLine` names the other side and its
+   * value, and `historyLine` carries XD-9 boundary 4's "watching since". The
+   * second does not: nothing on this surface reads incidents, so no badge is
+   * rendered, and a PASS here would credit half a criterion as whole.
+   */
+  {
+    specId: J_INSPECT,
+    kind: 'key_step',
+    matches: 'A disagreeing cell explains it',
+    run: (ctx) =>
+      blocked(
+        'the history badge — the cell explains its LINEAGE, but nothing on this surface reads ' +
+          'incidents, so "where the component has bitten before" is not rendered',
+        'a packet that joins WP-25\'s incident producer to the comparator cell',
+        [
+          ...ctx.probes.surfaces.evidence.filter((l) => l.includes(`\`${COMPARATOR_TOKEN}\``)),
+          'STANDING, so the gap is not overstated: the cell DOES explain itself in place. ' +
+            '`verdictLine` renders "behind Alpha, which is at 9.5.0" — the direction, the other ' +
+            'side, and its value — and `historyLine` renders XD-9 boundary 4 verbatim ' +
+            '("Nexus AI has been watching this site since …", never "unknown"). Both are pinned in ' +
+            'tests/unit/renderer/comparator.test.tsx',
+          'what is missing is the SECOND half only: the badge on a component with a history of ' +
+            'breaking this site. WP-25 emits incidents; nothing joins them to a matrix cell',
+        ]
+      ),
+  },
+
+  /**
+   * OWNER-PENDING, because it is a judgement about prose and no check can stand
+   * in for a person reading it. The surface's OWN text is fully derived — every
+   * string it renders comes from a cell, a row or the seam — and that half is
+   * driven in `comparator.test.tsx`. What cannot be driven is the prose the
+   * model writes around the render in a live turn, which is exactly what the
+   * criterion is about.
+   */
+  {
+    specId: J_INSPECT,
+    kind: 'must_not',
+    matches: 'A claim in the surrounding pro',
+    run: () =>
+      ownerPending(
+        [
+          'the SURFACE half is driven and holds: every string the comparator renders is derived — ' +
+            'values and verdicts from the cell, the site name from the row, places through the ' +
+            'seam\'s own `placeLabel`, the from-line from the matrix. The surface authors no fact',
+          'what no check can establish is the criterion\'s actual subject: whether the PROSE a live ' +
+            'model writes around the render makes a claim no cell supplies. That is a person ' +
+            'reading a turn, which is what H-02 reserves judges for',
+        ],
+        [
+          `EVAL ${J_INSPECT} — human-in-the-loop criterion (H-02).`,
+          '',
+          '1. npm run rebuild — a sitting happens inside Local, so the tree must be on the',
+          '   Electron ABI. A tree left on system Node by a jest run cannot load the addon.',
+          '2. Open the Docked Panel, click "Compare across places", and open a comparison',
+          '   that has at least one disagreeing row.',
+          '3. Ask about what you see, in your own words.',
+          '',
+          '4. Judge ONLY this: does anything the assistant says about the comparison assert a',
+          '   fact that no cell on screen supplies — a cause, a recommendation, a count, a',
+          '   "because", or a verdict the grid does not show?',
+          '5. Record the verdict in docs/intelligence/WORK_PACKETS.md, naming this criterion.',
+        ].join('\n')
+      ),
+  },
+];
+
 const JOURNEY_CHECKS: RegisteredCheck[] = [
   ...JOURNEY_GAPS.map(journeyGapCheck),
+  ...J_INSPECT_DRIVEN,
   ...J_REFUSAL_DRIVEN,
   ...J_REFUSAL_JUDGED,
 ];

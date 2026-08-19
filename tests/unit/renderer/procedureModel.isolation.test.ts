@@ -58,6 +58,15 @@ const RENDERER_MODULES = [
   // until a user opened the panel.
   '../../../src/renderer/components/DockedPanel/scopeModel',
   '../../../src/renderer/components/DockedPanel/ScopeBlock',
+  // WP-41. Same reasoning one step further out: `src/main/comparator/
+  // siteAtPlaces.ts` imports `divergence`, `TwinStore`, `EntityService` and
+  // `Ledger` as VALUES — it reaches the core and, through it, better-sqlite3.
+  // The comparator's renderer half therefore crosses `import type` only, and a
+  // single careless value import here would throw NODE_MODULE_VERSION at panel
+  // load. This is the pin that catches it in jest instead.
+  '../../../src/renderer/components/DockedPanel/comparatorModel',
+  '../../../src/renderer/components/DockedPanel/SiteAtPlaces',
+  '../../../src/renderer/components/DockedPanel/ComparatorPanel',
   // WP-38. These three are the ones that DO import the core, by design.
   '../../../src/renderer/components/DockedPanel/citationModel',
   '../../../src/renderer/components/DockedPanel/CitationSpans',
