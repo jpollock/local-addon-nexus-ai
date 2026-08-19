@@ -24,6 +24,7 @@ import { setIntelligenceCore } from '../coreRegistry';
 import { assembleForChatTurn } from '../chatAssembly';
 import {
   getCapabilityGrants,
+  materializableCapabilities,
   resolveCapabilityGrants,
   syncCapabilityGrants,
 } from '../capabilityGrants';
@@ -244,8 +245,16 @@ Prose.
   fs.rmSync(lawDir, { recursive: true, force: true });
   const registry = RunbookRegistry.build({ documents });
   // Grants for these documents come from the SAME resolver the boot path uses,
-  // pointed at this registry — never hand-built, so the shipped rule (strict
-  // runbooks are granted) is the rule under test here too.
-  const { grants } = resolveCapabilityGrants({ runbooks: registry, settings: null });
+  // pointed at this registry — never hand-built, so the real rule is the rule
+  // under test here too. WP-20f: the materialized set is derived through the
+  // migration's own function rather than listed, so these fixtures stand
+  // exactly where a migrated machine stands. With `materialized` omitted the
+  // resolver now grants nothing at all, which is the deny-flip and is pinned
+  // in `capabilityDenyFlip.test.ts`.
+  const { grants } = resolveCapabilityGrants({
+    runbooks: registry,
+    settings: null,
+    materialized: materializableCapabilities(registry),
+  });
   return { registry, grants, capability: 'cap.a', second: 'cap.b' };
 }

@@ -16,6 +16,7 @@ import { initIntelligenceCore } from '../bootstrap';
 import {
   GRANTS_STORAGE_KEY,
   GRANT_ISSUED_TOPIC,
+  MANDATED_EXPLICIT_CAPABILITIES,
   getCapabilityGrants,
 } from '../capabilityGrants';
 
@@ -61,6 +62,40 @@ test('a second boot over the same storage issues nothing new — one grant, not 
 
   expect(issuedFor(second, ANCHOR)).toHaveLength(1);
   expect(getCapabilityGrants().map((g) => g.capability)).toContain(ANCHOR);
+
+  second.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * WP-20f · the ruling's acceptance criterion, taken literally: TWO BOOTS, and
+ * EVERY materialized capability — not the anchor alone.
+ *
+ * The anchor-scoped test above is about the WIRING and stays that way. This one
+ * is about the MIGRATION, whose whole claim is that it happens once across the
+ * whole set, so here the census is the subject rather than an over-reach. It
+ * also pins the two mandated capabilities emitting nothing at all across both
+ * boots, which is where a re-derivation on the second boot would show up.
+ */
+test('WP-20f · two boots, and every materialized capability has exactly ONE grant event', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'intel-bootgrants-'));
+  const kv = new Map<string, unknown>();
+
+  const first = boot(kv, dir);
+  const materialized = getCapabilityGrants().map((g) => g.capability);
+  expect(materialized.length).toBeGreaterThan(0);
+  first.close();
+
+  const second = boot(kv, dir);
+
+  expect(getCapabilityGrants().map((g) => g.capability).sort()).toEqual([...materialized].sort());
+  for (const capability of materialized) {
+    expect(issuedFor(second, capability)).toHaveLength(1);
+  }
+  for (const mandated of MANDATED_EXPLICIT_CAPABILITIES) {
+    expect(materialized).not.toContain(mandated);
+    expect(issuedFor(second, mandated)).toHaveLength(0);
+  }
 
   second.close();
   fs.rmSync(dir, { recursive: true, force: true });

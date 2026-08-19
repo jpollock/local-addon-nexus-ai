@@ -28,8 +28,10 @@ import {
   GRANT_ISSUED_TOPIC,
   GRANT_REVOKED_TOPIC,
   GRANTS_STORAGE_KEY,
+  MANDATED_EXPLICIT_CAPABILITIES,
   getCapabilityGrants,
   grantedRunbooks,
+  materializableCapabilities,
   resolveCapabilityGrants,
   syncCapabilityGrants,
 } from '../capabilityGrants';
@@ -93,10 +95,19 @@ function sync() {
   return syncCapabilityGrants({ core, storage: storage(), logger: silent });
 }
 
+/**
+ * WP-20f · the resolver, standing where a migrated machine stands.
+ *
+ * `materialized` is derived through the migration's own function rather than
+ * hand-listed: these cases are about the OVERLAY's behaviour (pins, disarms,
+ * guided grants), and they must not silently re-encode which capabilities the
+ * flip materializes. The deny-flip's own pins live in `capabilityDenyFlip.test.ts`.
+ */
 function resolve(grants?: CapabilityGrantSetting[]) {
   return resolveCapabilityGrants({
     runbooks: core.law!.runbooks,
     settings: grants ? { capabilityGrants: grants } : null,
+    materialized: materializableCapabilities(core.law!.runbooks),
   });
 }
 
@@ -113,21 +124,30 @@ afterEach(() => {
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('the shipped grant set', () => {
-  test('covers the strict runbooks the registry SERVES, and nothing else', () => {
+  test('covers the strict runbooks the registry SERVES, EXCEPT the mandated-explicit two', () => {
+    // WP-20f · THE CENSUS GUARD. This assertion used to read "and nothing
+    // else", equating the grant set with the strict set — which is the sentence
+    // the deny-flip repeals, so it is rewritten rather than deleted. The
+    // subtraction is named here, and the two capabilities are pinned absent by
+    // name, so removing the exclusion cannot pass as a widening.
     const { grants } = resolve();
 
     expect(capabilitiesOf(grants)).toContain(ANCHOR);
     expect(anchorGrant(grants).runbookId).toBe('rb.bulk-plugin-update');
-    // Every grant, not just the anchor's: the shipped set grows whenever a
-    // strict runbook is added or split (WP-20c splits two into four), and the
-    // rule is what must hold — never the census.
+    // Every grant, not just the anchor's: the set grows whenever a strict
+    // runbook is added or split (WP-20c splits two into four), and the rule is
+    // what must hold — never the census.
     for (const g of grants) expect(g.strictness).toBe('strict');
     expect(capabilitiesOf(grants).sort()).toEqual(
       core
         .law!.runbooks.runbooks({ strictness: 'strict' })
         .map((rb) => rb.capability)
+        .filter((capability) => !MANDATED_EXPLICIT_CAPABILITIES.includes(capability))
         .sort()
     );
+    for (const mandated of MANDATED_EXPLICIT_CAPABILITIES) {
+      expect(capabilitiesOf(grants)).not.toContain(mandated);
+    }
   });
 
   test('ships the guided runbooks UNGRANTED — nothing is obliged to carry them whole', () => {
@@ -164,7 +184,12 @@ describe('the settings overlay', () => {
     const { grants, disarmed } = resolve([{ capability: ANCHOR, enabled: false }]);
 
     expect(capabilitiesOf(grants)).not.toContain(ANCHOR);
-    expect(disarmed).toEqual([
+    // CAPABILITY-SCOPED, never the whole list. Since WP-20f the disarmed set
+    // also carries a standing `requires-explicit-grant` row for each mandated
+    // capability, and an exhaustive assertion here would be a census of a set
+    // this case is not about — the same rule the grant assertions in this file
+    // already follow.
+    expect(disarmed.filter((d) => d.capability === ANCHOR)).toEqual([
       expect.objectContaining({ capability: ANCHOR, reason: 'disabled-by-settings' }),
     ]);
   });
@@ -175,18 +200,19 @@ describe('the settings overlay', () => {
     ]);
 
     expect(capabilitiesOf(grants)).not.toContain(ANCHOR);
-    expect(disarmed[0].reason).toBe('hash-mismatch');
+    const row = disarmed.find((d) => d.capability === ANCHOR)!;
+    expect(row.reason).toBe('hash-mismatch');
     // The remedy needs both hashes, per §6(b) — a mismatch message that names
     // neither cannot be acted on.
-    expect(disarmed[0].detail).toContain('sha256:reviewedadifferentdocument');
-    expect(disarmed[0].detail).toContain(core.law!.runbooks.byCapability(ANCHOR)!.hash);
+    expect(row.detail).toContain('sha256:reviewedadifferentdocument');
+    expect(row.detail).toContain(core.law!.runbooks.byCapability(ANCHOR)!.hash);
   });
 
   test('a grant for a capability nothing serves disarms, naming it rather than throwing', () => {
     const { grants, disarmed } = resolve([{ capability: 'cap.nothing-serves-this' }]);
 
-    expect(capabilitiesOf(grants)).toContain(ANCHOR); // the shipped ones survive
-    expect(disarmed).toEqual([
+    expect(capabilitiesOf(grants)).toContain(ANCHOR); // the materialized ones survive
+    expect(disarmed.filter((d) => d.capability === 'cap.nothing-serves-this')).toEqual([
       expect.objectContaining({ capability: 'cap.nothing-serves-this', reason: 'runbook-unavailable' }),
     ]);
   });

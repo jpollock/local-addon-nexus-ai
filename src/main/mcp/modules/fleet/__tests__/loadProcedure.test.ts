@@ -21,7 +21,12 @@ import * as os from 'os';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../../../../intelligence-host/bootstrap';
 import { setIntelligenceCore } from '../../../../intelligence-host/coreRegistry';
-import { syncCapabilityGrants } from '../../../../intelligence-host/capabilityGrants';
+import {
+  MANDATED_EXPLICIT_CAPABILITIES,
+  getCapabilityGrants,
+  syncCapabilityGrants,
+} from '../../../../intelligence-host/capabilityGrants';
+import { governDoorFor } from '../../../../intelligence-host/sequenceGuard';
 import {
   clearArmingRequests,
   takeArmingRequests,
@@ -195,6 +200,64 @@ test('the request is recorded, so the platform can deliver on the next turn', as
 test('an ungranted request is NOT recorded — nothing can be delivered for it', async () => {
   await call('cap.nothing-serves-this');
   expect(takeArmingRequests()).toEqual([]);
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// WP-20f · after the deny-flip, "not granted" is the ordinary state of a
+// capability nobody enabled — so the refusal has to say where it is enabled.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('WP-20f · arming a capability that is served but not granted', () => {
+  const MANDATED = MANDATED_EXPLICIT_CAPABILITIES[0];
+
+  test('the mandated capabilities are served here and are NOT granted', async () => {
+    // The premise, driven rather than assumed: a refusal test that passed
+    // because no runbook served the capability would prove nothing about the
+    // flip. Both halves are asserted before anything reads the message.
+    for (const capability of MANDATED_EXPLICIT_CAPABILITIES) {
+      expect(core.law!.runbooks.byCapability(capability)).toBeDefined();
+      expect(getCapabilityGrants().map((g) => g.capability)).not.toContain(capability);
+    }
+  });
+
+  test('the refusal carries the GOVERN DOOR — the same door the guard points at', async () => {
+    const runbook = core.law!.runbooks.byCapability(MANDATED)!;
+    const door = governDoorFor(MANDATED, runbook.id);
+
+    const { text, isError } = await call(MANDATED);
+
+    expect(isError).toBeFalsy();
+    // Every field of the structured target, so a door that drifts from the
+    // guard's is caught here rather than by a user who followed it somewhere
+    // that does not govern this grant.
+    expect(text).toContain(door.surface);
+    expect(text).toContain(door.section);
+    expect(text).toContain(door.capability);
+    expect(text).toContain(door.runbookId);
+  });
+
+  test('and it states the law rather than apologising for a missing default', async () => {
+    // The 2026-08-18 lesson: a model reads "not yet" as an invitation to retry.
+    const { text } = await call(MANDATED);
+
+    expect(text).toContain('NEVER granted by default');
+    expect(text).toContain('Nothing you can do in this turn grants it.');
+  });
+
+  test('arming it records NOTHING — a refusal that still queued would be no refusal', async () => {
+    await call(MANDATED);
+
+    expect(takeArmingRequests()).toEqual([]);
+  });
+
+  test('a capability nothing serves is told that, and is not sent to the Govern door', async () => {
+    // Pointing someone at a switch for a capability this machine does not have
+    // would be a fabricated remedy. The two answers must not collapse.
+    const { text } = await call('cap.nothing-serves-this');
+
+    expect(text).toContain('No procedure on this machine serves that capability.');
+    expect(text).not.toContain('capabilities');
+  });
 });
 
 test('with record-keeping down it says so, and still answers', async () => {

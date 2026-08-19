@@ -188,8 +188,16 @@ export interface SequenceRefusal {
   message: string;
 }
 
-/** The door, built from the same two ids the refusal already names. */
-function governDoorFor(capability: string, runbookId: string): GovernDoorTarget {
+/**
+ * The door, built from the same two ids the refusal already names.
+ *
+ * Exported at WP-20f: the deny-flip gives `nexus_load_procedure` a refusal of
+ * its own — a capability that is served but not granted — and that refusal has
+ * to point at the SAME door as the guard's, built from the same pair. Two
+ * builders would be two places for the destination to drift, and the repo has
+ * that lesson recorded twice already (`resolveAgentCron`, `localDay`).
+ */
+export function governDoorFor(capability: string, runbookId: string): GovernDoorTarget {
   return { surface: 'settings', section: 'capabilities', capability, runbookId };
 }
 

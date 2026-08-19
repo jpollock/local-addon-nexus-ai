@@ -3,33 +3,55 @@
  * `control.grant.issued` / `control.grant.revoked` anywhere in the tree.
  *
  * A grant says: *this capability is served by this reviewed document, pinned by
- * its hash.* Two layers produce the live set, in this order:
+ * its hash.*
  *
- *   1. **Shipped law.** Every STRICT runbook the registry SERVES gets a grant,
- *      enabled, scoped to the runbook's own declared scope. Nothing is written
- *      to settings to make that true — the shipped set is derived on every boot
- *      from the documents actually present, so a runbook refused by the ceiling
- *      or missing from `law/` simply has no grant.
+ * WP-20f · THE DENY-FLIP (ruled 2026-08-18). WP-20b derived the live set from
+ * the documents on disk: every STRICT runbook the registry served got an
+ * enabled grant, and nothing was written anywhere to make that true. **That
+ * code path is GONE.** Not filtered, not carved out — deleted. A grant now has
+ * exactly two origins, and both of them are explicit acts someone performed:
+ *
+ *   1. **The materialized set** (`intelligence_grants_materialized`). Written
+ *      ONCE, by the migration below, at the boot where the flip lands. It is a
+ *      list of capability names — not a derivation, not a rule — and nothing
+ *      ever appends to it afterwards.
  *   2. **The settings overlay** (`NexusSettings.capabilityGrants`). Switch one
- *      off, pin one to the document you reviewed, name one the shipped set does
- *      not cover. Only `capability` is required.
+ *      off, pin one to the document you reviewed, name one the materialized set
+ *      does not cover. Only `capability` is required.
  *
- * WHY THE SHIPPED SET IS ENABLED, when a grant is the *restrictive* thing.
- * P2's inversion, ruled: today a chat model can call `bulk_plugin_update` with
- * no ceremony at all, so shipping the grant OFF would leave the unceremonious
- * path as the default and make the safe one opt-in. v0 grants are therefore
- * ADDITIVE — holding one adds a procedure and (at WP-20d) sequencing over that
- * capability's own tools; not holding one leaves today's tool reach untouched.
- * Making a capability *required* removes reach and is WP-20f, not this.
+ * WHY DELETING LAYER 1 IS THE POINT, and not merely a way to reach it. Ruling
+ * point 3 — "new capabilities arrive DENIED; registering a capability and
+ * enabling it are two different acts" — is obtained STRUCTURALLY this way: no
+ * capability is ever granted because a document exists, so a strict runbook
+ * that ships tomorrow has no path to a default. A filter over a surviving
+ * derivation would have been a rule that some later default could out-vote.
+ * The signature is the proof: `resolveCapabilityGrants` with no `materialized`
+ * list returns NO grants, on a tree whose `law/` directory is full.
  *
- * WHY STRICT ONLY, in the shipped set. A strict runbook has a mandatory
- * full-body ride: the turn carrier must deliver the whole hash-pinned document
- * before the run may proceed, which is what the 8 KB ceiling bounds. Guided
+ * WHY TWO CAPABILITIES ARE HARDER STILL. `cap.promote_environment` and
+ * `cap.incident_remediation` are MANDATED-EXPLICIT (ruling point 1): the
+ * migration never materializes them, and the materialized path refuses them
+ * even if the stored list names one. Production consequence is never a default.
+ * They remain fully grantable — by an explicit settings entry, which is the
+ * ruling's own "a run needs an explicit grant made before it arms" — and a
+ * served-but-ungranted one is DISCLOSED as `requires-explicit-grant` rather
+ * than being quietly absent, so the row a user can act on exists.
+ *
+ * WHAT WAS AND WAS NOT FLIPPED. v0 grants are still ADDITIVE over the TOOL
+ * SURFACE: holding a grant adds a procedure and WP-20d's sequencing; not
+ * holding one leaves today's tool reach untouched. So denying these two
+ * subtracts ceremony, it does not subtract reach — until "capability required
+ * to reach gated tools" lands (WP-20g). Their production consequence rests
+ * meanwhile on `isOperationAllowed`, which is a real gate and a different one.
+ * Recorded here rather than left for a reader to discover.
+ *
+ * WHY STRICT ONLY, in what the migration materializes. A strict runbook has a
+ * mandatory full-body ride: the turn carrier must deliver the whole hash-pinned
+ * document before the run may proceed, which is what the ceiling bounds. Guided
  * runbooks have no such obligation (WP-20a ruling 2), and both shipped ones are
- * over 8 KB as whole documents — a shipped grant for them would hand a later
- * delivery path a payload the ceiling was written to prevent. An explicit
- * settings grant for a guided capability is still honoured: the rule is a
- * default, not a ban.
+ * over 8 KB as whole documents — materializing them would hand a later delivery
+ * path a payload the ceiling was written to prevent. An explicit settings grant
+ * for a guided capability is still honoured: the rule is a default, not a ban.
  *
  * WHAT A DISARMED GRANT IS. Not an error and never a throw: a grant whose
  * pinned hash no longer matches the shipped file, whose runbook is not served,
@@ -66,6 +88,45 @@ export const GRANT_REVOKED_SCHEMA = 'grant.revoked/1';
  */
 export const GRANTS_STORAGE_KEY = 'intelligence_grants_state';
 
+/**
+ * WP-20f · the materialized grant set — the second marker in the pre-approved
+ * `intelligence_grants_*` namespace, ruled at the WP-20f gate (option (a)).
+ *
+ * SEPARATE FROM `GRANTS_STORAGE_KEY` ON PURPOSE, and the separation is
+ * load-bearing rather than tidy. That one holds what was last ISSUED; a stale
+ * entry in it MEANS "revoke this". Folding the grant set into it would make one
+ * entry mean both "this is granted" and "revoke this", and nothing would ever
+ * be revoked again. Two facts, two records.
+ *
+ * OWNED BY THIS MODULE: nothing else reads or writes it.
+ */
+export const MATERIALIZED_STORAGE_KEY = 'intelligence_grants_materialized';
+
+/**
+ * WP-20f ruling point 1 · the capabilities that are NEVER granted by default.
+ *
+ * There is no legacy carve-out and no bypass: the migration does not write
+ * them, and the materialized path refuses them even when the stored list names
+ * one (which only tampering or a hand-edited marker can produce). The single
+ * path to either is an explicit `NexusSettings.capabilityGrants` entry — a
+ * grant a person made, which is exactly what the ruling asks for.
+ *
+ * Exported so the guard test can assert over the LIST rather than over two
+ * string literals it re-types: a third mandated capability added here is
+ * covered by the same pins, and a deletion from here fails them.
+ */
+export const MANDATED_EXPLICIT_CAPABILITIES: readonly string[] = [
+  'cap.promote_environment',
+  'cap.incident_remediation',
+];
+
+const MANDATED = new Set(MANDATED_EXPLICIT_CAPABILITIES);
+
+/** Is this capability one the platform may never grant on its own? */
+export function requiresExplicitGrant(capability: string): boolean {
+  return MANDATED.has(capability);
+}
+
 /** `source.system` for both topics — one value, so a liveness reader sees one row. */
 export const GRANTS_SYSTEM = 'law:capability-grants';
 /** A user turning a grant off is a different source: their intent, not the shipped law's. */
@@ -87,7 +148,24 @@ export interface ResolvedGrant {
   source: 'shipped' | 'settings';
 }
 
-export type DisarmReason = 'disabled-by-settings' | 'hash-mismatch' | 'runbook-unavailable';
+export type DisarmReason =
+  | 'disabled-by-settings'
+  | 'hash-mismatch'
+  | 'runbook-unavailable'
+  /**
+   * WP-20f · a MANDATED-EXPLICIT capability that no explicit grant covers.
+   *
+   * The one data-shape widening this packet makes, and point 1 is not honestly
+   * recordable without it. On a machine upgrading across the flip, the two
+   * mandated capabilities are in the issuance marker and are about to be
+   * revoked; every existing reason would have misdescribed why. Without this
+   * value the revocation would read `runbook-unavailable` — a plain falsehood
+   * in the compliance record, since the runbook is right there and serving.
+   *
+   * It also gives the Settings matrix the honest row: not-granted WITH the
+   * reason, rather than an absence a reader has to infer.
+   */
+  | 'requires-explicit-grant';
 
 /** A grant that was configured and is NOT live, with the reason a user can act on. */
 export interface DisarmedGrant {
@@ -115,6 +193,14 @@ interface MarkerEntry {
 interface MarkerState {
   version: 1;
   grants: MarkerEntry[];
+}
+
+/** WP-20f · what the migration wrote, and the only thing that grants by default. */
+interface MaterializedState {
+  version: 1;
+  /** When the flip landed on this machine. Recorded for the reader, never gated on. */
+  migratedAt: string;
+  capabilities: string[];
 }
 
 interface MinimalStorage {
@@ -180,14 +266,40 @@ function scopeFromRunbook(rb: Runbook): ResolvedGrant['scope'] {
 }
 
 /**
+ * The capabilities a migration materializes: the strict runbooks the registry
+ * SERVES, minus the mandated-explicit ones.
+ *
+ * Exported because the migration and every test that needs to stand on a
+ * migrated machine must derive this the same way. A test that hand-built the
+ * list would pass while the rule it is standing on changed underneath it.
+ *
+ * Note what it is NOT: it is not consulted at resolution. It runs once, its
+ * output is persisted, and the persisted list is what grants thereafter — which
+ * is the whole of ruling point 3.
+ */
+export function materializableCapabilities(runbooks: RunbookRegistry): string[] {
+  return runbooks
+    .runbooks({ strictness: 'strict' })
+    .map((rb) => rb.capability)
+    .filter((capability) => !MANDATED.has(capability));
+}
+
+/**
  * Resolve the configured grants against the documents actually present.
  *
  * Pure: no emission, no storage, no clock. `syncCapabilityGrants` is the side
  * effect, so this can be read by anything that only wants to know what is live.
+ *
+ * WP-20f · `materialized` HAS NO DEFAULT THAT GRANTS ANYTHING. Omit it and the
+ * result is the settings overlay alone, on a tree whose `law/` is full. That is
+ * the deny-flip expressed in the signature rather than in a rule: there is no
+ * argument to this function that makes a document grant itself.
  */
 export function resolveCapabilityGrants(opts: {
   runbooks: RunbookRegistry;
   settings?: Pick<NexusSettings, 'capabilityGrants'> | null;
+  /** The persisted, explicit grant set. Absent = nothing is granted but settings. */
+  materialized?: readonly string[];
 }): GrantResolution {
   const { runbooks } = opts;
   const overrides = new Map<string, CapabilityGrantSetting>();
@@ -200,14 +312,31 @@ export function resolveCapabilityGrants(opts: {
   const grants: ResolvedGrant[] = [];
   const disarmed: DisarmedGrant[] = [];
 
-  // Layer 1: the shipped set — every strict runbook the registry serves.
-  const shipped = runbooks.runbooks({ strictness: 'strict' });
-  for (const rb of shipped) {
-    admit(rb, 'shipped', overrides.get(rb.capability));
-    overrides.delete(rb.capability);
+  // Layer 1: the materialized set — capabilities an explicit, recorded act
+  // granted. Deduped, because a marker is storage and storage can repeat.
+  for (const capability of new Set(opts.materialized ?? [])) {
+    // Ruling point 1, enforced HERE and not only at the migration. The
+    // migration is what should never write these; this is what makes it
+    // impossible for a hand-edited or tampered marker to grant one anyway.
+    // Two independent refusals, because a single one is a bypass waiting for a
+    // bug — and the guard test drives exactly this case.
+    if (MANDATED.has(capability)) continue;
+    const rb = runbooks.byCapability(capability);
+    if (!rb) {
+      // Materialized once, and the document has since gone (removed, renamed,
+      // or refused by the ceiling). Disclosed, never silently dropped.
+      disarmed.push({
+        capability,
+        reason: 'runbook-unavailable',
+        detail: `no loaded runbook serves ${capability}`,
+      });
+      continue;
+    }
+    admit(rb, 'shipped', overrides.get(capability));
+    overrides.delete(capability);
   }
 
-  // Layer 2: whatever settings name that the shipped set did not cover.
+  // Layer 2: whatever settings name that the materialized set did not cover.
   for (const [capability, entry] of overrides) {
     const rb = runbooks.byCapability(capability);
     if (!rb) {
@@ -223,6 +352,34 @@ export function resolveCapabilityGrants(opts: {
       continue;
     }
     admit(rb, 'settings', entry);
+  }
+
+  // WP-20f point 1's DISCLOSURE. A mandated capability the registry serves and
+  // no grant covers is reported, with the reason, rather than being absent.
+  //
+  // Two things depend on this row existing. The Settings matrix needs a row
+  // someone can act on — "not granted, and here is why" is a fact; silence is
+  // not. And on a machine crossing the flip, `emitChanges` looks the reason up
+  // HERE when it revokes the grant WP-20b had derived; without the row the
+  // revocation would go out saying `runbook-unavailable` about a runbook that
+  // is present and serving.
+  for (const capability of MANDATED_EXPLICIT_CAPABILITIES) {
+    // A capability an explicit settings grant DID cover is not disclosed as
+    // ungranted, and one settings already disarmed keeps its sharper reason —
+    // a hash mismatch says more than "needs a grant" and must not be overwritten.
+    if (grants.some((g) => g.capability === capability)) continue;
+    if (disarmed.some((d) => d.capability === capability)) continue;
+    const rb = runbooks.byCapability(capability);
+    // Not served on this machine: there is nothing to grant and nothing to say.
+    if (!rb) continue;
+    disarmed.push({
+      capability,
+      runbookId: rb.id,
+      reason: 'requires-explicit-grant',
+      detail:
+        `${capability} is never granted by default — production consequence is not a default. ` +
+        `Grant it explicitly against ${rb.id} to arm its procedure.`,
+    });
   }
 
   return { grants, disarmed };
@@ -305,7 +462,16 @@ export function syncCapabilityGrants(opts: {
       return empty;
     }
 
-    const resolution = resolveCapabilityGrants({ runbooks, settings: readSettings(storage) });
+    // One clock reading for the whole sync: the migration record and the events
+    // that announce it describe the same moment, and two `new Date()` calls
+    // would let them disagree by a millisecond for no reason.
+    const now = opts.now ?? new Date();
+    const materialized = materializeShippedGrants(runbooks, storage, now, logger);
+    const resolution = resolveCapabilityGrants({
+      runbooks,
+      settings: readSettings(storage),
+      materialized,
+    });
     liveGrants = resolution.grants;
     liveDisarmed = resolution.disarmed;
 
@@ -316,7 +482,7 @@ export function syncCapabilityGrants(opts: {
       );
     }
 
-    emitChanges(core, storage, resolution, opts.now ?? new Date(), logger);
+    emitChanges(core, storage, resolution, now, logger);
     return resolution;
   } catch (err) {
     // A grant surface that could break startup would be a worse failure than
@@ -324,6 +490,104 @@ export function syncCapabilityGrants(opts: {
     logger.error(`[Intelligence] capability grant sync failed (non-fatal): ${(err as Error).message}`);
     return { grants: liveGrants, disarmed: liveDisarmed };
   }
+}
+
+/**
+ * WP-20f · THE MIGRATION — run once, at the boot where the flip lands.
+ *
+ * It converts the capabilities WP-20b had been granting implicitly, every boot,
+ * from a derivation into an explicit persisted list. Ruling point 2: what
+ * remains enabled becomes a grant someone can see and revoke, never a default
+ * nobody chose. The `control.grant.issued` events that announce them are
+ * emitted by `emitChanges` below — WP-20b's producer, unchanged, with the
+ * `reason: 'materialized'` it already used for a first issuance.
+ *
+ * TRIGGER: here, inside the sync that bootstrap and `onSettingsUpdated` already
+ * call. No new call site, so no edit to `index.ts` and no integration lock.
+ *
+ * IDEMPOTENT, on three independent layers — each one sufficient alone:
+ *
+ *  1. **The record's PRESENCE**, not a timestamp and not a count. A stored
+ *     record short-circuits, so the derivation runs exactly once per machine.
+ *     Presence is deliberately not "a non-empty list": a registry that served
+ *     no strict runbook at migration time materialized nothing, and that is a
+ *     completed migration, not a missing one.
+ *  2. **Nothing ever appends.** There is no union, no top-up, no re-derive on a
+ *     later boot. This is what makes a capability shipped tomorrow arrive
+ *     DENIED — point 3 — rather than being swept in by the next sync.
+ *  3. **The pre-existing event gate**, untouched: `emitChanges` compares
+ *     `(capability, runbookId, runbookHash)` against `GRANTS_STORAGE_KEY` and
+ *     emits nothing for an unchanged triple. Lose the materialized record alone
+ *     and the derivation re-runs to the identical set while this layer still
+ *     suppresses every duplicate event.
+ *
+ * DISCLOSED FAILURE DIRECTION (ratified as disclosed at the WP-20f gate): lose
+ * BOTH markers and the machine is indistinguishable from a fresh install, so
+ * the migration re-derives over whatever is shipped THEN — a capability added
+ * after this packet would be materialized as though it were day-one. The
+ * event-sourced repair is to rebuild the set from the ledger's own
+ * `control.grant.issued`/`revoked` history (architecture.md: "the grant table
+ * is itself a fold view"). That is a grant FOLD and a registered follow-on, not
+ * this packet.
+ */
+function materializeShippedGrants(
+  runbooks: RunbookRegistry,
+  storage: MinimalStorage,
+  now: Date,
+  logger: MinimalLogger
+): string[] {
+  const stored = readMaterialized(storage);
+  if (stored) {
+    // Layer 1 of the dedup key. Tampering is the only way a mandated capability
+    // reaches this list, and the resolver refuses it regardless — but a marker
+    // that says something false should not say it silently.
+    const mandated = stored.capabilities.filter((c) => MANDATED.has(c));
+    if (mandated.length > 0) {
+      logger.warn?.(
+        `[Intelligence] materialized grant record names ${mandated.join(', ')}, which are never ` +
+          'granted by default — ignored; grant them explicitly in settings if intended.'
+      );
+    }
+    return stored.capabilities;
+  }
+
+  const capabilities = materializableCapabilities(runbooks);
+  const record: MaterializedState = {
+    version: 1,
+    migratedAt: now.toISOString(),
+    capabilities,
+  };
+  try {
+    storage.set(MATERIALIZED_STORAGE_KEY, record);
+  } catch {
+    // Best effort, and the direction this falls in is the safe one: an unwritten
+    // record re-derives the SAME set next boot, where the event gate suppresses
+    // the duplicate issuance. Refusing to grant because a marker would not write
+    // would cost the user their procedures over a storage fault.
+  }
+  logger.info(
+    `[Intelligence] capability grants materialized (${capabilities.length}): ` +
+      `${capabilities.join(', ') || 'none'}. Never by default: ` +
+      `${MANDATED_EXPLICIT_CAPABILITIES.join(', ')}.`
+  );
+  return capabilities;
+}
+
+function readMaterialized(storage: MinimalStorage): MaterializedState | null {
+  try {
+    const raw = storage.get(MATERIALIZED_STORAGE_KEY) as MaterializedState | null;
+    // PRESENCE, not content: an empty list is a completed migration.
+    if (raw && Array.isArray(raw.capabilities)) {
+      return {
+        version: 1,
+        migratedAt: typeof raw.migratedAt === 'string' ? raw.migratedAt : '',
+        capabilities: raw.capabilities.filter((c): c is string => typeof c === 'string'),
+      };
+    }
+  } catch {
+    /* unreadable = absent; see the disclosed failure direction above */
+  }
+  return null;
 }
 
 function readSettings(storage: MinimalStorage): Pick<NexusSettings, 'capabilityGrants'> | null {
