@@ -14786,3 +14786,31 @@ tools — deny finally subtracts reach, not just ceremony; B-03's gate
 satisfied since 08-18. **WP-42 · the registry bundle** (eval
 registry): the WP-13b verdict mechanization + the empty-match MET
 fix. Prompts issued; all three launch together.
+
+---
+
+**WP-42 ANNOUNCED 2026-08-19 — LOCK TAKEN: the eval registry
+(`tests/intelligence-evals/` + `docs/intelligence/anchor-slice/evals/`).**
+Worktree `.worktrees/wp-42`, branch `wp-42`, base `poc/nexintelligence` @
+`18273a52` (this announce sits on the base before the work starts, per the
+WP-20f/WP-37 crossed-claim rule; the commit below it is the architect's Wave 6
+registration, found uncommitted here and committed verbatim).
+
+**Contention check, run before cutting the worktree, not assumed.**
+`git status --porcelain -- tests/intelligence-evals
+docs/intelligence/anchor-slice/evals` is EMPTY in the primary checkout and in
+every worktree `git worktree list` reports. Wave 6's other two packets hold
+disjoint locks: WP-41 the DockedPanel renderer, WP-20g `intelligence-host`.
+Neither touches this surface.
+
+**Scope, both items registry-only:** (1) mechanize the WP-13b citation-adherence
+sitting's verdicts the way WP-33b mechanized J-Refusal's — record-reading pins,
+the owner's adoption carried verbatim rather than paraphrased, and a FALL TO
+BLOCKED when the substrate stops supporting them; criterion 4's
+pass@1-with-pass³-open asterisk is preserved exactly, because a mechanization
+that upgrades an asterisked verdict to a clean pass³ is a fabrication.
+(2) `run.ts --only <no-match>` becomes an ERROR naming the unmatched selector
+and listing the available spec ids — never MET, never exit 0 (the vacuous-green
+family at the runner's own summary line, filed at the WP-39 adjudication). No
+`src/`, no new topic, payload version, envelope field or storage marker,
+`wpeOperationPermissions` untouched.
