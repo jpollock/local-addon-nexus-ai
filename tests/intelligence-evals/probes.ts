@@ -31,7 +31,16 @@ import {
   clearArmingRequests,
   recordArmingRequest,
 } from '../../src/main/intelligence-host/procedureArming';
-import { foldProcedureCursor, runForTask } from '../../src/main/intelligence-host/procedureCursor';
+import {
+  foldProcedureCursor,
+  forgetProcedureRun,
+  runForTask,
+} from '../../src/main/intelligence-host/procedureCursor';
+import {
+  createSessionRegistry,
+  type SessionRegistrySnapshot,
+} from '../../src/main/intelligence-host/sessionRegistry';
+import type { ScopePlace } from '../../src/main/intelligence-host/procedureScope';
 import { checkCheckpointSequence, governDoorFor } from '../../src/main/intelligence-host/sequenceGuard';
 import {
   deriveProcedureAudit,
@@ -1914,6 +1923,295 @@ export async function probeWidening(fixture: EvalFixture): Promise<WideningProbe
     ...(revokedEvent ? { revokedEventId: revokedEvent.id } : {}),
     revocationIsAHumanAct,
     noConversationalRoute,
+    evidence,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// WP-30 · the session registry, DRIVEN — and then the boot, simulated
+// ---------------------------------------------------------------------------
+
+export interface SessionRegistryProbe extends Probe {
+  /** Sessions the registry derived from this report's own ledger. */
+  sessions: number;
+  /** Rows in the waiting column — the premise for anything below. */
+  waitingRows: number;
+  /** Rows in the changed column. */
+  changedRows: number;
+  /** The first waiting row's gate, by id. Absent when nothing is waiting. */
+  gateCheckpointId?: string;
+  gatePosition?: string;
+  gateAwaits?: string;
+  /** Waiting SESSION rows that stand at a gate and name it. */
+  gatedWaitingRows: number;
+  /** Waiting SESSION rows with no gate — each one reporting a status that says why. */
+  gatelessWaitingRows: number;
+  /** No waiting session row is SILENTLY gateless: it names a gate, or says why there is none. */
+  everyWaitingRowNamesItsGate: boolean;
+  /** The approval state before the excursion, and after it. */
+  approvalsBefore: string[];
+  approvalsAfter: string[];
+  /** Session ids, gate ids and approval states all identical across the boot. */
+  identitySurvivedRestart: boolean;
+  /** The WHOLE snapshot re-derived identically — the stronger reading. */
+  snapshotIdentical: boolean;
+  /** Host memory really was warm before the kill, and really was empty after. */
+  memoryWasWarm: boolean;
+  memoryWasCleared: boolean;
+}
+
+/**
+ * WP-30 · what the registry answers, and what it still answers after a restart.
+ *
+ * RUNS LAST, and it must. It is the only probe that DESTROYS host state: the
+ * simulated boot empties `procedureCursor`'s in-memory run map, which is the map
+ * `probeProcedureRun` warmed and the sequence guard reads. Any probe placed
+ * after this one would be reading a process that had been rebooted underneath
+ * it — which is precisely the condition this probe exists to create, and
+ * precisely the condition nothing else here is written for.
+ *
+ * THE KILL IS THE MEASUREMENT. "Resume after restart" is a claim about where an
+ * answer comes from, and the only honest way to test where an answer comes from
+ * is to remove every other place it could have come from. The run map is that
+ * place — it is where a session's turn list has lived since WP-20d — so the
+ * probe reads the registry, empties the map, and reads again. Identical answers
+ * mean the map was never consulted.
+ */
+export async function probeSessionRegistry(fixture: EvalFixture): Promise<SessionRegistryProbe> {
+  const evidence: string[] = [];
+  setIntelligenceCore(fixture.core);
+
+  // Every fixture site is a LOCAL site, so that is what the places say. A
+  // describer that invented environments for them would put a fabricated
+  // production label under the consequence order's own sort key.
+  const placeOf = new Map<string, ScopePlace>();
+  for (const site of fixture.fleet) {
+    placeOf.set(fixture.environmentIdOf(site.siteId), { host: 'local' });
+    placeOf.set(fixture.siteIdOf(site.siteId), { host: 'local' });
+  }
+
+  // --- a run that STOPS AT A GATE, because nothing else in this report is ---
+  //
+  // MEASURED, not assumed, and it is the finding that shaped this block: both
+  // runs this report already contains reach a TERMINAL state. `probeProcedureRun`
+  // drives its run to completion and `probeDeniedApproval` drives its own to a
+  // denial, and neither is a run standing at a gate — a completed run has no
+  // pending step and a denied one is over. So the report held nothing to
+  // demonstrate gate-level addressing ON, and a criterion about the WHERE would
+  // have been adjudicated against a fixture with no where in it.
+  //
+  // This turn arms the capability and stops. `cp.consult-history` attests off
+  // the assembler's own retrieval, `cp.dry-run` is narrative, and `cp.approval`
+  // is therefore the first step the platform can prove and has not — which is
+  // exactly the state J-Return's user comes back to.
+  const flagged = fixture.fleet.find((s) => s.historyFlagged);
+  const gatedSessionId = `eval-wp30-${mintTaskId()}`;
+  if (flagged) {
+    const localSites: Record<string, { id: string; name: string; domain: string }> = {};
+    for (const s of fixture.fleet) {
+      localSites[s.siteId] = { id: s.siteId, name: s.name, domain: `${s.siteId}.local` };
+    }
+    const services = {
+      siteData: { getSite: (id: string) => localSites[id], getSites: () => localSites },
+    } as unknown as NexusServices;
+
+    const registryOfTools = new ToolRegistry();
+    registryOfTools.register(loadProcedureHandler);
+    clearArmingRequests();
+    await registryOfTools.call('nexus_load_procedure', { capability: B03_CAPABILITY }, services, 'mcp');
+    forgetChatAssemblySession(gatedSessionId);
+    const armed = await assembleForChatTurn({
+      services,
+      sessionId: gatedSessionId,
+      userMessage: B03_TURN,
+      siteId: flagged.siteId,
+      buildingSystemPrompt: true,
+    });
+    evidence.push(
+      armed?.procedure?.status === 'delivered'
+        ? `A RUN STOPPED AT A GATE was armed for this report (${armed.procedure.runbookId} on ` +
+          `${flagged.name}) and NOTHING was approved or executed on it — the state a user returns ` +
+          'to. Both other runs in this ledger are terminal (one completed, one denied), so without ' +
+          'this turn there would be no waiting-at-a-gate row to adjudicate the WHERE against'
+        : 'the arming turn delivered no procedure, so this report still holds no run standing at a gate'
+    );
+  } else {
+    evidence.push('no history-flagged site in the fleet — no run could be armed to stand at a gate');
+  }
+
+  const registry = createSessionRegistry({
+    core: fixture.core,
+    describePlace: (id) => placeOf.get(id),
+  });
+
+  const before = registry.snapshot();
+  evidence.push(
+    `the registry derived ${before.sessions.length} session(s) from ${fixture.core.ledger.count()} ` +
+      'ledger events — no host state was consulted to produce them, and no state was written'
+  );
+
+  if (before.sessions.length === 0) {
+    // Shape #15, at the probe level: everything below would "pass" vacuously
+    // over an empty fold, so the absence is reported as an absence.
+    return {
+      ok: false,
+      sessions: 0,
+      waitingRows: 0,
+      changedRows: 0,
+      gatedWaitingRows: 0,
+      gatelessWaitingRows: 0,
+      everyWaitingRowNamesItsGate: false,
+      approvalsBefore: [],
+      approvalsAfter: [],
+      identitySurvivedRestart: false,
+      snapshotIdentical: false,
+      memoryWasWarm: false,
+      memoryWasCleared: false,
+      evidence: [
+        ...evidence,
+        'NO SESSION EXISTS IN THIS LEDGER, so nothing below was measured. Every assertion this ' +
+          'probe makes would hold vacuously over an empty fold; reporting them would be the ' +
+          'green-over-nothing shape the harness exists to prevent',
+      ],
+    };
+  }
+
+  const triage = registry.triage();
+  const waitingSessions = triage.waiting.filter((s) => s.kind === 'session');
+  const gated = waitingSessions.filter((s) => !!s.gate?.checkpointId);
+  const gateless = waitingSessions.filter((s) => !s.gate?.checkpointId);
+
+  // THE MEASUREMENT, CORRECTED BY WHAT IT MEASURED. The first form of this
+  // demanded a gate on EVERY waiting row, and it failed against a denied run —
+  // correctly, in the sense that the row had no gate, and wrongly, in the sense
+  // that a denied run HAS no pending step. `deriveCheckpointStates` marks a
+  // denial `aborted` and everything after it `skipped`, so nothing is active;
+  // demanding a gate there would be demanding the platform invent a WHERE for a
+  // run that ended. What the criterion is actually about is that no waiting row
+  // is SILENTLY gateless: it names its gate, or its status says why there is
+  // none. And at least one row must name one, or this passes over a fixture
+  // with no gates in it — shape #15 at the criterion level.
+  const gatelessExplained = gateless.every((s) => {
+    const row = before.sessions.find((r) => r.id === s.sessionId);
+    return row?.status === 'halted' || row?.status === 'complete' || row?.documentUnavailable === true;
+  });
+  const everyWaitingRowNamesItsGate = gated.length > 0 && gatelessExplained;
+  const firstGate = gated[0]?.gate;
+
+  for (const s of gateless) {
+    const row = before.sessions.find((r) => r.id === s.sessionId);
+    evidence.push(
+      `  a waiting row with NO gate: ${s.id} — status "${row?.status ?? 'unknown'}"` +
+        (row?.documentUnavailable ? ', pinned document not served' : '') +
+        '. A run that ended has no pending step, and the status is what says so rather than an ' +
+        'invented WHERE'
+    );
+  }
+
+  evidence.push(
+    `triage: ${triage.waiting.length} waiting, 1 reserved ("${triage.reserved.headline}"), ` +
+      `${triage.changed.length} changed — two columns of one verdict, ranked by the consequence ` +
+      'order (moments-model 1.3 §4a)'
+  );
+  for (const situation of triage.waiting) {
+    evidence.push(
+      `  waiting · T${situation.tier} · ${situation.places.summary} · ` +
+        (situation.gate
+          ? `WHERE: ${situation.gate.checkpointId} (gate ${situation.gate.index} of ` +
+            `${situation.gate.of} in ${situation.gate.runbookId}, awaits ${situation.gate.awaits})`
+          : `no gate — ${situation.kind === 'incident' ? 'an incident of its own' : 'nothing pending'}`) +
+        ` — ${situation.tierReason}`
+    );
+  }
+
+  const approvalsBefore = before.sessions.flatMap((s) =>
+    s.approvals.map((a) => `${s.id}/${a.checkpointId}=${a.state}`)
+  );
+  evidence.push(
+    approvalsBefore.length > 0
+      ? `consent gates before the excursion: ${approvalsBefore.join(', ')}`
+      : 'no consent gate is declared by any document in this run — the approval half is not measured here'
+  );
+
+  // --- the boot -------------------------------------------------------------
+  const sessionIds = new Set<string>();
+  for (const row of before.sessions) {
+    for (const taskId of row.taskIds) {
+      const run = runForTask(taskId);
+      if (run) sessionIds.add(run.sessionId);
+    }
+  }
+  const memoryWasWarm = sessionIds.size > 0;
+  for (const id of sessionIds) forgetProcedureRun(id);
+  const memoryWasCleared = before.sessions
+    .flatMap((row) => row.taskIds)
+    .every((taskId) => runForTask(taskId) === undefined);
+
+  evidence.push(
+    memoryWasWarm
+      ? `SIMULATED BOOT: ${sessionIds.size} chat session(s) were live in procedureCursor's run map ` +
+        `and every one was forgotten; runForTask now resolves nothing for any of the ` +
+        `${before.sessions.flatMap((r) => r.taskIds).length} turn(s) folded above`
+      : 'SIMULATED BOOT: host memory held NO run for these turns to begin with, so the kill ' +
+        'proved nothing about where the answers come from — reported rather than counted as a pass'
+  );
+
+  const after = registry.snapshot();
+  const approvalsAfter = after.sessions.flatMap((s) =>
+    s.approvals.map((a) => `${s.id}/${a.checkpointId}=${a.state}`)
+  );
+
+  const idsMatch =
+    JSON.stringify(before.sessions.map((s) => s.id)) === JSON.stringify(after.sessions.map((s) => s.id));
+  const gatesMatch =
+    JSON.stringify(before.sessions.map((s) => s.gate ?? null)) ===
+    JSON.stringify(after.sessions.map((s) => s.gate ?? null));
+  const approvalsMatch = JSON.stringify(approvalsBefore) === JSON.stringify(approvalsAfter);
+  const identitySurvivedRestart = memoryWasWarm && memoryWasCleared && idsMatch && gatesMatch && approvalsMatch;
+
+  // `at` is a wall-clock stamp and differs between two folds by construction;
+  // comparing it would fail for a reason that has nothing to do with derivation.
+  const strip = (s: SessionRegistrySnapshot): string =>
+    JSON.stringify({ ...s, at: '' });
+  const snapshotIdentical = strip(before) === strip(after);
+
+  evidence.push(
+    `AFTER THE BOOT — session ids ${idsMatch ? 'IDENTICAL' : 'CHANGED'}, gates ` +
+      `${gatesMatch ? 'IDENTICAL' : 'CHANGED'}, consent-gate states ` +
+      `${approvalsMatch ? 'IDENTICAL' : 'CHANGED'}: ${approvalsAfter.join(', ') || '(none declared)'}`,
+    snapshotIdentical
+      ? 'and the WHOLE snapshot re-derived byte-identically (ids, gates, approvals, outcomes, ' +
+        'places, tiers, cursor) — not just the three fields the criteria name'
+      : 'the whole snapshot did NOT re-derive identically; the three named fields are reported ' +
+        'above on their own merits',
+    'WHAT THIS DOES NOT MEASURE, stated rather than left to be discovered: "opening it" is a ' +
+      'SURFACE act, and no surface consumes this registry yet (UX build 2). What is measured is ' +
+      'that the thing a surface would open is addressable by a stable id, names its gate, and ' +
+      'carries a consent decision that survives the process — which is the half a platform can ' +
+      'observe, and the half the §1 adjudication routed to this packet'
+  );
+
+  return {
+    ok: identitySurvivedRestart && everyWaitingRowNamesItsGate,
+    sessions: before.sessions.length,
+    waitingRows: triage.waiting.length,
+    changedRows: triage.changed.length,
+    gatedWaitingRows: gated.length,
+    gatelessWaitingRows: gateless.length,
+    ...(firstGate
+      ? {
+          gateCheckpointId: firstGate.checkpointId,
+          gatePosition: `${firstGate.index} of ${firstGate.of}`,
+          gateAwaits: firstGate.awaits,
+        }
+      : {}),
+    everyWaitingRowNamesItsGate,
+    approvalsBefore,
+    approvalsAfter,
+    identitySurvivedRestart,
+    snapshotIdentical,
+    memoryWasWarm,
+    memoryWasCleared,
     evidence,
   };
 }

@@ -39,6 +39,7 @@ import {
   Probe,
   ProcedureProbe,
   RefusalPayloadProbe,
+  SessionRegistryProbe,
   SurfaceProbe,
   WideningProbe,
 } from './probes';
@@ -68,6 +69,8 @@ export interface CheckContext {
     widening: WideningProbe;
     /** WP-34 — ADR-24's contract: the carrier teaches it, the join resolves it. */
     citation: CitationContractProbe;
+    /** WP-30 — the session fold, driven, then re-derived across a simulated boot. */
+    sessionRegistry: SessionRegistryProbe;
     taskFamily: (prefix: string) => Probe;
   };
 }
@@ -1174,7 +1177,20 @@ function journeyGapCheck(gap: JourneyGap): RegisteredCheck {
  * J-Return's promotion identity to WP-30 — carry those packet ids, because the
  * adjudication made them those packets' acceptance criteria.
  */
-const UX2 = 'UX build 2 (Home needs-you rows + audit view), which is gated on WP-25 and WP-30';
+/**
+ * UX build 2, and it is now gated on NOTHING BUT ITSELF.
+ *
+ * This constant used to read "which is gated on WP-25 and WP-30". Both have
+ * shipped — WP-25's incident producer on 2026-08-18, WP-30's session registry on
+ * 2026-08-19 — so the substrate half of every criterion below is present and
+ * what remains is the render. Leaving the two packet ids on it would be a
+ * BLOCKED naming shipped packets, which understates progress exactly as an
+ * overstated gap misleads (the rule WP-44 applied when UX3 shipped).
+ */
+const UX2 =
+  'UX build 2 (Home needs-you rows + audit view) — the RENDER, and nothing else: its substrate ' +
+  'shipped at WP-25 (the incident producer) and WP-30 (the session registry, which answers what ' +
+  'each session waits on, at which gate, and what changed since a cursor)';
 /**
  * SHIPPED AT WP-44 (2026-08-19), and kept as a record rather than deleted.
  *
@@ -1253,7 +1269,11 @@ const JOURNEY_GAPS: JourneyGap[] = [
     matches: 'The needs-you row names what i',
     token: 'needsYou',
     missing: 'the needs-you row itself',
-    unblockedBy: `WP-30 (the fold that answers "what is each session waiting on, at which gate") then ${UX2}`,
+    unblockedBy: UX2,
+    standing:
+      'WHAT it names is now answerable: WP-30\'s fold reports each session\'s pending gate by ' +
+      'checkpoint id with its position in the runbook\'s declared list, and ranks the sessions by ' +
+      'the consequence order. The row that would say it does not exist',
   },
   {
     spec: J_GLANCE,
@@ -1308,10 +1328,11 @@ const JOURNEY_GAPS: JourneyGap[] = [
     matches: 'The write gets the full gate, a',
     token: 'needsYou',
     missing: 'a session-scoped act-small run to observe the second write of',
-    unblockedBy: `WP-30 (session identity, so "the session" is a queryable thing) then ${UX2}`,
+    unblockedBy: UX2,
     standing:
       'no-decay is already law (the adopted §2 rule) and the gate is per-write by construction; ' +
-      'what is missing is the journey that would exercise the ordinal',
+      'session identity is no longer the gap either — WP-30 makes "the session" a queryable thing ' +
+      'with a stable derived id. What is missing is the journey that would exercise the ordinal',
   },
   {
     spec: J_ACT_SMALL,
@@ -1351,7 +1372,11 @@ const JOURNEY_GAPS: JourneyGap[] = [
     matches: 'Ceremony that decays across re',
     token: 'needsYou',
     missing: 'a multi-write session to measure decay across',
-    unblockedBy: `WP-30 then ${UX2}`,
+    unblockedBy: UX2,
+    standing:
+      'the session to measure ACROSS now exists as data — WP-30 folds a run\'s whole turn set and ' +
+      'every consent decision on it, so a second write inside one session is addressable. What is ' +
+      'absent is a journey that performs two',
   },
   {
     spec: J_ACT_SMALL,
@@ -1372,30 +1397,13 @@ const JOURNEY_GAPS: JourneyGap[] = [
     kind: 'key_step',
     matches: 'The triage shows waiting and c',
     token: 'needsYou',
-    missing: 'the arrival triage — the two-column render sorted by the consequence order',
-    unblockedBy: `WP-30 (the fold behind it) then ${UX2}`,
+    missing: 'the arrival triage — the two-column RENDER sorted by the consequence order',
+    unblockedBy: UX2,
     standing:
-      'the consequence order it sorts by IS ruled (moments-model 1.3 §4a) and has its own golden ' +
-      'fixture; what is absent is anything that renders it',
-  },
-  {
-    spec: J_RETURN,
-    kind: 'key_step',
-    matches: 'A waiting item names where in t',
-    token: 'sessionRegistry',
-    missing: 'gate-level addressing on a waiting row',
-    unblockedBy:
-      'WP-30 (the session registry — its scope names "the cursor\'s pending gate" as the WHERE)',
-  },
-  {
-    spec: J_RETURN,
-    kind: 'key_step',
-    matches: 'Opening it resumes the same se',
-    token: 'sessionRegistry',
-    missing: 'promotion identity across re-entry: session id, gate id, pending-approval state',
-    unblockedBy:
-      'WP-30 — the §1 adjudication made this journey\'s promotion-identity pins its acceptance ' +
-      'criteria, and WP-29 carries the promotion-without-loss pins beside them',
+      'the consequence order it sorts by IS ruled (moments-model 1.3 §4a), it has its own golden ' +
+      'fixture, and as of WP-30 it is COMPUTED: `probeSessionRegistry` reports the two columns and ' +
+      'the reserved slot, ranked, every run of this report. What is absent is anything that renders ' +
+      'them — no file under src/renderer references the fold',
   },
   {
     spec: J_RETURN,
@@ -1416,18 +1424,18 @@ const JOURNEY_GAPS: JourneyGap[] = [
   {
     spec: J_RETURN,
     kind: 'must_not',
-    matches: 'An approval that must be given',
-    token: 'sessionRegistry',
-    missing: 'the excursion across which a given approval must survive',
-    unblockedBy: 'WP-30 (pending-approval state invariant across re-entry)',
-  },
-  {
-    spec: J_RETURN,
-    kind: 'must_not',
     matches: 'A needs-you row that knows tha',
     token: 'needsYou',
-    missing: 'the needs-you row whose WHERE this is about',
-    unblockedBy: `WP-30 then ${UX2}`,
+    missing: 'the needs-you ROW whose WHERE this is about — the render, not the answer',
+    // WP-30 SHIPPED. Leaving it on this line would be a BLOCKED naming a
+    // shipped packet, which understates progress exactly as an overstated gap
+    // misleads — the rule WP-44 applied when UX3 shipped, applied again.
+    unblockedBy: UX2,
+    standing:
+      'the WHERE now EXISTS and is measured: `probeSessionRegistry` reports every waiting session ' +
+      'row naming its pending gate by checkpoint id, with its position in the runbook\'s declared ' +
+      'list and whether it awaits a consent or an evidence (WP-30). What is absent is a row that ' +
+      'renders it — this must-not is about what a person sees, and no surface reads the registry',
   },
   {
     spec: J_RETURN,
@@ -1506,23 +1514,6 @@ const JOURNEY_GAPS: JourneyGap[] = [
       'for a refused run, nor withhold one',
     unblockedBy: UX15,
     standing: XD21_STANDING,
-  },
-  {
-    spec: J_REFUSAL,
-    kind: 'must_not',
-    matches: 'A re-ask of anything the sessi',
-    token: 'sessionRegistry',
-    missing: 'the round trip across which nothing may be re-asked, on either side of it',
-    unblockedBy:
-      'WP-30 (the session registry — "what the session already established" has to be a queryable ' +
-      'thing before a re-ask of it can be detected)',
-    standing:
-      'RE-OWNED AT WP-44, and the excursion half of this is no longer missing. UX build 3 shipped ' +
-      'as the Govern matrix: the door lands on the capability\'s own row, the grant is made there, ' +
-      'and the crossing is an in-app publish rather than a navigation, so nothing on the path tears ' +
-      'a session down. What remains is entirely WP-30\'s — naming UX3 here after it shipped would ' +
-      'be a BLOCKED naming a shipped packet, which understates progress exactly as a BLOCKED that ' +
-      'ignores shipped substrate overstates the gap',
   },
   {
     spec: J_REFUSAL,
@@ -2193,11 +2184,190 @@ const J_INSPECT_DRIVEN: RegisteredCheck[] = [
   },
 ];
 
+/**
+ * WP-30 · the three J-Return criteria the session registry owns, plus the
+ * J-Refusal re-ask must-not that WP-44 re-owned to it — all DRIVEN.
+ *
+ * All four were static BLOCKEDs naming this packet. `probeSessionRegistry` now
+ * folds the report's own ledger into sessions, reads the triage, then EMPTIES
+ * `procedureCursor`'s in-memory run map and folds again. The kill is the
+ * measurement: "resume after restart" is a claim about where an answer comes
+ * from, and the only honest test of that is to remove every other place it
+ * could have come from.
+ *
+ * WHY PASS RATHER THAN A CONTINUED BLOCKED, and the rule is the one WP-44 wrote
+ * down: a BLOCKED means the walk cannot be taken. Three of these four are about
+ * a PROPERTY OF THE PLATFORM — is the waiting thing addressable, does its gate
+ * have a name, does a decision survive the process — and every one of those is
+ * now observable. The fourth is the same property read from J-Refusal's side.
+ *
+ * WHAT NONE OF THEM MEASURES, said once here rather than four times below: the
+ * SURFACE half. "Opening it" and "a needs-you row" are renders, and no renderer
+ * file reads this registry (UX build 2). The must-not that is purely about a
+ * render — "a needs-you row that knows that but not where" — is therefore still
+ * a BLOCKED, on UX2 alone, carrying what WP-30 supplies as its standing. Three
+ * flipped, one did not, and the difference between them is whether the criterion
+ * is about the answer or about its rendering.
+ *
+ * THE PREMISE IS CHECKED FIRST, EVERY TIME. The probe returns
+ * `sessions: 0` with an explicit evidence line when the fixture's ledger holds
+ * no run, and each check below falls to BLOCKED on that rather than to a PASS
+ * over an empty fold. Shape #15, at the registry level: a green over nothing is
+ * the failure mode a fold like this fails in.
+ */
+function sessionRegistryPremise(p: SessionRegistryProbe): CheckOutcome | undefined {
+  if (p?.sessions && p.sessions > 0) return undefined;
+  return blocked(
+    'a procedure run in this report\'s ledger for the registry to fold — no session exists, so ' +
+      'nothing about sessions was measured',
+    'whatever left the B-03 procedure probe unable to arm (WP-30 shipped the fold; ' +
+      'probeSessionRegistry drives it)',
+    p?.evidence ?? ['the session registry probe did not run']
+  );
+}
+
+const J_RETURN_DRIVEN: RegisteredCheck[] = [
+  {
+    specId: J_RETURN,
+    kind: 'key_step',
+    matches: 'A waiting item names where in t',
+    run: (ctx) => {
+      const p = ctx.probes.sessionRegistry;
+      const premise = sessionRegistryPremise(p);
+      if (premise) return premise;
+      return {
+        verdict: p.everyWaitingRowNamesItsGate ? 'PASS' : 'FAIL',
+        evidence: [
+          ...p.evidence,
+          'THE GATE, NOT THE RUN, is what the criterion asks for and what is reported: ' +
+            `${p.gateCheckpointId ?? '(none)'} at position ${p.gatePosition ?? '(none)'}, awaiting ` +
+            `${p.gateAwaits ?? '(none)'}. The position comes from the runbook\'s own ordered ` +
+            'checkpoint list, so "gate 3 of 8" is derived from the document rather than counted ' +
+            'by a surface',
+          'the pending step is `deriveCheckpointStates`\'s `active` — the SAME derivation the ' +
+            'procedure rail and the sequence guard read. A second rule for which step is next is ' +
+            'how a rail and a triage start disagreeing about where a run is',
+        ],
+      };
+    },
+  },
+  {
+    specId: J_RETURN,
+    kind: 'key_step',
+    matches: 'Opening it resumes the same se',
+    run: (ctx) => {
+      const p = ctx.probes.sessionRegistry;
+      const premise = sessionRegistryPremise(p);
+      if (premise) return premise;
+      if (!p.memoryWasWarm) {
+        // The kill proved nothing if there was nothing to kill. Reporting a
+        // pass off an empty run map is shape #15 wearing a different hat.
+        return blocked(
+          'a WARM in-memory run map to destroy — nothing held a run for these turns, so emptying ' +
+            'it demonstrated nothing about where the answers come from',
+          'whatever left procedureCursor unwarmed in this report (the fold itself has shipped)',
+          p.evidence
+        );
+      }
+      return {
+        verdict: p.identitySurvivedRestart ? 'PASS' : 'FAIL',
+        evidence: [
+          ...p.evidence,
+          'THE THREE PINS the §1 adjudication routed to WP-30, in one measurement: session id, ' +
+            'gate id and pending-approval state, all read before and after the run map was ' +
+            'emptied. They are identical because the registry never consulted it — it holds no ' +
+            'state, so every query re-folds from the ledger',
+          p.snapshotIdentical
+            ? 'and the reading is STRONGER than the criterion asks: the whole snapshot re-derived ' +
+              'identically, so "nothing re-derived" holds for outcomes, places, tiers and the ' +
+              'change cursor too, not only for the three named fields'
+            : 'the three named fields survived; the whole snapshot did not, and the divergence is ' +
+              'reported above rather than folded into this verdict',
+        ],
+      };
+    },
+  },
+  {
+    specId: J_RETURN,
+    kind: 'must_not',
+    matches: 'An approval that must be given',
+    run: (ctx) => {
+      const p = ctx.probes.sessionRegistry;
+      const premise = sessionRegistryPremise(p);
+      if (premise) return premise;
+      if (p.approvalsBefore.length === 0) {
+        // A must-not about approvals, over a run that declares no consent gate,
+        // is satisfied by there being nothing to re-ask. That is not evidence.
+        return blocked(
+          'a consent gate in this report\'s run for an approval to survive across — no document ' +
+            'here declares one, so "given a second time" has no subject',
+          'a fixture run under a runbook with a rationale-attested checkpoint (WP-30 shipped the ' +
+            'fold; the approval state is what it reports)',
+          p.evidence
+        );
+      }
+      return {
+        verdict:
+          JSON.stringify(p.approvalsBefore) === JSON.stringify(p.approvalsAfter) ? 'PASS' : 'FAIL',
+        evidence: [
+          ...p.evidence,
+          'WHY THIS IS THE MUST-NOT AND NOT A RESTATEMENT OF THE STEP ABOVE: the step asks whether ' +
+            'the session comes back; this asks whether the DECISION does. They come apart when a ' +
+            'registry re-derives a session but folds its consent from host memory — the shape ' +
+            'WP-20d\'s run map has, and the reason the kill is aimed at that map specifically',
+          'the state is folded through `foldProcedureCursor`, so a denial survives too and survives ' +
+            'as a denial: `approved` / `denied` / `pending` are three answers and none of them is ' +
+            'the absence of another',
+        ],
+      };
+    },
+  },
+];
+
+/**
+ * WP-30 · J-Refusal's re-ask must-not, RE-OWNED at WP-44 and now driven.
+ *
+ * WP-44 shipped the excursion (the Govern matrix door lands on a row, the grant
+ * is made there, the crossing is an in-app publish rather than a navigation) and
+ * re-owned what remained to this packet in one sentence: "what the session
+ * already established has to be a queryable thing before a re-ask of it can be
+ * detected". It is queryable now, and this is the query.
+ */
+const J_REFUSAL_REASK: RegisteredCheck = {
+  specId: J_REFUSAL,
+  kind: 'must_not',
+  matches: 'A re-ask of anything the sessi',
+  run: (ctx) => {
+    const p = ctx.probes.sessionRegistry;
+    const premise = sessionRegistryPremise(p);
+    if (premise) return premise;
+    return {
+      verdict: p.identitySurvivedRestart ? 'PASS' : 'FAIL',
+      evidence: [
+        ...p.evidence,
+        'WHAT THE SESSION ESTABLISHED, ENUMERATED — which is what makes a re-ask detectable rather ' +
+          'than a matter of opinion: the turns it spans, the gate it stands at, every consent gate ' +
+          'its document declares and how each was decided, and what landed in the world. All of it ' +
+          'reads back identically across the excursion',
+        'ON EITHER SIDE OF IT is the load-bearing half, and the excursion here is the harshest ' +
+          'available: not a navigation but a process restart, simulated by destroying the one map ' +
+          'this state has ever lived in. A crossing into Settings and back cannot lose more than ' +
+          'a reboot does',
+        'THE OTHER HALF, WP-44\'s, is not re-measured here: the door lands on the capability\'s own ' +
+          'row and the crossing is an in-app publish, so nothing on the path tears a session down. ' +
+          'That is `probeWidening`\'s subject and it stands where it stood',
+      ],
+    };
+  },
+};
+
 const JOURNEY_CHECKS: RegisteredCheck[] = [
   ...JOURNEY_GAPS.map(journeyGapCheck),
   ...J_INSPECT_DRIVEN,
+  ...J_RETURN_DRIVEN,
   ...J_REFUSAL_DRIVEN,
   J_REFUSAL_WIDENING,
+  J_REFUSAL_REASK,
   ...J_REFUSAL_JUDGED,
 ];
 
