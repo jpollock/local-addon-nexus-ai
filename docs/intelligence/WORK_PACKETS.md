@@ -13554,3 +13554,31 @@ effect (the primary checkout holds both embedding model files where a
 worktree holds one, so ten tests move from skipped to passed). Read the
 skipped column first: a comparison of the passed column alone would have
 reported a phantom gain of exactly ten.
+
+---
+
+**WP-38 · REGISTERED AND LOCK ANNOUNCED — the corroboration render (the M5
+surface packet) (2026-08-19).** The packet the ADR-24 loop has been
+sequencing toward since WP-34 merged: `from-designer-07-corroboration-
+render.md`'s eight pins plus the four rulings of
+`for-designer-corroboration-response.md` are its acceptance criteria, and
+its fixture is WP-34's byte-pinned adherence set.
+
+**LOCK: `src/renderer/components/DockedPanel/` — CONFIRMED FREE AND
+TAKEN.** WP-35 released it at its merge (stated twice in this file: "the
+`src/renderer/components/DockedPanel/` lock is RELEASED" in WP-35's merge
+receipts, and again in the architect's acceptance). WP-37, the only packet
+with an open lock claim, scopes itself to `src/main/intelligence-host/`
+and states in its own announce that "the renderer is READ ONLY this
+packet". No other announce in this file claims the surface.
+
+**The announce is committed to BASE before the work starts**, which is
+WP-20f's crossed-claim lesson applied rather than restated: a lock
+announced only on a worktree is invisible to the agent it is meant to
+warn.
+
+**The core lock is NOT taken and is not needed.** `src/intelligence/
+citation/resolve.ts` is IMPORTED, never edited — that is ADR-24 P5's whole
+claim ("one join, two consumers"), and the second consumer arriving is the
+event this packet is. Any want that would widen the join is recorded as
+OWED to a packet holding the core lock, not folded in here.
