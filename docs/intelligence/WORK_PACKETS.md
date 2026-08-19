@@ -17137,3 +17137,134 @@ built for SYSTEM NODE.** Local cannot load the addon until
 
 **LOCKS STILL HELD** (`src/main/intelligence-host/`, the Settings renderer
 surface) until this packet merges.
+
+---
+
+**WP-44 · MERGED, LOCKS RELEASED (2026-08-19).** Merge `73f8b67b` on
+`poc/nexintelligence`; **18 files, +3,615 / −23 against its first parent.**
+All five gate items ratified, with the REFUSAL_COPY condition discharged
+below.
+
+    docs/intelligence/WORK_PACKETS.md                  | 315 +++
+    scripts/wp44-battery.py                            | 308 +++
+    src/common/constants.ts                            |  25 +
+    src/main/intelligence-host/__tests__/governMatrix.test.ts | 850 +++
+    src/main/intelligence-host/capabilityGrants.ts     |  28 +
+    src/main/intelligence-host/governMatrix.ts         | 701 +++
+    src/main/ipc-handlers.ts                           |  25 +
+    src/renderer/components/DockedPanel/PanelChat.tsx  |  23 +
+    src/renderer/components/NexusOverview.tsx          |  25 +-
+    src/renderer/components/settings/GovernSection.tsx | 378 +++
+    src/renderer/components/settings/SettingsShell.tsx |  42 +-
+    src/renderer/store/NexusStateManager.ts            |  17 +
+    tests/intelligence-evals/checks.test.ts            |  78 +-
+    tests/intelligence-evals/checks.ts                 | 103 +-
+    tests/intelligence-evals/probes.ts                 | 207 +-
+    tests/intelligence-evals/runner.ts                 |   9 +
+    tests/unit/renderer/governDoorPath.test.tsx        | 190 +++
+    tests/unit/renderer/governMatrix.test.tsx          | 314 +++
+
+**THE RIDING CONDITION, DISCHARGED — the four `REFUSAL_COPY` sentences,
+verbatim.** Extracted MECHANICALLY from the merged blob
+(`git show HEAD:…/GovernSection.tsx`, parsed by regex), never retyped:
+copy the gate has not seen is not ratified copy, and a report that
+re-types it is showing the gate a transcription rather than the string.
+
+| key | the sentence, exactly as it ships |
+|---|---|
+| `no-core` | Nexus could not reach the capability register, so nothing was granted or revoked. |
+| `not-served` | No document serves that capability any more, so there is nothing to grant. |
+| `unwritable` | That change could not be saved, so nothing was granted or revoked. |
+| `unknown` | That change did not go through, so nothing was granted or revoked. |
+
+They are the only sentences `GovernSection.tsx` authors. Each is about
+the CLICK rather than about a capability — which is why they live at the
+surface rather than in the seam — and each says **what did not happen**,
+because on this surface the harmful lie is a person believing they
+granted something. `not-served` is the one that does not end in "nothing
+was granted or revoked": there was nothing to grant, so saying a
+revocation did not happen would imply a grant that never existed.
+
+**VERIFICATION ON THE MERGED TREE.** `npx tsc -p . --noEmit` clean.
+**601 suites, 8,194 passed, 2 skipped, 8,196 total, exit 0.** Mutation
+battery re-run on the merged tree: **27/27 killed**, control survived,
+tree pristine before and after. J-Refusal re-run: **5 PASS / 6 BLOCKED /
+1 OWNER-PENDING**, with the widening criterion still driven green.
+
+**THE SKIPPED COLUMN MOVED AND THE TOTAL DID NOT.** The worktree measured
+8,184 passed / **12** skipped / 8,196 total; the merged primary measures
+8,194 passed / **2** skipped / 8,196 total. Same total, different split —
+the documented boundary effect, read before the passed column exactly as
+the protocol requires. The primary holds both embedding model files where
+a worktree has one, so ten embedding tests move from skipped to passed. A
+reader of the passed column alone would have booked a phantom gain of
+exactly ten.
+
+**THE ONE CONFLICT, AND THE RULE THAT RESOLVED IT.**
+`docs/intelligence/WORK_PACKETS.md` — both sides appended over the same
+ancestor. Resolved by the record-merge rule the architect ratified hours
+earlier, in the same session that this packet then had to apply it:
+rebuilt from the three blobs, never hunk-edited, with the four-way
+verification executed rather than described —
+
+1. the ancestor is an exact prefix of the result;
+2. the base's half is an exact substring;
+3. the packet's half is an exact substring;
+4. the arithmetic closes in ONE named unit: 1,013,126 + 4,863 + 18,203 =
+   **1,036,192 characters**.
+
+Chronological order was asserted by CONTENT rather than by timestamp: the
+base's half ends with "Standing: WP-44 launches now (the prompt is
+issued)", which is the launch this packet's registration answers, so it
+precedes it. The `\n---\n` separator — the six characters WP-43's finding
+records hunk surgery silently eating — was asserted present in both
+halves.
+
+**THE ARCHITECT'S UNCOMMITTED WORK WAS COMMITTED FIRST (`6cd2482f`),
+VERBATIM,** per the standing WP-02 precedent: WP-43's merge acceptance,
+the record-merge rule itself, and `law-review-attestation-note.md`.
+Append-ness was verified BY SUBSTRING rather than by the diffstat — which
+is precisely what the newly-added paragraph being committed warns about
+("a zero-deletion diffstat is not proof of a pure append: an insertion
+mid-file also shows zero deletions"). md5s are in that commit message so
+fidelity is checkable rather than asserted.
+
+**WHAT THE FIVE RULINGS MEAN FOR LATER WORK, in the form they govern it:**
+
+1. **The IPC payload is XD-25's law at the wire.** `GOVERN_SET_GRANT`
+   takes `{ capability, grant }` and carries no list. A future surface
+   that wants to widen several capabilities issues several acts; the
+   channel has no shape for a batch, and that is the point rather than a
+   limitation to be lifted.
+2. **The three copy departures are ratified on the PROPERTY's authority:**
+   a row's copy must not depend on which other rows exist, and the sheet's
+   variants were a fixture accident. This generalises past this surface —
+   any derived column whose wording shortens on repetition has stopped
+   being derived.
+3. **The two authored sentences are INTERIM copy** ("Revoked by you.
+   Grantable again from this row." and "No grant covers this. A capability
+   arrives denied; grantable by an entry you make."), with the
+   designer-refinement path open. They are not vocabulary rows and must
+   not be cited as if they were.
+4. **The `REFUSAL_COPY` four are now gate-seen** and recorded above.
+5. **The WP-20b producer finding stands open**: `emitChanges` stamps
+   `reason: 'materialized'` on a first issuance including one a person
+   makes at this control. The row's state is derivable from `grant_source`
+   without touching it, so nothing here depends on the fix — but a
+   `control.grant.issued` that says `materialized` about a person's act
+   misdescribes that act in the compliance record. Owed to whoever next
+   holds the producer.
+
+**THE LAW REVIEW NOW HAS A DRIVER, NOT A DESCRIPTION.** The re-scoped
+review (attestable checkpoints across all four attestation-free strict
+runbooks) will be noticed by a test the moment it lands: author one
+`attest: event` checkpoint into any of those documents and the gates
+column changes with no code change. `law-review-attestation-note.md`,
+committed at `6cd2482f`, is that review's own record.
+
+**ABI STATE ON EXIT: `better-sqlite3` is built for SYSTEM NODE** — this
+session ran `npm test` and the battery. Local cannot load the addon until
+`npm run rebuild` is run.
+
+**THE `src/main/intelligence-host/` AND SETTINGS-RENDERER LOCKS ARE
+RELEASED.**
