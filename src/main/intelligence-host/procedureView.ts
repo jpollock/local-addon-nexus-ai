@@ -238,6 +238,31 @@ export interface DeclaredProcedure {
    * `checkpoints: []` two screens up.
    */
   scope?: ProcedureScope;
+  /**
+   * WP-37 · THE CHECKPOINT THAT PRODUCED THE PLAN, and the reason its own
+   * heading gave for it. `cp.dry-run — show what would change` on the anchor.
+   *
+   * WP-35's sheet draws the plan line as `rb.bulk-plugin-update · v1.2.0 ·
+   * marked strict · cp.dry-run — 0 cells eligible` and shipped it one segment
+   * short, because no served fact identified that checkpoint: it cannot be the
+   * ACTIVE one (`cp.dry-run` is narrative, so `nextGatedCheckpoint` never names
+   * it), and the escalation refused to guess. This is the fact, and it is
+   * DERIVED from the document rather than authored beside it — see
+   * `planCheckpointOf` for the rule and for what it deliberately will not claim.
+   *
+   * **Absent, never null, when the document identifies none** — a runbook with
+   * no consent gate has no plan for a gate to rest on, and a segment printed
+   * there would name a step the author never wrote. Absent on a refusal too,
+   * for the same reason `scope` is: no document is in force.
+   */
+  planCheckpoint?: PlanCheckpoint;
+}
+
+/** A checkpoint named by id, with the reason its `## cp.x — reason` heading gave. */
+export interface PlanCheckpoint {
+  checkpointId: string;
+  /** Null when the heading wrote no reason. The surface then says less. */
+  reason: string | null;
 }
 
 export interface CheckpointBadge {
@@ -539,6 +564,8 @@ export function deriveDeclaredProcedure(args: {
       )
     : [];
 
+  const planCheckpoint = planCheckpointOf(args.runbook);
+
   return {
     capability: outcome.capability,
     runbookId: outcome.runbookId,
@@ -553,7 +580,64 @@ export function deriveDeclaredProcedure(args: {
     // KEY is absent when nothing was selected, and `toEqual` cannot tell the
     // two apart (WP-26's finding). The refusal branch above never reaches here.
     ...(args.scope ? { scope: args.scope } : {}),
+    // Same conditional-spread rule as `scope` above, and for the same reason:
+    // the field's ABSENCE is the honest answer for a document that identifies
+    // no plan step, and `toEqual` cannot tell absent from present-undefined.
+    ...(planCheckpoint ? { planCheckpoint } : {}),
   };
+}
+
+/**
+ * WHICH CHECKPOINT PRODUCED THE PLAN: the nearest NARRATIVE checkpoint the
+ * document puts before its consent gate.
+ *
+ * Read the rule twice, because what it does NOT do is the load-bearing half.
+ *
+ * It does not match the id `cp.dry-run`. Matching the anchor's spelling would
+ * be matching one document rather than the contract, exactly as
+ * `approvalCheckpoint` refuses to (a runbook that calls the step `cp.preview`
+ * serves `cp.preview`). It does not read the body for the word "plan": that
+ * would be inference over an author's prose, which is what WP-35's escalation
+ * declined to do.
+ *
+ * What it DOES claim is structural and no more than the document supports. A
+ * consent gate is a checkpoint attested by a recorded human decision — the
+ * runbook's own `evidence: { topic: task.rationale.recorded }` — and its body
+ * says what every such gate says: "proceed only on explicit approval of the
+ * PRESENTED PLAN". The plan being consented to must therefore have been
+ * produced before the gate, and the nearest step before it that the platform
+ * cannot verify is where. That the platform cannot verify it is not incidental:
+ * a provable step's output is already on the record and needs no line crediting
+ * it.
+ *
+ * NEAREST, not "any": a document may declare several narrative steps, and the
+ * one the gate directly rests on is the one a reader needs named.
+ *
+ * `undefined` in three cases, all of them the document declining to answer: no
+ * consent gate, nothing narrative before it, or no document at all.
+ *
+ * THIS IS ALSO `ProcedureApprovalContext.unverifiablePrecedent`, which has held
+ * the same derivation under a different framing since WP-26 — the caveat the
+ * approval card prints ("the platform cannot show this step happened") and the
+ * segment the plan line prints are two readings of ONE fact. `procedureStream`
+ * assigns the card's field from this one rather than recomputing it, and
+ * `wp37StreamScope.test.ts` pins the two equal so a future edit cannot quietly
+ * make them two rules.
+ */
+export function planCheckpointOf(runbook: Runbook | undefined): PlanCheckpoint | undefined {
+  const checkpoints = runbook?.checkpoints ?? [];
+  const gate = checkpoints.findIndex(
+    (c) => c.attest === 'event' && c.evidence?.topic === RATIONALE_TOPIC
+  );
+  if (gate < 0) return undefined;
+  for (let i = gate - 1; i >= 0; i--) {
+    if (checkpoints[i].attest !== 'narrative') continue;
+    return {
+      checkpointId: checkpoints[i].id,
+      reason: runbook ? checkpointReason(runbook, checkpoints[i].id) : null,
+    };
+  }
+  return undefined;
 }
 
 /** The `communication:` frontmatter, as authored. Strings only — nothing ticks these. */

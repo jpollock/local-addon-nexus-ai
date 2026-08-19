@@ -70,13 +70,13 @@ afterEach(() => {
 
 describe('procedureRequestForTurn', () => {
   test('carries every live grant, so the always-on index has something to list', () => {
-    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'hello' })!;
+    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'hello' })!.request;
     expect(req.grants.map((g) => g.capability)).toEqual(getCapabilityGrants().map((g) => g.capability));
     expect(req.grants.find((g) => g.capability === ANCHOR)!.runbookHash).toMatch(/^sha256:/);
   });
 
   test('arms nothing on an ordinary turn — the index is not a procedure', () => {
-    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'how is my fleet?' })!;
+    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'how is my fleet?' })!.request;
     expect(req.armed).toBeUndefined();
   });
 
@@ -98,18 +98,18 @@ describe('procedureRequestForTurn', () => {
   test("a model's request arms the capability it asked for, and is consumed", () => {
     recordArmingRequest(ANCHOR);
 
-    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'go on then' })!;
+    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'go on then' })!.request;
     expect(req.armed).toEqual({ capability: ANCHOR, armedBy: 'model-request' });
     // Consumed: the next turn must not re-arm from a request already honoured.
     expect(takeArmingRequests()).toEqual([]);
     expect(
-      procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'and now?' })!.armed
+      procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'and now?' })!.request.armed
     ).toBeUndefined();
   });
 
   test('a request for something not granted arms nothing — a queue is not an authority', () => {
     recordArmingRequest('cap.never-granted');
-    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'go' })!;
+    const req = procedureRequestForTurn({ runbooks: core.law!.runbooks, userMessage: 'go' })!.request;
     expect(req.armed).toBeUndefined();
   });
 
@@ -123,7 +123,7 @@ describe('procedureRequestForTurn', () => {
       runbooks: registry,
       grants,
       userMessage: 'please update the plugins',
-    })!;
+    })!.request;
     expect(req.armed).toEqual({ capability, armedBy: 'predicate' });
   });
 
@@ -134,7 +134,7 @@ describe('procedureRequestForTurn', () => {
       runbooks: registry,
       grants,
       userMessage: 'update the plugins',
-    })!;
+    })!.request;
     expect(req.armed).toBeUndefined();
     // Both are still LISTED: the index names them, which is how "say so" is met
     // until a surface renders the ambiguity itself.
@@ -149,7 +149,7 @@ describe('procedureRequestForTurn', () => {
       runbooks: registry,
       grants,
       userMessage: 'update the plugins',
-    })!;
+    })!.request;
     expect(req.armed).toEqual({ capability, armedBy: 'model-request' });
   });
 });

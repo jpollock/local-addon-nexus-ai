@@ -201,9 +201,13 @@ export async function assembleForChatTurn(
       /* the tripwire must never break the turn it guards */
     }
 
-    const procedureRequest =
-      req.procedure ??
-      procedureRequestForTurn({ runbooks: core.law?.runbooks, userMessage: req.userMessage });
+    // WP-37 · the turn's procedure plane AND the scope its arming carried. A
+    // caller-supplied request stays authoritative (it is 20c's contract) and
+    // carries no scope: nothing selected anything for it.
+    const turnProcedure = req.procedure
+      ? { request: req.procedure }
+      : procedureRequestForTurn({ runbooks: core.law?.runbooks, userMessage: req.userMessage });
+    const procedureRequest = turnProcedure?.request;
 
     // WP-20d folds the cursor here; WP-26 keeps what the fold saw, because the
     // stream needs the same slice and a second fold would be a second opinion.
@@ -276,6 +280,12 @@ export async function assembleForChatTurn(
       runbook: folded?.runbook,
       run: folded?.run,
       ledger: core.ledger,
+      // WP-37 · the arming's scope, handed straight across. The absent-key
+      // parity floor is enforced by `deriveDeclaredProcedure`'s own conditional
+      // spread, not by this one (battery M16 is an equivalent mutant and M17 is
+      // the witness); this stays because a seam that passes an explicit
+      // `undefined` reads as though absence were a value it chose to send.
+      ...(turnProcedure?.scope ? { scope: turnProcedure.scope } : {}),
     });
 
     // WP-25 · the incident producer's abort tap, on the same seam and reading

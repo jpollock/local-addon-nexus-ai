@@ -111,6 +111,25 @@ export function clearArmingRequests(): void {
 }
 
 /**
+ * WP-37 · what the turn is owed on the procedure plane, AND what the arming it
+ * honoured carried with it.
+ *
+ * The `ProcedureRequest` is a CORE type and must stay one: `ProcedureScope`
+ * lives here in the host, and the seam (ADR-16) forbids the core knowing about
+ * it. So the scope travels beside the request rather than inside it, and this
+ * wrapper is what the assembler unpacks.
+ *
+ * **`scope` is present only when the honoured arming carried one**, and it is
+ * spread conditionally for the same reason `ArmingRequest.scope` is: an absent
+ * key and a present-undefined one are not the same fact, and only the first is
+ * byte-identical to every turn that predates WP-32.
+ */
+export interface TurnProcedure {
+  request: ProcedureRequest;
+  scope?: ProcedureScope;
+}
+
+/**
  * What this turn's assembly is owed on the procedure plane — the decision WP-20c
  * left to this packet in `ChatAssemblyRequest.procedure`'s own comment.
  *
@@ -136,14 +155,14 @@ export function procedureRequestForTurn(opts: {
   userMessage: string;
   /** Defaults to the live set. Injected by tests and by any caller holding its own. */
   grants?: ResolvedGrant[];
-}): ProcedureRequest | undefined {
+}): TurnProcedure | undefined {
   try {
     const grants = opts.grants ?? getCapabilityGrants();
     if (grants.length === 0) return undefined;
 
     const request: ProcedureRequest = { grants };
     const runbooks = opts.runbooks;
-    if (!runbooks) return request; // grants without a registry: index only
+    if (!runbooks) return { request }; // grants without a registry: index only
 
     const granted = grantedRunbooks(runbooks, grants);
 
@@ -153,7 +172,17 @@ export function procedureRequestForTurn(opts: {
     for (const req of [...asked].reverse()) {
       const outcome = armByRequest(req.capability, granted);
       if (outcome.armed) {
-        return { ...request, armed: { capability: outcome.armed.runbook.capability, armedBy: 'model-request' } };
+        return {
+          request: {
+            ...request,
+            armed: { capability: outcome.armed.runbook.capability, armedBy: 'model-request' },
+          },
+          // WP-37 · THE CARRIER'S ONE JOB, COLLECTED. The scope rides out on the
+          // request that honoured it and on no other: a selection belongs to the
+          // arming that carried it, and handing it to a later turn's arming would
+          // be the re-derivation-by-another-name this whole seam exists to stop.
+          ...(req.scope ? { scope: req.scope } : {}),
+        };
       }
     }
 
@@ -161,12 +190,16 @@ export function procedureRequestForTurn(opts: {
     // refusal arrives here as "nothing armed" — the index still names both.
     const byPredicate = armByPredicate(opts.userMessage, granted);
     if (byPredicate.armed) {
+      // No scope: a predicate arms from the turn's own words, and nobody
+      // selected anything for it to carry.
       return {
-        ...request,
-        armed: { capability: byPredicate.armed.runbook.capability, armedBy: 'predicate' },
+        request: {
+          ...request,
+          armed: { capability: byPredicate.armed.runbook.capability, armedBy: 'predicate' },
+        },
       };
     }
-    return request;
+    return { request };
   } catch {
     // Arming is additive: a fault here costs the procedure, never the turn.
     return undefined;

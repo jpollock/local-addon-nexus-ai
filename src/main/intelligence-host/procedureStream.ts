@@ -36,6 +36,7 @@
  */
 import type { EventEnvelope, Ledger, ProcedureOutcome, Runbook, RunbookCheckpoint } from '../../intelligence';
 import type { ProcedureRun } from './procedureCursor';
+import type { ProcedureScope } from './procedureScope';
 import { foldProcedureCursor, runEvents } from './procedureCursor';
 import {
   checkpointChangedEvent,
@@ -49,6 +50,7 @@ import {
   CheckpointChangedEvent,
   DeclaredProcedure,
   DEFAULT_BACKUP_TOOL,
+  PlanCheckpoint,
   ProcedureAbortedEvent,
   ProcedureArmedEvent,
 } from './procedureView';
@@ -129,7 +131,7 @@ export interface ProcedureApprovalContext {
    * narrative before its approval — a caveat printed there would describe a gap
    * the document does not have.
    */
-  unverifiablePrecedent?: { checkpointId: string; reason: string | null };
+  unverifiablePrecedent?: PlanCheckpoint;
 }
 
 interface SessionMemory {
@@ -151,6 +153,30 @@ export interface NotifyProcedureStateArgs {
   /** The run whose events the cursor folds from. Absent ⇒ nothing to report. */
   run?: ProcedureRun;
   ledger?: Ledger;
+  /**
+   * WP-37 · THE SCOPE THE ARMING CARRIED (WP-35's escalation 1, closed).
+   *
+   * It comes from `procedureRequestForTurn`, which took it off the
+   * `ArmingRequest` it honoured, which took it off the comparator selection.
+   * This seam hands it on and does nothing else to it: it does not re-split it,
+   * does not reconcile it against the plan, and does not build one when none
+   * arrived. A scope derived HERE would be a second derivation of a carried
+   * artifact, which is the exact defect `checkDryRunTargets` exists to catch
+   * one layer down.
+   *
+   * **Absent means absent, and that is a live state with a ratified rendering.**
+   * Nothing in the product fills the carrier yet (no comparator surface exists),
+   * so every armed run today arrives here without one — and `opensContainer`
+   * reads an absent scope as container-opens, unchanged from before WP-32.
+   * Reading absent as "zero cells" would silence every armed run in the
+   * product; WP-35's M20 is the mutation that proves it.
+   *
+   * **It rides the ARMING turn only.** The declaration rides once (rule 2), and
+   * the arming request is drained by the turn that delivers it, so a run whose
+   * `procedure_armed` could not be emitted on that turn carries no scope on any
+   * later one. That failure direction is the safe one — absent, not wrong.
+   */
+  scope?: ProcedureScope;
 }
 
 /**
@@ -196,7 +222,18 @@ export function notifyProcedureState(args: NotifyProcedureStateArgs): void {
     // one place a stream could quietly turn "unreadable" into "nothing yet".
     if (cursor.fault) return;
 
-    const declared = deriveDeclaredProcedure({ outcome, runbook: args.runbook, cursor });
+    // The conditional spread states this seam's contract; it is not what
+    // ENFORCES it. `deriveDeclaredProcedure` does its own, and battery M17
+    // (unconditional there → three pins fail) is the witness. Mutating THIS
+    // line to `scope: args.scope` changes nothing observable — an equivalent
+    // mutant, recorded rather than excused, because a reader who credits this
+    // line for the parity floor would delete the one that holds it.
+    const declared = deriveDeclaredProcedure({
+      outcome,
+      runbook: args.runbook,
+      cursor,
+      ...(args.scope ? { scope: args.scope } : {}),
+    });
     if (!declared) return;
 
     const runKey = `${outcome.capability} ${outcome.hash}`;
@@ -288,7 +325,10 @@ function approvalContextOf(
   // carrier can never disagree about where the run is standing.
   const state = declared.checkpoints.find((c) => c.id === checkpoint.id);
   if (state?.status !== 'active') return null;
-  const precedent = unverifiablePrecedentOf(runbook, checkpoint.id);
+  // WP-37 · READ, not recomputed. The card's caveat and the plan line's segment
+  // are two framings of ONE derived fact (`planCheckpointOf`), and this is where
+  // they are kept from becoming two rules that can disagree.
+  const precedent = declared.planCheckpoint;
   return {
     runbookId: declared.runbookId,
     version: declared.version,
@@ -298,34 +338,6 @@ function approvalContextOf(
     offersCanaryPolicy: declaresCanary(runbook),
     ...(precedent ? { unverifiablePrecedent: precedent } : {}),
   };
-}
-
-/**
- * The nearest narrative checkpoint before the approval, with the runbook's own
- * authored reason for it.
- *
- * NEAREST, not "any": a document may declare several narrative steps, and the
- * one the approval directly rests on is the one a reader needs named. The
- * reason comes from the runbook body's own `## cp.x — reason` heading via
- * `checkpointReason`, so the caveat quotes the author rather than paraphrasing
- * them; a section with no reason yields `null` and the copy says less rather
- * than inventing more.
- */
-function unverifiablePrecedentOf(
-  runbook: Runbook | undefined,
-  approvalId: string
-): { checkpointId: string; reason: string | null } | undefined {
-  const checkpoints = runbook?.checkpoints ?? [];
-  const at = checkpoints.findIndex((c) => c.id === approvalId);
-  if (at < 0) return undefined;
-  for (let i = at - 1; i >= 0; i--) {
-    if (checkpoints[i].attest !== 'narrative') continue;
-    return {
-      checkpointId: checkpoints[i].id,
-      reason: runbook ? checkpointReason(runbook, checkpoints[i].id) : null,
-    };
-  }
-  return undefined;
 }
 
 /**
