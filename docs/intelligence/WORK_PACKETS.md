@@ -14626,3 +14626,112 @@ above wants anyway, since seeing the panel is a Local session.
 **HELD AT THE GATE — not merged.** The emission is a contract with a shipped
 consumer, per the registration's own gate hold.
 
+
+---
+
+**WP-37 · MERGED (2026-08-19).** Merge `f7bf7feb` on `poc/nexintelligence`;
+**7 files, +929/−48** against its first parent:
+
+```
+ docs/intelligence/WORK_PACKETS.md                     | 167 ++++++
+ .../__tests__/procedureArmingWiring.test.ts           |  16 +-
+ .../__tests__/wp37StreamScope.test.ts                 | 575 +++++++++++++++++
+ src/main/intelligence-host/chatAssembly.ts            |  16 +-
+ src/main/intelligence-host/procedureArming.ts         |  45 +-
+ src/main/intelligence-host/procedureStream.ts         |  74 +--
+ src/main/intelligence-host/procedureView.ts           |  84 +++
+```
+
+**No architect work was pending.** `git status --porcelain` in the primary
+checkout was empty before the merge and `--untracked-files=all` found nothing
+either — the first merge in this run of packets with no verbatim-commit
+exercise to perform, checked rather than assumed.
+
+**Tail conflict resolved BOTH HALVES VERBATIM, base tail first, verified
+arithmetically in CHARACTERS** (the file is not ASCII — em dashes make the byte
+count a different number, and mixing the two units is how a "verified" sum can
+be wrong): common base **804,600** chars intact as a prefix; base tail
+**73,190** chars present verbatim at offset 804,600; this packet's tail
+**10,192** chars present verbatim at offset 877,790; resolved length
+**887,982** = the exact sum; **zero conflict markers**. Base tail first for the
+same reason WP-39's merge gave: the consolidated adjudication's "WP-37: MERGE"
+is what this packet's entry is answered BY, and the entry it answers was
+written before the ruling existed.
+
+**The one code conflict was not a conflict.** `procedureArmingWiring.test.ts`
+was edited on both sides — WP-20f added `materializableCapabilities` to the
+import and the `materialized:` argument to the fixture's resolver call (lines
+27, 257); WP-37 appended `.request` to eleven call sites (lines 74–153). Git
+auto-merged them and **both survive, verified by grep on the merged file**, not
+inferred from the absence of a marker.
+
+**MERGED-TREE VERIFICATION.** `npx tsc -p . --noEmit` clean; `npx tsc -p
+tsconfig.test.json --noEmit` clean. Full suite: **590 suites, 7,962 passed, 2
+skipped, 7,964 total, exit 0, zero FAIL lines** (exit code captured before any
+pipe). The new suite re-run alone with `--no-cache` on the merged tree: 22/22.
+
+**Both deltas read, and both reconcile to the test.** The pre-merge baseline
+was taken on the base in this checkout with the tree held still — **589 / 7,940
+/ 2 / 7,942, exit 0** — which is WP-39's post-merge figure to the digit, so
+nothing drifted between that merge and this one.
+
+| | suites | passed | skipped | total |
+|---|---|---|---|---|
+| base, pre-merge (primary) | 589 | 7,940 | 2 | 7,942 |
+| merged tree (primary) | 590 | 7,962 | 2 | 7,964 |
+| worktree, after (for reference) | 584 | 7,839 | 12 | 7,851 |
+
+Against the base: **+1 suite, +22 tests, skipped unchanged** — exactly the new
+file, and the skipped column being flat is what says so. Against the
+worktree's own after-figure the passed column alone would read as a phantom
++123; both halves resolve it: **7,839 + 10 + 113 = 7,962**, where **+10** is
+the documented boundary effect (the primary gates IN the ten
+`embedding-service` tests a worktree gates out — skipped 12 → 2) and **+113**
+is the base advancing under this worktree after it was cut at `240da7fd`
+(WP-20f, WP-38 and WP-39 all merged in between). Suites reconcile the same
+way: 583 + 6 + 1 = 590.
+
+**Base drift handled, not merely noted.** The worktree was cut at `240da7fd`;
+base was at `ab725c57` by merge time. The only file contention was the one
+named above.
+
+**THE ESCALATION IS ALREADY ANSWERED, and the agent's report predates the
+answer.** The packet held its producer question open and named two candidates;
+the consolidated adjudication ruled before this merge: **candidate A** — the
+comparator surface is the scope's ratified provenance — and **B is REFUSED**,
+because a model-named selection is a different provenance and widening
+`ScopeFrom.surface` by tool default would put words in a designer-ratified
+artifact. Read forward from the gate report, not from it: the escalation in
+this packet's own entry is answered eleven blocks above it.
+
+**Consequence, stated plainly and unchanged by the merge:** `deriveScope` still
+has zero production callers, so **the empty-run state remains UNREACHABLE in
+the product until the comparator lands** (UX build 2 / WP-29 family). The
+owner's triple ask (`halt t1/t2` → "Update my plugins on t1, t2") shows an
+ordinary armed run with an absent scope and an open container — correct
+behaviour, and NOT the ratified empty-run state. The path that would show it is
+pinned in §5 of `wp37StreamScope.test.ts` against the real assembler; the only
+unmocked step is who calls `recordArmingRequest` with a scope.
+
+**OWED, and named rather than left in a ruling's prose.** The renderer
+hand-off was declared REGISTERED as a DockedPanel micro at the gate, but it
+carries **no packet id and no checklist entry** — grep finds it only inside the
+ruling paragraph. Two items, both in `src/renderer/components/DockedPanel/`:
+`derivedPlanLine` must splice `procedure.planCheckpoint` in to reach the
+sheet's four-segment form (the field is SERVED but not CONSUMED, so the plan
+line is still one segment short on screen), and `procedureStream.fake.ts` now
+lacks a field the real stream emits — the same divergence class WP-35 closed
+for the document facts, and it should gain `planCheckpoint` from the same
+generated fixture.
+
+**ABI ON EXIT: SYSTEM NODE.** `npm test` was run twice on this checkout (base
+baseline and merged tree) plus a `--no-cache` jest run. Measured: `node -v`
+**v25.9.0**, `node -p process.versions.modules` **141**. **`npm run rebuild`
+before loading Local** — which the smoke above wants anyway, since seeing the
+panel is a Local session.
+
+**No poisoned-cache occurrence during this merge** — no unrelated suite failed
+to parse in either full run, and the isolated re-run was `--no-cache`.
+
+**Not pushed.** Branch `wp-37` and worktree `.worktrees/wp-37` left in place
+for the housekeeping backlog.
