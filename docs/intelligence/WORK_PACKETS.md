@@ -17379,3 +17379,76 @@ the WP-20b `reason` finding, with the ratified vocabulary
 decision recording stays refused per the note), any checkpoint whose
 class would have to be argued for rather than derived, and anything
 touching `bulk-plugin-update.md` or the guided runbooks.
+
+---
+
+## WP-45 · GATE RULING — the law review applied (2026-08-19, architect adjudication)
+
+**Verdict: PASS. Cleared to merge** — with one owner-seal item flagged
+below. Independent verification performed on the branch itself, not the
+relay: all four law diffs read line-by-line from `6fc40ced..wp-45`; the
+byte margins re-measured (9,195 and 9,210 → 21 and 6 under 9,216); the
+regenerated fixture's `$generatedBy` sentinel and attest classes
+confirmed; the reason vocabulary confirmed as a closed set.
+
+**The three holds, ruled:**
+
+1. **Containment's fall to narrative: RATIFIED.** This is the note's own
+   P2 escalation clause executed, not a deviation from it — "a class the
+   body cannot support FALLS TO NARRATIVE with the mismatch escalated,
+   never stretched." The 193-tool sweep is the measurement; the pinned
+   test (a snapshot/isolation tool declaration added later FAILS and gets
+   read) turns the finding into an instrument. The 0-of-5 stands, and
+   cap.incident_containment's materialized grant still moves through the
+   re-pin — the ledger shows the review touched the document even though
+   nothing became provable. Honest twice over.
+
+2. **The declarations: RATIFIED, both — and the evidence refinement is
+   ratified as derivation in the right direction.** `evidence.tool:
+   wpe_backup_and_verify` alone, from the document's own "a backup
+   request is not a backup": attesting on wpe_create_backup would credit
+   a request as a completed backup. The reach narrowing on
+   wpe_create_backup (zero declarers → one, mandated-explicit, refused on
+   a default machine) is ACCEPTED as the law working — fail-closed per
+   the WP-20g E2 ruling, disclosed with a driven test, not discovered
+   later. The tripwire firing (a granted, armed promotion run refuses
+   wpe_promote_environment at cp.backup) is the sequencer's ordering
+   doing precisely what handing writes to it was for. The
+   verify-destination quote-strength asymmetry is accepted AS FLAGGED:
+   the declaration stands on the WP-31 precedent, and refusing to edit a
+   law body to make a quote stronger was the right refusal.
+
+3. **The re-pin: RATIFIED — and P4 of the owner-approved note is
+   AMENDED BY MEASUREMENT.** The note assumed disarm-then-reissue; the
+   driven truth is worse in the unanticipated direction: a purely
+   materialized grant carries no pin, so it silently SURVIVES the hash
+   change — the exact silence P4 existed to prevent, on its other flank.
+   The one from→to table covering both shapes, idempotent by
+   construction (an applied move can't match `from` again), no new
+   storage marker, is accepted. The per-capability reason supply is
+   ratified with its reasoning intact: a call-scoped reason would stamp
+   one person's act onto every grant a sync moved. **OWNER-SEAL ITEM:**
+   P4's mechanism as approved read differently than P4 as built; the
+   intent — no grant silently survives a hash change, none silently dies
+   of one — is exactly what shipped. The owner seals the amendment with
+   his ruling word.
+
+**Findings, entered:**
+- The near-ceiling margins (21 and 6 bytes) are now asserted as a test;
+  the remedy is the WP-20c split, whose priority RISES — registered as
+  sequenced, not optional. No raised ceiling, per standing ruling.
+- `scope: {}` on the preflight re-pin event: pre-existing, deliberate,
+  recorded so the verbatim event is not misread as a regression.
+- The Emitter test trap (causation validated + non-fatal producer = a
+  fabricated prior event id passes with no event emitted) is
+  **vacuous-guard shape #15**, appended to PARALLEL_PROTOCOL.
+- Poisoned ts-jest cache: eighth and ninth occurrences, count kept.
+- Battery: two first-run survivors were vacuous-guard shapes in the
+  agent's own pins, fixed and re-driven to 16/16 — reported against
+  itself, which is the standard.
+
+**Merge instructions standing:** merge on primary; merge report with
+`git diff --stat merge^1 merge` receipts; full suite on the merged tree
+read skipped-first; locks released only after. Nothing escalation-grade
+was built and nothing beyond the approved scope was touched — the gate
+confirms the packet's own claim.

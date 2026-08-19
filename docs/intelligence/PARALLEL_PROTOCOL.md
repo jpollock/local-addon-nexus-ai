@@ -391,3 +391,13 @@ chronological order, arithmetic in one named unit) is the STANDARD, not
 one resolution style among several. And before invoking the pure-append
 fidelity form, READ the diff: an insertion mid-file also shows zero
 deletions.
+
+## Vacuous-guard shape #15 — the non-fatal producer behind a validating emitter (WP-45)
+
+`Emitter.emit` validates causation and the producer is non-fatal: a test
+that hands the producer a fabricated prior event id "passes" while no
+event is emitted at all — the assertion never ran against an event
+because there wasn't one. Any test of a non-fatal producer must FIRST
+assert the event exists (count or id read-back) before asserting
+anything about its content. A green test over an empty emission is shape
+#15's tell.
