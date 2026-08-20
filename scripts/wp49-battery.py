@@ -166,6 +166,31 @@ def run(argv):
     return subprocess.run(argv, capture_output=True, text=True)
 
 
+def abi_report():
+    """
+    THE MID-SESSION FLIP, CAUGHT INSTEAD OF MISREAD (WP-20d, and WP-33b's mask).
+
+    `node_modules` is SHARED across every worktree by symlink, so any `npm test`
+    or `npm run rebuild` elsewhere on this machine rebuilds better-sqlite3 to a
+    different ABI while this battery is running. It happened on this packet's
+    first drive: the flip landed mid-run and every mutant after it reported
+    "no test summary parsed" — 24 VOIDs and a DEAD CONTROL, which reads as a
+    broken battery and is a broken environment.
+
+    `node -p process.versions.modules` does NOT catch it: that reports YOUR
+    node's ABI, not what the shared tree was last built for (WP-33b). The probe
+    that does is LOADING the module, which is what this does. `npx jest` skips
+    the `pretest` hook that would have re-flipped it, and every battery in this
+    family uses `npx jest` — so the guard belongs here.
+    """
+    r = run(["node", "-e",
+             "new (require('better-sqlite3'))(':memory:').close()"])
+    if r.returncode != 0:
+        first = (r.stderr or r.stdout).strip().splitlines()
+        return False, (first[0] if first else "better-sqlite3 failed to load")
+    return True, "better-sqlite3 loads — the shared node_modules matches this node"
+
+
 def tracked_changes():
     return [l for l in run(["git", "status", "--porcelain"]).stdout.splitlines()
             if not l.startswith("??")]
@@ -243,6 +268,14 @@ def main():
         print("REFUSING: a battery over invisible bytes measures nothing trustworthy (WP-30).")
         return 2
 
+    ok, why = abi_report()
+    print(f"ABI PROBE: {why}")
+    if not ok:
+        print("REFUSING: the shared node_modules is built for another ABI — `npm rebuild "
+              "better-sqlite3`, then re-drive. A battery run across a flip measures the "
+              "environment, not the code (WP-20d/WP-33b).")
+        return 2
+
     before_untracked = untracked()
     ok, why = pristine_report()
     if not ok:
@@ -292,6 +325,13 @@ def main():
     ok, why = pristine_report(before_untracked)
     if not ok:
         print(f"ALARM: tree is NOT pristine after the battery — {why}")
+        return 2
+
+    ok, why = abi_report()
+    print(f"ABI PROBE (after): {why}")
+    if not ok:
+        print("ALARM: the ABI FLIPPED DURING THIS RUN — every verdict after the flip is a "
+              "measurement of the environment. Recover and re-drive; do not credit this run.")
         return 2
 
     killed = sum(1 for r in results if r[1] == "KILLED")
