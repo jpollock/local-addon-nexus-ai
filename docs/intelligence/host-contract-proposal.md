@@ -395,9 +395,10 @@ each answer true rather than aspirational.
 
 There are 20 `addons-nexus-ai-*.playwright.ts` suites in Local's master branch
 today, alongside `addons-notes`, `addons-preflight`, `addons-table-plus` and
-`addons-xdebug-vscode` (recon §8.6). We wrote them; we maintain them; and as your
-architect notes, they are *also* our exposure, because they encode the DOM
-assumptions §7 of the recon rates as fair game.
+`addons-xdebug-vscode` (recon §8.6). Whoever authored them, they cover our
+surfaces and we are willing to own them — and as your architect notes, they are
+*also* our exposure, because they encode the DOM assumptions §7 of the recon
+rates as fair game.
 
 **What we commit to, per item:**
 
