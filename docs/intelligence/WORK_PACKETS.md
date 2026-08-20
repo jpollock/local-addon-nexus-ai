@@ -19190,3 +19190,80 @@ follows as its own adjudicated event, and `npm run rebuild` precedes it.
 
 **THE `src/renderer/`, `src/main/ipc-handlers.ts`, `src/common/constants.ts` AND
 `tests/intelligence-evals/` LOCKS ARE RELEASED.**
+
+---
+
+## WP-46 · MERGE ACCEPTED — the arrival and the re-entry (2026-08-20, architect adjudication)
+
+**Independent verification, every number reproduced:**
+- `git diff --stat d6a409ae^1 d6a409ae`: **19 files, +4,023/−114** — exact.
+- **The record merge's four-way re-run from the blobs**: halves measure
+  15,116 (agent) and 6,062 (architect); each an exact substring EXACTLY
+  ONCE at the reported offsets (1,127,052 and 1,142,168);
+  **1,127,052 + 15,116 + 6,062 = 1,148,230, residual zero** against the
+  merge commit's blob; line-anchored markers zero.
+- **The ordering departure: RATIFIED, and it clarifies the standard.**
+  Agent-half-first is correct HERE for the same reason architect-first
+  was correct in WP-30: the record-merge standard's third check is
+  CHRONOLOGY OF CONTENT, not a fixed side order. A ruling above the
+  report it rules on would make the record cite forward; the agent read
+  the standard's intent over its precedent's accident, asserted the
+  ordering explicitly in check 3, and recorded the reasoning in both
+  the commit and the report. The standard now reads as it was always
+  meant: the sides land wherever chronology puts them.
+- **Fidelity through a second hand, again**: the architect batch
+  (`ee5759c8`) was FOUR files — the agent caught that the count was
+  four, not three (PARALLEL_PROTOCOL.md carried the series-guard rule)
+  — every blob md5-verified, and from-designer-10's recorded receipt
+  (21,052 bytes, `8ba961cd999160cd5435f50e9d623939`) reproduced on the
+  merged tree by the architect: identical, pasted from the print above
+  this entry's own append.
+- **Tree state accepted**: 607 / 8,326 / 2 skipped / 8,328 exit 0;
+  worktree split 8,316/12, same total, the ten-test boundary read
+  skipped-first; battery 28/28 on the merged tree; evals
+  **50 / 0 / 18 / 10 — J-Return 8/8 PASS, J-Glance 5/3** — ten flips,
+  every other spec byte-identical. Unpushed properly: absent remote
+  branch, no upstream, zero tags, version untouched.
+
+**WP-46 is CLOSED. M6 is IN THE PRODUCT.** The arrival renders the
+fold, the re-entry promotes without loss, the 6c copy ships verbatim,
+and the whole surface authored three sentences — all ratified, all
+extractable, all interim pending the designer. Home is the landing
+tab. **A journey now walks green end-to-end programmatically
+(J-Return 8/8) for the first time.**
+
+**What follows:** the OWNER'S ARRIVAL SMOKE — `npm run rebuild`, then
+the nine-step script (recorded 2026-08-20): the manufactured night,
+the arrival checks 1–5, the re-entry checks 6–7, the restart test 8,
+the deny test 9. Verdicts recorded as sitting entries; check 8 is the
+architecture's claim made falsifiable. Then: WP-20c + the micro bundle
+(now including WP-30b), the designer bundle (authored sentences, the
+no-act-buttons ruling, the two FYIs), and the demo track per the plan
+of record.
+
+---
+
+## THE LOCAL-SIDE RECONNAISSANCE — ADJUDICATED; HOST CONTRACT REVISED TO v2 (2026-08-20, architect)
+
+The flywheel-local architect answered the nine-section recon prompt
+with receipts throughout (Local 10.1.1 @ 844352123). Adjudication in
+SHELL_INVERSION_PLAN.md Amendment 2. The substance: **route/screen
+ownership was wrong-shaped and is replaced by region providers**
+(their design, adopted — fail-closed at region granularity, with
+Local's own `routes[site-info]` splice as shipping precedent);
+capability detection folds into `context.capabilities` rather than a
+fifth ask; tokens go first (~2wk); the rail slot is ONE named slot
+with a MobX-reactivity requirement stated up front (the hook registry
+is one-shot — their §1 finding); reservation v1 scoped to our docked
+panel exactly. Their seven-item "what I'd want from a proposer" is
+adopted as the proposal's structure, including the highest-leverage
+paragraph: what we will STOP doing, with versions. Three of our
+assumptions corrected in our favor (TabNav hash is path-based not
+content-based; theme readable without DOM sniffing today; the
+site-info route splice already IS our pattern) — four addon-side
+micros registered, none needing host changes. Their sizing (~8
+engineer-weeks for v1 of all four) adopted as planning numbers.
+**HELD for verbatim commit: the original response file** — the relay
+is adjudicated; the artifact gets committed with md5 when the owner
+supplies it. Next: WP-47 rescoped as the CONTRACT PROPOSAL packet
+(the written proposal + the four micros + the dual-track probe).

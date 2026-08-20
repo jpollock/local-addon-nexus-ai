@@ -171,3 +171,84 @@ adopted: the route back to the plain list is product behavior, one
 move, no settings; whether it becomes a persistent choice is a product
 conversation deliberately deferred. The addon's name → flagged to the
 owner; a product decision, not ruled here.
+
+---
+
+## AMENDMENT 2 (2026-08-20) — the host contract v2, revised against Local's real architecture
+
+The Local-side architect's reconnaissance (Local 10.1.1 @ 844352123,
+local-components 17.8.2; response to be committed verbatim on receipt
+of the original file) answered all nine sections with receipts.
+The contract is REVISED accordingly.
+
+### The four items, reshaped
+
+1. **Theme tokens as values** — FIRST, independent of everything else
+   (~2 wks by their estimate). Tokens exist only as SCSS
+   (`_variables.scss`/`_theme.scss`); zero runtime exports; emit as CSS
+   custom properties under `Theme__Light`/`Theme__Dark` + a
+   `theme: { name, tokens }` on the addon context with the existing
+   `osThemeChange` IPC as the change signal. Carry the external-
+   consumer rename problem WITH the proposal (alias period).
+2. **One named rail slot** (`mainVerticalNav`), not a generic slot
+   registry — typed item shape modeled on `AddonSettingsItem`
+   (renderer.d.ts:381-396), MobX-observable BY STATED REQUIREMENT (the
+   hook registry is one-shot and non-reactive — their §1's
+   most-under-documented semantic), per-item error isolation, and the
+   active-state fix (renderLocalSitesLink's negative path matching)
+   named in the proposal as evidence we read the code.
+3. **Layout reservation v1, scoped as they scoped it**: right edge
+   only, main window only, one reservation, no persistence, grant
+   clamped — "shell decides and reports what it granted" adopted
+   verbatim by them; ~2.5 wks. The invariants they enumerated
+   (fixed-position escapees, duplicated magic numbers, the hand-managed
+   z-ladder, the percentage sidebar) go in the proposal as known costs.
+4. **Region providers REPLACE route/screen ownership.** Their ruling
+   accepted in full: a route is not a screen in this architecture
+   (claiming /main inherits all of MainPage's chrome); screens have no
+   uniform props contract; the existing boundary navigates away rather
+   than falling back. The right shape is
+   `registerRegionProvider('main.siteList.body', { id, match, render })`
+   with a region-local error boundary falling back to LOCAL'S OWN BODY
+   — true fail-closed, per-region versionable, and generalizing a
+   pattern Local already ships (`routes[site-info]` splices addon
+   routes above the Overview catch-all — THE lead argument).
+
+**Capability detection folds into the items**: `context.capabilities`
+— integer-versioned members on one frozen namespace, absent=falsy on
+old hosts. Not a fifth ask; the shape of each of the four.
+
+### The proposal's structure = their seven asks, adopted as given
+
+Name the surfaces, not abstractions · a written removal path per item
+(disabled / uninstalled / crashes / newer host) · we take on the
+regression net (our 20 Playwright suites in their repo, extended to
+every new surface incl. the failure paths) · dual-track demonstrated
+against stock 10.1.1 BEFORE the host changes · **say what we'll stop
+doing** — the MutationObserver nav injection, the `.Window` right
+mutation, the hashed-class selectors, each deleted at a named version
+when its replacement lands · the token-rename deprecation path arrives
+with us · and ask for the deprecation policy IN WRITING (codifying the
+2.3.3-era alias practice) — their own advice: worth more over five
+years than any of the four APIs.
+
+### Addon-side de-risking, no host change needed — registered as micros
+
+- **Theme via `localPreferences.currentThemeName` + `osThemeChange`
+  IPC** — delete the theme MutationObserver now.
+- **Loosen the TabNav selector to `[class*="TabNav_Items_"]`** — the
+  hash is path+name, not content; only the `_v` suffix tracks
+  releases; this removes the item from the risk register.
+- **Audit for auto-theme assumptions**: "auto" resolves light on
+  Windows/Linux (darwin-only OS following) — verify no surface assumes
+  OS-following dark cross-platform.
+- **The capability probe, built now**: degrades to today's guest paths
+  against 10.1.1 where every probe is undefined.
+
+### Sizing (theirs, adopted as planning numbers)
+
+Tokens ~1.5–2 + rail slot ~2 + reservation v1 ~2.5 + region providers
+~2 ≈ **8 engineer-weeks for v1 of all four** — versus 12–15 for
+route ownership taken literally. The bundled-addons lever
+(`bundledAddons.ts`, privileged load path, currently empty) is noted
+as a possible first-party path and deliberately NOT proposed in v1.
