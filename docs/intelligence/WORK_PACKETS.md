@@ -20691,3 +20691,39 @@ by following a stale instruction.
 **A future fold of `-ux` into `poc/nexintelligence` remains an owner decision**,
 taken with receipts when taken. It is a fast-forward today: `d1cbf750` is an
 ancestor of `95b5d755`.
+
+---
+
+## WP-49 · LOCK ANNOUNCE (2026-08-20) — the front door: the collapse, the opening state, Now off the strip
+
+Announced ON THE BASE (`poc/nexintelligence-ux`) before the worktree is cut, per
+the WP-20f/WP-37 rule: a lock announced only on a worktree is not visible to the
+agent it warns.
+
+**Verified free at the tail rather than assumed.** The last LOCK line in this
+file before this one is WP-48's merge report — "**THE `src/main/
+intelligence-host/`, `src/renderer/`, `tests/intelligence-evals/` AND
+`docs/intelligence/` LOCKS ARE RELEASED.**" — and nothing between it and here
+re-takes any of them. The two BRANCH NOTES that follow it are the only
+intervening sections and neither claims a lock.
+
+**CLAIMED for WP-49:**
+
+- `src/renderer/` — the collapse (items 4 + 5) and the XD-27 chrome live here.
+- `tests/intelligence-evals/` — J-Glance's `buttons.length === doors.length`
+  measurement is drawn against the arrival as XD-26 left it, and XD-27 puts
+  Approve / Not now ON the rows. The measurement has to move or the ruling
+  cannot ship; see the gate report for what it becomes.
+- `docs/intelligence/` — this file's entries, and (read-only) the designer's
+  position 11, which the copy route extracts §5's opening asks from.
+- `scripts/` + `package.json` — one new generator in the situation-headlines
+  family, with its `:check`.
+
+**NOT claimed, and deliberately:** `src/main/intelligence-host/` is out of this
+packet's scope by the launch instruction. If the collapse needs a host fact the
+contract lacks, the packet stops and escalates rather than reaching for it —
+WP-48's `contradictedByTheRecord` (refuse loudly, fall back derived, render the
+honest limit) is the template for what to do instead of guessing.
+
+Base: `poc/nexintelligence-ux` @ `c5a634ea`. Branch `wp-49`, worktree
+`.worktrees/wp-49`. No remote is touched at any point.
