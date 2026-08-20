@@ -19819,3 +19819,49 @@ the owner's rulings, taken with the audit sheet in hand.
 four `incident.opened` events on theawfulpm-test carry a causal link
 (coalesce) or not (the row states its own limit, as drawn) — WP-48
 measures and reports rather than assumes.
+
+---
+
+## WP-48 · LOCK ANNOUNCE (2026-08-20) — the Now verdicts
+
+Branch `wp-48`, worktree `.worktrees/wp-48`, cut from `poc/nexintelligence`
+at **2f1794a9** — WP-47's merge (`7ab7c67a`) plus the merge report, the owner's
+`d1cbf750`, and this session's verbatim commit of the architect+designer Now
+route (receipts device-verified against the registration entry's own claims:
+5,650 / `dc8a8778…` and 6,588 / `10c482e5…`, both exact).
+
+**Base-branch note, stated because it is a topology change:** the designer's
+two files and the WP-48 registration were sitting UNCOMMITTED in the primary
+checkout, which had `poc/nexintelligence-ux` checked out; both branch names
+were at `d1cbf750`. The verbatim commit landed on `-ux` (the checked-out
+branch) and `poc/nexintelligence` was **fast-forwarded** to the same commit —
+`d1cbf750` verified as its ancestor, so nothing was rewritten and the two tips
+stay together exactly as the owner left them. Reversible with
+`git branch -f poc/nexintelligence d1cbf750`.
+
+**LOCKED SURFACES — three, each verified FREE at the tail rather than assumed.**
+`grep -n "LOCK" docs/intelligence/WORK_PACKETS.md | tail -40` returns, as its
+last three release lines:
+
+- line 19192 (WP-46 merged, 2026-08-20): "**THE `src/main/intelligence-host/`
+  AND `tests/intelligence-evals/` LOCKS ARE RELEASED.**"
+- line 19706 (WP-47 merged, 2026-08-20): "**THE `src/renderer/` AND
+  `docs/intelligence/` LOCKS ARE RELEASED.**" — the LAST LOCK line in the file.
+
+Nothing claims any of the three after those releases. WP-47 claimed only
+`src/renderer/` and `docs/intelligence/`, and released both.
+
+1. **`src/main/intelligence-host/`** — the headline composer
+   (`sessionRegistry.ts`) and the authored-copy object (`arrivalModel.ts`).
+2. **`src/renderer/`** — the chips and the copy consumers. `Arrival.tsx` is
+   expected NOT to change: the route's ratified placement argument is that it
+   already renders `situation.headline` verbatim.
+3. **`tests/intelligence-evals/`** — held only if the golden fixture's pins
+   live there; verified at cut and reported either way.
+
+**SCOPE — items 1–3 of the designer's §5 order, and nothing else.** Item 4 (the
+panel's opening state) waits on the Now-screen sheet. Items 5–6 (queue collapse,
+permission-pane merge, Fleet into Sites) are product IA awaiting owner rulings.
+
+**Carried open question, to be MEASURED and reported, not assumed:** whether the
+four `incident.opened` events on `theawfulpm-test` carry a causal link.
