@@ -18674,3 +18674,112 @@ expected: the drift line's count. See the gate report.)
 
 **Base:** `ee3fd67a` (WP-30 merge accepted, `3dc8df01` merged). **Worktree:**
 `.worktrees/wp-46`, branch `wp-46`. Nothing is pushed; no tag, no version bump.
+
+---
+
+## SHELL INVERSION PLAN REGISTERED (2026-08-20, architect, owner-directed)
+
+`docs/intelligence/SHELL_INVERSION_PLAN.md` — the execution plan for
+nexus-as-shell, POC-branch-first per the owner's ruling. Phase A: shell
+mode inside the addon ("Start in Nexus" setting, escape hatch as law)
+— WP-47 the shell frame, WP-48 Sites-by-consequence, WP-49 the Glance
+verdict, after cycle six's design (the one real design gap: the Sites
+matrix, the cold-open verdict, act-small). Phase B (Local core) is
+prepared, not scheduled — the port is a mount-point change by
+construction. Ground truth verified from source: `routes[main]` +
+nav/CSS injection reach a full takeover; three of five rail
+destinations already shipped; WP-30 closed the substrate. The demo
+assembles FROM the shell, and the acceptance frame is a pass³ shell
+sitting, not a screenshot.
+
+---
+
+## THE DESIGNER'S SHELL INVERSION PLAN — COMMITTED VERBATIM, ADOPTED AS GOVERNING (2026-08-20, architect adjudication)
+
+`from-designer-10-shell-inversion-plan.dc.html` committed verbatim
+(21,052 bytes, md5 `8ba961cd999160cd5435f50e9d623939`, verified on
+device against the upload). **Adjudication: their plan supersedes the
+architect's SHELL_INVERSION_PLAN.md phase A as the plan of record**,
+recorded in that document's own amendment: the end state corrected
+(intelligence as how every place behaves, never a place — Local's own
+rail, not a Nexus-branded shell), the injection ceiling accepted with
+receipts from our own source, the six risk-ascending phases adopted
+with journey evals as gates and host-capability dual-track (no flags,
+no fork). The architect's shell-mode survives ONLY as the disposable
+demo prototype that wins phase 0's host contract; WP-47/48/49 as
+shipping packets are WITHDRAWN, their surfaces retained (consumed by
+the designer's phases regardless of mount). §9 dispositioned: we
+draft the contract, Local ratifies; a stated version floor makes
+phase 6 finite; the plain-list route back is product behavior;
+the addon's name flagged to the owner. This is the second time a
+designer artifact has corrected a registered architect position by
+argument from the record — the loop running in its best direction.
+
+---
+
+## WP-46 · GATE RULING — the arrival and the re-entry (2026-08-20, architect adjudication)
+
+**Verdict: PASS. Cleared to merge.** Gate report read in full from the
+branch; the four ruled items:
+
+**1 · The three authored sentences: RATIFIED, all three, as interim.**
+`AWAY_UNKNOWN` and `DRIFT_NO_COUNT` name a limit of the platform in
+6c's own voice — the ratified pattern applied to two new facts, and
+the alternative in each case was a fabricated number or a silent
+absence where something is true. `NEEDS_YOUR` renders the WHAT from
+`PendingGate.awaits` — the contract's own word, prefixed, which is
+derivation not authorship in all but the two tokens. The single
+exported `AUTHORED` object as the mechanical extraction point is
+ratified as the standing pattern for authored copy. All three ride to
+the designer for refinement with the next bundle; the interim stands.
+
+**2 · The escalations: ruled correctly, both — and they register the
+follow-on.** Rendering `staleCount` (producer liveness) under a
+fact-freshness sentence would have been the borrowed wrong number —
+M18 is that exact mutation and it is killed, which is the discipline
+proving itself. The reserved row's affected-site count NOT rendered
+beats rendered-invented. **WP-30b registers: the contract-widening
+micro** — `driftFactCount` (fact-freshness, producer-supplied), the
+reserved row's affected-site count, a deferral field (divergence 5's
+channel), and `SessionRow.version/strictness/armedBy` (divergence 3's)
+— one host-side micro, names gate-held, after which `driftLine(count)`
+changes at one call site as built for.
+
+**3 · The five divergences, ruled:** (1) numerals RATIFIED outright —
+a number-to-word table is authored vocabulary by another name; (2)
+the full runbook id RATIFIED outright — ids cited in full is standing
+law and the sheet's trim was the deviation; (3) version/strictness
+absence ACCEPTED as a measured contract limit → WP-30b; (4) **no act
+buttons: RATIFIED ON DOCTRINE** — the acts are the session's own and
+belong to the shipped approval card; act buttons on the arrival's
+card would be the resume-button-that-re-arms XD-26 prohibits, and
+zero-controls-on-established-arm is now pinned. Flagged to the
+designer as a ruled divergence from their drawn sheet — theirs to
+contest with an argument that beats the doctrine; (5) deferrals
+ACCEPTED as unstatable → WP-30b. Items 2 and 4 ride to the designer;
+none block.
+
+**4 · The two shipped-surface changes: ACCEPTED, both, as stated.**
+The rail badge as instrument-not-inventory is XD-23 applied and M25
+pins it. Home as landing is XD-26's framing arriving with its
+surface; Sites unchanged and one click away preserves exactly the
+"one move back, no settings" property the inversion plan requires of
+phase 5 — the demo branch is the right place for this to land first.
+
+**Noted with approval:** WP-30's absence tripwires turning over
+rather than being deleted — they were watching for exactly this
+change and now record it; the no-visual-verdict claim — correct, the
+element tree is the agent's whole reach and the screen is the
+owner's; and §7's M07/M08 lesson enters the protocol: **a render test
+cannot pin a guard the render never reaches** — inner guards behind
+filtering callers are driven directly or they are not pinned.
+
+**Merge instructions standing:** architect's uncommitted work
+(WORK_PACKETS +40, SHELL_INVERSION_PLAN.md amendment,
+from-designer-10) committed verbatim FIRST, own attributed commit, md5
+fidelity; then the merge; tail by the record-merge blob standard,
+four-way, one named unit; suite both sides skipped-first; battery on
+the merged tree; receipts pasted after they print; locks released
+only after acceptance. **The owner's arrival smoke follows the merge
+as its own adjudicated event** — the nine-step script already in the
+record.

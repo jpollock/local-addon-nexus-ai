@@ -425,3 +425,15 @@ the architect's own first check of this finding also failed silently
 (`grep -c $'\x00'` passes an empty pattern — argv cannot carry NUL —
 and matches every line): verify NUL absence with a byte-level tool
 (python/od), never a shell-argument pattern.
+
+## A render test cannot pin a guard the render never reaches (WP-46)
+
+Series guards: when an inner guard sits behind a caller that already
+filters (the render path reached `standingApprovalSentence` only
+through a list pre-filtered to `approved`), no render test exercises
+the inner guard, and a mutation to it survives while every screen
+draws correctly. Pins on guarded builders must drive the builder
+DIRECTLY across its full input domain — including the states the
+current callers cannot supply — or the inner guard is decoration. The
+tell at battery time: a survivor whose mutation sits inside a function
+every render test "covers."

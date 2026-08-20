@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/palette.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/semantic.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/typography.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/layout.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/base.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/styles.css">
+<script src="./doc-page.js"></script>
+<style>
+doc-page:not(:defined) { visibility: hidden; }
+body { margin: 0; }
+doc-page { font-family: Inter, system-ui, sans-serif; }
+a { color: rgb(0,107,214); text-decoration: none; }
+a:hover { color: rgb(0,86,171); text-decoration: underline; }
+h1 { font-family: Geist, Inter, sans-serif; font-size: 30px; line-height: 1.2; font-weight: 600; letter-spacing: -0.5px; color: rgb(32,32,32); margin: 0 0 6px; }
+h2 { font-family: Geist, Inter, sans-serif; font-size: 19px; line-height: 1.3; font-weight: 600; color: rgb(32,32,32); margin: 30px 0 10px; }
+h3 { font-family: Geist, Inter, sans-serif; font-size: 15px; line-height: 1.35; font-weight: 600; color: rgb(31,36,38); margin: 20px 0 6px; }
+p, li { font-size: 14px; line-height: 1.65; color: rgb(46,53,56); text-wrap: pretty; }
+p { margin: 0 0 11px; }
+ul { margin: 0 0 12px; padding-left: 20px; }
+li { margin-bottom: 5px; }
+strong { color: rgb(31,36,38); }
+code { font-family: 'Roboto Mono', monospace; font-size: 12.5px; color: rgb(46,53,56); }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; }
+th { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: rgb(115,133,140); text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid rgb(31,36,38); }
+td { font-size: 13px; line-height: 1.55; color: rgb(46,53,56); padding: 9px 10px 9px 0; border-bottom: 1px solid rgb(226,230,232); vertical-align: top; }
+.lede { font-size: 15px; line-height: 1.6; color: rgb(115,133,140); margin: 0 0 4px; }
+.note { border-left: 2px solid rgb(226,230,232); padding: 2px 0 2px 14px; margin: 0 0 14px; break-inside: avoid; }
+.note p { font-size: 13px; color: rgb(115,133,140); margin: 0; }
+.phase { break-inside: avoid; margin: 0 0 18px; }
+.kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: rgb(115,133,140); margin: 0 0 2px; }
+</style>
+</helmet>
+
+<doc-page margin="0.85in">
+
+  <h1>Inverting the shell</h1>
+  <p class="lede">An implementation plan for making the Nexus designs the interface of Local, shipped dual-track, sequenced by risk. Design side; sequence and gates, no dates.</p>
+
+  <h2>1 · What this plan is</h2>
+  <p>It answers three questions and deliberately not a fourth. What Local is when the inversion is done. What order the work goes in, and what each phase proves before the next one starts. What can go wrong, and the mechanism — not the intention — that catches it. It does not estimate the work: the packet sizing is the architect's half, and this document is built to have those numbers bolted onto it phase by phase.</p>
+  <p>The premise is settled rather than argued here: the rank model already ruled that chat is a rank a session is at rather than a place, and the moments model already ruled that experienced simplicity is per-moment surface. Both were written as if Nexus were a guest. Neither needs Nexus to be a guest.</p>
+
+  <h2>2 · The end state</h2>
+  <p>Local opens on a screen that knows what happened while you were away. The rail is Local's own, the window is Local's own, and the intelligence is not a place inside it — it is how every place behaves.</p>
+  <ul>
+    <li><strong>The site list is agent-first.</strong> Sites still list, and the list leads with what needs you: divergences, halts, gates. Orientation is a shape, not a sentence, so the comparator is reachable from the list rather than buried in a tab.</li>
+    <li><strong>Every site screen carries its own intelligence.</strong> Freshness, provenance, the site at its places, the record of what was done to it. Not a Nexus tab beside four Local tabs — the site screen, with the facts attached where they live.</li>
+    <li><strong>The composer is on every screen.</strong> One session, promoted between ranks. Ambient in the rail, companion at 380, stage at full column, and the same session throughout.</li>
+    <li><strong>Settings is one place.</strong> Local's preferences and the Govern matrix are the same surface, because "what agents may do" is a setting, not an addon's opinion.</li>
+    <li><strong>The record is a place.</strong> Procedures against their runs, attested checkpoints, what was skipped and why — reachable without a session being open, because the record outlives the conversation.</li>
+    <li><strong>WP Admin stops being the default path</strong> for work the platform can do with a gate and a record. It remains a door, and it stops being the road.</li>
+  </ul>
+
+  <h2>3 · Why more injection cannot get there</h2>
+  <p>The addon's renderer bundle is <code>require()</code>'d into Local's own renderer process — same document, same DOM tree — and it extends Local four ways: a route contributed through <code>hooks.addContent('routes[main]')</code>, a site tab, a docked panel, and a nav item injected as markup into the sidebar. Everything beyond those four is reached by reaching into Local's own DOM.</p>
+  <p>That reach is where the ceiling is, and the code says so out loud. The panel makes room by setting <code>right</code> on <code>.Window</code> — chosen because it is a plain global class rather than a CSS-module hash, after an <code>App_</code>-prefixed guess that never matched anything. Tab wrapping is fixed by overriding a class whose hash carries a version suffix, <code>TabNav_Items_ad_cY_v17-8-1</code>. The nav item exists because a string of markup is written into a container the addon does not own.</p>
+  <div class="note"><p>Each of those is a correct engineering decision for a guest. Together they are the reason inversion cannot be delivered as more of the same: every additional surface bought this way is bought against a selector that Local's next release may rename, and the failure mode is silent.</p></div>
+  <p>The panel's own governing rule is the honest statement of the current relationship: <em>Nexus is a guest on these screens, and a guest doesn't resize the room.</em> The inversion is the decision that it stops being a guest — which means the room has to be handed over deliberately, not taken by selector.</p>
+
+  <h2>4 · The one prerequisite: a host contract</h2>
+  <p>Before any surface changes hands, Local has to expose four things it does not expose today. This is the plan's critical path, and everything in section 5 is ordered by which part of it each phase needs.</p>
+  <table>
+    <thead><tr><th>What Local must expose</th><th>What it replaces</th><th>Who needs it first</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Chrome slots.</strong> Named mount points in the shell — below the content column, in the rail, in the page header — contributed through the addon API rather than written into the DOM.</td><td>The injected nav item and the markup-into-a-container pattern.</td><td>Phase 1 (the composer)</td></tr>
+      <tr><td><strong>A layout reservation API.</strong> A supported way to ask the shell for width, with the shell deciding and reporting what it gave.</td><td>Setting <code>right</code> on <code>.Window</code> and re-measuring.</td><td>Phase 1</td></tr>
+      <tr><td><strong>Route and screen ownership.</strong> The ability to replace a screen Local ships, not only to add one beside it.</td><td><code>hooks.addContent('routes[main]')</code>, which can only add.</td><td>Phase 2</td></tr>
+      <tr><td><strong>Token and theme access.</strong> Local's resolved theme and design tokens as values, not as class names to sniff.</td><td>Reading <code>Theme__Dark</code> off <code>&lt;html&gt;</code> and mirroring it to a private attribute.</td><td>Phase 1, and every phase after</td></tr>
+    </tbody>
+  </table>
+  <p>None of the four is large. All four are the difference between a plan that compounds and one that accumulates selectors.</p>
+
+  <h2>5 · The sequence</h2>
+  <p>Ordered by ascending risk and by what each phase pays for. Every phase ships to users, keeps the addon working for anyone on an older Local, and is gated by a journey eval rather than by a review meeting.</p>
+
+  <div class="phase">
+    <p class="kicker">Phase 0 · the contract, drafted and gate-held</p>
+    <h3>Nothing user-visible ships</h3>
+    <p><strong>What happens.</strong> The four contract items above are specified against the surfaces that will consume them, and the addon's existing DOM reaches are inventoried — each one recorded with the Local selector it depends on. That inventory is the migration checklist for every later phase, and it is also the honest measure of today's exposure.</p>
+    <p><strong>What it proves.</strong> That the inversion has a mechanism. A phase 1 that begins before the contract exists will be built as injection and will have to be built twice.</p>
+    <p><strong>Gate.</strong> The contract is ratified and the inventory is complete, with every reach either mapped to a contract item or explicitly accepted as permanent guest behaviour.</p>
+  </div>
+
+  <div class="phase">
+    <p class="kicker">Phase 1 · the composer is everywhere</p>
+    <h3>The session stops being a place you go</h3>
+    <p><strong>What ships.</strong> The composer mounts in a chrome slot on every screen, and the docked panel's width comes from the reservation API rather than from setting <code>right</code>. Ambient rank arrives with it: the needs-you count in the rail, from the session registry.</p>
+    <p><strong>Why first.</strong> It is the smallest surface that requires the contract, so it proves the contract on real users before anything irreversible depends on it. It also delivers the rank model's core promise — promotion, not navigation — without moving a single screen a user already knows.</p>
+    <p><strong>What it must not break.</strong> Local's content never compresses below its usable minimum; the guest rule survives the inversion as a courtesy rather than as a constraint. No screen loses an action to a covered header.</p>
+    <p><strong>Gate.</strong> J-Glance's judged sitting on the cold open, and promotion identity asserted: session id, cursor and pending approvals unchanged across every rank change.</p>
+  </div>
+
+  <div class="phase">
+    <p class="kicker">Phase 2 · the site screen absorbs its intelligence</p>
+    <h3>The Nexus tab stops existing</h3>
+    <p><strong>What ships.</strong> The site screen renders the site at its places, its freshness, and its record — as the screen's own content rather than as a fifth tab. The comparator lands here first, because a selection made here is what arms a run.</p>
+    <p><strong>Why second.</strong> This is where the intelligence is worth the most per pixel, and it is the first phase that needs screen ownership. It also retires the tab-wrapping override — one selector dependency deleted rather than worked around.</p>
+    <p><strong>What it must not break.</strong> Every action Local's site screen ships today keeps working and keeps its position. A site with no intelligence recorded yet renders as a site, not as an empty dashboard.</p>
+    <p><strong>Gate.</strong> J-Inspect end to end: the shape before the prose, a door on every cell, and the selection becoming the next act's scope with nothing retyped.</p>
+  </div>
+
+  <div class="phase">
+    <p class="kicker">Phase 3 · the record becomes a place</p>
+    <h3>What was done outlives the conversation</h3>
+    <p><strong>What ships.</strong> A first-class record surface — procedures against their runs, attested checkpoints, skips with their reasons — reachable without a session open. Additive, so it needs only the routing half of the contract.</p>
+    <p><strong>Why here.</strong> It is the lowest-risk phase in the plan and it unblocks the highest-risk one: phase 5's list can point at the record instead of explaining itself in prose.</p>
+    <p><strong>Gate.</strong> The record exists before the user arrives, not on demand, and a historical run renders against its own document rather than the current registry.</p>
+  </div>
+
+  <div class="phase">
+    <p class="kicker">Phase 4 · Settings absorbs Govern</p>
+    <h3>One place where consent is given</h3>
+    <p><strong>What ships.</strong> The Govern matrix moves into Local's own preferences, and the addon's parallel settings home is retired. Every refusal door in the product re-points at the row in its new home.</p>
+    <p><strong>Why here.</strong> Two settings homes is the most confusing thing in the current product, and the matrix is already drawn and ratified. It is also the phase that most needs care: consent about a capability is the one consent a conversation may never elicit, and moving it must not soften it.</p>
+    <p><strong>What it must not break.</strong> Every door resolves to its specific grant, never to the top of Settings. A capability still arrives denied.</p>
+    <p><strong>Gate.</strong> J-Refusal fully green — its four remaining criteria are owned by this surface.</p>
+  </div>
+
+  <div class="phase">
+    <p class="kicker">Phase 5 · the site list becomes agent-first</p>
+    <h3>The arrival replaces the inventory</h3>
+    <p><strong>What ships.</strong> The list leads with what needs you — the two-column arrival, ordered by the consequence order, with the reserved health row — and the site inventory becomes the second thing on the screen rather than the first.</p>
+    <p><strong>Why late.</strong> This is the phase users will notice most, and it is the one that most needs the previous four to have earned trust. It is also the phase where being wrong is most expensive, so it ships last among the content changes and first among the reversible ones.</p>
+    <p><strong>What it must not break.</strong> A user who wants the list gets the list, in one move, without settings. Nothing in the arrival is composed on demand.</p>
+    <p><strong>Gate.</strong> J-Return's eight criteria, including the judged sitting: twelve hours away, no notes, from app opening to the decision owed with no reading and no re-approving.</p>
+  </div>
+
+  <div class="phase">
+    <p class="kicker">Phase 6 · the rail and the chrome change hands</p>
+    <h3>The last selector is deleted</h3>
+    <p><strong>What ships.</strong> The rail item is contributed rather than injected, the theme comes from tokens rather than from a class on <code>&lt;html&gt;</code>, and the DOM-reach inventory from phase 0 reaches zero.</p>
+    <p><strong>Why last.</strong> It is the only phase with no user-visible benefit of its own, which makes it the one most likely to be deferred forever. Putting it last is a scheduling fact; letting it slip is how the plan quietly fails.</p>
+    <p><strong>Gate.</strong> The inventory is empty, and a Local release with renamed CSS modules breaks nothing.</p>
+  </div>
+
+  <h2>6 · How dual-track works</h2>
+  <p>One codebase, capability detection, no fork. The addon asks the host what it supports and renders the best surface available: with the contract, the inverted surface; without it, today's guest behaviour, unchanged. That is a real constraint on how each phase is built, and it is what keeps the plan reversible.</p>
+  <ul>
+    <li><strong>Every phase ships behind host capability, not behind a flag someone remembers to flip.</strong> A flag is a decision that expires; a capability check is a fact about the host.</li>
+    <li><strong>Guest paths are deleted only when the phase's inventory items are retired</strong> — phase 2 deletes the tab override, phase 6 deletes the rest. Until then both paths are tested.</li>
+    <li><strong>No phase may require a Local release to be useful.</strong> If it does, it is really two phases and should be cut as two.</li>
+  </ul>
+
+  <h2>7 · What could go wrong, and what catches it</h2>
+  <table>
+    <thead><tr><th>Risk</th><th>The mechanism, not the intention</th></tr></thead>
+    <tbody>
+      <tr><td>The contract stalls, and phase 1 gets built as injection to keep moving.</td><td>Phase 0's gate is a ratification, not a document. No phase-1 packet opens until the contract is ratified; the addon keeps shipping meanwhile, which removes the pressure that causes this.</td></tr>
+      <tr><td>Users lose the app they know when the list changes.</td><td>Phase 5 is late by design, the list is one move away, and its gate is a judged sitting with a real person rather than a review.</td></tr>
+      <tr><td>The agent is not reliable enough to be the front door.</td><td>The front door renders derived facts, not agent prose: every count on the arrival is derived and dated, and an unlinked claim is loud. The corroboration render is the reliability mechanism, and it is already contracted.</td></tr>
+      <tr><td>A Local release renames a selector mid-plan and a shipped surface breaks silently.</td><td>Phase 0's inventory makes the exposure explicit and countable, and each phase reduces it. A test asserts each remaining reach still matches.</td></tr>
+      <tr><td>Inversion is judged a mistake after phase 3.</td><td>Because every phase is host-capability-gated rather than a cutover, stopping is a decision to stop rather than a rollback. Phases 1 to 4 are additive to a user's mental model; phase 5 is the first that replaces something, which is why it is fifth.</td></tr>
+      <tr><td>Two designs drift — the guest surface and the inverted one say different things about the same fact.</td><td>The density-invariance rule already covers this: which checkpoints tick, what a badge says, the attest wording. A difference between paths is a defect in one of them, not a path's prerogative.</td></tr>
+      <tr><td>Phase 6 never happens.</td><td>It is the only phase whose gate is a number reaching zero, so it is the only one that cannot be declared done by narrative.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>8 · Who owes what, per phase</h2>
+  <table>
+    <thead><tr><th>Phase</th><th>Design owes</th><th>Engineering owes</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>The consuming surfaces each contract item must serve, drawn well enough to specify against.</td><td>The contract, and the DOM-reach inventory.</td></tr>
+      <tr><td>1</td><td>The composer in a chrome slot at all three ranks; ambient escalation drawn against the consequence order.</td><td>Chrome slots, the reservation API, the session registry's query contract.</td></tr>
+      <tr><td>2</td><td>The site screen with its intelligence absorbed, and the empty-intelligence state.</td><td>Screen ownership; the comparator and scope carrier on the new mount.</td></tr>
+      <tr><td>3</td><td>The record as a place — procedures against runs, and the pre-convention state.</td><td>The record route and its retention rules.</td></tr>
+      <tr><td>4</td><td>Govern in Local's preferences; every door's landing.</td><td>The move, and the door resolution for every refusal payload.</td></tr>
+      <tr><td>5</td><td>The arrival as the list's head, and the route back to the plain inventory.</td><td>The triage derivation against the pinned golden fixture.</td></tr>
+      <tr><td>6</td><td>Nothing new. Sign-off that no surface regressed.</td><td>Rail contribution, token access, the inventory to zero.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>9 · What needs a ruling before phase 1 opens</h2>
+  <ul>
+    <li><strong>Does Local's team own the contract, or do we propose it?</strong> The plan's critical path runs through another team's roadmap, and that is the only dependency here that cannot be designed around.</li>
+    <li><strong>How far back does dual-track reach?</strong> Every supported Local version is a guest path that stays tested. A stated floor makes phase 6 finite.</li>
+    <li><strong>Is phase 5 reversible in the product or only in the code?</strong> If a user can choose the plain list permanently, that is a setting, and settings about the shell are a different conversation than settings about capability.</li>
+    <li><strong>What happens to the addon's name.</strong> When the intelligence is the interface, "Nexus AI" as a separate thing in the rail is the last piece of guest furniture — and renaming it is a product decision, not a design one.</li>
+  </ul>
+
+</doc-page>
+
+</x-dc>
+</body>
+</html>
