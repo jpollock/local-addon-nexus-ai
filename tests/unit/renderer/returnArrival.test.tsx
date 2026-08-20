@@ -144,6 +144,39 @@ describe('WP-48 · the verdict is READ, and the badge holds one word', () => {
     }
   });
 
+  test('metaLine composes all five segments, driven DIRECTLY across its domain', () => {
+    // WP-46's rule, and the battery proved it applies here: the case below
+    // reached NO row, because every row of the golden morning is the
+    // part-changed class and that class's `state` is empty. The guard was
+    // decoration — dropping `state` and dropping the parts chip from the
+    // composition both survived while every screen drew correctly.
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { metaLine } = require('../../../src/renderer/components/return/arrivalModel');
+    const { SEP } = require('../../../src/renderer/components/return/returnCopy.generated');
+    /* eslint-enable @typescript-eslint/no-var-requires */
+
+    const situation: any = {
+      places: { summary: 'touches production on 2 of 3' },
+      since: new Date(NOW.getTime() - 5 * 3_600_000).toISOString(),
+      state: 'nothing written yet',
+      meta: 'rb.remediate',
+      parts: [{ summary: 'a' }, { summary: 'b' }, { summary: 'c' }],
+    };
+    expect(metaLine(situation, NOW)).toBe(
+      ['touches production on 2 of 3', '5h', 'nothing written yet', 'rb.remediate',
+        `3 ${RETURN_COPY.PARTS_CHIP}`].join(SEP),
+    );
+
+    // Every segment is DROPPABLE and none leaves a dangling separator.
+    expect(metaLine({ ...situation, state: '', meta: '' }, NOW))
+      .toBe(['touches production on 2 of 3', '5h', `3 ${RETURN_COPY.PARTS_CHIP}`].join(SEP));
+    // A situation of one carries no parts chip — one part is not "parts".
+    expect(metaLine({ ...situation, parts: [{ summary: 'a' }] }, NOW))
+      .toBe(['touches production on 2 of 3', '5h', 'nothing written yet', 'rb.remediate'].join(SEP));
+    expect(metaLine({ ...situation, state: '', meta: '', parts: [{ summary: 'a' }] }, NOW))
+      .toBe(['touches production on 2 of 3', '5h'].join(SEP));
+  });
+
   test('the status phrase is on the META line, as text — never in the badge', () => {
     const { tree } = arrival();
     const rows = byAttr(walk(tree), 'data-situation');
