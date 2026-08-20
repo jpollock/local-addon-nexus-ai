@@ -133,8 +133,12 @@ MUTATIONS = [
     ("M17", ASKS, "  if (!triage.verdict && asks.length === 0) return null;",
      "  if (false) return null;",
      "a fleet with nothing waiting is announced an opening state with an empty verdict — the panel opens on a blank wearing furniture"),
-    ("M18", ASKS, "  if (Object.prototype.hasOwnProperty.call(OPENING_ASKS, classId)) return OPENING_ASKS[classId];\n  const authored = AUTHORED as Readonly<Record<string, string>>;\n  if (Object.prototype.hasOwnProperty.call(authored, classId)) return authored[classId];",
-     "  const authored = AUTHORED as Readonly<Record<string, string>>;\n  if (Object.prototype.hasOwnProperty.call(authored, classId)) return authored[classId];\n  if (Object.prototype.hasOwnProperty.call(OPENING_ASKS, classId)) return OPENING_ASKS[classId];",
+    # Anchored on BOTH lines, and the mutation is the swap. The first drive
+    # anchored on the pre-injection shape and reported ANCHOR-MISS once the
+    # source moved — which is the honest failure, and why the anchor is now the
+    # two lines the rule actually is.
+    ("M18", ASKS, "  if (Object.prototype.hasOwnProperty.call(extracted, classId)) return extracted[classId];\n  if (Object.prototype.hasOwnProperty.call(authored, classId)) return authored[classId];",
+     "  if (Object.prototype.hasOwnProperty.call(authored, classId)) return authored[classId];\n  if (Object.prototype.hasOwnProperty.call(extracted, classId)) return extracted[classId];",
      "an authored sentence SHADOWS the designer's own — the ratified copy loses to the packet's, which is the precedence the whole copy route exists to fix"),
     ("M19", PANEL, "    this.setState({ input: text }, () => {", "    this.setState({ input: text }, () => { void this.handleSend();",
      "taking an offered ask SENDS it — three suggestions become three ways to start a turn nobody typed, and an ask the reader wanted to edit is gone"),
