@@ -437,3 +437,12 @@ DIRECTLY across its full input domain — including the states the
 current callers cannot supply — or the inner guard is decoration. The
 tell at battery time: a survivor whose mutation sits inside a function
 every render test "covers."
+
+## The battery pins its ABI (WP-49)
+
+A mutation battery run records the ABI it starts on and verifies the
+same ABI at its end; a mid-run rebuild (jest flipping better-sqlite3,
+an npm run rebuild in a sibling) VOIDS the run — re-run whole, never
+splice. Evidence: a mid-battery ABI flip produced 24 false VOIDs that
+read as mutation outcomes. A battery that measured two ABIs measured
+nothing.

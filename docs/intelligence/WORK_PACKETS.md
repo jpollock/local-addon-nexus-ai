@@ -20727,3 +20727,59 @@ honest limit) is the template for what to do instead of guessing.
 
 Base: `poc/nexintelligence-ux` @ `c5a634ea`. Branch `wp-49`, worktree
 `.worktrees/wp-49`. No remote is touched at any point.
+
+---
+
+## WP-49 · GATE RULING — the front door (2026-08-20, architect adjudication)
+
+**Verdict: PASS. Cleared to merge as held** — no further code changes;
+the substantive escalation already did the right thing and the ruling
+routes its ask.
+
+**The three authored sentences: RATIFIED AS INTERIM**, read verbatim
+from the branch report. The one templatable ask was templated from the
+designer's own bytes (`What does {checkpoint} need from me?`); the two
+`{runbookId}` asks are honest interim — and BOTH retire when WP-49a
+lands, because the run noun they actually want is derivable from
+ratified vocabulary (`RUN_NOUN[capability]`, v1.4) the moment
+`Situation` carries `capability`. Declining to ship the designer's
+sentences with the WRONG subject ("an update run beside a containment
+run's row") is the WP-48 tripwire discipline applied at authoring
+time. The incident ask stays authored; designer FYI carries all three.
+
+**The four escalations, ruled:**
+1. **Rider 1: the measurement is RATIFIED and the rider stands as law
+   awaiting its fact.** Building the predicate, measuring that it
+   would file every 6c row under "nothing needed of you," and REMOVING
+   it with all three findings pinned against the real fold — that is
+   exactly what the escalate-don't-guess instruction meant.
+   **WP-49a is REGISTERED** as one host-side additive micro:
+   `TriageView.working` (sessions running with no pending gate,
+   rendered as the one-line rider) **plus `Situation.capability`**
+   (the same join the asks need — two escalations, one missing field
+   family). Rider 1's line and the run-noun asks both light up when
+   it lands, no renderer change.
+2. **Record = Activity renamed: ACCEPTED** as the reversible reading,
+   alternative recorded, designer's word invited.
+3. **The strip at five: ACCEPTED.** Fleet and Agents stay until item
+   6 rules — stranding content to satisfy a count would invert the
+   collapse's own first law (nothing becomes unreachable). XD-27's
+   binding half is Now-not-a-tab, which holds at any strip width.
+4. **J-Glance's buttons===doors growing into an exhaustive account:
+   ACCEPTED** — an eval predating a ruling must grow to account for
+   it; the alternative is a ruling unshippable by its own
+   instruments.
+
+**Environment findings:** the `git stash` slip is recorded as OWNED —
+protocol forbids it in multi-agent worktrees, the sibling stash
+verified untouched, the tree verified back; the owning is the
+standard and the verification is why no harm followed. The poisoned
+cache count advances two (neither red believed). **New protocol rule
+appended: a battery run pins the ABI before AND after; a mid-run flip
+VOIDS the run** — 24 false VOIDs are the evidence, and a battery that
+measured two ABIs measured nothing.
+
+**Merge instructions standing:** architect work verbatim-first if
+any, merge on `poc/nexintelligence-ux`, record-merge blob standard
+with chronology ruling, receipts pasted after they print, locks
+released only after acceptance.
