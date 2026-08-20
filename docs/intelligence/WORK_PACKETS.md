@@ -18635,3 +18635,42 @@ pins (XD-23). The designer FYI bundle for the next handoff carries
 two items from this packet: the `state` naming ruling and the
 world-state-to-halts generalization of their tear. The owner's items
 stand: three open smokes + the promotion ceremony sitting.
+
+---
+
+## WP-46 · LOCK ANNOUNCE (2026-08-19) — UX build 2, the arrival and the re-entry
+
+**Claimed, on the base, before the worktree is cut** (the WP-20f/WP-37 crossed-claim
+rule: a lock announced only on a worktree is invisible to the agent it warns).
+
+**Verified free at this tail before claiming.** The last lock event in this file is
+WP-30's release ("**THE `src/main/intelligence-host/` AND `tests/intelligence-evals/`
+LOCKS ARE RELEASED.**", WP-30 merge report), and WP-44's Settings-renderer lock was
+released by its own merge report at `73f8b67b`. No open claim stands on any surface
+below.
+
+**LOCKED SURFACES — four, not two, and the two beyond the launch instruction are
+declared here rather than discovered in a diff:**
+
+1. `src/renderer/` — the Home/arrival and session re-entry components. The packet's
+   subject.
+2. `src/main/ipc-handlers.ts` — the integration lock's IPC half. Wiring only: four
+   pass-throughs onto `createSessionRegistry`'s four methods, no derivation, per the
+   WP-41/WP-44 precedent in the same file.
+3. `src/common/constants.ts` — **declared, not assumed.** The IPC channel names live
+   there and nowhere else; WP-41 and WP-44 both added their channels there under the
+   same integration lock. It is not named in the ownership map, so it is named here.
+4. `tests/intelligence-evals/` — **declared, and conditional.** J-Return's five
+   UX2-owned criteria are `journeyGapCheck` entries, which return BLOCKED
+   unconditionally by construction; making them drivable is an edit to `checks.ts`.
+   Released by WP-30's merge report. If the registry turns out to measure these
+   differently, the registry wins and the divergence is raised rather than engineered
+   away.
+
+**NOT TOUCHED:** `src/main/intelligence-host/` — the query contract is CONSUMED, never
+extended. If this packet finds it needs a field the contract does not carry, it stops
+and escalates rather than reaching across the seam. (One such finding is already
+expected: the drift line's count. See the gate report.)
+
+**Base:** `ee3fd67a` (WP-30 merge accepted, `3dc8df01` merged). **Worktree:**
+`.worktrees/wp-46`, branch `wp-46`. Nothing is pushed; no tag, no version bump.
