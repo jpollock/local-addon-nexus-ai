@@ -20565,3 +20565,76 @@ this packet's renderer lock.
 
 **THE `src/main/intelligence-host/`, `src/renderer/`, `tests/intelligence-evals/`
 AND `docs/intelligence/` LOCKS ARE RELEASED.**
+
+---
+
+## WP-48 · MERGE ACCEPTED — the Now verdicts, ruling landed (2026-08-20, architect adjudication)
+
+**Independent verification — by content this time, and the method is
+worth recording:** the branch base overlapped the architect's primary
+appends, so a byte-offset reconstruction was the wrong instrument.
+The loss-proof check ran instead: **every `## ` entry header from BOTH
+parents present in the merged blob, zero missing from either side,
+zero merge-created duplicates** (the three repeated sub-headers
+pre-exist in the primary at identical counts — different packets
+reusing section titles), report-before-ruling confirmed by position,
+zero line-anchored markers, and the working file is the merged blob
+plus the 6,012-byte merge report as its exact tail. Stat: 14 files,
++2,890/−37, the ruling's commits included. The agent's own four-part
+arithmetic closed at its time with residual zero and is accepted as
+reported; the content check is this acceptance's own instrument.
+
+**The ruling's landing, adjudicated:**
+- **Binding `{total}` to `scope.runnable` fixed a SECOND false
+  sentence** that had not yet surfaced ("1 of 1 are changed" on a
+  5-armed run — self-contradicting). Same collision, second template.
+  The ruling was righter than it knew; credited to the fixture's slot
+  table, which was the authority all along.
+- **Null kept distinct from zero** ("nothing selected anything" is
+  not "a selection chose nothing"), both guards declining on null,
+  and the coercion agreement PINNED rather than trusted. Ratified.
+- **The guard amendment landed in the ratified fixture, not the
+  composer** — one rule, one home, the agreement pin holding.
+  Ratified. `contradictedByTheRecord` now deliberately redundant and
+  directly pinned — the tripwire outliving the hazard it caught.
+- **The honest zero on the live fleet, accepted as the finding it
+  is**: 0 of 36 manifests carry a scope key; every real run was armed
+  by predicate, never by selection; `targetSet` is null on all three
+  rows and the platform WITHHOLDS rather than guesses. Nothing
+  regressed; the visible payoff waits on a producer. **WP-48b is
+  REGISTERED as the twin: the arming records its scope on EVERY
+  manifest, predicate-armed included** — the day it does, both
+  waiting classes light on the real fleet with no further code
+  change. (WP-48a: the sentinel's causal link. WP-48b: the arming's
+  scope. Two producers owing the record what they already know.)
+- **Post-ruling battery credits**: third dead-code catch by the same
+  method (`OpenSession.targetSet` unkillable → deleted); the
+  morning-helper coincidence (headlines identical to parts[0].summary
+  masking a missing scope — the pin passing on luck until fixed).
+- The two unanchored `<<<<<<<` prose hits: the record documenting its
+  own false alarm, and the warning working. Third fitting, as
+  predicted at WP-45.
+
+**WP-48 is CLOSED.** The product's headlines are the designer's
+sentences, composed once in the host; the chips are one word; the
+authored count fell to 2; and the eval registry held at 50/0/18/10
+through a change that touched every headline in the product — which
+is what "the copy pipeline as law" was for. **WP-49 (the front door)
+is CLEAR TO CUT** — the renderer lock is released, the prompt stands
+as written.
+
+---
+
+## BRANCH NOTE — THE UX TRACK MOVES TO `poc/nexintelligence-ux` (2026-08-20, owner-directed)
+
+Verified: `poc/nexintelligence-ux` exists, is the current checkout, and
+its tip equals `poc/nexintelligence`'s (`5e7748eb` — WP-48's merge
+report), so the fork point is clean: nothing diverges yet. From here,
+**the UX track (WP-49 and successors) cuts from, gates against, and
+merges to `poc/nexintelligence-ux`**. All standing protocol carries
+unchanged — lock announces on THIS base, the record's tail lives on
+this branch, receipts and record-merge standards identical. Anything
+non-UX (intelligence-host law work, WP-48a/48b producers, WP-20c)
+lands wherever it is cut from, with the branch named in its
+registration; a future fold of `-ux` back into `poc/nexintelligence`
+is an owner decision, taken with receipts when taken.
