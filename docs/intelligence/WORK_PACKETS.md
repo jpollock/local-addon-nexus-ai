@@ -19581,3 +19581,128 @@ re-run the touched suites, then the standard sequence — architect
 uncommitted work verbatim-first if any, merge, record-merge blob
 standard with chronology ruling, receipts pasted after they print,
 locks released only after acceptance.
+
+## WP-47 · MERGED, LOCKS RELEASED (2026-08-20)
+
+Merge `7ab7c67a`. `git diff --stat 7ab7c67a^1 7ab7c67a`: **16 files,
++2,804/−13**.
+
+### 1 · The rename, executed as ruled
+
+`src/renderer/hostCapabilities.ts` → **`src/renderer/hostContractProbe.ts`**.
+
+**The test file was renamed with it**, which the ruling did not name and which is
+the same defect one directory over: `tests/unit/renderer/hostCapabilities.probe.
+test.ts` sat beside the pre-existing `host-capabilities.test.ts`, which tests the
+OTHER module. Renaming only the source would have left a colliding word in the
+test tree to trap the next reader. Now `hostContractProbe.test.ts`.
+
+Four reference sites followed, and one of them mattered more than the others:
+**the battery's `PROBE` constant and suite path**. A stale path there does not
+fail loudly — it reports ANCHOR-MISS on every probe mutation while the run still
+prints a total, which is the silently-measures-nothing family. Re-run after the
+rename: **20/20 KILLED, control SURVIVED, tree pristine** — the same verdict as
+before it, which is what makes the rename provably behaviour-free.
+
+The module header no longer argues that a comment disambiguates two identical
+filenames; it records the rename instead. The proposal's §4 path was updated
+(now **40,429 bytes, md5 `9c8fd94930fc3f978848fc2af81e6f20`**).
+
+### 2 · The record merge — four-way verification, residual zero
+
+`WORK_PACKETS.md` conflicted at the tail, as expected: the architect's ruling and
+this packet's gate report are both appends onto the same ancestor. Rebuilt from
+the **three blobs**, never hunk-edited (the WP-43 standard):
+
+```
+ancestor        1,163,969 bytes   (stage 1, merge base)
+agent half         11,703 bytes   (the gate report)
+architect half      3,743 bytes   (the gate ruling)
+1,163,969 + 11,703 + 3,743 = 1,179,415; result 1,179,415; residual 0
+```
+
+- **1 ANCESTOR is an exact prefix of the result:** True.
+- **2 Each half appears EXACTLY ONCE**, at offsets 1,163,969 and 1,175,672.
+- **3 CHRONOLOGICAL: the gate report precedes the ruling that rules on it.**
+  Agent half first — the same reading of the standard WP-46's merge established
+  and WP-46's adjudication ratified: chronology of content decides the order, not
+  a fixed side. A ruling placed above the report it rules on would make the
+  record cite forward.
+- **4 Line-anchored conflict-marker scan: none.**
+
+### 3 · The architect's uncommitted work, committed verbatim first
+
+`3d33c97a` — the WP-47 gate ruling, found uncommitted in the primary checkout and
+committed **verbatim, separately attributed**, before the merge. Per the standing
+precedent, not folded into this packet's commits and not edited.
+
+**Verified a pure append BYTE-LEVEL rather than by diffstat**, because WP-43's
+finding says a zero-deletion diffstat is not proof — an insertion mid-file shows
+zero deletions too. The committed blob is an **exact byte prefix** of the working
+file: **3,743 bytes appended at EOF, 66 lines.**
+
+### 4 · Merged-tree measurements
+
+- **Full suite: 610 suites / 8,378 passed / 2 skipped / 8,380 total**, exit 0.
+- **READ THE SKIPPED COLUMN FIRST.** The worktree measured
+  `8,368 passed / 12 skipped / 8,380 total`. **Same total, different split:** ten
+  tests moved from skipped to PASSED across the worktree→primary boundary. That
+  is the documented WP-20c finding exactly — the primary checkout holds both
+  embedding model files where a worktree has one — and it is the PHANTOM-GAIN
+  direction of it. Confirmed at the source: `tests/main/embedding-service.test.ts`
+  runs **11/11 on the merged tree** and `describe.skip`s in the worktree. Nothing
+  was gained and nothing regressed; +52 remains this packet's true delta, against
+  the base's 8,328.
+- **Battery on the merged tree: 20/20 KILLED**, control SURVIVED, pristine both
+  sides.
+- `npx tsc -p . --noEmit`: clean. `npx eslint src`: **0 errors, 6 warnings** —
+  the same 6 that measure on the base.
+- `npm run inventory:dom-reach:check`: current — the tracked inventory is exactly
+  what the generator produces from the merged tree.
+- **Unpushed, properly:** zero remote `wp-47` refs, no upstream configured on
+  `poc/nexintelligence`, newest tag `v0.5.2` (2026-07-27, untouched), version
+  still `0.5.2`.
+
+### 5 · What is now in the record
+
+**The proposal is the deliverable, and it is ruled.** 655 lines, structured on
+the Local architect's seven asks in their order, every claim about Local cited to
+their recon with their own citation into Local's source, and every claim about
+OUR code independently verified by the architect before the ruling (4
+MutationObservers, 36 `--nxai-*` declarations — both exact).
+
+**Two owner decisions are sealed:** the **Nexus 1.0.0 version floor** adopted as
+proposed, and the **additive-integer clause** ratified — the agent's own
+contribution, flagged as such in the document rather than smuggled in as the
+recon's.
+
+**The inventory is the phase-6 instrument.** 12 declared, **11 open**, 1 accepted
+and excluded from the count, 20 marked lines across 6 files. Both directions are
+build gates, and each failure mode is reproduced against a synthetic tree that
+must fail it. The designer's phase-6 gate — *"the inventory is empty"* — now has
+something that counts it, and a new reach cannot enter `src/renderer/` without
+appearing in it.
+
+### 6 · MICRO REGISTERED — WP-47a · SidebarBadgeManager: delete it or record why it stays
+
+Ruled at the gate. `src/renderer/SidebarBadgeManager.ts` has **zero callers**
+(measured), reaches `[data-site-id]` rows and `.TID_SiteListSite_Span_SiteName`,
+and carries a live `MutationObserver` that nothing ever starts. It is counted as
+an OPEN reach — the agent's reasoning ratified verbatim: *"an inventory that
+excuses a reach for not being called can be gamed by not calling things."*
+
+The micro: delete it, or record in the inventory why it stays. Zero-caller code
+with a live observer is either dead or a trap, and the inventory is now the place
+that forces the question rather than letting it sit. Deleting it would take the
+open count from 11 to 10 without any host change — the first entry on the ladder
+that costs Local nothing.
+
+### 7 · ABI, declared
+
+This session ran jest, so `better-sqlite3` is built for **system Node (this
+machine: v25.9.0, ABI 141)** — verified by loading it, not assumed. **The owner
+must `npm run rebuild` before loading Local.**
+
+**THE `src/renderer/` AND `docs/intelligence/` LOCKS ARE RELEASED.**
+
+---
