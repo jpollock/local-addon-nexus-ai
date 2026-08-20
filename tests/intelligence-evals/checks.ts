@@ -1239,14 +1239,6 @@ const JOURNEY_GAPS: JourneyGap[] = [
   {
     spec: J_GLANCE,
     kind: 'key_step',
-    matches: 'A verdict is visible with no i',
-    token: 'needsYou',
-    missing: 'the cold-open verdict view — nothing renders a no-interaction verdict',
-    unblockedBy: UX2,
-  },
-  {
-    spec: J_GLANCE,
-    kind: 'key_step',
     matches: 'Every count and age on screen i',
     token: 'needsYou',
     missing: 'the Glance surface whose counts the derivation pins would run against',
@@ -1265,46 +1257,10 @@ const JOURNEY_GAPS: JourneyGap[] = [
   },
   {
     spec: J_GLANCE,
-    kind: 'key_step',
-    matches: 'The needs-you row names what i',
-    token: 'needsYou',
-    missing: 'the needs-you row itself',
-    unblockedBy: UX2,
-    standing:
-      'WHAT it names is now answerable: WP-30\'s fold reports each session\'s pending gate by ' +
-      'checkpoint id with its position in the runbook\'s declared list, and ranks the sessions by ' +
-      'the consequence order. The row that would say it does not exist',
-  },
-  {
-    spec: J_GLANCE,
-    kind: 'must_not',
-    matches: 'Any ceremony: no approval, no c',
-    token: 'needsYou',
-    missing: 'the first view whose contents this prohibits',
-    unblockedBy: UX2,
-  },
-  {
-    spec: J_GLANCE,
     kind: 'must_not',
     matches: 'A fact with no date where its c',
     token: 'needsYou',
     missing: 'the rendered fact set to audit for undated facts',
-    unblockedBy: UX2,
-  },
-  {
-    spec: J_GLANCE,
-    kind: 'must_not',
-    matches: 'A transcript or a session scro',
-    token: 'needsYou',
-    missing: 'the first view this prohibits a transcript from',
-    unblockedBy: UX2,
-  },
-  {
-    spec: J_GLANCE,
-    kind: 'must_not',
-    matches: 'A count the user must open som',
-    token: 'needsYou',
-    missing: 'the rendered counts whose trustworthiness this is about',
     unblockedBy: UX2,
   },
 
@@ -1392,59 +1348,6 @@ const JOURNEY_GAPS: JourneyGap[] = [
   },
 
   // ---- J-Return · M6 -------------------------------------------------------
-  {
-    spec: J_RETURN,
-    kind: 'key_step',
-    matches: 'The triage shows waiting and c',
-    token: 'needsYou',
-    missing: 'the arrival triage — the two-column RENDER sorted by the consequence order',
-    unblockedBy: UX2,
-    standing:
-      'the consequence order it sorts by IS ruled (moments-model 1.3 §4a), it has its own golden ' +
-      'fixture, and as of WP-30 it is COMPUTED: `probeSessionRegistry` reports the two columns and ' +
-      'the reserved slot, ranked, every run of this report. What is absent is anything that renders ' +
-      'them — no file under src/renderer references the fold',
-  },
-  {
-    spec: J_RETURN,
-    kind: 'key_step',
-    matches: 'The finished portion is alread',
-    token: 'needsYou',
-    missing: 'the Record-rank filing this journey arrives to find already done',
-    unblockedBy: UX2,
-  },
-  {
-    spec: J_RETURN,
-    kind: 'must_not',
-    matches: 'A scrollback as the re-entry.',
-    token: 'needsYou',
-    missing: 'the re-entry surface this prohibits a scrollback from being',
-    unblockedBy: UX2,
-  },
-  {
-    spec: J_RETURN,
-    kind: 'must_not',
-    matches: 'A needs-you row that knows tha',
-    token: 'needsYou',
-    missing: 'the needs-you ROW whose WHERE this is about — the render, not the answer',
-    // WP-30 SHIPPED. Leaving it on this line would be a BLOCKED naming a
-    // shipped packet, which understates progress exactly as an overstated gap
-    // misleads — the rule WP-44 applied when UX3 shipped, applied again.
-    unblockedBy: UX2,
-    standing:
-      'the WHERE now EXISTS and is measured: `probeSessionRegistry` reports every waiting session ' +
-      'row naming its pending gate by checkpoint id, with its position in the runbook\'s declared ' +
-      'list and whether it awaits a consent or an evidence (WP-30). What is absent is a row that ' +
-      'renders it — this must-not is about what a person sees, and no surface reads the registry',
-  },
-  {
-    spec: J_RETURN,
-    kind: 'must_not',
-    matches: 'Everything-since-you-left rend',
-    token: 'needsYou',
-    missing: 'the arrival render this prohibits prose from being',
-    unblockedBy: UX2,
-  },
 
   // ---- J-Refusal · the criteria that wait on a surface --------------------
   //
@@ -2184,6 +2087,528 @@ const J_INSPECT_DRIVEN: RegisteredCheck[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// WP-46 · J-Return and J-Glance, DRIVEN against the arrival UX build 2 shipped
+// ---------------------------------------------------------------------------
+//
+// Ten criteria left `JOURNEY_GAPS` when the render landed. Each one was BLOCKED
+// on "UX build 2 — the RENDER, and nothing else", and each is now answered the
+// way WP-41's comparator criteria are: by requiring the real component in this
+// process, folding the report's OWN ledger through the real session registry,
+// rendering the real element tree and measuring it. A green here is a
+// measurement, not a claim.
+//
+// THE LINE BETWEEN WHAT FLIPPED AND WHAT DID NOT. UX build 2 owns RENDERINGS.
+// Three J-Glance criteria stay BLOCKED on purpose and their reasons are in
+// `JOURNEY_GAPS` above: the two freshness criteria ("every count and age … is
+// dated or carries its freshness class", "a fact with no date where its class
+// has an SLO") are about M1's fact set rather than M6's verdict rows, and
+// "exactly one door per fact" is about the Glance surface's fact-level routes.
+// A flip where everything turns green at once is a flip nobody measured.
+//
+// The fixture's places are LOCAL, for `probeSessionRegistry`'s reason: every
+// fixture site is a local site, and a describer that invented environments for
+// them would put a fabricated production label under the sort key.
+
+const RETURN_TOKEN = 'needsYou';
+
+/** Every element in a raw `React.createElement` tree, flattened deeply. */
+function elementsOf(node: unknown, out: any[] = []): any[] {
+  if (Array.isArray(node)) { for (const n of node) elementsOf(n, out); return out; }
+  if (!node || typeof node !== 'object') return out;
+  const el = node as { type?: unknown; props?: { children?: unknown } };
+  if (el.type !== undefined) out.push(el);
+  elementsOf(el.props?.children, out);
+  return out;
+}
+
+/** Every text node beneath an element, in document order. */
+function textsOf(node: unknown, out: string[] = []): string[] {
+  if (node === null || node === undefined) return out;
+  if (typeof node === 'string' || typeof node === 'number') { out.push(String(node)); return out; }
+  if (Array.isArray(node)) { for (const n of node) textsOf(n, out); return out; }
+  if (typeof node === 'object') textsOf((node as { props?: { children?: unknown } }).props?.children, out);
+  return out;
+}
+
+const attr = (el: any, name: string): unknown => el?.props?.[name];
+const withAttr = (els: any[], name: string): any[] => els.filter((e) => attr(e, name) !== undefined);
+
+interface ReturnSurface {
+  triage: any;
+  arrival: any[];
+  session: any;
+  reentry: any[];
+  reentryUnknown: any[];
+}
+
+/**
+ * The report's own ledger, folded and RENDERED.
+ *
+ * Built per criterion rather than cached, because each criterion must be able
+ * to fail on its own: a shared memo would let one criterion's construction
+ * error read as five criteria's verdict.
+ */
+function driveReturnSurface(fixture: EvalFixture): ReturnSurface {
+  /* eslint-disable @typescript-eslint/no-var-requires */
+  const { createSessionRegistry } = require('../../src/main/intelligence-host/sessionRegistry');
+  const { Arrival } = require('../../src/renderer/components/return/Arrival');
+  const { SessionReEntry } = require('../../src/renderer/components/return/SessionReEntry');
+  /* eslint-enable @typescript-eslint/no-var-requires */
+
+  const placeOf = new Map<string, { host: string }>();
+  for (const site of fixture.fleet) {
+    placeOf.set(fixture.environmentIdOf(site.siteId), { host: 'local' });
+    placeOf.set(fixture.siteIdOf(site.siteId), { host: 'local' });
+  }
+
+  const registry = createSessionRegistry({
+    core: fixture.core,
+    describePlace: (id: string) => placeOf.get(id),
+  });
+  const triage = registry.triage();
+
+  const now = new Date();
+  const store = (() => {
+    const kv = new Map<string, string>();
+    return { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => { kv.set(k, v); } };
+  })();
+
+  const arrivalInstance = new Arrival({
+    electron: { ipcRenderer: { invoke: () => Promise.resolve(triage) } },
+    now,
+    store,
+  });
+  arrivalInstance.state = { triage, loading: false, error: null, awayMs: 12 * 3_600_000 };
+
+  const gatedRow = triage.waiting
+    .map((s: any) => (s.sessionId ? registry.session(s.sessionId) : undefined))
+    .find((r: any) => r && r.gate);
+
+  return {
+    triage,
+    arrival: elementsOf(arrivalInstance.render()),
+    session: gatedRow ?? null,
+    reentry: elementsOf(new SessionReEntry({ session: gatedRow ?? null }).render()),
+    reentryUnknown: elementsOf(new SessionReEntry({ session: null }).render()),
+  };
+}
+
+/**
+ * A criterion UX build 2's render answers. Gated on the probe, then DRIVEN.
+ *
+ * Falls back to BLOCKED rather than FAIL when the surface is absent, for
+ * `comparatorDriven`'s reason: "the screen is gone" and "the screen is wrong"
+ * are different findings.
+ */
+function returnDriven(opts: {
+  spec: string;
+  matches: string;
+  kind: CriterionKind;
+  missing: string;
+  holds: (s: ReturnSurface) => { ok: boolean; evidence: string[] };
+}): RegisteredCheck {
+  return {
+    specId: opts.spec,
+    kind: opts.kind,
+    matches: opts.matches,
+    run: (ctx) => {
+      if (ctx.probes.surfaces.absentFromRenderer(RETURN_TOKEN)) {
+        return blocked(opts.missing, UX2, [
+          ...ctx.probes.surfaces.evidence.filter((l) => l.includes(`\`${RETURN_TOKEN}\``)),
+          'this criterion IS driven when the surface is present — it falls back to BLOCKED rather ' +
+            'than FAIL, because "the screen is gone" and "the screen is wrong" are different findings',
+        ]);
+      }
+      let surface: ReturnSurface;
+      try {
+        surface = driveReturnSurface(ctx.fixture);
+      } catch (err) {
+        return {
+          verdict: 'FAIL',
+          evidence: [`folding and rendering the arrival threw: ${(err as Error)?.message ?? String(err)}`],
+        };
+      }
+      if (surface.triage.waiting.length === 0 && surface.triage.changed.length === 0) {
+        // Shape #15 at the criterion level: every measurement below would hold
+        // vacuously over an empty triage, so the absence is reported as one.
+        return blocked(opts.missing, UX2, [
+          'THE FOLD OVER THIS REPORT\'S LEDGER IS EMPTY — no waiting row and no changed row, so ' +
+            'nothing was measured. Every assertion below would pass against an empty render',
+        ]);
+      }
+      let result: { ok: boolean; evidence: string[] };
+      try {
+        result = opts.holds(surface);
+      } catch (err) {
+        return {
+          verdict: 'FAIL',
+          evidence: [`driving the shipped arrival threw: ${(err as Error)?.message ?? String(err)}`],
+        };
+      }
+      return {
+        verdict: result.ok ? 'PASS' : 'FAIL',
+        evidence: [
+          'DRIVEN against the shipped arrival and re-entry (WP-46), not asserted — the components ' +
+            'below were required and rendered in this process, over this report\'s own ledger folded ' +
+            'by the real session registry',
+          ...result.evidence,
+        ],
+      };
+    },
+  };
+}
+
+/** Rows a column actually drew, in the order it drew them. */
+function drawnColumn(surface: ReturnSurface, column: 'waiting' | 'changed'): string[] {
+  const col = surface.arrival.find((e) => attr(e, 'data-column') === column);
+  return withAttr(elementsOf(col), 'data-situation').map((e) => String(attr(e, 'data-situation')));
+}
+
+const UX2_DRIVEN: RegisteredCheck[] = [
+  // ---- J-Return · M6 -------------------------------------------------------
+  returnDriven({
+    spec: J_RETURN,
+    kind: 'key_step',
+    matches: 'The triage shows waiting and c',
+    missing: 'the arrival triage — the two-column RENDER sorted by the consequence order',
+    holds: (s) => {
+      const waiting = drawnColumn(s, 'waiting');
+      const changed = drawnColumn(s, 'changed');
+      const expectedWaiting = s.triage.waiting.map((x: any) => x.id);
+      const expectedChanged = s.triage.changed.map((x: any) => x.id);
+      const tiers = withAttr(s.arrival, 'data-situation').map((e) => attr(e, 'data-tier'));
+      return {
+        ok:
+          JSON.stringify(waiting) === JSON.stringify(expectedWaiting) &&
+          JSON.stringify(changed) === JSON.stringify(expectedChanged) &&
+          waiting.length + changed.length > 0 &&
+          !tiers.includes(3),
+        evidence: [
+          `the waiting column drew ${waiting.length} row(s) IN THE FOLD'S OWN ORDER, and the ` +
+            `changed column ${changed.length} — not a set comparison: the consequence order IS the ` +
+            'ordering, so the right rows in the wrong order would have lost the only thing ranked',
+          `tiers on screen: ${JSON.stringify(tiers)} — no tier 3 in either column, because tier 3 ` +
+            'is the reserved slot rather than a rank (§4a tear 3)',
+          `the reserved slot rendered as ${withAttr(s.arrival, 'data-reserved').length} row(s) ` +
+            `whatever the counts say: "${s.triage.reserved.headline}"`,
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_RETURN,
+    kind: 'key_step',
+    matches: 'The finished portion is alread',
+    missing: 'the Record-rank filing this journey arrives to find already done',
+    holds: (s) => {
+      const col = s.arrival.find((e) => attr(e, 'data-column') === 'changed');
+      const rows = withAttr(elementsOf(col), 'data-situation');
+      const filed = withAttr(elementsOf(col), 'data-filed');
+      const filedText = textsOf(filed[0]).join('');
+      // "PROCEDURE BESIDE RUN" IS ABOUT RUNS, and the first form of this check
+      // demanded a runbook reference from EVERY changed row — including the two
+      // closed incidents in this report's ledger, which are not runs under a
+      // procedure and have none to name. It failed, correctly, against a
+      // surface that was right: the fault was in the measurement, which asked a
+      // situation kind for a fact its kind does not have.
+      //
+      // The reading that is actually the criterion's: every FINISHED RUN in the
+      // column is filed with the procedure it ran under, and at least one such
+      // run is present — without that second half this passes vacuously over a
+      // changed column holding nothing but incidents.
+      const finishedRuns = s.triage.changed.filter((x: any) => x.kind === 'session');
+      const namesProcedure = finishedRuns.every((x: any) => /rb\./.test(String(x.tierReason)));
+      return {
+        ok:
+          rows.length === s.triage.changed.length &&
+          rows.length > 0 &&
+          filed.length === 1 &&
+          finishedRuns.length > 0 &&
+          namesProcedure,
+        evidence: [
+          `${rows.length} row(s) render in the CHANGED column, ${finishedRuns.length} of them a ` +
+            `finished RUN, each with the rule that filed it: ` +
+            `${JSON.stringify(s.triage.changed.map((x: any) => x.tierReason))}`,
+          'the rows that name no procedure are closed INCIDENTS, which ran under none — a filing ' +
+            'that claimed a runbook for them would be the surface inventing one',
+          `the provenance line is present exactly once and is the ratified one: "${filedText}"`,
+          'the record exists BEFORE the arrival by construction — the fold reads recorded outcomes ' +
+            'and the column composes nothing; there is no code path here that could compose one',
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_RETURN,
+    kind: 'must_not',
+    matches: 'A needs-you row that knows tha',
+    missing: 'the needs-you ROW whose WHERE this is about — the render, not the answer',
+    holds: (s) => {
+      // The probe's own reading, at the render: no waiting row is SILENTLY
+      // gateless. It draws its gate by checkpoint id, or it is a row the fold
+      // gave no gate (an incident of its own, a run that ended) and it draws
+      // the parts that say so.
+      const drawn = drawnColumn(s, 'waiting');
+      const gatesInFold = s.triage.waiting.filter((x: any) => x.gate);
+      const col = s.arrival.find((e) => attr(e, 'data-column') === 'waiting');
+      const gateIds = withAttr(elementsOf(col), 'data-gate').map((e) => String(attr(e, 'data-gate')));
+      const expected = gatesInFold.map((x: any) => x.gate.checkpointId);
+      const gateLines = withAttr(elementsOf(col), 'data-gate').map((e) => textsOf(e).join(''));
+      const everyGateLineNamesItsId = gateIds.every((id, i) => gateLines[i].includes(id));
+      return {
+        ok:
+          gatesInFold.length > 0 &&
+          JSON.stringify(gateIds) === JSON.stringify(expected) &&
+          everyGateLineNamesItsId &&
+          drawn.length === s.triage.waiting.length,
+        evidence: [
+          `${gatesInFold.length} of ${s.triage.waiting.length} waiting row(s) stand at a gate, and ` +
+            `every one of them RENDERS it by checkpoint id: ${JSON.stringify(gateLines)}`,
+          'the position beside the id is the runbook\'s own — "3 of 8" comes from the document\'s ' +
+            'ordered checkpoint list through `PendingGate`, never counted by the surface',
+          `the rows the fold gave no gate are still drawn (${drawn.length} rows for ` +
+            `${s.triage.waiting.length} situations); a run that ended has no pending step, and its ` +
+            'parts say so rather than the surface inventing a WHERE',
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_RETURN,
+    kind: 'must_not',
+    matches: 'A scrollback as the re-entry.',
+    missing: 'the re-entry surface this prohibits a scrollback from being',
+    holds: (s) => {
+      if (!s.session) {
+        return {
+          ok: false,
+          evidence: ['no waiting row in this report stands at a gate, so no re-entry could be rendered'],
+        };
+      }
+      const types = s.reentry.map((e) => (typeof e.type === 'string' ? e.type : 'component'));
+      const turnNodes = withAttr(s.reentry, 'data-turn');
+      const gate = withAttr(s.reentry, 'data-gate');
+      const declared = withAttr(s.reentry, 'data-checkpoint');
+      return {
+        ok: turnNodes.length === 0 && gate.length === 1 && declared.length > 0,
+        evidence: [
+          `the re-entry rendered ${s.reentry.length} element(s) — ${JSON.stringify([...new Set(types)])} — ` +
+            'and NOT ONE of them is a turn: there is no transcript node, no message list, no scroll ' +
+            'container in the tree',
+          `what it renders instead: the declared list (${declared.length} checkpoints, from the ` +
+            `document), the standing approval, and the gate card at the cursor ` +
+            `(${String(attr(gate[0], 'data-gate'))})`,
+          'the session opened AT ITS GATE rather than at the bottom of a scroll — the gate is a ' +
+            'block of the render, not a position in a list',
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_RETURN,
+    kind: 'must_not',
+    matches: 'Everything-since-you-left rend',
+    missing: 'the arrival render this prohibits prose from being',
+    holds: (s) => {
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const { RETURN_COPY } = require('../../src/renderer/components/return/returnCopy.generated');
+      const model = require('../../src/renderer/components/return/arrivalModel');
+      /* eslint-enable @typescript-eslint/no-var-requires */
+
+      // THE ACCOUNTING IS BY ORIGIN, NOT BY RESEMBLANCE, and that is the second
+      // form of this check. The first asked whether each long string CONTAINED
+      // a ratified sentence, which cannot account for a line COMPOSED of short
+      // ratified fragments around derived values — the accounting line and the
+      // gate line both failed it while being exactly what they should be. The
+      // fault was in the measurement, and the honest repair is to enumerate the
+      // surface's sentence-producing paths and require it to use no other.
+      //
+      // There are four generators, all of them pure functions of fold data and
+      // extracted copy, and they are called HERE with the fold's own values —
+      // so a string only counts as accounted if the surface could have produced
+      // it that way. Anything else on screen is prose about the night.
+      const fromFold = new Set<string>();
+      for (const situation of [...s.triage.waiting, ...s.triage.changed]) {
+        fromFold.add(String(situation.tierReason));
+        fromFold.add(String(situation.places.summary));
+        for (const part of situation.parts) fromFold.add(String(part.summary));
+      }
+      fromFold.add(String(s.triage.reserved.headline));
+
+      const generated = new Set<string>([
+        model.accountingLine(model.arrivalCounts(s.triage)),
+        model.driftLine(null),
+        model.awayHeadline(12 * 3_600_000),
+        model.awayHeadline(null),
+        ...s.triage.waiting.filter((x: any) => x.gate).flatMap((x: any) => [
+          model.gateLine(x.gate),
+          model.needsLine(x.gate),
+        ]),
+        model.reservedDetail(s.triage.reserved),
+        ...Object.values(RETURN_COPY).map(String),
+        ...Object.values(model.AUTHORED).map(String),
+      ]);
+
+      const long = textsOf(s.arrival[0]).filter((t) => t.trim().length >= 40);
+      const unaccounted = long.filter((t) => !fromFold.has(t) && !generated.has(t));
+      return {
+        ok: long.length > 0 && unaccounted.length === 0,
+        evidence: [
+          `${long.length} sentence-length string(s) render on the arrival, and EVERY ONE is either ` +
+            'a field of the fold (a rule, a part summary, a place set, the reserved headline) or the ' +
+            'exact output of one of the four generators, called here with the fold\'s own values',
+          `unaccounted strings: ${JSON.stringify(unaccounted)}`,
+          'the accounting line and the gate line are COMPOSED — counts and gate fields inside ' +
+            'ratified connectives — so they are matched against the generator\'s own output rather ' +
+            'than against a substring, which is what an authored sentence would defeat',
+          'the drift line is the one place a count of unchanged facts could have become prose, and ' +
+            'it renders as ONE line saying where the facts live rather than as rows',
+        ],
+      };
+    },
+  }),
+
+  // ---- J-Glance · M1 — the needs-you row's own criteria ---------------------
+  returnDriven({
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'A verdict is visible with no i',
+    missing: 'the cold-open verdict view — nothing renders a no-interaction verdict',
+    holds: (s) => {
+      const controls = s.arrival.filter((e) =>
+        ['input', 'select', 'textarea', 'form'].includes(String(e.type)),
+      );
+      const buttons = s.arrival.filter((e) => e.type === 'button');
+      const doors = withAttr(s.arrival, 'data-door');
+      const accounting = textsOf(withAttr(s.arrival, 'data-accounting')[0]).join('');
+      return {
+        ok: controls.length === 0 && buttons.length === doors.length && accounting.length > 0,
+        evidence: [
+          `the verdict renders on open: "${accounting}" over ` +
+            `${s.triage.waiting.length} waiting and ${s.triage.changed.length} changed row(s)`,
+          `${controls.length} input/select/textarea/form element(s) in the tree — the render takes ` +
+            'no argument from the user and asks nothing before answering',
+          `the only controls are the ${doors.length} row door(s), and each promotes a session that ` +
+            'already exists rather than starting anything',
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'The needs-you row names what i',
+    missing: 'the needs-you row itself',
+    holds: (s) => {
+      const col = s.arrival.find((e) => attr(e, 'data-column') === 'waiting');
+      const els = elementsOf(col);
+      const gated = s.triage.waiting.filter((x: any) => x.gate);
+      const text = textsOf(col).join(' | ');
+      const namesWhat = gated.every((x: any) => text.includes(`Needs your ${x.gate.awaits}`));
+      const namesWhere = gated.every((x: any) => text.includes(x.gate.checkpointId));
+      return {
+        ok: gated.length > 0 && namesWhat && namesWhere && withAttr(els, 'data-situation').length > 0,
+        evidence: [
+          `each waiting row names WHAT is needed from the gate's own \`awaits\`: ` +
+            `${JSON.stringify(gated.map((x: any) => `Needs your ${x.gate.awaits}`))}`,
+          `…and WHERE, by checkpoint id: ${JSON.stringify(gated.map((x: any) => x.gate.checkpointId))}`,
+          'both come from `PendingGate`, so the row cannot say one without the other',
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_GLANCE,
+    kind: 'must_not',
+    matches: 'Any ceremony: no approval, no c',
+    missing: 'the first view whose contents this prohibits',
+    holds: (s) => {
+      const ceremony = [
+        ...withAttr(s.arrival, 'data-standing'),
+        ...withAttr(s.arrival, 'data-declared'),
+        ...withAttr(s.arrival, 'data-denominator'),
+        ...withAttr(s.arrival, 'data-checkpoint'),
+      ];
+      const controls = s.arrival.filter((e) =>
+        ['input', 'select', 'textarea', 'form'].includes(String(e.type)),
+      );
+      return {
+        ok: ceremony.length === 0 && controls.length === 0,
+        evidence: [
+          'no approval block, no checkpoint rail, no denominator and no plan renders on the ' +
+            'arrival — every one of those belongs to the re-entry, one promotion away',
+          `${controls.length} form control(s): the arrival confirms nothing and asks nothing`,
+          'the ONLY act reachable here is a row door, and a door promotes a session rather than ' +
+            'arming, approving or confirming anything',
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_GLANCE,
+    kind: 'must_not',
+    matches: 'A transcript or a session scro',
+    missing: 'the first view this prohibits a transcript from',
+    holds: (s) => {
+      const turns = withAttr(s.arrival, 'data-turn');
+      const reentryOnArrival = s.arrival.filter((e) => attr(e, 'data-surface') === 'return-reentry');
+      const rows = withAttr(s.arrival, 'data-situation');
+      return {
+        ok: turns.length === 0 && reentryOnArrival.length === 0 && rows.length > 0,
+        evidence: [
+          `the first view renders ${rows.length} derived verdict row(s) and zero turns — there is ` +
+            'no transcript node and no session scroll anywhere in the tree',
+          'the session\'s own turns are not reachable from this view at all; the re-entry is a ' +
+            'separate surface a promotion opens',
+        ],
+      };
+    },
+  }),
+
+  returnDriven({
+    spec: J_GLANCE,
+    kind: 'must_not',
+    matches: 'A count the user must open som',
+    missing: 'the rendered counts whose trustworthiness this is about',
+    holds: (s) => {
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const { arrivalCounts, accountingLine } = require('../../src/renderer/components/return/arrivalModel');
+      /* eslint-enable @typescript-eslint/no-var-requires */
+      const counts = arrivalCounts(s.triage);
+      const rendered = textsOf(withAttr(s.arrival, 'data-accounting')[0]).join('');
+      const waitingDrawn = drawnColumn(s, 'waiting').length;
+      const changedDrawn = drawnColumn(s, 'changed').length;
+      const darkDrawn = s.triage.reserved.dark.length;
+      const badge = withAttr(s.arrival, 'data-badge').map((e) => textsOf(e).join(''));
+      return {
+        ok:
+          rendered === accountingLine(counts) &&
+          counts.needsYou === waitingDrawn &&
+          counts.changed === changedDrawn &&
+          counts.dark === darkDrawn &&
+          (counts.needsYou === 0 || badge.join('') === String(counts.needsYou)),
+        evidence: [
+          `the accounting line reads "${rendered}", and each of its three numbers is the LENGTH OF ` +
+            `A LIST RENDERED ON THE SAME SCREEN: ${waitingDrawn} waiting rows, ${changedDrawn} ` +
+            `changed rows, ${darkDrawn} dark producers in the reserved row`,
+          'there is nothing to open to check them — the count and the thing counted are the same ' +
+            'render pass, from `arrivalCounts` over the `TriageView` the columns draw',
+          `the rail badge carries the same waiting count (${JSON.stringify(badge)}), so the ambient ` +
+            'instrument and the column cannot disagree',
+        ],
+      };
+    },
+  }),
+];
+
 /**
  * WP-30 · the three J-Return criteria the session registry owns, plus the
  * J-Refusal re-ask must-not that WP-44 re-owned to it — all DRIVEN.
@@ -2364,6 +2789,7 @@ const J_REFUSAL_REASK: RegisteredCheck = {
 const JOURNEY_CHECKS: RegisteredCheck[] = [
   ...JOURNEY_GAPS.map(journeyGapCheck),
   ...J_INSPECT_DRIVEN,
+  ...UX2_DRIVEN,
   ...J_RETURN_DRIVEN,
   ...J_REFUSAL_DRIVEN,
   J_REFUSAL_WIDENING,

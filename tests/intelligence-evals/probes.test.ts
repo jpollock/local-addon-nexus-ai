@@ -211,30 +211,40 @@ describe('probeRendererSurfaces', () => {
     // the renderer. A probe whose test freezes today's absences turns into a
     // tripwire against its own project's progress, so what is pinned is the
     // per-token reading, token by token, with the reason each one matters.
-    expect(surfaces.counts.needsYou.renderer).toBe(0); // Glance's row, Return's triage
-    expect(surfaces.counts.sessionRegistry.renderer).toBe(0); // WP-30's fold
     expect(surfaces.counts.capabilityGrants.renderer).toBe(0); // Govern's matrix
     expect(surfaces.counts.refusalTurn.renderer).toBe(0); // WP-33b, the empty-run turn
     // …and the ones that HAVE landed, pinned as present so their BLOCKED
     // criteria cannot quietly go on citing them as missing. This list grows as
-    // the project does — which is the whole reason the pin is per-token.
+    // the project does — which is the whole reason the pin is per-token, and
+    // WP-46 is the third time it has grown rather than been rewritten.
     expect(surfaces.counts.scopeBlock.renderer).toBeGreaterThan(0); // WP-32, merged
     expect(surfaces.counts.siteAtPlaces.renderer).toBeGreaterThan(0); // WP-41, the comparator
+    expect(surfaces.counts.needsYou.renderer).toBeGreaterThan(0); // WP-46, the arrival
+    expect(surfaces.counts.sessionRegistry.renderer).toBeGreaterThan(0); // WP-46, reading WP-30's fold
     expect(surfaces.ok).toBe(false);
   });
 
-  it('WP-30 shipped a FOLD and no UI — both halves pinned, because both are the packet', () => {
-    // "No UI. Not one renderer file." is an acceptance criterion, and an
-    // acceptance criterion nothing checks is a sentence. These two lines are
-    // the check, and they fail in opposite directions: the first goes red if
-    // someone renders the registry before UX build 2 rules how, and the second
-    // goes red if the fold is deleted or renamed while criteria still cite it.
+  it('WP-30\'s fold now HAS a surface — the pin that guarded its absence, turned over', () => {
+    // WHAT THIS PIN USED TO SAY, AND WHY IT SAYS THE OPPOSITE NOW. WP-30's
+    // acceptance criterion was "no UI, not one renderer file", and this pair
+    // was its check: `renderer === 0` went red "if someone renders the registry
+    // before UX build 2 rules how" (its own words). UX build 2 is WP-46, it has
+    // ruled how, and the pin went red exactly as designed — on the change it
+    // was watching for, not on a regression. Turning it over is what closing
+    // that criterion looks like; deleting it would throw away the half that
+    // still has work to do.
     //
-    // The pair is also what keeps the renderer zero from being free. A `0` that
-    // could be produced by a scanner that finds nothing proves nothing; a `0`
-    // beside a positive count from the SAME scan is a measurement.
-    expect(surfaces.counts.sessionRegistry.renderer).toBe(0);
-    expect(surfaces.counts.sessionRegistry.all).toBeGreaterThan(0);
+    // The pair still fails in OPPOSITE DIRECTIONS, which is the property worth
+    // keeping. The first goes red if the arrival stops reading the fold — a
+    // surface that renders M6 without the registry would be deriving its own
+    // verdicts, which is the defect the whole seam exists to prevent. The
+    // second goes red if the fold is deleted or renamed while criteria cite it.
+    // And neither number is free: both come from the SAME scan that still
+    // reports `capabilityGrants` and `refusalTurn` at zero, so a scanner
+    // finding nothing could not produce this result.
+    expect(surfaces.counts.sessionRegistry.renderer).toBeGreaterThan(0);
+    expect(surfaces.counts.sessionRegistry.all).toBeGreaterThan(surfaces.counts.sessionRegistry.renderer);
+    expect(surfaces.counts.capabilityGrants.renderer).toBe(0);
   });
 
   it('the scanner can actually find a token — otherwise every absence is free', () => {

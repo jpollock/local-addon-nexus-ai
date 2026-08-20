@@ -59,6 +59,31 @@ export const IPC_CHANNELS = {
    */
   GOVERN_MATRIX: `${ADDON_PREFIX}:govern:matrix`,
   GOVERN_SET_GRANT: `${ADDON_PREFIX}:govern:set-grant`,
+  /**
+   * WP-46 · M6's FOUR READS. The arrival and the re-entry, and nothing else.
+   *
+   * ALL FOUR ARE READS. There is no fifth channel with a side effect, because
+   * the return has no act of its own: XD-26's re-entry does not re-arm, does not
+   * ask for a second approval and does not confirm you are back. The acts a
+   * resumed session can reach are the ones it already had, at the gate card,
+   * through the channels that already carry them. A `RETURN_RESUME` that "picks
+   * the session back up" would be the resume button XD-26 names as an absence.
+   *
+   * THEY ARE PASS-THROUGHS ONTO `createSessionRegistry`'s FOUR METHODS and they
+   * are four rather than one because the registry's own query surface is four:
+   * `triage()`, `session(id)`, `changedSince(cursor)`, `snapshot()`. A single
+   * channel taking a method name would put a router in the bridge, and the one
+   * property this bridge must have is that it holds no logic at all — the host
+   * folds, the surface reads, and nothing in between derives anything.
+   *
+   * `RETURN_SNAPSHOT` overlaps the other three by design; it is the whole fold
+   * for a caller that wants all four answers from one read, and it is the only
+   * one that reports the horizon, the concurrency limit and the deadline source.
+   */
+  RETURN_TRIAGE: `${ADDON_PREFIX}:return:triage`,
+  RETURN_SESSION: `${ADDON_PREFIX}:return:session`,
+  RETURN_CHANGED_SINCE: `${ADDON_PREFIX}:return:changed-since`,
+  RETURN_SNAPSHOT: `${ADDON_PREFIX}:return:snapshot`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
   GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
   START_SITE: `${ADDON_PREFIX}:start-site`,

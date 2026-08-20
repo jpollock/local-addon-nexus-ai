@@ -114,6 +114,7 @@ import { enrichSiteFinderPlugins, summarizeSiteFinderTwins } from './intelligenc
 import { readSiteContentStatus } from './intelligence-host/siteContentStatus';
 import { readGovernMatrix, setCapabilityGrant } from './intelligence-host/governMatrix';
 import { getIntelligenceCore } from './intelligence-host/coreRegistry';
+import { createSessionRegistry } from './intelligence-host/sessionRegistry';
 import { listComparableFacts, readSiteAtPlaces } from './comparator/comparatorRead';
 import { armFromSelection, previewScope } from './comparator/armFromSelection';
 
@@ -876,6 +877,27 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       capability: String(args?.capability ?? ''),
       grant: args?.grant === true,
     }));
+
+  // WP-46 · M6's four reads — the arrival and the re-entry. THE BRIDGE IS THIN
+  // BY RULE, not by happening to be short: each handler builds the registry and
+  // returns the method's value untouched. No shaping, no defaulting, no merging
+  // of two answers into one, no caching. WP-30's contract is designed so the
+  // host folds and the surface reads, and a transform here would be a second
+  // place the consequence order, the gate's position or the standing approvals
+  // could be decided — which is exactly the drift the one-fold design removes.
+  //
+  // `createSessionRegistry()` per call rather than once at wiring time: the
+  // registry HOLDS NO STATE and re-folds from the ledger on every query, so a
+  // long-lived instance would buy nothing and would outlive a core swap.
+  //
+  // Nothing here is audited, and that is the rule rather than an omission: all
+  // four cannot mutate (CLAUDE.md, "Read-only paths are not audited").
+  safeHandle(IPC_CHANNELS.RETURN_TRIAGE, () => createSessionRegistry().triage());
+  safeHandle(IPC_CHANNELS.RETURN_SESSION, (_event: any, id: string) =>
+    createSessionRegistry().session(String(id ?? '')));
+  safeHandle(IPC_CHANNELS.RETURN_CHANGED_SINCE, (_event: any, cursor?: string) =>
+    createSessionRegistry().changedSince(typeof cursor === 'string' ? cursor : undefined));
+  safeHandle(IPC_CHANNELS.RETURN_SNAPSHOT, () => createSessionRegistry().snapshot());
 
   safeHandle(IPC_CHANNELS.GET_FLEET_LIST, async () => {
     try {
