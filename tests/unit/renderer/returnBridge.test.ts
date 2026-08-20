@@ -189,6 +189,39 @@ describe('the ratified copy — generated, never retyped', () => {
     expect(source).toContain('npm run fixtures:return-copy');
   });
 
+  test('a ratified line the designer MOVED fails loudly, and never renders as a blank', () => {
+    // The guard `fromSheet` carries is unreachable while both designer files
+    // are intact, so it is driven against a COPY of the sheet with one anchor
+    // removed. A generator that emitted `''` here would ship a surface with a
+    // blank where a ratified sentence belongs, and nothing would say so.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wp46-anchor-'));
+    try {
+      const broken = path.join(dir, 'sheet.md');
+      const sheet = fs.readFileSync(SHEET_MD, 'utf-8');
+      expect(sheet).toContain('**Waiting on you**');
+      fs.writeFileSync(broken, sheet.replace('**Waiting on you**', '**Waiting for you**'), 'utf-8');
+
+      let threw = false;
+      let message = '';
+      try {
+        execFileSync(
+          'npx',
+          ['ts-node', GENERATOR, '--sheet', broken, '--out', path.join(dir, 'out.ts')],
+          { cwd: REPO_ROOT, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+      } catch (err) {
+        threw = true;
+        message = String((err as { stderr?: string }).stderr ?? '');
+      }
+      expect(threw).toBe(true);
+      expect(message).toContain('anchor for "the waiting column head" no longer matches');
+      // …and it wrote nothing, rather than writing a file with a hole in it.
+      expect(fs.existsSync(path.join(dir, 'out.ts'))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('the four §6c strings are present and are the ratified ones', () => {
     expect(RETURN_COPY.UNKNOWN_ARM_LEAD).toBe(
       'This session was running a procedure, and the platform can no longer say which',

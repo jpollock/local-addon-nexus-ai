@@ -28,12 +28,13 @@ import { serializeTree } from './helpers/serializeTree';
 import { assertGoldenShape, buildMorning, type Morning } from './helpers/returnMorning';
 import { SessionReEntry } from '../../../src/renderer/components/return/SessionReEntry';
 import { RETURN_COPY } from '../../../src/renderer/components/return/returnCopy.generated';
+import { standingApprovalSentence } from '../../../src/renderer/components/return/arrivalModel';
 import {
   ATTEST_WORDS,
   checkpointMark,
 } from '../../../src/renderer/components/DockedPanel/procedureModel';
 import type { CheckpointState } from '../../../src/main/intelligence-host/procedureView';
-import type { SessionRow, TriageView } from '../../../src/main/intelligence-host/sessionRegistry';
+import type { PendingApproval, SessionRow, TriageView } from '../../../src/main/intelligence-host/sessionRegistry';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const SOURCE = path.join(REPO_ROOT, 'src', 'renderer', 'components', 'return', 'SessionReEntry.tsx');
@@ -278,6 +279,45 @@ describe('the standing approval — its own block, above the gate, never re-aske
     };
     const { nodes } = reentry(denied);
     expect(byAttr(nodes, 'data-standing')).toHaveLength(0);
+  });
+
+  /**
+   * THE SENTENCE ITSELF, over the whole state table.
+   *
+   * Battery finding (M07/M08 survived the first drive): the render path reaches
+   * `standingApprovalSentence` only through `standingApprovals`, which already
+   * filters to `approved` — so the two guards INSIDE the sentence builder were
+   * never exercised by a render test, and a mutation to either survived while
+   * the surface it protects was drawn correctly. Two gates in series, and only
+   * the outer one was pinned. This drives the inner one directly.
+   */
+  describe('the sentence builder\'s own guards', () => {
+    const at = '2026-08-18T12:11:00.000Z';
+
+    test('ONLY an approved decision yields a sentence — pending and denied yield null', () => {
+      const states: Array<PendingApproval['state']> = ['pending', 'approved', 'denied'];
+      const built = states.map((state) => standingApprovalSentence({ checkpointId: 'cp.approval', state, decidedAt: at }));
+
+      expect(built[0]).toBeNull(); // pending — the question is asked AT the gate
+      expect(built[2]).toBeNull(); // denied  — a refusal is not consent standing
+      expect(built[1]).toBe(
+        `${RETURN_COPY.STANDING_APPROVAL_PREFIX}${at}${RETURN_COPY.STANDING_APPROVAL_SUFFIX}`,
+      );
+      // Exactly one of the three states produces the sentence.
+      expect(built.filter((b) => b !== null)).toHaveLength(1);
+    });
+
+    test('an approved decision with NO moment yields null, never "approved this plan undefined"', () => {
+      // `decidedAt` is present for `approved` by the contract's own rule, so
+      // this state should be unreachable — which is exactly why the guard has
+      // to be pinned rather than trusted: an unreachable state that becomes
+      // reachable renders the word `undefined` where the moment belongs, and
+      // XD-26's sentence is about WHEN the person approved.
+      expect(standingApprovalSentence({ checkpointId: 'cp.approval', state: 'approved' })).toBeNull();
+      const good = standingApprovalSentence({ checkpointId: 'cp.approval', state: 'approved', decidedAt: at });
+      expect(good).not.toBeNull();
+      expect(good).not.toContain('undefined');
+    });
   });
 
   test('the block sits ABOVE the gate, and there is no second approval to give', () => {

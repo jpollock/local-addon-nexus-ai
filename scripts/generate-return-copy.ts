@@ -50,6 +50,10 @@ const OUT_FILE = path.join(
   REPO_ROOT, 'src', 'renderer', 'components', 'return', 'returnCopy.generated.ts',
 );
 
+/** The inputs actually read. Overridable by `--sheet` / `--fixture`; see `main`. */
+let sheetPath = SHEET_MD;
+let fixturePath = FIXTURE_JS;
+
 /** Bumped when the SHAPE changes, so a consumer can tell that from a content change. */
 const SHAPE_VERSION = 1;
 
@@ -65,12 +69,12 @@ const SHAPE_VERSION = 1;
  * and only the interpreter knows those are one character.
  */
 function readScenario(): any {
-  const source = fs.readFileSync(FIXTURE_JS, 'utf-8');
+  const source = fs.readFileSync(fixturePath, 'utf-8');
   const sandbox: any = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: FIXTURE_JS });
+  vm.runInContext(source, sandbox, { filename: fixturePath });
   const scenario = sandbox.window.NEXUS_RETURN;
-  if (!scenario) throw new Error(`${FIXTURE_JS} did not assign window.NEXUS_RETURN`);
+  if (!scenario) throw new Error(`${fixturePath} did not assign window.NEXUS_RETURN`);
   return scenario;
 }
 
@@ -83,7 +87,7 @@ function readScenario(): any {
  */
 function fromSheet(md: string, re: RegExp, what: string): string {
   const m = md.match(re);
-  if (!m || !m[1]) throw new Error(`anchor for "${what}" no longer matches ${SHEET_MD}`);
+  if (!m || !m[1]) throw new Error(`anchor for "${what}" no longer matches ${sheetPath}`);
   return m[1].trim();
 }
 
@@ -132,7 +136,7 @@ interface Extracted {
 
 function extract(): { values: Extracted; separator: string } {
   const s = readScenario();
-  const md = fs.readFileSync(SHEET_MD, 'utf-8');
+  const md = fs.readFileSync(sheetPath, 'utf-8');
 
   // --- 6c · the unknown arm. Four strings, verbatim, no substitution. -------
   const unknownArm = s.unknownArm;
@@ -278,6 +282,17 @@ function main(): void {
   const check = argv.includes('--check');
   const outAt = argv.indexOf('--out');
   const out = outAt >= 0 ? path.resolve(argv[outAt + 1]) : OUT_FILE;
+
+  // `--sheet` / `--fixture` override the INPUTS. They exist for one caller: the
+  // test that drives an anchor MISS. `fromSheet` throws rather than emitting a
+  // blank when the designer moves a ratified line, and that guard is
+  // unreachable while both files are intact — so the test hands the generator a
+  // copy with the anchor removed and asserts it exits loudly. A guard nothing
+  // can reach is a guard nothing can check.
+  const sheetAt = argv.indexOf('--sheet');
+  const fixtureAt = argv.indexOf('--fixture');
+  if (sheetAt >= 0) sheetPath = path.resolve(argv[sheetAt + 1]);
+  if (fixtureAt >= 0) fixturePath = path.resolve(argv[fixtureAt + 1]);
 
   const next = emit();
 

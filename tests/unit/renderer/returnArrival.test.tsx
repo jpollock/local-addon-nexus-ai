@@ -27,7 +27,7 @@ import * as React from 'react';
 import { serializeTree } from './helpers/serializeTree';
 import { assertGoldenShape, buildMorning, NOW, type Morning } from './helpers/returnMorning';
 import { Arrival, ageLabel, LAST_ARRIVAL_KEY } from '../../../src/renderer/components/return/Arrival';
-import { AUTHORED, accountingLine, arrivalCounts } from '../../../src/renderer/components/return/arrivalModel';
+import { AUTHORED, accountingLine, arrivalCounts, promotableSessionId } from '../../../src/renderer/components/return/arrivalModel';
 import { RETURN_COPY } from '../../../src/renderer/components/return/returnCopy.generated';
 import type { TriageView } from '../../../src/main/intelligence-host/sessionRegistry';
 
@@ -273,6 +273,47 @@ describe('the absences — pins, not omissions', () => {
     instance.promote(sessionId)();
 
     expect(promoted).toEqual([sessionId]);
+  });
+
+  /**
+   * A SITUATION OF ONE IS STILL A SITUATION — and it is not a session.
+   *
+   * Battery finding (M13 survived the first drive): both waiting rows in the
+   * designer's morning are sessions, so a `promotableSessionId` that fell back
+   * to the situation's own id changed nothing observable. The golden fixture
+   * cannot pin this on its own; the eval fixture's ledger has incident-only
+   * rows and this one now does too.
+   */
+  describe('an incident of its own — a waiting row with no session behind it', () => {
+    const incident = (): any => ({
+      id: 'evt_incident_1',
+      kind: 'incident',
+      column: 'waiting',
+      tier: 2,
+      tierReason: 'an open incident with no run linked to it — nothing has been written under a procedure',
+      places: { tokens: [], highest: null, atHighest: 0, total: 0, unresolved: 0, summary: 'no targets on record' },
+      since: new Date(NOW.getTime() - 2 * 3_600_000).toISOString(),
+      lastEventId: 'evt_incident_1',
+      parts: [{ kind: 'incident', eventId: 'evt_incident_1', summary: 'checkout returned 500' }],
+    });
+
+    test('promotableSessionId returns null for it — an event id is not a session id', () => {
+      expect(promotableSessionId(incident())).toBeNull();
+      expect(promotableSessionId(triage.waiting[0])).toBe(triage.waiting[0].sessionId);
+    });
+
+    test('it renders as a row, and it gets NO door — there is no session to promote', () => {
+      const withIncident = { ...triage, waiting: [...triage.waiting, incident()] };
+      const { nodes } = arrival({ state: { triage: withIncident } });
+
+      // The row is drawn: an incident of one is still a situation, and dropping
+      // it would be worse than giving it a door it cannot honour.
+      expect(byAttr(nodes, 'data-situation').map((n) => props(n)['data-situation'])).toContain('evt_incident_1');
+      // …and the doors are exactly the sessions', never the incident's event id.
+      const doors = byAttr(nodes, 'data-door').map((n) => props(n)['data-door']);
+      expect(doors).toEqual(triage.waiting.map((s) => s.sessionId));
+      expect(doors).not.toContain('evt_incident_1');
+    });
   });
 
   test('every row shows the RULE that placed it, and the rule is the fold\'s own', () => {
