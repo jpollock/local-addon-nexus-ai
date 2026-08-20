@@ -19706,3 +19706,67 @@ must `npm run rebuild` before loading Local.**
 **THE `src/renderer/` AND `docs/intelligence/` LOCKS ARE RELEASED.**
 
 ---
+
+---
+
+## WP-47 · MERGE ACCEPTED — the host contract proposal (2026-08-20, architect adjudication)
+
+**Independent verification, all reproduced:** `git diff --stat
+7ab7c67a^1 7ab7c67a` = **16 files, +2,804/−13** exact; the rename
+landed as ruled AND one step further — `hostContractProbe.ts` and its
+test both exist on the merged tree, the test renamed too because it
+sat beside the other module's test (the identical trap one directory
+over — the extension is ACCEPTED as the ruling's own spirit); the
+four-way record verification re-run from the blobs: halves 11,703 /
+3,743, each substring exactly once at 1,163,969 and 1,175,672,
+**1,163,969 + 11,703 + 3,743 = 1,179,415, residual zero**,
+line-anchored markers zero, chronology correct (report before ruling).
+
+**Adjudications:**
+- **The battery-path finding is the rename's real lesson**: a stale
+  suite path doesn't fail loudly — it reports ANCHOR-MISS per mutation
+  while still printing a total, the silently-measures-nothing family.
+  Re-running to the SAME 20/20 verdict is what made the rename
+  provably behaviour-free. Accepted as reported.
+- **The pure-append verification of the architect's ruling commit**
+  done byte-level (exact prefix + 3,743 at EOF), not by diffstat —
+  WP-43's rule applied unprompted. Accepted.
+- **The skipped-column reading in its PHANTOM-GAIN direction**:
+  primary 8,378/2 vs worktree 8,368/12, same 8,380 total — ten tests
+  moved skipped→passed because the primary holds both embedding
+  files, confirmed at the source (embedding-service.test.ts 11/11
+  here, describe.skip there). +52 stands as the true delta. The
+  boundary read correctly in the direction that would otherwise
+  FLATTER the packet — which is the direction that matters.
+- **WP-47a registered as reported**, with the agent's observation
+  adopted: deleting SidebarBadgeManager takes the open-reach count
+  11 → 10 with no host change — the only rung on the deletion ladder
+  that costs Local nothing. It should be the first rung climbed.
+
+**WP-47 is CLOSED.** The host contract proposal exists on the tree at
+`docs/intelligence/host-contract-proposal.md` — 655 lines, ruled line
+by line, carrying the owner's two sealed decisions (the 1.0.0 floor;
+the additive-integer clause) — with the probe, the inventory guard,
+and the loosened selectors shipping beside it as its running
+evidence. The proposal is now the OWNER'S to carry: when and to whom
+it goes at WP Engine is a product conversation, with the demo track
+(per the plan of record) as its exhibit when scheduled.
+
+---
+
+## WP-47 · POST-ACCEPTANCE NOTE — the proposal's one-byte drift, traced and ratified (2026-08-20, architect)
+
+Delivering the proposal to the owner surfaced a receipt mismatch: the
+merged file measures **40,429 bytes, md5
+`9c8fd94930fc3f978848fc2af81e6f20`**, against the gate receipt's
+40,428 / `e97e9df5…`. Traced, not shrugged at: the rename commit
+(`c281b2ee`) updated the proposal's own §4 reference —
+`hostCapabilities.ts` → `hostContractProbe.ts`, +1 byte, one line —
+which is the gate ruling's own consequence applied to the document
+that names the file. Verified by diffing the two blobs: exactly that
+line, nothing else. RATIFIED as correct (a ruled document citing a
+file the ruling renamed must follow the rename), with the note that
+the merge report should have carried the updated receipt — the
+CURRENT receipts of record for `host-contract-proposal.md` are
+40,429 / `9c8fd949…`. Working file verified identical to the merged
+blob; the copy delivered to the owner is this version.
