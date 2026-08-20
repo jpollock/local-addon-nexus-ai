@@ -20222,3 +20222,129 @@ Two facts from that section bear on this packet:
 - **WP-49 is registered and "CUTS AFTER WP-48 MERGES — the renderer lock
   serializes them."** So the `src/renderer/` lock this report holds is the thing
   gating WP-49's start, and releasing it is part of accepting this packet.
+
+---
+
+## WP-48 · RULING LANDED — the target-set field, and what it did to the live fleet (2026-08-20)
+
+The gate ruling implemented in full. Both remedies taken, not one.
+
+### The field
+
+`SessionRow.targetSet` — read from the manifest's own `scope.runnable`, which
+`chatAssembly` already writes (WP-37's carrier) and the registry already reads.
+The diagnosis was exact: the defect was a **name collision**, and the fix is one
+binding. `{total}` is now the ARMED target set; `places.total` remains the set
+that has an OUTCOME. Both facts are real, both are on the row, and only one is
+that slot's.
+
+**Null is not zero, and it is load-bearing.** No `scope` key means nothing
+selected anything — a different fact from a selection that chose nothing. Both
+`total`-reading guards decline on null. JavaScript happens to agree by coercion
+(`null === 0` and `null > 0` are both false), which is why the ratified strings
+needed no amendment for it — and "the language happens to do the right thing" is
+pinned rather than trusted.
+
+**The second sentence the collision broke, now fixed.** A run with 5 armed and 1
+acted on said *"1 of 1 are changed and the rest are waiting on you"* — which
+contradicts itself, since if 1 of 1 is changed there is no rest. It now says
+**"1 of 5"**. No live row has reached this yet; it is pinned through real
+emitters.
+
+### The guard, amended in the RATIFIED SOURCE
+
+`&& gate === null` added to guard 1 in `situation-headlines.js`, not in the
+composer — so the guard and the code stay one rule and the agreement pin keeps
+holding. The generator regenerated; `:check` green. New receipts:
+
+```
+situation-headlines.js        7428 bytes  md5 400fabcc4110fd33c19c90b070f67c5e
+situationCopy.generated.ts    6168 bytes  md5 2b061e5720848c9b800e668bd6c5ecd0
+```
+
+### The tripwire, permanent and now deliberately redundant
+
+`contradictedByTheRecord` stays. Because the ruling took BOTH remedies, no input
+can reach it through `selectSituationTemplate` any more — so it is **pinned
+directly**, including an assertion that the ratified guard now refuses the same
+input by itself. A guard nothing can reach is a guard nothing can check, and
+this packet does not get to exempt its own tripwire from its own rule.
+
+### THE ACCEPTANCE CASE — met in the fold, NOT met on the live fleet, and why
+
+Driven through real emitters, the ruled behaviour is exactly as drawn: a gated
+run with a target set of 3 and nothing written composes
+**`run.waiting.mid-procedure`** — *"Waiting at cp.canary, 2 of 8. Nothing has
+been written yet, so stopping here costs nothing."*
+
+**On the developer's real ledger it does not fire, and this is the finding.**
+Re-folded after the change, measured not assumed:
+
+| row | before ruling | after ruling |
+|---|---|---|
+| `cp.backup 4/8`, nothing written | class 1 — **the false ask** | derived sentence, `template: null` |
+| two ungated, nothing written | class 1 | derived sentence, `template: null` |
+| four orphan incidents | `incident.no-run` | `incident.no-run` (unchanged) |
+
+The false sentence is gone. **But class 1 stopped firing too**, because
+`targetSet` is null on every session row — and that is not a defect in the
+ruling, it is a producer gap the ruling made visible:
+
+> **0 of 36 manifests on that ledger carry a `scope` key, and no event anywhere
+> carries `runnable`.** Every run on that machine was armed by predicate rather
+> than by a selection.
+
+So the platform genuinely does not know those runs' target sets, and the two
+sentences that depend on one are withheld rather than guessed — this layer's own
+doctrine. Relative to the pre-WP-48 baseline nothing regressed: those rows read
+the derived sentence before this packet and read it now.
+
+**This is the same shape as WP-48a and wants the same treatment.** WP-48a: a
+producer that knows a causal link and does not record it. This: a carrier that
+exists and is not populated. **Recommended for registration (the architect's to
+make): the arming should record its scope on every manifest, not only when the
+scope picker was used** — the day it does, both waiting classes light up on the
+real fleet with no further code change. Not done here: it is a producer change,
+outside items 1–3.
+
+### Battery, suite, and the three gaps the post-ruling run found
+
+```
+=== WP-48 BATTERY: 35 killed / 0 survived / 0 anchor-miss, of 35 ===
+```
+
+Seven mutations were added for the ruled code. The first post-ruling run was
+32/35 and all three survivors were real:
+
+- **`armedTargetCount`'s second branch** (a `scope` present but malformed) was
+  unreachable from every test, because the no-scope case returns at the FIRST
+  guard. A mutation making it answer `0` survived. Now driven with a half-written
+  scope.
+- **The re-arm test could not tell "leaves it alone" from "erases it"**: its
+  scopeless turn sat in the middle, where both readings give the same answer. It
+  goes last now.
+- **`OpenSession.targetSet` was dead code** — `armedTargetSetOf` returns null
+  exactly when a candidate-carried value would be null too, so the fallback
+  could never change an answer, and nothing could kill a mutation to it.
+  **Deleted, per WP-47a's zero-caller ruling** — the third time this battery has
+  found dead code by failing to kill it.
+- Also found: the RENDERER's morning helper carried no scopes either, so every
+  session row fell back and `headline === parts[0].summary` on all of them —
+  swapping one for the other in the render changed nothing visible. The helper
+  now carries the morning's own selection, which is what made that pin real.
+
+The golden morning gains the arming scopes it always implied (Charlie 2,
+Bravo 1, purge 12). The fixture's stated premise is that it is shaped like what
+the producers write; the target set was always part of the drawing and the
+contract had nowhere to put it until now. No tier, count or place changed.
+
+| | suites | tests | passed | skipped |
+|---|---|---|---|---|
+| baseline (8ac50e63) | 610 | 8,380 | 8,368 | 12 |
+| WP-48 at the gate | 611 | 8,436 | 8,424 | 12 |
+| **ruling landed** | **611** | **8,442** | **8,430** | **12** |
+
+Eval registry **50 PASS / 0 FAIL / 18 BLOCKED / 10 OWNER-PENDING** — unchanged
+across all three. `tsc` clean; `eslint` 0 errors, 6 pre-existing warnings. Byte
+sweep clean over all 14 changed files. ABI: system Node v25.9.0 / **141** —
+**the owner must `npm run rebuild` before loading Local.**
