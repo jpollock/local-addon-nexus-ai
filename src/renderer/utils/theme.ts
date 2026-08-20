@@ -2,6 +2,56 @@ import { UI_COLORS } from '../../common/constants';
 
 const STYLE_ID = 'nexus-ai-theme-vars';
 
+/** Local's two resolved themes. 'auto' never reaches the renderer — ThemeCop resolves it first. */
+export type HostThemeName = 'dark' | 'light';
+
+/**
+ * The resolved theme Local is showing, from the host rather than from the DOM where the
+ * host offers it.
+ *
+ * Two sources, in this order (recon §4, cited to `themecop-init.tsx:13-17` and
+ * `ThemeCop.ts:196`):
+ *
+ * 1. `localPreferences.currentThemeName` — `'theme--light' | 'theme--dark'`, kept in sync
+ *    by Local's own theme init. This is a published VALUE, not a rendering of one.
+ * 2. The `Theme__Dark` class on `<html>` — the intended mechanism per recon §4 and the
+ *    single most durable string in Local's codebase per recon §7 (pinned by an explicit
+ *    "must remain the same for Local 2.4.x backwards compatibility" comment at
+ *    `ThemeCop.ts:55`). Retained as the fallback, and recorded in the DOM-reach inventory
+ *    as `theme-class-read`.
+ *
+ * The change SIGNAL is unchanged and lives at the caller: the `osThemeChange` IPC event,
+ * which this addon already subscribed to before this packet. There is no MutationObserver
+ * here and there never was one — see `tests/unit/renderer/hostTheme.test.ts` for the
+ * measurement that establishes that.
+ *
+ * Neither source is guessed at: an unrecognised `currentThemeName` falls through to the
+ * class, and a document that cannot be read resolves light, which is Local's own default
+ * (recon §4: on Windows and Linux "auto" always resolves light).
+ */
+export function resolveHostTheme(
+  scope: unknown = typeof globalThis === 'undefined' ? undefined : globalThis,
+  doc: Document | undefined = typeof document === 'undefined' ? undefined : document,
+): HostThemeName {
+  try {
+    const prefs = (scope as Record<string, unknown> | null | undefined)?.localPreferences;
+    if (prefs !== null && typeof prefs === 'object') {
+      const name = (prefs as Record<string, unknown>).currentThemeName;
+      if (name === 'theme--dark') return 'dark';
+      if (name === 'theme--light') return 'light';
+    }
+  } catch {
+    // A host that throws on property access tells us nothing; fall through to the class.
+  }
+
+  try {
+    // NEXUS-DOM-REACH: theme-class-read
+    return doc?.documentElement?.classList?.contains('Theme__Dark') ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 /**
  * Injects Nexus AI CSS custom properties into the document head.
  * Must be called from the root component (SiteNexusSection) on mount.
@@ -65,6 +115,7 @@ export function injectThemeVars(): void {
       --nxai-rail-stuck-text: #b45309;
       --nxai-rail-badge-shadow: #fff;
     }
+    /* NEXUS-DOM-REACH: theme-class-css-scope */
     .Theme__Dark {
       --nxai-card-bg: #2a2a2a;
       --nxai-card-border: #404040;

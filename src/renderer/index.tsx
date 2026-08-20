@@ -7,6 +7,7 @@ import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { DockedPanelContainer } from './components/DockedPanel/DockedPanelContainer';
 import { IPC_CHANNELS } from '../common/constants';
 import { nexusStore } from './store/NexusStateManager';
+import { resolveHostTheme } from './utils/theme';
 import type { NexusState } from './store/NexusStateManager';
 // Agent console styles injected at runtime (CSS cannot be require()'d in Electron addon renderers)
 function injectAgentConsoleStyles(): void {
@@ -24,16 +25,24 @@ injectAgentConsoleStyles();
 
 /**
  * This addon's renderer bundle is require()'d directly into Local's own main-window renderer
- * process (RendererAddonLoader, not an iframe/BrowserView) — same document, same DOM tree. By
- * the time addon code runs, Local's own themecop-init has already applied `Theme__Dark` or
- * `Theme__Light` to <html>, so that class is the resolved-theme source of truth (never 'auto' —
- * ThemeCop resolves 'auto' before applying the class). agent-console.css keys its light palette
- * off `data-ag-theme` rather than reusing Local's own class name directly, so this addon's CSS
- * selector doesn't silently break if Local ever renames its own theme classes.
+ * process (RendererAddonLoader, not an iframe/BrowserView) — same document, same DOM tree.
+ *
+ * WHERE THE THEME COMES FROM (WP-47, aligned against the Local architect's recon §4):
+ * `resolveHostTheme` reads Local's own published value — `localPreferences.currentThemeName`
+ * — and falls back to the `Theme__Dark` class on <html> only when the host does not publish
+ * one. Neither is ever 'auto': ThemeCop resolves that before either surface is written.
+ *
+ * WHERE THE CHANGE SIGNAL COMES FROM: the `osThemeChange` IPC event, subscribed below. This
+ * addon has never used a MutationObserver for the theme — measured, not assumed; see
+ * `tests/unit/renderer/hostTheme.test.ts`.
+ *
+ * agent-console.css keys its light palette off `data-ag-theme` rather than reusing Local's own
+ * class name directly, so this addon's CSS selector doesn't silently break if Local ever
+ * renames its own theme classes.
  */
 function applyAgentTheme(): void {
-  const isDark = document.documentElement.classList.contains('Theme__Dark');
-  document.documentElement.setAttribute('data-ag-theme', isDark ? 'dark' : 'light');
+  // NEXUS-DOM-REACH: theme-root-attribute
+  document.documentElement.setAttribute('data-ag-theme', resolveHostTheme());
 }
 
 export default function renderer(context: any): void {
@@ -78,12 +87,21 @@ export default function renderer(context: any): void {
   try {
     const styleEl = document.createElement('style');
     styleEl.id = 'nexus-ai-tabnav-fix';
-    // Target TabNav_Items using the CSS module hash pattern from local-components v17.8.1
-    // The hash "ko_uu" is derived from the file; version suffix confirms the version.
-    // Target the exact CSS module class for local-components v17.8.1
+    // NEXUS-DOM-REACH: tabnav-nowrap
+    //
+    // ONE selector, version-suffix-tolerant. This used to carry a second, fully pinned rule
+    // (`.TabNav_Items_ad_cY_v17-8-1`) written on the belief that the hash tracked the file's
+    // CONTENT and the suffix its version. The Local architect's recon §7 read css-loader
+    // 6.11.0's `defaultGetLocalIdent` (dist/utils.js:289-299) and corrected us in our favour:
+    // the `[hash:base64:5]` is computed over the file PATH + "\0" + class name, so it survives
+    // every edit to TabNav.sass and changes only if the file moves or the class is renamed —
+    // neither of which has happened since 2021. Only the `_v` suffix tracks releases, and
+    // local-components has bumped three times in 28 months. Matching `TabNav_Items_` alone is
+    // stable against everything except a path move or a rename, which the recon rates at
+    // better than 95% over two releases — and it is why the pinned rule was not merely
+    // redundant but actively wrong: it pinned to v17.8.1 while Local ships 17.8.2 today.
     styleEl.textContent = `
-      [class*="TabNav_Items"] { white-space: nowrap !important; }
-      .TabNav_Items_ad_cY_v17-8-1 { white-space: nowrap !important; }
+      [class*="TabNav_Items_"] { white-space: nowrap !important; }
       [data-nexus-chat] { -webkit-user-select: text !important; user-select: text !important; cursor: text !important; }
       [data-nexus-chat] * { -webkit-user-select: text !important; user-select: text !important; }
       [data-nexus-chat] button { cursor: pointer !important; }
@@ -242,6 +260,7 @@ export default function renderer(context: any): void {
     console.log('[Nexus AI] Attempting to inject search button...');
 
     // Target the SitesSidebarToolbar component
+    // NEXUS-DOM-REACH: sites-sidebar-toolbar-button
     const toolbar = document.querySelector('[class*="SitesSidebar_Toolbar"]');
 
     if (!toolbar) {
@@ -321,6 +340,7 @@ export default function renderer(context: any): void {
 
   // Use MutationObserver to keep search button injected (don't disconnect)
   // Button can disappear when navigating away from Sites and back
+  // NEXUS-DOM-REACH: sites-sidebar-toolbar-button
   const observer = new MutationObserver(() => {
     // Check if button exists
     const button = document.querySelector('#nexus-search-btn');
@@ -404,11 +424,13 @@ export default function renderer(context: any): void {
       styleTag.id = 'nexus-site-filter';
 
       // Hide all sites by default
+      // NEXUS-DOM-REACH: site-list-filter-css
       let css = '[data-site-id] { display: none !important; }\n';
 
       // Show only filtered sites
       siteIds.forEach(id => {
         // Check if it's a WPE site (starts with "wpe-") - use flex for those
+        // NEXUS-DOM-REACH: site-list-filter-css
         if (id.startsWith('wpe-')) {
           css += `[data-site-id="${id}"] { display: flex !important; }\n`;
         } else {

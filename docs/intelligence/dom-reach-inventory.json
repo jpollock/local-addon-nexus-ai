@@ -1,0 +1,292 @@
+{
+  "$generatedBy": "scripts/generate-dom-reach-inventory.ts — npm run inventory:dom-reach",
+  "$shapeVersion": 1,
+  "$derived": "Every `sites` entry and every count below is scanned from the code. Run the generator; never hand-edit this file.",
+  "$notDerived": "Every judgement — localDependency, reconStability, reconCitation, contractItem, plannedReplacement, deletionTrigger, status — is hand-authored in the generator, sourced from the Local architect's reconnaissance (docs/intelligence/from-local-architect/local-recon-01.txt) and host contract v2 (SHELL_INVERSION_PLAN.md Amendment 2). No claim about Local in this file comes from anywhere else.",
+  "$gate": "The designer's phase 6 (from-designer-10-shell-inversion-plan.dc.html): \"the inventory is empty, and a Local release with renamed CSS modules breaks nothing.\" The number that must reach zero is totals.open. totals.accepted is permanent guest behaviour, accepted at phase 0's gate and disclosed separately so it can never be used to make the gate look closer.",
+  "totals": {
+    "declared": 12,
+    "open": 11,
+    "accepted": 1,
+    "markedLines": 20,
+    "filesScanned": 115
+  },
+  "byContractItem": [
+    {
+      "contractItem": "layoutReservation",
+      "openReaches": [
+        "window-right-reservation"
+      ]
+    },
+    {
+      "contractItem": "mainVerticalNav",
+      "openReaches": [
+        "nav-theme-css-scope",
+        "nav-rail-injection",
+        "nav-rail-observer",
+        "sites-sidebar-toolbar-button"
+      ]
+    },
+    {
+      "contractItem": null,
+      "openReaches": []
+    },
+    {
+      "contractItem": "regionProviders",
+      "openReaches": [
+        "window-data-location-read",
+        "site-list-filter-css",
+        "site-list-badge",
+        "tabnav-nowrap"
+      ]
+    },
+    {
+      "contractItem": "themeTokens",
+      "openReaches": [
+        "theme-class-read",
+        "theme-class-css-scope"
+      ]
+    }
+  ],
+  "reaches": [
+    {
+      "id": "theme-class-read",
+      "title": "Resolved theme read from the class Local applies to <html>",
+      "kind": "read",
+      "localDependency": "`Theme__Dark` / `Theme__Light` on `document.documentElement`",
+      "status": "open",
+      "reconStability": "Very likely to survive two releases — \"explicitly pinned by comment\". The theme keys carry \"The theme keys need to remain the same for Local 2.4.x backwards compatibility\", which the recon calls \"your best available durability guarantee anywhere in this codebase\".",
+      "reconCitation": "recon-01 §4 and §7 table (their citation: ThemeCop.ts:55, themecop-init.tsx:19-39)",
+      "contractItem": "themeTokens",
+      "plannedReplacement": "`theme: { name, tokens }` on the addon renderer context, with `osThemeChange` as the change signal. Already demoted from source to FALLBACK in WP-47: `resolveHostTheme` reads `localPreferences.currentThemeName` first (recon §4, themecop-init.tsx:13-17).",
+      "deletionTrigger": "capabilities.themeTokens >= 1 — the class read is deleted, not merely bypassed.",
+      "sites": [
+        {
+          "file": "src/renderer/utils/theme.ts",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 1
+    },
+    {
+      "id": "theme-class-css-scope",
+      "title": "This addon's CSS custom properties scoped under Local's dark-theme class",
+      "kind": "write",
+      "localDependency": "`.Theme__Dark` as a CSS selector on `<html>`",
+      "status": "open",
+      "reconStability": "Same dependency as `theme-class-read`: very likely, explicitly pinned by comment.",
+      "reconCitation": "recon-01 §7 table (their citation: ThemeCop.ts:55)",
+      "contractItem": "themeTokens",
+      "plannedReplacement": "Local's own ramp emitted as CSS custom properties on `:root` under `Theme__Light`/`Theme__Dark` — the recon's own recommendation, which makes tokens consumable by addons without a SASS build. Our `--nxai-*` layer then derives from Local's tokens instead of restating hex values beside them.",
+      "deletionTrigger": "capabilities.themeTokens >= 1.",
+      "sites": [
+        {
+          "file": "src/renderer/utils/theme.ts",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 1
+    },
+    {
+      "id": "nav-theme-css-scope",
+      "title": "The injected rail item's own CSS, scoped under Local's dark-theme class",
+      "kind": "write",
+      "localDependency": "`.Theme__Dark` as a CSS selector, plus six hardcoded values copied from Local's nav SCSS",
+      "status": "open",
+      "reconStability": "The class: very likely (pinned by comment). The copied palette is not a selector and the recon does not assess it; it is a hand-copied constant that drifts silently if Local restyles its nav — which is the same exposure the rail slot removes.",
+      "reconCitation": "recon-01 §7 table (their citation: ThemeCop.ts:55)",
+      "contractItem": "mainVerticalNav",
+      "plannedReplacement": "A contributed rail item rendered by Local's own `VerticalNavItem`, which carries Local's palette by construction. Dies with the injection, before the theme item lands.",
+      "deletionTrigger": "capabilities.mainVerticalNav >= 1 — earlier than the other theme reaches.",
+      "sites": [
+        {
+          "file": "src/renderer/NavItemInjector.ts",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 1
+    },
+    {
+      "id": "theme-root-attribute",
+      "title": "This addon's own `data-ag-theme` attribute written onto Local's <html>",
+      "kind": "write",
+      "localDependency": "None of Local's own names — the attribute is ours. The dependency is that we write an attribute onto an element Local owns.",
+      "status": "accepted",
+      "reconStability": "Not assessed by the recon, and not a Local-name dependency: an addon-namespaced attribute on the document element cannot be renamed out from under us.",
+      "reconCitation": "not covered by recon-01 — this is our own attribute, not a Local selector",
+      "contractItem": null,
+      "plannedReplacement": "None planned. `agent-console.css` needs a theme scope it controls; the attribute is deliberately NOT `Theme__Dark` so our stylesheet does not break when Local renames its own.",
+      "deletionTrigger": "None. ACCEPTED as permanent guest behaviour under the designer's phase-0 gate, and therefore excluded from the phase-6 count — disclosed rather than hidden inside it.",
+      "sites": [
+        {
+          "file": "src/renderer/index.tsx",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 1
+    },
+    {
+      "id": "nav-rail-injection",
+      "title": "The Nexus rail item, injected as markup into a container we do not own",
+      "kind": "inject",
+      "localDependency": "`#Sidebar` (the rail `<nav>`) and a child whose class contains `DragRegion` (the flex filler)",
+      "status": "open",
+      "reconStability": "\"id=\\\"Sidebar\\\" and TID_Main_Nav: likely. Internal wrapper nesting: coin-flip. The 2023 churn was real and could recur.\" The recon is explicit that no rail hook has EVER existed: \"You didn't miss a hook. There is none.\"",
+      "reconCitation": "recon-01 §2 and §7 table (their citation: MainVerticalNav.tsx:34-192, :179-187; VerticalNav.tsx:14-27)",
+      "contractItem": "mainVerticalNav",
+      "plannedReplacement": "ONE named slot (`mainVerticalNav`) taking a typed item modelled on `AddonSettingsItem` (renderer.d.ts:381-396), MobX-observable by stated requirement, with per-item error isolation and Local's own active-state resolution.",
+      "deletionTrigger": "capabilities.mainVerticalNav >= 1.",
+      "sites": [
+        {
+          "file": "src/renderer/NavItemInjector.ts",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 1
+    },
+    {
+      "id": "nav-rail-observer",
+      "title": "A MutationObserver over the whole body that re-injects the rail item when React drops it",
+      "kind": "observe",
+      "localDependency": "Local's rail re-rendering and discarding foreign children — the reason the injection needs a watchdog at all",
+      "status": "open",
+      "reconStability": "The recon names the underlying cause: the hook registry \"is not reactive and is read exactly once per render\", so anything registered after first paint appears only when a subtree happens to re-render. An observer is what an addon does instead.",
+      "reconCitation": "recon-01 §1 (timing) and §10 (their citation: HooksRenderer.tsx:119-133, bootstrap-app.tsx:14-21)",
+      "contractItem": "mainVerticalNav",
+      "plannedReplacement": "The slot being MobX-observable, which is why that is a STATED REQUIREMENT of the ask rather than an implementation detail: an additive-array API with one-shot semantics would leave this observer in place under a nicer name.",
+      "deletionTrigger": "capabilities.mainVerticalNav >= 1 — deleted in the same change as the injection.",
+      "sites": [
+        {
+          "file": "src/renderer/NavItemInjector.ts",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 1
+    },
+    {
+      "id": "window-right-reservation",
+      "title": "The docked panel makes room by setting `right` on Local's shell",
+      "kind": "write",
+      "localDependency": "`.Window` — a plain global class, styled `position: absolute; inset: 0`",
+      "status": "open",
+      "reconStability": "Very likely over two releases. \"The position: absolute; inset: 0 contract your docking relies on is the oldest layout code in the app.\" The recon also calls the approach \"actually well-matched to this architecture\" — and names what it cannot survive: a second `.Window` (Preferences renders its own) or a competing addon doing the same thing.",
+      "reconCitation": "recon-01 §5 and §7 table (their citation: Window.tsx:93-110, Window.scss:3-14, preferences/index.tsx:48)",
+      "contractItem": "layoutReservation",
+      "plannedReplacement": "`reserveEdge({ edge, requestedPx }) → { grantedPx }` on `Window`, v1 scoped as the recon scoped it: right edge, main window, one reservation, no persistence, grant clamped. The shell decides and reports what it granted.",
+      "deletionTrigger": "capabilities.layoutReservation >= 1.",
+      "notes": "Two write sites and one read site: the read locates the shell, the writes set and clear `style.right`. All three go together.",
+      "sites": [
+        {
+          "file": "src/renderer/components/DockedPanel/DockedPanelContainer.tsx",
+          "occurrences": 2
+        },
+        {
+          "file": "src/renderer/utils/panelReflow.ts",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 3
+    },
+    {
+      "id": "window-data-location-read",
+      "title": "The route on screen, read off the `data-location` attribute of Local's shell",
+      "kind": "read",
+      "localDependency": "`.Window[data-location]`, plus a body-wide attribute observer on `data-location`",
+      "status": "open",
+      "reconStability": "`.Window` itself: very likely (see above). The `data-location` attribute is confirmed present in the recon's own quotation of `Window.tsx` but is NOT assessed for stability anywhere in the document — recorded here as unassessed rather than inferred from the class's rating.",
+      "reconCitation": "recon-01 §5 (their citation: Window.tsx:93-110); stability unassessed",
+      "contractItem": "regionProviders",
+      "plannedReplacement": "A region provider receives Local's own typed props for the region it renders, so the site on screen arrives as an argument rather than being inferred from an attribute. Until then the panel is mounted outside Local's router and has no route prop to read.",
+      "deletionTrigger": "capabilities.regionProviders >= 1 for the panel's own site context. NOTE: the panel is mounted on document.body; if it moves into a chrome slot first, the slot supplies context and this goes at mainVerticalNav/chrome-slot time instead. Whichever lands first.",
+      "notes": "One of the four sites is `panelReflow.readSiteId`, which is DEAD (no callers) and documented as such in place. It is marked and counted rather than quietly excluded: an inventory that omits a reach because nobody calls it is an inventory that can be gamed by not calling things.",
+      "sites": [
+        {
+          "file": "src/renderer/components/DockedPanel/DockedPanelContainer.tsx",
+          "occurrences": 2
+        },
+        {
+          "file": "src/renderer/utils/panelReflow.ts",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 3
+    },
+    {
+      "id": "sites-sidebar-toolbar-button",
+      "title": "The site-finder button, injected into Local's sites-sidebar toolbar and kept there by an observer",
+      "kind": "inject",
+      "localDependency": "`[class*=\"SitesSidebar_Toolbar\"]` — a CSS-module class, matched loosely",
+      "status": "open",
+      "reconStability": "Fair game, explicitly: \"every CSS-module class, all component internals, all DOM nesting\" are listed as things the team would not hesitate to change. The loose match survives the hash and the version suffix but not a rename or a file move.",
+      "reconCitation": "recon-01 §7 (\"Fair game\") and §7 TabNav analysis (their citation: shared-rules.js:14, css-loader dist/utils.js:289-299)",
+      "contractItem": "mainVerticalNav",
+      "plannedReplacement": "A contributed chrome slot. The rail slot is the one ask; a second named slot is the recon's own \"~1 more week\" extension, and this is the surface that would consume it.",
+      "deletionTrigger": "capabilities.mainVerticalNav >= 2 (a second named slot) — or the button moves into the rail item itself at mainVerticalNav >= 1, whichever the design settles on. NOT retired by the v1 rail slot on its own.",
+      "sites": [
+        {
+          "file": "src/renderer/index.tsx",
+          "occurrences": 2
+        }
+      ],
+      "markedLines": 2
+    },
+    {
+      "id": "site-list-filter-css",
+      "title": "Injected CSS that hides rows of Local's own site list to apply a Nexus filter",
+      "kind": "write",
+      "localDependency": "`[data-site-id]` on Local's site-list rows",
+      "status": "open",
+      "reconStability": "Not assessed by the recon. It is a data attribute on a component internal, which §7 places in \"fair game\" as a class; the recon does not rate data attributes specifically, so this is recorded as unassessed. It is also the reach with the largest blast radius: it hides Local's own content.",
+      "reconCitation": "not covered by recon-01 — the recon was asked about four dependencies and this was not among them",
+      "contractItem": "regionProviders",
+      "plannedReplacement": "`registerRegionProvider('main.siteList.body', …)` — the site list's body is exactly the region the region-provider ask names first, and a provider RENDERS the filtered list rather than hiding rows of Local's.",
+      "deletionTrigger": "capabilities.regionProviders >= 1.",
+      "sites": [
+        {
+          "file": "src/renderer/index.tsx",
+          "occurrences": 2
+        }
+      ],
+      "markedLines": 2
+    },
+    {
+      "id": "site-list-badge",
+      "title": "Per-site badges inserted into Local's site-list rows (present in the tree, wired to nothing)",
+      "kind": "inject",
+      "localDependency": "`[data-site-id]` rows and the `.TID_SiteListSite_Span_SiteName` label inside them",
+      "status": "open",
+      "reconStability": "The `TID_*` classes are \"effectively public (renaming would be a deliberate, discussed act)\" — \"Test IDs, deliberately literal, referenced by the Playwright suites in this repo.\" The row attribute is unassessed, as above.",
+      "reconCitation": "recon-01 §7 (\"Effectively public\": TID_* classes, their citation: MainVerticalNav.tsx:175, VerticalNav.tsx:127)",
+      "contractItem": "regionProviders",
+      "plannedReplacement": "A region provider for the site list's body renders its own rows, badges included.",
+      "deletionTrigger": "capabilities.regionProviders >= 1.",
+      "notes": "MEASURED 2026-08-20: `SidebarBadgeManager` has ZERO callers in `src/` — it is present but unwired. Counted as an open reach anyway, because it is code in the shipped bundle that would reach the moment someone instantiates it, and because deleting it is a decision this packet is not scoped to make.",
+      "sites": [
+        {
+          "file": "src/renderer/SidebarBadgeManager.ts",
+          "occurrences": 3
+        }
+      ],
+      "markedLines": 3
+    },
+    {
+      "id": "tabnav-nowrap",
+      "title": "Injected CSS that stops our fifth site-info tab wrapping in Local's tab bar",
+      "kind": "write",
+      "localDependency": "`[class*=\"TabNav_Items_\"]` — the CSS-module class from `@getflywheel/local-components`",
+      "status": "open",
+      "reconStability": "Better than we thought, and the recon corrected us in our favour: the `[hash:base64:5]` is computed over file PATH + class name, NOT content, so it survives every edit to TabNav.sass; only the `_v` suffix tracks releases, and local-components has bumped three times in 28 months. A version-suffix-tolerant selector is rated \"better than 95% odds over two releases\" and \"this drops off your risk register entirely\".",
+      "reconCitation": "recon-01 §7 (\"The TabNav hash — you're wrong about how it works, in your favour\") and \"Where your assumptions are wrong\" #4 (their citation: shared-rules.js:14, css-loader dist/utils.js:289-299)",
+      "contractItem": "regionProviders",
+      "plannedReplacement": "Retired by the site screen absorbing its intelligence (the designer's phase 2): with no fifth tab there is nothing to stop wrapping. Recorded against `regionProviders` because that is the capability the site screen needs.",
+      "deletionTrigger": "capabilities.regionProviders >= 1 AND the Nexus site tab is retired. Until then the loose selector stays — WP-47 already deleted the version-pinned duplicate that pinned v17.8.1 while Local ships 17.8.2.",
+      "sites": [
+        {
+          "file": "src/renderer/index.tsx",
+          "occurrences": 1
+        }
+      ],
+      "markedLines": 1
+    }
+  ]
+}

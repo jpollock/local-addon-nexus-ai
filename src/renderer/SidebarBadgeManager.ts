@@ -79,6 +79,7 @@ export class SidebarBadgeManager {
   }
 
   private injectBadges(): void {
+    // NEXUS-DOM-REACH: site-list-badge
     const siteElements = document.querySelectorAll('[data-site-id]');
 
     siteElements.forEach((element) => {
@@ -89,6 +90,7 @@ export class SidebarBadgeManager {
       const hasBadge = element.querySelector(`.${BADGE_CLASS}`) !== null;
 
       if (isWpe && !hasBadge) {
+        // NEXUS-DOM-REACH: site-list-badge
         const nameSpan = element.querySelector('.TID_SiteListSite_Span_SiteName');
         if (nameSpan) {
           const badge = document.createElement('div');
@@ -108,6 +110,7 @@ export class SidebarBadgeManager {
   private startObserver(): void {
     if (this.observer) return;
 
+    // NEXUS-DOM-REACH: site-list-badge
     this.observer = new MutationObserver(() => {
       if (this.pendingRefresh !== null) {
         cancelAnimationFrame(this.pendingRefresh);
