@@ -20638,3 +20638,56 @@ non-UX (intelligence-host law work, WP-48a/48b producers, WP-20c)
 lands wherever it is cut from, with the branch named in its
 registration; a future fold of `-ux` back into `poc/nexintelligence`
 is an owner decision, taken with receipts when taken.
+
+---
+
+## BRANCH NOTE — CORRECTED: WP-48 LIVES ON `-ux` ONLY (2026-08-20, owner-directed)
+
+**Owner's direction, verbatim: "i want to do this work in JUST
+poc/nexintelligence-ux."** Acted on, and the two statements it supersedes are
+named here rather than edited in place — the record is append-only and both
+were true when written.
+
+**What changed.** `poc/nexintelligence` has been restored to **`d1cbf750`**
+("updating work packets"), which is exactly where the owner left it before this
+session. It does **not** carry WP-48. Everything WP-48 — the packet's fourteen
+commits, both verbatim commits of architect work, the merge commit and the merge
+report — lives on **`poc/nexintelligence-ux`**, now at `95b5d755`.
+
+Verified rather than asserted:
+- The restore point came from the **reflog**, not from memory:
+  `poc/nexintelligence@{5}` is `d1cbf750`, the last entry before this session's
+  three resets (`@{4}`, `@{3}`, `@{2}`).
+- `git diff --stat d1cbf750 poc/nexintelligence` is **empty** — byte-identical
+  to where the owner left it.
+- All fourteen WP-48 commits confirmed **reachable from `-ux`**, one by one via
+  `git merge-base --is-ancestor`. Nothing was lost; a branch pointer moved.
+
+**The two superseded statements, both mine or the architect's, both left
+standing in the record above:**
+
+1. The architect's BRANCH NOTE says `-ux`'s tip "equals `poc/nexintelligence`'s
+   (`5e7748eb`), so the fork point is clean: nothing diverges yet." True at the
+   moment it was written. The branches now **do** diverge, deliberately:
+   `-ux` = `95b5d755`, `poc/nexintelligence` = `d1cbf750`. The fork point is
+   `d1cbf750`, and WP-48 is on the `-ux` side of it.
+2. WP-48's own merge report says "Merge commit `1aedc700` into
+   `poc/nexintelligence`". That is how the merge was performed — the commit's
+   first parent is on that line of history — but the branch NAME
+   `poc/nexintelligence` no longer points at or after it. Read that sentence as
+   naming the merge's parentage, not the current tip.
+
+**Standing arrangement, unchanged otherwise.** The UX track cuts from, gates
+against, and merges to `poc/nexintelligence-ux`; lock announces land on THIS
+base; the record's tail lives on this branch. Non-UX work lands wherever it is
+cut from, with the branch named in its registration.
+
+**`PARALLEL_PROTOCOL.md` still names `poc/nexintelligence` as the base
+throughout** (its Isolation section's `git worktree add` line included). It was
+NOT edited here — it is an owner-approval file and the branch arrangement is the
+owner's to record. Flagged so the next packet does not cut from the wrong base
+by following a stale instruction.
+
+**A future fold of `-ux` into `poc/nexintelligence` remains an owner decision**,
+taken with receipts when taken. It is a fast-forward today: `d1cbf750` is an
+ancestor of `95b5d755`.
