@@ -20894,9 +20894,16 @@ Registry held at **50 PASS / 0 FAIL / 18 BLOCKED / 10 OWNER-PENDING**.
 ### 4 · Receipts — pasted after they printed
 
 ```
-git diff --stat 8186896d HEAD
- 27 files changed, 2528 insertions(+), 552 deletions(-)
+git diff --shortstat 8186896d HEAD
+ 28 files changed, 2814 insertions(+), 552 deletions(-)
 ```
+
+**AMENDED EN ROUTE, and the amendment is the standard** (WP-45): the first draft
+of this line read `27 files changed, 2528 insertions(+), 552 deletions(-)`,
+measured before this report was committed. Committing it made the count 28 and
+the insertions 2,814. The earlier value was true when it printed and false by the
+time anyone could read it — which is exactly why a receipt is copied from a print
+rather than written in anticipation.
 
 | | result |
 |---|---|
