@@ -19319,3 +19319,69 @@ any shipped surface's behaviour beyond the selector/theme mechanics named above.
 If a micro turns out to require more, it stops at the gate rather than growing.
 
 ---
+
+---
+
+## WP-47 · GATE RULING — the host contract proposal (2026-08-20, architect + owner adjudication)
+
+**Verdict: PASS. Cleared to merge.** The proposal was read IN FULL from
+the branch by the architect (655 lines, 40,428 bytes, md5
+`e97e9df5e8bf0765ac4c05cb7c1717c7` re-computed from the blob — exact
+match), and its two claims about OUR OWN code were independently
+verified before ruling: exactly **4** MutationObservers in
+src/renderer (nav injector, badge manager, panel location, sidebar
+filter — none theme), exactly **36** distinct `--nxai-*` declarations.
+The document meets its own citation standard in both directions, which
+was the bar.
+
+**The two owner decisions, RULED by the owner:**
+1. **The Nexus 1.0.0 version floor (§5): ADOPTED as proposed.** The
+   floor moves once, at 1.0.0, to the first Local release carrying all
+   four capabilities; guest paths stay live and tested until then; the
+   reach ledger reaches zero open at 1.0.0; Local's team keeps the
+   explicit option to hold an older floor longer.
+2. **The "integer bumps must be additive" clause (§1): RATIFIED** —
+   the agent's own contribution, honestly flagged as such. Without it
+   every consumer pins exact integers and the versioning does nothing;
+   §7's policy paragraph already carries it, so §1 adds consistency,
+   not scope.
+
+**Architect rulings on the flagged items:**
+- **The name collision: RENAME before merge.** `src/renderer/
+  hostCapabilities.ts` collides with the pre-existing settings-side
+  file of the same name with a different meaning. New name:
+  `src/renderer/hostContractProbe.ts` — the name says what it is.
+  Tests and imports follow; nothing else changes.
+- **SidebarBadgeManager counted as an open reach despite zero callers:
+  RATIFIED with the agent's own sentence** — "an inventory that
+  excuses a reach for not being called can be gamed by not calling
+  things." Micro registered: delete SidebarBadgeManager or record why
+  it stays; zero-caller code with a live MutationObserver is either
+  dead or a trap.
+- **The inventory guard's narrowing** (supported API excluded by name,
+  with the line it lets through recorded in the scanner): RATIFIED —
+  the distinction between a REACH and a SUPPORTED HOOK is exactly the
+  distinction the whole proposal turns on.
+- **The two self-caught defects: ACCEPTED with credit.** (1) The
+  uncitable "we wrote them" claim about the Playwright suites removed
+  — an uncitable claim about ourselves is the same defect as one about
+  them, and catching it in an external-facing document is the standard
+  at its most valuable. (2) The pre-written commit receipt (wrong in
+  both fields) caught, amended with printed values, and reported
+  rather than tidied — the fabricated-receipt rule applied against its
+  own author, second occurrence, both self-caught.
+- **Battery adjudication**: M07 real (WP-46's freeze pin satisfied by
+  the empty-map early return — a vacuous-guard shape, closed with a
+  second pin); M05/M10 invalid witnesses rewritten rather than code
+  churned. 20/20 on the second drive accepted as reported.
+- **The theme measurement inverting its premise** (nothing to delete;
+  alignment shipped instead; recorded not invented) is the
+  measure-first rule working, and the proposal's §5 closing paragraph
+  — declining credit for deleting an observer that never existed — is
+  the record's honesty exported to an external document.
+
+**Merge instructions standing:** rename first (hostContractProbe.ts),
+re-run the touched suites, then the standard sequence — architect
+uncommitted work verbatim-first if any, merge, record-merge blob
+standard with chronology ruling, receipts pasted after they print,
+locks released only after acceptance.
