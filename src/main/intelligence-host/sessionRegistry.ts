@@ -120,6 +120,12 @@ import { INCIDENT_TOPIC } from './incidentProducer';
 import { foldProcedureCursor, runEvents, type ProcedureRun } from './procedureCursor';
 import { deriveCheckpointStates, type CheckpointState } from './procedureView';
 import { placeLabel, placeToken, type ScopePlace } from './procedureScope';
+import {
+  LIST_VERDICT,
+  RUN_NOUN,
+  SITUATION_TEMPLATES,
+  type SituationTemplate,
+} from './situationCopy.generated';
 
 /**
  * The manifest's topic, defined locally rather than imported.
@@ -373,6 +379,47 @@ export interface Situation {
   /** Newest event id across the parts. */
   lastEventId: string;
   parts: SituationPart[];
+
+  // --- WP-48 · the verdict, composed ONCE here (the ratified placement) ----
+
+  /**
+   * THE ROW'S ONE SENTENCE. World state first, then the ask beneath it.
+   *
+   * Composed in the host from the ratified templates
+   * (`situationCopy.generated.ts`) so every `TriageView` consumer renders the
+   * identical verdict — the arrival, the panel and the rail's accounting line
+   * cannot drift between densities because there is only one derivation. A
+   * surface that composed its own would be the second place the wording lives.
+   */
+  headline: string;
+  /** What is being asked, and what stopping costs. Follows the headline. */
+  ask: string;
+  /**
+   * ONE WORD, or empty. A badge never carries a sentence — the phrases the
+   * chips used to carry live on the meta line as text, which is why `state`
+   * exists beside this.
+   */
+  chip: string;
+  /** A status phrase for the meta line, or empty. */
+  state: string;
+  /** The meta line's identifier — the runbook id, the producer, the agent. */
+  meta: string;
+  /**
+   * WHICH ratified class composed the headline, by the designer's own id, or
+   * `null` when no template's guard selected this row and the derived sentence
+   * was used instead. Reported rather than inferred: a surface that cannot say
+   * which sentence set it is rendering cannot be audited against the set.
+   */
+  headlineTemplate: string | null;
+  /**
+   * The three numbers the headline was composed FROM, carried on the row.
+   *
+   * The list verdict reads these rather than re-deriving them from sessions, so
+   * it is generated from the very rows the columns render and structurally
+   * cannot disagree with them — the accounting line's own property, applied to
+   * the sentence the accounting line cannot say.
+   */
+  written: { done: number; failed: number; total: number };
 }
 
 /**
@@ -401,6 +448,15 @@ export interface TriageView {
   waiting: Situation[];
   reserved: ReservedRow;
   changed: Situation[];
+  /**
+   * ONE SENTENCE ABOUT THE WHOLE LIST, which no single row can say.
+   *
+   * "Nothing is half-done, so nothing is expensive to stop" is the most useful
+   * thing this data produces and it is invisible row by row. Derived from
+   * `waiting`'s own `written` counts — the same rows the columns are about to
+   * render — so it cannot contradict them. Empty when nothing is waiting.
+   */
+  verdict: string;
   /** Hand this back to `changedSince` next time. */
   cursor: string;
 }
@@ -1218,6 +1274,7 @@ function situationOfSession(
 
   const since = oldestIso([row.startedAt, ...incidents.map((e) => e.observed_at)]);
   const lastEventId = maxId([row.lastEventId, ...incidents.map((e) => e.id)]);
+  const copy = composeSessionCopy(row, column, deps.now ?? new Date(), since);
 
   return {
     id: row.id,
@@ -1231,6 +1288,12 @@ function situationOfSession(
     since,
     lastEventId,
     parts,
+    ...copy,
+    written: {
+      done: row.outcomes.succeeded.length,
+      failed: row.outcomes.failed.length,
+      total: row.places.total,
+    },
   };
 }
 
@@ -1246,6 +1309,308 @@ function runSummary(row: SessionRow): string {
           ? 'waiting'
           : 'running';
   return `${head} under ${row.runbookId ?? row.capability} — ${done} done and standing, ${failed} failed`;
+}
+
+// ---------------------------------------------------------------------------
+// WP-48 · the verdict, composed here and nowhere else
+// ---------------------------------------------------------------------------
+
+/**
+ * Whole hours between two instants — the age every surface renders.
+ *
+ * It lives HERE rather than in the arrival because the headline now carries an
+ * age too, and two implementations of "how old is this" is how the row's own
+ * sentence starts disagreeing with the meta line beneath it. `Arrival.tsx`
+ * imports this one; the renderer copy it used to own is gone.
+ */
+export function ageLabel(sinceIso: string, now: Date): string {
+  const then = Date.parse(sinceIso);
+  if (!Number.isFinite(then)) return '';
+  return `${Math.max(0, Math.floor((now.getTime() - then) / 3_600_000))}h`;
+}
+
+/**
+ * The values a template's `{slot}` braces are filled from.
+ *
+ * Every key here is a field the fold ALREADY derived — the fixture's own rule
+ * that "nothing here computes anything" holds on both sides of the seam. A slot
+ * whose value is `undefined` is one the record cannot answer.
+ */
+export type SlotBag = Record<string, string | number | undefined>;
+
+/**
+ * The facts the guards read. EXPORTED so its pins can drive the selector
+ * DIRECTLY across the whole input domain — including states no current caller
+ * can supply, which is exactly where `agent.stuck` and the unreachable corners
+ * of the other four live. A render test cannot pin a guard the render never
+ * reaches (WP-46), and every guard here has such a corner.
+ */
+export interface SituationClassInput {
+  kind: 'run' | 'incident' | 'agentFailure';
+  done: number;
+  failed: number;
+  total: number;
+  gate: PendingGate | null;
+  runId: string | null;
+}
+
+/** Every `{slot}` a string carries. */
+function slotsOf(template: string): string[] {
+  return [...template.matchAll(/\{([A-Za-z][A-Za-z0-9]*)\}/g)].map((m) => m[1]);
+}
+
+/**
+ * Fill a ratified sentence from the bag.
+ *
+ * An ABSENT slot renders empty rather than as its own braces: six literal
+ * characters `{target}` reaching a customer is the substitution form of the
+ * blank-where-a-sentence-belongs defect the copy generator exists to prevent.
+ * The HEADLINE never reaches this state — `selectTemplate` refuses a class
+ * whose headline has an unfillable slot — so an empty fill can only ever
+ * shorten a meta or an ask, never leave the verdict itself with a hole.
+ */
+function fill(template: string, bag: SlotBag): string {
+  return template
+    .replace(/\{([A-Za-z][A-Za-z0-9]*)\}/g, (_m, slot: string) => {
+      const value = bag[slot];
+      return value === undefined ? '' : String(value);
+    })
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * WHICH ratified class this row is — the designer's `row.kind`, in our words.
+ *
+ * The fixture writes `"run"` where this fold writes `'session'`: same referent,
+ * the designer's vocabulary for the thing a person sees. `"agentFailure"` has
+ * no counterpart at all — nothing in this fold produces one, because no
+ * producer emits an agent-run failure into the ledger. That class is carried,
+ * its selector is written, and it is unreachable until such a producer exists;
+ * see the packet report, where it is declared rather than left to be discovered.
+ */
+function designerKind(situation: Pick<Situation, 'kind'>): 'run' | 'incident' | 'agentFailure' {
+  return situation.kind === 'session' ? 'run' : 'incident';
+}
+
+/**
+ * The guards, in the fixture's order, first match wins.
+ *
+ * Each arm is the fixture's own guard string transcribed into TypeScript, and
+ * `__tests__/situationHeadlines.test.ts` EVALUATES every guard string from the
+ * generated module over a shared case table and asserts this function agrees on
+ * every case. That is the pattern this repo already uses to pin two copies of
+ * one rule together (`resolveAgentCron`/`effectiveCadenceExpression`,
+ * `localDay`) — the guards are not evaluated in production, because running a
+ * string from a file inside the main process is a code-execution surface, and
+ * they are not merely commented alongside either, because a comment drifts in
+ * silence.
+ *
+ * ONE READING IS STATED RATHER THAN HIDDEN: these select rows of the NOW LIST,
+ * which is the waiting column. The changed column is a different list with its
+ * own ratified head, and template 1 applied to it would tell a reader that a
+ * FINISHED run "has waited 6h and changed nothing" and offer to close it. The
+ * guards say `row.kind === "run"` because in the fixture every `row` is a
+ * Now-list row; they are applied to the list they were written for.
+ */
+export function guardHolds(template: SituationTemplate, input: SituationClassInput): boolean {
+  const { kind, done, failed, total, gate } = input;
+  switch (template.id) {
+    case 'run.waiting.nothing-written':
+      return kind === 'run' && done === 0 && failed === 0 && total === 0;
+    case 'run.waiting.mid-procedure':
+      return kind === 'run' && done === 0 && failed === 0 && total > 0 && gate !== null;
+    case 'run.waiting.part-changed':
+      return kind === 'run' && (done > 0 || failed > 0) && gate !== null;
+    case 'incident.no-run':
+      return kind === 'incident' && input.runId === null;
+    case 'agent.stuck':
+      return kind === 'agentFailure';
+    default:
+      return false;
+  }
+}
+
+/**
+ * The class that composes this row, or null.
+ *
+ * Null has TWO causes and they are different facts, both honest:
+ *  - no guard held (a class the ratified set does not cover), or
+ *  - a guard held but the headline carries a slot the record cannot fill —
+ *    an incident with no symptom and no fact, a capability with no ratified
+ *    run noun. Rendering the template anyway would print a sentence with a
+ *    hole in it; the derived sentence, which states only what is recorded, is
+ *    the honest fallback and the row reports `headlineTemplate: null` so the
+ *    fallback is visible rather than mistaken for ratified copy.
+ */
+export function selectSituationTemplate(
+  input: SituationClassInput,
+  bag: SlotBag,
+): SituationTemplate | null {
+  for (const template of SITUATION_TEMPLATES) {
+    if (!guardHolds(template, input)) continue;
+    if (slotsOf(template.headline).some((slot) => bag[slot] === undefined)) return null;
+    return template;
+  }
+  return null;
+}
+
+/**
+ * THE ONE CLASS THIS PACKET DECLINES, AND WHY — raised at the gate, not smoothed.
+ *
+ * MEASURED against the developer's live ledger, 2026-08-20: of seven waiting
+ * rows, one is a `cap.bulk_plugin_update` run stopped at `cp.backup`, **4 of
+ * 8**, with nothing written. Guard 1 selects it, and guard 1's ratified ask
+ * says *"It never received a target list, so it cannot start. Give it one, or
+ * close it."* That is false about that row: it received a procedure and it is
+ * four checkpoints into it. It is the designer's CLASS 2, and class 2 cannot
+ * fire.
+ *
+ * WHY CLASS 2 CANNOT FIRE, structurally. Guard 2 needs `total > 0` with nothing
+ * written, and `{total}` is `row.places.total`, which `foldOneSession` derives
+ * from `outcomes.succeeded` + `outcomes.failed` and from nothing else. So
+ * `done === 0 && failed === 0` FORCES `total === 0`, guard 2 is unreachable by
+ * construction, and every one of its real instances lands in guard 1. The fold
+ * carries no intended-target set for a run that has not acted yet — there is no
+ * field on `SessionRow` that could hold one, and inventing a count would be the
+ * fabrication this layer forbids outright.
+ *
+ * WHAT THIS DOES ABOUT IT, and its limits. It declines guard 1 for a GATED row
+ * and falls back to the derived sentence, which is true and is what the surface
+ * already showed. The row keeps its gate lines — "Waiting at cp.backup — 4 of 8"
+ * and "Needs your approval" — so the reader loses no information relative to
+ * today; what they are spared is a ratified sentence that contradicts the
+ * record. `headlineTemplate` reports `null`, so the fallback is visible rather
+ * than mistaken for ratified copy.
+ *
+ * THIS IS AN ADDED CONDITION AND IT IS NAMED AS ONE. It lives HERE rather than
+ * inside `guardHolds`, deliberately: the guards stay byte-exact against the
+ * ratified strings and their agreement pin stays exact. The packet does not get
+ * to edit ratified copy, and it does not get to ship a sentence it has measured
+ * to be false either. The ruling this wants is one of two, and both are the
+ * owner's: add `&& gate === null` to guard 1, or give the fold a target-set
+ * field so class 2 fires as drawn. Until then, this refusal is the honest gap.
+ */
+function contradictedByTheRecord(
+  template: SituationTemplate | null,
+  gate: PendingGate | null,
+): boolean {
+  return template?.id === 'run.waiting.nothing-written' && gate !== null;
+}
+
+/** Everything a row renders, composed once. */
+interface SituationCopy {
+  headline: string;
+  ask: string;
+  chip: string;
+  state: string;
+  meta: string;
+  headlineTemplate: string | null;
+}
+
+/**
+ * A row whose class the ratified set does not cover, or cannot fill.
+ *
+ * The derived sentence, unchanged from what this fold has always produced. No
+ * new sentence is authored here: the ratified set covers the classes it covers,
+ * and inventing prose for the rest is exactly what the copy discipline forbids.
+ */
+function derivedCopy(headline: string, meta: string, state: string): SituationCopy {
+  return { headline, ask: '', chip: '', state, meta, headlineTemplate: null };
+}
+
+/** A session row's verdict. */
+function composeSessionCopy(row: SessionRow, column: TriageColumn, now: Date, since: string): SituationCopy {
+  const done = row.outcomes.succeeded.length;
+  const failed = row.outcomes.failed.length;
+  const total = row.places.total;
+  const gate = row.gate ?? null;
+  const runbookId = row.runbookId ?? row.capability;
+
+  const bag: SlotBag = {
+    runNoun: RUN_NOUN[row.capability],
+    done,
+    failed,
+    total,
+    age: ageLabel(since, now),
+    checkpoint: gate?.checkpointId,
+    position: gate ? `${gate.index} of ${gate.of}` : undefined,
+    awaits: gate?.awaits,
+    runbookId,
+  };
+
+  const selected =
+    column === 'waiting'
+      ? selectSituationTemplate({ kind: 'run', done, failed, total, gate, runId: row.id }, bag)
+      : null;
+  const template = contradictedByTheRecord(selected, gate) ? null : selected;
+
+  if (!template) return derivedCopy(runSummary(row), runbookId, '');
+  return {
+    headline: fill(template.headline, bag),
+    ask: fill(template.ask, bag),
+    chip: template.chip,
+    state: template.state,
+    meta: fill(template.meta, bag),
+    headlineTemplate: template.id,
+  };
+}
+
+/** An orphan incident's verdict — a situation of one is still a situation. */
+function composeIncidentCopy(incident: EventEnvelope, places: PlaceSet, derived: string): SituationCopy {
+  const payload = payloadOf(incident);
+  const bag: SlotBag = {
+    finding: str(payload.symptom) ?? str(payload.fact),
+    // The anchor entity, cited as the id the record holds. Nothing on this fold
+    // can name a site: `describePlace` answers WHERE a target is, not what it
+    // is called, and softening the id into its place ("on production") would
+    // drop the one word saying WHICH site. An id cited in full is the property
+    // the refusals and the Govern matrix already hold to.
+    target: incident.entity?.environment ?? incident.entity?.site,
+    producer: (incident.actor as { id?: string } | undefined)?.id,
+  };
+
+  // An orphan is BY CONSTRUCTION a situation with no run: it reached this
+  // function because nothing correlated it into a session. `runId: null` is
+  // therefore the record's own answer, not a default standing in for one.
+  const template = selectSituationTemplate(
+    { kind: 'incident', done: 0, failed: 0, total: places.total, gate: null, runId: null },
+    bag,
+  );
+
+  if (!template) {
+    // The class's own `state`, READ from the ratified set rather than retyped —
+    // an incident row that reached the fallback is still an incident with no run
+    // attached, and that phrase is the designer's. Absent if the set ever drops
+    // the class, which renders no state line rather than a stale one.
+    const state = SITUATION_TEMPLATES.find((t) => t.id === 'incident.no-run')?.state ?? '';
+    return derivedCopy(derived, fill('{producer}', bag), state);
+  }
+  return {
+    headline: fill(template.headline, bag),
+    ask: fill(template.ask, bag),
+    chip: template.chip,
+    state: template.state,
+    meta: fill(template.meta, bag),
+    headlineTemplate: template.id,
+  };
+}
+
+/**
+ * THE LIST VERDICT — one sentence about the whole list.
+ *
+ * Read off the waiting rows' own `written` counts, which are the numbers their
+ * headlines were composed from, so the sentence cannot disagree with the rows
+ * beneath it. Empty when nothing is waiting: a verdict about an empty list is a
+ * claim about nothing.
+ */
+export function listVerdict(waiting: readonly Situation[]): string {
+  if (waiting.length === 0) return '';
+  const changedRuns = waiting.filter((s) => s.written.done > 0 || s.written.failed > 0).length;
+  const bag: SlotBag = { needsYou: waiting.length, changedRuns };
+  return changedRuns === 0
+    ? fill(LIST_VERDICT.allUnwritten, bag)
+    : fill(LIST_VERDICT.someChanged, bag);
 }
 
 function safeDeadline(deps: SessionRegistryDeps, row: SessionRow): DerivedDeadline | undefined {
@@ -1305,6 +1670,10 @@ function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps)
   const anchor = incident.entity?.environment ?? incident.entity?.site;
   const places = derivePlaces(anchor ? [anchor] : [], deps.describePlace);
   const resolved = payload.resolved === true;
+  const derived = `${resolved ? 'incident closed' : 'incident open'}: ${
+    str(payload.symptom) ?? str(payload.fact) ?? 'no symptom recorded'
+  }`;
+  const copy = composeIncidentCopy(incident, places, derived);
 
   return {
     id: incident.id,
@@ -1325,11 +1694,11 @@ function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps)
         eventId: incident.id,
         topic: incident.topic,
         observedAt: incident.observed_at,
-        summary: `${resolved ? 'incident closed' : 'incident open'}: ${
-          str(payload.symptom) ?? str(payload.fact) ?? 'no symptom recorded'
-        }`,
+        summary: derived,
       },
     ],
+    ...copy,
+    written: { done: 0, failed: 0, total: places.total },
   };
 }
 
@@ -1455,10 +1824,14 @@ export function createSessionRegistry(deps: SessionRegistryDeps = {}): SessionRe
 
     triage: () => {
       const snapshot = fold();
+      const waiting = snapshot.situations.filter((s) => s.column === 'waiting');
       return {
-        waiting: snapshot.situations.filter((s) => s.column === 'waiting'),
+        waiting,
         reserved: snapshot.reserved,
         changed: snapshot.situations.filter((s) => s.column === 'changed'),
+        // Generated from `waiting` itself, not re-derived from the sessions:
+        // the sentence and the rows have one source, so they cannot disagree.
+        verdict: listVerdict(waiting),
         cursor: snapshot.cursor,
       };
     },

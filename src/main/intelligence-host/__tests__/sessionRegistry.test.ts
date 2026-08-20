@@ -1109,6 +1109,16 @@ describe('the consequence order (moments-model 1.3 §4a)', () => {
       tierReason: 'x',
       lastEventId: 'evt_0',
       parts: [],
+      // WP-48's composed fields. The comparator reads none of them — tier,
+      // place and age are its whole key — so they are present here only to
+      // satisfy the shape, and their values are deliberately inert.
+      headline: 'h',
+      ask: '',
+      chip: '',
+      state: '',
+      meta: '',
+      headlineTemplate: null,
+      written: { done: 0, failed: 0, total: 1 },
     };
     const place = (highest: string | null) => ({
       tokens: highest ? [highest] : [],
@@ -1509,6 +1519,237 @@ describe('non-fatal by construction', () => {
  *
  * When a future tear re-rules the order, this morning is what it re-renders.
  */
+describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
+  /**
+   * The class-selection pins in `situationHeadlines.test.ts` drive the selector
+   * directly, across its whole input domain. THESE prove the other half: that
+   * the FOLD, over events the producers actually write, produces the inputs
+   * those classes are for. A selector that is right about inputs the fold can
+   * never hand it composes nothing.
+   */
+
+  /** A run under a document it can be folded against, with nothing written. */
+  function unwrittenRunUnderDocument(): string {
+    const t = mintTaskId();
+    emitManifest({
+      taskId: t,
+      observedAt: hoursAgo(3),
+      procedure: {
+        capability: RB_REMEDIATE.capability,
+        runbook: RB_REMEDIATE.id,
+        hash: RB_REMEDIATE.hash,
+        status: 'delivered',
+      },
+      consulted: true,
+    });
+    return t;
+  }
+
+  /** The same run, with its canary landed — one target done, gate still open. */
+  function partChangedRun(): string {
+    const t = unwrittenRunUnderDocument();
+    emitAct({ taskId: t, observedAt: hoursAgo(3), tool: 'contain_site', targets: [BRAVO] });
+    return t;
+  }
+
+  test('a run with no document and nothing written is the nothing-written class, in the ratified words', () => {
+    const t = mintTaskId();
+    emitManifest({
+      taskId: t,
+      observedAt: hoursAgo(9),
+      // A runbook the lookup does not hold: no document, so no checkpoints and
+      // no gate. This is the shape THREE rows on the developer's live ledger
+      // have (measured 2026-08-20) — the class the designer counted two of.
+      procedure: { capability: RB_REMEDIATE.capability, runbook: 'rb.remediate', hash: 'sha256:gone', status: 'delivered' },
+      consulted: true,
+    });
+    expect(ledgerCount(MANIFEST_TOPIC)).toBe(1); // shape #15
+
+    const [situation] = foldSessionRegistry(deps({ runbooks: lookup() })).situations;
+    expect(situation.headlineTemplate).toBe('run.waiting.nothing-written');
+    expect(situation.headline).toBe('A remediation run has waited 9h and changed nothing');
+    expect(situation.ask).toBe('It never received a target list, so it cannot start. Give it one, or close it.');
+    expect(situation.chip).toBe('Waiting');
+    expect(situation.state).toBe('nothing written yet');
+    // The runbook id LEFT the headline and is on the meta line — the route's
+    // own instruction, and the assertion that would fail if it drifted back.
+    expect(situation.headline).not.toContain('rb.remediate');
+    expect(situation.meta).toBe('rb.remediate');
+  });
+
+  test('the run noun is the capability\'s, and a capability outside the vocabulary declines the class', () => {
+    // `cap.cache_purge` has no ratified run noun. Rather than composing
+    // "undefined has waited 5h", the class is declined and the derived sentence
+    // stands — with `headlineTemplate: null` saying so.
+    const t = mintTaskId();
+    emitManifest({
+      taskId: t,
+      observedAt: hoursAgo(5),
+      procedure: { capability: RB_PURGE.capability, runbook: 'rb.cache-purge', hash: 'sha256:gone', status: 'delivered' },
+      consulted: true,
+    });
+    const [situation] = foldSessionRegistry(deps({ runbooks: lookup() })).situations;
+    expect(situation.headlineTemplate).toBeNull();
+    expect(situation.headline).not.toContain('undefined');
+    expect(situation.headline).toContain('rb.cache-purge');
+  });
+
+  test('a GATED run with nothing written is declined, because the class\'s ask contradicts the record', () => {
+    // The measured live-fleet defect, pinned. This row is at a checkpoint with
+    // approvals outstanding; guard 1 selects it and guard 1 says it "never
+    // received a target list, so it cannot start". It received one and it is
+    // partway through. See `contradictedByTheRecord` for the ruling this wants.
+    unwrittenRunUnderDocument();
+    expect(ledgerCount(MANIFEST_TOPIC)).toBe(1); // shape #15
+    const [situation] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).situations;
+    expect(situation.gate).toBeDefined();
+    expect(situation.written).toEqual({ done: 0, failed: 0, total: 0 });
+    expect(situation.headlineTemplate).toBeNull();
+    expect(situation.ask).toBe('');
+    expect(situation.headline).not.toContain('never received a target list');
+  });
+
+  test('the mid-procedure class cannot fire, and this pins WHY rather than asserting it does', () => {
+    // `{total}` is `places.total`, derived from outcomes alone, so nothing
+    // written forces total 0 and guard 2 (`total > 0` with nothing written) has
+    // no reachable input. Pinned as a MEASURED LIMIT so the day a target-set
+    // field lands, this test fails and says what changed.
+    unwrittenRunUnderDocument();
+    const [row] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).sessions;
+    expect(row.outcomes.succeeded.length + row.outcomes.failed.length).toBe(0);
+    expect(row.places.total).toBe(0);
+  });
+
+  test('a part-changed run at a gate is the tier-1 class, counting done against the target set', () => {
+    partChangedRun();
+    expect(ledgerCount(OUTCOME_RECORDED_TOPIC)).toBe(1); // shape #15
+
+    const [situation] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).situations;
+    expect(situation.headlineTemplate).toBe('run.waiting.part-changed');
+    expect(situation.headline).toBe('1 of 1 are changed and the rest are waiting on you');
+    expect(situation.chip).toBe('Mid-change');
+    expect(situation.ask).toContain('Continue, or stop and keep what is standing.');
+    expect(situation.written).toEqual({ done: 1, failed: 0, total: 1 });
+  });
+
+  test('an orphan incident states the FINDING, not that an incident exists', () => {
+    const id = core.emitter.emit({
+      observed_at: hoursAgo(7),
+      topic: INCIDENT_TOPIC,
+      schema: INCIDENT_SCHEMA,
+      entity: { environment: CHARLIE_1 },
+      actor: { id: 'act_security_sentinel', kind: 'agent' },
+      source: { class: 'work', system: 'agent:security-sentinel', trust: 'emitted' },
+      payload: { fact: 'ABS-05', symptom: 'Known backdoor plugin detected: wp-compat', severity: 'critical', resolved: false },
+    }).id;
+    expect(core.ledger.get(id)).toBeDefined(); // shape #15
+
+    const [situation] = foldSessionRegistry(deps()).situations;
+    expect(situation.headlineTemplate).toBe('incident.no-run');
+    expect(situation.headline).toBe(
+      `Known backdoor plugin detected: wp-compat on ${CHARLIE_1}, and nothing is fixing it`,
+    );
+    expect(situation.state).toBe('No run attached');
+    expect(situation.meta).toBe('act_security_sentinel');
+    // The badge stays empty on this class, so nothing renders an empty pill.
+    expect(situation.chip).toBe('');
+  });
+
+  test('an incident with neither symptom nor fact declines the class rather than naming nothing', () => {
+    core.emitter.emit({
+      observed_at: hoursAgo(7),
+      topic: INCIDENT_TOPIC,
+      schema: INCIDENT_SCHEMA,
+      entity: { environment: CHARLIE_1 },
+      actor: { id: 'act_security_sentinel', kind: 'agent' },
+      source: { class: 'work', system: 'agent:security-sentinel', trust: 'emitted' },
+      payload: { severity: 'high', resolved: false },
+    });
+    const [situation] = foldSessionRegistry(deps()).situations;
+    expect(situation.headlineTemplate).toBeNull();
+    expect(situation.headline).toContain('no symptom recorded');
+    // …and the status phrase still comes from the ratified set, not from here.
+    expect(situation.state).toBe('No run attached');
+  });
+
+  test('FOUR uncorrelated incidents on one site are FOUR rows — measured, not assumed', () => {
+    // The route's §2 open question, driven with the shape the developer's real
+    // ledger holds: four `episodic.incident.recorded` events, same actor, same
+    // entity, same millisecond, `correlation` and `causation` BOTH null.
+    // Coalescing keys off `correlation` into a session's task set, so with no
+    // link there is no session to fold them into and each states its own limit
+    // exactly as the designer drew it.
+    const findings = ['fileorganizer', 'wp-compat', 'noted, index', 'index.php'];
+    for (const finding of findings) {
+      core.emitter.emit({
+        observed_at: hoursAgo(7),
+        topic: INCIDENT_TOPIC,
+        schema: INCIDENT_SCHEMA,
+        entity: { environment: CHARLIE_1, site: CHARLIE_2 },
+        actor: { id: 'act_security_sentinel', kind: 'agent' },
+        source: { class: 'work', system: 'agent:security-sentinel', trust: 'emitted' },
+        payload: { fact: 'ABS-0x', symptom: finding, severity: 'high', resolved: false },
+      });
+    }
+    expect(ledgerCount(INCIDENT_TOPIC)).toBe(4); // shape #15
+
+    const snapshot = foldSessionRegistry(deps());
+    expect(snapshot.situations).toHaveLength(4);
+    expect(snapshot.situations.every((s) => s.headlineTemplate === 'incident.no-run')).toBe(true);
+    // Each names its OWN finding — four rows saying four things, not four
+    // saying the same thing.
+    expect(new Set(snapshot.situations.map((s) => s.headline)).size).toBe(4);
+  });
+
+  test('the same four WITH a causal link into a run coalesce to ONE row, so the fold is the reason', () => {
+    // The other half of the measurement: the rows are four because the RECORD
+    // carries no link, not because the fold cannot coalesce. Correlate them into
+    // a session and the same four events become three parts of one situation.
+    const t = mintTaskId();
+    emitManifest({
+      taskId: t,
+      observedAt: hoursAgo(8),
+      procedure: { capability: RB_REMEDIATE.capability, runbook: RB_REMEDIATE.id, hash: RB_REMEDIATE.hash, status: 'delivered' },
+      consulted: true,
+    });
+    for (const finding of ['a', 'b', 'c', 'd']) {
+      core.emitter.emit({
+        observed_at: hoursAgo(7),
+        topic: INCIDENT_TOPIC,
+        schema: INCIDENT_SCHEMA,
+        entity: { environment: CHARLIE_1 },
+        actor: { id: 'act_security_sentinel', kind: 'agent' },
+        source: { class: 'work', system: 'agent:security-sentinel', trust: 'emitted' },
+        correlation: t,
+        payload: { fact: 'ABS-0x', symptom: finding, severity: 'high', resolved: false },
+      });
+    }
+    expect(ledgerCount(INCIDENT_TOPIC)).toBe(4); // shape #15
+
+    const snapshot = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) }));
+    expect(snapshot.situations).toHaveLength(1);
+    expect(snapshot.situations[0].parts.filter((p) => p.kind === 'incident')).toHaveLength(4);
+  });
+
+  test('the list verdict is generated from the very rows the columns render', () => {
+    // Two unwritten rows and nothing else: the allUnwritten arm, with the count
+    // the waiting column is about to draw.
+    for (const capability of [RB_REMEDIATE.capability, 'cap.incident_containment']) {
+      emitManifest({
+        taskId: mintTaskId(),
+        observedAt: hoursAgo(4),
+        procedure: { capability, runbook: 'rb.x', hash: 'sha256:gone', status: 'delivered' },
+        consulted: true,
+      });
+    }
+    const triage = createSessionRegistry(deps({ runbooks: lookup() })).triage();
+    expect(triage.waiting).toHaveLength(2);
+    expect(triage.verdict).toBe('2 things need you, and none of them has changed anything yet');
+  });
+});
+
+// ===========================================================================
+
 describe('the golden fixture — the designer\'s "one morning, both ways" (§2)', () => {
   interface Morning {
     charlieTask: string;
@@ -1691,6 +1932,75 @@ describe('the golden fixture — the designer\'s "one morning, both ways" (§2)'
     expect([...triage.waiting, ...triage.changed].map((s) => s.tier)).not.toContain(3);
     expect(triage.reserved.staleCount).toBe(0);
     expect(triage.reserved.headline).not.toContain('late');
+  });
+
+  /**
+   * WP-48 · THE PINS, RE-RULED WITH THE PACKET.
+   *
+   * This fixture pinned the composer's old strings, and the copy those strings
+   * came from was re-ratified on 2026-08-20. A fixture pinning superseded copy
+   * is not a safety net, it is a veto on a ruling — so the pins move WITH the
+   * ruling, and what they pin is unchanged: this same morning, rendered by the
+   * sentence set of the day.
+   *
+   * WHAT THE RE-RULE REVEALED, worth stating because it is a fact about the
+   * morning rather than about the sentences: BOTH waiting rows are the
+   * `run.waiting.part-changed` class — the class the designer specified because
+   * "no shipped row can produce it today". The golden morning produces two of
+   * them, through real emitters, which is why the fifth class ships pinned
+   * rather than merely written down.
+   */
+  test('both waiting rows are the part-changed class, in the ratified words', () => {
+    overnight();
+    const [charlie, bravo] = createSessionRegistry(morningDeps()).triage().waiting;
+
+    expect(charlie.headlineTemplate).toBe('run.waiting.part-changed');
+    expect(charlie.headline).toBe('1 of 2 are changed and the rest are waiting on you');
+    expect(charlie.ask).toBe(
+      'Waiting at cp.verify, 7 of 8. 1 failed. Continue, or stop and keep what is standing.',
+    );
+    expect(charlie.chip).toBe('Mid-change');
+    expect(charlie.meta).toBe('rb.bulk-plugin-update');
+
+    expect(bravo.headlineTemplate).toBe('run.waiting.part-changed');
+    expect(bravo.headline).toBe('1 of 1 are changed and the rest are waiting on you');
+    expect(bravo.ask).toBe(
+      'Waiting at cp.approval, 3 of 8. 0 failed. Continue, or stop and keep what is standing.',
+    );
+    expect(bravo.chip).toBe('Mid-change');
+    expect(bravo.meta).toBe('rb.remediate');
+  });
+
+  test('Charlie\'s two numbers are the record\'s, not the fixture prose\'s', () => {
+    // The fixture's own comment says "Two done and standing"; the RECORD says
+    // one. `bulk_plugin_update` succeeded on both Charlie targets and the later
+    // `verify_site_live` FAILED on the first, and latest-outcome-per-target is
+    // the rule — a retry that succeeded is not still failed, and a verify that
+    // failed is not still standing. The headline counts what the record counts.
+    overnight();
+    const [charlie] = createSessionRegistry(morningDeps()).triage().waiting;
+    expect(charlie.written).toEqual({ done: 1, failed: 1, total: 2 });
+    expect(charlie.headline).toContain('1 of 2');
+  });
+
+  test('the changed column keeps the DERIVED sentence — the ratified set is the Now list\'s', () => {
+    // No ratified class covers a finished run, and none is authored for one.
+    // `headlineTemplate: null` says the sentence is derived, so the fallback is
+    // visible rather than passing as ratified copy.
+    overnight();
+    const [changed] = createSessionRegistry(morningDeps()).triage().changed;
+    expect(changed.headlineTemplate).toBeNull();
+    expect(changed.headline).toBe('complete under rb.cache-purge — 12 done and standing, 0 failed');
+    expect(changed.chip).toBe('');
+    expect(changed.ask).toBe('');
+  });
+
+  test('the morning\'s list verdict is the someChanged arm, counting both written rows', () => {
+    overnight();
+    const triage = createSessionRegistry(morningDeps()).triage();
+    expect(triage.verdict).toBe('2 things need you, and 2 of them have already written somewhere');
+    // It cannot disagree with the column: the count IS the rows' own `written`.
+    expect(triage.waiting.filter((s) => s.written.done > 0 || s.written.failed > 0)).toHaveLength(2);
   });
 
   test('the whole morning re-derives after the in-memory state is killed', () => {

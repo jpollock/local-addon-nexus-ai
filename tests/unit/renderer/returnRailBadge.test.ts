@@ -32,6 +32,9 @@ function triageWith(n: number): TriageView {
     waiting: Array.from({ length: n }, (_, i) => ({ id: `sit_${i}` })) as any,
     changed: [{ id: 'sit_changed' }] as any,
     reserved: { headline: 'x', dark: [], staleCount: 0, verdict: 'OK', degraded: false } as any,
+    // WP-48's list verdict. The badge reads `waiting.length` and nothing else,
+    // which is the point of this suite, so the sentence is inert here.
+    verdict: '',
     cursor: 'evt_1',
   };
 }

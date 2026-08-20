@@ -94,6 +94,110 @@ function arrival(overrides: any = {}): { instance: any; tree: any; nodes: any[] 
 
 const byAttr = (nodes: any[], attr: string) => nodes.filter((n) => props(n)[attr] !== undefined);
 
+describe('WP-48 · the verdict is READ, and the badge holds one word', () => {
+  /**
+   * The composer is pinned in the host. What these pin is the SEAM: that the
+   * component renders those fields verbatim and composes nothing of its own —
+   * the property the ratified placement argument is worth having.
+   */
+
+  test('every row renders the host\'s headline verbatim, and none is composed here', () => {
+    const { tree } = arrival();
+    const rows = byAttr(walk(tree), 'data-situation');
+    const all = [...triage.waiting, ...triage.changed];
+    expect(rows).toHaveLength(all.length);
+
+    for (const situation of all) {
+      const row = rows.find((n) => props(n)['data-situation'] === situation.id);
+      const text = textOf(row).join(' ');
+      expect({ id: situation.id, rendered: text.includes(situation.headline) })
+        .toEqual({ id: situation.id, rendered: true });
+    }
+  });
+
+  test('the headline node reports WHICH class composed it, or that it was derived', () => {
+    const { tree } = arrival();
+    const marks = byAttr(walk(tree), 'data-headline').map((n) => props(n)['data-headline']);
+    const expected = [...triage.waiting, ...triage.changed].map((s) => s.headlineTemplate ?? 'derived');
+    expect(marks).toEqual(expected);
+  });
+
+  test('the ask follows the headline, and a row without one renders no empty line', () => {
+    const { tree } = arrival();
+    const asks = byAttr(walk(tree), 'data-ask');
+    const withAsk = [...triage.waiting, ...triage.changed].filter((s) => s.ask !== '');
+    expect(asks).toHaveLength(withAsk.length);
+    expect(asks.map((n) => textOf(n).join(''))).toEqual(withAsk.map((s) => s.ask));
+  });
+
+  test('the chip is ONE WORD, and a class with no chip renders NO badge', () => {
+    const { tree } = arrival();
+    const chips = byAttr(walk(tree), 'data-chip');
+    const withChip = [...triage.waiting, ...triage.changed].filter((s) => s.chip !== '');
+    expect(chips).toHaveLength(withChip.length);
+    for (const chip of chips) {
+      const word = props(chip)['data-chip'];
+      // The rule, asserted at the render rather than only at the copy: whatever
+      // the set says, what reaches a badge here carries no whitespace.
+      expect({ word, isOneWord: !/\s/.test(word) }).toEqual({ word, isOneWord: true });
+      expect(textOf(chip).join('')).toBe(word);
+    }
+  });
+
+  test('the status phrase is on the META line, as text — never in the badge', () => {
+    const { tree } = arrival();
+    const rows = byAttr(walk(tree), 'data-situation');
+    for (const situation of [...triage.waiting, ...triage.changed]) {
+      if (situation.state === '') continue;
+      const row = rows.find((n) => props(n)['data-situation'] === situation.id);
+      // Present somewhere in the row…
+      expect(textOf(row).join(' ')).toContain(situation.state);
+      // …and NOT as the badge, which is the whole point of moving it.
+      const chip = walk(row).find((n) => props(n)['data-chip'] !== undefined);
+      expect(chip === undefined || props(chip)['data-chip'] !== situation.state).toBe(true);
+    }
+  });
+
+  test('the rule line stays the DERIVED tierReason, not the template\'s tier label', () => {
+    // XD-23's line names the evidence that placed the row. The ratified `rule`
+    // field restates the tier, and trading evidence for a label would be the
+    // regression that line exists to prevent — so it is carried and not drawn.
+    const { tree } = arrival();
+    const rows = byAttr(walk(tree), 'data-situation');
+    for (const situation of triage.waiting) {
+      const row = rows.find((n) => props(n)['data-situation'] === situation.id);
+      const text = textOf(row).join(' ');
+      expect(text).toContain(situation.tierReason);
+      expect(text).not.toContain('Tier 1 · mid-change');
+      expect(text).not.toContain('Tier 2 · the world is untouched');
+    }
+  });
+
+  test('the list verdict is rendered from the TriageView, and an empty one draws nothing', () => {
+    const { tree } = arrival();
+    const verdict = walk(tree).find((n) => props(n)['data-verdict'] !== undefined);
+    expect(verdict).toBeDefined();
+    expect(textOf(verdict).join('')).toBe(triage.verdict);
+    expect(triage.verdict).not.toBe('');
+
+    const empty = arrival({ state: { triage: { ...triage, verdict: '' } } });
+    expect(walk(empty.tree).find((n) => props(n)['data-verdict'] !== undefined)).toBeUndefined();
+  });
+
+  test('the parts still render beneath the verdict — a verdict does not replace the record', () => {
+    // Tear 2: a correct list of parts is not a verdict about the whole. The row
+    // now says both, and this is what would fail if the parts were dropped in
+    // favour of the sentence.
+    const { tree } = arrival();
+    const rows = byAttr(walk(tree), 'data-situation');
+    const charlie = triage.waiting[0];
+    const row = rows.find((n) => props(n)['data-situation'] === charlie.id);
+    const parts = walk(row).filter((n) => props(n)['data-part'] !== undefined);
+    expect(parts).toHaveLength(charlie.parts.length);
+    expect(parts.map((n) => textOf(n).join(''))).toEqual(charlie.parts.map((p) => p.summary));
+  });
+});
+
 describe('the arrival renders the fold — row for row', () => {
   test('two columns of ONE VERDICT, each in the order the registry supplied', () => {
     const { tree } = arrival();

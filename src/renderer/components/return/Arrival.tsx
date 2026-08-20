@@ -34,6 +34,7 @@
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import type { ReservedRow, Situation, TriageView } from '../../../main/intelligence-host/sessionRegistry';
+import { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
 import {
   accountingLine,
@@ -41,6 +42,7 @@ import {
   awayHeadline,
   driftLine,
   gateLine,
+  metaLine,
   needsLine,
   promotableSessionId,
   reservedDetail,
@@ -137,6 +139,28 @@ const styles = {
     marginBottom: 4,
   },
   statement: { fontSize: 12, fontWeight: 600, marginBottom: 4 },
+  /**
+   * WP-48 · the row chip. ONE WORD — Waiting, Mid-change, Stuck.
+   *
+   * The padding and radius are the reason the rule exists rather than a taste:
+   * a pill sized for one word renders a sentence as a lozenge with 6px of
+   * padding against a 10px radius, which reads as a broken badge instead of as
+   * prose. The phrases the chips used to carry are on the meta line now, as
+   * text, where a sentence belongs.
+   */
+  chip: {
+    display: 'inline-block',
+    borderRadius: 10,
+    padding: '1px 8px',
+    marginBottom: 4,
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: 0.3,
+    color: 'var(--nxai-muted-text)',
+    border: '1px solid var(--nxai-card-border)',
+  },
+  ask: { fontSize: 11, marginBottom: 4, color: 'var(--nxai-card-text)' },
+  verdict: { fontSize: 12, color: 'var(--nxai-card-text)', margin: '4px 0 0' },
   gate: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, marginBottom: 2 },
   meta: { fontSize: 10, color: 'var(--nxai-muted-text)' },
   door: {
@@ -154,12 +178,18 @@ const styles = {
   empty: { fontSize: 11, color: 'var(--nxai-muted-text)' },
 };
 
-/** Whole hours between two instants, as the rows render age. */
-export function ageLabel(sinceIso: string, now: Date): string {
-  const then = Date.parse(sinceIso);
-  if (!Number.isFinite(then)) return '';
-  return `${Math.max(0, Math.floor((now.getTime() - then) / 3_600_000))}h`;
-}
+/**
+ * Whole hours between two instants, as the rows render age.
+ *
+ * WP-48 · THE IMPLEMENTATION MOVED TO THE HOST and this is a re-export of it.
+ * The headline now carries an age too (`{age}` in the ratified templates), and
+ * it is composed in `sessionRegistry`; a second copy here would let the row's
+ * own sentence disagree with the meta line directly beneath it about how old
+ * the same situation is. One derivation, imported, is how that is kept true
+ * rather than promised — the same move `declaredFromSession` makes for the
+ * marks discipline.
+ */
+export { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
 
 export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
   constructor(props: ArrivalProps) {
@@ -206,25 +236,53 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
     if (this.props.onPromote) this.props.onPromote(sessionId);
   };
 
-  /** One waiting or changed row. The gate and the door appear on waiting only. */
+  /**
+   * One waiting or changed row. The gate and the door appear on waiting only.
+   *
+   * WP-48 · THE VERDICT IS READ, NOT COMPOSED. `headline`, `ask`, `chip`,
+   * `state` and `meta` all arrive from the host's one composer, so this
+   * component holds no template, no substitution and no branch on which
+   * sentence a row deserves — the property the ratified placement argument
+   * buys. What remains here is layout: which field goes on which line, and the
+   * system's own rule that a BADGE CARRIES ONE WORD while every phrase, the
+   * parts chip and the status line included, is text on the meta line.
+   */
   private renderSituation(situation: Situation, now: Date): React.ReactElement {
     const sessionId = promotableSessionId(situation);
-    const meta = [
-      situation.places.summary,
-      ageLabel(situation.since, now),
-      situation.parts.length > 1 ? `${situation.parts.length} ${RETURN_COPY.PARTS_CHIP}` : '',
-    ].filter(Boolean);
 
     return React.createElement(
       'div',
       { key: situation.id, style: styles.row, 'data-situation': situation.id, 'data-tier': situation.tier },
       // XD-23: every row shows the rule that placed it. Derived, never authored.
+      // This stays `tierReason` rather than the template's own `rule` field: the
+      // reason names the EVIDENCE that placed the row ("a write has landed in
+      // scope — 2 target(s) … (evt_…)"), where the template's rule restates the
+      // tier. Trading derived evidence for an authored tier label would be the
+      // regression XD-23 exists to prevent, so the ratified `rule` is carried in
+      // the generated module and deliberately not rendered here.
       React.createElement('div', { key: 'rule', style: styles.rule }, situation.tierReason),
+      // ONE WORD, when the class has one. A row whose chip is empty renders no
+      // badge at all rather than an empty pill.
+      ...(situation.chip
+        ? [React.createElement('div', { key: 'chip', style: styles.chip, 'data-chip': situation.chip }, situation.chip)]
+        : []),
+      // The verdict, composed once in the host and rendered verbatim.
+      React.createElement(
+        'div',
+        { key: 'headline', style: styles.statement, 'data-headline': situation.headlineTemplate ?? 'derived' },
+        situation.headline,
+      ),
+      ...(situation.ask
+        ? [React.createElement('div', { key: 'ask', style: styles.ask, 'data-ask': 'true' }, situation.ask)]
+        : []),
       // The situation's own parts, in the record's words. Never composed prose.
+      // They stay BENEATH the verdict rather than replacing it: tear 2's rule is
+      // that a correct list of parts is not a verdict about the whole, and the
+      // row now says both.
       ...situation.parts.map((part, i) =>
         React.createElement(
           'div',
-          { key: `part-${i}`, style: i === 0 ? styles.statement : styles.meta, 'data-part': part.kind },
+          { key: `part-${i}`, style: styles.meta, 'data-part': part.kind },
           part.summary,
         ),
       ),
@@ -235,7 +293,7 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
             React.createElement('div', { key: 'needs', style: styles.meta }, needsLine(situation.gate)),
           ]
         : []),
-      React.createElement('div', { key: 'meta', style: styles.meta }, meta.join(SEP)),
+      React.createElement('div', { key: 'meta', style: styles.meta }, metaLine(situation, now)),
       ...(situation.column === 'waiting' && sessionId
         ? [
             React.createElement(
@@ -284,6 +342,13 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
         { key: 'header' },
         React.createElement('h2', { style: styles.headline, 'data-away': 'true' }, awayHeadline(awayMs)),
         React.createElement('p', { style: styles.accounting, 'data-accounting': 'true' }, accountingLine(counts)),
+        // WP-48 · the list verdict — the sentence no single row can say, and the
+        // most useful one this data produces: "nothing is half-done, so nothing
+        // is expensive to stop." Composed in the host from the very rows below
+        // it, so it cannot contradict them. Empty when nothing is waiting.
+        ...(triage.verdict
+          ? [React.createElement('p', { style: styles.verdict, 'data-verdict': 'true' }, triage.verdict)]
+          : []),
       ),
 
       React.createElement('div', { key: 'reserved' }, this.renderReserved(triage.reserved)),
