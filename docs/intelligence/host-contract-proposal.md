@@ -428,7 +428,7 @@ if you would rather these live elsewhere, tell us where.
 Done, and shipping in our branch now — before this proposal, deliberately, so that
 the question is answered by a measurement rather than by a plan.
 
-- `src/renderer/hostCapabilities.ts` reads `context.capabilities` when present and
+- `src/renderer/hostContractProbe.ts` reads `context.capabilities` when present and
   records `context.environment.version` alongside as the fallback signal.
 - **`has()` never reads the version.** A capability is never inferred from a
   version in either direction: a host at 99.0.0 advertising nothing gets every

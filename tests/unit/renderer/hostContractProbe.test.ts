@@ -12,7 +12,7 @@ import {
   probeHost,
   HOST_CAPABILITIES,
   type HostCapabilityName,
-} from '../../../src/renderer/hostCapabilities';
+} from '../../../src/renderer/hostContractProbe';
 
 /** The host we ship against today: renderer context per recon §6, no `capabilities`. */
 const STOCK_10_1_1 = {

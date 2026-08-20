@@ -1,10 +1,12 @@
 /**
  * WP-47 · THE DUAL-TRACK CAPABILITY PROBE — what THIS host supports, asked of the host.
  *
- * Not to be confused with `components/settings/hostCapabilities.ts`, which is about an
- * external SSH host's *permissions* in the Govern matrix. This module is about LOCAL —
- * the application our renderer is loaded into — and what of the host contract it
- * exposes.
+ * Named for what it is, after WP-47's gate ruling: this file was `hostCapabilities.ts`
+ * and collided by NAME with `components/settings/hostCapabilities.ts`, which is about an
+ * external SSH host's *permissions* in the Govern matrix. Two files a directory apart
+ * with the same name and different meanings is a trap, and a header paragraph is not a
+ * fix for one. This module is about LOCAL — the application our renderer is loaded into
+ * — and which parts of the host contract it exposes.
  *
  * ## Why a probe and not a version check
  *

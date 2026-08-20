@@ -6,7 +6,7 @@ mutation would ship named beside it.
 
 Three families:
 
-  1. **The capability probe** (`hostCapabilities.ts`). Its whole job is to be
+  1. **The capability probe** (`hostContractProbe.ts`). Its whole job is to be
      WRONG IN ONE DIRECTION ONLY: an absent or unreadable capability must select
      the guest path. Every mutation here makes it optimistic — a version read as
      evidence, an unusable level treated as support, a hostile context throwing
@@ -56,12 +56,12 @@ import re
 FLOOR = 49
 
 SUITES = [
-    "tests/unit/renderer/hostCapabilities.probe.test.ts",
+    "tests/unit/renderer/hostContractProbe.test.ts",
     "tests/unit/renderer/hostTheme.test.ts",
     "tests/unit/renderer/domReachInventory.test.ts",
 ]
 
-PROBE = "src/renderer/hostCapabilities.ts"
+PROBE = "src/renderer/hostContractProbe.ts"
 THEME = "src/renderer/utils/theme.ts"
 GEN = "scripts/generate-dom-reach-inventory.ts"
 
