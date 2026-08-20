@@ -29,6 +29,8 @@
  * the piece that gets tested and mutated.
  */
 
+import { SCOPE_LINE } from './openingCopy.generated';
+
 export type SiteContextMode = 'viewed' | 'override' | 'none';
 
 export interface SiteContextSelection {
@@ -112,8 +114,8 @@ export function selectionSiteIds(selection: SiteContextSelection): string[] {
  * without mounting a component.
  *
  * The three states read differently on purpose. "Currently in" is a statement of where
- * you are; "No site selected — answers will be fleet-wide" is a statement of what will
- * happen, because there is no *where* to state. The override state adds the only fact
+ * you are; "Asking about the whole fleet" (WP-49 §5) names the subject instead,
+ * because there is no *where* to state. The override state adds the only fact
  * the user cannot see for themselves: that the chat is not following the screen.
  */
 export function stripCopy(input: {
@@ -127,9 +129,16 @@ export function stripCopy(input: {
 }): StripCopy {
   if (input.mode === 'none') {
     // No site, so no copy, so no content age. There is nothing for a chip to be about.
+    //
+    // WP-49 · §5's SCOPE LINE, RATIFIED — "Asking about *the whole fleet* ·
+    // *Choose a site*". Both spans are extracted from the designer's own sheet
+    // rather than retyped, and the sheet's emphasis marks are what say which one
+    // is the subject and which is the control. It replaces "No site selected —
+    // answers will be fleet-wide", which said the same thing as a consequence
+    // instead of as a subject; the action label was already the ratified word.
     return {
-      primary: 'No site selected — answers will be fleet-wide',
-      actionLabel: 'Choose a site',
+      primary: `${SCOPE_LINE.LEAD} ${SCOPE_LINE.FLEET}`,
+      actionLabel: SCOPE_LINE.ACTION,
     };
   }
 

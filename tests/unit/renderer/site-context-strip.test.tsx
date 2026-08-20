@@ -65,7 +65,7 @@ describe('SiteContextStrip — the three states render distinctly', () => {
   it('none says the answers will be fleet-wide and offers to choose', () => {
     const { inst } = makeStrip({ mode: 'none', siteName: null, viewedSiteName: null });
     const text = textOf(inst.render());
-    expect(text).toContain('No site selected — answers will be fleet-wide');
+    expect(text).toContain('Asking about the whole fleet');
     expect(text).toContain('Choose a site');
     expect(text).not.toContain('Currently in');
   });
@@ -231,7 +231,7 @@ describe('SiteContextStrip — the content-age chip', () => {
   it('never renders a chip when no site is selected', () => {
     const tree = stripWith(pulled, { mode: 'none', siteName: null, viewedSiteName: null }).render();
     expect(chipNode(tree)).toBeNull();
-    expect(textOf(tree)).toContain('No site selected — answers will be fleet-wide');
+    expect(textOf(tree)).toContain('Asking about the whole fleet');
   });
 
   it('does not add a control — the chip is a fact, not an affordance', () => {

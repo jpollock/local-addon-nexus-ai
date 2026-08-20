@@ -22,6 +22,20 @@
  * the pin doing its job. Regenerate the fixture from the base of YOUR change, and
  * say in the packet note what moved and why.
  *
+ * WP-49 REGENERATED IT, AND SAYS WHAT MOVED. Item 4 changes this panel's chrome
+ * on purpose, so the fixture is re-captured — and because "regenerate and move
+ * on" is how a pin quietly stops pinning, the two moves are ASSERTED below
+ * rather than absorbed into the artifact. The structural delta was measured
+ * before the recapture and is exactly two nodes, nothing else:
+ *
+ *   1. the empty state gained `data-panel-opening` — it is the opening state
+ *      now, drawn from the queue instead of from a blank;
+ *   2. `SiteContextStrip` moved from ABOVE the composer to BELOW it, which is
+ *      where §5 puts the scope line.
+ *
+ * Every other node, in every other position, is byte-identical to the tree the
+ * base commit produced.
+ *
  * THE SWAP POINT. The other half: the same three shapes, delivered by the fake
  * emitter through the panel's real stream listener, put the rail on screen. When
  * WP-26's emitter lands it puts those shapes on the same channel and this test
@@ -68,9 +82,42 @@ function text(node: any): string {
   return bits.join(' ');
 }
 
+/** Every element in a serialized tree, flattened deeply, with its depth. */
+function elements(node: any, depth = 0, out: Array<{ type: any; depth: number; props: any }> = []): Array<{ type: any; depth: number; props: any }> {
+  if (node === null || node === undefined) return out;
+  if (Array.isArray(node)) { node.forEach((n) => elements(n, depth, out)); return out; }
+  if (typeof node !== 'object') return out;
+  if (node.type !== undefined) out.push({ type: node.type, depth, props: node.props ?? {} });
+  elements(node.children, depth + 1, out);
+  return out;
+}
+
 describe('parity — the panel a user without a procedure sees', () => {
-  it('renders byte-identical to the pre-WP-27 tree', () => {
+  it('renders byte-identical to the recorded tree', () => {
     expect(serializeTree(chat().render())).toEqual(baseTree);
+  });
+
+  // WP-49 · THE TWO MOVES THE RECAPTURE ABSORBED, ASSERTED. A regenerated
+  // fixture pins the new tree to itself and says nothing about what changed;
+  // these say it. If a later packet moves the strip back above the composer, or
+  // drops the opening state for a blank, the fixture would happily be
+  // regenerated again — and these two would not.
+  it('WP-49 · the scope line sits BELOW the composer, not above it', () => {
+    const flat = elements(serializeTree(chat().render()));
+    const strip = flat.findIndex((e) => e.type === 'SiteContextStrip');
+    const composer = flat.findIndex((e) => e.type === 'textarea');
+    expect(strip).toBeGreaterThan(-1);
+    expect(composer).toBeGreaterThan(-1);
+    expect(strip).toBeGreaterThan(composer);
+  });
+
+  it('WP-49 · the transcript opens on an opening state, never on an unlabelled blank', () => {
+    const flat = elements(serializeTree(chat().render()));
+    const opening = flat.filter((e) => e.props['data-panel-opening'] !== undefined);
+    expect(opening).toHaveLength(1);
+    // With no `opening` prop there is no queue to draw from, so it is the
+    // panel's own invitation — a real state, and a labelled one.
+    expect(opening[0].props['data-panel-opening']).toBe('invitation');
   });
 
   it('WP-41 · grows NO comparator chrome for a user with nothing to compare', () => {

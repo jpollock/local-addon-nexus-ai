@@ -232,25 +232,28 @@ describe('WP-48 · the verdict is READ, and the badge holds one word', () => {
 });
 
 describe('the arrival renders the fold — row for row', () => {
-  test('two columns of ONE VERDICT, each in the order the registry supplied', () => {
+  // WP-49 · the two columns became ONE LIST and the section beneath it (XD-27).
+  // The addressing moved with them — `data-now-list` — and the property being
+  // pinned did not: row for row, in the order the fold ranked.
+  test('one list and the section beneath it, each in the order the registry supplied', () => {
     const { tree } = arrival();
 
-    const waitingColumn = walk(tree).find((n) => props(n)['data-column'] === 'waiting');
-    const changedColumn = walk(tree).find((n) => props(n)['data-column'] === 'changed');
-    expect(waitingColumn).toBeDefined();
-    expect(changedColumn).toBeDefined();
+    const needsYou = walk(tree).find((n) => props(n)['data-now-list'] === 'needs-you');
+    const nothingNeeded = walk(tree).find((n) => props(n)['data-now-list'] === 'nothing-needed');
+    expect(needsYou).toBeDefined();
+    expect(nothingNeeded).toBeDefined();
 
     const idsIn = (column: any) => byAttr(walk(column), 'data-situation').map((n) => props(n)['data-situation']);
 
     // ROW FOR ROW, IN ORDER. Not a set comparison: the consequence order IS the
     // ordering, so a render that draws the right rows in the wrong order has
     // lost the only thing the fold ranked.
-    expect(idsIn(waitingColumn)).toEqual(triage.waiting.map((s) => s.id));
-    expect(idsIn(changedColumn)).toEqual(triage.changed.map((s) => s.id));
+    expect(idsIn(needsYou)).toEqual(triage.waiting.map((s) => s.id));
+    expect(idsIn(nothingNeeded)).toEqual(triage.changed.map((s) => s.id));
 
     // And the morning is the designer's: Charlie before Bravo, one changed row.
-    expect(idsIn(waitingColumn)).toHaveLength(2);
-    expect(idsIn(changedColumn)).toHaveLength(1);
+    expect(idsIn(needsYou)).toHaveLength(2);
+    expect(idsIn(nothingNeeded)).toHaveLength(1);
   });
 
   test('every waiting row names its gate BY CHECKPOINT ID, from PendingGate', () => {
@@ -334,20 +337,20 @@ describe('the reserved slot, the badge, and the drift line', () => {
     expect(props(reserved[0]).style.position).toBe('sticky');
   });
 
-  test('the badge is the WAITING count, and the changed column has none', () => {
+  test('the badge is the NEEDS-YOU count, and the section below has none', () => {
     const { tree } = arrival();
-    const waitingColumn = walk(tree).find((n) => props(n)['data-column'] === 'waiting');
-    const changedColumn = walk(tree).find((n) => props(n)['data-column'] === 'changed');
+    const needsYou = walk(tree).find((n) => props(n)['data-now-list'] === 'needs-you');
+    const nothingNeeded = walk(tree).find((n) => props(n)['data-now-list'] === 'nothing-needed');
 
     const badgesIn = (column: any) => walk(column).filter((n) => props(n)['data-badge'] === 'needsYou');
 
-    expect(badgesIn(waitingColumn)).toHaveLength(1);
-    expect(textOf(badgesIn(waitingColumn)[0]).join('')).toBe(String(triage.waiting.length));
+    expect(badgesIn(needsYou)).toHaveLength(1);
+    expect(textOf(badgesIn(needsYou)[0]).join('')).toBe(String(triage.waiting.length));
 
-    // XD-26's absence, with teeth: nothing in `changed` needs anyone, so nothing
-    // in it escalates.
-    expect(badgesIn(changedColumn)).toHaveLength(0);
-    expect(walk(changedColumn).filter((n) => props(n)['data-badge'] !== undefined)).toHaveLength(0);
+    // XD-26's absence, with teeth: nothing under `Nothing needed of you` needs
+    // anyone, so nothing in it escalates.
+    expect(badgesIn(nothingNeeded)).toHaveLength(0);
+    expect(walk(nothingNeeded).filter((n) => props(n)['data-badge'] !== undefined)).toHaveLength(0);
   });
 
   test('drift renders as ONE line and NO rows — T5 leaves the list', () => {
@@ -369,9 +372,9 @@ describe('the reserved slot, the badge, and the drift line', () => {
     expect(drawn.map((n) => props(n)['data-tier'])).not.toContain(3);
   });
 
-  test('the changed column carries its provenance line — nothing composed on demand', () => {
+  test('the nothing-needed section carries its provenance line — nothing composed on demand', () => {
     const { tree } = arrival();
-    const changedColumn = walk(tree).find((n) => props(n)['data-column'] === 'changed');
+    const changedColumn = walk(tree).find((n) => props(n)['data-now-list'] === 'nothing-needed');
     const filed = walk(changedColumn).filter((n) => props(n)['data-filed'] !== undefined);
 
     expect(filed).toHaveLength(1);

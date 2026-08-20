@@ -42,6 +42,8 @@
     "fixtures:return-copy:check": "ts-node scripts/generate-return-copy.ts --check",
     "fixtures:situation-copy": "ts-node scripts/generate-situation-copy.ts",
     "fixtures:situation-copy:check": "ts-node scripts/generate-situation-copy.ts --check",
+    "fixtures:opening-copy": "ts-node scripts/generate-opening-copy.ts",
+    "fixtures:opening-copy:check": "ts-node scripts/generate-opening-copy.ts --check",
     "inventory:dom-reach": "ts-node scripts/generate-dom-reach-inventory.ts",
     "inventory:dom-reach:check": "ts-node scripts/generate-dom-reach-inventory.ts --check",
     "create-entry-points": "node scripts/create-entry-points.js",

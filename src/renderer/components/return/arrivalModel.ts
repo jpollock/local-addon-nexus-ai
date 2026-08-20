@@ -118,6 +118,47 @@ export function arrivalCounts(triage: TriageView): ArrivalCounts {
   };
 }
 
+// ---------------------------------------------------------------------------
+// WP-49 · XD-27 RIDER 1 — MEASURED, AND NOT BUILT. The finding is the delivery.
+// ---------------------------------------------------------------------------
+//
+// The rider: "an in-flight run needing nothing goes to Nothing-needed-of-you as
+// ONE LINE with its door, and PROMOTES ITSELF into the list when it stalls or
+// reaches a gate — the consequence order doing its job, not a new mechanism."
+//
+// THE STARTING STATE IT DESCRIBES CANNOT BE PRODUCED BY THE FOLD. Measured
+// against the real registry, 2026-08-20, three ways:
+//
+//  1. **A session with a document always has a gate.** `deriveGate` takes the
+//     first checkpoint whose state is `active`; a run with no active checkpoint
+//     is a run whose every checkpoint is attested or narrative, which
+//     `deriveStatus` calls `complete` and the fold files under `changed`. So
+//     "in flight, no gate" has no representation while a document is present.
+//  2. **`awaits: 'evidence'` is not "needs nobody".** It is the designer's own
+//     class 2 — "A backup step is waiting on evidence from you" — and it is
+//     also what a HALTED run carries: the morning's Charlie is `status:
+//     'halted'` at `cp.verify` with `awaits: 'evidence'`. One value, two
+//     opposite meanings, and `Situation` carries no `status` to separate them.
+//  3. **The one gateless waiting session is `documentUnavailable`** — XD-26's
+//     6c, where the platform names its own limit. Filing that under "nothing
+//     needed of you" would be the platform quietly deciding that a run it
+//     cannot place needs no one, which is the opposite of what 6c is for. And
+//     `documentUnavailable` is a `SessionRow` field the `Situation` does not
+//     carry either, so a surface cannot even recognise it to refuse it.
+//
+// So the promotion has nothing to promote FROM, and every reachable session
+// shape belongs in the list exactly where the fold already put it. Building the
+// predicate anyway would have moved the 6c rows — the measurement's own third
+// finding — into the section for things that need nobody.
+//
+// ESCALATED, NOT ROUTED AROUND (the launch instruction's own rule for a host
+// fact the contract lacks). `needsNothingOfYou.test.ts` pins the three findings
+// against the real fold so the day the contract gains the fact, the pin fails
+// and says the rider is now buildable. `TriageView.verdict` is therefore
+// rendered as the fold composed it — the purest form of "reuse the one
+// composition", because nothing recomposes it at all.
+
+
 /**
  * "2 need you · 1 changed overnight · 3 checks dark" — one breath, three counts.
  *

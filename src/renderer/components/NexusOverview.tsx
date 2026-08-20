@@ -36,7 +36,6 @@ import { RunPill } from './agents/RunPill';
 import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
-import { InboxTab } from './tabs/InboxTab';
 import { SitesTab, BULK_CONFIRM_THRESHOLD, type BulkJobView } from './tabs/SitesTab';
 import { FleetTab } from './tabs/FleetTab';
 // Types only — a value import would pull main-process code into the renderer
@@ -115,20 +114,33 @@ interface SetupAIResult {
  * Moving them here would cost more in binding than the duplication saves.
  */
 const TABS = [
-  // WP-46 · M6. The arrival IS Home (XD-26): a verdict about the night, read to
-  // you with no interaction and no question asked. It is the landing tab because
-  // "what needs me" is the question a return begins with — Sites was the landing
-  // tab before this, and it is one click away, unchanged.
-  { key: 'home',       label: 'Home' },
   { key: 'sites',      label: 'Sites' },
+  // ITEM 6, NOT WP-49's: Fleet folds into Sites on the web-property unit once
+  // the owner rules on it. It stays a strip entry until then, because the
+  // alternative is content nobody can reach — which the collapse's own third
+  // rider forbids outright.
   { key: 'fleet',      label: 'Fleet' },
-  { key: 'inbox',      label: 'Inbox' },
-  { key: 'activity',   label: 'Activity' },
+  // XD-27 names the strip Sites / Record / Settings. Record is the surface that
+  // already exists: the fleet's own event history, which is where a FINISHED run
+  // belongs and where the finished-run door lands. The tab is renamed, not
+  // rebuilt — "no new surface, no duplication of it in Now".
+  { key: 'record',     label: 'Record' },
   { key: 'agents',     label: 'Agents' },
   { key: 'settings',   label: 'Settings' },
 ] as const;
 
-type TabKey = typeof TABS[number]['key'];
+/**
+ * WP-49 · XD-27 — **NOW IS NOT IN `TABS`, AND THAT IS THE LAW, NOT AN OMISSION.**
+ *
+ * "A tab is a peer, and a front door that is tab one of four becomes a choice
+ * among five the day the next feature claims a tab — a future destination must
+ * argue for being a destination." So the union is the strip PLUS `'now'`: the
+ * addon opens on it, the title bar returns to it the way a logo does, and
+ * nothing in the strip points at it. `nowScreen.test.tsx` pins both halves —
+ * the opening route AND the absence — because the absence is what makes that
+ * argument mandatory for whatever comes next.
+ */
+type TabKey = typeof TABS[number]['key'] | 'now';
 
 interface NexusOverviewState {
   stats: DashboardStats | null;
@@ -220,7 +232,6 @@ interface NexusOverviewState {
   inboxFailed: boolean;
   inboxItems: InboxItem[];
   inboxTotal: number;
-  inboxCounts: { decide: number; problem: number; know: number };
   inboxPausedSources: string[];
   inboxRecentlyDecided: InboxItem[];
   // Fleet
@@ -294,7 +305,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     togglingId: null,
     loading: true,
     error: null,
-    activeTab: 'home',
+    activeTab: 'now',
     returnSessionId: null,
     returnSession: null,
     governDoor: null,
@@ -356,7 +367,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     inboxFailed: false,
     inboxItems: [],
     inboxTotal: 0,
-    inboxCounts: { decide: 0, problem: 0, know: 0 },
     inboxPausedSources: [],
     inboxRecentlyDecided: [],
     fleetLoaded: false,
@@ -637,7 +647,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         inboxFailed: !inboxResult?.success,
         inboxItems: inboxResult?.items ?? [],
         inboxTotal: inboxResult?.total ?? 0,
-        inboxCounts: inboxResult?.counts ?? { decide: 0, problem: 0, know: 0 },
         inboxPausedSources: inboxResult?.pausedSources ?? [],
         inboxRecentlyDecided: inboxResult?.recentlyDecided ?? [],
         fleetLoaded: true,
@@ -791,7 +800,16 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   // -- Card renders (unchanged from original) --
 
 
-  renderActivityTab(): React.ReactNode {
+  /**
+   * XD-27's RECORD — the fleet's own history, renamed rather than rebuilt.
+   *
+   * This is the surface the audit means by "a finished run belongs to Record,
+   * which already exists": the event stats, the timeline, the open issues and
+   * the storage health, every one of them dated. Nothing about it changed here
+   * except the word above it, because the collapse's rule is that no old
+   * screen's content becomes unreachable and no new place is invented for it.
+   */
+  renderRecordTab(): React.ReactNode {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 } },
       // Event Stats Cards (fixed height)
       React.createElement('div', { style: { flexShrink: 0 } },
@@ -1059,7 +1077,7 @@ renderTabBar(): React.ReactNode {
       // copy, no local cache keyed by id, and no re-derivation — which is what
       // makes "same session id, same cursor, same pending approvals" a property
       // of the shape rather than a promise a test has to police.
-      case 'home': return this.state.returnSessionId
+      case 'now': return this.state.returnSessionId
         ? React.createElement(SessionReEntry, {
             session: this.state.returnSession,
             onFindInRecord: () => this.setState({ returnSessionId: null, returnSession: null }),
@@ -1067,6 +1085,34 @@ renderTabBar(): React.ReactNode {
           })
         : React.createElement(Arrival, {
             electron: this.props.electron,
+            // WP-49 · the Inbox, collapsed onto the rows. Every field is the one
+            // the retired tab read; the decision handlers are the same handlers,
+            // so "behavior intact" is a property of the wiring rather than a
+            // claim about it.
+            inbox: {
+              loaded: this.state.inboxLoaded,
+              failed: this.state.inboxFailed,
+              items: this.state.inboxItems,
+              total: this.state.inboxTotal,
+              pausedSources: this.state.inboxPausedSources,
+              recentlyDecided: this.state.inboxRecentlyDecided,
+            },
+            onDecide: (id: number, decision: string, status: 'dismissed' | 'done') => {
+              void this.props.electron.ipcRenderer
+                .invoke(IPC_CHANNELS.INBOX_DECIDE, { id, decision, status })
+                .then(() => this.fetchAll());
+            },
+            onReopen: (id: number) => {
+              void this.props.electron.ipcRenderer
+                .invoke(IPC_CHANNELS.INBOX_REOPEN, { id })
+                .then(() => this.fetchAll());
+            },
+            onResumeAgent: (agentId: string) => {
+              void this.props.electron.ipcRenderer
+                .invoke(IPC_CHANNELS.AGENT_RESUME, { agentId })
+                .then(() => this.fetchAll());
+            },
+            onRetryInbox: () => { void this.fetchAll(); },
             onPromote: (sessionId: string) => {
               this.props.electron.ipcRenderer
                 .invoke(IPC_CHANNELS.RETURN_SESSION, sessionId)
@@ -1082,28 +1128,6 @@ renderTabBar(): React.ReactNode {
                 });
             },
           });
-      case 'inbox': return React.createElement(InboxTab, {
-        loaded: this.state.inboxLoaded,
-        failed: this.state.inboxFailed,
-        items: this.state.inboxItems,
-        total: this.state.inboxTotal,
-        counts: this.state.inboxCounts,
-        pausedSources: this.state.inboxPausedSources,
-        recentlyDecided: this.state.inboxRecentlyDecided,
-        onDecide: async (id: number, decision: string, status: 'dismissed' | 'done') => {
-          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INBOX_DECIDE, { id, decision, status });
-          void this.fetchAll();
-        },
-        onReopen: async (id: number) => {
-          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INBOX_REOPEN, { id });
-          void this.fetchAll();
-        },
-        onResumeAgent: async (agentId: string) => {
-          await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RESUME, { agentId });
-          void this.fetchAll();
-        },
-        onRetry: () => { void this.fetchAll(); },
-      });
       case 'fleet': return React.createElement(FleetTab, {
         loaded: this.state.fleetLoaded,
         failed: this.state.fleetFailed,
@@ -1145,7 +1169,7 @@ renderTabBar(): React.ReactNode {
           siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
         }),
       );
-      case 'activity': return this.renderActivityTab();
+      case 'record': return this.renderRecordTab();
       case 'settings': return React.createElement(SettingsTab, {
         electron: this.props.electron,
         door: this.state.governDoor,
@@ -1327,9 +1351,24 @@ renderTabBar(): React.ReactNode {
       React.createElement('div', {
         style: { flexShrink: 0, padding: '24px 32px 0' },
       },
+        // XD-27 · "the title bar returns to Now the way a logo does." It is a
+        // control and not a tab: it sits outside the strip, it never renders an
+        // active underline, and it goes one place. That is what keeps Now from
+        // becoming a peer of the three destinations beside it.
         React.createElement('h1', {
-          style: { fontSize: '22px', fontWeight: 600, marginBottom: '16px', color: 'var(--nxai-card-text)' },
-        }, 'Nexus AI Dashboard'),
+          style: {
+            fontSize: '22px', fontWeight: 600, marginBottom: '16px',
+            color: 'var(--nxai-card-text)', cursor: 'pointer',
+          },
+          'data-testid': 'nexus-mark-home',
+          role: 'button',
+          tabIndex: 0,
+          title: 'Now',
+          onClick: () => this.setState({ activeTab: 'now' }),
+          onKeyDown: (e: any) => {
+            if (e.key === 'Enter' || e.key === ' ') this.setState({ activeTab: 'now' });
+          },
+        }, 'Nexus AI'),
         this.renderTabBar(),
       ),
 
@@ -1341,7 +1380,7 @@ renderTabBar(): React.ReactNode {
           },
             React.createElement(AgentConsoleTab, {
               electron: this.props.electron,
-              onNavigateToInbox: () => this.setState({ activeTab: 'inbox' }),
+              onNavigateToInbox: () => this.setState({ activeTab: 'now' }),
             }),
           )
         : loading

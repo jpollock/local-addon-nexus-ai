@@ -112,7 +112,7 @@ describe('promotion identity — same session id, same cursor, same pending appr
     });
 
     const shell = new NexusOverview({ NavLink: () => null, electron: { ipcRenderer: { invoke, on: () => {}, removeListener: () => {} } } });
-    shell.state = { ...shell.state, activeTab: 'home', loading: false, stats: { localSites: { total: 0, running: 0, halted: 0 } } };
+    shell.state = { ...shell.state, activeTab: 'now', loading: false, stats: { localSites: { total: 0, running: 0, halted: 0 } } };
     (shell as any).mounted = true;
     shell.setState = (patch: any) => { shell.state = { ...shell.state, ...patch }; };
 
@@ -157,7 +157,7 @@ describe('promotion identity — same session id, same cursor, same pending appr
     const { NexusOverview } = require('../../../src/renderer/components/NexusOverview');
     const invoke = jest.fn().mockResolvedValue(undefined);
     const shell = new NexusOverview({ NavLink: () => null, electron: { ipcRenderer: { invoke, on: () => {}, removeListener: () => {} } } });
-    shell.state = { ...shell.state, activeTab: 'home', loading: false, stats: { localSites: { total: 0, running: 0, halted: 0 } } };
+    shell.state = { ...shell.state, activeTab: 'now', loading: false, stats: { localSites: { total: 0, running: 0, halted: 0 } } };
     (shell as any).mounted = true;
     shell.setState = (patch: any) => { shell.state = { ...shell.state, ...patch }; };
 

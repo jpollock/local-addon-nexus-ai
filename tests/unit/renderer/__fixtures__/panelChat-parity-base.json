@@ -43,6 +43,7 @@
             "type": "div",
             "key": null,
             "props": {
+              "data-panel-opening": "invitation",
               "style": {
                 "padding": "24px 0",
                 "color": "var(--nxai-card-sub)",
@@ -53,7 +54,7 @@
             "children": [
               {
                 "type": "div",
-                "key": null,
+                "key": "mark",
                 "props": {
                   "style": {
                     "color": "#0ECAD4",
@@ -65,7 +66,7 @@
               },
               {
                 "type": "div",
-                "key": null,
+                "key": "line",
                 "props": {},
                 "children": "Ask anything about your WordPress sites."
               }
@@ -74,19 +75,6 @@
           []
         ]
       }
-    },
-    {
-      "type": "SiteContextStrip",
-      "key": null,
-      "props": {
-        "mode": "none",
-        "onClear": "[fn]",
-        "onPick": "[fn]",
-        "siteName": null,
-        "sites": [],
-        "viewedSiteName": null
-      },
-      "children": null
     },
     {
       "type": "div",
@@ -156,6 +144,19 @@
           "children": "↑"
         }
       ]
+    },
+    {
+      "type": "SiteContextStrip",
+      "key": null,
+      "props": {
+        "mode": "none",
+        "onClear": "[fn]",
+        "onPick": "[fn]",
+        "siteName": null,
+        "sites": [],
+        "viewedSiteName": null
+      },
+      "children": null
     },
     {
       "type": "div",
