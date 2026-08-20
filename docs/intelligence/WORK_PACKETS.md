@@ -20439,3 +20439,129 @@ Eval registry **50 PASS / 0 FAIL / 18 BLOCKED / 10 OWNER-PENDING** — unchanged
 across all three. `tsc` clean; `eslint` 0 errors, 6 pre-existing warnings. Byte
 sweep clean over all 14 changed files. ABI: system Node v25.9.0 / **141** —
 **the owner must `npm run rebuild` before loading Local.**
+
+---
+
+## WP-48 · MERGED, LOCKS RELEASED (2026-08-20)
+
+Merge commit **1aedc700** into `poc/nexintelligence`. Receipts pasted after they
+printed.
+
+### 1 · The stat block
+
+```
+git diff --stat 1aedc700^1 1aedc700
+ docs/intelligence/WORK_PACKETS.md                      | 483 +++++
+ .../from-designer/fixtures/situation-headlines.js      |  15 +-
+ package.json                                           |   6 +-
+ scripts/generate-situation-copy.ts                     | 385 +++++
+ .../intelligence-host/__tests__/sessionRegistry.test.ts| 519 +++++
+ .../__tests__/situationHeadlines.test.ts               | 516 +++++
+ src/main/intelligence-host/sessionRegistry.ts          | 481 ++++-
+ src/main/intelligence-host/situationCopy.generated.ts  | 149 +++
+ src/renderer/components/return/Arrival.tsx             |  93 +-
+ src/renderer/components/return/arrivalModel.ts         |  64 +-
+ tests/intelligence-evals/checks.ts                     |  48 +-
+ tests/unit/renderer/helpers/returnMorning.ts           |  28 +-
+ tests/unit/renderer/returnArrival.test.tsx             | 137 +++
+ tests/unit/renderer/returnRailBadge.test.ts            |   3 +
+ 14 files changed, 2890 insertions(+), 37 deletions(-)
+```
+
+### 2 · The record, rebuilt from three blobs
+
+Never hunk-edited. Ancestor `8ac50e63` verified as an **exact prefix**; each of
+the three appended halves an **exact substring exactly once**; arithmetic in one
+named unit (characters):
+
+```
+1,185,806 + 19,345 + 4,775 + 6,364 = 1,216,290   result 1,216,290   residual 0
+```
+
+**Line-anchored conflict markers: 0.** A naive substring check reported 2, and
+both are PRE-EXISTING record prose from earlier packets writing *about* conflict
+markers — the exact false alarm this record already documents ("a naive
+`'<<<<<<<' not in result` report…"). Line-anchored is the honest check; the
+record warned its own reader and the warning worked.
+
+**Chronology ruled and applied.** My gate report and addendum were written
+BEFORE the ruling; the ruling-landed report AFTER it. My branch held all three
+as one block, so the append was SPLIT at the ruling-landed heading and the
+architect's section interleaved between. The record now reads report → ruling →
+landed, at offsets **1,185,812 < 1,206,531 < 1,209,932**.
+
+**Both sides' contributions verified present** by reading the fields each side
+moved, not by trusting the rebuild: the architect's `WP-49 · the front door is
+REGISTERED`, `WP-48 · GATE RULING` and `XD-27` are on the merged tree, as are
+positions 11 and 12 as files; my `LOCK ANNOUNCE`, `GATE REPORT` and `RULING
+LANDED` are too. `git diff --stat` alone would not have shown a silently dropped
+half — that is why this step is not redundant with the arithmetic.
+
+The architect's work was committed VERBATIM first, in its own attributed commit
+(`dc9bef1e`), with device-verified receipts. **Its message carries an amendment
+en route**: the first draft said `WORK_PACKETS +27`, measured earlier in the
+session; the architect appended the gate ruling itself between that measurement
+and the commit, making it **+91**. A receipt written before the print is a
+fabricated receipt even when it was true once (WP-45).
+
+### 3 · Independent verification on the MERGED tree
+
+Everything below was re-measured here, not carried across from the branch.
+
+| | result |
+|---|---|
+| suite | **611 suites / 8,442 tests — 8,430 passed, 12 skipped, exit 0** |
+| mutation battery | **35 killed / 0 survived / 0 anchor-miss, of 35** |
+| eval registry | **50 PASS / 0 FAIL / 18 BLOCKED / 10 OWNER-PENDING** |
+| `tsc -p . --noEmit` | clean |
+| `eslint` | 0 errors, 6 warnings (all pre-existing, none in a touched file) |
+| `fixtures:situation-copy:check` | up to date |
+| `fixtures:return-copy:check` | up to date |
+| byte sweep | clean over all 14 changed files |
+
+Baseline for the delta was 610 suites / 8,380 tests / 8,368 passed / **12
+skipped**. The skipped column is **12 on both sides**, so no embedding boundary
+moved and the entire +62 is added tests.
+
+### 4 · What the ruling changed, and the one thing it exposed
+
+The ruling's diagnosis was exact and is worth keeping in the record: **the false
+sentence was a name collision, not a bad template.** The class-2 sentence is the
+true sentence for the row that got the false one, and binding `{total}` to the
+arming record's own scope restores the slot table to its own meaning.
+
+**The acceptance case is met in the fold and NOT on the live fleet**, and the
+reason is a producer gap the ruling made visible:
+
+> **0 of 36 manifests on the developer's ledger carry a `scope` key**, and no
+> event anywhere carries `runnable`. Every run there was armed by predicate
+> rather than by a selection.
+
+So `targetSet` is null on every live session row: the false sentence is gone, and
+class 1 stopped firing too. Nothing regressed against the pre-WP-48 baseline —
+those rows read the derived sentence before this packet and read it now — and the
+platform withholds rather than guesses, which is this layer's doctrine.
+
+**Recommended for registration, the architect's to make:** the arming should
+record its scope on every manifest, not only when the scope picker was used. It
+is the same shape as WP-48a — a producer that knows a fact and does not write it
+— and the day it lands, both waiting classes light up on the real fleet with no
+further code change.
+
+### 5 · ABI, declared
+
+This session ran jest, so `better-sqlite3` is built for **system Node (this
+machine v25.9.0, ABI 141)** — verified by loading it, not assumed. `.nvmrc` pins
+22.16.0 → ABI 127, which is what CI sees. **The owner must `npm run rebuild`
+before loading Local.**
+
+### 6 · Unpushed, properly
+
+Zero remote `wp-48` refs; no upstream on `poc/nexintelligence`; no tags touched;
+version still `0.5.2`.
+
+**WP-48 is CLOSED.** WP-49 cuts after this merge, and its serialization was on
+this packet's renderer lock.
+
+**THE `src/main/intelligence-host/`, `src/renderer/`, `tests/intelligence-evals/`
+AND `docs/intelligence/` LOCKS ARE RELEASED.**
