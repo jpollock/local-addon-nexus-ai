@@ -19282,3 +19282,40 @@ CLOSED. A new counterpart directory opens with it:
 held to the same standard as the designer's (committed verbatim,
 adjudicated in the open, cited by receipt). Host contract v2 and its
 adjudication stand as recorded in SHELL_INVERSION_PLAN.md Amendment 2.
+
+## WP-47 · LOCK ANNOUNCE (2026-08-20) — the host contract proposal + the four addon-side micros
+
+Announced ON THE BASE before the worktree is cut (the WP-20f/WP-37 rule: a lock
+announced only on a worktree is invisible to the agent it warns).
+
+**Verified free at this tail before claiming.** The last lock event in this file
+is WP-46's merge report — "**THE `src/renderer/`, `src/main/ipc-handlers.ts`,
+`src/common/constants.ts` AND `tests/intelligence-evals/` LOCKS ARE RELEASED.**"
+(`docs/intelligence/WORK_PACKETS.md`, WP-46 merged block) — and nothing has
+claimed since. `grep -n "LOCK" … | tail` over this file returns that release as
+the last event.
+
+**LOCKED SURFACES — two:**
+
+1. `src/renderer/` — the DOM-reach inventory's subject and the capability
+   probe's home. Deliverable B touches the theme read, the TabNav selector, and
+   adds `hostCapabilities.ts`; no shipped surface changes behaviour beyond those
+   selector/theme mechanics.
+2. `docs/intelligence/` — **narrowly**: `host-contract-proposal.md` and
+   `dom-reach-inventory.json` (both new), plus this packet's own WORK_PACKETS
+   entries. WP-47 does not edit `SHELL_INVERSION_PLAN.md`, the designer's or the
+   Local architect's committed files, or any other packet's entries.
+
+Not locked, and touched: `scripts/` (the inventory generator/checker) and
+`tests/` (the inventory-matches-code test), neither under any packet's lock.
+
+**Base:** `ed63ab26` — WP-46's merge (`d6a409ae`) plus the owner's docs commits
+through the Local recon's verbatim commit. Branch `wp-47`, worktree
+`.worktrees/wp-47`.
+
+**Escalation-grade, declared up front:** nothing in this packet changes
+`src/intelligence/`, `src/main/intelligence-host/`, `law/`, the eval registry, or
+any shipped surface's behaviour beyond the selector/theme mechanics named above.
+If a micro turns out to require more, it stops at the gate rather than growing.
+
+---
