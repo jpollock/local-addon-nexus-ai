@@ -175,6 +175,21 @@ describe('probeHost — the returned map cannot be edited into a capability', ()
     expect(host.has('themeTokens')).toBe(false);
   });
 
+  it('is frozen on a POPULATED map too, not only on the empty one', () => {
+    // WP-47 battery M07 found this gap: the assertion above is satisfied by the
+    // absent-capabilities early return, so the freeze on the map actually built from a
+    // host's members was never exercised. Removing that freeze survived the suite.
+    const host = probeHost({ capabilities: { themeTokens: 1 } });
+    expect(Object.isFrozen(host.capabilities)).toBe(true);
+    try {
+      (host.capabilities as Record<string, number>).regionProviders = 1;
+    } catch {
+      /* as above */
+    }
+    expect(host.has('regionProviders')).toBe(false);
+    expect(host.summary()).toBe('host=unknown capabilities=themeTokens@1');
+  });
+
   it('does not alias the host object it read from', () => {
     const caps = { themeTokens: 1 };
     const host = probeHost({ capabilities: caps });

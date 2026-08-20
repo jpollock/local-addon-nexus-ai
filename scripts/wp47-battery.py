@@ -50,9 +50,10 @@ import subprocess
 import sys
 import re
 
-# 51 tests pristine across the three suites; floored just under so a mutant that
-# quietly executes fewer is VOID rather than green.
-FLOOR = 48
+# 52 tests pristine across the three suites (51 on the first drive; M07's real gap
+# added one); floored just under so a mutant that quietly executes fewer is VOID
+# rather than green.
+FLOOR = 49
 
 SUITES = [
     "tests/unit/renderer/hostCapabilities.probe.test.ts",
@@ -81,8 +82,11 @@ MUTATIONS = [
     ("M04", PROBE, "      const found = level(name);\n      return found !== undefined && found >= atLeast;",
      "      const found = level(name);\n      return found !== undefined;",
      "a v1 host satisfies a v2 requirement — the integer versioning that makes each item independently rollable stops meaning anything"),
-    ("M05", PROBE, "  const capabilities = readCapabilities(context);\n  const version = readVersion(context);",
-     "  const capabilities = readCapabilities(context);\n  const version = readVersion(context);\n  const newer = version !== null && version >= '10.2';",
+    # M05's first form added an UNUSED const and survived — an invalid witness, not a
+    # gap: TypeScript compiled it to nothing, so a green run measured nothing (WP-24).
+    # This form wires the sniff into the answer, which is the real pre-fix shape.
+    ("M05", PROBE, "      const found = level(name);\n      return found !== undefined && found >= atLeast;",
+     "      const found = level(name);\n      if (found !== undefined && found >= atLeast) return true;\n      return version !== null && version >= '10.2';",
      "a VERSION SNIFF re-enters the probe — the exact thing the capability member replaces, and the thing the designer's plan forbids by name"),
     ("M06", PROBE, "  if (target === null || typeof target !== 'object') return undefined;\n  try {",
      "  if (target === null || typeof target !== 'object') return undefined;\n  if (true) {",
@@ -96,8 +100,11 @@ MUTATIONS = [
     ("M09", THEME, "      if (name === 'theme--dark') return 'dark';\n      if (name === 'theme--light') return 'light';",
      "      if (name === 'theme--dark') return 'dark';\n      return 'light';",
      "an unrecognised `currentThemeName` is GUESSED as light instead of falling through — a host that renames its values silently flips every Nexus surface to the wrong palette"),
-    ("M10", THEME, "    return doc?.documentElement?.classList?.contains('Theme__Dark') ? 'dark' : 'light';",
-     "    return doc!.documentElement.classList.contains('Theme__Dark') ? 'dark' : 'light';",
+    # M10's first form removed only the optional chaining and survived — the try/catch
+    # below it was still catching, so the mutant behaved identically and the witness was
+    # invalid (WP-24). This form removes the WHOLE guard, which is the unguarded shape.
+    ("M10", THEME, "  try {\n    // NEXUS-DOM-REACH: theme-class-read\n    return doc?.documentElement?.classList?.contains('Theme__Dark') ? 'dark' : 'light';\n  } catch {\n    return 'light';\n  }",
+     "  // NEXUS-DOM-REACH: theme-class-read\n  return doc!.documentElement.classList.contains('Theme__Dark') ? 'dark' : 'light';",
      "a document that cannot be read throws out of a theme resolution instead of answering light"),
     ("M11", THEME, "    const prefs = (scope as Record<string, unknown> | null | undefined)?.localPreferences;\n    if (prefs !== null && typeof prefs === 'object') {",
      "    const prefs = (scope as Record<string, unknown> | null | undefined)?.localPreferences;\n    if (false) {",
