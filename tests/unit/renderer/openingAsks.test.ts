@@ -157,14 +157,29 @@ describe('the asks are drawn from the visible rows, by situation class', () => {
   });
 
   test('a designer-supplied ask always wins over an authored one for the same class', () => {
-    // The order is the point: if §5 ever grows an ask for a class authored here,
-    // the generated entry takes effect on the next `fixtures:opening-copy` run
-    // without anyone remembering to delete the authored one.
-    for (const classId of Object.keys(OPENING_ASKS)) {
-      expect(askTemplateFor(classId)).toBe(OPENING_ASKS[classId]);
-    }
+    // DRIVEN DIRECTLY, with a class in BOTH sets — which no current data can
+    // supply, and which is the only input where the precedence is observable at
+    // all. The first battery reversed the two lookups and the mutation SURVIVED
+    // against the real maps, because §5 covers one class and the authored set
+    // covers three others: the rule was decoration until it was driven across
+    // the domain that contains it (WP-46).
+    const contested = 'run.waiting.part-changed';
+    expect(askTemplateFor(contested, { [contested]: 'FROM THE SHEET' }, { [contested]: 'authored' }))
+      .toBe('FROM THE SHEET');
+    // …and the authored set still answers for a class the sheet does not cover.
+    expect(askTemplateFor(contested, {}, { [contested]: 'authored' })).toBe('authored');
+    expect(askTemplateFor(contested, {}, {})).toBeNull();
+
+    // THE PRECEDENCE IS MOOT TODAY, and that is stated rather than relied on: the
+    // two sets are disjoint, so nothing on the current tree exercises it. The day
+    // §5 grows an ask for an authored class, this assertion fails and says the
+    // authored entry should be deleted.
     for (const classId of Object.keys(AUTHORED)) {
       expect(Object.prototype.hasOwnProperty.call(OPENING_ASKS, classId)).toBe(false);
+    }
+    // The real maps still resolve through the same function.
+    for (const classId of Object.keys(OPENING_ASKS)) {
+      expect(askTemplateFor(classId)).toBe(OPENING_ASKS[classId]);
     }
   });
 
@@ -224,8 +239,35 @@ describe('the copy route fails closed', () => {
     return at;
   };
 
-  test(':check is GREEN on the tracked artifact — so a stale copy fails the build', () => {
+  test(':check is GREEN on the tracked artifact, and RED on a stale one', () => {
     expect(run(['--check']).code).toBe(0);
+
+    // FAILING CLOSED IS THE WHOLE POINT, and a green-on-green assertion does not
+    // test it: the first battery replaced the staleness comparison with `if
+    // (false)` and this passed unchanged. So the check is driven against a file
+    // that IS stale — the artifact with one byte of its ratified copy changed,
+    // which is exactly the drift `:check` exists to catch.
+    const stale = path.join(tmp, 'stale.ts');
+    expect(run(['--out', stale]).code).toBe(0);
+    fs.writeFileSync(stale, fs.readFileSync(stale, 'utf8').replace('Asking about', 'Asking abou_'), 'utf8');
+    const result = run(['--check', '--out', stale]);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('is STALE');
+  });
+
+  test('the split refuses a specimen that no longer carries the value it splits on', () => {
+    // DRIVEN DIRECTLY. `extract` checks that some §5 bullet carries `cp.backup`
+    // before calling this, so the CLI can never reach the guard — and a mutation
+    // that returned the specimen unchanged (shipping "What does cp.backup need
+    // from me?" beside every row, naming a checkpoint that is not on it)
+    // survived the first battery for exactly that reason.
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { templateFrom } = require('../../../scripts/generate-opening-copy');
+    /* eslint-enable @typescript-eslint/no-var-requires */
+    expect(templateFrom('What does cp.backup need from me?', 'cp.backup', 'checkpoint', 'the ask'))
+      .toBe('What does {checkpoint} need from me?');
+    expect(() => templateFrom('What does the backup step need from me?', 'cp.backup', 'checkpoint', 'the ask'))
+      .toThrow('no longer contains the value "cp.backup"');
   });
 
   test('the generator is deterministic — twice on an unchanged tree is byte-identical', () => {

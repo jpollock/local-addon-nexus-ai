@@ -127,8 +127,16 @@ function askSpecimens(md: string): string[] {
  * is the property that makes this extraction rather than authorship — the same
  * move `generate-return-copy.ts` makes with `splitAroundMoment` and
  * `dropCountToken`.
+ *
+ * EXPORTED SO ITS OWN GUARD IS REACHABLE. `extract` checks that some §5 bullet
+ * carries the value before calling this, so the throw below cannot be driven
+ * through the CLI at all — and a mutation that replaced it with `return
+ * specimen` (shipping the specimen with no slot, naming a checkpoint that is not
+ * on the row) SURVIVED the first battery for exactly that reason. The guard
+ * stays — belt and braces in a generator is cheap — and it is pinned directly
+ * instead of being decoration (WP-46).
  */
-function templateFrom(specimen: string, value: string, slot: string, what: string): string {
+export function templateFrom(specimen: string, value: string, slot: string, what: string): string {
   const at = specimen.indexOf(value);
   if (at < 0) throw new Error(`"${what}" no longer contains the value "${value}" it splits on`);
   return `${specimen.slice(0, at)}{${slot}}${specimen.slice(at + value.length)}`;

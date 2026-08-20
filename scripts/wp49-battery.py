@@ -55,6 +55,13 @@ SUITES = [
     "tests/unit/renderer/needsNothingOfYou.test.ts",
     "tests/unit/renderer/returnArrival.test.tsx",
     "tests/unit/renderer/panelChat-procedure-parity.test.tsx",
+    # The scope line's own suites. They were missing from the first drive and a
+    # mutation that made the band state the CONTROL where the SUBJECT belongs —
+    # "Asking about Choose a site" — survived, not because nothing pinned it but
+    # because the battery was not running the file that does. A survivor whose
+    # cause is the suite list is the battery measuring its own reach.
+    "tests/unit/renderer/site-context-model.test.ts",
+    "tests/unit/renderer/site-context-strip.test.tsx",
 ]
 
 ARRIVAL = "src/renderer/components/return/Arrival.tsx"
@@ -68,9 +75,10 @@ STRIP = "src/renderer/components/DockedPanel/siteContextModel.ts"
 SWEPT = [ARRIVAL, MODEL, OVERVIEW, ASKS, PANEL, GEN, STRIP,
          "src/renderer/components/DockedPanel/openingCopy.generated.ts", *SUITES]
 
-# 80 tests pristine across the six suites, measured 2026-08-20; floored just
-# under so a mutant that quietly executes fewer is VOID rather than green.
-FLOOR = 76
+# 142 tests pristine across the eight suites, measured 2026-08-20 after the
+# scope-line suites joined; floored just under so a mutant that quietly executes
+# fewer is VOID rather than green.
+FLOOR = 136
 
 # (id, file, find, replace, the lie it would ship)
 MUTATIONS = [

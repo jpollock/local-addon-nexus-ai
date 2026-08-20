@@ -145,9 +145,24 @@ function slotsOf(template: string): string[] {
  * authored here, the generated entry wins on the next `fixtures:opening-copy`
  * run without anyone remembering to delete the authored one.
  */
-export function askTemplateFor(classId: string): string | null {
-  if (Object.prototype.hasOwnProperty.call(OPENING_ASKS, classId)) return OPENING_ASKS[classId];
-  const authored = AUTHORED as Readonly<Record<string, string>>;
+export function askTemplateFor(
+  classId: string,
+  /**
+   * The two sets, injectable — and injectable for one reason, which is the only
+   * reason that justifies a seam like this.
+   *
+   * The rule this function encodes is a PRECEDENCE, and precedence is only
+   * observable when both sides hold the same key. Today they never do: §5
+   * supplies one class and the authored set covers three others, so swapping the
+   * two lookups changes no output and a mutation that reversed them SURVIVED the
+   * first battery — the rule was decoration. A render (or a caller) cannot pin a
+   * guard it can never reach (WP-46), so the pin drives this directly with a
+   * class in both, which no current data can supply.
+   */
+  extracted: Readonly<Record<string, string>> = OPENING_ASKS,
+  authored: Readonly<Record<string, string>> = AUTHORED as Readonly<Record<string, string>>,
+): string | null {
+  if (Object.prototype.hasOwnProperty.call(extracted, classId)) return extracted[classId];
   if (Object.prototype.hasOwnProperty.call(authored, classId)) return authored[classId];
   return null;
 }
