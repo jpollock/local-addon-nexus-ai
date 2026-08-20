@@ -694,12 +694,6 @@ interface ManifestTurn {
   capability: string;
   runbookId: string | null;
   hash: string;
-  /**
-   * How many targets THE ARMING SELECTED, from the manifest's own
-   * `scope.runnable`. Null when the turn carried no scope — a predicate arming
-   * selected nothing, and nobody named a target list.
-   */
-  targetSet: number | null;
 }
 
 function payloadOf(event: EventEnvelope): Record<string, unknown> {
@@ -735,7 +729,6 @@ function turnOf(event: EventEnvelope): ManifestTurn | undefined {
     capability,
     runbookId: str(procedure.runbook) ?? null,
     hash,
-    targetSet: armedTargetCount(payload),
   };
 }
 
@@ -791,15 +784,6 @@ interface OpenSession {
   runbookId: string | null;
   hash: string;
   taskIds: string[];
-  /**
-   * The armed target-set size, from the NEWEST turn that carried a scope.
-   *
-   * Manifests are folded OLDEST FIRST here (`MANIFEST_SCAN_LIMIT`'s reversal),
-   * so a later turn overwrites an earlier one — a re-arm REPLACES the selection
-   * rather than appending to it. Turns with no scope leave it alone: an arming
-   * that selected nothing must not erase one that did.
-   */
-  targetSet: number | null;
   /**
    * Fallback only. `foldOneSession` derives the real start from the run's OWN
    * events — the manifest carries `correlation`, so it is always one of them —
@@ -878,10 +862,6 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     const existing = open.get(key);
     if (existing) {
       if (!existing.taskIds.includes(turn.taskId)) existing.taskIds.push(turn.taskId);
-      // A LATER arming replaces the selection; a turn without one changes
-      // nothing. Guarded on the turn rather than on the existing value so a
-      // re-arm that narrows the set to a smaller list still wins.
-      if (turn.targetSet !== null) existing.targetSet = turn.targetSet;
       continue;
     }
     open.set(key, {
@@ -890,7 +870,6 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
       runbookId: turn.runbookId,
       hash: turn.hash,
       taskIds: [turn.taskId],
-      targetSet: turn.targetSet,
       startedAt: turn.observedAt,
     });
   }
@@ -1044,7 +1023,13 @@ function foldOneSession(
   // copying the candidate's value onto both would give the HEAD a target set
   // its TAIL selected. The newest arming that carried a scope wins — a re-arm
   // replaces the selection; a turn without one leaves it alone.
-  const targetSet = armedTargetSetOf(events) ?? candidate.targetSet;
+  // ONE derivation, from the run's own turns. There is deliberately no
+  // candidate-carried fallback: `armedTargetSetOf` returns null exactly when no
+  // turn of this run carried a scope, which is exactly when a candidate-carried
+  // value would be null too — so the fallback could never change an answer. A
+  // mutation battery proved it (nothing could kill a change to it), and
+  // zero-caller code is deleted here rather than pinned (WP-47a's ruling).
+  const targetSet = armedTargetSetOf(events);
 
   const lastEventId = maxId(events.map((e) => e.id));
   // Derived from this run's own events, so a cut session's halves get their own
@@ -1147,7 +1132,6 @@ function splitAtTerminal(
         runbookId: row.runbookId,
         hash: row.runbookHash,
         taskIds: row.taskIds.slice(0, cut),
-        targetSet: row.targetSet,
         startedAt: row.startedAt,
       },
       ledger,
@@ -1165,8 +1149,6 @@ function splitAtTerminal(
         // Fallback only, and it is deliberately the CANDIDATE's: if the tail
         // has no readable events there is nothing better to say, and
         // `foldOneSession` overrides it whenever there is. Same for the target
-        // set, which `armedTargetSetOf` re-derives from the tail's own turns.
-        targetSet: row.targetSet,
         startedAt: row.startedAt,
       },
       ledger,

@@ -1686,6 +1686,36 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     expect(snapshot.situations[0].headlineTemplate).toBeNull();
   });
 
+  test('a scope whose runnable is not a list reports null, never a guessed size', () => {
+    // The `scope` key present but malformed — a producer half-writing the fact.
+    // `armedTargetCount`'s second guard, which the no-scope case never reaches
+    // because it returns at the first. A battery mutation making this branch
+    // answer 0 survived until this existed.
+    const t = mintTaskId();
+    core.emitter.emit({
+      observed_at: hoursAgo(3),
+      topic: MANIFEST_TOPIC,
+      schema: MANIFEST_SCHEMA,
+      entity: {},
+      actor: { id: 'act_chat_assembler', kind: 'system' },
+      source: { class: 'work', system: 'assembler:chat', trust: 'emitted' },
+      correlation: t,
+      payload: {
+        task: t,
+        procedure: {
+          capability: RB_REMEDIATE.capability, runbook: RB_REMEDIATE.id,
+          hash: RB_REMEDIATE.hash, status: 'delivered',
+        },
+        retrieval: [{ store: 'ledger', query: 'entity=x topic=episodic.*', returned: 2 }],
+        scope: { capability: RB_REMEDIATE.capability, runbookId: RB_REMEDIATE.id, places: ['local'] },
+      },
+    });
+    expect(ledgerCount(MANIFEST_TOPIC)).toBe(1); // shape #15
+
+    const [row] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).sessions;
+    expect(row.targetSet).toBeNull();
+  });
+
   test('a LATER arming replaces the target set; a turn without one leaves it alone', () => {
     const t = mintTaskId();
     const procedure = {
@@ -1695,13 +1725,16 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
       status: 'delivered' as const,
     };
     emitManifest({ taskId: t, observedAt: hoursAgo(5), procedure, consulted: true, targets: 9 });
-    emitManifest({ taskId: t, observedAt: hoursAgo(4), procedure, consulted: true });                 // no scope
-    emitManifest({ taskId: t, observedAt: hoursAgo(3), procedure, consulted: true, targets: 2 });     // re-armed, narrower
+    emitManifest({ taskId: t, observedAt: hoursAgo(4), procedure, consulted: true, targets: 2 }); // re-armed, narrower
+    // A scopeless turn LAST, which is the ordering that can tell "leaves it
+    // alone" apart from "erases it" — with it in the middle both readings give
+    // the same answer, and a battery mutation survived on exactly that.
+    emitManifest({ taskId: t, observedAt: hoursAgo(3), procedure, consulted: true });
     expect(ledgerCount(MANIFEST_TOPIC)).toBe(3); // shape #15
 
     const [row] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).sessions;
-    // A re-arm REPLACES rather than appends, and narrowing is a real re-arm —
-    // so the answer is 2, not 9 and not 11.
+    // A re-arm REPLACES rather than appends (2, not 9 and not 11), and the
+    // scopeless turn after it changes nothing.
     expect(row.targetSet).toBe(2);
   });
 
