@@ -288,6 +288,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     window.removeEventListener('resize', this.handleResize);
     if (this.localRoot) {
       // Clearing the inline value restores Window.scss's own `right: 0`.
+      // NEXUS-DOM-REACH: window-right-reservation
       this.localRoot.style.right = '';
       this.localRoot.style.transition = '';
       this.localRoot = null;
@@ -368,6 +369,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
     try {
       window.addEventListener('hashchange', this.refreshViewedSite);
+      // NEXUS-DOM-REACH: window-data-location-read
       this.locationObserver = new MutationObserver(this.refreshViewedSite);
       this.locationObserver.observe(document.body, {
         attributes: true,
@@ -400,6 +402,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
    */
   currentLocation(): string | null {
     try {
+      // NEXUS-DOM-REACH: window-data-location-read
       const shell = document.querySelector('.Window[data-location]');
       const attr = shell && shell.getAttribute('data-location');
       if (attr) return attr;
@@ -602,6 +605,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     const reflowMode = computeReflowMode(this.state.panelState, window.innerWidth, hostRoot !== null);
     if (hostRoot) {
       const reserved = computeReservedWidth(this.state.panelState, reflowMode);
+      // NEXUS-DOM-REACH: window-right-reservation
       hostRoot.style.right = reserved > 0 ? `${reserved}px` : '';
       hostRoot.style.transition = 'right 0.2s ease';
     }

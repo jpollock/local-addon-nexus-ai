@@ -51,6 +51,8 @@ const NAV_COLORS = {
 /**
  * Local treats light as the default and scopes dark under `.Theme__Dark`
  * (`styles/_partials/_theme.scss`). Same convention here so the two track each other.
+ *
+ * NEXUS-DOM-REACH: nav-theme-css-scope
  */
 const DARK = '.Theme__Dark';
 
@@ -153,6 +155,7 @@ export class NavItemInjector {
   private tryInject(): void {
     if (this.injected) return;
 
+    // NEXUS-DOM-REACH: nav-rail-injection
     const nav = document.getElementById('Sidebar');
     if (!nav) return;
 
@@ -204,6 +207,7 @@ export class NavItemInjector {
   private startObserver(): void {
     if (this.observer) return;
 
+    // NEXUS-DOM-REACH: nav-rail-observer
     this.observer = new MutationObserver(() => {
       const nexusExists = document.getElementById(NEXUS_NAV_ITEM_ID);
 

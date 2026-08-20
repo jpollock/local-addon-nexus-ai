@@ -40,6 +40,8 @@
     "fixtures:citations:check": "ts-node scripts/generate-citation-fixtures.ts --check",
     "fixtures:return-copy": "ts-node scripts/generate-return-copy.ts",
     "fixtures:return-copy:check": "ts-node scripts/generate-return-copy.ts --check",
+  "inventory:dom-reach": "ts-node scripts/generate-dom-reach-inventory.ts",
+  "inventory:dom-reach:check": "ts-node scripts/generate-dom-reach-inventory.ts --check",
     "create-entry-points": "node scripts/create-entry-points.js",
     "sync-wp-plugins": "node scripts/create-entry-points.js",
     "prepublishOnly": "node scripts/prepublish-guard.js",

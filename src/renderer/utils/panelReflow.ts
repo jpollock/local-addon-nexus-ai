@@ -99,6 +99,7 @@ export function computeReservedWidth(
  * different behaviour wearing the same name.
  */
 export function findLocalRoot(): HTMLElement | null {
+  // NEXUS-DOM-REACH: window-right-reservation
   const shell = document.querySelector<HTMLElement>('.Window');
   if (shell) return shell;
   console.warn(
@@ -130,6 +131,7 @@ export function findLocalRoot(): HTMLElement | null {
  * @param root - Local's shell, from `findLocalRoot()`
  */
 export function readSiteId(root: HTMLElement | null): string | null {
+  // NEXUS-DOM-REACH: window-data-location-read
   const location = root?.getAttribute('data-location');
   if (!location) return null;
   // '/site-info/<id>' and '/site-info/<id>/<subroute>' both scope to <id>.
