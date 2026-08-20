@@ -24,6 +24,9 @@ import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { localDay } from './localDay';
 import { SettingsTab } from './SettingsTab';
 import type { GovernDoorTarget } from '../../main/intelligence-host/sequenceGuard';
+import type { SessionRow } from '../../main/intelligence-host/sessionRegistry';
+import { Arrival } from './return/Arrival';
+import { SessionReEntry } from './return/SessionReEntry';
 import { AssistantPanel } from './AssistantPanel';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
 import { agentStore } from './agents/AgentStore';
@@ -112,6 +115,11 @@ interface SetupAIResult {
  * Moving them here would cost more in binding than the duplication saves.
  */
 const TABS = [
+  // WP-46 · M6. The arrival IS Home (XD-26): a verdict about the night, read to
+  // you with no interaction and no question asked. It is the landing tab because
+  // "what needs me" is the question a return begins with — Sites was the landing
+  // tab before this, and it is one click away, unchanged.
+  { key: 'home',       label: 'Home' },
   { key: 'sites',      label: 'Sites' },
   { key: 'fleet',      label: 'Fleet' },
   { key: 'inbox',      label: 'Inbox' },
@@ -138,6 +146,18 @@ interface NexusOverviewState {
   activeTab: TabKey;
   /** WP-44 · the refusal door this dashboard is currently honouring. */
   governDoor: GovernDoorTarget | null;
+  /**
+   * WP-46 · the session a waiting row promoted, and the row the registry folded
+   * for it. Both null means the arrival itself is on screen.
+   *
+   * THE ROW IS HELD, NOT COPIED. Promotion identity — same session id, same
+   * cursor, same pending approvals — holds because this is the registry's own
+   * `SessionRow` travelling unchanged from `RETURN_SESSION` into the re-entry's
+   * props. Nothing between the two reads a field out and puts it back, so there
+   * is nothing for a promotion to lose.
+   */
+  returnSessionId: string | null;
+  returnSession: SessionRow | null;
   /** Sites table. `siteRowsFailed` is distinct from an empty list — see SitesTab. */
   siteRows: SiteRow[];
   siteRowsTotal: PopulationCount;
@@ -274,7 +294,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     togglingId: null,
     loading: true,
     error: null,
-    activeTab: 'sites',
+    activeTab: 'home',
+    returnSessionId: null,
+    returnSession: null,
     governDoor: null,
     siteRows: [],
     // Not zero-with-a-scope: nothing has been read yet, and the empty scope
@@ -1029,6 +1051,37 @@ renderTabBar(): React.ReactNode {
 
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
+      // WP-46 · M6. The arrival, and the re-entry a promoted row lands on.
+      //
+      // ONE PROMOTION, NO SECOND ANSWER: a waiting row hands back the session id
+      // the registry gave it, this fetches THAT session by THAT id, and the row
+      // travels into the re-entry untouched. There is no merge with the triage's
+      // copy, no local cache keyed by id, and no re-derivation — which is what
+      // makes "same session id, same cursor, same pending approvals" a property
+      // of the shape rather than a promise a test has to police.
+      case 'home': return this.state.returnSessionId
+        ? React.createElement(SessionReEntry, {
+            session: this.state.returnSession,
+            onFindInRecord: () => this.setState({ returnSessionId: null, returnSession: null }),
+            onStartNewRun: () => this.setState({ returnSessionId: null, returnSession: null }),
+          })
+        : React.createElement(Arrival, {
+            electron: this.props.electron,
+            onPromote: (sessionId: string) => {
+              this.props.electron.ipcRenderer
+                .invoke(IPC_CHANNELS.RETURN_SESSION, sessionId)
+                .then((session: SessionRow | undefined) => {
+                  if (!this.mounted) return;
+                  // `undefined` is 6c's second shape — a session id that resolves
+                  // to nothing. It is carried as null and the re-entry says the
+                  // platform cannot establish the arm, never that it is unknown.
+                  this.setState({ returnSessionId: sessionId, returnSession: session ?? null });
+                })
+                .catch(() => {
+                  if (this.mounted) this.setState({ returnSessionId: sessionId, returnSession: null });
+                });
+            },
+          });
       case 'inbox': return React.createElement(InboxTab, {
         loaded: this.state.inboxLoaded,
         failed: this.state.inboxFailed,

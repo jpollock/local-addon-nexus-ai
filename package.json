@@ -38,6 +38,8 @@
     "fixtures:procedures:check": "ts-node scripts/generate-procedure-fixtures.ts --check",
     "fixtures:citations": "ts-node scripts/generate-citation-fixtures.ts",
     "fixtures:citations:check": "ts-node scripts/generate-citation-fixtures.ts --check",
+    "fixtures:return-copy": "ts-node scripts/generate-return-copy.ts",
+    "fixtures:return-copy:check": "ts-node scripts/generate-return-copy.ts --check",
     "create-entry-points": "node scripts/create-entry-points.js",
     "sync-wp-plugins": "node scripts/create-entry-points.js",
     "prepublishOnly": "node scripts/prepublish-guard.js",

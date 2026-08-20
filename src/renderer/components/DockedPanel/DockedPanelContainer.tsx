@@ -1,5 +1,7 @@
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
+import type { TriageView } from '../../../main/intelligence-host/sessionRegistry';
+import { arrivalCounts } from '../return/arrivalModel';
 import { injectThemeVars } from '../../utils/theme';
 import { DockedPanel, PanelTab } from './DockedPanel';
 import { PanelChat, type SiteContextProps } from './PanelChat';
@@ -61,6 +63,14 @@ interface ContainerState {
   reflowMode: 'in-flow' | 'overlay';
   /** Sessions whose newest message is from the assistant and arrived unseen. */
   unreadChats: number | null;
+  /**
+   * WP-46 · situations currently escalating — the waiting column's length.
+   *
+   * XD-23: the ambient badge is an INSTRUMENT, NOT AN INVENTORY. It counts what
+   * is escalating right now, which is what the arrival's waiting column holds
+   * and nothing else. null until it loads, never coerced to 0.
+   */
+  needsYou: number | null;
   /** Fleet health rollup — null until it loads, never coerced to 'ok'. */
   fleetHealth: 'ok' | 'degraded' | 'failing' | 'unknown' | null;
   /** A full-height overlay owns the screen; the collapsed tab stands down. */
@@ -104,6 +114,7 @@ const SITE_CONTEXT_DEFAULTS = {
 
 const SIGNAL_DEFAULTS = {
   unreadChats: null as number | null,
+  needsYou: null as number | null,
   fleetHealth: null as 'ok' | 'degraded' | 'failing' | 'unknown' | null,
   overlayOpen: false,
   railBottom: readRailBottom(),
@@ -304,6 +315,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
    */
   private setupSignals() {
     this.refreshUnread();
+    this.refreshNeedsYou();
 
     // A reply landing while the panel is closed is exactly the case the badge exists for,
     // so the stream event refreshes it rather than waiting for the next mount. When the
@@ -545,6 +557,24 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   };
 
   /**
+   * WP-46 · how many situations are escalating. null on any failure — never 0.
+   *
+   * READS `RETURN_TRIAGE` AND COUNTS THE ROWS IT WOULD RENDER. The count is not
+   * asked for separately, because a badge served by its own query is a second
+   * answer to the question the arrival answers, free to disagree with the column
+   * beneath it. `arrivalCounts` is the same function the arrival's own header
+   * uses.
+   */
+  private refreshNeedsYou = (): void => {
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.RETURN_TRIAGE)
+      .then((triage: TriageView) => {
+        this.setState({ needsYou: triage ? arrivalCounts(triage).needsYou : null });
+      })
+      .catch(() => { this.setState({ needsYou: null }); });
+  };
+
+  /**
    * The collapsed tab's two signals.
    *
    * Both are fleet-wide. An earlier version scoped them to the site on screen, but that
@@ -553,9 +583,16 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
    * Rather than repair scoping nobody had seen, the badge is now one honest global count.
    */
   private tabSignals(): { badgeCount: number | null; hasStuck: boolean | null } {
-    const { unreadChats, fleetHealth } = this.state;
+    const { needsYou, fleetHealth } = this.state;
     return {
-      badgeCount: unreadChats,
+      // WP-46 · the rail badge is the WAITING COUNT (XD-23/XD-26), not the unread
+      // chat count. The two answer different questions and only one of them is
+      // what the ambient rank is for: a chat awaiting a reply is a conversation,
+      // while a waiting SITUATION is a gate or a halt that cannot move without
+      // this person. `unreadChats` is still collected and still marks sessions
+      // read — it is the sessions list's own signal — and it is no longer what
+      // the rail escalates with.
+      badgeCount: needsYou,
       hasStuck: fleetHealth === null ? null : fleetHealth === 'degraded' || fleetHealth === 'failing',
     };
   }
