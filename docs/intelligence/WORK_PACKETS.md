@@ -19040,3 +19040,153 @@ the merged tree; receipts pasted after they print; locks released
 only after acceptance. **The owner's arrival smoke follows the merge
 as its own adjudicated event** — the nine-step script already in the
 record.
+
+---
+
+## WP-46 · MERGED, LOCKS RELEASED (2026-08-20)
+
+Gate PASSED with every item ruled inside already-ratified law. Merge `d6a409ae`
+on `poc/nexintelligence`. **Nothing pushed; no tag, no version bump.**
+
+**MERGE RECEIPT — `git diff --stat d6a409ae^1 d6a409ae`, pasted from the print:**
+
+```
+ docs/intelligence/WORK_PACKETS.md                  | 257 +++++++++
+ package.json                                       |   2 +
+ scripts/generate-return-copy.ts                    | 316 +++++++++++
+ scripts/wp46-battery.py                            | 343 ++++++++++++
+ src/common/constants.ts                            |  25 +
+ src/main/ipc-handlers.ts                           |  22 +
+ .../DockedPanel/DockedPanelContainer.tsx           |  41 +-
+ src/renderer/components/NexusOverview.tsx          |  55 +-
+ src/renderer/components/return/Arrival.tsx         | 337 +++++++++++
+ src/renderer/components/return/SessionReEntry.tsx  | 249 +++++++++
+ src/renderer/components/return/arrivalModel.ts     | 276 +++++++++
+ .../components/return/returnCopy.generated.ts      |  55 ++
+ tests/intelligence-evals/checks.ts                 | 620 +++++++++++++++++----
+ tests/intelligence-evals/probes.test.ts            |  38 +-
+ tests/unit/renderer/helpers/returnMorning.ts       | 394 +++++++++++++
+ tests/unit/renderer/returnArrival.test.tsx         | 348 ++++++++++++
+ tests/unit/renderer/returnBridge.test.ts           | 233 ++++++++
+ tests/unit/renderer/returnRailBadge.test.ts        | 103 ++++
+ tests/unit/renderer/returnReEntry.test.tsx         | 423 ++++++++++++++
+ 19 files changed, 4023 insertions(+), 114 deletions(-)
+```
+
+### The record merge — rebuilt from the three blobs, four-way verified
+
+`docs/intelligence/WORK_PACKETS.md` was the only conflict, and it was resolved by
+concatenation from the three blobs per the WP-43 standard, never hunk-edited.
+Blob md5s, pasted: ancestor `6887bdcb21037232cc940d96c9f17a87` (1,127,052 B),
+architect side `005aa32ba277fbe2def5b06ce1a86a57` (1,133,114 B), wp-46 side
+`d0d7b964e5908f7187e5bee191b31653` (1,142,168 B), merged
+`6f776e2fa5f3925cc14ba56daeaed1c8` (1,148,230 B). Receipts pasted from the
+verification's own output:
+
+```
+1 ancestor is an exact PREFIX of the merged blob     : True
+2 each half is an exact SUBSTRING, exactly once      : True (gate @1127052, architect @1142168)
+3 CHRONOLOGICAL: WP-46's gate report before its ruling: True
+4 ARITHMETIC, BYTES: 1127052 + 15116 + 6062 = 1148230 vs merged 1148230, residual 0
+  no conflict markers, line-anchored                 : True
+```
+
+Both junctions were re-read after the write: the `---` separators are present at
+each, which is the six characters WP-43's hunk surgery silently dropped.
+
+**THE ORDERING DEPARTS FROM WP-30's INSTANCE, AND THE REASON IS THE RULE
+ITSELF.** WP-30 placed the architect's half first because that work genuinely
+predated its gate. Here it does not, wholly: the architect's block ENDS with
+WP-46's gate ruling — "Gate report read in full from the branch" — which is a
+response to the half below it. Placing the architect's half first would have put
+a ruling above the report it rules on, and a later reader citing the ruling would
+find its subject afterwards. The standard's third check is CHRONOLOGY, not
+"architect first", so the gate report precedes the ruling and check 3 asserts
+exactly that rather than a fixed side order.
+
+### The architect's work, committed verbatim first
+
+`ee5759c8`, its own attributed commit, FOUR files, none authored or edited by
+this agent — the shell-inversion plan registered, the designer's
+`from-designer-10` committed verbatim and adopted as governing, WP-46's gate
+ruling, and `PARALLEL_PROTOCOL.md`'s new series-guard rule. Every committed blob
+md5-verified against the working tree after the commit, and the one value the
+architect had already recorded — `from-designer-10` at 21,052 bytes, md5
+`8ba961cd999160cd5435f50e9d623939` — matched exactly, which is independent
+verification of their receipt rather than a restatement of it.
+
+### The merged tree, measured
+
+- **`npx tsc -p . --noEmit` clean; `npx tsc -p tsconfig.test.json --noEmit`
+  clean; `npm run fixtures:return-copy:check` up to date.**
+- **`npm test`: 607 suites / 8,326 passed / 2 skipped / 8,328 total, exit 0**
+  (exit captured before any pipe).
+- **Read skipped-first**, per the standing rule: the worktree's own after-run was
+  **607 / 8,316 / 12 / 8,328** — SAME TOTAL, and the passed/skipped split differs
+  by exactly ten in the documented direction (12 − 2 = 10 = 8,326 − 8,316). The
+  primary holds both embedding-model files and gates ten tests IN that a worktree
+  skips. No gain is claimed and none is real.
+- Against the pre-merge worktree baseline (**603 / 8,265 / 12 / 8,277**) the
+  packet's delta is **+4 suites, +51 tests** — returnArrival 17, returnReEntry
+  18, returnBridge 12, returnRailBadge 4 — fully accounted off the diff.
+- **Mutation battery re-run ON THE MERGED TREE: 28/28 KILLED**, control SURVIVED
+  (correct), tree verified PRISTINE before and after, `--no-cache` throughout,
+  count-floored at 48 against a 51-test pristine baseline, both summary lines
+  parsed, 13 files swept byte-level for non-printing characters before the run.
+- **Eval registry on the merged tree: 50 PASS / 0 FAIL / 18 BLOCKED / 10
+  OWNER-PENDING.** J-Return **8 / 0 / 0 / 0**; J-Glance **5 / 0 / 3 / 0**.
+  Against the baseline measured on the base before the work (**40 / 0 / 28 /
+  10**) that is ten flips, no regressions, and every other spec byte-identical —
+  no criterion moved that this packet does not own.
+- **The unpushed confirmation, properly:** no `origin/poc/nexintelligence`, no
+  upstream configured, zero tags at HEAD, `package.json` still `0.5.2`. The
+  absent remote branch is the evidence; a "0 unpushed" count would be the false
+  zero WP-30 recorded.
+
+### What this packet leaves behind, besides the surface
+
+- **A protocol rule**, already recorded by the architect in `ee5759c8`: **a
+  render test cannot pin a guard the render never reaches.** Two guards in
+  series, the outer one filtering, and the inner one exercised by nothing — M07
+  and M08 survived the first battery drive while every screen drew correctly.
+  The tell at battery time is a survivor whose mutation sits inside a function
+  every render test "covers".
+- **Two further battery lessons in the same family.** M13: a fixture with no
+  instance of the case in it cannot pin the case — the designer's morning has
+  two session rows and no incident row, so an id fallback changed nothing
+  observable. M28: a guard nothing can reach is a guard nothing can check —
+  `fromSheet`'s throw is unreachable while the designer's files are intact, so
+  the generator gained `--sheet`/`--fixture` overrides and the test drives an
+  anchor miss directly.
+- **Two of WP-30's own absence tripwires, turned over rather than deleted.**
+  They said "WP-30 shipped a FOLD and no UI" and went red on exactly the change
+  they were watching for. The pair still fails in opposite directions: the first
+  now goes red if the arrival stops reading the fold — a surface deriving its own
+  verdicts — and both numbers still come from the scan that reports
+  `capabilityGrants` and `refusalTurn` at zero, so a scanner finding nothing
+  could not produce the result.
+- **An `AUTHORED` export as the standing pattern** for gate-held copy, ratified
+  at the gate: one object, mechanically extractable, so a gate reads the packet's
+  authored prose from a command rather than from a human scanning the tree.
+
+### ABI state, disclosed
+
+**This session ran `npm test`, `npx jest`, the eval runner and the battery
+repeatedly, so better-sqlite3 is built for SYSTEM NODE** (this machine: v25.9.0,
+ABI 141). **Local cannot load the addon until `npm run rebuild` is run** — which
+is the first step of the owner's arrival smoke.
+
+### What is now reachable, and what is not
+
+M6 is on screen. The morning the designer drew renders from the fold: two columns
+of one verdict in the registry's own order, every waiting row naming its gate by
+checkpoint id, one reserved row that cannot be scrolled away, and a promotion
+that opens the run where it stopped with its approval still standing. Nothing in
+the render path derives anything.
+
+**No visual verdict is claimed.** Every measurement above is over a rendered
+element tree; nobody has looked at this on a screen. The owner's arrival smoke
+follows as its own adjudicated event, and `npm run rebuild` precedes it.
+
+**THE `src/renderer/`, `src/main/ipc-handlers.ts`, `src/common/constants.ts` AND
+`tests/intelligence-evals/` LOCKS ARE RELEASED.**
