@@ -241,11 +241,17 @@ describe('an unfillable headline falls back rather than rendering a hole', () =>
     // "Waiting at cp.x,  . 1 failed" — the gap an absent slot opens mid-sentence.
     // Collapsing it is the difference between a shortened sentence and a broken
     // one, and the battery found nothing pinning the collapse.
+    // The slot must be surrounded by spaces on BOTH sides for its removal to
+    // open a gap — the first draft of this test dropped `{position}`, which sits
+    // between a comma and a full stop and leaves no double space at all. It
+    // passed against an implementation with no collapse, and the battery said
+    // so. `{failed}` is the one that actually gaps: ". {failed} failed" becomes
+    // ".  failed".
     const gapped = fillSituationSentence('Waiting at {checkpoint}, {position}. {failed} failed.', {
-      checkpoint: 'cp.approval', position: undefined, failed: 1,
+      checkpoint: 'cp.approval', position: '3 of 8', failed: undefined,
     });
     expect(gapped).not.toMatch(/\s{2,}/);
-    expect(gapped).toBe('Waiting at cp.approval, . 1 failed.');
+    expect(gapped).toBe('Waiting at cp.approval, 3 of 8. failed.');
   });
 
   test('a slot missing from the ASK does not decline the class — only the headline gates', () => {
