@@ -461,9 +461,8 @@ fails without.
 > paragraph you can write."* — recon §9
 
 We have counted them. **Eleven open reaches, across nineteen marked lines in six
-files**, plus **one** twentieth line for the single reach we are explicitly
-keeping and disclosing. The list is not a
-prose estimate: it is generated from our source by
+files**, plus a twentieth line for the single reach we are explicitly keeping and
+disclosing. The list is not a prose estimate: it is generated from our source by
 `scripts/generate-dom-reach-inventory.ts` into
 `docs/intelligence/dom-reach-inventory.json`, and our build fails if a reach
 exists in code without a declaration, or a declaration exists without code. A new
