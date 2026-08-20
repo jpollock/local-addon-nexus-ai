@@ -20190,3 +20190,35 @@ product IA, owner's rulings pending.
 **THE `src/main/intelligence-host/`, `src/renderer/`, `tests/intelligence-evals/`
 AND `docs/intelligence/` LOCKS REMAIN HELD** pending acceptance of this report
 and the §2 ruling.
+
+### 13 · ADDENDUM — a concurrent append to THIS file, flagged not merged
+
+While WP-48 ran, new architect+designer work appeared UNCOMMITTED in the primary
+checkout. It is not this packet's and was deliberately **not** touched:
+
+```
+ M docs/intelligence/DESIGN_DECISIONS.md            (+23, 0 deletions)
+ M docs/intelligence/WORK_PACKETS.md                (+27, 0 deletions)
+?? from-designer-11-now-screen.md   6,800 bytes  md5 f2f891eee8693fe2cc608cf856aa9eb0
+?? from-designer-12-addon-audit.md  4,705 bytes  md5 e6cd1b408204a55e93357c8a6d40c59f
+```
+
+The standing precedent commits such work verbatim when it BLOCKS A MERGE. This
+packet is not merging, and the files appeared mid-session — the architect is
+evidently still writing in that tree — so committing now would capture a
+half-written state. Flagged with receipts instead; the merger commits it.
+
+**Two appends to this file now exist and neither has seen the other:** WP-48's
+gate report (committed on `wp-48`) and the architect's section (uncommitted on
+the base). At merge time this is the WP-43 case exactly — **rebuild the record
+from the three blobs with the four-way verification and a chronology ruling;
+never hunk-edit it.** A zero-deletion diffstat is not proof of a pure append.
+
+Two facts from that section bear on this packet:
+
+- **`from-designer-11-now-screen.md` has ARRIVED** — the Now-screen sheet item 4
+  was explicitly waiting on. Its front matter says "item 4's prompt copy is in
+  §5". This does not widen WP-48's scope; item 4 stays untouched here.
+- **WP-49 is registered and "CUTS AFTER WP-48 MERGES — the renderer lock
+  serializes them."** So the `src/renderer/` lock this report holds is the thing
+  gating WP-49's start, and releasing it is part of accepting this packet.
