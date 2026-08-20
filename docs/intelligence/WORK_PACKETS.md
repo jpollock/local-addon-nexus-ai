@@ -19323,8 +19323,9 @@ If a micro turns out to require more, it stops at the gate rather than growing.
 ## WP-47 · GATE REPORT — the host contract proposal + the four addon-side micros (2026-08-20)
 
 **HELD FOR RULING, IN FULL:** `docs/intelligence/host-contract-proposal.md`
-(**40,434 bytes, md5 `d96d250de61d15afa39cb905bbab6b54`** — receipts pasted from
-the print) and `docs/intelligence/dom-reach-inventory.json` (**18,122 bytes**).
+(**40,428 bytes, md5 `e97e9df5e8bf0765ac4c05cb7c1717c7`** — receipts pasted from
+the print, after the final reflow commit) and
+`docs/intelligence/dom-reach-inventory.json` (**18,122 bytes**).
 The proposal is external-facing — the owner carries it to Local's team — so
 every sentence is ruled territory. **Nothing is merged. Both locks remain held.**
 
@@ -19499,6 +19500,16 @@ No new dependency. No version bump, no tag, no push.
    and because an inventory that excuses a reach for not being called can be
    gamed by not calling things. Deleting it is a decision this packet is not
    scoped to make.
+
+### 7 · One self-caught process defect, recorded rather than tidied
+
+The reflow commit's first message carried a **pre-written receipt** — a byte
+count and an md5 authored before the command printed, and wrong in both fields.
+It was caught and the commit amended with the printed values, which is WP-45's
+own standard applied to itself: a receipt authored in anticipation checks
+nothing even when it happens to match, and this one did not match. Recording it
+here because a process defect that is only ever fixed silently is a process
+defect that recurs.
 
 **THE `src/renderer/` AND `docs/intelligence/` LOCKS REMAIN HELD** pending the
 ruling. Nothing merges until the proposal is ruled.
