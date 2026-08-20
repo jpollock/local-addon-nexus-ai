@@ -321,6 +321,20 @@ export interface SessionRow {
   approvals: PendingApproval[];
   outcomes: SessionOutcomes;
   places: PlaceSet;
+  /**
+   * HOW MANY TARGETS THE ARMING SELECTED — the "derived target set" the
+   * designer's slot table names, read from the manifest's own `scope.runnable`.
+   *
+   * **This is NOT `places.total`, and conflating them was WP-48's defect.**
+   * `places` describes the targets that have an OUTCOME; this describes the
+   * targets a human or a predicate SELECTED, before anything was done to them.
+   * A run mid-flight has 2 in `places` and 5 here, and that difference is
+   * exactly what "the rest are waiting on you" refers to.
+   *
+   * **Null means UNKNOWN, never empty.** A manifest with no scope means nothing
+   * selected anything, which is a different fact from selecting nothing.
+   */
+  targetSet: number | null;
   /** ISO — the first turn's observed_at. */
   startedAt: string;
   /** ISO — the newest folded event's observed_at. */
@@ -418,8 +432,12 @@ export interface Situation {
    * it is generated from the very rows the columns render and structurally
    * cannot disagree with them — the accounting line's own property, applied to
    * the sentence the accounting line cannot say.
+   *
+   * `total` is the ARMED TARGET SET (`SessionRow.targetSet`) and is **null when
+   * the record does not say** — not zero. It is deliberately not
+   * `places.total`: see `SessionRow.targetSet` for the collision that cost.
    */
-  written: { done: number; failed: number; total: number };
+  written: { done: number; failed: number; total: number | null };
 }
 
 /**
@@ -676,6 +694,12 @@ interface ManifestTurn {
   capability: string;
   runbookId: string | null;
   hash: string;
+  /**
+   * How many targets THE ARMING SELECTED, from the manifest's own
+   * `scope.runnable`. Null when the turn carried no scope — a predicate arming
+   * selected nothing, and nobody named a target list.
+   */
+  targetSet: number | null;
 }
 
 function payloadOf(event: EventEnvelope): Record<string, unknown> {
@@ -711,7 +735,54 @@ function turnOf(event: EventEnvelope): ManifestTurn | undefined {
     capability,
     runbookId: str(procedure.runbook) ?? null,
     hash,
+    targetSet: armedTargetCount(payload),
   };
+}
+
+/**
+ * THE SIZE OF THE ARMED TARGET SET, from the arming record's own scope.
+ *
+ * WP-48's ruling, and it repairs a NAME COLLISION rather than adding a feature.
+ * The designer's slot table defines `{total}` as "size of the derived target
+ * set"; the host field wearing that name — `places.total` — is a different
+ * fact, the targets that have an OUTCOME. Binding the slot to it made two
+ * sentences wrong at once: a gated run with nothing written reported "0
+ * targets" and drew the class that says it "never received a target list", and
+ * a genuinely mid-flight run would have said "2 of 2 are changed and the rest
+ * are waiting on you", which contradicts itself.
+ *
+ * The fact was already on the record: `chatAssembly` spreads the honoured
+ * arming's `scope` onto the manifest payload (WP-37's carrier), and
+ * `ProcedureScope.runnable` IS the selected target list. The registry already
+ * reads these events; it simply was not reading this key.
+ *
+ * NULL IS NOT ZERO, and the distinction is the whole point. A manifest with no
+ * scope means nothing selected anything — the size is UNKNOWN, not empty — so
+ * it reports null and every guard that tests `total` declines rather than
+ * treating an absence as a count. Defaulting it to 0 would rebuild the exact
+ * collision this removes, one field over.
+ *
+ * MEASURED on the developer's ledger 2026-08-20: **0 of 36 manifests carry a
+ * scope**, and no event anywhere carries a `runnable` key at all — every run on
+ * that machine was armed by predicate rather than by a selection. So this reads
+ * null in production today. That is the honest answer and it is reported at the
+ * gate rather than papered over with a fallback.
+ */
+function armedTargetSetOf(events: readonly EventEnvelope[]): number | null {
+  let newest: number | null = null;
+  for (const event of events) {
+    if (event.topic !== MANIFEST_TOPIC) continue;
+    const count = armedTargetCount(payloadOf(event));
+    if (count !== null) newest = count;
+  }
+  return newest;
+}
+
+function armedTargetCount(payload: Record<string, unknown>): number | null {
+  const scope = payload.scope as Record<string, unknown> | null | undefined;
+  if (!scope || typeof scope !== 'object') return null;
+  const runnable = scope.runnable;
+  return Array.isArray(runnable) ? runnable.length : null;
 }
 
 interface OpenSession {
@@ -720,6 +791,15 @@ interface OpenSession {
   runbookId: string | null;
   hash: string;
   taskIds: string[];
+  /**
+   * The armed target-set size, from the NEWEST turn that carried a scope.
+   *
+   * Manifests are folded OLDEST FIRST here (`MANIFEST_SCAN_LIMIT`'s reversal),
+   * so a later turn overwrites an earlier one — a re-arm REPLACES the selection
+   * rather than appending to it. Turns with no scope leave it alone: an arming
+   * that selected nothing must not erase one that did.
+   */
+  targetSet: number | null;
   /**
    * Fallback only. `foldOneSession` derives the real start from the run's OWN
    * events — the manifest carries `correlation`, so it is always one of them —
@@ -798,6 +878,10 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     const existing = open.get(key);
     if (existing) {
       if (!existing.taskIds.includes(turn.taskId)) existing.taskIds.push(turn.taskId);
+      // A LATER arming replaces the selection; a turn without one changes
+      // nothing. Guarded on the turn rather than on the existing value so a
+      // re-arm that narrows the set to a smaller list still wins.
+      if (turn.targetSet !== null) existing.targetSet = turn.targetSet;
       continue;
     }
     open.set(key, {
@@ -806,6 +890,7 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
       runbookId: turn.runbookId,
       hash: turn.hash,
       taskIds: [turn.taskId],
+      targetSet: turn.targetSet,
       startedAt: turn.observedAt,
     });
   }
@@ -954,6 +1039,12 @@ function foldOneSession(
   );
   const gate = deriveGate(states, checkpoints, candidate, document);
   const approvals = deriveApprovals(checkpoints, cursor, events);
+  // DERIVED FROM THE RUN'S OWN EVENTS, for the reason `startedAt` is two lines
+  // below: `splitAtTerminal` re-folds a cut session's halves through here, and
+  // copying the candidate's value onto both would give the HEAD a target set
+  // its TAIL selected. The newest arming that carried a scope wins — a re-arm
+  // replaces the selection; a turn without one leaves it alone.
+  const targetSet = armedTargetSetOf(events) ?? candidate.targetSet;
 
   const lastEventId = maxId(events.map((e) => e.id));
   // Derived from this run's own events, so a cut session's halves get their own
@@ -975,6 +1066,7 @@ function foldOneSession(
     approvals,
     outcomes,
     places,
+    targetSet,
     startedAt,
     lastActivityAt,
     lastEventId,
@@ -1055,6 +1147,7 @@ function splitAtTerminal(
         runbookId: row.runbookId,
         hash: row.runbookHash,
         taskIds: row.taskIds.slice(0, cut),
+        targetSet: row.targetSet,
         startedAt: row.startedAt,
       },
       ledger,
@@ -1071,7 +1164,9 @@ function splitAtTerminal(
         taskIds: tailIds,
         // Fallback only, and it is deliberately the CANDIDATE's: if the tail
         // has no readable events there is nothing better to say, and
-        // `foldOneSession` overrides it whenever there is.
+        // `foldOneSession` overrides it whenever there is. Same for the target
+        // set, which `armedTargetSetOf` re-derives from the tail's own turns.
+        targetSet: row.targetSet,
         startedAt: row.startedAt,
       },
       ledger,
@@ -1292,7 +1387,7 @@ function situationOfSession(
     written: {
       done: row.outcomes.succeeded.length,
       failed: row.outcomes.failed.length,
-      total: row.places.total,
+      total: row.targetSet,
     },
   };
 }
@@ -1349,7 +1444,16 @@ export interface SituationClassInput {
   kind: 'run' | 'incident' | 'agentFailure';
   done: number;
   failed: number;
-  total: number;
+  /**
+   * The ARMED TARGET SET, or null when the record does not say.
+   *
+   * Null is a third state and both guards that read it must mean it: `total ===
+   * 0` is "nothing was selected", `total > 0` is "something was", and null is
+   * neither. JavaScript agrees by coercion — `null === 0` and `null > 0` are
+   * both false — which is why the ratified guard strings need no amendment for
+   * it and the agreement table can carry null cases directly.
+   */
+  total: number | null;
   gate: PendingGate | null;
   runId: string | null;
 }
@@ -1413,9 +1517,9 @@ export function guardHolds(template: SituationTemplate, input: SituationClassInp
   const { kind, done, failed, total, gate } = input;
   switch (template.id) {
     case 'run.waiting.nothing-written':
-      return kind === 'run' && done === 0 && failed === 0 && total === 0;
+      return kind === 'run' && done === 0 && failed === 0 && total === 0 && gate === null;
     case 'run.waiting.mid-procedure':
-      return kind === 'run' && done === 0 && failed === 0 && total > 0 && gate !== null;
+      return kind === 'run' && done === 0 && failed === 0 && total !== null && total > 0 && gate !== null;
     case 'run.waiting.part-changed':
       return kind === 'run' && (done > 0 || failed > 0) && gate !== null;
     case 'incident.no-run':
@@ -1479,15 +1583,19 @@ export function selectSituationTemplate(
  * record. `headlineTemplate` reports `null`, so the fallback is visible rather
  * than mistaken for ratified copy.
  *
- * THIS IS AN ADDED CONDITION AND IT IS NAMED AS ONE. It lives HERE rather than
- * inside `guardHolds`, deliberately: the guards stay byte-exact against the
- * ratified strings and their agreement pin stays exact. The packet does not get
- * to edit ratified copy, and it does not get to ship a sentence it has measured
- * to be false either. The ruling this wants is one of two, and both are the
- * owner's: add `&& gate === null` to guard 1, or give the fold a target-set
- * field so class 2 fires as drawn. Until then, this refusal is the honest gap.
+ * RULED PERMANENT (WP-48 gate, 2026-08-20): **this stays forever, and it is now
+ * deliberately redundant.** The ruling took BOTH remedies — guard 1 gained
+ * `&& gate === null` in the ratified fixture, and `{total}` was rebound to the
+ * arming record's scope — so no input can reach this refusal through
+ * `selectSituationTemplate` any more. It is kept as a TRIPWIRE, not as
+ * scaffolding: a ratified sentence that contradicts the record must refuse
+ * loudly and fall back derived, whatever a future amendment does to the guards.
+ *
+ * Because nothing reaches it through the composer, it is pinned DIRECTLY — a
+ * guard nothing can reach is a guard nothing can check, which is this packet's
+ * own rule turned on itself.
  */
-function contradictedByTheRecord(
+export function contradictedByTheRecord(
   template: SituationTemplate | null,
   gate: PendingGate | null,
 ): boolean {
@@ -1519,7 +1627,12 @@ function derivedCopy(headline: string, meta: string, state: string): SituationCo
 function composeSessionCopy(row: SessionRow, column: TriageColumn, now: Date, since: string): SituationCopy {
   const done = row.outcomes.succeeded.length;
   const failed = row.outcomes.failed.length;
-  const total = row.places.total;
+  // WP-48's ruling: `{total}` is THE ARMED TARGET SET, not the targets that
+  // happen to have an outcome. See `SessionRow.targetSet` for why binding it to
+  // `places.total` made two sentences wrong at once. `undefined` when the
+  // record does not say — unknown is not zero, and every guard testing `total`
+  // declines rather than reading an absence as a count.
+  const total = row.targetSet;
   const gate = row.gate ?? null;
   const runbookId = row.runbookId ?? row.capability;
 
@@ -1527,7 +1640,12 @@ function composeSessionCopy(row: SessionRow, column: TriageColumn, now: Date, si
     runNoun: RUN_NOUN[row.capability],
     done,
     failed,
-    total,
+    // `undefined` rather than `null` in the BAG: the fill guard's question is
+    // "can this slot be filled", and an unknown target set cannot. The GUARD's
+    // question is different — "was a target set recorded, and was it empty" —
+    // which is why `input.total` keeps the null. Two representations of one
+    // absence, for two different decisions, and neither is a default.
+    total: total ?? undefined,
     age: ageLabel(since, now),
     checkpoint: gate?.checkpointId,
     position: gate ? `${gate.index} of ${gate.of}` : undefined,
@@ -1694,7 +1812,9 @@ function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps)
       },
     ],
     ...copy,
-    written: { done: 0, failed: 0, total: places.total },
+    // An orphan incident was never armed under a procedure, so it has no target
+    // set at all — null, not the size of its place set.
+    written: { done: 0, failed: 0, total: null },
   };
 }
 

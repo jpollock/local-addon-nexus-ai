@@ -52,13 +52,16 @@ import {
 } from '../procedureCursor';
 import { provisionalEnvironmentId } from '../provisionalEntity';
 import {
+  contradictedByTheRecord,
   createSessionRegistry,
   foldSessionRegistry,
+  guardHolds,
   rankSituations,
   type RunbookLookup,
   type SessionRegistryDeps,
   type Situation,
 } from '../sessionRegistry';
+import { SITUATION_TEMPLATES } from '../situationCopy.generated';
 import type { IntelligenceHealthReport } from '../health';
 import type { ScopePlace } from '../procedureScope';
 import { taskId as mintTaskId } from '../../../intelligence';
@@ -197,6 +200,16 @@ function emitManifest(args: {
   procedure: ManifestProcedure | null;
   /** A ledger retrieval row is what attests `cp.consult-history`. */
   consulted?: boolean;
+  /**
+   * THE ARMING'S SCOPE, shaped as `chatAssembly` writes it — spread
+   * CONDITIONALLY, because an arming that selected nothing carries no `scope`
+   * key at all rather than `scope: undefined`, and WP-48's whole distinction is
+   * between "selected nothing" and "nothing selected".
+   *
+   * `targets` is the size of `scope.runnable`, which is the target list a human
+   * or a predicate chose. Omit the argument for a predicate arming.
+   */
+  targets?: number;
 }): string {
   return core.emitter.emit({
     observed_at: args.observedAt,
@@ -212,6 +225,24 @@ function emitManifest(args: {
       retrieval: args.consulted
         ? [{ store: 'ledger', query: 'entity=x topic=episodic.*', returned: 2 }]
         : [],
+      ...(args.targets === undefined
+        ? {}
+        : {
+            scope: {
+              capability: args.procedure?.capability ?? 'cap.x',
+              runbookId: args.procedure?.runbook ?? 'rb.x',
+              runnable: Array.from({ length: args.targets }, (_, i) => ({
+                siteId: `site-${i}`,
+                siteName: `Site ${i}`,
+                place: { host: 'local' },
+              })),
+              barred: [],
+              excluded: [],
+              places: ['local'],
+              from: 'selection',
+              opensRun: args.targets > 0,
+            },
+          }),
     },
   }).id;
 }
@@ -1543,7 +1574,7 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
   });
 
   /** A run under a document it can be folded against, with nothing written. */
-  function unwrittenRunUnderDocument(): string {
+  function unwrittenRunUnderDocument(targets?: number): string {
     const t = mintTaskId();
     emitManifest({
       taskId: t,
@@ -1555,13 +1586,14 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
         status: 'delivered',
       },
       consulted: true,
+      ...(targets === undefined ? {} : { targets }),
     });
     return t;
   }
 
   /** The same run, with its canary landed — one target done, gate still open. */
   function partChangedRun(): string {
-    const t = unwrittenRunUnderDocument();
+    const t = unwrittenRunUnderDocument(1);
     emitAct({ taskId: t, observedAt: hoursAgo(3), tool: 'contain_site', targets: [BRAVO] });
     return t;
   }
@@ -1576,6 +1608,7 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
       // have (measured 2026-08-20) — the class the designer counted two of.
       procedure: { capability: RB_REMEDIATE.capability, runbook: 'rb.remediate', hash: 'sha256:gone', status: 'delivered' },
       consulted: true,
+      targets: 0, // a selection was made, and it selected nothing
     });
     expect(ledgerCount(MANIFEST_TOPIC)).toBe(1); // shape #15
 
@@ -1601,6 +1634,7 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
       observedAt: hoursAgo(5),
       procedure: { capability: RB_PURGE.capability, runbook: 'rb.cache-purge', hash: 'sha256:gone', status: 'delivered' },
       consulted: true,
+      targets: 0,
     });
     const [situation] = foldSessionRegistry(deps({ runbooks: lookup() })).situations;
     expect(situation.headlineTemplate).toBeNull();
@@ -1608,31 +1642,112 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     expect(situation.headline).toContain('rb.cache-purge');
   });
 
-  test('a GATED run with nothing written is declined, because the class\'s ask contradicts the record', () => {
-    // The measured live-fleet defect, pinned. This row is at a checkpoint with
-    // approvals outstanding; guard 1 selects it and guard 1 says it "never
-    // received a target list, so it cannot start". It received one and it is
-    // partway through. See `contradictedByTheRecord` for the ruling this wants.
-    unwrittenRunUnderDocument();
+  test('THE ACCEPTANCE CASE · a gated run with a target set is the mid-procedure class', () => {
+    // WP-48's gate ruling, driven. This is the shape of the real cp.backup row
+    // that received the FALSE sentence: gated, partway through, nothing
+    // written. With `{total}` bound to the arming record's own scope, the class
+    // the designer drew for it fires and says the true thing.
+    unwrittenRunUnderDocument(3);
     expect(ledgerCount(MANIFEST_TOPIC)).toBe(1); // shape #15
+
+    const [situation] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).situations;
+    expect(situation.gate).toBeDefined();
+    expect(situation.written).toEqual({ done: 0, failed: 0, total: 3 });
+    expect(situation.headlineTemplate).toBe('run.waiting.mid-procedure');
+    expect(situation.chip).toBe('Waiting');
+    expect(situation.state).toBe('nothing written yet');
+    expect(situation.ask).toContain('Nothing has been written yet, so stopping here costs nothing.');
+    // …and it is NOT the class that would have told her it cannot start.
+    expect(situation.ask).not.toContain('never received a target list');
+  });
+
+  test('a gated run whose selection was EMPTY gets neither class — the guard\'s new clause', () => {
+    // `total === 0` WITH a gate: guard 1's ratified clause `&& gate === null`
+    // declines it, and guard 2 needs `total > 0`. A row standing at a gate can
+    // never be "cannot start", whatever the count says — the belt-and-suspenders
+    // half of the ruling, pinned at the fold.
+    unwrittenRunUnderDocument(0);
     const [situation] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).situations;
     expect(situation.gate).toBeDefined();
     expect(situation.written).toEqual({ done: 0, failed: 0, total: 0 });
     expect(situation.headlineTemplate).toBeNull();
     expect(situation.ask).toBe('');
-    expect(situation.headline).not.toContain('never received a target list');
   });
 
-  test('the mid-procedure class cannot fire, and this pins WHY rather than asserting it does', () => {
-    // `{total}` is `places.total`, derived from outcomes alone, so nothing
-    // written forces total 0 and guard 2 (`total > 0` with nothing written) has
-    // no reachable input. Pinned as a MEASURED LIMIT so the day a target-set
-    // field lands, this test fails and says what changed.
-    unwrittenRunUnderDocument();
-    const [row] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).sessions;
-    expect(row.outcomes.succeeded.length + row.outcomes.failed.length).toBe(0);
-    expect(row.places.total).toBe(0);
+  test('a run whose arming carried NO scope reports the target set as null, never as zero', () => {
+    // The state 36 of 36 manifests on the developer's live ledger are in: armed
+    // by predicate, nothing selected. "Nothing selected anything" is a different
+    // fact from "a selection chose nothing", and only the second is the class
+    // that says a run never received a target list.
+    unwrittenRunUnderDocument(); // no `targets` ⇒ no `scope` key at all
+    const snapshot = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) }));
+    expect(snapshot.sessions[0].targetSet).toBeNull();
+    expect(snapshot.situations[0].written.total).toBeNull();
+    expect(snapshot.situations[0].headlineTemplate).toBeNull();
   });
+
+  test('a LATER arming replaces the target set; a turn without one leaves it alone', () => {
+    const t = mintTaskId();
+    const procedure = {
+      capability: RB_REMEDIATE.capability,
+      runbook: RB_REMEDIATE.id,
+      hash: RB_REMEDIATE.hash,
+      status: 'delivered' as const,
+    };
+    emitManifest({ taskId: t, observedAt: hoursAgo(5), procedure, consulted: true, targets: 9 });
+    emitManifest({ taskId: t, observedAt: hoursAgo(4), procedure, consulted: true });                 // no scope
+    emitManifest({ taskId: t, observedAt: hoursAgo(3), procedure, consulted: true, targets: 2 });     // re-armed, narrower
+    expect(ledgerCount(MANIFEST_TOPIC)).toBe(3); // shape #15
+
+    const [row] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).sessions;
+    // A re-arm REPLACES rather than appends, and narrowing is a real re-arm —
+    // so the answer is 2, not 9 and not 11.
+    expect(row.targetSet).toBe(2);
+  });
+
+  test('the contradicted-record TRIPWIRE stays, and is pinned DIRECTLY because nothing reaches it', () => {
+    // RULED PERMANENT at the WP-48 gate. The ruling took BOTH remedies, so no
+    // input can reach this through the composer any more — which is exactly why
+    // it is driven directly. A guard nothing can reach is a guard nothing can
+    // check, and this packet does not get to exempt its own tripwire from its
+    // own rule.
+    const nothingWritten = SITUATION_TEMPLATES.find((t) => t.id === 'run.waiting.nothing-written')!;
+    const midProcedure = SITUATION_TEMPLATES.find((t) => t.id === 'run.waiting.mid-procedure')!;
+    const aGate = {
+      checkpointId: 'cp.backup', index: 4, of: 8, awaits: 'approval' as const,
+      runbookId: 'rb.bulk-plugin-update', capability: 'cap.bulk_plugin_update',
+    };
+
+    // The shape it exists for: the class that says "cannot start", on a gated row.
+    expect(contradictedByTheRecord(nothingWritten, aGate)).toBe(true);
+    // …and it refuses nothing else.
+    expect(contradictedByTheRecord(nothingWritten, null)).toBe(false);
+    expect(contradictedByTheRecord(midProcedure, aGate)).toBe(false);
+    expect(contradictedByTheRecord(null, aGate)).toBe(false);
+
+    // The redundancy is REAL, not assumed: the ratified guard now refuses that
+    // same input by itself, so the tripwire is a second lock on one door.
+    expect(guardHolds(nothingWritten, {
+      kind: 'run', done: 0, failed: 0, total: 0, gate: aGate, runId: 's1',
+    })).toBe(false);
+  });
+
+  test('a part-changed run counts done against the ARMED set, not the acted-on one', () => {
+    // The second sentence the name collision broke, and one no live row has yet
+    // reached: five targets armed, one acted on. Bound to `places.total` this
+    // said "1 of 1 are changed and the rest are waiting on you", which
+    // contradicts itself — if 1 of 1 is changed there is no rest.
+    const t = unwrittenRunUnderDocument(5);
+    emitAct({ taskId: t, observedAt: hoursAgo(3), tool: 'contain_site', targets: [BRAVO] });
+    expect(ledgerCount(OUTCOME_RECORDED_TOPIC)).toBe(1); // shape #15
+
+    const snapshot = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) }));
+    // The two facts are DIFFERENT, and both are on the row.
+    expect(snapshot.sessions[0].places.total).toBe(1);   // acted on
+    expect(snapshot.sessions[0].targetSet).toBe(5);      // armed
+    expect(snapshot.situations[0].headline).toBe('1 of 5 are changed and the rest are waiting on you');
+  });
+
 
   test('a part-changed run at a gate is the tier-1 class, counting done against the target set', () => {
     partChangedRun();
@@ -1763,6 +1878,11 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
         status: 'delivered',
       },
       consulted: true,
+      // A RECORDED empty selection, so guard 1's inputs genuinely ARE satisfied
+      // and the column restriction is the only thing declining this row. With
+      // no scope at all the target set would be null, guard 1 would decline on
+      // its own, and this test would pass without exercising its subject.
+      targets: 0,
     });
     expect(ledgerCount(MANIFEST_TOPIC)).toBe(1); // shape #15
 
@@ -1813,6 +1933,13 @@ describe('the golden fixture — the designer\'s "one morning, both ways" (§2)'
       observedAt: hoursAgo(14),
       procedure: { capability: RB_BULK.capability, runbook: RB_BULK.id, hash: RB_BULK.hash, status: 'delivered' },
       consulted: true,
+      // WP-48 · THE MORNING'S OWN SELECTION, now on the record. The designer's
+      // §2 morning is a bulk update across TWO Charlie sites — the target set
+      // was always part of the drawing, and the contract had nowhere to put it
+      // until `{total}` was bound to the arming scope. Adding it makes the
+      // fixture shaped like what the producers write, which is this file's
+      // stated premise; it does not change a single tier, count or place.
+      targets: 2,
     });
     emitRationale({ taskId: charlieTask, observedAt: hoursAgo(14), decision: 'approved', checkpoint: 'cp.approval' });
     emitAct({ taskId: charlieTask, observedAt: hoursAgo(14), tool: 'wpe_backup_and_verify', targets: [CHARLIE_1] });
@@ -1852,6 +1979,7 @@ describe('the golden fixture — the designer\'s "one morning, both ways" (§2)'
         status: 'delivered',
       },
       consulted: true,
+      targets: 1, // the canary, on one site
     });
     emitAct({ taskId: bravoTask, observedAt: hoursAgo(3), tool: 'contain_site', targets: [BRAVO] });
 
@@ -1863,6 +1991,7 @@ describe('the golden fixture — the designer\'s "one morning, both ways" (§2)'
       observedAt: hoursAgo(5),
       procedure: { capability: RB_PURGE.capability, runbook: RB_PURGE.id, hash: RB_PURGE.hash, status: 'delivered' },
       consulted: true,
+      targets: 12, // the cache purge across twelve sites
     });
     emitRationale({
       taskId: purgeTask,

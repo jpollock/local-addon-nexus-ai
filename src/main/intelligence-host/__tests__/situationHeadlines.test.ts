@@ -75,9 +75,16 @@ const FULL_BAG = {
  * still agree with a table of only its own positive cases.
  */
 const CASES: Array<{ name: string; input: SituationClassInput }> = [
-  // --- run.waiting.nothing-written, and its three near-misses --------------
-  { name: 'run, nothing written, no targets', input: { kind: 'run', done: 0, failed: 0, total: 0, gate: null, runId: 's1' } },
-  { name: 'run, nothing written, no targets, but gated', input: { kind: 'run', done: 0, failed: 0, total: 0, gate: gate(), runId: 's1' } },
+  // --- run.waiting.nothing-written, and its near-misses --------------------
+  { name: 'run, nothing written, empty selection, ungated', input: { kind: 'run', done: 0, failed: 0, total: 0, gate: null, runId: 's1' } },
+  // The WP-48 ruling's belt-and-suspenders clause: same counts, but GATED.
+  { name: 'run, nothing written, empty selection, GATED', input: { kind: 'run', done: 0, failed: 0, total: 0, gate: gate(), runId: 's1' } },
+  // NULL is the third state and it is neither of the other two: "nothing
+  // selected anything" is not "a selection chose nothing". 36 of 36 manifests
+  // on the developer's live ledger are in this state.
+  { name: 'run, nothing written, NO scope recorded, ungated', input: { kind: 'run', done: 0, failed: 0, total: null, gate: null, runId: 's1' } },
+  { name: 'run, nothing written, NO scope recorded, gated', input: { kind: 'run', done: 0, failed: 0, total: null, gate: gate(), runId: 's1' } },
+  { name: 'run, part done, NO scope recorded, gated', input: { kind: 'run', done: 1, failed: 0, total: null, gate: gate(), runId: 's1' } },
   { name: 'run, one done, no targets', input: { kind: 'run', done: 1, failed: 0, total: 0, gate: null, runId: 's1' } },
   { name: 'run, one failed, no targets', input: { kind: 'run', done: 0, failed: 1, total: 0, gate: null, runId: 's1' } },
 
@@ -116,6 +123,19 @@ function evaluateGuard(guard: string, input: SituationClassInput): boolean {
 }
 
 describe('the guards — two copies of one rule, pinned together', () => {
+  test('null total is a THIRD state — neither guard reads it as a count', () => {
+    // JavaScript agrees with the intent by coercion (`null === 0` and
+    // `null > 0` are both false), which is why the ratified guard strings need
+    // no amendment for it — but "the language happens to do the right thing" is
+    // exactly the kind of claim that should be pinned rather than trusted.
+    const noScope: SituationClassInput =
+      { kind: 'run', done: 0, failed: 0, total: null, gate: null, runId: 's1' };
+    expect(SITUATION_TEMPLATES.filter((t) => guardHolds(t, noScope))).toEqual([]);
+    expect(selectSituationTemplate(noScope, FULL_BAG)).toBeNull();
+    // …and the fixture's own strings say the same thing.
+    for (const t of SITUATION_TEMPLATES) expect(evaluateGuard(t.guard, noScope)).toBe(false);
+  });
+
   test('the ratified guard STRING and the TypeScript selector agree on every case', () => {
     const disagreements: string[] = [];
     for (const template of SITUATION_TEMPLATES) {
@@ -156,7 +176,7 @@ describe('the guards — two copies of one rule, pinned together', () => {
     // have done.
     const overlaps: string[] = [];
     for (const kind of ['run', 'incident', 'agentFailure'] as const) {
-      for (const done of [0, 1, 2]) for (const failed of [0, 1, 2]) for (const total of [0, 1, 2]) {
+      for (const done of [0, 1, 2]) for (const failed of [0, 1, 2]) for (const total of [0, 1, 2, null]) {
         for (const g of [null, gate()]) for (const runId of [null, 's1']) {
           const input: SituationClassInput = { kind, done, failed, total, gate: g, runId };
           const holding = SITUATION_TEMPLATES.filter((t) => guardHolds(t, input));

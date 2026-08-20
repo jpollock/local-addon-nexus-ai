@@ -78,7 +78,7 @@ export interface SituationTemplate {
 export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
   {
     id: 'run.waiting.nothing-written',
-    guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0',
+    guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0 && gate === null',
     headline: '{runNoun} has waited {age} and changed nothing',
     ask: 'It never received a target list, so it cannot start. Give it one, or close it.',
     chip: 'Waiting',
