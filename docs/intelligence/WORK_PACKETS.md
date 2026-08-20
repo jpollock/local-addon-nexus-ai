@@ -19267,3 +19267,18 @@ engineer-weeks for v1 of all four) adopted as planning numbers.
 is adjudicated; the artifact gets committed with md5 when the owner
 supplies it. Next: WP-47 rescoped as the CONTRACT PROPOSAL packet
 (the written proposal + the four micros + the dual-track probe).
+
+---
+
+## LOCAL RECON — ORIGINAL FILE COMMITTED VERBATIM; HOLD CLOSED (2026-08-20, architect)
+
+The Local-side architect's full response committed as
+`docs/intelligence/from-local-architect/local-recon-01.txt` —
+**68,175 bytes, md5 `01994286fb084525a0336acdc22b1a0b`**, verified on
+device against the upload, receipts pasted from the print above this
+append. The held verbatim commit from the recon adjudication is
+CLOSED. A new counterpart directory opens with it:
+`from-local-architect/` — the Local codebase's voice in this record,
+held to the same standard as the designer's (committed verbatim,
+adjudicated in the open, cited by receipt). Host contract v2 and its
+adjudication stand as recorded in SHELL_INVERSION_PLAN.md Amendment 2.

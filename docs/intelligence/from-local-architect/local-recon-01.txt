@@ -1,0 +1,624 @@
+I read the source at 844352123 (Local 10.1.1, local-components 17.8.2). Everything below is cited; where I'm inferring rather than reading, I say so.
+
+  ---
+
+  1 · The addon renderer content-hook API, as it actually is
+
+  The registry
+
+  Two classes. HooksMain (app/main/_helpers/HooksMain.ts:1-65) owns actions and filters; HooksRenderer extends it and adds content (app/renderer/_helpers/HooksRenderer.tsx:4-134).
+
+  Verbatim registration signature (app/renderer/_helpers/HooksRenderer.tsx:105-117):
+
+  static addContent(hook, callback, priority = 10) {
+        hook = HooksRenderer.maybeUpgradeDeprecatedHook('content', hook);
+
+        if (!(hook in HooksRenderer.registeredHooks.content)) {
+                HooksRenderer.registeredHooks.content[hook] = [];
+        }
+
+        HooksRenderer.registeredHooks.content[hook].push({ callback, priority });
+  }
+
+  Declared type surface (app/api/renderer.d.ts:19-31):
+
+  export class HooksRenderer extends HooksMain {
+        static deprecatedHooks: { content: { match: string | RegExp; replacement: string; version: string }[] };
+        static addContent(hook: any, callback: any, priority?: number): void;
+        static doContent(hook: any, ...args: any[]): any[];
+  }
+
+  That's supported API — it's in the published .d.ts, and hooks: HooksRenderer is handed to every addon via the renderer context (app/renderer/_helpers/RendererAddonLoader.ts:66, typed at
+  app/api/renderer.d.ts:310). Note the types are any — there is no compile-time hook-name enum, no typed payloads.
+
+  Complete set of content hook IDs
+
+  These are every live doContent call site in the renderer. There are 22:
+
+  ┌─────────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────┬───────────────────────────┐
+  │                         Hook ID                         │                          Site                           │           Args            │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ stylesheets                                             │ app/renderer/app/App.tsx:529                            │ —                         │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ routesRoot                                              │ app/renderer/app/App.tsx:543                            │ { routeChildrenProps }    │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ routes[main]                                            │ app/renderer/app/MainPage.tsx:196                       │ { routeChildrenProps }    │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ routes[site-info]                                       │ app/renderer/sites/SiteInfo/index.tsx:486               │ { routeChildrenProps }    │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfo_TabNav_Items                                   │ app/renderer/sites/SiteInfo/index.tsx:460               │ site                      │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfo_Top_TopRight                                   │ app/renderer/sites/SiteInfo/SiteInfoHeader.tsx:152, 167 │ (two call sites, same ID) │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoOverview:Before                                 │ SiteInfoOverview.tsx:222                                │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoOverview_TableList:Before                       │ SiteInfoOverview.tsx:235                                │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoOverview_TableList                              │ SiteInfoOverview.tsx:282                                │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoOverview                                        │ SiteInfoOverview.tsx:300                                │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoDatabase                                        │ SiteInfoDatabase.tsx:235                                │ site                      │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoDatabase_TableList                              │ SiteInfoDatabase.tsx:228                                │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoDatabase_TableList_TableListRow[Connect]:Before │ SiteInfoDatabase.tsx:130                                │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoSSL                                             │ SiteInfoSSL.tsx:149                                     │ site                      │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoSSL_TableList                                   │ SiteInfoSSL.tsx:147                                     │ site                      │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SiteInfoTools_TableList                                 │ SiteInfoTools.tsx:126                                   │ site                      │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SitesSidebar_SiteList                                   │ sites/Sidebar/sites-organization/SiteList.tsx:68        │ —                         │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ SitesSidebar_SiteList:Before                            │ SiteList.tsx:57                                         │ —                         │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ NewSiteEnvironment_EnvironmentDetails                   │ sites/NewSiteEnvironment.tsx:478                        │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ NewSiteSite_AfterContent                                │ sites/NewSiteSite.jsx:319                               │                           │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ Blueprints_BlueprintsList:after                         │ blueprints/Blueprints.tsx:32                            │ —                         │
+  ├─────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┼───────────────────────────┤
+  │ Blueprints_FromBlueprints:after                         │ sites/CreateSite/FromBlueprint/FromBlueprint.tsx:104    │                           │
+  └─────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────┴───────────────────────────┘
+
+  Correction worth having: the deprecatedHooks map (HooksRenderer.tsx:20-93) advertises replacements for hooks that no longer have call sites — SiteInfoEnvironmentWebServer[*], SiteInfoEnvironmentMySQL[*],
+  SiteInfoEnvironmentPHP[*], SettingsNewSiteDefaults[*], SaveBlueprintPage[*], NewSiteEnvironment[*]_AddSiteContent_Inner. If you read that map as a hook catalogue, you'll target six dead IDs. It is an alias
+  table, not a registry.
+
+  Registration semantics
+
+  - Priority: integer, default 10, ascending. Sorted at render time: .sort((a,b) => a.priority - b.priority) (HooksRenderer.tsx:126-128). Array.prototype.sort is stable in V8, so equal priorities preserve
+    registration order — which is addon load order, i.e. filesystem enumeration order in AddonLoaderService. Don't rely on it.
+  - Multiple contributors: fully supported; all callbacks run, outputs collected into an array, falsy results dropped (.filter(a => a), line 132).
+  - Timing is one-shot and non-reactive. new RendererAddonLoader() runs at app/renderer/_browserWindows/app/bootstrap-app.tsx:14, before render() at line 16. The registry is a plain object on
+    global.registeredHooks (HooksRenderer.tsx:8-18) — no observable, no subscription. If you addContent asynchronously after first paint, nothing re-renders; your content appears only when that subtree happens
+    to re-render for an unrelated reason. This is the single most under-documented semantic in the system, and if your deeper integration involves lazily-registered surfaces, it will bite you.
+  - Scope: only the main BrowserWindow loads addons. RendererAddonLoader is instantiated in exactly one place (grep: app/renderer/_browserWindows/app/bootstrap-app.tsx:9,14). Preferences renders inside the
+    same window; the About/Updater/TOS windows do not load addons.
+  - Errors: doContent does not try/catch (contrast doActions, HooksMain.ts:31-36). A throwing content callback propagates to the nearest ErrorBoundaryDialog, which fires goToRoute → /main and shows a native
+    error dialog (app/renderer/_components/ErrorBoundaryDialog.tsx:15-31). One bad addon render bounces the user to the site list.
+  - Registry introspection is a trap. HooksRenderer overrides registeredHooks as a static getter returning global.registeredHooks, but the inherited addAction/addFilter/applyFilters hard-reference
+    HooksMain.registeredHooks by name, not this (HooksMain.ts:11-17, 44-50, 54-58). So in the renderer, content lives on global.registeredHooks.content while filters/actions live on
+    HooksMain.registeredHooks.filters/.actions, and global.registeredHooks.filters is permanently empty. Behaviour is correct; the registry shape is not what it looks like.
+
+  Can anything replace or suppress what Local ships?
+
+  Content hooks: strictly additive. No. doContent appends to JSX; there is no mechanism to remove, wrap, reorder, or veto a Local-rendered element.
+
+  Filters: yes, for specific lists — and this is the part you may not know. applyFilters (HooksMain.ts:53-64) chains callbacks over a mutable value. Where Local seeds that value with its own items, an addon
+  can delete them:
+
+  - siteInfoToolsItem — seeded with Local's Mailpit and Live Links entries (SiteInfoTools.tsx:61-106). An addon returning a filtered array removes them from the Tools tab.
+  - CreateSite:Steps (_stores/createSite/CreateSiteStore.ts:145-149) and CreateSite:RadioOptions (:123-127) — seeded with Local's own create-site flows. Removable.
+  - appMenu (app/main/_helpers/AppMenu.ts:51) — the entire application menu, main process.
+  - siteInfoMoreMenu, SiteInfoOverview_Addon_Section (SiteInfoOverview.tsx:211-217), allowedSiteOverlayStatuses, siteUrl/siteAdminUrl/openSiteUrl/openSiteAdminUrl.
+  - preferencesMenuItems (app/renderer/preferences/index.tsx:42-44) — seeded [], so additive in practice.
+
+  Full filter set (renderer + main): AddSiteIndexJS:{NewSiteEnvironment,RenderBreadcrumbs,RenderCloseButton,RoutesArray}, allowedSiteOverlayStatuses, appMenu, Blueprints_FromBlueprintsContinue,
+  CreateSite:RadioOptions, CreateSite:Steps, defaultSiteServices, exportSiteFileFilter, importSiteManifest, liveLinksServiceStart{Hostname,Port}, migrations, modifyAddSiteObjectBeforeCreation,
+  openSite{Url,AdminUrl}, preferencesMenuItems, routerService{ProxyPass,LocationBlocks}, site{Url,AdminUrl}, siteInfoMoreMenu, SiteInfoOverview_Addon_Section, SiteInfoOverview:localHostURLContent,
+  siteInfoToolsItem, updateCloneSiteMetadata.
+
+  Actions: changeSiteDomain, CreateSite:Mounted, FromBlueprintSiteDetails:OnContinue, importSiteChangeDomain, siteAdded, siteDeleted, siteStarted, siteStopped,
+  wordPressInstaller:{standardInstall,import,import:includesWP}.
+
+  So the honest answer to your key question: the content system is additive-only by construction, but Local already ships a suppression-capable mechanism (list filters) in four or five places. The precedent
+  for "an addon changes what Local shows" exists. It just doesn't reach chrome.
+
+  ⚠️ One caveat on that precedent: CreateSiteStore.ts:121 and :141 both carry TODO: remove the hook once addons have been updated to use store actions. The team's stated direction is away from filter hooks
+  toward MobX store actions (updateCreateSiteDefinitions, app/api/renderer.d.ts:140-142). Build a proposal on filter-hook precedent and you may be building on something being retired.
+
+  ---
+
+  2 · The vertical nav
+
+  You didn't miss a hook. There is none.
+
+  Rendered by MainVerticalNav (app/renderer/app/_components/MainVerticalNav.tsx:34-192), mounted at app/renderer/app/MainPage.tsx:157-164. The item list is hardcoded JSX children — nine render functions called
+  positionally (:179-187):
+
+  <VerticalNav {...props} className="TID_Main_Nav" title="Local Task Sidebar" id="Sidebar">
+        {renderLoginTabLink()}
+        {renderLocalSitesLink()}
+        {renderFlywheelSitesLink()}
+        {renderBlueprints()}
+        {renderAddons()}
+        {renderSupport()}
+        {renderFiller()}
+        {renderProductDrawer()}
+        {renderAddSite()}
+  </VerticalNav>
+
+  No array, no registry, no doContent, no applyFilters. VerticalNav itself is a dumb <nav> that renders props.children (packages/local-components/src/components/modules/VerticalNav/VerticalNav.tsx:14-27).
+  VerticalNavItem supports type: 'addsite' | 'button' | 'filler' | 'navlink' | 'switcher' (:37) and is exported from @getflywheel/local-components — so the item is available to you; the slot is not.
+
+  Natural seam. MainVerticalNav.tsx:179-187. The renderFiller() at line 185 is a flex spacer (VerticalNavItem_DragRegion, flex-grow: 1) that already partitions the rail into top and bottom groups. A
+  contribution API drops in almost mechanically: convert the nine calls to a { key, order, group: 'top' | 'bottom', render }[] array, pass it through applyFilters('mainVerticalNavItems', items) or a
+  doContent-style additive hook, and render. The component is already observer()-wrapped (:192), so a MobX-backed registry would even solve the non-reactivity problem from §1 for this surface specifically.
+
+  The thing that argues against a naive version: renderLocalSitesLink() computes active state by negative path matching against five hardcoded route prefixes (:65-71). Any addon-owned rail item that lives
+  under /main/ will make the "Local sites" icon light up simultaneously unless it's added to that exclusion list. A contribution API that doesn't also fix active-state resolution ships a visual bug on day one.
+  Flag this in your proposal — it's the kind of detail that signals you read the code.
+
+  ---
+
+  3 · Routing and the landing screen
+
+  Router: react-router-dom 5.3.4 (node_modules/react-router/package.json:3; declared ^5.0.1 in package.json:194). History: history@^4 hash history, created once as a module singleton
+  (app/renderer/_helpers/localHistory.ts:1-4):
+
+  const localHistory =
+        process.env.NODE_ENV === 'test' ? createMemoryHistory() : createHashHistory();
+
+  Mounted via <Router history={localHistory}> in app/renderer/_browserWindows/_common/Bootstrap.tsx:28. Hash history, because the app loads from file:// (app.html).
+
+  Initial route: there is no "initial route" decision. The window loads app.html with no fragment; hash history resolves to /; App.tsx:532 redirects:
+
+  <Route exact path="/" render={() => <Redirect to="/main" />} />
+
+  and MainPage.tsx:89-94 maps /main exact → SelectSite. The landing screen is a hardcoded redirect plus a hardcoded route table. There is no default-route setting, no user preference, no hook.
+
+  Can an addon influence it? Only imperatively, and only after first paint. Addons get events.send = sendIPCEvent (RendererAddonLoader.ts:62-64), and the main process handles goToRoute (App.tsx:107, :289-293).
+  So sendIPCEvent('goToRoute', '/main/your-route') from an addon's renderer or main entry navigates. Documented at app/docs/UI-Router.md:143-148. That's a redirect-after-render, not a landing-screen contract:
+  the user sees SelectSite flash first. context.ReactRouter gives you { Router, Route, Link, NavLink } (RendererAddonLoader.ts:56-61) but not history and not Redirect — a real gap.
+
+  What screen-replacement collides with
+
+  The controlling fact is <Switch>'s first-match-wins semantics (node_modules/react-router/cjs/react-router.js:882-894):
+
+  React.Children.forEach(_this.props.children, function (child) {
+    if (match == null && React.isValidElement(child)) {
+      element = child;
+      var path = child.props.path || child.props.from;
+      match = path ? matchPath(location.pathname, _extends({}, child.props, { path: path })) : context.match;
+    }
+  });
+  return match ? React.cloneElement(element, { location, computedMatch: match }) : null;
+
+  A child with no path prop matches unconditionally. Now compare the two mount points:
+
+  routes[main] — cannot preempt anything. MainPage.tsx:185-200: all thirteen of Local's RoutePlus elements come first (each carries path, so they match normally), and the addon block is last, wrapped in a
+  pathless <ErrorBoundaryDialog>:
+
+  <ErrorBoundaryDialog>
+        {HooksRenderer.doContent.call(this, 'routes[main]', { routeChildrenProps })}
+  </ErrorBoundaryDialog>
+
+  Pathless ⇒ unconditional match ⇒ it is the catch-all, reached only when no Local route matched. /main, /main/site-info/:siteID, /main/marketplace, etc. are structurally unreachable for an addon. Your addon
+  routes then all render simultaneously inside that boundary (they're not in a nested Switch), each self-matching.
+
+  routes[site-info] — already has the shape you want. SiteInfo/index.tsx:464-495:
+
+  <Switch>
+        <RoutePlus path={`${match.path}/database`} ... />
+        <RoutePlus path={`${match.path}/backups`} ... />
+        <RoutePlus path={`${match.path}/tools`} ... />
+        {HooksRenderer.doContent.call(this, 'routes[site-info]', { routeChildrenProps })}
+        <RoutePlus path={`${match.path}/`} component={SiteInfoOverview} ... />
+  </Switch>
+
+  Addon routes are spliced before the non-exact Overview fallback. React.Children.forEach flattens the returned array, so each addon <Route> participates individually in Switch ordering. This is precedent for
+  exactly the pattern you're proposing — addon routes take priority, Local's own screen is the fail-open fallback. Cite it. It's your strongest argument and it's already shipping.
+
+  What replacement would collide with, concretely:
+
+  1. Switch ordering is the whole mechanism. Screen ownership means splicing the addon block above specific Local routes, per route. There's no route registry to reorder — you'd be reordering JSX.
+  2. RoutePlus couples routing to error handling. app/renderer/_components/RoutePlus.tsx:24-33 wraps every route in ErrorBoundaryDialog. Fail-closed fallback ("addon screen threw → show Local's") is not what
+     that boundary does: it renders null and navigates to /main (ErrorBoundaryDialog.tsx:15-31). Real fallback needs a new boundary that re-renders the Local component instead of bailing to the site list.
+     That's the genuinely new code in a route-ownership proposal.
+  3. componentProps injection is positional. RoutePlus merges rest.componentProps into the route render props (:29-31); each Local route passes a different, hand-assembled bag (MainPage.tsx:93, 98, 120-121).
+     An addon replacing SelectSite must be handed { sites }, one replacing SiteInfo needs { sites, siteStatuses }. There is no uniform screen contract to hand an addon.
+  4. The sidebar is conditioned on path string-matching, not on the route. MainPage.tsx:171-174 decides whether to render SitesSidebar via currentPath.includes('site-info'). Ownership transfer would silently
+     change chrome.
+  5. Two components own state for the "same" screen. SelectSite's selection state lives in App's component state and is pushed to main via IPC (App.tsx:162-169). A replacement screen must drive
+     selectSite/selectSites/unselectSite correctly or the vertical-nav deep-link (MainVerticalNav.tsx:62-64) and main-process state desync.
+
+  ---
+
+  4 · Theme and design tokens
+
+  Resolution. Main process only. ThemeCop (app/shared/helpers/ThemeCop.ts:48-198) is a main-process singleton on global.ThemeCop; the renderer gets it via @electron/remote (:85-95). Two themes (:56-69):
+
+  themes: ThemeCopThemes = {
+        'theme--light': { default: 'light', label: 'Light', browserBackgroundColor: '#ffffff', bodyClass: 'Theme__Light' },
+        'theme--dark':  { default: 'dark',  label: 'Dark',  browserBackgroundColor: '#262727', bodyClass: 'Theme__Dark'  },
+  };
+
+  Source of truth is userData['settings-theme-appearance'].themeName, which may be 'auto'; auto resolves via nativeTheme.shouldUseDarkColors and only on darwin (:142-158, and the OS listener at :104-114
+  early-returns for non-darwin). So on Windows/Linux, "auto" always resolves light. Changes broadcast over IPC osThemeChange (:196).
+
+  Application to the DOM (app/renderer/_browserWindows/_common/themecop-init.tsx:19-39):
+
+  document.documentElement.classList.add(currentTheme.bodyClass);
+
+  So your <html> class read is correct and is the intended mechanism. But there are two better handles you're probably not using:
+
+  - global.localPreferences.currentThemeName (themecop-init.tsx:13-17) — 'theme--light' | 'theme--dark', kept in sync.
+  - IPC 'osThemeChange' with (currentThemeName, lastThemeName) — subscribe instead of MutationObserver-ing <html>.
+  - Or, directly: remote.require('../shared/helpers/ThemeCop').default.getInstance().currentThemeName.
+
+  None of these are in @getflywheel/local/renderer — all are internal but stable in practice. ThemeCop.ts has had no behavioural change since 2023 (git log: last non-formatting commit 82c4de86d); the
+  Theme__Light/Theme__Dark strings carry the comment "The theme keys need to remain the same for Local 2.4.x backwards compatibility" (:55). That comment is your best available durability guarantee anywhere in
+  this codebase.
+
+  Design tokens: they exist, but not as values you can consume.
+
+  - SCSS variables, compile-time only: packages/local-components/src/styles/_partials/_variables.scss (102 lines — $gray-darker: #131313, $green: #51bb7b, $blue: #50c6db, the full ramp, plus
+    $museo-sans-rounded / $system-font).
+  - Theme mixins: _theme.scss (457 lines) — @include if-theme-light() / if-theme-dark(), used pervasively (e.g. Window.scss:25-31, ProductDrawer.scss:40-43).
+  - CSS custom properties: essentially absent. Repo-wide, --*: declarations appear in exactly four component SCSS files (Toast.scss ×1, Divider.scss ×2, Combobox.scss ×6, Tooltip.scss ×2), all component-local.
+    There is no global custom-property token layer.
+  - No theme React context. I grepped every createContext in app/renderer and packages/local-components/src: zero theme/token contexts.
+
+  Reachable by addons today? Only by @import-ing the partials at a filesystem path, which is what Local's own app code does — note it reaches through node_modules:
+  app/renderer/productdrawer/ProductDrawer.scss:1-2 uses @import '../../../node_modules/@getflywheel/local-components/src/styles/_partials/theme'; and app/renderer/sites/Sidebar/SitesSidebar.scss:1 uses
+  @import '~@getflywheel/local-components/src/styles/_partials/index';. That works for an addon with a SASS build. It is not an API, it's a path.
+
+  What local-components actually exports for addons: packages/local-components/src/index.ts (166 lines) — components only. Button/PrimaryButton/TextButton/IconButton, Banner, toast/ToastContainer, TabNav,
+  VerticalNav/VerticalNavItem, TableList, Combobox, Checkbox, FlyModal, ProgressBar, Divider, List, FlyTooltip, DragBar, WindowsToolbar, Icons, plus IReactComponentProps. Zero token exports — no color object,
+  no spacing scale, no theme value. Importing the package also side-effect-injects dist/scoped.css into <head> (src/index.ts:1-4 → src/add-styles.ts:26-46).
+
+  One thing to be aware of: if your addon bundles its own copy of local-components, you inject a second scoped.css and get class names with a different _v suffix than Local's (see §7). I read the
+  version-suffixed localIdentName as deliberately designed for exactly that coexistence.
+
+  ---
+
+  5 · Layout and width
+
+  Nothing "owns" the layout. It's one flex row and three hardcoded widths.
+
+  .Window is a plain global (non-CSS-module) class literal, applied in app/renderer/_components/Window.tsx:93-110:
+
+  <div
+        data-location={props['data-location']}
+        className={classnames('Window', {
+                __FlexColumn: FlexColumn, __BackdropBlur: BackdropBlur,
+                __FadeIn: FadeIn, __FadeOut: FadeOut,
+                __OsWindows: isWindows, __OsDarwin: isDarwin, __OsLinux: isLinux,
+        }, className)}
+        {...restProps}
+  >
+
+  Styled in :global scope (packages/local-components/src/styles/components/Window.scss:3-14):
+
+  :global {
+        .Window {
+                display: flex;
+                position: absolute;
+                top: 0; right: 0; bottom: 0; left: 0;
+                &.__OsWindows { top: 32px; ... }
+        }
+  }
+
+  Children, in DOM order (MainPage.tsx:154-202): MainDragDrop, MainVerticalNav, ProductDrawer, conditional SitesSidebar, then the route Switch. Widths:
+
+  - Rail: width: 68px; flex-shrink: 0; z-index: 9 — VerticalNav.scss:3-12.
+  - Site list: width: 25%; min-width: 230px; max-width: 480px; flex-shrink: 0 — SitesSidebar.scss:9-17; collapsed state is a class toggle to 34px (:106-109), driven by a GraphQL-backed sidebarCollapsed value
+    (SitesSidebar.tsx:23, 40).
+  - Content: whatever flex leaves.
+
+  Layout regions / panels / reservations: none. I looked for a layout manager, a region registry, a width context, a resize-observer coordinator — none exists. The nearest thing to a panel is ProductDrawer,
+  and it is explicitly not a reservation: position: fixed; left: 68px; right: 0; top: 0; bottom: 0 with a scrim, z-index: 8, and content sliding in at width: 480px
+  (app/renderer/productdrawer/ProductDrawer.scss:4-21, 30-60). It overlays; it never shrinks the content area. Note left: 68px — the rail width is duplicated as a magic number there, and top: 32px (the Windows
+  titlebar height) is duplicated again at :17-19.
+
+  Your right-on-.Window approach is actually well-matched to this architecture — .Window is absolutely positioned with inset: 0, so overriding right shrinks the flex container and every child reflows
+  correctly, including the percentage-width sidebar. That's more robust than it sounds. What it can't do is survive Local adding a second .Window (Preferences renders its own —
+  app/renderer/preferences/index.tsx:48) or a competing addon doing the same thing.
+
+  Where a reservation API would live: Window.tsx is the only correct home. It is the sole owner of the outer box, it already accepts arbitrary props, and it's rendered by both MainPage and Settings. A
+  useLayoutReservation() / reserveEdge({ edge, requestedPx }) returning { grantedPx }, with Window applying granted insets as inline style and publishing granted values through context, fits without touching a
+  single screen component.
+
+  What would object:
+
+  1. ProductDrawer's hardcoded left: 68px and any other geometry constant duplicated in CSS — a reservation system needs those to become derived values, or the drawer will misalign the moment the rail is
+     reserved against.
+  2. position: fixed descendants. .DrawerOverlay is fixed to the viewport, not to .Window. Anything fixed escapes a .Window inset. There will be more of these.
+  3. Windows titlebar offset. .Window.__OsWindows { top: 32px } plus .DrawerOverlay { top: 32px } — per-platform insets already exist informally and would need folding into the same model.
+  4. z-index is a flat hand-managed ladder (8 drawer, 9 rail, 10 __BackdropBlur), with a code comment in ProductDrawer.scss:17 documenting the ordering by hand. A granted panel needs a defined layer, and
+     there's no scale to assign it from.
+  5. Percentage-width sidebar. SitesSidebar at 25% with a 480px cap means reserving 400px on a small window pushes the content area toward zero. The shell must clamp; that's the "shell decides and reports what
+     it granted" part of your design and it's the right call — say so explicitly, because it's the part that makes the API defensible rather than a shared mutable.
+
+  ---
+
+  6 · Capability detection and versioning
+
+  There is no capability API. There is no feature-detection surface for the addon contract. You will be sniffing. Here's what you can sniff that isn't DOM:
+
+  Version (best available, and quite good). @getflywheel/local's npm version is held in exact lockstep with the app version by the release pipeline (azure-pipelines-build.yml:140-149 and :269-298):
+
+  yarn version $NEW_VERSION --immediate
+  cd app/api
+  yarn version $NEW_VERSION --immediate
+
+  Both are 10.1.1 today (package.json:14, app/api/package.json:3). At runtime:
+  - Renderer: context.environment.version (RendererAddonLoader.ts:32, typed app/api/renderer.d.ts:279-284).
+  - Main: context.environment.version (AddonLoaderService.ts:159) or process.localVersion.
+
+  Load-time gate. package.json → engines['local-by-flywheel'], semver-checked at addon load; failing the range makes the addon invisible, not degraded (AddonLoaderService.ts:282-292,
+  app/shared/helpers/localSemVerCheck.js). Fine for a hard floor; useless for dual-track.
+
+  Feature flags — exist, but they're not what you want. FeatureFlagService (app/main/app/FeatureFlagService.ts) exposes two IPC-async listeners (:55-60):
+
+  this._addIpcAsyncListener('isFeatureEnabled', (featureName: string) => this.isFeatureEnabled(featureName));
+  this._addIpcAsyncListener('getFeaturesArray', () => this.getFeaturesArray());
+
+  reachable from an addon via the exported ipcAsync (app/api/renderer.d.ts:355-358), plus GraphQL isFeatureEnabled / getFeaturesArray. Values merge static defaults with a user-editable features.json in
+  userData (:85-94). But the flag set is four entries, all defaulting true, all about Local's own shipped behaviour (app/shared/constants/features.ts:4-9), and at least one is vestigial —
+  localAccountsWelcomeScreen guards a welcome screen whose migration is commented out with "Removed as we no longer show a welcome screen" (app/main/app/migrations.ts:24-27). This is a dev/QA toggle mechanism,
+  not a host-capability contract.
+
+  My recommendation for your dual-track: don't propose "add a capability API" as a separate item. Propose that every new chrome API ship with a boolean probe on a single frozen namespace — the cheapest correct
+  version is a plain object on the renderer addon context:
+
+  context.capabilities // { chromeSlots: 1, layoutReservation: 1, routeOwnership: 1, themeTokens: 1 }
+
+  Integer-versioned per capability, absent = unsupported. It costs nothing to add to AddonRendererContext (app/api/renderer.d.ts:277-311), it's typed, and it degrades correctly for old hosts because undefined
+  is falsy. Asking for one capability API plus four features is five asks; folding detection into the shape of each feature is one.
+
+  Process and cadence for API changes.
+
+  - Owner: @getflywheel/local-engineers owns everything (.github/CODEOWNERS — a single wildcard rule; there is no separate API owner).
+  - Mechanism: hand-written .d.ts in app/api/ (index.d.ts 671 lines, main.d.ts 2107, renderer.d.ts 404, plus generated graphql.d.ts). Adding a member = editing a .d.ts and adding the implementation. There is
+    no codegen, no API-diff gate, no contract test. I found no CI check that types match implementations.
+  - Publication: tasks/publish-api-to-github.sh copies the files listed in app/api/package.json:"files" into the public local-addon-api repo and pushes; docs are typedoc'd (package-scripts.js:149) to
+    getflywheel.github.io/local-addon-api.
+  - Cadence: whenever Local ships, because the version bump is in the release pipeline. Effectively: the API is a byproduct of the app release, not an independently governed artifact.
+  - Deprecation policy: none written down. What exists as practice: @deprecated JSDoc tags on ~13 SiteJSON properties (app/api/index.d.ts:148-233), and the deprecatedHooks alias table with version fields
+    recording when each rename happened (HooksRenderer.tsx:20-93) — 2.3.3 and 5.10.5. Those aliases are still honoured today, on Local 10.1.1, seven major versions later.
+
+  That's the finding worth designing against: the de facto policy is "renames get a permanent silent alias; nothing is ever removed." Very friendly, and — since it's undocumented and unenforced — very fragile.
+  If you want a deprecation guarantee, you have to ask for one in writing; it does not exist for you to rely on.
+
+  ---
+
+  7 · Stability, honestly
+
+  My read of what the team would and wouldn't hesitate to change. Where I'm inferring intent from code and history rather than reading a policy, I say so — there is no written stability policy in this repo.
+
+  Effectively public (renaming would be a deliberate, discussed act):
+  - The content-hook IDs. The deprecatedHooks alias table is a seven-year-old promise, still honoured.
+  - Theme__Light / Theme__Dark, per the explicit backwards-compat comment at ThemeCop.ts:55.
+  - Everything in app/api/*.d.ts — published to npm.
+  - TID_* classes (TID_Main_Nav at MainVerticalNav.tsx:175, TID_VerticalNav_NavLink_Add at VerticalNav.tsx:127). Test IDs, deliberately literal, referenced by the Playwright suites in this repo.
+  - .Window — I'd call this effectively public too, though nobody has said so. It's a hand-written global string in :global scope, unchanged in structure since the initial commit (Window.scss history:
+    79cd179ef Hello World!).
+
+  Fair game: every CSS-module class, all component internals, all DOM nesting, all z-index values, MobX store internals.
+
+  Per your four dependencies:
+
+  ┌─────────────────────────────┬───────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────┐
+  │         Dependency          │                        Verdict                        │                          Last changed                           │               Two-release survival               │
+  ├─────────────────────────────┼───────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────┤
+  │                             │                                                       │ Structure unchanged since repo genesis; Window.scss last        │ Very likely. The position: absolute; inset: 0    │
+  │ .Window                     │ Global literal, :global scope, Window.tsx:97          │ touched 2023-11-06 (2fd9a7744), Window.tsx last non-formatting  │ contract your docking relies on is the oldest    │
+  │                             │                                                       │ change 2024-02-01 (a4ac0a975)                                   │ layout code in the app.                          │
+  ├─────────────────────────────┼───────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────┤
+  │ TabNav_Items_<hash>_v17-8-2 │ Safer than you think — see below                      │ TabNav.sass last content change 2023-11-06 (047c90c05);         │ Hash: very likely. Version suffix: likely, but   │
+  │                             │                                                       │ local-components 17.8.1→17.8.2 on 2026-07-14                    │ it's the volatile half.                          │
+  ├─────────────────────────────┼───────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────┤
+  │                             │ <nav id="Sidebar" class="VerticalNav_<hash>           │ Structure churned through 2023 (c6d7c762b div→nav + title,      │ id="Sidebar" and TID_Main_Nav: likely. Internal  │
+  │ Sidebar nav DOM             │ TID_Main_Nav"> → per-item FlyTooltip/div wrappers →   │ 9c3bfbb3d added button type, b9946546d z-index reorder), then   │ wrapper nesting: coin-flip. The 2023 churn was   │
+  │                             │ <a>/<button>                                          │ quiet since 2023-12-14 (91450484b)                              │ real and could recur.                            │
+  ├─────────────────────────────┼───────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Theme class on <html>       │ Theme__Light / Theme__Dark                            │ ThemeCop.ts behaviour unchanged since 2023 (82c4de86d)          │ Very likely — explicitly pinned by comment.      │
+  └─────────────────────────────┴───────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────┘
+
+  The TabNav hash — you're wrong about how it works, in your favour. Two independent components:
+
+  // packages/local-components/webpack/shared-rules.js:14
+  localIdentName: `[local]_[hash:base64:5]_v${packageJson.version.replace(/\./g, '-')}`,
+
+  The [hash:base64:5] is not a content hash. css-loader 6.11.0's defaultGetLocalIdent (node_modules/css-loader/dist/utils.js:289-299) sets:
+
+  let relativeResourcePath = normalizePath(path.relative(context, resourcePath));
+  options.content = hashStrategy === "minimal-subset" && /\[local\]/.test(localIdentName)
+    ? relativeResourcePath
+    : `${relativeResourcePath}\x00${localName}`;
+
+  Default hashStrategy is not minimal-subset, so the hash input is file path + \x00 + class name. It does not change when the SASS content changes. TabNav_Items's hash changes only if
+  src/components/menus/TabNav/TabNav.sass moves or the class is renamed — neither has happened since the 2021 directory reorganisation (509e7ad17).
+
+  The _v suffix is the fragile part, and it is fragile on a slow clock. Every bump in the last 2.5 years:
+
+  17.8.2  2026-07-14
+  17.8.1  2025-05-28
+  17.8.0  2024-03-29
+
+  Three bumps in 28 months. So a version-suffix-tolerant selector — [class*="TabNav_Items_"] — is stable against everything except a path move or class rename, and I'd give that better than 95% odds over two
+  releases. If you're currently pinning the full string including _v17-8-2, loosen it and this stops being a listed risk.
+
+  (Note the app's own webpack uses a different pattern with no version suffix — webpack.common.js:108, '[local]_[hash:base64:5]'. So app-level classes like MainVerticalNav_Blueprints_<hash> have no _v
+  component at all. I read the library-only suffix as deliberate collision-avoidance between Local's copy of local-components and an addon's.)
+
+  ---
+
+  8 · Prior art and precedent
+
+  Screen replacement: never. Not once. No first-party feature, experiment, or addon has taken over a shipped route. The architecture (§3) makes it impossible at routes[main] and nobody has done it at
+  routes[site-info] either.
+
+  Rail contribution: never. No hook has ever existed; git log over MainVerticalNav.tsx and VerticalNav/ shows only styling, a11y, and item-type work.
+
+  Layout negotiation: never. ProductDrawer is the only panel-like feature and it overlays rather than reserving (ProductDrawer.scss:4-21). Nothing in the codebase resizes the content area for a contributor.
+
+  What does have precedent, and what it establishes:
+
+  1. Addon-priority routing with a Local fallback — already shipping. SiteInfo/index.tsx:486 places routes[site-info] above the Overview catch-all. This is the strongest precedent you have for item 3 of your
+     proposal, and it's Local's own code, not an addon hack.
+  2. List filters that let addons remove Local's own items — siteInfoToolsItem seeds Mailpit and Live Links (SiteInfoTools.tsx:61-106); CreateSite:Steps/CreateSite:RadioOptions seed Local's flows. Precedent
+     that "addon changes what Local shows" is acceptable. With the caveat from §1: both CreateSite filters are marked for removal in favour of store actions (CreateSiteStore.ts:121, 141).
+  3. A structured contribution type in the published API — AddonSettingsItem (app/api/renderer.d.ts:381-396), a documented { path, displayName, sections, onApply, sectionsProps } shape for contributing to
+     Preferences via preferencesMenuItems. This is the closest thing to a "named slot with a typed contract" that exists. Model your chrome-slot proposal on this type. It proves the team will accept
+     structured, typed contribution surfaces, and matching its shape makes your proposal look like continuation rather than novelty.
+  4. First-party features shipped as addons — docs/adr/0005-instant-reload-as-addon.md, docs/adr/0006-OS-specific-addons.md. Establishes that "addon" is not second-class. Note also
+     app/shared/helpers/bundledAddons.ts:8 — const bundledAddons = [];, currently empty, but the loader has a whole privileged path for bundled addons (AddonLoaderService.ts:304-309,
+     RendererAddonLoader.ts:92-100) that skips the enabled-check. If your integration is meant to feel first-party, bundling is a lever that already exists and may be a shorter path than new hooks for some of
+     what you want.
+  5. A named third-party addon is already load-bearing in Local's source. SiteInfoTools.tsx:99-101: "The routeChildrenProps param is only consumed by Broken Link Checker. Future refactors of that addon should
+     remove the dependency so we can remove it here." Local carries API shape it wants to delete because one addon depends on it — and it's been carried, not broken. And SiteInfoOverview.tsx:218 has const
+     hasAtlasSection = addonSections.find(...), i.e. Local's own render branches on whether the Atlas addon contributed. Precedent for the host accommodating a specific named addon, in-tree.
+  6. Your own coupling is precedent. playwright/ contains 20 addons-nexus-ai-*.playwright.ts suites in Local's master branch, alongside addons-notes, addons-preflight, addons-table-plus, addons-xdebug-vscode.
+     Addon integration is already tested inside the host repo. That's leverage — you can offer to extend those suites as the regression net for anything new — and it's also exposure, since those suites encode
+     the DOM assumptions from §7.
+
+  ---
+
+  9 · The architect's own read
+
+  Effort in engineer-weeks, one engineer familiar with the renderer, including tests and a docs pass. My estimates, not the team's.
+
+  Near-trivial
+
+  Theme tokens as values — 1 to 1.5 weeks. Do this first regardless of everything else.
+  The values already exist in _variables.scss (102 lines) and _theme.scss (457). The work is generating a tokens export from the SCSS (or hand-authoring a TS module and generating the SCSS from it — better
+  direction), exporting it from local-components/src/index.ts, and adding theme: { name, tokens } to AddonRendererContext with the existing osThemeChange IPC as the change signal. No architectural risk, no
+  runtime coupling, immediately useful to every addon, and it removes a whole class of DOM sniffing.
+
+  I'd push one step further and argue for emitting the ramp as CSS custom properties on :root under Theme__Light/Theme__Dark. Today custom properties appear in four files repo-wide, so this is close to
+  greenfield; it's the mechanism that makes tokens consumable by addons that don't have a SASS build, which is most of them. That pushes it to ~2 weeks. Worth it. Note there's an existing consumer risk here —
+  my understanding is that external consumers already depend on the current token names, so a rename needs an alias period.
+
+  Named chrome-slot mount points — 1.5 to 2 weeks for the rail; ~1 more for a second slot.
+  Genuinely easy, because the hook machinery already exists and only the call site is missing. MainVerticalNav.tsx:179-187 becomes an array, run through a filter or a typed doContent, rendered. Real work is:
+  the active-state bug from §2 (renderLocalSitesLink's negative path matching must become an owner-aware check), deciding top/bottom grouping around renderFiller(), deciding the ordering model, and
+  error-isolating each item so one addon can't bounce the user to /main.
+
+  Design note: don't propose a generic slot registry. Propose one named slot (mainVerticalNav) with a typed item shape modelled on AddonSettingsItem, plus the capability integer. A generic mount-point system
+  invites the question "which slots, forever?" and stalls. One slot with an obvious extension path ships.
+
+  Genuinely hard
+
+  Layout reservation — 3 to 5 weeks, and the range is honest.
+  The API is small; the invariants are not. From §5: position: fixed descendants escape any .Window inset; the rail width and Windows titlebar offset are duplicated as magic numbers in at least three files;
+  the z-index ladder is hand-maintained with no scale; the percentage-width sidebar needs clamping policy. Add contention (two addons both reserving), persistence (does a grant survive restart?), and the
+  second .Window in Preferences.
+
+  Your "shell decides and reports what it granted" framing is the right one and I'd adopt it verbatim — it makes the API a negotiation rather than a shared mutable, which is what makes it reviewable. Scope it
+  down for v1: right edge only, main window only, one reservation at a time, no persistence, grant clamped to a fixed fraction of window width. That's ~2.5 weeks and it covers your docked panel. Everything
+  else is v2.
+
+  Wrong-shaped
+
+  Route/screen ownership with fail-closed fallback. Not wrong in ambition — wrong as a route-level concept in this architecture.
+
+  Why the shape is wrong:
+  - "Ownership" would mean an addon claiming /main — but a route is not a screen here. /main renders MainPage, which owns Window, MainDragDrop, MainVerticalNav, ProductDrawer, SitesSidebar and the inner Switch
+    (MainPage.tsx:154-202). Claim the route, inherit responsibility for all the chrome. Nobody wants that, including you.
+  - The screens have no uniform contract. Each gets a hand-assembled componentProps bag (MainPage.tsx:93, 98, 120-121), and SelectSite in particular drives selection state that flows back to the main process
+    (App.tsx:171-197, 162-169).
+  - "Fail-closed fallback to Local's own screen" contradicts what ErrorBoundaryDialog does today — it renders null and navigates away (ErrorBoundaryDialog.tsx:15-31). You'd be introducing a second,
+    semantically opposite boundary into a tree where the existing one is wrapped around every route by RoutePlus.
+  - A route-level takeover is all-or-nothing and unversionable. Local can never change what /main renders again without breaking whoever owns it.
+
+  The right shape: content ownership at the pane level, not route ownership.
+
+  Keep Local owning routes, chrome, and props assembly. Add a content-region override inside the screen — the thing you actually want is for the site list's body to be your fleet view, not for you to own
+  MainPage:
+
+  registerRegionProvider('main.siteList.body', {
+    id: 'nexus.fleet',
+    match: (ctx) => boolean,      // sync, cheap, no throw
+    render: (ctx) => ReactNode,   // ctx is Local's own typed props
+  });
+
+  Local renders the highest-priority provider whose match returns true; if render throws, an error boundary local to that region falls back to Local's built-in body and logs. That gives you true fail-closed (a
+  region fallback is well-defined; a route fallback isn't), keeps props assembly in Local's hands so the contract is typeable, keeps chrome/sidebar/nav consistent, is per-region versionable, and composes with
+  your rail slot and reservation. Cost: ~2 weeks for the mechanism plus ~0.5 per region exposed — cheaper and stronger than route ownership.
+
+  And bring the receipt from §3: routes[site-info] (SiteInfo/index.tsx:486) already gives addon routes priority over Local's fallback screen. You're not asking for a new principle. You're asking to generalise
+  one the team already shipped, at a safer granularity.
+
+  Total, my scoping: tokens 1.5 + rail slot 2 + reservation v1 2.5 + region providers 2 ≈ 8 engineer-weeks for a v1 of all four, versus roughly 12–15 if route ownership is taken literally.
+
+  What I'd want from an addon proposing this
+
+  Straight answer, in priority order:
+
+  1. Name the surfaces, not the abstractions. "Nexus needs a rail item, a right-docked panel with reserved width, the site-list body, and the theme ramp" is reviewable in an afternoon. "A chrome extensibility
+     framework" is a quarter of design review. Every generalisation you ask for is a maintenance obligation someone has to defend in a planning meeting.
+  2. A written removal path. What happens to Local's UI when Nexus is disabled, uninstalled, crashes on load, or is running against a host two versions newer? For each of the four asks. This is the question
+     that actually decides it, and it's the one addon proposals reliably skip.
+  3. Take on the regression net. You already have 20 Playwright suites in this repo. Offer to extend them to cover each new surface, including the disabled/uninstalled/throwing paths. An API with host-repo
+     tests attached is an API someone can refactor around; one without is a landmine, and the team knows it.
+  4. Show the dual-track working before the host changes. Prove the capability probe degrades cleanly against 10.1.1 — where every probe returns undefined and you fall back to your current MutationObserver
+     path. That converts "will this fork our addon ecosystem?" from an objection into a demonstrated non-issue.
+  5. Say what you'll stop doing. Name the MutationObserver injection, the .Window mutation, the hashed-class selector — and commit to deleting each one when its replacement lands, with a version. A proposal
+     that removes fragile coupling is a very different conversation from one that adds surface area. This is the single highest-leverage paragraph you can write.
+  6. Bring the token-rename problem with you. If tokens become public API, the existing external consumers need a deprecation path. Arriving with that already thought through signals you understand you're
+     asking the team to take on a contract, not just write code.
+  7. Ask for the deprecation policy explicitly (§6). It doesn't exist. Getting "hook IDs and chrome slots are semver-stable; renames get permanent aliases" written down — which merely codifies what's already
+     been practised since 2.3.3 — is nearly free to grant and is worth more to you over five years than any of the four APIs.
+
+  ---
+
+  Where your assumptions are wrong
+
+  1. "The hooks system is strictly additive." Content hooks are. But applyFilters chains a mutable value, and Local seeds several of those lists with its own items — siteInfoToolsItem ships Mailpit and Live
+  actions.
+
+  2. "Screen replacement with Local's screen as fallback would be new." It exists. SiteInfo/index.tsx:486 splices routes[site-info] addon routes above the non-exact SiteInfoOverview catch-all at :489. Addon
+  routes win; Local's Overview is the fallback. That's your pattern, shipping, in Local's own code. Lead your proposal with it.
+
+  3. "routes[main] is a route hook." It's a catch-all sink. In MainPage.tsx:195-199 the addon block is the last child of the Switch and has no path prop — which in react-router 5.3.4 means unconditional match
+  (react-router.js:885-888). It runs only when none of Local's thirteen routes matched, and your routes then all render simultaneously inside one shared ErrorBoundaryDialog rather than competing in a Switch.
+  Preempting /main or /main/site-info/:id from there is structurally impossible, not merely unsupported.
+
+  4. "The TabNav_Items_* hash is version-suffixed and therefore fragile." Two separate things, and you've merged them. The [hash:base64:5] is a hash of file path + class name, not content (css-loader 6.11.0,
+  dist/utils.js:289-299) — it survives every edit to TabNav.sass. Only the _v17-8-2 suffix tracks releases, and local-components has bumped three times in 28 months (17.8.0 → 17.8.1 → 17.8.2). Match
+  [class*="TabNav_Items_"] and this drops off your risk register entirely.
+
+  5. "We read a class off <html> because that's the only way." It's the intended way, but there are two cheaper ones you're not using: global.localPreferences.currentThemeName (themecop-init.tsx:13-17) gives
+  you 'theme--light' | 'theme--dark' directly, and the 'osThemeChange' IPC event (ThemeCop.ts:196) pushes (currentThemeName, lastThemeName) on every change. You can drop the MutationObserver for theme today,
+  with no host changes. Related correction: auto theme only follows the OS on macOS — listenForThemeChanges early-returns for non-darwin (:104-114) and determineAutoTheme gates on os.platform() === 'darwin'
+  (:142-146). On Windows and Linux, "auto" is always light. If your UI assumes OS-following dark mode cross-platform, it's wrong on two of three platforms.
+
+  6. "Design tokens exist somewhere consumable." They exist as SCSS variables and mixins only — compile-time, no runtime values. Repo-wide there are CSS custom properties in exactly four component files, all
+  component-scoped. There is no theme React context anywhere (I grepped every createContext in app/renderer and packages/local-components/src). local-components exports zero tokens — src/index.ts is 166 lines
+  of components. Local's own app code consumes tokens by @import-ing through a relative node_modules path (ProductDrawer.scss:1-2). That's not an API you're missing; it's the absence of one.
+
+  7. "There's a layout system we could hook into." There is no layout owner, no region concept, no width authority. .Window is display: flex with position: absolute; inset: 0 and three hardcoded child widths
+  (68px rail, 25%/230–480px sidebar, remainder). ProductDrawer — the only panel-shaped feature — is position: fixed with a scrim and never reserves space (ProductDrawer.scss:4-21). Your reservation API isn't
+  extending a system; it's introducing the first one. Scope and pitch accordingly — and note that your right-on-.Window hack is better matched to this architecture than you probably assumed, because
+  absolute-inset + flex reflows correctly.
+
+  8. "There must be a capability or feature-flag surface we can use." FeatureFlagService exists and is addon-reachable via ipcAsync('getFeaturesArray') — but it's four flags, all defaulting true, all about
+  Local's internal behaviour, and at least one guards a screen that was deleted (migrations.ts:24-27). It is a dev toggle, not a host-capability contract. The only real signal today is
+  context.environment.version, which is trustworthy because the release pipeline bumps app/api/package.json in lockstep with the app (azure-pipelines-build.yml:140-149). Version-sniffing is currently the
+  correct answer, not a workaround.
+
+  9. "The addon API has an owner and a deprecation policy to design against." .github/CODEOWNERS is a single wildcard: * @getflywheel/local-engineers. There is no API owner, no API-diff CI gate, no contract
+  test that types match implementations, and no written deprecation policy. What exists is a strong practice — deprecatedHooks aliases from versions 2.3.3 and 5.10.5 are still honoured on 10.1.1 — and in-tree
+  accommodation of named third-party addons (SiteInfoTools.tsx:99-101 on Broken Link Checker; SiteInfoOverview.tsx:218 branching on Atlas). Reliable in practice, unenforced on paper. Don't design against a
+  policy that isn't there — ask for it.
+
+  10. One you didn't ask about but that will bite the "surfaces become how Local's screens behave" plan. The hook registry is not reactive and is read exactly once per render. RendererAddonLoader runs before
+  render() (bootstrap-app.tsx:14-21), global.registeredHooks is a plain object, and doContent is a synchronous array read during render (HooksRenderer.tsx:119-133). Register a surface asynchronously — after
+  your readyPromise resolves, after Awilix lazily resolves a service — and nothing re-renders; your content appears whenever that subtree next re-renders for an unrelated reason, or never. Any chrome-slot API
+  you propose should be MobX-observable or backed by a store from the outset. MainVerticalNav is already observer()-wrapped (MainVerticalNav.tsx:192), so for the rail specifically this costs nothing — but it
+  needs to be a stated requirement in the proposal, not an implementation detail, or you'll get an additive-array API with the same one-shot semantics and a nondeterministic startup race.
