@@ -80,7 +80,7 @@ const styles = {
   }),
   lines: { flex: 1, minWidth: 0 },
   // Both lines WRAP rather than ellipsize. At the docked panel's 380px, ellipsis cut
-  // "No site selected — answers will be fleet-…" and "it stays on alpine-outfitters u…":
+  // "Asking about the whole fl…" and "it stays on alpine-outfitters u…":
   // in each case the clause that was truncated is the one carrying the meaning. A band
   // that grows a line is cheaper than a disclosure that is unreadable.
   primary: {

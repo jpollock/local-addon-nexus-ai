@@ -16,6 +16,7 @@ import {
   contentAgeChip,
   asContentStatus,
 } from '../../../src/renderer/components/DockedPanel/siteContextModel';
+import { SCOPE_LINE } from '../../../src/renderer/components/DockedPanel/openingCopy.generated';
 
 describe('readViewedSiteId — Local\'s route, not a guess', () => {
   it('reads the id from the route Local actually pushes', () => {
@@ -118,9 +119,18 @@ describe('stripCopy — Controlled Vocabulary v1 governs every string', () => {
     expect(copy.secondary).toBeUndefined();
   });
 
-  it('the none state says the answers will be fleet-wide', () => {
+  // WP-49 · §5's RATIFIED SCOPE LINE, asserted against the GENERATED constants
+  // rather than against a retyped copy of them. A literal here would be a third
+  // place the designer's sentence lives — the drift the generator exists to
+  // stop, reintroduced by the test that is supposed to police it. The literal
+  // that IS asserted is the joined rendering, because the join is this
+  // function's own work and a test that only checked the parts would pass
+  // against a function that dropped the space between them.
+  it('the none state states the subject: the whole fleet', () => {
     const copy = stripCopy({ mode: 'none', siteName: null, viewedSiteName: null });
-    expect(copy.primary).toBe('No site selected — answers will be fleet-wide');
+    expect(copy.primary).toBe(`${SCOPE_LINE.LEAD} ${SCOPE_LINE.FLEET}`);
+    expect(copy.primary).toBe('Asking about the whole fleet');
+    expect(copy.actionLabel).toBe(SCOPE_LINE.ACTION);
     expect(copy.actionLabel).toBe('Choose a site');
     expect(copy.secondary).toBeUndefined();
   });

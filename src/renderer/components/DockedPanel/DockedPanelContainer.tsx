@@ -2,6 +2,7 @@ import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import type { TriageView } from '../../../main/intelligence-host/sessionRegistry';
 import { arrivalCounts } from '../return/arrivalModel';
+import { openingState, type OpeningState } from './openingAsksModel';
 import { injectThemeVars } from '../../utils/theme';
 import { DockedPanel, PanelTab } from './DockedPanel';
 import { PanelChat, type SiteContextProps } from './PanelChat';
@@ -71,6 +72,15 @@ interface ContainerState {
    * and nothing else. null until it loads, never coerced to 0.
    */
   needsYou: number | null;
+  /**
+   * WP-49 · ITEM 4 — the panel's opening state, from the SAME read as the badge.
+   *
+   * One `RETURN_TRIAGE` call answers both, which is the property `refreshNeedsYou`
+   * already had and the reason the opening state is derived here rather than
+   * fetched in `PanelChat`: a second read is a second answer, free to disagree
+   * with the number on the rail beside it.
+   */
+  opening: OpeningState | null;
   /** Fleet health rollup — null until it loads, never coerced to 'ok'. */
   fleetHealth: 'ok' | 'degraded' | 'failing' | 'unknown' | null;
   /** A full-height overlay owns the screen; the collapsed tab stands down. */
@@ -115,6 +125,7 @@ const SITE_CONTEXT_DEFAULTS = {
 const SIGNAL_DEFAULTS = {
   unreadChats: null as number | null,
   needsYou: null as number | null,
+  opening: null as OpeningState | null,
   fleetHealth: null as 'ok' | 'degraded' | 'failing' | 'unknown' | null,
   overlayOpen: false,
   railBottom: readRailBottom(),
@@ -572,9 +583,12 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.props.electron.ipcRenderer
       .invoke(IPC_CHANNELS.RETURN_TRIAGE)
       .then((triage: TriageView) => {
-        this.setState({ needsYou: triage ? arrivalCounts(triage).needsYou : null });
+        this.setState({
+          needsYou: triage ? arrivalCounts(triage).needsYou : null,
+          opening: openingState(triage),
+        });
       })
-      .catch(() => { this.setState({ needsYou: null }); });
+      .catch(() => { this.setState({ needsYou: null, opening: null }); });
   };
 
   /**
@@ -682,6 +696,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       sessionId: activeSessionId,
       selectedSiteIds,
       siteContext,
+      opening: this.state.opening,
       visible: panelState !== 'closed',
       onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
       onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),

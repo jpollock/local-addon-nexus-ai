@@ -17,6 +17,7 @@ import {
   type ProcedureStreamState,
 } from './procedureModel';
 import type { SiteContextMode, SiteContentStatus } from './siteContextModel';
+import type { OpeningState } from './openingAsksModel';
 import type { CitationTurn } from './citationModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 import type { ProcedureApprovalContext } from '../../../common/chat-types';
@@ -95,6 +96,16 @@ interface Props {
   sessionId: string | null;
   selectedSiteIds: string[];
   siteContext: SiteContextProps;
+  /**
+   * WP-49 · ITEM 4 — what the panel opens ON, drawn from the queue beside it.
+   *
+   * `null` is the honest state and not a loading one: nothing is waiting, so
+   * there is no verdict to state and no ask that could be answered from the
+   * screen, and the panel opens on its own invitation as before. The container
+   * holds it because the container already reads `RETURN_TRIAGE` for the rail
+   * badge — one read, two consumers, no second answer to the same question.
+   */
+  opening?: OpeningState | null;
   visible: boolean;
   onSessionCreated: (id: string) => void;
   onSessionSaved: (session: ChatSession, messages: ChatMessage[]) => void;
@@ -619,6 +630,92 @@ export class PanelChat extends React.Component<Props, State> {
 
   handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     this.setState({ input: e.target.value });
+  }
+
+  /**
+   * An opening ask, taken.
+   *
+   * IT FILLS THE COMPOSER AND DOES NOT SEND. The panel is offering a question,
+   * not asking it: a click that sent would make three suggestions three ways to
+   * start a turn nobody typed, and an ask the reader wanted to edit first would
+   * be gone. The focus moves with the text so the next keystroke lands where the
+   * reader is looking.
+   */
+  private takeOpeningAsk = (text: string) => (): void => {
+    this.setState({ input: text }, () => {
+      const el = this.inputRef.current;
+      if (el) el.focus();
+    });
+  };
+
+  /**
+   * WP-49 · ITEM 4 — the opening state, drawn from the queue beside the panel.
+   *
+   * THREE THINGS, AND NOT ONE OF THEM IS COMPOSED HERE:
+   *
+   *  - the verdict is `TriageView`'s own, composed once in `sessionRegistry`
+   *    over the rows the Now list renders (WP-48). This reads it.
+   *  - the invitation and the asks come from `openingCopy.generated.ts` and
+   *    `openingAsksModel`, filled with fields the fold derived.
+   *  - the fallback, for a fleet with nothing waiting, is the panel's own
+   *    existing line, unchanged.
+   *
+   * A blank is the one thing it cannot be: "the highest-frequency surface in the
+   * product opens on a blank" is the defect item 4 names, and an opening state
+   * that quietly degraded to one whenever the read failed would be the same
+   * defect with a fallback path.
+   */
+  private renderOpeningState(): React.ReactElement {
+    const opening = this.props.opening;
+    const style = { padding: '24px 0', color: 'var(--nxai-card-sub)', textAlign: 'center' as const, fontSize: 13 };
+
+    if (!opening) {
+      return React.createElement(
+        'div',
+        { style, 'data-panel-opening': 'invitation' },
+        React.createElement('div', { key: 'mark', style: { color: UI_COLORS.WPE_BRAND, fontSize: 18, marginBottom: 8 } }, 'Nexus'),
+        React.createElement('div', { key: 'line' }, 'Ask anything about your WordPress sites.'),
+      );
+    }
+
+    return React.createElement(
+      'div',
+      { style: { ...style, textAlign: 'left' as const, padding: '18px 14px' }, 'data-panel-opening': 'queue' },
+      ...(opening.verdict
+        ? [React.createElement(
+            'div',
+            { key: 'verdict', style: { color: 'var(--nxai-card-text)', fontSize: 13, lineHeight: 1.45 }, 'data-opening-verdict': 'true' },
+            opening.verdict,
+          )]
+        : []),
+      React.createElement('div', { key: 'invitation', style: { marginTop: 4, fontSize: 12 } }, opening.invitation),
+      ...opening.asks.map((ask) =>
+        React.createElement(
+          'button',
+          {
+            key: ask.classId,
+            'data-opening-ask': ask.classId,
+            'data-opening-ask-row': ask.situationId,
+            onClick: this.takeOpeningAsk(ask.text),
+            style: {
+              display: 'block',
+              width: '100%',
+              textAlign: 'left' as const,
+              marginTop: 8,
+              padding: '7px 10px',
+              background: 'var(--nxai-section-bg)',
+              border: '1px solid var(--nxai-card-border)',
+              borderRadius: 6,
+              color: 'var(--nxai-card-text)',
+              font: 'inherit',
+              fontSize: 12,
+              cursor: 'pointer',
+            },
+          },
+          ask.text,
+        ),
+      ),
+    );
   }
 
   handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -1153,14 +1250,7 @@ export class PanelChat extends React.Component<Props, State> {
         React.createElement(
           'div',
           { style: styles.logInner },
-          messages.length === 0
-            ? React.createElement(
-                'div',
-                { style: { padding: '24px 0', color: 'var(--nxai-card-sub)', textAlign: 'center' as const, fontSize: 13 } },
-                React.createElement('div', { style: { color: UI_COLORS.WPE_BRAND, fontSize: 18, marginBottom: 8 } }, 'Nexus'),
-                React.createElement('div', null, 'Ask anything about your WordPress sites.'),
-              )
-            : null,
+          messages.length === 0 ? this.renderOpeningState() : null,
           messages.map((m) => this.renderMessage(m)),
           // The empty run's derived plan, attached where the refusal turn is.
           ...this.renderProcedurePlan(),
@@ -1173,7 +1263,6 @@ export class PanelChat extends React.Component<Props, State> {
       // WP-41 · the comparator, spread from an array — empty when there is
       // nothing to compare, so a user it cannot serve sees the panel unchanged.
       ...this.renderComparator(),
-      React.createElement(SiteContextStrip, this.props.siteContext),
       offline
         ? React.createElement(
             'div',
@@ -1214,6 +1303,11 @@ export class PanelChat extends React.Component<Props, State> {
               streaming ? '■' : '↑',
             ),
           ),
+      // §5 · "Below the composer, the scope line." A question with no stated
+      // subject is this panel's most common failure, and the band that states it
+      // is the one that already knew the answer — moved, not duplicated. A
+      // second scope surface would be two answers to "what am I asking about".
+      React.createElement(SiteContextStrip, this.props.siteContext),
       React.createElement(
         'div',
         { style: { padding: '3px 14px 6px', color: 'var(--nxai-card-sub)', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },

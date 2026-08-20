@@ -1,6 +1,30 @@
 /**
- * WP-46 · THE ARRIVAL (M6 · XD-26 §6a) — two columns of one verdict, and the
- * morning read to you before you ask anything.
+ * WP-49 · THE NOW SCREEN (XD-27) — the addon's front door, and the one list.
+ *
+ * WP-46 built this as the ARRIVAL: two columns of one verdict (XD-26 §6a), the
+ * morning read to you before you ask anything. XD-27 collapsed Home, Inbox and
+ * Runs into it. What changed is the shape around the rows, not the rows:
+ *
+ *  - **Two columns became a list and a section.** The verdict heads the rows
+ *    that need you; `Nothing needed of you` sits below as its own section — "a
+ *    section, not a footnote" (position 11 §3) — holding everything the fold
+ *    filed as changed, which is exactly the set that needs nobody. XD-27's
+ *    rider about in-flight runs joining it is MEASURED AND ESCALATED rather
+ *    than built: see `arrivalModel.ts`'s rider-1 block for the three findings
+ *    and `needsNothingOfYou.test.ts` for the pins that will fail the day the
+ *    contract can express it.
+ *  - **The Inbox's cards are rows here now**, carrying their own *Approve* and
+ *    *Not now* in place. A row that can be ANSWERED here gets buttons; a row
+ *    that needs the session gets one door and no buttons, so deciding and going
+ *    somewhere look different before you click. `renderSituation` and
+ *    `renderInboxRow` are two functions for exactly that reason: the difference
+ *    is structural, not a style.
+ *  - **A finished run is not here at all.** It belongs to the record, which
+ *    already exists, and a second rendering of it on this screen would be the
+ *    two-homes defect the collapse removed.
+ *
+ * The file keeps its name because the eval harness, four suites and the surface
+ * probe all address it, and a rename is churn no reader would see.
  *
  * COMPUTES NO VERDICT. Every tier, every rule that placed a row, every gate's
  * checkpoint id and position, every place set and every part summary arrives
@@ -35,7 +59,9 @@ import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import type { ReservedRow, Situation, TriageView } from '../../../main/intelligence-host/sessionRegistry';
 import { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
+import type { InboxItem } from '../../../main/inbox/types';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
+import { NOW_COPY } from '../DockedPanel/openingCopy.generated';
 import {
   accountingLine,
   arrivalCounts,
@@ -59,10 +85,46 @@ import {
  */
 export const LAST_ARRIVAL_KEY = 'nexus-ai:return:last-arrival';
 
+/**
+ * WP-49 · what the Inbox brought with it when it collapsed onto this screen.
+ *
+ * ABSENT IS A REAL STATE and it is not the same as empty: a surface driven
+ * without this prop (the eval harness, most unit tests) renders the situation
+ * rows alone, which is what it did before the collapse. `failed` is likewise not
+ * `items: []` — "Nothing needs you when we simply could not look is the worst
+ * thing this surface can say", and that ordering is preserved verbatim from the
+ * tab this replaces.
+ */
+export interface NowInbox {
+  loaded: boolean;
+  failed: boolean;
+  /** The open items. Every one of them is a row that needs a person. */
+  items: InboxItem[];
+  /** The true total behind `items`, which is one page. */
+  total: number;
+  /** Agent ids currently auto-paused, from GET_INBOX. */
+  pausedSources: string[];
+  /** Decided items, for Reopen. They need nobody, so they sit below. */
+  recentlyDecided: InboxItem[];
+}
+
 export interface ArrivalProps {
   electron: any;
-  /** Promote the session a row belongs to. The arrival's only act. */
+  /** Promote the session a row belongs to. */
   onPromote?: (sessionId: string) => void;
+  /**
+   * WP-49 · the Inbox, collapsed onto the rows. Optional: the surface renders
+   * its situation rows with or without it.
+   */
+  inbox?: NowInbox;
+  /** Answer an inbox row in place — the card's own Approve / Not now. */
+  onDecide?: (id: number, decision: string, status: 'dismissed' | 'done') => void;
+  /** Reverse a DECISION, never a live change. */
+  onReopen?: (id: number) => void;
+  /** Clear an agent's auto-pause so it may run automatically again. */
+  onResumeAgent?: (agentId: string) => void;
+  /** Re-read the inbox after a failed read. */
+  onRetryInbox?: () => void;
   /** Test seam. Production reads `window.localStorage`. */
   store?: Pick<Storage, 'getItem' | 'setItem'>;
   /** Test seam for the absence arithmetic. */
@@ -98,7 +160,25 @@ const styles = {
   },
   reservedHeadline: { fontSize: 13, fontWeight: 600, color: 'var(--nxai-card-text)', margin: '2px 0' },
   reservedDetail: { fontSize: 11, color: 'var(--nxai-muted-text)' },
-  columns: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'start' as const },
+  // WP-49 · ONE LIST, then a section. The two-column grid is gone with the two
+  // columns: the verdict heads the rows that need you, and everything that
+  // needs nobody is below, where a reader arrives at it after the decisions
+  // rather than beside them.
+  columns: { display: 'flex', flexDirection: 'column' as const, gap: 18 },
+  sectionGap: { marginTop: 10 },
+  banner: {
+    border: '1px solid var(--nxai-card-border)',
+    borderRadius: 4,
+    padding: '10px 12px',
+    marginBottom: 8,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center' as const,
+    fontSize: 11,
+    color: 'var(--nxai-muted-text)',
+  },
+  answers: { display: 'flex', gap: 8, marginTop: 8 },
+  truncated: { fontSize: 10, color: 'var(--nxai-muted-text)', marginBottom: 8 },
   columnHead: {
     display: 'flex',
     alignItems: 'center' as const,
@@ -320,6 +400,122 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
     );
   }
 
+  /**
+   * ONE INBOX ROW — a card that collapsed onto the list, answerable in place.
+   *
+   * IT CARRIES BUTTONS AND NO DOOR, and `renderSituation` carries a door and no
+   * buttons. That is the whole of position 11 §3's rule — "rows answerable here
+   * get buttons; rows needing the session get one door and no buttons, so
+   * deciding and going somewhere look different before you click" — and it is
+   * enforced by the two functions being separate rather than by a flag inside
+   * one, so a future edit cannot give a door-row a button by flipping a boolean.
+   *
+   * Every string on the row is the ITEM's own: title, detail, scope label,
+   * source, evidence. Nothing here composes a sentence about them, which is why
+   * the row survives the no-prose accounting the way a fold field does.
+   */
+  private renderInboxRow(item: InboxItem): React.ReactElement {
+    const { onDecide, onReopen } = this.props;
+    const open = item.status === 'open';
+
+    return React.createElement(
+      'div',
+      { key: `inbox-${item.id}`, style: styles.row, 'data-inbox-row': String(item.id), 'data-inbox-kind': item.kind },
+      React.createElement('div', { key: 'title', style: styles.statement }, item.title),
+      ...(item.detail ? [React.createElement('div', { key: 'detail', style: styles.ask }, item.detail)] : []),
+      React.createElement(
+        'div',
+        { key: 'meta', style: styles.meta },
+        [item.scopeLabel, item.source, item.seenCount > 1 ? `seen ${item.seenCount} times` : '']
+          .filter(Boolean)
+          .join(SEP),
+      ),
+      ...(item.evidence
+        ? [React.createElement(
+            'details',
+            { key: 'evidence', style: { marginTop: 6 } },
+            React.createElement('summary', { style: styles.meta }, 'Evidence'),
+            React.createElement('pre', { style: { ...styles.meta, whiteSpace: 'pre-wrap' as const } }, item.evidence),
+          )]
+        : []),
+      open
+        ? React.createElement(
+            'div',
+            { key: 'answers', style: styles.answers, 'data-answers': String(item.id) },
+            React.createElement(
+              'button',
+              { key: 'approve', 'data-answer': 'approve', onClick: () => onDecide && onDecide(item.id, NOW_COPY.APPROVE, 'done') },
+              NOW_COPY.APPROVE,
+            ),
+            React.createElement(
+              'button',
+              { key: 'not-now', 'data-answer': 'not-now', onClick: () => onDecide && onDecide(item.id, NOW_COPY.NOT_NOW, 'dismissed') },
+              NOW_COPY.NOT_NOW,
+            ),
+          )
+        : React.createElement(
+            'button',
+            { key: 'reopen', style: styles.door, 'data-answer': 'reopen', onClick: () => onReopen && onReopen(item.id) },
+            'Reopen',
+          ),
+    );
+  }
+
+  /**
+   * One paused agent, and the only control that clears the pause.
+   *
+   * Read from `pausedSources` DIRECTLY, never derived from the rows on screen:
+   * an agent pauses precisely when it keeps failing, the user may well have
+   * dismissed its failure item, and nothing else clears `_autoPausedAt`. That
+   * reasoning is inherited whole from the tab this replaces, along with its
+   * second half — `items` is one page, so a paused agent past the first page
+   * would be missed by any derivation from them.
+   */
+  private renderPausedBanner(agentId: string): React.ReactElement {
+    const { onResumeAgent } = this.props;
+    return React.createElement(
+      'div',
+      { key: `paused-${agentId}`, style: styles.banner, 'data-paused': agentId },
+      React.createElement('span', { key: 'text' }, `${agentId} paused after repeated failures`),
+      React.createElement(
+        'button',
+        { key: 'resume', style: styles.door, onClick: () => onResumeAgent && onResumeAgent(agentId) },
+        'Try again',
+      ),
+    );
+  }
+
+  /**
+   * The inbox's half of the needs-you list, or the read failure in its place.
+   *
+   * ORDER MATTERS AND IS INHERITED: a failed read must never fall through to
+   * silence. Before the collapse the tab said so with its own screen; here it
+   * says so with one row inside the list, because the list has other rows in it
+   * and a whole-screen failure would hide them.
+   */
+  private renderInboxRows(): React.ReactElement[] {
+    const inbox = this.props.inbox;
+    if (!inbox) return [];
+    if (inbox.failed) {
+      return [React.createElement(
+        'div',
+        { key: 'inbox-failed', style: styles.row, 'data-inbox-failed': 'true' },
+        React.createElement('div', { key: 'text', style: styles.statement }, "Couldn't read the inbox."),
+        ...(this.props.onRetryInbox
+          ? [React.createElement('button', { key: 'retry', style: styles.door, onClick: this.props.onRetryInbox }, 'Try again')]
+          : []),
+      )];
+    }
+    if (!inbox.loaded) return [];
+    return [
+      ...inbox.pausedSources.map((agentId) => this.renderPausedBanner(agentId)),
+      ...(inbox.items.length < inbox.total
+        ? [React.createElement('div', { key: 'inbox-truncated', style: styles.truncated }, `Showing ${inbox.items.length} of ${inbox.total}`)]
+        : []),
+      ...inbox.items.map((item) => this.renderInboxRow(item)),
+    ];
+  }
+
   render(): React.ReactElement | null {
     const { triage, loading, error, awayMs } = this.state;
     const now = this.props.now ?? new Date();
@@ -330,22 +526,25 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
     }
 
     const counts = arrivalCounts(triage);
+    const inbox = this.props.inbox;
 
     return React.createElement(
       'section',
-      { style: styles.surface, 'data-surface': 'return-arrival' },
+      { style: styles.surface, 'data-surface': 'now' },
 
       // The headline is about the USER's absence; the accounting line is the
-      // same three counts the columns are about to render, in one breath.
+      // same counts the lists below are about to render, in one breath.
       React.createElement(
         'header',
         { key: 'header' },
         React.createElement('h2', { style: styles.headline, 'data-away': 'true' }, awayHeadline(awayMs)),
         React.createElement('p', { style: styles.accounting, 'data-accounting': 'true' }, accountingLine(counts)),
         // WP-48 · the list verdict — the sentence no single row can say, and the
-        // most useful one this data produces: "nothing is half-done, so nothing
-        // is expensive to stop." Composed in the host from the very rows below
-        // it, so it cannot contradict them. Empty when nothing is waiting.
+        // most useful one this data produces. READ, NEVER RECOMPOSED: it is
+        // composed once in `sessionRegistry` over the very rows below it, and
+        // this list is those rows (see rider 1's measurement in `arrivalModel`
+        // for why nothing is filtered out from under it). Empty when nothing is
+        // waiting.
         ...(triage.verdict
           ? [React.createElement('p', { style: styles.verdict, 'data-verdict': 'true' }, triage.verdict)]
           : []),
@@ -355,29 +554,33 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
 
       React.createElement(
         'div',
-        { key: 'columns', style: styles.columns },
+        { key: 'lists', style: styles.columns },
 
         React.createElement(
           'div',
-          { key: 'waiting', 'data-column': 'waiting' },
+          { key: 'needs-you', 'data-now-list': 'needs-you' },
           React.createElement(
             'div',
             { style: styles.columnHead },
             React.createElement('span', { key: 'label' }, RETURN_COPY.WAITING_HEAD),
-            // The badge is the waiting count and it lives HERE and on the rail.
+            // The badge is the needs-you count and it lives HERE and on the rail.
             ...(counts.needsYou > 0
               ? [React.createElement('span', { key: 'badge', style: styles.badge, 'data-badge': 'needsYou' }, String(counts.needsYou))]
               : []),
           ),
           ...triage.waiting.map((s) => this.renderSituation(s, now)),
+          ...this.renderInboxRows(),
         ),
 
         React.createElement(
           'div',
-          { key: 'changed', 'data-column': 'changed' },
+          { key: 'nothing-needed', style: styles.sectionGap, 'data-now-list': 'nothing-needed' },
           // NO BADGE. Nothing here needs the user, so nothing here escalates.
-          React.createElement('div', { style: styles.columnHead }, RETURN_COPY.CHANGED_HEAD),
+          React.createElement('div', { style: styles.columnHead }, NOW_COPY.NOTHING_NEEDED_HEAD),
           ...triage.changed.map((s) => this.renderSituation(s, now)),
+          ...(inbox && inbox.loaded && !inbox.failed
+            ? inbox.recentlyDecided.map((item) => this.renderInboxRow(item))
+            : []),
           React.createElement('p', { key: 'filed', style: styles.filed, 'data-filed': 'true' }, RETURN_COPY.FILED_BEFORE_YOU_ARRIVED),
         ),
       ),

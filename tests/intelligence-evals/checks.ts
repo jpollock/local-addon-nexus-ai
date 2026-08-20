@@ -2183,10 +2183,33 @@ function driveReturnSurface(fixture: EvalFixture): ReturnSurface {
     return { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => { kv.set(k, v); } };
   })();
 
+  /**
+   * WP-49 · THE SURFACE IS DRIVEN WITH ITS INBOX HALF, not without it.
+   *
+   * XD-27 collapsed the Inbox onto these rows, so a criterion driven against the
+   * situations alone would be measuring half a screen and reporting it as the
+   * screen. The item below is the shape `InboxStore` returns; it exists so the
+   * "no interaction" criterion has to account for the *Approve* / *Not now*
+   * buttons the ruling put on the surface, rather than passing because the
+   * harness never supplied a row that has them.
+   */
   const arrivalInstance = new Arrival({
     electron: { ipcRenderer: { invoke: () => Promise.resolve(triage) } },
     now,
     store,
+    inbox: {
+      loaded: true,
+      failed: false,
+      total: 1,
+      pausedSources: [],
+      recentlyDecided: [],
+      items: [{
+        id: 1, source: 'security-sentinel', code: 'FS-01', scope: 'name:Site A',
+        scopeLabel: 'Site A', kind: 'decide', title: 'File permissions are too open',
+        status: 'open', firstSeenAt: 1, lastSeenAt: 1, seenCount: 1,
+      }],
+    },
+    onDecide: () => undefined,
   });
   arrivalInstance.state = { triage, loading: false, error: null, awayMs: 12 * 3_600_000 };
 
@@ -2269,9 +2292,21 @@ function returnDriven(opts: {
   };
 }
 
-/** Rows a column actually drew, in the order it drew them. */
+/**
+ * Rows a list actually drew, in the order it drew them.
+ *
+ * WP-49 · the two columns became ONE LIST and the section beneath it (XD-27),
+ * and the addressing moved with them. The fold's own vocabulary is unchanged —
+ * `waiting` and `changed` are still `TriageColumn` — so the mapping is stated
+ * here once rather than in each caller.
+ */
+const NOW_LIST: Record<'waiting' | 'changed', string> = {
+  waiting: 'needs-you',
+  changed: 'nothing-needed',
+};
+
 function drawnColumn(surface: ReturnSurface, column: 'waiting' | 'changed'): string[] {
-  const col = surface.arrival.find((e) => attr(e, 'data-column') === column);
+  const col = surface.arrival.find((e) => attr(e, 'data-now-list') === NOW_LIST[column]);
   return withAttr(elementsOf(col), 'data-situation').map((e) => String(attr(e, 'data-situation')));
 }
 
@@ -2313,7 +2348,7 @@ const UX2_DRIVEN: RegisteredCheck[] = [
     matches: 'The finished portion is alread',
     missing: 'the Record-rank filing this journey arrives to find already done',
     holds: (s) => {
-      const col = s.arrival.find((e) => attr(e, 'data-column') === 'changed');
+      const col = s.arrival.find((e) => attr(e, 'data-now-list') === NOW_LIST.changed);
       const rows = withAttr(elementsOf(col), 'data-situation');
       const filed = withAttr(elementsOf(col), 'data-filed');
       const filedText = textsOf(filed[0]).join('');
@@ -2363,7 +2398,7 @@ const UX2_DRIVEN: RegisteredCheck[] = [
       // the parts that say so.
       const drawn = drawnColumn(s, 'waiting');
       const gatesInFold = s.triage.waiting.filter((x: any) => x.gate);
-      const col = s.arrival.find((e) => attr(e, 'data-column') === 'waiting');
+      const col = s.arrival.find((e) => attr(e, 'data-now-list') === NOW_LIST.waiting);
       const gateIds = withAttr(elementsOf(col), 'data-gate').map((e) => String(attr(e, 'data-gate')));
       const expected = gatesInFold.map((x: any) => x.gate.checkpointId);
       const gateLines = withAttr(elementsOf(col), 'data-gate').map((e) => textsOf(e).join(''));
@@ -2516,21 +2551,41 @@ const UX2_DRIVEN: RegisteredCheck[] = [
     matches: 'A verdict is visible with no i',
     missing: 'the cold-open verdict view — nothing renders a no-interaction verdict',
     holds: (s) => {
+      // WP-49 · THE MEASUREMENT MOVED WITH THE RULING, AND ONLY THIS FAR.
+      //
+      // It used to read `buttons.length === doors.length` — every button is a
+      // door. XD-27 puts the Inbox's *Approve* and *Not now* ON the rows, so
+      // that equality now says "the collapse did not happen" rather than "the
+      // verdict needs no interaction", and keeping it would have made a ratified
+      // ruling unshippable by an eval that predates it.
+      //
+      // What the criterion is actually about survives intact: A VERDICT IS
+      // VISIBLE WITH NO INTERACTION. So the arithmetic becomes an exhaustive
+      // account — every button on the surface is a door or an in-place answer,
+      // and there is still nothing to type, choose or submit. An unaccounted
+      // button is exactly what this used to catch, and it still catches it.
       const controls = s.arrival.filter((e) =>
         ['input', 'select', 'textarea', 'form'].includes(String(e.type)),
       );
       const buttons = s.arrival.filter((e) => e.type === 'button');
       const doors = withAttr(s.arrival, 'data-door');
+      const answers = withAttr(s.arrival, 'data-answer');
+      const unaccounted = buttons.filter(
+        (b) => attr(b, 'data-door') === undefined && attr(b, 'data-answer') === undefined,
+      );
       const accounting = textsOf(withAttr(s.arrival, 'data-accounting')[0]).join('');
       return {
-        ok: controls.length === 0 && buttons.length === doors.length && accounting.length > 0,
+        ok: controls.length === 0 && unaccounted.length === 0 && accounting.length > 0,
         evidence: [
           `the verdict renders on open: "${accounting}" over ` +
             `${s.triage.waiting.length} waiting and ${s.triage.changed.length} changed row(s)`,
           `${controls.length} input/select/textarea/form element(s) in the tree — the render takes ` +
             'no argument from the user and asks nothing before answering',
-          `the only controls are the ${doors.length} row door(s), and each promotes a session that ` +
-            'already exists rather than starting anything',
+          `every one of the ${buttons.length} button(s) is accounted for: ${doors.length} row ` +
+            `door(s), each promoting a session that already exists, and ${answers.length} in-place ` +
+            'answer(s), each deciding a row where it stands (XD-27)',
+          `${unaccounted.length} unaccounted button(s) — a control that is neither a door nor an ` +
+            'answer is ceremony this surface does not have',
         ],
       };
     },
@@ -2542,7 +2597,7 @@ const UX2_DRIVEN: RegisteredCheck[] = [
     matches: 'The needs-you row names what i',
     missing: 'the needs-you row itself',
     holds: (s) => {
-      const col = s.arrival.find((e) => attr(e, 'data-column') === 'waiting');
+      const col = s.arrival.find((e) => attr(e, 'data-now-list') === 'needs-you');
       const els = elementsOf(col);
       const gated = s.triage.waiting.filter((x: any) => x.gate);
       const text = textsOf(col).join(' | ');
