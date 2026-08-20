@@ -21076,3 +21076,171 @@ measured two ABIs measured nothing.
 any, merge on `poc/nexintelligence-ux`, record-merge blob standard
 with chronology ruling, receipts pasted after they print, locks
 released only after acceptance.
+
+---
+
+## WP-49 · MERGED, LOCKS RELEASED (2026-08-20)
+
+Merge commit **999f63cc** on `poc/nexintelligence-ux`. The gate ruling was
+**PASS, cleared to merge as held** — no code change was asked for and none was
+made after it. Receipts pasted after they printed.
+
+### 1 · The stat block
+
+```
+git diff --stat 999f63cc^1 999f63cc
+ docs/intelligence/WORK_PACKETS.md                  | 293 +++++++++++++++++
+ docs/intelligence/dom-reach-inventory.json         |   2 +-
+ package.json                                       |   2 +
+ scripts/generate-opening-copy.ts                   | 342 ++++++++++++++++++++
+ scripts/wp49-battery.py                            | 358 +++++++++++++++++++++
+ .../DockedPanel/DockedPanelContainer.tsx           |  19 +-
+ src/renderer/components/DockedPanel/PanelChat.tsx  | 112 ++++++-
+ .../components/DockedPanel/SiteContextStrip.tsx    |   2 +-
+ .../components/DockedPanel/openingAsksModel.ts     | 227 +++++++++++++
+ .../DockedPanel/openingCopy.generated.ts           |  76 +++++
+ .../components/DockedPanel/siteContextModel.ts     |  17 +-
+ src/renderer/components/NexusOverview.tsx          | 121 ++++---
+ src/renderer/components/return/Arrival.tsx         | 231 ++++++++++++-
+ src/renderer/components/return/arrivalModel.ts     |  41 +++
+ src/renderer/components/tabs/InboxTab.tsx          | 148 ---------
+ tests/intelligence-evals/checks.ts                 |  71 +++-
+ .../__fixtures__/panelChat-parity-base.json        |  31 +-
+ .../renderer/__snapshots__/inbox-tab.test.ts.snap  | 125 -------
+ tests/unit/renderer/inbox-tab.test.ts              | 157 ---------
+ tests/unit/renderer/needsNothingOfYou.test.ts      | 154 +++++++++
+ tests/unit/renderer/nowScreen.test.tsx             | 309 ++++++++++++++++++
+ tests/unit/renderer/openingAsks.test.ts            | 302 +++++++++++++++++
+ .../renderer/panelChat-procedure-parity.test.tsx   |  49 ++-
+ tests/unit/renderer/panelOpening.test.tsx          | 119 +++++++
+ tests/unit/renderer/returnArrival.test.tsx         |  43 +--
+ tests/unit/renderer/returnReEntry.test.tsx         |   4 +-
+ tests/unit/renderer/site-context-model.test.ts     |  14 +-
+ tests/unit/renderer/site-context-strip.test.tsx    |   4 +-
+ 28 files changed, 2821 insertions(+), 552 deletions(-)
+```
+
+### 2 · The record, rebuilt from three blobs
+
+Never hunk-edited. Ancestor `8186896d` verified as an **exact prefix** of both
+sides; each append an **exact substring exactly once**; arithmetic in one named
+unit (characters):
+
+```
+1,231,065 + 17,256 + 2,993 = 1,251,314   result 1,251,314   residual 0
+```
+
+**Chronology ruled and applied.** My gate report was written BEFORE the ruling,
+and the ruling reads it ("read verbatim from the branch report"), so the merged
+order is ancestor → **GATE REPORT** (offset 1,231,065) → **GATE RULING** (offset
+1,248,321). Both offsets printed, not asserted.
+
+**Line-anchored conflict markers: 0.** A naive substring check reported 4, and
+all four are pre-existing record prose from earlier packets writing *about*
+conflict markers — the false alarm this record has now documented three times.
+
+**Loss-proof check, by content rather than by trusting the rebuild:** every
+`## ` entry header from BOTH parents present in the merged blob — 67 on each
+side, 68 merged (66 shared ancestor headers plus one unique per side), **zero
+missing from either, zero merge-created duplicates.** Then the fields each side
+moved were read directly: the architect's `WP-49 · GATE RULING` and
+`WP-49a is REGISTERED`, my `GATE REPORT`, `LOCK ANNOUNCE` and the diffstat
+amendment, and — on the other file — the architect's new
+`The battery pins its ABI (WP-49)` protocol rule. `git diff --stat` alone
+would not have shown a silently dropped half.
+
+`PARALLEL_PROTOCOL.md` did not conflict: only the base side touched it.
+
+The architect's work was committed **VERBATIM first**, in its own attributed
+commit (`466b2a91`), with fidelity verified by md5 against the working tree as
+measured before the commit — `3b2b85fed8f28fdb760703592933cdd4` (PROTOCOL,
+26,151 → 26,547 bytes) and `fbdb31937317eb66072afac0060deba9` (WORK_PACKETS,
+1,240,310 → 1,243,322 bytes), both pure appends.
+
+### 3 · Independent verification on the MERGED tree
+
+Everything below was re-measured here, not carried across from the branch.
+
+| | result |
+|---|---|
+| suite | **614 suites / 8,475 tests — 8,473 passed, 2 skipped, exit 0** |
+| mutation battery | **27 killed / 0 survived / 0 anchor-miss, of 27**; control SURVIVED (correct); tree pristine before and after |
+| eval registry | **50 PASS / 0 FAIL / 18 BLOCKED / 10 OWNER-PENDING** (exit 2 = the documented BLOCKED code) |
+| `tsc -p . --noEmit` | clean |
+| `npm run compile` | clean |
+| `eslint src/ scripts/` | 0 errors, 6 warnings (all pre-existing, none in a touched file) |
+| `fixtures:situation-copy:check` | up to date |
+| `fixtures:return-copy:check` | up to date |
+| `fixtures:opening-copy:check` | up to date |
+| `inventory:dom-reach:check` | current |
+| byte sweep | clean over all 25 changed files present on the merged tree |
+
+**THE SKIPPED COLUMN MOVED, IN THE DOCUMENTED DIRECTION, AND THE TOTAL DID NOT.**
+The branch measured **12 skipped** in `.worktrees/wp-49`; the merged tree
+measures **2 skipped** in the primary checkout. That is exactly WP-20c's
+worktree↔primary embedding boundary in its second form: the primary holds both
+embedding model files where a worktree has one, so **ten embedding tests move
+from skipped to passed across that boundary**. The TOTAL is 8,475 on both sides —
+same total, different split — which is what says the ten moved rather than
+appeared. Read the skipped column first, as the protocol says.
+
+### 4 · The ABI flipped TWICE during this packet, and the second one nearly landed as a finding
+
+The architect's new rule ("a battery run pins the ABI before AND after; a mid-run
+flip VOIDS the run") was written from this packet's first flip. **A second flip
+happened during this merge's verification**, and it is worth recording because
+it wore the same mask on a different surface:
+
+The first full suite on the merged tree reported **1 failed** —
+`tests/intelligence-evals/runCli.test.ts`, "still runs, and still reports, when
+the selector matches", with an EMPTY stdout. It reproduced when run alone, which
+is where a packet stops calling it load. Running the CLI by hand printed the
+real cause: **`intelligence core failed to initialise`** — WP-33b's mask,
+verbatim, with `node -p process.versions.modules` still printing 141 exactly as
+that finding warns. The unmasking probe (LOADING better-sqlite3, not asking node
+its own ABI) reported the mismatch; `npm rebuild better-sqlite3` recovered it;
+the suite passes and the full run is green.
+
+**Nothing was filed, and nothing in the code was touched.** The suite is in this
+packet's blast radius — `checks.ts` is imported by `run.ts` — so it was a
+credible red, which is exactly why the environment was checked before the code.
+The suite run above is now ABI-pinned on both sides, the same way the battery is.
+
+### 5 · What the ruling settled, carried into the record
+
+- **The three authored asks are RATIFIED AS INTERIM**, and both `{runbookId}`
+  forms retire when **WP-49a** lands, because the run noun they want is
+  `RUN_NOUN[capability]` (Controlled Vocabulary v1.4) the moment `Situation`
+  carries `capability`.
+- **WP-49a is REGISTERED** as one host-side additive micro carrying two fields
+  for two escalations: `TriageView.working` (rider 1's one-line row) and
+  `Situation.capability` (the asks' subject). Neither needs a renderer change
+  when it lands — the surfaces are built for it.
+- **Record = Activity renamed: ACCEPTED** as the reversible reading, with the
+  `FleetActivityLedger` alternative on the record and the designer's word
+  invited.
+- **The strip at five: ACCEPTED** until item 6 rules. XD-27's binding half is
+  Now-not-a-tab, which holds at any strip width.
+- **J-Glance's exhaustive account: ACCEPTED** — an eval predating a ruling must
+  grow to account for it.
+- **The `git stash` slip is recorded as OWNED**, with the sibling stash verified
+  untouched and the tree verified back.
+
+### 6 · ABI, declared
+
+This session ran jest and rebuilt `better-sqlite3` twice, so it is built for
+**system Node (this machine v25.9.0, ABI 141)** — verified by loading it, not
+assumed, immediately before and after the final suite run. `.nvmrc` pins
+22.16.0 → ABI 127, which is what CI sees. **The owner must `npm run rebuild`
+before loading Local.**
+
+### 7 · Unpushed, properly
+
+Zero remote `wp-49` refs; no upstream on `poc/nexintelligence-ux`; no tags
+touched; version still `0.5.2`.
+
+**WP-49 is CLOSED.** WP-49a is the registered successor and needs the
+`src/main/intelligence-host/` lock, which this packet never held.
+
+**THE `src/renderer/`, `tests/intelligence-evals/` AND `docs/intelligence/`
+LOCKS ARE RELEASED.**
