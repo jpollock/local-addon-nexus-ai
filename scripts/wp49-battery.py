@@ -68,9 +68,9 @@ STRIP = "src/renderer/components/DockedPanel/siteContextModel.ts"
 SWEPT = [ARRIVAL, MODEL, OVERVIEW, ASKS, PANEL, GEN, STRIP,
          "src/renderer/components/DockedPanel/openingCopy.generated.ts", *SUITES]
 
-# Measured pristine below; floored just under so a mutant that quietly executes
-# fewer tests is VOID rather than green.
-FLOOR = 70
+# 80 tests pristine across the six suites, measured 2026-08-20; floored just
+# under so a mutant that quietly executes fewer is VOID rather than green.
+FLOOR = 76
 
 # (id, file, find, replace, the lie it would ship)
 MUTATIONS = [
