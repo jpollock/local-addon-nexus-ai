@@ -215,6 +215,29 @@ produced these; nothing enters by drift. XD = experience decision.)*
   designer "Return arrival" sheet (cycle five), ratified in
   `for-designer-return-response.md`.
 
+- **XD-27 · Now, the front door — and not a tab** — Home, Inbox and
+  Runs COLLAPSE into one Now screen (three renderings of one list; the
+  consequence order already ranks their rows against each other, only
+  the UI kept them apart). Three riders make the collapse honest: an
+  in-flight run needing nothing goes to Nothing-needed-of-you as one
+  line with its door, and PROMOTES ITSELF into the list when it stalls
+  or reaches a gate — the consequence order doing its job, not a new
+  mechanism; a finished run belongs to Record, which already exists;
+  and NOW IS NOT A TAB — the addon opens on Now, always; the strip
+  becomes Sites / Record / Settings; the title bar returns to Now the
+  way a logo does. A tab is a peer, and a front door that is tab one
+  of four becomes a choice among five the day the next feature claims
+  a tab — a future destination must argue for being a destination.
+  Row grammar per the Now screen: verdict headline derived from the
+  rows it heads; world state first, then the ask; rows answerable in
+  place get buttons (Approve / Not now), rows needing the session get
+  one door and no buttons — deciding and going somewhere look
+  different before you click; sibling findings the record does not
+  link render as ONE row stating its own limit. Source: designer
+  positions 11 (Now screen) and 12 (addon audit) + the owner-relayed
+  collapse ruling, 2026-08-20; the sheet's own four-tab strip is
+  superseded by this entry and the designer redraws it.
+
 ## How a ruling gets here
 
 Designer position or architect note → ratification response (both

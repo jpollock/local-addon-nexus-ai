@@ -19865,3 +19865,94 @@ permission-pane merge, Fleet into Sites) are product IA awaiting owner rulings.
 
 **Carried open question, to be MEASURED and reported, not assumed:** whether the
 four `incident.opened` events on `theawfulpm-test` carry a causal link.
+
+---
+
+## POSITIONS 11 + 12 COMMITTED; THE COLLAPSE RULED; XD-27; WP-49 REGISTERED (2026-08-20, architect + owner)
+
+`from-designer-11-now-screen.md` (6,800 bytes, md5
+`f2f891eee8693fe2cc608cf856aa9eb0`) and `from-designer-12-addon-audit.md`
+(4,705 bytes, md5 `e6cd1b408204a55e93357c8a6d40c59f`) committed
+verbatim, device-verified. The audit's §1 is noted for the record: the
+doctrine's hard half — the attest seam, dated facts, refusal doors,
+the record before the asking — is confirmed SHIPPED by the person who
+wrote the doctrine.
+
+**RULED (owner, with the designer's elaboration relayed): the
+COLLAPSE.** Home, Inbox and Runs become the one Now screen, with the
+three riders and the not-a-tab law recorded as **XD-27**. The
+designer redraws the strip (their own sheet shows the four-tab
+version they argued against — superseded knowingly).
+
+**WP-49 · the front door is REGISTERED** — items 4 + 5 of the order
+plus the XD-27 chrome: the panel's opening state drawn from the queue,
+the collapse (mostly deletion), Now as the opening screen with
+Sites / Record / Settings subordinate. CUTS AFTER WP-48 MERGES — the
+renderer lock serializes them. **Item 6 (the permission-pane merge and
+Fleet-into-Sites on the web-property unit) awaits the owner's word**
+— the designer's position is that accepting the Nexus-shell Sites
+design as target makes it a merge, not a new screen.
+
+---
+
+## WP-48 · GATE RULING — the Now verdicts (2026-08-20, architect adjudication)
+
+**Verdict: PASS, with one build instruction from the ruling below —
+merge after it lands and re-drives.**
+
+**The ruling asked for: the target-set field, not the guard patch —
+because the fixture already ruled it.** The designer's slot table
+defines `total` as "size of the derived target set," and the host
+field wearing that name is a different fact (places.total, derived
+from outcomes alone). The false sentence came from the NAME COLLISION,
+not from the template: the class-2 sentence ("Waiting at cp.backup,
+4 of 8. Nothing has been written yet, so stopping here costs
+nothing") is exactly the TRUE sentence for the real row that received
+the false one. So:
+1. The fold gains the target-set fact, sourced from the ARMING
+   RECORD's own scope (the registry already reads task.* — the armed
+   target list is on the record). The template slot `total` binds to
+   it; the contract addition is presented verbatim in the merge
+   report and rides to the designer as the slot table restored to its
+   own meaning.
+2. Guard 1 ALSO gains `&& gate === null` — belt and suspenders: a row
+   standing at a gate can never be "cannot start," whatever any count
+   says.
+3. Class 2 then fires as drawn; the golden fixture re-drives; the
+   real cp.backup row is the acceptance case.
+4. **The `contradictedByTheRecord` refusal STAYS, permanently** — not
+   as scaffolding but as a tripwire: a ratified sentence that
+   contradicts the record must refuse loudly and fall back derived,
+   forever. Building it instead of shipping the false sentence was
+   exactly right and is the packet's best moment.
+
+**The coalescence measurement: ACCEPTED as reported, and the fix is
+upstream.** correlation: null and causation: null on all four — four
+rows stating their own limit, as drawn. The shared origin
+(payload.source = one sentinel run) reported SEPARATELY rather than
+folded in is the correct discipline: the coalescing rule reads record
+links, never payloads, and that stays ratified. **Micro registered
+(WP-48a): the sentinel producer records the causal link it already
+knows** — the run id it writes into payload.source belongs in the
+causation field. The day it does, the four become one row of parts by
+the existing rules, which is what the designer's row was drawn to
+become.
+
+**Credits, entered:** the battery falsifying the packet's own written
+claim in four places (template order is NOT load-bearing — guards
+mutually exclusive by brute force, copies corrected); `designerKind`
+deleted at zero callers; two vacuous guards of WP-46's shape caught;
+and the J-Return no-prose eval catching the packet MID-FLIGHT
+(metaLine moved into the model — "the check can only account for a
+sentence by calling the function that made it" is register-grade).
+Flagging the uncommitted primary work with receipts instead of
+committing a tree someone was still writing in: right call, and the
+three-blob rebuild is confirmed as the merge instruction. AUTHORED
+count 3 → 2 with zero authored sentences in the packet — the copy
+pipeline working as law.
+
+**Merge instructions:** land the ruling (field + guard + fixture
+re-drive), re-run suite and battery, then the standard sequence —
+architect work verbatim-first, three-blob record rebuild with
+chronology ruling, receipts pasted after they print, locks released
+only after acceptance.
