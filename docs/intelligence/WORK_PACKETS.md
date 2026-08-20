@@ -18674,3 +18674,260 @@ expected: the drift line's count. See the gate report.)
 
 **Base:** `ee3fd67a` (WP-30 merge accepted, `3dc8df01` merged). **Worktree:**
 `.worktrees/wp-46`, branch `wp-46`. Nothing is pushed; no tag, no version bump.
+
+---
+
+## WP-46 · GATE REPORT — UX build 2, the arrival and the re-entry (2026-08-20)
+
+**HOLDING AT THE GATE.** Three authored sentences and two escalations are ruled
+before anything merges. Locks still held.
+
+### 1 · WHAT IS BUILT
+
+**The bridge, thin by rule.** Four IPC pass-throughs onto the registry's four
+methods — `triage()`, `session(id)`, `changedSince(cursor?)`, `snapshot()`. No
+derivation in the bridge and none in any render path. Thinness is not a
+code-review impression here: `returnBridge.test.ts` reads the registered
+handlers out of `ipc-handlers.ts` and pins each body to a pass-through shape, so
+a handler that grew an `if`, a `.map`, a merge or a cached instance fails. Four
+channels rather than one with a method name, because a router IS logic. All four
+are reads and none is audited (CLAUDE.md's rule: read-only paths are not
+audited). None is a tool, none has a CLI or GraphQL route, and that is pinned.
+
+**The arrival (Home, and it is now the landing tab).** Two columns of one
+verdict, each in the order the registry supplied — asserted ROW FOR ROW against
+the fold, not as a set, because the consequence order IS the ordering. Every
+waiting row names its gate BY CHECKPOINT ID from `PendingGate`, with the
+document's own position beside it. The headline is about the user's absence with
+the accounting line in one breath, generated from the same three counts the
+columns render. The reserved health row is one row, sticky, from `ReservedRow`.
+No badge on the changed column; the rail badge is the waiting count. Drift is
+one line and no rows.
+
+**The re-entry.** Opening a row promotes the session — same session id, same
+cursor, same pending approvals — and the three survive because the row is HELD,
+NEVER COPIED: the registry's own `SessionRow` travels unchanged from
+`RETURN_SESSION` into the component's props. Driven end to end through
+`NexusOverview`'s real promote closure, not a re-implementation of it. Marks come
+from the shipped densities' own `checkpointMark`; a 30-case status × attest table
+pins every mark to that function's answer and a source pin asserts no local tick
+exists in the directory. The standing approval is its own block above the gate,
+writable from `PendingApproval` alone. The gate card sits at the cursor with the
+document's own `ATTEST_WORDS`.
+
+**§6c.** The four ratified strings verbatim, for BOTH shapes of the limit —
+`documentUnavailable`, and a session id that resolves to nothing. Nothing armed,
+no rail, no denominator, the run reachable in the record. The label XD-26 forbids
+appears nowhere in the directory's source; the negative test is the only place it
+may be written, because writing it there is what forbids it everywhere else.
+
+**The copy is extracted, never retyped.** `scripts/generate-return-copy.ts` reads
+the designer's two files and emits `returnCopy.generated.ts` — 28 strings, every
+one a verbatim substring of a designer file or a mechanical split of one, which a
+test asserts against the files themselves. Three ratified sentences carry a
+scenario value ("12 hours", "yesterday, 12:11", "41") and are split ON that value,
+so the template is still designer bytes. `npm run fixtures:return-copy:check`
+fails closed on a stale copy, per the generated-artifact rule.
+
+### 2 · GATE-HELD: THE AUTHORED COPY — three sentences, extracted by tooling
+
+Printed by `npx ts-node -e "const {AUTHORED} = require('./src/renderer/
+components/return/arrivalModel'); ..."`, pasted from its output, never retyped:
+
+```
+=== AUTHORED BY WP-46 (gate-held) — 3 strings ===
+AWAY_UNKNOWN
+  "This surface has no record of when you last opened it, so the time away is not stated."
+DRIFT_NO_COUNT
+  "No producer reports how many facts are past their freshness window, so this line cannot state the count."
+NEEDS_YOUR
+  "Needs your "
+```
+
+Each exists because the fact it states has no ratified sentence AND no channel
+into the contract, so the alternative to authoring it was rendering a fabricated
+number or rendering nothing where something is true. The first two name a LIMIT
+OF THE PLATFORM in 6c's own voice rather than inventing a state. The third is the
+J-Glance key step "the needs-you row names WHAT is needed of the user", rendered
+from `PendingGate.awaits`.
+
+They live in ONE exported `AUTHORED` object so the gate can extract them
+mechanically rather than a human reading the tree for stray prose — and so the
+eval's own "everything-since-you-left" check can enumerate them.
+
+### 3 · ESCALATIONS — two counts with no channel, neither closed by a guess
+
+**E1 · THE DRIFT LINE'S COUNT.** XD-26 asks the drift line to render the count
+and where the facts live. WP-30's contract carries no count of facts past their
+freshness window: `ReservedRow.staleCount` is PRODUCER LIVENESS, a different
+question, and the golden fixture pins it at **0** for a morning the designer
+describes as having **41** stale facts in it. Rendering `staleCount` there would
+put a producer number under a fact-freshness sentence — mutation **M18** is
+exactly that mutation, and it is killed. The line therefore says what it cannot
+say (`DRIFT_NO_COUNT`) and then says the designer's second sentence, which needs
+no count. `driftLine(count)` already takes the count; the day a producer supplies
+one, one call site changes.
+
+**E2 · THE RESERVED ROW'S AFFECTED-SITE COUNT.** The designer's reserved row
+carries "Verdicts about 47 sites cannot be trusted while this stands."
+`ReservedRow` has no such field. The note is NOT rendered rather than rendered
+with an invented number.
+
+Both are host-side facts. I did not reach across the seam to add them, per the
+launch instruction.
+
+### 4 · DIVERGENCES FROM THE SHEET, declared rather than smoothed over
+
+1. **The accounting line's third count is a NUMERAL, not a word.** The designer's
+   line reads "2 need you · 1 changed overnight · three checks dark" — two
+   numerals and one word. A word for one arbitrary count needs a number-to-word
+   table, which is authored vocabulary by another name. All three are numerals.
+2. **The gate line renders the runbook id IN FULL.** The sheet reads "3 of 8 in
+   remediate"; this renders "3 of 8 in rb.remediate". An id cited in full is the
+   property the refusals and the Govern matrix both hold to, and a trimmed id is
+   a second spelling of the same thing.
+3. **The reference line has no version and no strictness.** `SessionRow` carries
+   `runbookId`, `runbookHash` and `capability` but not `version`, `strictness` or
+   `armedBy`, so `referenceLine` renders the id alone where the shipped densities
+   render "rb.x · v1.2.0 · marked strict". An honest absence, passed as `null`
+   rather than defaulted. A measured limit of the contract, not a render choice.
+4. **The gate card renders no actions.** The sheet's card offers "Continue to the
+   four" / "Stop here". Those are the session's own acts and belong to the
+   shipped approval card through the channels it already has; inventing act
+   buttons here would be the resume-button-that-re-arms XD-26 names as an
+   absence. The established-arm re-entry renders ZERO controls, and that is
+   pinned.
+5. **Deferrals are not stated in the accounting line.** XD-23 asks it to state
+   them. The contract has no deferral field — nothing on `Situation`,
+   `SessionRow` or `TriageView` could hold one — so stating a deferral count
+   would be inventing it. Related to E1; raised separately because it is XD-23's
+   sentence rather than XD-26's.
+
+### 5 · TWO CHANGES TO SHIPPED SURFACES, for the owner rather than buried
+
+1. **The rail badge no longer carries the unread-CHAT count.** It carries the
+   waiting count, per XD-23 ("an instrument, not an inventory") and the launch
+   instruction. `unreadChats` is still collected and still marks sessions read —
+   it is the sessions list's own signal — and it is no longer what the rail
+   escalates with. Mutation **M25** puts it back and is killed.
+2. **Home is the landing tab.** Sites was, and is one click away, unchanged. "The
+   arrival IS Home" is XD-26's framing; the landing-tab consequence is stated
+   here because it is a change a user will notice on first launch.
+
+### 6 · RECEIPTS, pasted after they printed
+
+- **Baseline, worktree, tree held still, exit captured before any pipe:**
+  `603 suites / 8,265 passed / 12 skipped / 8,277 total, exit 0` — matching the
+  WP-30 merge report's worktree figure exactly.
+- **After, worktree:** `607 suites / 8,316 passed / 12 skipped / 8,328 total,
+  exit 0`. Delta **+4 suites, +51 tests**, fully accounted: returnArrival 17,
+  returnReEntry 18, returnBridge 12, returnRailBadge 4. **The skipped column is
+  unmoved at 12**; the ten-test embedding boundary is a worktree-vs-primary
+  difference and both figures here are the worktree's.
+- **Mutation battery `scripts/wp46-battery.py`: 28/28 KILLED**, control
+  SURVIVED (correct), tree verified PRISTINE before and after, `--no-cache`
+  throughout, count-floored at 48 against a 51-test pristine baseline, both
+  summary lines parsed. The battery REFUSES to run over a source carrying
+  non-printing characters (WP-30's extension) — 13 files swept byte-level, clean.
+- **Four survivors on the first drive, all four closed**, and all four were gaps
+  in the PIN rather than in the code. Recorded in §7.
+- **Eval registry: 40 PASS / 0 FAIL / 28 BLOCKED / 10 OWNER-PENDING →
+  50 / 0 / 18 / 10.** Ten flips, all UX2-owned: **J-Return 3 PASS / 5 BLOCKED →
+  8 PASS**; **J-Glance 0 PASS / 8 BLOCKED → 5 PASS / 3 BLOCKED**. Every other
+  spec is byte-identical to the baseline — no criterion moved that this packet
+  does not own, and no regressions.
+- **`tests/intelligence-evals` own suites: 410 passed / 410 total.**
+- **`npx tsc -p . --noEmit` clean; `npx tsc -p tsconfig.test.json --noEmit`
+  clean; eslint clean.**
+- **Generator determinism**, two `--out` runs plus the tracked file, md5 pasted:
+  `9cf6552ea193282cbb42c122feddab61` × 3, 2,830 bytes.
+- **`git diff --stat poc/nexintelligence...HEAD`: 18 files changed, 3,766
+  insertions(+), 114 deletions(-).**
+- **Byte-level non-printing sweep over all 18 changed files: 0 hits.** No file
+  answers `Binary file matches`.
+
+### 7 · THE BATTERY'S FOUR SURVIVORS — what each one taught
+
+- **M07/M08 · TWO GATES IN SERIES, AND ONLY THE OUTER ONE PINNED.** The render
+  path reaches `standingApprovalSentence` only through `standingApprovals`, which
+  already filters to `approved` — so the two guards INSIDE the sentence builder
+  were never exercised by any render test, and a mutation to either survived
+  while the surface it protects was drawn correctly. A render test cannot pin a
+  guard the render never reaches. The state table now drives the inner gate
+  directly: only `approved` yields a sentence, and an `approved` with no moment
+  yields null rather than "You approved this plan undefined".
+- **M13 · A FIXTURE WITH NO INSTANCE OF THE CASE IN IT.** Both waiting rows in
+  the designer's morning are sessions, so a `promotableSessionId` that fell back
+  to the situation's own id changed nothing observable — the golden fixture
+  cannot pin this on its own. An incident-only row is added: it renders (a
+  situation of one is still a situation) and it gets NO door, because an event id
+  is not a session id. Same family as WP-30's own finding that a criterion
+  adjudicated against a fixture with no gates in it is a green over nothing.
+- **M28 · A GUARD NOTHING CAN REACH IS A GUARD NOTHING CAN CHECK.**
+  `fromSheet`'s throw-on-anchor-miss is unreachable while both designer files are
+  intact. The generator gained `--sheet`/`--fixture` input overrides and the test
+  drives it against a copy with one anchor removed: it must exit non-zero AND
+  write nothing. A ratified line the designer moved must fail loudly at
+  generation time, never render as a blank.
+
+### 8 · TWO OF WP-30's OWN ABSENCE TRIPWIRES, TURNED OVER RATHER THAN DELETED
+
+`probes.test.ts` carried "WP-30 shipped a FOLD and no UI — both halves pinned",
+whose own comment said the first line "goes red if someone renders the registry
+before UX build 2 rules how". UX build 2 has ruled how, and both went red exactly
+as designed — on the change they were watching for, not on a regression. They are
+turned over, not removed: the pair still fails in OPPOSITE directions (the first
+now goes red if the arrival stops reading the fold, which would mean a surface
+deriving its own verdicts), and both numbers still come from the same scan that
+reports `capabilityGrants` and `refusalTurn` at zero, so a scanner finding
+nothing could not produce the result.
+
+**Three J-Glance criteria stay BLOCKED on purpose**, with their reasons left in
+`JOURNEY_GAPS`: the two freshness criteria are about M1's fact set rather than
+M6's verdict rows, and "exactly one door per fact" is about the Glance surface's
+fact-level routes. A flip where everything turns green at once is a flip nobody
+measured.
+
+### 9 · LOCK SCOPE, as declared and as used
+
+`src/renderer/`, `src/main/ipc-handlers.ts`, `src/common/constants.ts` and
+`tests/intelligence-evals/` — the four announced on the base at `7f3973a4`.
+**`src/main/intelligence-host/` was NOT touched**: the query contract is consumed
+and never extended, which is why E1 and E2 are escalations rather than fields.
+`package.json` gained the two `fixtures:return-copy*` scripts, and
+`scripts/generate-return-copy.ts` + `scripts/wp46-battery.py` are new files in
+`scripts/` — neither directory is under any packet's lock.
+
+### 10 · ARCHITECT WORK IN THE PRIMARY CHECKOUT, uncommitted at the time of writing
+
+Found while gathering receipts, NOT touched by this agent, and it will be
+committed verbatim in its own attributed commit before any merge, per the
+standing WP-02 precedent:
+
+- ` M docs/intelligence/WORK_PACKETS.md` (+40 lines)
+- `?? docs/intelligence/SHELL_INVERSION_PLAN.md` (10,103 bytes)
+- `?? docs/intelligence/from-designer/from-designer-10-shell-inversion-plan.dc.html`
+  (21,052 bytes)
+
+This report's WORK_PACKETS entry WILL conflict with the architect's on the tail
+and is resolved by the record-merge blob standard with four-way verification
+(ancestor an exact prefix, each half an exact substring exactly once,
+chronological order, arithmetic in one named unit — bytes).
+
+### 11 · ABI STATE, disclosed
+
+**This session ran `npm test`, `npx jest`, the eval runner and the battery
+repeatedly, so better-sqlite3 is built for SYSTEM NODE** (this machine: v25.9.0,
+ABI 141). **Local cannot load the addon until `npm run rebuild` is run.**
+
+### 12 · WHAT THIS PACKET CANNOT CLAIM
+
+**No visual verdict.** The owner's live smoke of the arrival rides after merge as
+its own adjudicated event. Everything above is a measurement of a rendered
+element tree; nobody has looked at this on a screen, and this report does not say
+otherwise.
+
+**LOCKS `src/renderer/`, `src/main/ipc-handlers.ts`, `src/common/constants.ts`
+AND `tests/intelligence-evals/` REMAIN HELD. HOLDING AT THE GATE — the three
+authored sentences, the two escalations, the five divergences and the two changes
+to shipped surfaces are ruled before anything merges.**
