@@ -19770,3 +19770,52 @@ the merge report should have carried the updated receipt — the
 CURRENT receipts of record for `host-contract-proposal.md` are
 40,429 / `9c8fd949…`. Working file verified identical to the merged
 blob; the copy delivered to the owner is this version.
+
+---
+
+## THE NOW IMPLEMENTATION ROUTE — RATIFIED; VOCABULARY v1.4; WP-48 REGISTERED (2026-08-20, architect + owner)
+
+The designer audited the SHIPPED product and delivered an
+implementation route read from our own tree
+(`from-designer-10-now-implementation.md`, 5,650 bytes, md5
+`dc8a8778c4e99f9b2e295474281d4c39`) with the ratified sentence set as
+guarded templates (`fixtures/situation-headlines.js`, 6,588 bytes, md5
+`10c482e573fd21e13bb7be6a0372895f`) — both committed verbatim,
+device-verified. Numbering note: the designer reused "10"; this is
+POSITION 11 in the record's count, filename kept as delivered.
+
+**Ratified now, owner present and directing:**
+1. **The five templates, the list verdict, and the freshness
+   replacement are RATIFIED COPY** — including the fifth class
+   (`run.waiting.part-changed`), specified before any fleet row can
+   produce it: "the class the tier 1 / tier 2 split exists for,
+   specified now rather than discovered by an incident." Templates
+   with guards and named host fields, nothing computed in the file.
+2. **Controlled Vocabulary v1.4: the RUN-NOUN COLUMN is RATIFIED** —
+   a second column on the same capability rows, subject form, same
+   referent ("A plugin update run" beside "Update plugins across
+   sites"). The designer's own condition honored: it went through the
+   loop before rendering, and this entry is the loop's record.
+3. **The implementation route's placement argument is RATIFIED**: the
+   headline composes ONCE in the host (`sessionRegistry.ts`) and every
+   surface inherits it — a verdict assembled once cannot drift between
+   densities. The golden fixture's pinned strings are RE-RULED to the
+   new sentence set as part of the same packet (the fixture pins the
+   ratified copy, and the ratified copy just changed — the pin moves
+   WITH the ruling, never against it).
+4. **`AUTHORED.DRIFT_NO_COUNT` → "Freshness is not being reported
+   yet."** Ratified. Same honesty, one clause, stops explaining the
+   pipeline to a customer.
+
+**WP-48 · the Now verdicts is REGISTERED** — items 1–3 of the
+designer's own order (the freshness sentence, the headline composer
+rewrite against the templates, one-word chips with phrases moving to
+meta). Item 4 (the panel's opening state) WAITS on the "Now screen"
+sheet, not yet delivered. Items 5–6 (collapse the three queues into
+Now; merge permission panes, fold Fleet into Sites) are product IA —
+the owner's rulings, taken with the audit sheet in hand.
+
+**Open engineering question carried from the route's §2:** whether the
+four `incident.opened` events on theawfulpm-test carry a causal link
+(coalesce) or not (the row states its own limit, as drawn) — WP-48
+measures and reports rather than assumes.
