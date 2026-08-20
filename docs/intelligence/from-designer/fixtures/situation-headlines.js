@@ -46,7 +46,20 @@
     {
       id: 'run.waiting.nothing-written',
       // The class the current headline renders as "0 done and standing, 0 failed".
-      guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0',
+      //
+      // WP-48 GATE RULING (2026-08-20, architect + owner). Amended in the
+      // RATIFIED SOURCE rather than patched in the composer, so the guard and
+      // the code stay one rule and the agreement pin keeps holding.
+      //
+      // `&& gate === null` is belt-and-suspenders: a row STANDING AT A GATE can
+      // never be "cannot start", whatever any count says. Measured on the live
+      // fleet, one such row (cp.backup, 4 of 8) received this class's ask and
+      // it was false about it. The cause was a NAME COLLISION, now removed:
+      // `total` binds to the arming record's own scope — the "derived target
+      // set" this slot table always named — instead of to places-from-outcomes,
+      // which is the set that has an OUTCOME. Both facts are real; only one is
+      // this slot's.
+      guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0 && gate === null',
       headline: '{runNoun} has waited {age} and changed nothing',
       ask: 'It never received a target list, so it cannot start. Give it one, or close it.',
       chip: 'Waiting',

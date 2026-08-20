@@ -208,7 +208,17 @@ export function buildMorning(): Morning {
   })!;
   setIntelligenceCore(core);
 
-  const emitManifest = (args: { taskId: string; observedAt: string; procedure: ManifestProcedure | null; consulted?: boolean }): string =>
+  /**
+   * `targets` is the size of the arming's `scope.runnable`, spread
+   * CONDITIONALLY exactly as `chatAssembly` writes it — an arming that selected
+   * nothing carries no `scope` key at all. WP-48 binds the `{total}` slot to it,
+   * so a morning without one renders every session row from the DERIVED
+   * sentence and no ratified class is exercised at all. That is what this helper
+   * did before the scopes were added, and a mutation battery caught it: the
+   * headline and `parts[0].summary` were identical on every row, so swapping one
+   * for the other in the render changed nothing visible.
+   */
+  const emitManifest = (args: { taskId: string; observedAt: string; procedure: ManifestProcedure | null; consulted?: boolean; targets?: number }): string =>
     core.emitter.emit({
       observed_at: args.observedAt,
       topic: MANIFEST_TOPIC,
@@ -221,6 +231,19 @@ export function buildMorning(): Morning {
         task: args.taskId,
         procedure: args.procedure,
         retrieval: args.consulted ? [{ store: 'ledger', query: 'entity=x topic=episodic.*', returned: 2 }] : [],
+        ...(args.targets === undefined
+          ? {}
+          : {
+              scope: {
+                capability: args.procedure?.capability ?? 'cap.x',
+                runbookId: args.procedure?.runbook ?? 'rb.x',
+                runnable: Array.from({ length: args.targets }, (_, i) => ({
+                  siteId: `site-${i}`, siteName: `Site ${i}`, place: { host: 'local' },
+                })),
+                barred: [], excluded: [], places: ['local'],
+                from: 'selection', opensRun: args.targets > 0,
+              },
+            }),
       },
     }).id;
 
@@ -290,6 +313,7 @@ export function buildMorning(): Morning {
     observedAt: hoursAgo(14),
     procedure: { capability: RB_BULK.capability, runbook: RB_BULK.id, hash: RB_BULK.hash, status: 'delivered' },
     consulted: true,
+    targets: 2,
   });
   emitRationale({ taskId: charlieTask, observedAt: hoursAgo(14), decision: 'approved', checkpoint: 'cp.approval' });
   emitAct({ taskId: charlieTask, observedAt: hoursAgo(14), tool: 'wpe_backup_and_verify', targets: [CHARLIE_1] });
@@ -311,6 +335,7 @@ export function buildMorning(): Morning {
     observedAt: hoursAgo(3),
     procedure: { capability: RB_REMEDIATE.capability, runbook: RB_REMEDIATE.id, hash: RB_REMEDIATE.hash, status: 'delivered' },
     consulted: true,
+    targets: 1,
   });
   emitAct({ taskId: bravoTask, observedAt: hoursAgo(3), tool: 'contain_site', targets: [BRAVO] });
 
@@ -322,6 +347,7 @@ export function buildMorning(): Morning {
     observedAt: hoursAgo(5),
     procedure: { capability: RB_PURGE.capability, runbook: RB_PURGE.id, hash: RB_PURGE.hash, status: 'delivered' },
     consulted: true,
+    targets: 12,
   });
   emitRationale({ taskId: purgeTask, observedAt: hoursAgo(5), decision: 'approved', checkpoint: 'cp.approval', tool: 'wpe_purge_cache' });
   emitAct({ taskId: purgeTask, observedAt: hoursAgo(5), tool: 'wpe_purge_cache', targets: twelve });

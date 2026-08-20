@@ -2136,6 +2136,15 @@ const withAttr = (els: any[], name: string): any[] => els.filter((e) => attr(e, 
 
 interface ReturnSurface {
   triage: any;
+  /**
+   * THE CLOCK THE ARRIVAL WAS RENDERED WITH, carried so a check can call the
+   * surface's own generators with it. `metaLine` humanises an age, so calling
+   * it with a second `new Date()` would produce a string the surface never
+   * rendered whenever the two instants straddle an hour boundary — a flake that
+   * would surface as "the arrival renders prose" once an hour, which is the
+   * worst possible way for this criterion to be wrong.
+   */
+  now: Date;
   arrival: any[];
   session: any;
   reentry: any[];
@@ -2187,6 +2196,7 @@ function driveReturnSurface(fixture: EvalFixture): ReturnSurface {
 
   return {
     triage,
+    now,
     arrival: elementsOf(arrivalInstance.render()),
     session: gatedRow ?? null,
     reentry: elementsOf(new SessionReEntry({ session: gatedRow ?? null }).render()),
@@ -2428,17 +2438,33 @@ const UX2_DRIVEN: RegisteredCheck[] = [
       // fault was in the measurement, and the honest repair is to enumerate the
       // surface's sentence-producing paths and require it to use no other.
       //
-      // There are four generators, all of them pure functions of fold data and
-      // extracted copy, and they are called HERE with the fold's own values —
-      // so a string only counts as accounted if the surface could have produced
-      // it that way. Anything else on screen is prose about the night.
+      // The generators are pure functions of fold data and extracted copy, and
+      // they are called HERE with the fold's own values — so a string only
+      // counts as accounted if the surface could have produced it that way.
+      // Anything else on screen is prose about the night.
+      //
+      // WP-48 · THE SET GREW, AND IT GREW ON THE FOLD'S SIDE. The row's verdict
+      // — its headline, its ask, the status phrase and the identifier on its
+      // meta line — and the LIST verdict are now composed ONCE in
+      // `sessionRegistry` from the designer's ratified templates, so they are
+      // FIELDS of the fold, arriving exactly the way `tierReason` and
+      // `places.summary` already did. That is why they are added here rather
+      // than to the generator set: their origin is the record, not the surface.
+      // The count in the evidence below was already stale at "four" before this
+      // packet touched it (six were enumerated); it now names the number and
+      // the list is the authority.
       const fromFold = new Set<string>();
       for (const situation of [...s.triage.waiting, ...s.triage.changed]) {
         fromFold.add(String(situation.tierReason));
         fromFold.add(String(situation.places.summary));
+        fromFold.add(String(situation.headline));
+        fromFold.add(String(situation.ask));
+        fromFold.add(String(situation.state));
+        fromFold.add(String(situation.meta));
         for (const part of situation.parts) fromFold.add(String(part.summary));
       }
       fromFold.add(String(s.triage.reserved.headline));
+      fromFold.add(String(s.triage.verdict));
 
       const generated = new Set<string>([
         model.accountingLine(model.arrivalCounts(s.triage)),
@@ -2450,6 +2476,13 @@ const UX2_DRIVEN: RegisteredCheck[] = [
           model.needsLine(x.gate),
         ]),
         model.reservedDetail(s.triage.reserved),
+        // The meta line is COMPOSED — a place set, an age, a status phrase, an
+        // identifier and a parts chip inside the vocabulary's own separator.
+        // It is called here rather than reconstructed, which is the whole
+        // reason WP-48 moved it out of the component: a composition this check
+        // cannot call is a sentence-producing path it cannot account for, and
+        // an unaccountable path reads as prose whether or not it is.
+        ...[...s.triage.waiting, ...s.triage.changed].map((x: any) => model.metaLine(x, s.now)),
         ...Object.values(RETURN_COPY).map(String),
         ...Object.values(model.AUTHORED).map(String),
       ]);
@@ -2460,8 +2493,11 @@ const UX2_DRIVEN: RegisteredCheck[] = [
         ok: long.length > 0 && unaccounted.length === 0,
         evidence: [
           `${long.length} sentence-length string(s) render on the arrival, and EVERY ONE is either ` +
-            'a field of the fold (a rule, a part summary, a place set, the reserved headline) or the ' +
-            'exact output of one of the four generators, called here with the fold\'s own values',
+            'a field of the fold (a rule, a part summary, a place set, the reserved headline, and ' +
+            'since WP-48 the row\'s own verdict, ask, status and identifier plus the list verdict) ' +
+            'or the exact output of one of the SEVEN generators — accountingLine, driftLine, ' +
+            'awayHeadline, gateLine, needsLine, reservedDetail, metaLine — called here with the ' +
+            'fold\'s own values',
           `unaccounted strings: ${JSON.stringify(unaccounted)}`,
           'the accounting line and the gate line are COMPOSED — counts and gate fields inside ' +
             'ratified connectives — so they are matched against the generator\'s own output rather ' +

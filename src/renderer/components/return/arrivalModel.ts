@@ -42,15 +42,24 @@ import type {
 } from '../../../main/intelligence-host/sessionRegistry';
 import type { DeclaredProcedure } from '../../../main/intelligence-host/procedureView';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
+import { FRESHNESS } from '../../../main/intelligence-host/situationCopy.generated';
+import { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
 
 /**
- * EVERY SENTENCE THIS PACKET AUTHORED. Gate-held, per XD-26's copy discipline.
+ * THIS SURFACE'S COPY, IN ONE PLACE. Gate-held, per XD-26's copy discipline.
  *
- * Each one exists because the fact it states has NO ratified sentence and no
+ * Each entry exists because the fact it states has NO ratified sentence and no
  * channel into the query contract, so the alternative to authoring it was
  * rendering a fabricated number or rendering nothing where something is true.
  * Both of the first two name a LIMIT OF THE PLATFORM, in 6c's own voice, rather
  * than inventing a state.
+ *
+ * WP-48 · ONE OF THE THREE IS NO LONGER AUTHORED. `DRIFT_NO_COUNT` was
+ * replaced by a ratified sentence and now reads it from the generated module;
+ * it keeps its key here so this object stays the one place a gate report has to
+ * extract to see every sentence this surface renders. The object's name is
+ * therefore a claim about its ROLE, not about the provenance of every value in
+ * it — each entry says which it is.
  */
 export const AUTHORED = {
   /**
@@ -59,13 +68,26 @@ export const AUTHORED = {
    */
   AWAY_UNKNOWN: 'This surface has no record of when you last opened it, so the time away is not stated.',
   /**
-   * WP-30's contract carries NO count of facts past their freshness window —
-   * `ReservedRow.staleCount` is producer liveness, a different question, and
-   * the golden fixture pins it at 0 for a morning with 41 stale facts in it.
-   * The drift line therefore says what it cannot say, and then says the
-   * designer's own second sentence, which needs no count.
+   * WP-48 · NO LONGER AUTHORED — RATIFIED, and extracted rather than retyped.
+   *
+   * WP-30's contract still carries no count of facts past their freshness
+   * window (`ReservedRow.staleCount` is producer liveness, a different
+   * question, and the golden fixture pins it at 0 for a morning with 41 stale
+   * facts in it), so this line still cannot state a count. What changed is WHO
+   * wrote the sentence that says so. The packet authored a paragraph explaining
+   * the pipeline to a customer; the designer replaced it with one clause and
+   * the owner ratified it, so the bytes now come from
+   * `situation-headlines.js` §4 through the generator, like every other
+   * ratified string on this surface.
+   *
+   * THE KEY STAYS HERE ON PURPOSE. `AUTHORED` is the single gate-extractable
+   * home for this surface's copy, and a report that extracts it must still find
+   * the drift line — moving the key out would make the object one entry shorter
+   * without making the surface one sentence more honest. It is one sentence
+   * shorter, not one mechanism looser: the value is now ratified, and the
+   * provenance is stated here rather than implied by the object's name.
    */
-  DRIFT_NO_COUNT: 'No producer reports how many facts are past their freshness window, so this line cannot state the count.',
+  DRIFT_NO_COUNT: FRESHNESS.now,
   /** WHAT is needed of the user, from `PendingGate.awaits`. J-Glance's key step. */
   NEEDS_YOUR: 'Needs your ',
 } as const;
@@ -268,6 +290,32 @@ export function reservedDetail(reserved: ReservedRow): string {
   return reserved.dark
     .map((d) => (d.detail ? `${d.label} ${d.detail}` : d.label))
     .join(SEP);
+}
+
+/**
+ * THE META LINE — every short fact about a row, in one breath, as text.
+ *
+ * WP-48 moved the status phrase and the parts chip here, off the badge: a badge
+ * carries one word, and everything that is a phrase belongs on a line where a
+ * phrase reads. `state` and `meta` arrive composed from the host; `ageLabel` is
+ * the fold's own; `places.summary` is derived. Nothing here is authored.
+ *
+ * IT LIVES IN THE MODEL RATHER THAN IN THE COMPONENT for the reason `gateLine`
+ * does: the eval that proves this surface renders no prose has to be able to
+ * ask "could the surface have produced this string?", and it can only answer by
+ * calling the same function the surface called. A composition inlined in the
+ * component is a sentence-producing path the accounting cannot reach, which
+ * reads to that check as authored prose — correctly, because a path nothing can
+ * enumerate is a path that could contain anything.
+ */
+export function metaLine(situation: Situation, now: Date): string {
+  return [
+    situation.places.summary,
+    ageLabel(situation.since, now),
+    situation.state,
+    situation.meta,
+    situation.parts.length > 1 ? `${situation.parts.length} ${RETURN_COPY.PARTS_CHIP}` : '',
+  ].filter(Boolean).join(SEP);
 }
 
 /** A situation's session id, when it has one. The re-entry's only input. */
