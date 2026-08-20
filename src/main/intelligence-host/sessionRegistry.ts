@@ -1362,6 +1362,12 @@ function slotsOf(template: string): string[] {
 /**
  * Fill a ratified sentence from the bag.
  *
+ * EXPORTED for its own pins. A mutation battery found nothing holding either
+ * half of this function: an absent slot rendering the six characters
+ * `undefined`, and the gap an absent slot opens mid-sentence, both survived.
+ * Neither is reachable through the composer's public path often enough to pin
+ * there, which is WP-46's rule exactly — drive the builder directly.
+ *
  * An ABSENT slot renders empty rather than as its own braces: six literal
  * characters `{target}` reaching a customer is the substitution form of the
  * blank-where-a-sentence-belongs defect the copy generator exists to prevent.
@@ -1369,7 +1375,7 @@ function slotsOf(template: string): string[] {
  * whose headline has an unfillable slot — so an empty fill can only ever
  * shorten a meta or an ask, never leave the verdict itself with a hole.
  */
-function fill(template: string, bag: SlotBag): string {
+export function fillSituationSentence(template: string, bag: SlotBag): string {
   return template
     .replace(/\{([A-Za-z][A-Za-z0-9]*)\}/g, (_m, slot: string) => {
       const value = bag[slot];
@@ -1380,21 +1386,11 @@ function fill(template: string, bag: SlotBag): string {
 }
 
 /**
- * WHICH ratified class this row is — the designer's `row.kind`, in our words.
- *
- * The fixture writes `"run"` where this fold writes `'session'`: same referent,
- * the designer's vocabulary for the thing a person sees. `"agentFailure"` has
- * no counterpart at all — nothing in this fold produces one, because no
- * producer emits an agent-run failure into the ledger. That class is carried,
- * its selector is written, and it is unreachable until such a producer exists;
- * see the packet report, where it is declared rather than left to be discovered.
- */
-function designerKind(situation: Pick<Situation, 'kind'>): 'run' | 'incident' | 'agentFailure' {
-  return situation.kind === 'session' ? 'run' : 'incident';
-}
-
-/**
- * The guards, in the fixture's order, first match wins.
+ * The guards, in the fixture's order, first match wins — though nothing
+ * depends on the order: the five are MUTUALLY EXCLUSIVE, proven by brute force
+ * over the whole input domain in `situationHeadlines.test.ts` rather than
+ * asserted here. A battery mutation that reversed the order survived, which is
+ * the honest result and is why this says so instead of claiming otherwise.
  *
  * Each arm is the fixture's own guard string transcribed into TypeScript, and
  * `__tests__/situationHeadlines.test.ts` EVALUATES every guard string from the
@@ -1547,11 +1543,11 @@ function composeSessionCopy(row: SessionRow, column: TriageColumn, now: Date, si
 
   if (!template) return derivedCopy(runSummary(row), runbookId, '');
   return {
-    headline: fill(template.headline, bag),
-    ask: fill(template.ask, bag),
+    headline: fillSituationSentence(template.headline, bag),
+    ask: fillSituationSentence(template.ask, bag),
     chip: template.chip,
     state: template.state,
-    meta: fill(template.meta, bag),
+    meta: fillSituationSentence(template.meta, bag),
     headlineTemplate: template.id,
   };
 }
@@ -1584,14 +1580,14 @@ function composeIncidentCopy(incident: EventEnvelope, places: PlaceSet, derived:
     // attached, and that phrase is the designer's. Absent if the set ever drops
     // the class, which renders no state line rather than a stale one.
     const state = SITUATION_TEMPLATES.find((t) => t.id === 'incident.no-run')?.state ?? '';
-    return derivedCopy(derived, fill('{producer}', bag), state);
+    return derivedCopy(derived, fillSituationSentence('{producer}', bag), state);
   }
   return {
-    headline: fill(template.headline, bag),
-    ask: fill(template.ask, bag),
+    headline: fillSituationSentence(template.headline, bag),
+    ask: fillSituationSentence(template.ask, bag),
     chip: template.chip,
     state: template.state,
-    meta: fill(template.meta, bag),
+    meta: fillSituationSentence(template.meta, bag),
     headlineTemplate: template.id,
   };
 }
@@ -1609,8 +1605,8 @@ export function listVerdict(waiting: readonly Situation[]): string {
   const changedRuns = waiting.filter((s) => s.written.done > 0 || s.written.failed > 0).length;
   const bag: SlotBag = { needsYou: waiting.length, changedRuns };
   return changedRuns === 0
-    ? fill(LIST_VERDICT.allUnwritten, bag)
-    : fill(LIST_VERDICT.someChanged, bag);
+    ? fillSituationSentence(LIST_VERDICT.allUnwritten, bag)
+    : fillSituationSentence(LIST_VERDICT.someChanged, bag);
 }
 
 function safeDeadline(deps: SessionRegistryDeps, row: SessionRow): DerivedDeadline | undefined {

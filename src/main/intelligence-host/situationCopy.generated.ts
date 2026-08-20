@@ -66,12 +66,14 @@ export interface SituationTemplate {
 }
 
 /**
- * The five classes, IN THE FIXTURE'S OWN ORDER, which the composer relies on.
+ * The five classes, IN THE FIXTURE'S OWN ORDER.
  *
- * Selection is first-match, and two guards overlap on `done === 0 && failed
- * === 0`: `nothing-written` and `mid-procedure` are separated only by `total`.
- * A set in another order would select the wrong sentence for a mid-procedure
- * run, so the generator refuses to emit any order but this one.
+ * Selection is first-match, but the five guards are MUTUALLY EXCLUSIVE — no
+ * input satisfies two, which `situationHeadlines.test.ts` proves by brute
+ * force over the whole domain rather than by inspection. So the order does
+ * not change which sentence a row gets. The generator refuses to emit a
+ * reordered set anyway, because this array is the ratified artifact and a
+ * change to it must reach a human rather than regenerate in silence.
  */
 export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
   {

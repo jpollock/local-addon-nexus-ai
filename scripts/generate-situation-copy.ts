@@ -61,10 +61,21 @@ const SHAPE_VERSION = 1;
 /**
  * The five ratified ids, in the fixture's own order.
  *
- * Order is load-bearing: the composer selects FIRST MATCH, and two of the
- * guards overlap on `done === 0 && failed === 0` — `nothing-written` is
- * distinguished from `mid-procedure` only by `total`, and a set that arrived
- * in the other order would select the wrong sentence for a mid-procedure run.
+ * WHY THE ORDER IS CHECKED, stated correctly after a mutation battery
+ * falsified the first answer. This comment used to claim the order was
+ * load-bearing because `nothing-written` and `mid-procedure` overlap on
+ * `done === 0 && failed === 0`. They do not: one requires `total === 0` and
+ * the other `total > 0`, which are disjoint. Brute-forcing the guards over
+ * their whole input domain finds ZERO inputs satisfying two of the five, so
+ * first-match and last-match select identically and the battery's reordering
+ * mutation SURVIVED — correctly.
+ *
+ * The order is still refused when it changes, for the reason that actually
+ * applies: this array is the ratified ARTIFACT, and a reordered set is a
+ * change to ratified copy. It must reach a human rather than regenerate
+ * silently. `situationHeadlines.test.ts` pins the exclusivity itself, so if a
+ * future template ever does overlap another, that test fails and says so
+ * instead of leaving the order quietly load-bearing.
  */
 const RATIFIED_IDS = [
   'run.waiting.nothing-written',
@@ -300,12 +311,14 @@ function emit(): string {
     '}',
     '',
     '/**',
-    ' * The five classes, IN THE FIXTURE\'S OWN ORDER, which the composer relies on.',
+    ' * The five classes, IN THE FIXTURE\'S OWN ORDER.',
     ' *',
-    ' * Selection is first-match, and two guards overlap on `done === 0 && failed',
-    ' * === 0`: `nothing-written` and `mid-procedure` are separated only by `total`.',
-    ' * A set in another order would select the wrong sentence for a mid-procedure',
-    ' * run, so the generator refuses to emit any order but this one.',
+    ' * Selection is first-match, but the five guards are MUTUALLY EXCLUSIVE — no',
+    ' * input satisfies two, which `situationHeadlines.test.ts` proves by brute',
+    ' * force over the whole domain rather than by inspection. So the order does',
+    ' * not change which sentence a row gets. The generator refuses to emit a',
+    ' * reordered set anyway, because this array is the ratified artifact and a',
+    ' * change to it must reach a human rather than regenerate in silence.',
     ' */',
     'export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [',
   );

@@ -30,6 +30,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 
 import {
+  fillSituationSentence,
   guardHolds,
   listVerdict,
   selectSituationTemplate,
@@ -140,10 +141,39 @@ describe('the guards — two copies of one rule, pinned together', () => {
     }
   });
 
-  test('selection is FIRST MATCH in the fixture\'s order, which two guards depend on', () => {
-    // `nothing-written` and `mid-procedure` both hold on done===0 && failed===0.
-    // Order is what separates them, so a set that arrived reordered would select
-    // the wrong sentence rather than fail.
+  test('the five guards are MUTUALLY EXCLUSIVE — brute-forced, not inspected', () => {
+    // THE CLAIM THIS REPLACES WAS WRONG, and a mutation battery is what caught
+    // it. The first version of this file said the order was load-bearing
+    // because `nothing-written` and `mid-procedure` overlap on
+    // `done === 0 && failed === 0`. They cannot: one needs `total === 0`, the
+    // other `total > 0`. Reversing the selection order therefore changes
+    // nothing, and the battery's reordering mutation SURVIVED — correctly.
+    //
+    // So the real property is exclusivity, and it is proven over the whole
+    // input domain rather than over a hand-picked table. If a sixth class ever
+    // does overlap a fifth, this fails and says which two — instead of leaving
+    // the order silently load-bearing, which is what the wrong comment would
+    // have done.
+    const overlaps: string[] = [];
+    for (const kind of ['run', 'incident', 'agentFailure'] as const) {
+      for (const done of [0, 1, 2]) for (const failed of [0, 1, 2]) for (const total of [0, 1, 2]) {
+        for (const g of [null, gate()]) for (const runId of [null, 's1']) {
+          const input: SituationClassInput = { kind, done, failed, total, gate: g, runId };
+          const holding = SITUATION_TEMPLATES.filter((t) => guardHolds(t, input));
+          if (holding.length > 1) {
+            overlaps.push(`${JSON.stringify({ kind, done, failed, total, gated: g !== null, runId })} → ${holding.map((t) => t.id).join(' + ')}`);
+          }
+        }
+      }
+    }
+    expect(overlaps).toEqual([]);
+    // Not vacuous: the same sweep must actually select something, often.
+    let selected = 0;
+    for (const c of CASES) if (SITUATION_TEMPLATES.some((t) => guardHolds(t, c.input))) selected += 1;
+    expect(selected).toBeGreaterThan(5);
+  });
+
+  test('the ratified set is the five, in the fixture\'s order', () => {
     expect(SITUATION_TEMPLATES.map((t) => t.id)).toEqual([
       'run.waiting.nothing-written',
       'run.waiting.mid-procedure',
@@ -194,6 +224,28 @@ describe('an unfillable headline falls back rather than rendering a hole', () =>
       { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: null };
     expect(guardHolds(SITUATION_TEMPLATES[3], input)).toBe(true);
     expect(selectSituationTemplate(input, { ...FULL_BAG, finding: undefined })).toBeNull();
+  });
+
+  test('an absent slot renders EMPTY, never the six characters "undefined"', () => {
+    // The battery's tell: `String(undefined)` is a word a customer can read,
+    // and nothing pinned that it never reaches one. The ask is where an absent
+    // slot can still land, because only the headline gates selection.
+    expect(fillSituationSentence('{producer}', { producer: undefined })).toBe('');
+    expect(fillSituationSentence('{finding} on {target}, and nothing is fixing it',
+      { finding: 'a backdoor', target: undefined })).not.toContain('undefined');
+    // Zero is a VALUE, not an absence — "0 failed" must survive the same path.
+    expect(fillSituationSentence('{failed} failed', { failed: 0 })).toBe('0 failed');
+  });
+
+  test('an absent slot leaves NO double space where its value was', () => {
+    // "Waiting at cp.x,  . 1 failed" — the gap an absent slot opens mid-sentence.
+    // Collapsing it is the difference between a shortened sentence and a broken
+    // one, and the battery found nothing pinning the collapse.
+    const gapped = fillSituationSentence('Waiting at {checkpoint}, {position}. {failed} failed.', {
+      checkpoint: 'cp.approval', position: undefined, failed: 1,
+    });
+    expect(gapped).not.toMatch(/\s{2,}/);
+    expect(gapped).toBe('Waiting at cp.approval, . 1 failed.');
   });
 
   test('a slot missing from the ASK does not decline the class — only the headline gates', () => {
@@ -293,6 +345,22 @@ describe('the copy discipline, asserted over the ratified set', () => {
     }
   });
 
+  test('the surface\'s drift line READS the ratified sentence — not the other half of it', () => {
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const model = require('../../../renderer/components/return/arrivalModel');
+    /* eslint-enable @typescript-eslint/no-var-requires */
+    // The battery found nothing pinning WHICH half of FRESHNESS the surface
+    // reads: swapping `now` for `then` left every test green while the drift
+    // line said its second sentence twice and never said the first.
+    expect(model.AUTHORED.DRIFT_NO_COUNT).toBe(FRESHNESS.now);
+    const line = model.driftLine(null);
+    expect(line).toBe(`${FRESHNESS.now} ${FRESHNESS.then}`);
+    expect(line.indexOf(FRESHNESS.then)).toBe(line.lastIndexOf(FRESHNESS.then));
+    // …and a line that HAS a count still renders the count, not the sentence.
+    expect(model.driftLine(41)).toContain('41');
+    expect(model.driftLine(41)).not.toContain(FRESHNESS.now);
+  });
+
   test('the freshness replacement is one sentence, and shorter than what it replaced', () => {
     const was = 'No producer reports how many facts are past their freshness window, so this line cannot state the count.';
     expect(FRESHNESS.now).toBe('Freshness is not being reported yet.');
@@ -384,7 +452,7 @@ describe('the generator — the tracked module is what the designer\'s file prod
     expect(r.message).toContain('the ratified template set changed');
   });
 
-  test('a REORDERED set fails loudly — order is what separates two overlapping guards', () => {
+  test('a REORDERED set fails loudly — the ratified artifact changed, whatever it selects', () => {
     const source = fs.readFileSync(FIXTURE_JS, 'utf-8');
     const r = refuses(() => source
       .replace("id: 'run.waiting.nothing-written'", "id: '__A__'")

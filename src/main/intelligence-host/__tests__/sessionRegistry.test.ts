@@ -1528,6 +1528,20 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
    * never hand it composes nothing.
    */
 
+  /**
+   * A runbook of NARRATIVE checkpoints only, under a capability the ratified
+   * vocabulary covers. A manifest alone completes it, so it lands in the
+   * CHANGED column having written nothing — the one shape that reaches guard 1
+   * from the wrong column, and therefore the only shape that can prove the
+   * column restriction is doing work.
+   */
+  const RB_DIAGNOSE = runbook({
+    id: 'rb.diagnose',
+    capability: 'cap.diagnose_site',
+    hash: 'sha256:diagnose-1',
+    checkpoints: [narrative('cp.read'), narrative('cp.report')],
+  });
+
   /** A run under a document it can be folded against, with nothing written. */
   function unwrittenRunUnderDocument(): string {
     const t = mintTaskId();
@@ -1729,6 +1743,39 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     const snapshot = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) }));
     expect(snapshot.situations).toHaveLength(1);
     expect(snapshot.situations[0].parts.filter((p) => p.kind === 'incident')).toHaveLength(4);
+  });
+
+  test('a COMPLETE run is never given a waiting class, however well its guard fits', () => {
+    // Guard 1 fits this row exactly — a `cap.diagnose_site` run, nothing
+    // written, no targets — and it must not compose it, because the ratified
+    // set is the NOW list's and this row is finished. Rendering it would tell a
+    // reader a completed diagnosis "has waited 4h and changed nothing" and
+    // offer to close it. This is the row that proves the column restriction is
+    // load-bearing rather than decorative; without it the battery's
+    // apply-to-every-column mutation survives.
+    emitManifest({
+      taskId: mintTaskId(),
+      observedAt: hoursAgo(4),
+      procedure: {
+        capability: RB_DIAGNOSE.capability,
+        runbook: RB_DIAGNOSE.id,
+        hash: RB_DIAGNOSE.hash,
+        status: 'delivered',
+      },
+      consulted: true,
+    });
+    expect(ledgerCount(MANIFEST_TOPIC)).toBe(1); // shape #15
+
+    const triage = createSessionRegistry(deps({ runbooks: lookup(RB_DIAGNOSE) })).triage();
+    expect(triage.changed).toHaveLength(1);
+    const [row] = triage.changed;
+    // The guard's own inputs are satisfied…
+    expect(row.written).toEqual({ done: 0, failed: 0, total: 0 });
+    expect(row.gate).toBeUndefined();
+    // …and the class is still not composed.
+    expect(row.headlineTemplate).toBeNull();
+    expect(row.headline).not.toContain('A diagnosis has waited');
+    expect(row.ask).toBe('');
   });
 
   test('the list verdict is generated from the very rows the columns render', () => {
