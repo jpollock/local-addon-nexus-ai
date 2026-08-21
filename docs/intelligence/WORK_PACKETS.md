@@ -23804,3 +23804,50 @@ and WP-55 cannot draw the class without the fold supplying them.
 Standard discipline, all of it, plus the real-ledger exhibit the launch
 instruction requires: a newly produced sibling set coalescing into one
 situation with parts, BESIDE the four historical ones staying separate.
+
+---
+
+## WP-56 · LOCK ANNOUNCE AMENDED (2026-08-21) — two test fixtures, and a crossed claim WP-51 could not have seen
+
+*Amended ON THE BASE at the moment the need was measured, per WP-52's rule: "a
+lock announce that turns out to be too narrow is amended on the base at the
+moment the need is discovered, never corrected retroactively in the merge
+report."*
+
+**ADDED TO THE LOCK:**
+
+| surface | why, and it was measured rather than anticipated |
+|---|---|
+| `tests/unit/renderer/returnRailBadge.test.ts` | Constructs a `TriageView` literal. `TriageView.counts` is REQUIRED — deliberately, because an optional count invites the `?? waiting.length` fallback that is the whole defect — so the fixture stopped compiling. Two-line addition, no assertion touched. |
+| `tests/unit/renderer/cardIsTemplate.test.tsx` | Same cause, same shape. |
+| `scripts/wp56-battery.py` | New file, no collision. |
+
+Both fixtures DERIVE the counts from their own rows rather than writing a
+literal, for the contract's own reason: a hand-written count is free to
+disagree with the list it describes. Neither is inside WP-54's `src/renderer/`
+lock — they live under `tests/` — but they are named here rather than left to
+surface in a diff, because WP-54's item 1 is a badge pin and a sibling reading
+only the announce table would not expect this packet in a badge test file.
+
+**A CROSSED CLAIM ON `src/main/ipc-handlers.ts`, AND WP-51 COULD NOT HAVE SEEN
+IT.** WP-51's announce (`20a01d45`) locks `ipc-handlers.ts` for wiring and
+states it "verified free at the tail rather than assumed". That verification
+was correct about WP-54 and WP-54a, which both name the file as NOT locked —
+and it read WP-56's announce for the same sentence, which is there. But this
+packet's table then CLAIMS the file on the strength of those two releases, one
+row further down. Two packets now hold it.
+
+**Assessed rather than escalated, because the collision is additive and both
+edits are the wiring the integration-lock rule permits:** WP-56 adds two
+`safeHandle` calls immediately beneath the four `RETURN_*` reads; WP-51's is
+its producer's wiring, elsewhere in the file, as its final step. Whichever
+lands second takes both hunks. Named here so WP-51 learns of it from the base
+rather than from a conflict, which is the whole purpose of announcing.
+
+**THE BASE IS INHERITED RED, and this packet did not cause it.** WP-51's
+announce states it at 1 suite / 6 tests — the designer's new sheet is ahead of
+the generator's ratified id list, from the architect's fixture commit
+`09c32d99`. WP-56's own baseline was taken at `bb16e9de`, BEFORE that commit,
+and measured **620 suites / 8,527 passed / 12 skipped / 8,539 total, exit 0**.
+The gate report reconciles against that figure and attributes the inherited red
+separately rather than absorbing it into its own delta.
