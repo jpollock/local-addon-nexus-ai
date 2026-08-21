@@ -33,9 +33,10 @@ import {
   askTemplateFor,
   openingAsks,
   openingState,
+  runNounInSentence,
 } from '../../../src/renderer/components/DockedPanel/openingAsksModel';
 import { NOW_COPY, OPENING_ASKS, PANEL_INVITATION, SCOPE_LINE } from '../../../src/renderer/components/DockedPanel/openingCopy.generated';
-import { SITUATION_TEMPLATES } from '../../../src/main/intelligence-host/situationCopy.generated';
+import { RUN_NOUN, SITUATION_TEMPLATES } from '../../../src/main/intelligence-host/situationCopy.generated';
 import type { Situation, TriageView } from '../../../src/main/intelligence-host/sessionRegistry';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -46,6 +47,10 @@ const SHEET = path.join(REPO_ROOT, 'docs', 'intelligence', 'from-designer', 'fro
 function row(over: Partial<Situation> = {}): Situation {
   return {
     id: 'sit-1', kind: 'session', column: 'waiting', tier: 2,
+    // WP-49a · every session row carries its capability now, so the default
+    // fixture carries one too. A row built WITHOUT it is a real state (an
+    // incident row), and the withholding pins below drive that deliberately.
+    capability: 'cap.bulk_plugin_update',
     tierReason: 'r', places: { tokens: [], highest: null, atHighest: 0, total: 0, unresolved: 0, summary: '' },
     since: '2026-08-19T00:00:00.000Z', lastEventId: 'evt', parts: [],
     headline: 'h', ask: 'a', chip: '', state: '', meta: 'rb.bulk-plugin-update',
@@ -106,7 +111,8 @@ describe('the asks are drawn from the visible rows, by situation class', () => {
       // A SECOND row of the SAME class contributes nothing — the panel offers
       // three different questions, not one question about three rows.
       row({ id: 'b', headlineTemplate: 'run.waiting.mid-procedure', gate: { ...gate, checkpointId: 'cp.verify' }, written: { done: 0, failed: 0, total: 5 } }),
-      row({ id: 'c', headlineTemplate: 'incident.no-run', kind: 'incident' }),
+      // An incident row has NO capability — it was never armed under one.
+      row({ id: 'c', headlineTemplate: 'incident.no-run', kind: 'incident', capability: undefined }),
       row({ id: 'd', headlineTemplate: 'run.waiting.nothing-written' }),
       row({ id: 'e', headlineTemplate: 'run.waiting.part-changed', gate, written: { done: 1, failed: 0, total: 5 } }),
     ];
@@ -183,16 +189,68 @@ describe('the asks are drawn from the visible rows, by situation class', () => {
     }
   });
 
-  test('THE AUTHORED SET IS EXTRACTABLE, and it is exactly three sentences', () => {
+  test('THE AUTHORED SET IS EXTRACTABLE, and WP-50 took it from three to two', () => {
     // `AUTHORED` is the one gate-extractable home for this surface's copy, so a
     // gate report pulls every sentence out mechanically instead of a human
-    // reading the tree for stray prose. A fourth authored sentence appearing
+    // reading the tree for stray prose. A third authored sentence appearing
     // without a ruling fails here.
+    //
+    // WP-50 · `run.waiting.nothing-written` LEFT THIS SET. WP-49's gate ruled
+    // that both `{runbookId}` asks "retire when WP-49a lands, because the run
+    // noun they actually want is derivable from ratified vocabulary" —
+    // WP-49a landed `Situation.capability`, so §5's own bytes template again and
+    // the interim stand-in is deleted rather than kept beside its replacement.
     expect(Object.values(AUTHORED)).toEqual([
-      'Why has {runbookId} changed nothing?',
       'Why is nothing fixing the open findings?',
-      'What has {runbookId} already changed?',
+      'What has {runNoun} already changed?',
     ]);
+
+    // AND NO `{runbookId}` SURVIVES AS A RUN'S SUBJECT ANYWHERE ON THIS SURFACE.
+    // That is the retirement's actual content: the interim form's defect was
+    // naming a PROCEDURE where a run noun belongs, and deleting one of the two
+    // while leaving the other would retire the symptom on half the rows.
+    for (const sentence of Object.values(AUTHORED)) {
+      expect(sentence).not.toContain('{runbookId}');
+    }
+  });
+
+  test('THE RETIRED ASK IS THE DESIGNER\'S SENTENCE AGAIN, filled from the ratified vocabulary', () => {
+    // §5's own bytes: "Why has the update run changed nothing?" — the run noun
+    // is a slot now, and the vocabulary fills it. This is the retirement's
+    // actual product, and it is asserted against the RENDERED sentence rather
+    // than against the template, because a template nobody can fill is not copy.
+    const [ask] = openingAsks([
+      row({ headlineTemplate: 'run.waiting.nothing-written', capability: 'cap.bulk_plugin_update' }),
+    ]);
+    expect(ask).toBeDefined();
+    expect(ask.text).toBe('Why has a plugin update run changed nothing?');
+    // A DIFFERENT run gets a different noun — the false-sentence class WP-48
+    // built a tripwire for ("an update run beside a containment run's row") is
+    // what the interim form could not avoid and this one cannot commit.
+    const [other] = openingAsks([
+      row({ headlineTemplate: 'run.waiting.nothing-written', capability: 'cap.incident_containment' }),
+    ]);
+    expect(other.text).toBe('Why has a containment run changed nothing?');
+  });
+
+  test('THE ONE MECHANICAL TRANSFORM · the ratified noun is lowercased mid-sentence and nothing else', () => {
+    // v1.4's nouns are written to HEAD a headline ("A plugin update run has
+    // waited…"), so the capital article is a rendering artifact where the noun
+    // sits mid-sentence. Lowercasing the first character invents no vocabulary.
+    expect(RUN_NOUN['cap.bulk_plugin_update']).toBe('A plugin update run');
+    expect(runNounInSentence('cap.bulk_plugin_update')).toBe('a plugin update run');
+    // …and it is skipped when the second character is uppercase, so an acronym
+    // is never damaged.
+    expect(runNounInSentence('cap.nothing_named_this')).toBeUndefined();
+  });
+
+  test('A ROW WITH NO CAPABILITY WITHHOLDS THE ASK — shortening it is not safer', () => {
+    // An incident row is never armed under a capability. The run-noun ask has
+    // nothing to name, so it is dropped whole.
+    const asks = openingAsks([
+      row({ headlineTemplate: 'run.waiting.nothing-written', capability: undefined }),
+    ]);
+    expect(asks).toEqual([]);
   });
 });
 

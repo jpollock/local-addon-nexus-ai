@@ -35,6 +35,10 @@ function triageWith(n: number): TriageView {
     // WP-48's list verdict. The badge reads `waiting.length` and nothing else,
     // which is the point of this suite, so the sentence is inert here.
     verdict: '',
+    // WP-49a · rider 1's rows. Empty here deliberately: the badge counts what
+    // NEEDS the user, and a working run needs nobody — the fold has already
+    // excluded it from `waiting`, so there is nothing for this suite to read.
+    working: [],
     cursor: 'evt_1',
   };
 }

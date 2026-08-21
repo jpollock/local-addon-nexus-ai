@@ -25,26 +25,33 @@
  *     hole where the subject was: `fillSituationSentence` would render the gap
  *     empty, so the check is made HERE, before the fill, and the ask is dropped.
  *
- * THE MEASUREMENT BEHIND `AUTHORED`, and why it is three sentences rather than
- * none. §5 supplies three asks. Only one of them — "What does cp.backup need
- * from me?" — carries a value the query contract can supply (`cp.backup` is
- * `PendingGate.checkpointId`), so only that one could be split into a template
- * out of the designer's own bytes; it is, in `openingCopy.generated.ts`. The
- * other two name facts `Situation` does not carry:
+ * THE MEASUREMENT BEHIND `AUTHORED`, AND THE HALF OF IT WP-50 RETIRED. §5
+ * supplies three asks. At WP-49 only one — "What does cp.backup need from me?" —
+ * carried a value the query contract could supply (`cp.backup` is
+ * `PendingGate.checkpointId`), so only that one was split into a template out of
+ * the designer's own bytes. The other two named facts `Situation` did not carry,
+ * and both were escalated at that gate rather than routed around:
  *
  *  - "Why has **the update run** changed nothing?" needs the run noun, which is
- *    `RUN_NOUN[capability]` — and `Situation` carries no `capability`. Rendering
- *    the specimen unchanged would name an update run beside a containment run's
- *    row, which is the false-sentence class WP-48 built a tripwire for.
+ *    `RUN_NOUN[capability]`. **RETIRED AT WP-50** — WP-49a put `capability` on
+ *    `Situation`, so the ask is extracted from §5's own bytes again
+ *    (`openingCopy.generated.ts`) and its authored stand-in is GONE. This is the
+ *    retirement the WP-49 ruling named: "BOTH retire when WP-49a lands, because
+ *    the run noun they actually want is derivable from ratified vocabulary."
  *  - "Are the four findings on **theawfulpm-test** related?" needs the incident's
- *    target entity id. `Situation.places` answers WHERE a target is, not what it
- *    is called; the id reaches the row's headline through the fold's own bag and
- *    is not carried as a field.
+ *    target entity id AND a count of siblings. `Situation.places` answers WHERE a
+ *    target is, not what it is called, and the four real findings do not coalesce
+ *    (WP-48a's registered debt), so nothing on the contract can supply the count
+ *    either. **STILL AUTHORED, still gate-held**, and still escalated.
  *
- * Both are escalated at the gate as contract gaps, not routed around. Until they
- * are ruled, the generalised sentences below are AUTHORED and gate-held.
+ * So the authored set falls from three to two, and the two that remain are the
+ * one §5 never supplied (`part-changed`) and the one the contract still cannot
+ * fill (`incident.no-run`). Both now name the run in the RATIFIED vocabulary
+ * where they name it at all — no `{runbookId}` stands in for a run noun anywhere
+ * on this surface.
  */
 import type { Situation, TriageView } from '../../../main/intelligence-host/sessionRegistry';
+import { RUN_NOUN } from '../../../main/intelligence-host/situationCopy.generated';
 import { fillSituationSentence } from '../../../main/intelligence-host/sessionRegistry';
 import type { SlotBag } from '../../../main/intelligence-host/sessionRegistry';
 import { OPENING_ASKS, PANEL_INVITATION } from './openingCopy.generated';
@@ -67,13 +74,6 @@ import { OPENING_ASKS, PANEL_INVITATION } from './openingCopy.generated';
  */
 export const AUTHORED = {
   /**
-   * Generalised from §5's "Why has the update run changed nothing?" — the run
-   * noun replaced by the runbook id, because the noun is not on the contract.
-   * The question the specimen asks is unchanged; only its subject is one the
-   * row can prove.
-   */
-  'run.waiting.nothing-written': 'Why has {runbookId} changed nothing?',
-  /**
    * Generalised from §5's "Are the four findings on theawfulpm-test related?" —
    * the count and the site both dropped rather than guessed. The class means
    * exactly "an open finding with no run attached", so the question the row
@@ -84,8 +84,14 @@ export const AUTHORED = {
    * NOT SUPPLIED BY THE POSITION DOCUMENT AT ALL. §5 draws a morning with no
    * part-changed row in it, and this is the class whose row matters most when it
    * appears — a part-changed world compounding against an untouched one.
+   *
+   * WP-50: its subject moves from `{runbookId}` to `{runNoun}`. The sentence is
+   * still authored — no §5 bullet supplies it — but it no longer puts a
+   * PROCEDURE IDENTIFIER where a run noun belongs, which is what made the
+   * interim form interim. The frame is this packet's; every word inside the
+   * brace is the ratified vocabulary's.
    */
-  'run.waiting.part-changed': 'What has {runbookId} already changed?',
+  'run.waiting.part-changed': 'What has {runNoun} already changed?',
 } as const;
 
 /**
@@ -126,10 +132,38 @@ export function askBag(situation: Situation): SlotBag {
     checkpoint: situation.gate?.checkpointId,
     position: situation.gate ? `${situation.gate.index} of ${situation.gate.of}` : undefined,
     runbookId: situation.kind === 'session' ? situation.meta || undefined : undefined,
+    runNoun: runNounInSentence(situation.capability),
     done: situation.written.done,
     failed: situation.written.failed,
     total: situation.written.total ?? undefined,
   };
+}
+
+/**
+ * The ratified run noun, mid-sentence — `RUN_NOUN[capability]` with ONE
+ * mechanical transform and no new words.
+ *
+ * Controlled Vocabulary v1.4's nouns are written to HEAD a sentence ("A plugin
+ * update run has waited 60 hours and changed nothing"), so they carry a capital
+ * article. §5's ask puts the noun in the middle ("Why has the update run changed
+ * nothing?"), where that capital is a rendering artifact rather than a word. The
+ * transform is lowercasing the FIRST CHARACTER and nothing else — it invents no
+ * vocabulary, and it is skipped when the second character is also uppercase so
+ * an acronym is never damaged.
+ *
+ * A capability the vocabulary does not name returns `undefined`, and
+ * `openingAsks` then WITHHOLDS the ask entirely rather than shortening it. That
+ * is the module's third rule, unchanged: a sentence with its subject filled in
+ * as empty is a different sentence.
+ */
+export function runNounInSentence(capability: string | undefined): string | undefined {
+  if (!capability) return undefined;
+  const noun = RUN_NOUN[capability];
+  if (!noun) return undefined;
+  if (noun.length > 1 && noun[1] === noun[1].toUpperCase() && noun[1] !== noun[1].toLowerCase()) {
+    return noun;
+  }
+  return noun.charAt(0).toLowerCase() + noun.slice(1);
 }
 
 /** Every `{slot}` a template carries. */

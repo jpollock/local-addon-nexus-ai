@@ -264,3 +264,76 @@ describe('the anchor runbook across a multi-turn session', () => {
     forgetChatAssemblySession('s2');
   });
 });
+
+// ---------------------------------------------------------------------------
+// WP-48b · the arming's scope reaches the RECORD, through the wired path
+// ---------------------------------------------------------------------------
+
+/**
+ * The producer's registered debt, driven where it actually lives.
+ *
+ * `manifestScope.test.ts` pins the derivation and the fold; this pins the WIRING
+ * — that a real `assembleForChatTurn` writes the key at all. That distinction is
+ * the whole reason WP-48's reader sat correct and permanently null: the scope was
+ * being handed to `notifyProcedureState` (an IPC stream to the renderer) and to
+ * nothing that reaches a ledger, while a comment in the fold said otherwise. A
+ * derivation test would have passed against that tree.
+ */
+describe('WP-48b · the manifest records the arming\'s scope', () => {
+  test('an armed turn records the EMPTY SET when nothing selected targets', async () => {
+    const first = await turn(armed());
+    const [event] = core.ledger.query({ correlation: first!.taskId });
+    const payload = event.payload as Record<string, unknown>;
+
+    // The event exists and the procedure was delivered — shape #15 before the
+    // assertion that matters.
+    expect((payload.procedure as Record<string, unknown>).status).toBe('delivered');
+    // A predicate arming selected nothing, and the record now SAYS SO rather
+    // than staying silent. This is the state every run on the owner's real
+    // ledger is in.
+    expect(payload.scope).toEqual({ runnable: [], from: 'no-selection' });
+  });
+
+  test('an UNARMED turn records no scope key at all — the parity floor', async () => {
+    const plain = await turn();
+    const [event] = core.ledger.query({ correlation: plain!.taskId });
+    const payload = event.payload as Record<string, unknown>;
+
+    expect(payload.procedure).toBeNull();
+    // Not `scope: undefined`, which would read as a value the producer chose to
+    // send: ABSENT, so a turn that armed nothing writes the manifest it wrote
+    // before this packet existed.
+    expect(Object.prototype.hasOwnProperty.call(payload, 'scope')).toBe(false);
+  });
+
+  test('a SELECTION armed at the comparator reaches the record — WP-37\'s carrier, landed', async () => {
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { recordArmingRequest } = require('../procedureArming');
+    /* eslint-enable @typescript-eslint/no-var-requires */
+
+    recordArmingRequest(CAPABILITY, new Date('2026-08-20T09:00:00.000Z'), {
+      capability: CAPABILITY,
+      runbookId: 'rb.bulk-plugin-update',
+      runnable: [
+        { siteId: 'site-a', siteName: 'Alpha', place: { host: 'local' } },
+        { siteId: 'site-b', siteName: 'Bravo', place: { host: 'local' } },
+      ],
+      barred: [],
+      excluded: [],
+      places: ['local'],
+      from: { surface: 'comparator', comparatorId: 'cmp-1', filter: 'staging' },
+      opensRun: true,
+    });
+
+    // NO `procedure` ON THE REQUEST AT ALL. A caller-supplied request stays
+    // authoritative and carries no scope (20c's contract), so passing one would
+    // pin the caller rather than the carrier: the queue has to be what arms this
+    // turn, through `procedureRequestForTurn` and the live grant set.
+    const t = await turn();
+    const [event] = core.ledger.query({ correlation: t!.taskId });
+    const payload = event.payload as Record<string, unknown>;
+
+    expect((payload.procedure as Record<string, unknown>).armed_by).toBe('model-request');
+    expect(payload.scope).toEqual({ runnable: ['site-a', 'site-b'], from: 'selection' });
+  });
+});

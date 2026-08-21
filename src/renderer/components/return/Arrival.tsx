@@ -359,13 +359,26 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
       // They stay BENEATH the verdict rather than replacing it: tear 2's rule is
       // that a correct list of parts is not a verdict about the whole, and the
       // row now says both.
-      ...situation.parts.map((part, i) =>
-        React.createElement(
-          'div',
-          { key: `part-${i}`, style: styles.meta, 'data-part': part.kind },
-          part.summary,
+      //
+      // WP-50 · FIELD FINDING 2 — A PART THAT IS THE HEADLINE IS NOT A PART.
+      // The owner's first live look: "the headline repeats as the first meta
+      // line on every row." On a row whose class no ratified guard selected, the
+      // composer falls back to the DERIVED sentence — which is `runSummary(row)`
+      // — and `parts[0].summary` is `runSummary(row)` too. One derivation, two
+      // slots, so the card said its own sentence twice on every run row on the
+      // real fleet. ONE COMPARISON, and it is a comparison rather than an index
+      // rule: suppressing `parts[0]` positionally would hide a distinct first
+      // part the day the headline is a template's, which is the more common
+      // case once the producers pay their debts.
+      ...situation.parts
+        .filter((part) => part.summary !== situation.headline)
+        .map((part, i) =>
+          React.createElement(
+            'div',
+            { key: `part-${i}`, style: styles.meta, 'data-part': part.kind },
+            part.summary,
+          ),
         ),
-      ),
       // J-Return's WHERE — the gate, by checkpoint id, with its position.
       ...(situation.gate
         ? [
@@ -577,6 +590,25 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
           { key: 'nothing-needed', style: styles.sectionGap, 'data-now-list': 'nothing-needed' },
           // NO BADGE. Nothing here needs the user, so nothing here escalates.
           React.createElement('div', { style: styles.columnHead }, NOW_COPY.NOTHING_NEEDED_HEAD),
+          // WP-49a · XD-27 RIDER 1, now that the contract carries its fact.
+          // "An in-flight run needing nothing goes to Nothing-needed-of-you as
+          // ONE LINE with its door." The line is composed in the host from the
+          // ratified run noun and the fold's own status — this renders it and
+          // adds nothing, which is the packet's own "no new renderer logic
+          // beyond consumption". Empty on the real fleet today, by measurement,
+          // and the section is unchanged when it is.
+          ...(triage.working ?? []).map((w) =>
+            React.createElement(
+              'div',
+              { key: `working-${w.sessionId}`, style: styles.row, 'data-working': w.sessionId },
+              React.createElement('div', { style: styles.statement }, w.line),
+              React.createElement(
+                'button',
+                { style: styles.door, 'data-door': w.sessionId, onClick: this.promote(w.sessionId) },
+                RETURN_COPY.ROW_DOOR,
+              ),
+            ),
+          ),
           ...triage.changed.map((s) => this.renderSituation(s, now)),
           ...(inbox && inbox.loaded && !inbox.failed
             ? inbox.recentlyDecided.map((item) => this.renderInboxRow(item))

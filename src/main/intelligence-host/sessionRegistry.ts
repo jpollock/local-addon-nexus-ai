@@ -385,6 +385,23 @@ export interface Situation {
   tierReason: string;
   /** Present on `kind: 'session'`. */
   sessionId?: string;
+  /**
+   * WP-49a · THE RUN'S CAPABILITY — `SessionRow.capability`, carried onto the
+   * situation, and it closes two escalations with one field.
+   *
+   * The row already knew it; nothing on `Situation` said it, so every surface
+   * that wanted to name the run in a sentence had to reach for `meta` (the
+   * runbook id) instead. That is why WP-49 shipped two interim asks reading
+   * *"Why has {runbookId} changed nothing?"* where §5's own bytes say *"Why has
+   * the update run changed nothing?"* — the run NOUN is `RUN_NOUN[capability]`
+   * (Controlled Vocabulary v1.4) and the capability was one join away.
+   *
+   * ABSENT ON AN INCIDENT ROW, and absent rather than empty: an orphan incident
+   * was never armed under a capability, and `''` would read as one it could not
+   * name. A surface reading this on an incident gets `undefined` and withholds,
+   * which is this layer's own rule about an absence.
+   */
+  capability?: string;
   /** Present when a gate is pending — the WHERE. */
   gate?: PendingGate;
   places: PlaceSet;
@@ -461,11 +478,64 @@ export interface ReservedRow {
   degraded: boolean;
 }
 
+/**
+ * WP-49a · XD-27 RIDER 1 — an in-flight run that needs nothing of you.
+ *
+ * "An in-flight run needing nothing goes to Nothing-needed-of-you as ONE LINE
+ * with its door, and PROMOTES ITSELF into the list when it stalls or reaches a
+ * gate — the consequence order doing its job, not a new mechanism."
+ *
+ * WP-49 built the predicate, MEASURED that every reachable shape belonged in the
+ * list where the fold already put it, and removed it rather than shipping a
+ * filter that would have moved XD-26's 6c rows — a run the platform cannot place
+ * — into the section for things that need nobody. This is the same predicate,
+ * built where the fact lives, with the third finding encoded as a guard rather
+ * than as a paragraph:
+ *
+ *   status is `running` · no pending gate · **not `documentUnavailable`**
+ *
+ * MEASURED ON THE OWNER'S REAL LEDGER, 2026-08-20, and the number is zero: of
+ * three sessions, one is gated at `cp.backup` and the other two are gateless AND
+ * `documentUnavailable` — WP-49's finding 3, twice over. So this list is EMPTY on
+ * the real fleet today and nothing moves out of the waiting column. The rider is
+ * law with its fact now on the contract; the day a run is genuinely in flight
+ * under a document the registry holds, it renders here instead of asking.
+ *
+ * A WORKING ROW IS NOT IN `waiting`. That is the rider's whole content — a run
+ * needing nothing must not be counted among the things needing you, or the badge
+ * and the verdict both lie — and it is why `triage()` filters the column against
+ * this list rather than composing them independently.
+ */
+export interface WorkingRow {
+  sessionId: string;
+  capability: string;
+  /**
+   * The one line. COMPOSED FROM THE RECORD'S OWN WORDS AND NOTHING ELSE: the run
+   * noun from Controlled Vocabulary v1.4 (`RUN_NOUN[capability]`, ratified) and
+   * the fold's own `SessionStatus` value. No sentence is authored here — the
+   * copy discipline's rule is that a class the ratified set does not cover gets
+   * the derived form, never new prose, and this is the derived form.
+   *
+   * A capability the vocabulary does not name falls back to the capability id,
+   * cited in full. An id is honest; a guessed noun is not.
+   */
+  line: string;
+  /** ISO — when the run started, so a surface can age the line with `ageLabel`. */
+  since: string;
+  /** The newest folded event id. The change cursor, as everywhere else. */
+  lastEventId: string;
+}
+
 /** The arrival triage: two columns of one verdict, plus the reserved slot. */
 export interface TriageView {
   waiting: Situation[];
   reserved: ReservedRow;
   changed: Situation[];
+  /**
+   * WP-49a · rider 1's rows — in-flight runs needing nothing, one line each.
+   * Empty is the normal state and is not an error; see `WorkingRow`.
+   */
+  working: WorkingRow[];
   /**
    * ONE SENTENCE ABOUT THE WHOLE LIST, which no single row can say.
    *
@@ -744,10 +814,14 @@ function turnOf(event: EventEnvelope): ManifestTurn | undefined {
  * a genuinely mid-flight run would have said "2 of 2 are changed and the rest
  * are waiting on you", which contradicts itself.
  *
- * The fact was already on the record: `chatAssembly` spreads the honoured
- * arming's `scope` onto the manifest payload (WP-37's carrier), and
- * `ProcedureScope.runnable` IS the selected target list. The registry already
- * reads these events; it simply was not reading this key.
+ * **WP-50 CORRECTION — this paragraph used to be false, and it is kept with its
+ * correction rather than quietly rewritten.** It said: "`chatAssembly` spreads
+ * the honoured arming's `scope` onto the manifest payload (WP-37's carrier)".
+ * It did not. `chatAssembly` spread the scope onto `notifyProcedureState`, which
+ * is an IPC STREAM to the renderer and reaches no ledger at all — which is
+ * exactly why 0 of 36 manifests carried the key and why this reader was correct
+ * and permanently null. `chatAssembly.emitManifest` now records it (WP-48b), and
+ * `ProcedureScope.runnable` IS the selected target list.
  *
  * NULL IS NOT ZERO, and the distinction is the whole point. A manifest with no
  * scope means nothing selected anything — the size is UNKNOWN, not empty — so
@@ -1360,6 +1434,10 @@ function situationOfSession(
     tier,
     tierReason,
     sessionId: row.id,
+    // WP-49a · the run's capability, carried so a surface can name the run in a
+    // sentence without reaching for the runbook id. Read off the row, never
+    // re-derived.
+    capability: row.capability,
     ...(row.gate ? { gate: row.gate } : {}),
     places: row.places,
     since,
@@ -1372,6 +1450,37 @@ function situationOfSession(
       total: row.targetSet,
     },
   };
+}
+
+/**
+ * WP-49a · rider 1's rows, derived from the sessions the fold already folded.
+ *
+ * THE THIRD GUARD IS THE ONE THAT MATTERS. `documentUnavailable` is XD-26's 6c —
+ * the platform naming its own limit — and filing such a run under "nothing needed
+ * of you" would be the platform quietly deciding that a run it cannot place needs
+ * no one. WP-49 measured that filing exact regression before building anything;
+ * the guard is that measurement, kept as code.
+ *
+ * `status === 'running'` and no gate is the rider's own condition: a run that has
+ * stalled is `halted`, a run at an approval is `waiting`, a finished one is
+ * `complete`, and each of those promotes itself into the list by the consequence
+ * order that already exists. Nothing new decides anything here.
+ */
+function workingRows(sessions: readonly SessionRow[]): WorkingRow[] {
+  const rows: WorkingRow[] = [];
+  for (const row of sessions) {
+    if (row.status !== 'running') continue;
+    if (row.gate) continue;
+    if (row.documentUnavailable) continue;
+    rows.push({
+      sessionId: row.id,
+      capability: row.capability,
+      line: `${RUN_NOUN[row.capability] ?? row.capability} is ${row.status}`,
+      since: row.startedAt,
+      lastEventId: row.lastEventId,
+    });
+  }
+  return rows;
 }
 
 function runSummary(row: SessionRow): string {
@@ -1922,13 +2031,24 @@ export function createSessionRegistry(deps: SessionRegistryDeps = {}): SessionRe
 
     triage: () => {
       const snapshot = fold();
-      const waiting = snapshot.situations.filter((s) => s.column === 'waiting');
+      // WP-49a · rider 1. A run needing nothing is NOT among the things needing
+      // you: it leaves the column, so the badge, the verdict and the rows all
+      // count the same set. Composing the two independently is how a list and
+      // the sentence about it start disagreeing.
+      const working = workingRows(snapshot.sessions);
+      const workingIds = new Set(working.map((w) => w.sessionId));
+      const waiting = snapshot.situations.filter(
+        (s) => s.column === 'waiting' && !(s.sessionId !== undefined && workingIds.has(s.sessionId)),
+      );
       return {
         waiting,
         reserved: snapshot.reserved,
         changed: snapshot.situations.filter((s) => s.column === 'changed'),
+        working,
         // Generated from `waiting` itself, not re-derived from the sessions:
         // the sentence and the rows have one source, so they cannot disagree.
+        // It reads the FILTERED column, so a working run cannot be counted in a
+        // verdict about rows nobody is being shown.
         verdict: listVerdict(waiting),
         cursor: snapshot.cursor,
       };

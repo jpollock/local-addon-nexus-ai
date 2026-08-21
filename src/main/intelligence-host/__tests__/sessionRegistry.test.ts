@@ -63,7 +63,8 @@ import {
 } from '../sessionRegistry';
 import { SITUATION_TEMPLATES } from '../situationCopy.generated';
 import type { IntelligenceHealthReport } from '../health';
-import type { ScopePlace } from '../procedureScope';
+import type { ProcedureScope, ScopePlace } from '../procedureScope';
+import { manifestScopeFor } from '../chatAssembly';
 import { taskId as mintTaskId } from '../../../intelligence';
 import type { Runbook, RunbookCheckpoint } from '../../../intelligence';
 
@@ -210,6 +211,14 @@ function emitManifest(args: {
    * or a predicate chose. Omit the argument for a predicate arming.
    */
   targets?: number;
+  /**
+   * WP-50 · the arming that SELECTED NOTHING — a predicate or a model request.
+   *
+   * Distinct from `targets: 0`, which is a selection that chose nothing, and
+   * distinct again from omitting both, which is a manifest with no scope key at
+   * all. Three states, and the fold reads two of them as `0` and one as `null`.
+   */
+  armedWithoutSelection?: true;
 }): string {
   return core.emitter.emit({
     observed_at: args.observedAt,
@@ -225,23 +234,33 @@ function emitManifest(args: {
       retrieval: args.consulted
         ? [{ store: 'ledger', query: 'entity=x topic=episodic.*', returned: 2 }]
         : [],
-      ...(args.targets === undefined
+      // WP-50 · THE SCOPE IS BUILT BY THE PRODUCER'S OWN FUNCTION, not by a copy
+      // of its shape. `manifestScopeFor` is what `chatAssembly.emitManifest`
+      // calls, so a fixture here cannot drift from what a real turn writes —
+      // this file's own opening rule ("a fold tested against events its
+      // producers could never write proves nothing about the producers"),
+      // applied to the field WP-48b added.
+      ...(args.targets === undefined && !args.armedWithoutSelection
         ? {}
         : {
-            scope: {
-              capability: args.procedure?.capability ?? 'cap.x',
-              runbookId: args.procedure?.runbook ?? 'rb.x',
-              runnable: Array.from({ length: args.targets }, (_, i) => ({
-                siteId: `site-${i}`,
-                siteName: `Site ${i}`,
-                place: { host: 'local' },
-              })),
-              barred: [],
-              excluded: [],
-              places: ['local'],
-              from: 'selection',
-              opensRun: args.targets > 0,
-            },
+            scope: manifestScopeFor(
+              args.armedWithoutSelection
+                ? undefined
+                : ({
+                    capability: args.procedure?.capability ?? 'cap.x',
+                    runbookId: args.procedure?.runbook ?? 'rb.x',
+                    runnable: Array.from({ length: args.targets ?? 0 }, (_, i) => ({
+                      siteId: `site-${i}`,
+                      siteName: `Site ${i}`,
+                      place: { host: 'local' },
+                    })),
+                    barred: [],
+                    excluded: [],
+                    places: ['local'],
+                    from: { surface: 'comparator', comparatorId: 'cmp-1', filter: 'all' },
+                    opensRun: (args.targets ?? 0) > 0,
+                  } as ProcedureScope),
+            ),
           }),
     },
   }).id;

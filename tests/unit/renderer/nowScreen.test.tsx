@@ -14,10 +14,13 @@
  * **The chrome (XD-27).** "A tab is a peer, and a front door that is tab one of
  * four becomes a choice among five the day the next feature claims a tab — a
  * future destination must argue for being a destination." Two pins make that
- * argument mandatory: the addon OPENS on Now, and Now is ABSENT from the strip.
- * The second is the load-bearing one. A packet that adds a Now tab has to delete
- * a test whose name says why it must not, which is the point of writing the
- * absence down as an assertion instead of as a comment.
+ * argument mandatory: the addon OPENS on Now. (WP-50: the second half of that
+ * sentence — "and Now is ABSENT from the strip" — was WITHDRAWN BY ITS AUTHOR at
+ * the XD-27 amendment; Now is the first tab, selected on arrival, with a
+ * divider after it.)
+ * The absence pin did its job to the last: the packet that added a Now tab had
+ * to come with the author's own withdrawal, in the record, before the assertion
+ * could be replaced. That is what writing a ruling down as a test buys.
  *
  * The rows are the REAL fold — `buildMorning` through the real emitters into a
  * real ledger, folded by the real registry — for `returnArrival.test.tsx`'s
@@ -248,7 +251,7 @@ describe('the collapse — one screen, and two kinds of row on it', () => {
 // XD-27 · the chrome. Now is not a tab.
 // ---------------------------------------------------------------------------
 
-describe('XD-27 · the addon opens on Now, and Now is not in the strip', () => {
+describe('XD-27 AMENDED · the addon opens on Now, and Now is the FIRST TAB', () => {
   /* eslint-disable @typescript-eslint/no-var-requires */
   const { NexusOverview } = require('../../../src/renderer/components/NexusOverview');
   /* eslint-enable @typescript-eslint/no-var-requires */
@@ -264,25 +267,82 @@ describe('XD-27 · the addon opens on Now, and Now is not in the strip', () => {
     expect(shell().state.activeTab).toBe('now');
   });
 
-  test('THE ABSENCE · Now is not in the strip, and the strip is the three destinations', () => {
+  /**
+   * WP-50 · THE NOW-ABSENT-FROM-THE-STRIP PIN IS REPLACED, NOT DELETED.
+   *
+   * XD-27's not-a-tab clause was WITHDRAWN BY ITS AUTHOR on the owner's live
+   * evidence (field finding 5). The pin that enforced it is replaced by pins on
+   * the three properties the amendment ruled — FIRST POSITION, SELECTED ON
+   * ARRIVAL, and the DIVIDER — because a withdrawn ruling with its guard left
+   * standing is a test asserting the opposite of the law.
+   *
+   * The two surfaces Now ABSORBED are still absent, and that half of XD-27 was
+   * never withdrawn: `home` and `inbox` collapsed INTO Now and must not
+   * reappear as peers beside it.
+   */
+  function stripKeys(): string[] {
     const bar = serializeTree(shell().renderTabBar());
-    const keys = walk(bar)
+    return walk(bar)
       .map((n) => props(n)['data-testid'])
       .filter((id: unknown): id is string => typeof id === 'string' && id.startsWith('tab-'))
       .map((id: string) => id.slice(4));
+  }
 
-    // THE LAW: a tab is a peer. Now is the front door, so it is not one.
-    expect(keys).not.toContain('now');
-    // …and neither are the two surfaces it absorbed.
+  test('FIRST POSITION · Now heads the strip, and the collapsed surfaces are not beside it', () => {
+    const keys = stripKeys();
+
+    // The amendment's first property: home, then destinations.
+    expect(keys[0]).toBe('now');
+    // The collapse's own law, untouched by the amendment: `home` and `inbox`
+    // went INTO Now and never come back as peers.
     expect(keys).not.toContain('home');
     expect(keys).not.toContain('inbox');
     // Record is in the strip and it is XD-27's own word for the surface.
     expect(keys).toContain('record');
     expect(keys).toContain('sites');
     expect(keys).toContain('settings');
+    // The interim strip, pending item 6's Fleet/Agents fold.
+    expect(keys).toEqual(['now', 'sites', 'fleet', 'record', 'agents', 'settings']);
   });
 
-  test('THE MARK · the title returns to Now the way a logo does, and never renders as active', () => {
+  test('SELECTED ON ARRIVAL · the Now entry carries the active underline before anything is clicked', () => {
+    const bar = serializeTree(shell().renderTabBar());
+    const entries = walk(bar).filter((n) => {
+      const id = props(n)['data-testid'];
+      return typeof id === 'string' && id.startsWith('tab-');
+    });
+    const now = entries.find((n) => props(n)['data-testid'] === 'tab-now');
+    const sites = entries.find((n) => props(n)['data-testid'] === 'tab-sites');
+    expect(now).toBeDefined();
+
+    // "A strip with nothing underlined reads as nothing-selected rather than as
+    // you-are-home" — the finding the amendment was made on. So the underline
+    // must be REAL, and it must be Now's alone.
+    const nowBorder = String((props(now)['style'] as any)?.borderBottom ?? '');
+    const sitesBorder = String((props(sites)['style'] as any)?.borderBottom ?? '');
+    expect(nowBorder).not.toContain('transparent');
+    expect(nowBorder).toMatch(/3px solid/);
+    expect(sitesBorder).toContain('transparent');
+  });
+
+  test('THE DIVIDER · a hairline follows Now, and it is not itself a tab', () => {
+    const bar = serializeTree(shell().renderTabBar());
+    const ids = walk(bar)
+      .map((n) => props(n)['data-testid'])
+      .filter((id: unknown): id is string => typeof id === 'string');
+
+    // It exists…
+    expect(ids).toContain('strip-divider-now');
+    // …it sits immediately after Now and before the first destination…
+    expect(ids.indexOf('strip-divider-now')).toBe(ids.indexOf('tab-now') + 1);
+    expect(ids.indexOf('strip-divider-now')).toBeLessThan(ids.indexOf('tab-sites'));
+    // …and it is a rule, not a destination: a `tab-*` scan must not count it,
+    // or "the strip is six entries" becomes seven and nobody notices.
+    expect(stripKeys()).not.toContain('divider-now');
+    expect(stripKeys()).toHaveLength(6);
+  });
+
+  test('THE MARK · the title still returns to Now the way a logo does (unamended)', () => {
     const instance = shell();
     instance.state = { ...instance.state, activeTab: 'sites', loading: false, error: null, stats: null };
     const patches: any[] = [];
