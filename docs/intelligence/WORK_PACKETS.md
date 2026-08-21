@@ -27308,3 +27308,55 @@ stays ratified copy no surface reads yet.
 **THE GATE OWES ONE NEW EXHIBIT, DRIVEN:** both terms non-zero at once — an
 unheld row and a deferred situation in the same list. That is the case neither
 branch can currently produce and the only one that proves the merged expression.
+
+---
+
+## WP-56a · REGISTERED (2026-08-21) — an incident's identity is `incidentKey`, not the id of one of its events
+
+**Approved at WP-56's gate.** WP-56 measured it and held the incident path;
+this is the packet that closes it.
+
+**THE DEFECT, in the ruling's own words: the producer's own dedup key already
+held that identity, and the fold invented a different one from the REPORT
+instead of the SUBJECT.**
+
+`situationOfIncident` gives an orphan incident the id of the EVENT that reported
+it (`id: incident.id`). But `incidentProducer` resolves an incident by writing a
+NEW event carrying `resolved: true` — superseding, never mutating — and dedups
+on `incidentKey(component, fact)`, which is what the producer itself treats as
+the incident's identity. So the situation id names one event in a chain rather
+than the thing the chain is about.
+
+**Measured, driven, and pinned in `deferral.test.ts` today** (the three findings
+under "MEASURED AND HELD"): deferring an open incident and then amending it
+yields TWO situations, the deferral stays with the event it named, and the
+amendment arrives undeferred — a user who quieted an incident sees it back in
+the badge under a different id the moment it is amended. It is the same class of
+error as keying a run on a turn instead of on `capability@hash`.
+
+### THE CONTRACT NOTE FOR WP-55 — relayed, not sprung
+
+**WP-56a CHANGES INCIDENT SITUATION IDS**, from `evt_…` (the reporting event) to
+a key derived from `component` + `fact`. WP-55 must know this **before** it
+renders coalesced rows, because:
+
+1. **Anything keying a rendered row on `situation.id` for an incident will see
+   its key change.** React keys, the Inbox dedup's own matching, any persisted
+   "I have seen this row" state.
+2. **`SituationSignature` is unaffected** — it is already `producer` + `fact` +
+   `target`, which is the same instinct one field over, and WP-54's `sameThing`
+   keeps working unchanged.
+3. **It is a strict improvement for coalescing**, which is why the sequencing
+   matters rather than merely the notice: an incident amended between two reads
+   currently produces two rows the coalescer cannot join. After WP-56a they are
+   one subject with a stable name.
+
+Sequencing: **WP-56a lands before WP-55 draws the coalesced row**, or WP-55
+draws against ids that are about to move.
+
+### Not in WP-56
+
+WP-56 built the run path and held this deliberately, presenting the measurement
+rather than inventing a shape. The three findings stay as passing tests in
+`deferral.test.ts` so that the day WP-56a lands they go red and say exactly what
+changed — the watch-item rule, written at the code rather than only here.
