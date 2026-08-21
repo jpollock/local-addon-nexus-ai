@@ -67,8 +67,14 @@ MUTATIONS = [
      "    ? (declared as ConsequenceTier)\n    : derived;",
      "  return derived;",
      "THE SHIPPED DEFECT, RESTORED: the class's tier is ignored and every open finding ranks at 2 again — the list back to age order"),
+    # RE-ANCHORED AT WP-54's MERGE. The guard gained `template.tier !== null`
+    # when the designer's cycle-seven sheet introduced a class whose tier is
+    # declared in prose, so the one-line anchor stopped matching and the battery
+    # reported ANCHOR-MISS rather than a survivor — which is the whole point of
+    # having that verdict: a mutation that silently fails to apply would report
+    # the pin as strong when nothing had been done to it.
     ("M02", SEAM,
-     "  return template !== null && derived < template.tier;",
+     "  return template !== null && template.tier !== null && derived < template.tier;",
      "  return false;",
      "a row the record ranks MORE urgent keeps its class's sentence — 'Tier 1 · the world is untouched'"),
     ("M03", SEAM,
@@ -210,7 +216,9 @@ MUTATIONS = [
 
 # The control: a change that must NOT be detected. If it "kills", the battery is
 # measuring something other than what it claims.
-CONTROL = (SEAM, " * Tiers 1 to 4.", " * Tiers 1 to 4 (see below).")
+# The control's anchor moved too: the merged comment records BOTH packets'
+# reasonings for the widening, and opens "Tiers 1, 2, 3 and 4."
+CONTROL = (SEAM, " * Tiers 1, 2, 3 and 4.", " * Tiers 1, 2, 3 and 4 (see below).")
 
 NON_PRINTING = set(range(0, 9)) | {11, 12} | set(range(14, 32))
 
