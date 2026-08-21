@@ -446,3 +446,20 @@ an npm run rebuild in a sibling) VOIDS the run — re-run whole, never
 splice. Evidence: a mid-battery ABI flip produced 24 false VOIDs that
 read as mutation outcomes. A battery that measured two ABIs measured
 nothing.
+
+## The ABI probe constructs, it does not require (WP-50)
+
+`require('better-sqlite3')` resolves the module without loading the
+native binding: a probe built on the require alone PASSES against a
+tree built for the other ABI, and the mismatch surfaces on the next
+call as WP-33b's mask. The probe must CONSTRUCT a Database. Sharpens
+the WP-33b rule rather than replacing it.
+
+## A guard conditions only on what its sentence claims (WP-50)
+
+A template's guard may test only facts the sentence's own claim
+depends on. WP-50 measured the cost: guard 2 carried `total > 0` while
+neither class-2 sentence reads `{total}`, so a true sentence was
+withheld from a real row on a fact it never states — and a withheld
+sentence is invisible, which makes it worse than a false one, which
+at least argues with the reader.

@@ -21404,3 +21404,85 @@ events.
 ledger, before and after, with the actual sentences printed.
 
 Worktree `.worktrees/wp-50`, branch `wp-50`, cut from `poc/nexintelligence-ux`.
+
+---
+
+## WP-50 · GATE RULING — the producers pay (2026-08-21, architect adjudication)
+
+**Verdict: PASS. Cleared to merge with §8's amendment landed; §7
+routes to its own packet and does NOT hold this merge.**
+
+**The exhibit is the packet.** Two of the designer's revised-sheet
+sentences, verbatim, on the owner's real fleet — "A plugin update run
+has waited 68h and changed nothing / It never received a target list,
+so it cannot start. Give it one, or close it." Before matches the
+owner's screenshots exactly; after appends the next turn through the
+shipped producer and rewrites no history. The debt is paid where it
+can be seen.
+
+**48b's second half is the finding of the packet:** an arming that
+selected nothing RECORDS THE EMPTY SET, because "a predicate armed
+this and nobody chose targets" is a fact the armer knows. **`null` is
+UNKNOWN, `0` is KNOWN-EMPTY** — ratified as vocabulary, and it is the
+distinction that let the sentences fire honestly instead of by
+manufacture. Also ratified: the correction that the comparator
+selection never reached the record at all (it was handed to an IPC
+stream, not the manifest) — WP-48's comment asserted a wiring that
+did not exist, and measuring rather than trusting it is why 0 of 36
+became the real number.
+
+**§8 — guard 2's `total > 0`: AMEND, and the rule generalizes.**
+Neither class-2 sentence reads `{total}`; the clause gates a sentence
+on a fact the sentence never states, and it withheld the designer's
+own row from the designer's own sheet. Drop `total > 0`; guard 2 is
+`done === 0 && failed === 0 && gate !== null`. Mutual exclusivity
+holds on `gate` (guard 1 carries `gate === null`), and the honest gap
+stays honest: a gateless run with an UNKNOWN target set matches
+neither guard and falls to the derived sentence, which is correct —
+we do not know what it was armed with. **New standing rule: a guard
+may condition only on facts its sentence's claim depends on. Gating
+on an unstated fact is how a true sentence gets withheld** — and the
+withholding is invisible, which makes it worse than a false one.
+Land it in the ratified fixture, not the composer.
+
+**§7 — WP-48a cannot be paid as written: the measurement is ACCEPTED
+and my own instruction is AMENDED.** WP-48's ruling said "you change
+the producer, never the coalescer." The driven proof retires it: even
+with valid causation on all four siblings, the coalescer files
+orphans one situation apiece — so a producer-only change is
+structurally incapable of closing it, and repeating the instruction
+would have been repeating it against evidence. Ruled, both parts,
+and **registered as WP-51** (it does not hold WP-50):
+1. **Mint the scan's TaskId.** A sentinel scan is an ACT and belongs
+   in the record as one; its findings then carry a real
+   `correlation: task_<ULID>`. The envelope validator is not bent —
+   the id becomes valid because the thing it names becomes real.
+2. **One orphan-grouping rule in the coalescer**: run-less incidents
+   sharing a correlation coalesce into one situation with parts. This
+   does NOT breach "record links, never payloads" — the link becomes
+   a genuine record link; the payload stays unread. That doctrine
+   stands unamended.
+3. The four existing incidents stay four rows. The record is
+   append-only; the row's stated limit remains true of them, and
+   "nothing was laundered" is the right instinct stated in the right
+   words.
+
+**ManifestScope: RATIFIED as shaped.** Declining to reuse
+`ProcedureScope` because `ScopeFrom.surface` is typed `'comparator'`
+and a predicate arming has no comparator provenance is exactly right —
+a type that can only describe one provenance forces a lie for the
+other, and a lie in a provenance field is the fabricated-source class.
+
+**Credits:** the finding-1 correction — WP-49's "a placed session
+always has a gate" was measured over the golden morning, where every
+runbook has checkpoints; **two of seven shipped runbooks declare
+none**, so gateless-placed-and-running is a real population and v1.4
+already names both ("A diagnosis", "A site pull"). The rider gained
+guards instead of an obituary. M04 accepted as a MEASURED equivalent
+mutant (JSON.stringify drops undefined — the durable record is
+identical either way); M07 was real and is driven. AUTHORED 3 → 2 with
+§5's own bytes templating the retirement.
+
+**Protocol:** WP-33b's ABI rule is sharpened — `require('better-sqlite3')`
+does not load the native binding; **construct a Database** or the
+probe passes against a tree that will blow up on the next call.
