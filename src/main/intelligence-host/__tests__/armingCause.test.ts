@@ -307,6 +307,109 @@ describe('the fold joins a run to the incidents its arming named', () => {
     expect(triage.waiting.filter((s) => s.kind === 'incident')).toHaveLength(4);
   });
 
+  test('A GROUP RE-DERIVES OVER WHAT IS LEFT: naming SOME members splits it, naming all dissolves it', () => {
+    // The arithmetic behind the merge report's 8 -> 3, pinned rather than
+    // described. Coalescing is a fold over the ORPHAN set: an incident a run
+    // answers is no longer an orphan, so it leaves the group — the group does
+    // not "move into" the run, it re-derives without that member.
+    const scan = mintTaskId();
+    const sibling = (symptom: string) =>
+      core.emitter.emit({
+        observed_at: hoursAgo(9),
+        topic: INCIDENT_TOPIC,
+        schema: INCIDENT_SCHEMA,
+        entity: { site: SITE },
+        actor: { id: 'act_security_sentinel', kind: 'agent' },
+        source: { class: 'work', system: 'sentinel:scan', trust: 'emitted' },
+        correlation: scan,
+        payload: { fact: symptom, symptom, resolved: false, severity: 'critical' },
+      }).id;
+    const members = ['a', 'b', 'c', 'd'].map(sibling);
+    expect(core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 20 })).toHaveLength(4);
+
+    // TWO of the four named by the arming.
+    emitManifest({
+      taskId: mintTaskId(),
+      observedAt: hoursAgo(8),
+      cause: manifestCauseFor(members.slice(0, 2)),
+    });
+
+    const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    // Two rows: the run carrying the two it answers, and the group of the two
+    // it does not.
+    expect(triage.waiting).toHaveLength(2);
+    const run = triage.waiting.find((s) => s.kind === 'session')!;
+    const group = triage.waiting.find((s) => s.kind === 'incident')!;
+    expect(run.parts.filter((p) => p.kind === 'incident').map((p) => p.eventId).sort())
+      .toEqual(members.slice(0, 2).sort());
+    expect(group.memberCount).toBe(2);
+    expect(group.linkKind).toBe('correlation');
+    expect(group.parts.map((p) => p.eventId).sort()).toEqual(members.slice(2).sort());
+  });
+
+  test('naming THREE of four leaves a situation of ONE, not a group of one', () => {
+    // The tail of the same rule, and the reason `memberCount`/`linkKind` are
+    // set together: the remainder is one incident, so nothing was folded and
+    // the row says so.
+    const scan = mintTaskId();
+    const members = ['a', 'b', 'c', 'd'].map((symptom) =>
+      core.emitter.emit({
+        observed_at: hoursAgo(9),
+        topic: INCIDENT_TOPIC,
+        schema: INCIDENT_SCHEMA,
+        entity: { site: SITE },
+        actor: { id: 'act_security_sentinel', kind: 'agent' },
+        source: { class: 'work', system: 'sentinel:scan', trust: 'emitted' },
+        correlation: scan,
+        payload: { fact: symptom, symptom, resolved: false, severity: 'critical' },
+      }).id,
+    );
+    emitManifest({
+      taskId: mintTaskId(),
+      observedAt: hoursAgo(8),
+      cause: manifestCauseFor(members.slice(0, 3)),
+    });
+
+    const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(triage.waiting).toHaveLength(2);
+    const remainder = triage.waiting.find((s) => s.kind === 'incident')!;
+    expect(remainder.id).toBe(members[3]);          // the EVENT id, not the link
+    expect(remainder.memberCount).toBe(1);
+    expect(remainder.linkKind).toBeNull();
+    expect(remainder.headlineTemplate).toBe('incident.no-run');
+  });
+
+  test('naming ALL of a group dissolves the row — five rows leave the list, not four', () => {
+    // The exhibit's own step, in miniature: the coalesced ROW does not fold
+    // into the run. Every member leaves the orphan set individually and the
+    // group ceases to exist, which is why 8 - 5 = 3 rather than 8 - 4.
+    const scan = mintTaskId();
+    const members = ['a', 'b', 'c', 'd'].map((symptom) =>
+      core.emitter.emit({
+        observed_at: hoursAgo(9),
+        topic: INCIDENT_TOPIC,
+        schema: INCIDENT_SCHEMA,
+        entity: { site: SITE },
+        actor: { id: 'act_security_sentinel', kind: 'agent' },
+        source: { class: 'work', system: 'sentinel:scan', trust: 'emitted' },
+        correlation: scan,
+        payload: { fact: symptom, symptom, resolved: false, severity: 'critical' },
+      }).id,
+    );
+    const before = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(before.waiting).toHaveLength(1);                    // the group, alone
+    expect(before.waiting[0].id).toBe(scan);
+
+    emitManifest({ taskId: mintTaskId(), observedAt: hoursAgo(8), cause: manifestCauseFor(members) });
+
+    const after = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(after.waiting).toHaveLength(1);
+    expect(after.waiting[0].kind).toBe('session');
+    // No row carries the link as its id any more: the group is gone, not moved.
+    expect(after.waiting.some((s) => s.id === scan)).toBe(false);
+    expect(after.waiting[0].parts.filter((p) => p.kind === 'incident')).toHaveLength(4);
+  });
+
   test('a REFUSED turn records no cause, so it joins nothing', () => {
     const incident = emitIncident('Known backdoor plugin detected: wp-compat');
     emitManifest({

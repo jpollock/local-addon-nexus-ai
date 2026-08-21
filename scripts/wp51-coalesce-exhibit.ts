@@ -130,7 +130,7 @@ for (const s of triage.waiting) {
   if (s.ask) console.log(`    ask      : ${s.ask}`);
   console.log(`    rule     : ${s.rule}`);
   console.log(`    tier     : ${s.tier}  (${s.tierReason})`);
-  for (const p of s.parts) console.log(`    part     : [${p.kind}] ${p.summary}`);
+  for (const p of s.parts) console.log(`    part     : [${p.kind}] ${p.eventId ?? '(no event)'} ${p.summary}`);
   console.log('');
 }
 console.log(`CHANGED: ${triage.changed.length}`);
