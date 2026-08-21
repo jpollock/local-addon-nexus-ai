@@ -165,6 +165,28 @@ MUTATIONS = [
      "the second interim form comes back — a PROCEDURE identifier standing where a run noun belongs, on the class whose row matters most when it appears"),
 ]
 
+# EQUIVALENT MUTANTS — RECORDED, NOT EXCUSED.
+#
+# M04 replaces the conditional spread in `emitManifest` with an unconditional
+# one, so an unarmed turn's payload carries `scope: undefined` where it carried
+# no key. It SURVIVED the first drive, and the reason was MEASURED rather than
+# argued: `Ledger.append` writes the payload through `JSON.stringify`, and
+# `JSON.stringify` DROPS a key whose value is `undefined`
+# (`JSON.stringify({a:1, scope: undefined})` → `{"a":1}`). Nothing else reads
+# the in-memory envelope. So the durable record is identical either way and no
+# pin can distinguish them.
+#
+# The conditional spread STAYS — it states the contract at the seam, and the
+# same reasoning is already recorded one file over in `procedureStream.ts`
+# ("mutating THIS line changes nothing observable — an equivalent mutant,
+# recorded rather than excused, because a reader who credits this line for the
+# parity floor would delete the one that holds it"). Here the line that actually
+# holds the floor is M03's `status === 'delivered'` gate, which the battery kills.
+#
+# Listing it here means the run REPORTS it as equivalent instead of as a gap,
+# and a future reader does not spend an afternoon chasing it.
+EQUIVALENT = {"M04"}
+
 # The control: a comment-only edit to a mutated file. It MUST survive — a battery
 # whose control dies is measuring the harness, not the code.
 CONTROL = (REGISTRY, " * ## Three rules, and everything below follows from them",
@@ -309,6 +331,8 @@ def main():
             verdict, detail = "KILLED", f"{f} tests / {sf} suites failed"
         elif t < FLOOR:
             verdict, detail = "VOID", f"green but executed {t} < floor {FLOOR}"
+        elif mid in EQUIVALENT:
+            verdict, detail = "EQUIVALENT", f"{t} passed — see EQUIVALENT above"
         else:
             verdict, detail = "SURVIVED", f"{t} passed"
         results.append((mid, verdict, detail, lie))
@@ -341,9 +365,10 @@ def main():
 
     killed = sum(1 for r in results if r[1] == "KILLED")
     survived = sum(1 for r in results if r[1] == "SURVIVED")
+    equivalent = sum(1 for r in results if r[1] == "EQUIVALENT")
     missed = sum(1 for r in results if r[1] == "ANCHOR-MISS")
-    print(f"\n=== WP-50 BATTERY: {killed} killed / {survived} survived / {missed} anchor-miss, "
-          f"of {len(results)} ===")
+    print(f"\n=== WP-50 BATTERY: {killed} killed / {survived} survived / {equivalent} equivalent "
+          f"/ {missed} anchor-miss, of {len(results)} ===")
     print("TREE PRISTINE AFTER.")
     for mid, verdict, detail, lie in results:
         if verdict != "KILLED":

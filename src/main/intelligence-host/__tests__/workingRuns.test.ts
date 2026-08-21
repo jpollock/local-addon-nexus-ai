@@ -261,6 +261,41 @@ describe('TriageView.working — an in-flight run that needs nothing of you', ()
     expect(triage.waiting.map((s) => s.sessionId)).toContain(row.id);
   });
 
+  test('A HALTED RUN IS NOT WORKING — even with no gate, and the battery is why this test exists', () => {
+    // FOUND BY THE MUTATION BATTERY (M07): `status !== 'running'` → `status ===
+    // 'complete'` SURVIVED the first drive, because nothing drove a halted run
+    // with no gate. It is reachable and it is the worst thing this section can
+    // say: a run that STOPPED, filed under "nothing needed of you".
+    //
+    // The shape: a zero-checkpoint document (so there is no gate to exclude it
+    // on) plus an open abort incident correlated into the run, which is how the
+    // fold learns a run halted.
+    const task = mintTaskId();
+    emitManifest({ taskId: task, observedAt: hoursAgo(5), rb: RB_IN_FLIGHT, consulted: true });
+    core.emitter.emit({
+      observed_at: hoursAgo(4),
+      topic: 'episodic.incident.recorded',
+      schema: 'incident.recorded/1',
+      entity: { site: 'ent_site_Y64Y113T3AQXYGGSAPXMQKMQHA' },
+      actor: { id: 'act_chat_agent', kind: 'agent' },
+      source: { class: 'work', system: 'procedure:abort', trust: 'emitted' },
+      correlation: task,
+      payload: { fact: 'ab.verify-failed', symptom: 'checkout returned 500', resolved: false, source: `abort:${task}/ab.verify-failed` },
+    });
+
+    const registry = createSessionRegistry({ core, now: NOW, runbooks: lookup(RB_IN_FLIGHT) });
+    const [row] = registry.sessions();
+    expect(row).toBeDefined();                       // shape #15
+    expect(row.status).toBe('halted');
+    expect(row.gate).toBeUndefined();                // no gate — the guard that could have caught it is not the one that does
+    expect(row.documentUnavailable).toBeFalsy();     // …nor is the 6c guard
+
+    const triage = registry.triage();
+    expect(triage.working).toEqual([]);
+    // It belongs in the list. A halt is the fleet asking.
+    expect(triage.waiting.map((s) => s.sessionId)).toContain(row.id);
+  });
+
   test('A 6c ROW IS NOT WORKING — WP-49\'s finding 3, kept as a guard rather than a paragraph', () => {
     // A run armed under a document this registry does not hold: gateless,
     // running, and NOT in flight — the platform cannot place it. Filing it under

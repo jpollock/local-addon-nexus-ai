@@ -42,6 +42,16 @@ one of those invocations passes `--out <tmp>` and `--sheet <tmp>`, so a mutant c
 only ever write into a temp directory the test made and removes. The pristine
 report after the run is what proves that rather than this paragraph.
 
+STALE SINCE WP-50, AND SAID HERE RATHER THAN DISCOVERED BY A FUTURE READER:
+family 1's chrome mutations were written against XD-27's NOT-A-TAB ruling, which
+its author WITHDREW on the owner's live evidence (field finding 5). Now is the
+first tab, selected on arrival, with a divider after it — so M02's anchor
+("`const TABS = [` followed by `sites` first") no longer matches this tree and
+that mutation reports ANCHOR-MISS, which is the honest failure rather than a
+false green. `scripts/wp50-battery.py` carries the amended chrome family (first
+position, selected on arrival, the divider). This file is kept as WP-49's own
+drive, not maintained as a live gate.
+
 Explicit argv throughout; no shell string is ever built from a variable.
 """
 import subprocess
