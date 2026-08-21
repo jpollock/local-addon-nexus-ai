@@ -1104,3 +1104,60 @@ Driven by `tests/unit/build/venue-guard.test.ts`, which executes the hook
 directly with a branch supplied through the environment. A guard that can
 only be exercised by constructing the failure it prevents is a guard
 nothing checks.
+
+## A guard's exit condition needs a check of its own (WP-55 gate)
+
+`assertDeferralsStillHold` probes the condition each deferral states and
+throws when it stops holding. The guard is right. **Its exit condition is
+a hand-written array, and nothing checked the array.**
+
+`KNOWN_SLOTS` appeared in the generator and its tests and nowhere else.
+`SlotBag` is `Record<string, string | number | undefined>` — an open
+record that cannot contradict it — and `fillSituationSentence` renders an
+absent slot as `''` and collapses the whitespace. So the failure the
+generator's own header names, *"a row that renders the six literal
+characters `{newField}` to a customer"*, was not the failure that
+composer could produce. **It produced silence.**
+
+And the sequence was worse than inert: add a name to `KNOWN_SLOTS`
+without deriving it, and the deferral guard throws DEMANDING the class be
+emitted. The class ships. The headline reads *"theawfulpm-test has , and
+3 more findings."* **The guard drove toward that state.**
+
+Shape #17 was closed one level up and open one level down.
+
+The check that closes it (`slotDerivation.test.ts`): every name the
+generator declares fillable must RESOLVE, non-empty, at its own slot
+position, on a row the REAL FOLD produced from real events. Values are
+read back out of the rendered sentences positionally — an empty
+substitution collapses the whitespace around it, so the literals stop
+lining up and the match fails, which is recorded rather than skipped.
+
+**It cannot be satisfied by editing a constant**, which is the property
+that matters: adding a name fails until something derives a value, and
+deriving a value is the only thing that passes. Both directions driven —
+mutation B put an underived `{operatorName}` in `agent.stuck`'s META
+line, which `selectSituationTemplate` does not gate on, so the class
+still selected and rendered `auth-probe ·`; the test named the template,
+the field and both strings.
+
+Generalisation: **a guard whose exit condition is a list needs a check on
+the list.** An instrument that fires correctly on a wrong input is only
+as good as the definition of "wrong", and a hand-maintained definition is
+memory with better spelling.
+
+## Building the instrument found two silences it was built to find (WP-55 gate)
+
+Both while writing the test above, in its own fixture:
+
+- A run whose capability the run-noun column does not carry
+  (`cap.cache_purge`) makes `{runNoun}` unfillable, which DECLINES
+  `run.waiting.nothing-written` and sends the row to the derived
+  sentence. The class simply never appeared.
+- Two manifests naming one `capability@hash` are two TURNS of one run and
+  not two rows, so `run.waiting.mid-procedure` never appeared either.
+
+Neither was a bug in the product; both were the product being right and
+the fixture being silent about it. **A coverage assertion over the
+classes actually produced** — shape #15 applied to a sweep rather than to
+one row — is what turned both into a red line instead of a quiet pass.

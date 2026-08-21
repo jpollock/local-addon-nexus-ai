@@ -27896,3 +27896,105 @@ mismatch (and is why the ledger holds no `agent%` events).
 3. `signatures` as a SET is a CONTRACT CHANGE made without a packet
    naming it, taken under the residue WP-54 routed here (§8).
 4. The one-member-evidence residue (§8).
+
+---
+
+## WP-55 · THE TWO GATE ITEMS, LANDED (2026-08-21)
+
+### 1 · COMMITTED
+
+`c07f542e` on `wp-55`. The gate hold was read as a commit hold; it is
+not, and the correction is taken. Nothing pushed, no tag, no version
+bump.
+
+### 2 · THE EXIT CONDITION'S OWN CHECK
+
+`src/main/intelligence-host/__tests__/slotDerivation.test.ts`, two
+assertions, and the second is the one that was asked for:
+
+1. **Every name in `KNOWN_SLOTS` is carried by at least one ratified
+   template.** A slot named and used by nothing is dead weight the
+   deferral guard would treat as satisfied.
+2. **Every name resolves NON-EMPTY, at its own slot position, on a row
+   the REAL FOLD produced.** Every row comes out of
+   `createSessionRegistry(...).triage()` over a ledger built with the
+   shipped emitters and producers; the values are read back out of the
+   rendered sentences by position, never supplied here.
+
+**HOW AN EMPTY SLOT IS CAUGHT.** A template becomes an anchored regex —
+literals escaped, each `{slot}` a lazy capture — matched against what the
+fold rendered. `fillSituationSentence` collapses the whitespace an absent
+slot leaves, so an empty substitution changes the sentence's SHAPE and
+the literals stop lining up. A mismatch is RECORDED as a failure, not
+skipped.
+
+**DRIVEN IN BOTH DIRECTIONS, and mutation B is the one that matters.**
+
+- **A** — `{operatorName}` added to `KNOWN_SLOTS` and to `agent.stuck`'s
+  HEADLINE. Red: the unfillable headline declines the class, so the class
+  never appears and the coverage assertion fires.
+- **B** — the same slot in `agent.stuck`'s **meta** line, which
+  `selectSituationTemplate` does NOT gate on. The class still selects and
+  still renders. Red, with the silence quoted:
+
+```
+mismatches: [
+  "agent.stuck.meta: template \"{agentId} · {operatorName}\" vs rendered \"auth-probe ·\"",
+]
+```
+
+That is the state the ruling named — *"theawfulpm-test has , and 3 more
+findings"* — caught at its source, by template, field and both strings.
+**It cannot be satisfied by editing a constant:** adding a name fails
+until something derives a value, and a value is the only thing that
+passes.
+
+**BUILDING IT FOUND TWO SILENCES IN ITS OWN FIXTURE**, both the product
+being right and the fixture being quiet about it: a capability the
+run-noun column does not carry makes `{runNoun}` unfillable and declines
+`run.waiting.nothing-written` outright; and two manifests naming one
+`capability@hash` are two TURNS of one run, so `run.waiting.mid-procedure`
+never appeared. A coverage assertion over the classes actually produced —
+shape #15 applied to a sweep — is what made both red instead of quiet.
+
+### 3 · THE MERGE-REPORT QUESTION, ANSWERED
+
+*"Is the rule 'the count is stated once per row', or 'these two classes
+differ'?"*
+
+**The first, and the class id does not appear in the condition.**
+`arrivalModel.ts`:
+
+```ts
+function disclosesParts(situation: Situation): boolean {
+  const template = SITUATION_TEMPLATES.find((t) => t.id === situation.headlineTemplate);
+  return template !== undefined && template.disclosure !== '';
+}
+```
+
+The condition is *does another element on this row state the count* —
+read off the ratified template, so the day a second class gains a
+disclosure it is already true of that class with no edit here. A row with
+no class discloses nothing and keeps its clause, which is the other
+direction and is driven.
+
+### 4 · ACCEPTED CORRECTIONS, RECORDED
+
+- **`signatures` reached the gate rather than the announce.** The rule is
+  restated, not tightened: announce the quantity, not only the file, and
+  amend the announce when the need is measured. It cost nothing here
+  because nothing else was live against `Situation`; the rule exists for
+  the time it does.
+- **WP-56a's scope amendment** — `(entity, component, fact)` — is the
+  ruling as amended.
+
+### 5 · NUMBERS
+
+```
+BASE  (worktree, 239e4e32)   629 suites   8,722 tests   8,710 passed   12 skipped
+c07f542e                     632 suites   8,769 tests   8,757 passed   12 skipped
+FINAL (with the instrument)  633 suites   8,771 tests   8,759 passed   12 skipped
+```
+
+**+4 suites, +49 tests against the base, all passing.** Skipped unchanged
+at 12. ABI 141 — `npm run rebuild` before loading Local.
