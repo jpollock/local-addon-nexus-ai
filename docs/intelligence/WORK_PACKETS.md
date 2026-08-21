@@ -22446,3 +22446,281 @@ carries none, and the record is append-only — that target set is honestly
 unknown forever.
 
 Worktree `.worktrees/wp-52`, branch `wp-52`, cut from `poc/nexintelligence-ux`.
+
+---
+
+## WP-52 · GATE REPORT — the card is the template (2026-08-21)
+
+**Items 1, 3 and 4 landed. Item 4 was MEASURED before anything was touched and
+the measurement named (a), so the composer was left alone and the wording was
+fixed. Item 2 built nothing — the designer's sentence set has not arrived. Three
+evals grew, two of them stricter. No escalations.**
+
+### 1 · ITEM 4 — THE MEASUREMENT, FIRST, AND WHAT IT NAMED
+
+The packet forbade fixing before measuring, and named the two candidates. Driven
+against the owner's real ledger through the SHIPPED fold and the SHIPPED
+`metaLine`, so the measurement is of what the card actually renders:
+
+```
+--- sess_task_01M09M7ZHVS6XM58VA9G8TWPFH  [session]
+    headlineTemplate : null  (DERIVED FALLBACK)
+    SessionRow.targetSet : null          <- the ARMED set
+    places.total     : 0                 <- the OUTCOME set
+    places.summary   : "no targets on record"
+    RENDERED CARD LINES:
+      rule     : waiting, and nothing has been written in scope
+      headline : running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+      meta     : no targets on record · 80h · rb.bulk-plugin-update
+```
+
+**(a). `total` is `null`.** Guard 1 requires `total === 0`, and `null` is not
+`0`, so **the composer was right to decline and is not the defect.** The defect
+is the fallback's own wording: `summarisePlaces` said *"no targets on record"*
+when its subject is `PlaceSet.total` — the targets that have an OUTCOME. It
+never meant "no targets were recorded", which is a fact about the ARMING and
+lives on `targetSet`.
+
+**This is WP-48's name collision in a third form.** WP-48 found it as a BINDING
+(`{total}` bound to `places.total`); WP-50 found it as a REGISTRATION gap; here
+it is a SENTENCE — two facts sharing one wording, with nothing in the type
+system to notice. And it was wrong twice over: a run with five armed targets and
+nothing written said there were none.
+
+**The fix: an empty place set reports NO PLACE CLAUSE.** Saying nothing is the
+strongest available form of "say unknown, not empty" — any replacement phrase
+would be authored copy on the one surface whose whole discipline is that nothing
+is authored, and **the designer's §2 meta columns carry no place clause on any of
+the three run rows**, so silence is also the drawn rendering. The string was
+never ratified: `from-designer-10` QUOTES it as an example of a host derivation.
+
+The branches that DO have members are pinned unchanged — `touches production on
+2 of 2`, and `nothing on record names where the target is` for a member the
+record cannot place. A summary that returned `''` for everything would satisfy
+the fix and delete the field; two battery mutations exist for exactly that.
+
+### 2 · ITEM 1 — THE TEMPLATE OWNS THE CARD
+
+A ratified card is **headline · ask · meta**, plus its rule, chip and door.
+Gone: the parts, the mono gate line, and "Needs your evidence".
+
+A **derived** card keeps all three, and that is not a hedge. A derived card has
+no ask at all, so those lines are the only place its WHERE appears — dropping
+them unconditionally would fire J-Return's sharpest must-not on the one card
+that cannot say it any other way. Battery M02 is that mutation and it dies.
+
+**Why this is layout and not a branch on which sentence a row deserves** (the
+property WP-48's placement argument bought): a ratified card is COMPLETE — the
+template supplies every line it needs and the gate's WHERE rides inside its own
+ask. A derived card is incomplete BY CONSTRUCTION. The host already reports
+which kind this is via `headlineTemplate`; the surface reads that report rather
+than deciding it.
+
+**PINNED AS A COUNT, over EVERY ratified class** — including `agent.stuck`,
+which no producer can construct, per WP-46's full-input-domain rule. Three
+assertions per class: the ask occurs **exactly once**; **no** pre-template line
+survives, checked by marker AND by text so a marker rename cannot pass it; and
+**all three lines the template owns are present**, so a card that dropped
+everything cannot pass the first two.
+
+### 3 · ITEM 3 — THE RULE LINE
+
+`Situation.rule` joins the contract, composed once in the host: the ratified
+class's own `rule` on a ratified card, `tierReason` on a derived one. One field,
+so the component renders it with no branch — a renderer choosing between two
+fold fields would be the branch WP-48 removed.
+
+`tierReason` is unchanged and stays on the contract: it is the audit answer to
+"why is this row here", the eval's no-prose accounting reads it, and it is what a
+derived card shows. XD-23 is honoured where it applies rather than overruled.
+
+The `fontStyle: 'italic'` is gone. On the real fleet the line now reads
+`Tier 2 · the world is untouched` instead of `waiting, and nothing has been
+written in scope`.
+
+### 4 · THE CARDS, ON THE OWNER'S REAL LEDGER, AFTER
+
+```
+--- sess_task_01M09M7ZHVS6XM58VA9G8TWPFH   [DERIVED]
+    rule     : waiting, and nothing has been written in scope
+    headline : running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+    meta     : 81h · rb.bulk-plugin-update
+
+--- sess_task_01M0BBHDGE8W4FJM5BJJ5DVAEF   [ratified · run.waiting.mid-procedure]
+    rule     : Tier 2 · the world is untouched
+    chip     : Waiting
+    headline : A cp.backup step is waiting on your evidence
+    ask      : Waiting at cp.backup, 4 of 8. Nothing has been written yet, so stopping here costs nothing.
+    meta     : 64h · nothing written yet · rb.bulk-plugin-update
+
+--- evt_01M0BFNDD6XS21X8HTEMGY4NQV   [ratified · incident.no-run]
+    rule     : Tier 1 · nothing is holding it back but you
+    headline : File manager plugin(s) active: fileorganizer, filester on ent_env_2TH5EJB62XMHN2YRX5V0JTHWMA, and nothing is fixing it
+    ask      : Contain it now, or say why not. Nothing has been written under a procedure.
+    meta     : nothing on record names where the target is · 63h · No run attached · act_security_sentinel
+```
+
+Card 2 states its gate **once**. The incident cards state their finding **once**.
+Card 1 asserts nothing about a target set it cannot see. The grammar is §2's.
+
+**The older gateless run still reads the derived sentence, and that is not a
+defect** — the packet says so and the measurement agrees: an 80-hour-old manifest
+carries no scope, the record is append-only, and that target set is honestly
+unknown forever. Card 2 lights up regardless because §8 freed guard 2 from
+`total`. Two rulings working correctly, and the asymmetry is visible above.
+
+### 5 · ITEM 2 — NOTHING BUILT, AS INSTRUCTED
+
+The designer's sentence set has not arrived (`from-designer/fixtures/` holds the
+same three files it held at the cut, checked at the gate). The away line and the
+accounting line are untouched. The ratified rules are recorded for whoever picks
+them up: an absence under an hour is not an absence, and the accounting line
+states what is true rather than enumerating what isn't.
+
+### 6 · THREE EVALS GREW — AND TWO GREW STRICTER
+
+Landing item 1 turned three criteria RED, each an instrument reading for a shape
+the ruling replaced. WP-49's precedent governs: "an eval predating a ruling must
+grow to account for it; the alternative is a ruling unshippable by its own
+instruments."
+
+| criterion | was | now |
+|---|---|---|
+| `J-Glance#key_step[3]` | the literal string `Needs your <awaits>`, anywhere in the COLUMN | the gate's own `awaits` word AND its checkpoint id, in the ROW'S OWN TEXT |
+| `J-Return#must_not[2]` | a `data-gate` ELEMENT per gated row, compared as two independently-ordered lists | each gated row's own text names its checkpoint id AND its position |
+| `J-Return#must_not[3]` | the no-prose accounting enumerated `tierReason` | …and now `Situation.rule`, a field of the fold arriving exactly as `tierReason` does |
+
+The first two are **stricter than what they replaced**: a column-wide `includes`
+can be satisfied by one card carrying another card's checkpoint id, and
+`must_not[2]` never checked the position at all. Per-row is what both criteria
+always meant.
+
+**The evals surface was outside the announced lock, and the announce was amended
+ON THE BASE the moment the need was measured** (`1705160c`), not at the merge.
+The WP-20f/WP-37 rule does not stop applying because a need is discovered
+mid-packet.
+
+### 7 · FIVE WP-48-ERA PINS REPLACED, NOT DELETED
+
+Each carries in its own comment what changed and why — the standing rule that a
+withdrawn rule with its guard left standing is a test asserting the opposite of
+the law.
+
+- *"the rule line stays the DERIVED tierReason, not the template's tier label"* —
+  asserted precisely what finding 3 withdrew. Inverted, and split in two so the
+  derived case keeps its own pin.
+- *"the parts still render beneath the verdict — a verdict does not replace the
+  record"* — asserted precisely what finding 1 withdrew. Tear 2 is not
+  overturned: the parts are still on the contract and still expandable; a
+  ratified card does not print them as meta lines beneath its own verdict.
+- *"every waiting row names its gate BY CHECKPOINT ID"* — grown to per-row, both
+  halves, with the derived card's mono line still pinned separately.
+- *"every row shows the RULE that placed it, and the rule is the fold's own"* —
+  still true, still the fold's own; it reads `rule` rather than `tierReason`,
+  which is what keeps it true of both kinds of card.
+- WP-50's dedup *"SHOWN · a part that differs from the headline still renders"* —
+  MOVED to the derived card, which is where parts are still drawn, with a new
+  companion pinning that the ratified card renders none. Both directions of the
+  dedup survive on the surface that has them.
+
+### 8 · FINDINGS
+
+- **THE PWD RULE CAUGHT ME, AND IT COST A BASELINE.** The `cd` into the primary
+  checkout for the architect commit and the lock announce persisted, so the
+  "worktree baseline" was the PRIMARY's — reporting 2 skipped where the worktree
+  reports 12. Nothing was written to the wrong tree (`npm run compile` writes
+  gitignored `lib/`; `npm test` writes nothing tracked), and the numbers were
+  discarded and re-taken. **The tell was the skipped column**, exactly as the
+  protocol says to read it. Recorded because the documented form of this hazard
+  is a `cd` "hours earlier"; this one was four commands earlier, inside a
+  compound command whose purpose was something else entirely.
+- **The skipped delta is MEASURED, not assumed**: the worktree's `models/` holds
+  only the tracked `bge-small-en-v1.5`, while `all-MiniLM-L6-v2-quantized` is
+  untracked and lives in the primary alone — so `tests/main/embedding-service.test.ts`
+  `describe.skip`s ten tests here and runs them there. Same total both sides.
+- **THE POISONED ts-jest CACHE, NINTH OCCURRENCE, IN A NEW SHAPE.** The protocol
+  records the signature as "EXACTLY ONE unrelated suite fails to parse". This
+  time **TWO** did — `sitting.test.ts` and `probes.test.ts`, neither edited —
+  and the reason the count differs is instructive: both import `checks.ts`,
+  which this packet DID edit, so the poisoned entry was a shared dependency
+  rather than a suite's own first line. `npx jest --clearCache` then re-measure;
+  both pass, and the full suite went from `2 failed / 8,463` to
+  `620 passed / 8,539`. The rule holds, the count in it does not: **a parse
+  failure in a suite you did not edit is the cache until proven otherwise,
+  however many suites it takes down.**
+- **A compile-failure kill is a weaker witness than an assertion.** The
+  battery's M09 first took the form `return '';`, which made the branches below
+  it unreachable and killed the mutant at the TYPE CHECKER. Honest — it cannot
+  ship — but WP-24's rule is to confirm the mutant changes emitted behaviour.
+  Reshaped to `if (total >= 0) return '';`, which compiles, runs, and dies on
+  five assertions across two suites. The battery was re-driven whole.
+
+### 9 · THE MUTATION BATTERY
+
+`scripts/wp52-battery.py`, 11 mutations over four families, `--no-cache`
+throughout, count-floored, byte sweep first, tree pristine before and after, ABI
+pinned at both ends with the CONSTRUCT-a-Database probe.
+
+```
+NON-PRINTING SWEEP: 11 file(s) swept byte-by-byte, no non-printing characters
+ABI PROBE (before): better-sqlite3 loads — the shared node_modules matches this node
+PRISTINE BASELINE: 0 failed / 183 total, 0 suites failed (floor 179)
+CONTROL  SURVIVED (correct)  0 failed / 183 total
+ABI PROBE (after): better-sqlite3 loads — the shared node_modules matches this node
+
+=== WP-52 BATTERY: 11 killed / 0 survived / 0 anchor-miss, of 11 ===
+TREE PRISTINE AFTER.
+```
+
+Both directions of item 1 are mutations (M01 restores the prepend, M02 strips the
+derived card), both halves of item 4 are mutations (M08 restores the false
+wording, M09 over-applies the fix), and M11 covers the meta line losing the place
+clause for good.
+
+### 10 · RECEIPTS — pasted from the FINAL print, after the last write
+
+| | suites | tests | passed | skipped | exit |
+|---|---|---|---|---|---|
+| baseline (`187f51b1`, in `.worktrees/wp-52`) | 618 | 8,511 | 8,499 | 12 | 0 |
+| **WP-52 at the gate** | **620** | **8,539** | **8,527** | **12** | **0** |
+
++2 suites, +28 tests, **the skipped column did not move**.
+
+```
+situationCopy.generated.ts    6212 bytes  md5 08756f9c9e9853119c97e913aa7dde2a
+                              (wc -c, and the generator now prints the same
+                               number — WP-50's unit fix)
+
+tsc -p . --noEmit                     clean
+eslint src --ext .ts,.tsx             0 errors, 6 warnings (all pre-existing, none in a touched file)
+fixtures:situation-copy:check         exit 0
+fixtures:return-copy:check            exit 0
+fixtures:opening-copy:check           exit 0
+fixtures:procedures:check             exit 0
+fixtures:citations:check              exit 0
+inventory:dom-reach:check             exit 0
+byte sweep                            10 changed files, CLEAN
+mutation battery                      11 killed / 0 survived / 0 anchor-miss, of 11
+```
+
+### 11 · ABI, declared
+
+The tree was built for **Electron (ABI 146)** at the cut — the owner's
+`npm run rebuild` after WP-50, taken on that packet's advice — and the
+CONSTRUCT-a-Database probe said so on the first command in the worktree, before
+a single test ran. `npm test`'s `pretest` hook flipped it. It is now **system
+Node (this machine v25.9.0, ABI 141)**, verified by construction at both ends of
+the battery and after the final suite. **The owner must `npm run rebuild` before
+loading Local.**
+
+### 12 · Unpushed, properly
+
+Zero remote `wp-52` refs; no upstream; no tags touched; version still `0.5.2`.
+
+**No escalations.** The card is the template on every ratified class, the rule
+line is upright and tier-named, and card 1 stops claiming knowledge the platform
+does not have.
+
+**THE `src/renderer/`, THE COMPOSER IN `sessionRegistry.ts`,
+`tests/intelligence-evals/` AND `docs/intelligence/` LOCKS REMAIN HELD** pending
+acceptance of this report.
