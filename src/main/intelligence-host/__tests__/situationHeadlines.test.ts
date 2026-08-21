@@ -30,6 +30,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 
 import {
+  contradictedByTheRecord,
   fillSituationSentence,
   guardHolds,
   listVerdict,
@@ -38,8 +39,12 @@ import {
   type Situation,
 } from '../sessionRegistry';
 import {
+  ACCOUNTING,
+  COLOURS,
+  DOORS,
   FRESHNESS,
   LIST_VERDICT,
+  RESERVED,
   RUN_NOUN,
   SITUATION_COPY_SHAPE_VERSION,
   SITUATION_TEMPLATES,
@@ -102,7 +107,8 @@ const CASES: Array<{ name: string; input: SituationClassInput }> = [
   { name: 'incident, no run', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: null } },
   { name: 'incident, linked to a run', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: 's1' } },
 
-  // --- agent.stuck: no producer emits one, so it is ONLY reachable here ----
+  // --- agent.stuck: WP-54a gave it a producer; these are still its ONLY
+  // --- exercise of the corners the producer cannot supply ------------------
   { name: 'agent failure', input: { kind: 'agentFailure', done: 0, failed: 0, total: 0, gate: null, runId: null } },
   { name: 'agent failure with writes', input: { kind: 'agentFailure', done: 4, failed: 1, total: 5, gate: gate(), runId: 's1' } },
 ];
@@ -116,10 +122,19 @@ const CASES: Array<{ name: string; input: SituationClassInput }> = [
  * sandbox is the only place it is allowed to run.
  */
 function evaluateGuard(guard: string, input: SituationClassInput): boolean {
+  // WP-54's merge · `memberCount` joined the harness because the designer's
+  // cycle-seven sheet split the incident classes on it. It is supplied to BOTH
+  // sides — the string here and the selector below — and a row that folded
+  // nothing is a situation of one, which is why an absent count reads as 1 on
+  // both sides rather than only on the TypeScript one.
   const row = { kind: input.kind, runId: input.runId };
+  const memberCount = input.memberCount ?? 1;
   // eslint-disable-next-line no-new-func
-  const fn = new Function('row', 'done', 'failed', 'total', 'gate', `return (${guard});`);
-  return fn(row, input.done, input.failed, input.total, input.gate) === true;
+  const fn = new Function(
+    'row', 'done', 'failed', 'total', 'gate', 'memberCount',
+    `return (${guard});`,
+  );
+  return fn(row, input.done, input.failed, input.total, input.gate, memberCount) === true;
 }
 
 describe('the guards — two copies of one rule, pinned together', () => {
@@ -215,17 +230,46 @@ describe('the guards — two copies of one rule, pinned together', () => {
     }
   });
 
-  test('agent.stuck is selectable, and nothing in this fold can produce its input', () => {
-    // The class is carried and its selector works; what it lacks is a producer.
-    // Pinning both halves means the day an agent-failure producer lands, the
-    // sentence is already correct — and until then this is the ONLY thing that
-    // reaches it, which is why the pin is here rather than in a render test.
+  test('agent.stuck is selectable, AND the fold can now produce its input', () => {
+    // WP-54a AMENDED THIS PIN, and the amendment is the finding it closes.
+    //
+    // It used to read "…and nothing in this fold can produce its input", with
+    // the note that this file was the ONLY thing reaching the class. That was
+    // true when it was written and it is the shape the architect's finding 4
+    // named: "a class the designer specified, the fold cannot emit, and the
+    // only reason it is on screen at all is the duplication defect that WP-54
+    // is about to remove." A pin that states an absence must be amended the day
+    // the absence is filled, or it becomes a test asserting the opposite of the
+    // code.
+    //
+    // The selector half is unchanged and still belongs here (WP-46: drive the
+    // builder directly). The producer half now lives in
+    // `agentStuckSituation.test.ts`, ledger-driven end to end.
     const stuck: SituationClassInput =
       { kind: 'agentFailure', done: 0, failed: 0, total: 0, gate: null, runId: null };
     expect(selectSituationTemplate(stuck, FULL_BAG)?.id).toBe('agent.stuck');
-    // `Situation.kind` has exactly two members, and neither is `agentFailure`.
-    const kinds: Array<Situation['kind']> = ['session', 'incident'];
-    expect(kinds).not.toContain('agentFailure' as never);
+    // `Situation.kind` carries `agentFailure` now — the one-word change that
+    // made the class reachable.
+    const kinds: Array<Situation['kind']> = ['session', 'incident', 'agentFailure'];
+    expect(kinds).toContain('agentFailure');
+  });
+
+  test('the ratified ask is REFUSED when the record holds no timeout, not shortened', () => {
+    // `contradictedByTheRecord`'s second arm, driven directly across the two
+    // states no other test in this file can reach: the guard holds either way
+    // and the HEADLINE is fillable either way, so `selectSituationTemplate`
+    // returns the class in both — the refusal is the only thing standing
+    // between a real row and "It timed out after ." on a run that errored.
+    const stuck: SituationClassInput =
+      { kind: 'agentFailure', done: 0, failed: 0, total: null, gate: null, runId: null };
+    const selected = selectSituationTemplate(stuck, { agentId: 'auth-probe' });
+    expect(selected?.id).toBe('agent.stuck');
+    expect(contradictedByTheRecord(selected, null, { agentId: 'auth-probe' })).toBe(true);
+    expect(contradictedByTheRecord(selected, null, { agentId: 'auth-probe', timeout: '300s' })).toBe(false);
+    // …and the first arm is untouched by the widening: a class-1 template with
+    // a gate is still contradicted, with or without a bag.
+    expect(contradictedByTheRecord(SITUATION_TEMPLATES[0], gate())).toBe(true);
+    expect(contradictedByTheRecord(SITUATION_TEMPLATES[0], null)).toBe(false);
   });
 });
 
@@ -324,8 +368,17 @@ describe('the copy discipline, asserted over the ratified set', () => {
       .filter((t) => t.chip !== '' && /\s/.test(t.chip))
       .map((t) => `${t.id}: ${JSON.stringify(t.chip)}`);
     expect(offenders).toEqual([]);
-    // …and the three that have one are the three the route names.
-    expect(SITUATION_TEMPLATES.map((t) => t.chip).filter(Boolean)).toEqual(['Waiting', 'Waiting', 'Mid-change', 'Stuck']);
+    // WP-54 · ITEM 12 CUT `Waiting`, AND THE DESIGNER'S CYCLE-SEVEN SHEET CUT
+    // THE REST. The packet removed the chip from the two classes that rendered
+    // beside a derived twin — chip-presence told the user which of OUR code
+    // paths ran — and the designer then carried the cut to every class, so no
+    // ratified template declares a badge at all.
+    //
+    // The field survives as `''` so every consumer is unchanged, and the
+    // one-word rule above still stands over whatever a future class declares.
+    // Asserted as an EMPTY SET rather than deleted: a chip reappearing is a
+    // ratified-copy change and must reach a human.
+    expect(SITUATION_TEMPLATES.map((t) => t.chip).filter(Boolean)).toEqual([]);
   });
 
   test('the runbook id is on the META line and never in a headline', () => {
@@ -349,13 +402,43 @@ describe('the copy discipline, asserted over the ratified set', () => {
     const normalised = fs.readFileSync(FIXTURE_JS, 'utf-8')
       .replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16)));
     const needles = [
-      ...SITUATION_TEMPLATES.flatMap((t) => [t.id, t.guard, t.headline, t.ask, t.chip, t.state, t.meta, t.rule]),
+      ...SITUATION_TEMPLATES.flatMap((t) => [t.id, t.guard, t.headline, t.ask, t.state, t.meta, t.door]),
       ...Object.values(RUN_NOUN),
       LIST_VERDICT.allUnwritten, LIST_VERDICT.someChanged,
       FRESHNESS.now, FRESHNESS.then,
     ];
     const misses = needles.filter((n) => n !== '' && !normalised.includes(n));
     expect(misses).toEqual([]);
+  });
+
+  /**
+   * WP-54's merge · THE ONE STRING THE GENERATOR TRANSFORMS, and the pin is
+   * STRONGER than the substring rule it is exempted from.
+   *
+   * The designer's sheet writes the tier twice — as prose at the head of the
+   * rule line and as a numeric field beside it — which is the two-sources shape
+   * this packet exists to remove, arriving as data. Editing the designer's
+   * sentence would be a packet rewriting ratified copy, so the generator
+   * NORMALISES instead: it asserts the two agree and emits the line with the
+   * numeral replaced by the slot that fills it.
+   *
+   * `rule` is therefore not a verbatim substring of the fixture, and this is
+   * what replaces that guarantee: substituting the DECLARED tier back must
+   * reproduce the designer's line byte for byte. A transformation that changed
+   * a word rather than a numeral fails here.
+   */
+  test('the rule line is the designer\'s own sentence with its tier turned into a slot', () => {
+    const normalised = fs.readFileSync(FIXTURE_JS, 'utf-8')
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+
+    for (const t of SITUATION_TEMPLATES) {
+      expect({ id: t.id, opens: t.rule.startsWith('Tier {tier} · ') })
+        .toEqual({ id: t.id, opens: true });
+      // Put the number back; the designer's line must reappear exactly.
+      const restored = t.rule.replace('{tier}', String(t.tier));
+      expect({ id: t.id, verbatim: normalised.includes(restored) })
+        .toEqual({ id: t.id, verbatim: true });
+    }
   });
 
   test('the run-noun column is Controlled Vocabulary v1.4, whole', () => {
@@ -380,8 +463,21 @@ describe('the copy discipline, asserted over the ratified set', () => {
     // line said its second sentence twice and never said the first.
     expect(model.AUTHORED.DRIFT_NO_COUNT).toBe(FRESHNESS.now);
     const line = model.driftLine(null);
-    expect(line).toBe(`${FRESHNESS.now} ${FRESHNESS.then}`);
-    expect(line.indexOf(FRESHNESS.then)).toBe(line.lastIndexOf(FRESHNESS.then));
+    // WP-54's merge · THE SECOND HALF MOVED HOUSE, and the pin follows it.
+    //
+    // `FRESHNESS.then` was this sentence's anchor in the SITUATION fixture, and
+    // the designer's cycle-seven sheet dropped it. Nothing rendered changes:
+    // `driftLine` has always composed its second sentence from
+    // `RETURN_COPY.DRIFT_REST`, which the RETURN generator extracts from the
+    // sheet that still carries it. What `then` was for was the CROSS-GENERATOR
+    // agreement — two extractors, one sentence — so the anchor is now that
+    // sentence directly, and the half-swap the battery found is still caught.
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { RETURN_COPY: returnCopy } = require('../../../renderer/components/return/returnCopy.generated');
+    /* eslint-enable @typescript-eslint/no-var-requires */
+    const second = returnCopy.DRIFT_REST;
+    expect(line).toBe(`${FRESHNESS.now} ${second}`);
+    expect(line.indexOf(second)).toBe(line.lastIndexOf(second));
     // …and a line that HAS a count still renders the count, not the sentence.
     expect(model.driftLine(41)).toContain('41');
     expect(model.driftLine(41)).not.toContain(FRESHNESS.now);
@@ -391,11 +487,19 @@ describe('the copy discipline, asserted over the ratified set', () => {
     const was = 'No producer reports how many facts are past their freshness window, so this line cannot state the count.';
     expect(FRESHNESS.now).toBe('Freshness is not being reported yet.');
     expect(FRESHNESS.now.length).toBeLessThan(was.length);
-    // The designer's second sentence follows it unchanged — the same bytes the
-    // return-copy generator already extracts as DRIFT_REST.
+    // WP-54's merge: the sheet dropped `then`. The surface never read it (see
+    // the drift-line test above), so an empty value is the honest emission —
+    // and emitting it as `''` rather than defaulting it from the other
+    // generator is what keeps this file from becoming the second source.
+    expect(FRESHNESS.then).toBe('');
+    // The designer's second sentence used to be carried by BOTH fixtures, and
+    // this asserted the two extractors agreed on it. The cycle-seven sheet
+    // dropped it here; the RETURN fixture still carries it, and the drift line
+    // still renders it from there — pinned in the drift-line test above, which
+    // is now the only place the sentence is anchored.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { RETURN_COPY } = require('../../../renderer/components/return/returnCopy.generated');
-    expect(FRESHNESS.then).toBe(RETURN_COPY.DRIFT_REST);
+    expect(RETURN_COPY.DRIFT_REST).not.toBe('');
   });
 
   test('no template string is hand-typed in the composer — it reads them from the module', () => {
@@ -447,7 +551,15 @@ describe('the generator — the tracked module is what the designer\'s file prod
     const source = fs.readFileSync(GENERATED, 'utf-8');
     expect(source).toContain('GENERATED — DO NOT EDIT');
     expect(source).toContain('npm run fixtures:situation-copy');
-    expect(SITUATION_COPY_SHAPE_VERSION).toBe(1);
+    // WP-54 bumped the SHAPE: templates now declare a `tier`, and the module
+    // carries four new blocks (`DOORS`, `COLOURS`, `RESERVED`, `ACCOUNTING`).
+    // The version is what lets a consumer tell a shape change from a content
+    // change, which is the whole reason it is emitted.
+    // WP-54's merge bumped it again: the designer's cycle-seven sheet added a
+    // per-template `door`, removed every `chip`, and declares one class's tier
+    // in prose — three shape changes in one artifact, and the version is what
+    // lets a consumer tell that from a content change.
+    expect(SITUATION_COPY_SHAPE_VERSION).toBe(3);
   });
 
   /** Run the generator against a broken copy of the fixture; expect a loud death. */
@@ -489,9 +601,44 @@ describe('the generator — the tracked module is what the designer\'s file prod
   });
 
   test('a template missing a field fails loudly rather than defaulting it', () => {
-    const r = refuses((s) => s.replace("      chip: 'Stuck',\n", ''));
+    // Re-aimed at a field that still EXISTS. It used to remove `chip: 'Stuck'`,
+    // and the designer's cycle-seven sheet removed every chip, so the mutation
+    // had nothing to delete — a refusal test whose subject is gone passes
+    // vacuously in the worst way: by never running the code it checks.
+    const r = refuses((s) => s.replace("      door: 'Open {agentId}',\n", ''));
     expect({ threw: r.threw, wrote: r.wroteOutput }).toEqual({ threw: true, wrote: false });
-    expect(r.message).toContain('is missing "chip"');
+    expect(r.message).toContain('is missing "door"');
+  });
+
+  /**
+   * WP-54's merge · THE RULED-CONTENT ASSERTION, driven against the exact
+   * regression that produced it.
+   *
+   * Two ruled guard amendments were silently REVERTED when the cycle-seven
+   * sheet replaced this fixture wholesale: WP-48's `&& gate === null` on class
+   * 1 and WP-50's removal of `total` from class 2. Nothing caught it — the
+   * generator checked ids, fields and slots and had no opinion about a guard's
+   * CONTENT — so a ruling adjudicated at two gates was undone by a file copy.
+   *
+   * A ruling that lives only in the record survives as long as the next
+   * person's memory. Both directions are driven here, because the two
+   * amendments fail in opposite directions and a check that only tested one
+   * would be half an instrument.
+   */
+  test('a REVERTED RULING fails the build — both amendments, both directions', () => {
+    const lost = refuses((s) => s.replace(" && total === 0 && gate === null'", " && total === 0'"));
+    expect(lost.threw).toBe(true);
+    expect(lost.message).toContain('RULED AMENDMENT REVERTED');
+    expect(lost.message).toContain('gate === null');
+    expect(lost.message).toContain('WP-48');
+
+    const returned = refuses((s) => s.replace(
+      "      guard: 'row.kind === \"run\" && done === 0 && failed === 0 && gate !== null',",
+      "      guard: 'row.kind === \"run\" && done === 0 && failed === 0 && total > 0 && gate !== null',",
+    ));
+    expect(returned.threw).toBe(true);
+    expect(returned.message).toContain('RULED AMENDMENT REVERTED');
+    expect(returned.message).toContain('WP-50');
   });
 
   test('a slot the composer cannot fill fails the BUILD, not the customer\'s row', () => {
@@ -512,5 +659,86 @@ describe('the generator — the tracked module is what the designer\'s file prod
     const r = refuses(() => '(function () { /* assigns no NEXUS_HEADLINES */ })();');
     expect(r.threw).toBe(true);
     expect(r.message).toContain('did not assign window.NEXUS_HEADLINES');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-54 · the four blocks the ratified fixture grew, and the class rule on them
+// ---------------------------------------------------------------------------
+
+describe('WP-54 · the doors, the stripe, the reserved row and the accounting clauses', () => {
+  /**
+   * ITEM 7 — THE PUNCTUATION APPENDER, DRIVEN DIRECTLY.
+   *
+   * The row door shipped as "Open where you are needed." while every ratified
+   * drawing of it carries no full stop, so the render was APPENDING one — which
+   * meant it was appending one to every door string. The appender turned out to
+   * be an EXTRACTION: `generate-return-copy.ts` captures the door out of a
+   * markdown sentence (`Door: *Open where you are needed.*`) and the sentence's
+   * own terminator came with it.
+   *
+   * `controlLabel` is the class fix, and it is pinned over its whole input
+   * domain rather than through the one string that exposed it — including the
+   * inputs it must LEAVE ALONE, which is where a fix of this shape usually
+   * overreaches.
+   */
+  test('controlLabel strips ONE terminal period, and nothing else', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { controlLabel } = require('../../../../scripts/control-label');
+
+    expect(controlLabel('Open where you are needed.')).toBe('Open where you are needed');
+    expect(controlLabel('Open where you are needed')).toBe('Open where you are needed');
+
+    // An ellipsis is a control's own punctuation and survives, in both spellings.
+    expect(controlLabel('Choose a site…')).toBe('Choose a site…');
+    expect(controlLabel('Choose a site...')).toBe('Choose a site...');
+    // Nothing else is trimmed: a control asking something is a different
+    // decision, and one that is a whole sentence is a defect this must surface
+    // rather than tidy away.
+    expect(controlLabel('Retry?')).toBe('Retry?');
+    expect(controlLabel('Contain it now, or say why not.')).toBe('Contain it now, or say why not');
+    expect(controlLabel('')).toBe('');
+  });
+
+  test('no control the generators emit carries a terminal period', () => {
+    for (const label of Object.values(DOORS)) expect(label).not.toMatch(/\.$/);
+  });
+
+  /**
+   * ITEM 3's guard, at the fixture: the stripe encodes TIER, and there is no
+   * tier-4 colour because tier 4 takes no stripe. A `tier4` key appearing here
+   * would be the drift the guard names, arriving as data rather than as code.
+   */
+  test('the stripe has exactly three tier colours, and a link colour beside them', () => {
+    expect(Object.keys(COLOURS).sort()).toEqual(['link', 'tier1', 'tier2', 'tier3']);
+    for (const value of Object.values(COLOURS)) expect(value).toMatch(/^rgb\(\d{1,3},\d{1,3},\d{1,3}\)$/);
+  });
+
+  /**
+   * ITEM 10 — "checks dark" in plain words, and the clause states the count and
+   * STOPS.
+   *
+   * The review asked for "3 checks haven't reported in 9 hours". The duration is
+   * not derivable and is therefore not written: a DARK producer is one that has
+   * never reported at all (`producerLine` in `health.ts` returns DARK only for
+   * `!row.lastRecordedAt`, and a producer that HAS reported is OK or STALE), so
+   * there is no last-seen moment to subtract from. Inventing one would be the
+   * fabrication this layer forbids; the honest clause is the count.
+   */
+  test('the accounting clauses take a count and nothing the record cannot supply', () => {
+    expect(ACCOUNTING.dark).toBe('{count} checks haven’t reported');
+    expect(ACCOUNTING.changed).toBe('{count} changed overnight');
+    for (const clause of Object.values(ACCOUNTING)) {
+      expect([...clause.matchAll(/\{(\w+)\}/g)].map((m) => m[1])).toEqual(['count']);
+    }
+    // The jargon is gone from the ratified set entirely, not merely unrendered.
+    expect(Object.values(ACCOUNTING).join(' ')).not.toContain('checks dark');
+  });
+
+  /** ITEM 11 — the reserved row's two strings, in the user's words. */
+  test('the reserved row names the thing the user recognises, not the structure that stores it', () => {
+    expect(RESERVED.head).toBe('Watching your sites');
+    expect(RESERVED.quiet).toBe('Everything is reporting.');
+    expect(`${RESERVED.head} ${RESERVED.quiet}`).not.toMatch(/record|reserved/i);
   });
 });

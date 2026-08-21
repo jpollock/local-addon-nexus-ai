@@ -548,3 +548,391 @@ the record — where the internal noun has no plain equivalent, name the
 thing the user recognises, not the structure that stores it. A
 surface that is honest and incomprehensible has failed the same test
 as one that lies, one step later.
+
+## An agreement pin needs an anchor outside both derivations (WP-54)
+
+An agreement pin asserts that two derivations of one fact match. It
+cannot see an error that moves BOTH of them: WP-54's battery mutated
+the ranker into ignoring the ratified class, display and rank agreed on
+the same wrong number, and the mutant SURVIVED. Pair every agreement
+pin with a companion that anchors the agreed value to a source outside
+both — the ratified fixture, the law document, the record. Two things
+agreeing is not evidence; two things agreeing WITH A THIRD is.
+
+## A verbatim commit proves fidelity, not consistency (WP-51)
+
+Committing a counterpart's artifact byte-perfect and verifying its md5
+proves it matches what the SENDER sent. It says nothing about whether
+it still honours what the RECORD has ruled. WP-51 found the ratified
+fixture had silently reverted two amendments — WP-48's `gate === null`
+and WP-50's dropped `total > 0` — in a file whose hash verified
+perfectly, and the architect had committed it without noticing. Follow
+every verbatim commit of a SHARED artifact with a ruled-content check:
+every amendment the record has made to that file must still be
+present, asserted mechanically, in the file's own `:check`.
+
+## A pasted receipt is also a wrong-tree detector (WP-51)
+
+The receipts rule is usually argued from fidelity. WP-51 shows the
+second use: an addendum landed in the wrong checkout, and the commit
+message carried a HAND-COMPUTED byte figure while the terminal's print
+said something else. A pasted receipt puts the true number and the
+wrong tree on the same screen; a hand-computed one hides the
+discrepancy that would have named the mistake.
+
+## An anticipatory pin is a hypothesis, not a guard (WP-51)
+
+A pin written to catch a ruling that has not happened yet encodes an
+assumption about the SHAPE that ruling will take. WP-48a's escalation
+pin watched `causation`; the ruling produced a `correlation`, so the
+pin never fired and its silence meant nothing. Keep the cases, amend
+the header when the shape is known, and never read a quiet
+anticipatory pin as confirmation that the thing it watches for did not
+happen.
+
+## Locks partition files; they do not partition types (WP-54)
+
+WP-54 and WP-54a held provably disjoint file locks and collided anyway:
+`SituationCopy` gained three required fields in one while a function in
+the other predated them, and the merged tree would not compile. No
+announce discipline could have seen it, because the announce names
+paths. **Declare the SHAPES a packet changes — types, contract fields,
+generated artifacts — in the lock announce alongside the paths.** And
+note the good news in the failure: a type collision fails loudly at
+compile time and cannot be shipped past, which is the best failure
+mode available to a two-agent merge.
+
+## Printing the cwd is not the control; branching on it is (WP-54)
+
+The pwd rule's sharpest form, and it generalizes past pwd: a command
+that PRINTS its working directory produces a receipt of the mistake,
+readable after the commit has already run. A command that BRANCHES on
+it refuses to run in the wrong tree. **A check that only prints is a
+log; a check that can refuse is a guard** — the same family as the
+battery's ANCHOR-MISS and the agreement pin's outside anchor. An
+instrument that cannot fail is not an instrument.
+
+## Hashes are piped, never typed (WP-51)
+
+The receipts family gains its sharpest form. WP-51's merge-report
+commit message carried a fabricated md5 — invented minutes after the
+receipts rule was ruled, in the report that carries it — and the
+analysis is why it survived long enough to commit: the byte figures in
+the same message were genuine, and **the invented number was the only
+figure nothing else on screen could contradict.** A byte count has
+`wc -c` beside it; an opaque hash has no neighbour. Fabrication
+survives precisely where nothing local can disagree. Pipe every hash
+from the command that computes it; never transcribe one, and never
+type one from memory of what it looked like.
+
+## A watch item belongs at the code it warns about (WP-51)
+
+Recording a watch item in WORK_PACKETS makes it findable by whoever
+looks. Writing it at the rule it supersedes — in the source, beside
+the decision it will overturn — makes it findable by whoever must.
+WP-51 put the phase-1 heartbeat warning in `incidentProducer.ts` at
+the rule phase 1 will supersede, so that packet's author meets it
+where the decision lives rather than where it was filed.
+
+## The base is measured by the packet that created it (2026-08-21, owner-directed)
+
+A merged tree BECOMES the next packet's base, so the packet that
+merged it has already measured exactly the tree the next packet would
+re-measure. Re-running that suite is a second measurement of one
+commit — ten minutes of wall clock for a number that already exists,
+and a second chance to disagree with itself. WP-51's merge spent a
+full scratch-worktree suite deriving 623/8,581, a figure WP-54a's
+merge had already produced on the same tree.
+
+**Every merge report publishes its merged-tree figures as the base's
+own measurement**, in `docs/intelligence/base-measure.json`,
+overwritten rather than appended (so a conflict is "take the newer
+commit's", never a rebuild):
+
+```json
+{ "commit": "<sha>", "suites": 624, "tests": 8621, "passed": 8613,
+  "skipped": 2, "tree": "primary" }
+```
+
+Two rules make it sound:
+
+1. **The tree kind is part of the figure.** Primary and worktree
+   differ by exactly ten in the skipped column (the untracked
+   embedding model). A count without its tree kind is the ambiguity
+   that made three packets narrate the boundary instead of asserting
+   it.
+2. **It is guarded, and it fails closed.** Before trusting it, the
+   reading packet runs
+   `git diff --name-only <measured-commit> HEAD -- src/ tests/ scripts/`.
+   Empty ⇒ the measurement stands. Anything at all ⇒ re-measure. Docs
+   commits land between merges constantly and move no test count; a
+   code commit does, and this is the one command that tells them
+   apart.
+
+The two runs this does NOT remove are the two that earn their place:
+the merged tree (a tree neither branch has tested) and the battery
+(which has found a real defect in every packet this month).
+
+## A scoring harness needs a control that fails when the harness is blind (WP-54a)
+
+WP-54a's battery captured stdout only; jest writes its summary to
+stderr INCLUDING ON SUCCESS. The run would have reported **21/21
+killed** while measuring nothing — a perfect score read from silence,
+indistinguishable from a perfect score read from evidence. The
+green-baseline guard caught it: **the control that must PASS is what
+exposes a harness that can only report perfection.** Every scoring
+instrument needs one. Same family as ANCHOR-MISS, the agreement pin's
+outside anchor, and printing-versus-branching: an instrument that
+cannot fail is not an instrument.
+
+## A producer that formats a fact into a sentence has thrown it away (WP-54a)
+
+Fourth occurrence of one shape. The sentinel knew the run id and wrote
+it into `payload.source` prose; the arming knew its scope and streamed
+it to a renderer; the arming knew what it answered and recorded
+nothing; `AgentRunner` computes `timeoutMs` and interpolates it into
+"timed out after 300000ms". **A producer holding a fact at the moment
+it emits must write the fact as a field, and may then also format it.**
+Never the sentence alone — a consumer that must parse prose to recover
+a number is a consumer the record has failed.
+
+## When you edit a failing suite, identity is the receipt, not the count (WP-54a)
+
+An unchanged count of inherited failures proves nothing if the packet
+touched the suite producing them — the same number can be a different
+set. Diff the failing test NAMES against the base and assert identity.
+
+## Vacuous-guard shape #16 — indexing into a heterogeneous list (WP-56)
+
+A pin that reads `parts[0]` asserted something true for one KIND of
+member and vacuous for another: for an incident situation `parts[0]` is
+a real event; for a session situation it is the synthetic run part,
+which carries no `eventId`. The assertion named a string belonging to
+nothing and held against the bug as well as the fix. **When a list's
+members differ in kind, a pin selects by KIND, never by index** — and
+if the kinds cannot be distinguished at the pin, that is the finding.
+
+## A ruling can be unimplementable from the caller's shape (WP-56)
+
+"Recorded on the run" was ratified, correct, and unsatisfiable where it
+had to be called: a surface holding a `Situation` has no turn id
+because `taskIds` lives on `SessionRow`. Neither the ruling nor the
+review could see it; building the driven exhibit did, on its first run.
+**A ruling states what must be true; only an exhibit shows whether the
+caller can say it.** When a packet's ruling names a fact, the packet
+verifies that fact is reachable from the shape that must supply it.
+
+## The record merges by receipt, not by authorship (WP-54)
+
+WP-54's merge conflicted the record where it always will: both halves
+appended to the same tail. Theirs held two sections the ux branch had
+never seen; ours held eighteen. Strict authorship chronology would have
+interleaved them — WP-54's gate report belongs *before* the amended one
+already on our side, and WP-54's staleness note belongs *after* it.
+
+**That resolution is unverifiable, and the standard forbids it.** The
+four-way check requires each half to appear as an exact substring
+exactly once; splitting a half to interleave it destroys the only
+property that proves nothing was lost. A merge whose correctness cannot
+be demonstrated is not a merge, it is a retype with good intentions.
+
+**So: the record is ordered by RECEIPT. A branch's sections arrive when
+the branch merges, appended whole, after everything the base already
+held.** Authorship chronology stays readable because every section
+carries its own date in its header — which is why the dates are there.
+The rebuild is `ancestor + ours_tail + theirs_tail`, in that order,
+always, with no judgement exercised at the seam.
+
+Receipts for this one: ancestor 1386076 · ours_tail 126116 (18 headers)
+· theirs_tail 25491 (2) · architect appends 9651 (2) · rebuilt 1547334
+(112 = 90+18+2+2) · residual 0 · markers 0.
+
+## A resolution that keeps the code can still drop the law (WP-54)
+
+The conflicted fixture was resolved by hand before it reached the
+gate, and the resolution was almost right: it restored both ratified
+guards — WP-48's `gate === null` and WP-50's dropped `total > 0` — so
+every mechanical check on it would have passed. It also silently
+deleted the two comment blocks that say WHY those guards read that way,
+including a standing rule of the law that lived nowhere else in source:
+**a guard may condition only on facts its sentence's claim depends on.**
+
+The rule survived in the record, so nothing was lost outright. But it
+stopped sitting at the code it governs, which is the failure the
+watch-item rule already names — and the next packet to read that guard
+would have found a bare expression with no argument attached, exactly
+the condition under which WP-50's clause got added in the first place.
+
+**A merge resolution in ruled territory is verified on the PROSE, not
+only on the strings.** The guards are what a test can check; the
+provenance is what stops the guard being re-broken. Both halves' unique
+comment blocks are enumerated and shown to survive, by exact-substring
+count, before the resolution is offered.
+
+Measured here: working 16173 bytes, missing both blocks; restored
+18631 with each block an exact substring of the wp-54 blob exactly
+once; `node --check` clean; all six guards present and unchanged.
+
+## Declare the SHAPES a packet changes, not only the paths (WP-54)
+
+**Locks partition FILES; they do not partition TYPES.** WP-54 and WP-54a
+held provably disjoint file locks and kept them perfectly — WP-54a
+edited none of WP-54's eight named functions and WP-54 edited none of
+WP-54a's — and the two still collided, because `SituationCopy` gained
+three required fields in one packet while a function returning it was
+written in the other. No announce discipline could have seen it: both
+announces named paths, and paths were not where the collision was.
+
+What saw it was the TYPE SYSTEM, at compile time, loudly, in a form
+nothing could ship past, with the badge/row equality pin standing
+behind it as the second net. That is the good outcome, and it is worth
+naming as one: a merge that will not compile is a merge that cannot
+silently lose half a packet.
+
+So a lock announce now declares the shapes as well as the paths — an
+interface a packet widens, a union it extends, a required field it
+adds. A sibling reading "adds three required fields to `SituationCopy`"
+knows to check every function that returns one; a sibling reading
+"holds `sessionRegistry.ts`" does not.
+
+## An instrument that cannot fail is not an instrument (WP-54)
+
+WP-52's version of the pwd rule said re-anchor at every measurement.
+WP-54's sharpening names why a printed anchor is not an anchor:
+**"The command printed `pwd`; I read it after the commit had run.
+Printing the cwd isn't the control; branching on it is."**
+
+**A check that only prints is a log; a check that can refuse is a
+guard.** The same family runs through this protocol already — the
+battery's ANCHOR-MISS, which fails rather than reporting a survivor;
+the agreement pin's outside anchor, without which both derivations can
+agree on one wrong number (WP-54 measured that: a mutation making the
+ranker ignore the ratified class SURVIVED an agreement pin, because
+display and rank still agreed); `:check` failing closed on a stale
+artifact. Ask of every instrument: what input makes this refuse? If
+there isn't one, it is documentation.
+
+**Its first application beyond the pwd case, in the same packet:** two
+ruled guard amendments were silently reverted when a designer's new
+sheet replaced a fixture wholesale, and nothing caught it — the
+generator checked ids, fields and slots and had no opinion about a
+guard's CONTENT. A ruling recorded only in `WORK_PACKETS.md` survives
+exactly as long as the next person's memory. `RULED_AMENDMENTS` in
+`scripts/generate-situation-copy.ts` is the guard that now refuses it,
+and its own test drives both directions rather than asserting it exists.
+
+## An append written into a conflicted file is on neither side (WP-54)
+
+Two adjudications, 9,651 bytes, were appended to `WORK_PACKETS.md` while
+the file held live conflict markers. The merge was then resolved
+correctly — three blobs, receipt order, four-way verified — and the
+appends went out with the markers, because a rebuild reads the ANCESTOR,
+OURS and THEIRS blobs and the working file is none of those. Every
+check passed. The record lost two rulings and the byte arithmetic
+reconciled exactly, because it was reconciling the wrong three numbers.
+
+**While a merge is in progress, the record is not writable.** An
+adjudication written during a hold goes to a file of its own and is
+appended after the merge commits, or it is written to a working file
+that the correct resolution is guaranteed to discard.
+
+For the resolver: the rebuild is `ancestor + ours_tail + theirs_tail`,
+and if the working file is LARGER than that sum, the excess is somebody's
+uncommitted text. Measure the residual before discarding it. A residual
+of zero is the proof; a positive residual is a question, not a rounding.
+
+## Vacuous shape #17 — a guard that subtracts its own exception before reading
+
+`RATIFIED_IDS` was compared against the emitted ids with the deferred
+class already filtered out, so the guard could not see the class it was
+deferring. The deferral's exit condition — "the host fields WP-55 adds"
+— lived in a string, was announced once on stdout, and was tested by
+nothing. Deleting the deferral is what makes the class ship, and nothing
+fails if nobody does.
+
+**Skipping loudly is not failing closed.** A deferral states a condition
+under which it ends; the check that reads it PROBES that condition, or
+the deferral is permanent by construction and the announcement is a
+comment with a stack trace's self-regard.
+
+## An instrument is described by what it measures (WP-54)
+
+`RULED_AMENDMENTS` was reported as failing the build "on any future
+reversal". It fails on a reversal that changes a substring of the guard
+text — which is the reversal that happened, so the instrument is right.
+The claim is wider than the measurement, and a wider claim is how the
+next reader stops looking for the gap the instrument leaves.
+
+Same line, same rule as the receipts: **state the measurement, then the
+protection it buys, and never the second in place of the first.** A
+histogram assembled from two fleets is labelled with both, on the line
+that carries the numbers, not in the paragraph after it.
+
+## A battery belongs in a worktree (WP-54 merge)
+
+A mutation battery polls `git status` between every mutation — that is
+how its pristine check and its ANCHOR-MISS verdict work. An architect
+writing `WORK_PACKETS.md` in the same checkout is therefore racing it.
+Measured across WP-54's merge: three stale zero-byte `.git/index.lock`
+files and two runs ending `ALARM: tree is NOT pristine after the
+battery` on runs whose mutations were all sound.
+
+Both ALARMs were arguable — the modified files were markdown no suite
+reads, provably outside the battery's own write set, which its
+`MUTATIONS` table names. Neither was argued, because the rule directly
+above this one says an instrument that cannot fail is not an
+instrument, and the first time the harmless case is exempted is the
+last time the check means anything.
+
+**Run the battery in a worktree cut at the commit under test**, where
+nothing else writes. Same isolation, and the same reason, as a packet's.
+
+## A mechanism its author carries is still memory (WP-54)
+
+The pwd hazard fired three times in one day, twice after its own rule
+was written into this file, once while committing that rule to the wrong
+worktree. The packet's answer was right and is ratified: **a rule its
+own author cannot follow from memory needs a mechanism, and the third
+occurrence is the evidence.**
+
+The mechanism it built was a two-line guard in the prologue of each
+writing command — which protects one operator in one session and nobody
+else. **A guard that travels with the person is a habit with better
+spelling.** A guard in the repository is the mechanism.
+
+The test: could the next agent, starting cold on a fresh clone, violate
+this rule? If yes, the rule is still enforced by memory — somebody
+else's. `.githooks/pre-commit` is versioned and `core.hooksPath` already
+points at it, so this repository's answer to any refusal that can be
+mechanised is four lines in a file that already runs everywhere.
+
+And the general form, for every rule in this document: each one is
+currently enforced by an agent remembering to read it. That is
+acceptable for judgement and unacceptable for venue, identity and
+arithmetic — the three kinds of failure that recur, because they are the
+kinds a careful reader still commits while reading carefully.
+
+## Locks partition files; they do not partition arithmetic (WP-54 / WP-56)
+
+Both locks were kept perfectly. WP-54 held `sessionRegistry.ts` and
+edited `listVerdict` to add a term for rows the fold does not hold.
+WP-56 stayed off the file, cut from an earlier base, and rewrote the
+same function to subtract deferred rows. Neither branch has a test where
+both terms are non-zero, so **every test passes under the resolution
+that silently drops one of them.**
+
+A file lock is an exclusion on WRITES. It says nothing about two packets
+computing the same quantity, and the merge presents the newer body as
+the obvious resolution precisely when the older one carried a term the
+newer author never saw.
+
+**A packet that changes the meaning of a shared quantity — a count, a
+sum, an identity, a sort key — announces the QUANTITY, not only the
+file.** The announce names the expression before and after. Two packets
+announcing the same quantity is a sequencing decision for the architect,
+and it is cheap; discovering it at the merge is not.
+
+The tell for the resolver: **a signature that differs between the two
+branches is a contract change, and a contract change never resolves by
+choosing the better-commented body.** Write the merged expression out as
+a sentence first, then make both bodies satisfy it.

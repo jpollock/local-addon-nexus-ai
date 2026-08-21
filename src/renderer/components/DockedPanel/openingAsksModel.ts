@@ -55,6 +55,7 @@ import { RUN_NOUN } from '../../../main/intelligence-host/situationCopy.generate
 import { fillSituationSentence } from '../../../main/intelligence-host/sessionRegistry';
 import type { SlotBag } from '../../../main/intelligence-host/sessionRegistry';
 import { OPENING_ASKS, PANEL_INVITATION } from './openingCopy.generated';
+import { nowVerdict, type NowInboxRead } from '../return/arrivalModel';
 
 /**
  * THIS SURFACE'S AUTHORED COPY, IN ONE PLACE AND NAMED — `arrivalModel.ts`'s
@@ -253,9 +254,23 @@ export interface OpeningState {
  * announced an opening state anyway would be back to opening on a blank with
  * extra furniture around it.
  */
-export function openingState(triage: TriageView | null | undefined): OpeningState | null {
+export function openingState(
+  triage: TriageView | null | undefined,
+  /**
+   * WP-54 · ITEM 1 — the Inbox, so the panel's opening line counts the same rows
+   * the list beside it draws.
+   *
+   * The panel and the Now list sit side by side on the designer's own sheet. If
+   * the list heads eight rows and the panel opens "Seven things need you", the
+   * screen contradicts itself in the space of one glance — which is item 1 again,
+   * one surface over. Optional: a caller with no inbox gets the fold's own
+   * sentence, unchanged.
+   */
+  inbox?: NowInboxRead,
+): OpeningState | null {
   if (!triage) return null;
   const asks = openingAsks(triage.waiting);
-  if (!triage.verdict && asks.length === 0) return null;
-  return { verdict: triage.verdict, invitation: PANEL_INVITATION, asks };
+  const verdict = nowVerdict(triage, inbox);
+  if (!verdict && asks.length === 0) return null;
+  return { verdict, invitation: PANEL_INVITATION, asks };
 }

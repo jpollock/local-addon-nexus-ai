@@ -121,16 +121,32 @@ export function previewScope(capability: string, selection: ScopeSelection): Sco
  *
  * `at` is injectable because the request is timestamped and a test that cannot
  * fix the clock cannot pin the timestamp.
+ *
+ * WP-51 · `answers` is the incidents this arming is being made IN ANSWER TO —
+ * the designer's Q1, ratified: *"the containment run folds if and only if its
+ * arming names the incidents it answers."* It is passed through untouched;
+ * `recordArmingRequest` owns the format gate, because the queue is where a
+ * caller's value first meets this system and two gates would be two rules.
+ *
+ * **The surface that supplies them is not built here.** A user contains an
+ * incident from the row that reports it, and that row's door lives in
+ * `src/renderer/`, which a sibling packet holds. So this parameter has exactly
+ * one production caller today — the IPC handler, passing whatever the renderer
+ * sends — and the renderer sends nothing yet. Stated rather than hidden,
+ * because a complete carrier that nothing fills is the defect WP-48b measured
+ * and this packet is repaying: the difference is that here the filling end is
+ * behind a live lock rather than forgotten.
  */
 export function armFromSelection(
   capability: string,
   selection: ScopeSelection,
-  at: Date = new Date()
+  at: Date = new Date(),
+  answers?: readonly string[]
 ): ScopeOutcome {
   const outcome = previewScope(capability, selection);
   if (!outcome.scope) return outcome;
   try {
-    recordArmingRequest(capability, at, outcome.scope);
+    recordArmingRequest(capability, at, outcome.scope, answers);
   } catch {
     // The queue refusing costs the arming, not the answer. The caller still
     // receives the split it derived, so the surface can say what it found.

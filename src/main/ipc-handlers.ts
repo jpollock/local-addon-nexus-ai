@@ -857,8 +857,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     readSiteAtPlaces(deps.nexusServices, fact));
   safeHandle(IPC_CHANNELS.COMPARATOR_PREVIEW_SCOPE, (_event: any, args: any) =>
     previewScope(args?.capability, args?.selection));
+  // WP-51 · `answers` rides through unchanged: the incidents this arming is
+  // being made in answer to (the designer's Q1). Wiring only — the format gate
+  // and the carrier live in src/main/intelligence-host/procedureArming.ts.
   safeHandle(IPC_CHANNELS.COMPARATOR_ARM_SELECTION, (_event: any, args: any) =>
-    armFromSelection(args?.capability, args?.selection));
+    armFromSelection(args?.capability, args?.selection, new Date(), args?.answers));
 
   // WP-44 · the Govern matrix. Wiring only — every derivation and the act itself
   // live in src/main/intelligence-host/governMatrix.ts, per the integration lock.

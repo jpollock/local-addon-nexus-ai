@@ -60,6 +60,7 @@
  * OUT OF SCOPE, deliberately (design note §3): no assembler change, no sentinel
  * behaviour change, no new topic, no Tell-channel intake, no UI.
  */
+import { taskId as mintTaskId } from '../../intelligence';
 import type { EventEnvelope, Ledger, Runbook } from '../../intelligence';
 import type { NexusServices } from '../mcp/types';
 import { entityRefsFor } from './actionProducer';
@@ -71,6 +72,26 @@ import type { ProcedureRun } from './procedureCursor';
 /** The topic the taxonomy already carries and the assembler already retrieves. */
 export const INCIDENT_TOPIC = 'episodic.incident.recorded';
 export const INCIDENT_SCHEMA = 'incident.recorded/1';
+
+/**
+ * WP-51 item 1 · THE SCAN'S OWN ACT — the topic that makes a finding's
+ * correlation name something real.
+ *
+ * `task.run.completed` is NOT a new topic: the architecture doc's §4.2 taxonomy
+ * has carried it since the layer was designed, beside `task.run.assigned`, and
+ * measured on the owner's real ledger 2026-08-21 it has **zero events** — a
+ * declared topic that never had a producer. This is its first. The payload
+ * schema `run.completed/1` IS new, and it is presented verbatim at the gate
+ * with the other contract additions rather than assumed.
+ *
+ * Why a scan belongs here rather than under `task.action.executed`: that topic's
+ * payload is a GATED TOOL CALL's (`tool`, `tier`, `dispatch`, `access_method`,
+ * `args`), written by `actionProducer` at the two dispatch chokepoints. A
+ * sentinel sweep is none of those things, and filling that shape for it would
+ * put five invented fields on the record to avoid one honest one.
+ */
+export const SCAN_TOPIC = 'task.run.completed';
+export const SCAN_SCHEMA = 'run.completed/1';
 
 /** Which agent's report is a security scan. The tap reads one agent's output. */
 export const SENTINEL_AGENT_ID = 'security-sentinel';
@@ -226,6 +247,39 @@ export function recordSentinelIncidents(
     const source = report.runId ? `sentinel:${report.runId}` : undefined;
     let written = 0;
 
+    /**
+     * WP-51 item 1 · the scan's TaskId, minted ONCE per report and only when
+     * this scan actually has something to record.
+     *
+     * LAZY, and that is P4's rule rather than an optimisation. `security-sentinel`
+     * runs on a timer, so an act emitted at entry would write one row per sweep
+     * per day forever — the heartbeat the whole dedup design exists to refuse.
+     * The overwhelmingly common scan finds nothing new; it is not an act worth
+     * recording, and nothing needs a correlation to point at.
+     *
+     * **THE ACT IS EMITTED BEFORE THE FIRST FINDING, AND A FAILURE TO EMIT IT
+     * COSTS THE CORRELATION, NEVER THE FINDING.** The ruling's own sentence is
+     * "the id becomes valid because the thing it names becomes real" — so an id
+     * whose act was refused is not written anywhere. It would satisfy the
+     * validator's regex and name nothing, which is the fabricated join WP-48a
+     * declined to make out of `causation`.
+     */
+    let actAttempted = false;
+    let scanTask: string | undefined;
+    const scanCorrelation = (): string | undefined => {
+      if (actAttempted) return scanTask;
+      actAttempted = true;
+      const minted = mintTaskId();
+      const recorded = emitScanAct(core, {
+        observedAt,
+        task: minted,
+        runId: report.runId,
+        siteCount: Object.keys(sites).length,
+      });
+      scanTask = recorded ? minted : undefined;
+      return scanTask;
+    };
+
     for (const [siteName, site] of Object.entries(sites)) {
       const refs = entityRefsFor(core, siteName, deps.services);
       if (!refs) continue; // rule 2: never derive an entity for a name
@@ -250,6 +304,9 @@ export function recordSentinelIncidents(
           entity: refs,
           actor: SENTINEL_ACTOR,
           system: SENTINEL_SYSTEM,
+          // WP-51 · the scan that observed this finding, named. Absent when the
+          // act could not be recorded — see `scanCorrelation`.
+          correlation: scanCorrelation(),
           payload: {
             // `component` OMITTED at site level (gate ruling 1a). A head word
             // must carry information, and `site` as a head is a schema artifact
@@ -281,6 +338,10 @@ export function recordSentinelIncidents(
           entity: refs,
           actor: SENTINEL_ACTOR,
           system: SENTINEL_SYSTEM,
+          // The scan doing the CLOSING, not the one that opened it: an
+          // amendment is an observation of THIS sweep. `causation` already
+          // names the incident being closed, which is the other half.
+          correlation: scanCorrelation(),
           causation: openId,
           payload: {
             ...history.payloads.get(key)!,
@@ -607,6 +668,48 @@ function openPayloadOf(payload: IncidentPayload): IncidentPayload {
     ...(payload.correlate ? { correlate: payload.correlate } : {}),
     resolved: false,
   };
+}
+
+/**
+ * WP-51 · one scan act, recorded before the findings it explains.
+ *
+ * Returns whether the act reached the ledger, because the caller's next
+ * decision depends on it: a correlation is only written when this returns true.
+ *
+ * `entity: {}` is deliberate and it is `actionProducer`'s own rule — "an entity
+ * map naming ONE of several targets would misattribute the call to that site".
+ * A sweep spans every site in its report; the per-site entity rides on the
+ * findings, where it is true.
+ */
+function emitScanAct(
+  core: IntelligenceCore,
+  args: { observedAt: string; task: string; runId?: string; siteCount: number }
+): boolean {
+  try {
+    core.emitter.emit({
+      // The scan's own completion time, carried in from the report — the same
+      // value its findings carry, and never the fold's clock (rule 1).
+      observed_at: args.observedAt,
+      topic: SCAN_TOPIC,
+      schema: SCAN_SCHEMA,
+      entity: {},
+      actor: SENTINEL_ACTOR,
+      source: { class: 'work', system: SENTINEL_SYSTEM, trust: 'emitted' },
+      correlation: args.task,
+      payload: {
+        agent: SENTINEL_AGENT_ID,
+        // The runtime's own run id, when the report carries one. Absent rather
+        // than invented — the same conditional spread the findings' `source`
+        // uses for exactly the same reason.
+        ...(args.runId ? { run: args.runId } : {}),
+        /** How many site slices this report carried. A fact of the report. */
+        sites: args.siteCount,
+      },
+    });
+    return true;
+  } catch {
+    return false; // rule 5, and the correlation falls away with it
+  }
 }
 
 interface EmitArgs {

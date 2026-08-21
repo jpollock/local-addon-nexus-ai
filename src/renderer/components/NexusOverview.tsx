@@ -1121,6 +1121,12 @@ renderTabBar(): React.ReactNode {
             session: this.state.returnSession,
             onFindInRecord: () => this.setState({ returnSessionId: null, returnSession: null }),
             onStartNewRun: () => this.setState({ returnSessionId: null, returnSession: null }),
+            // WP-54 · ITEM 6 — THE WAY BACK. The re-entry had two doors and both
+            // of them belonged to §6c's unknown-arm case, so an ESTABLISHED arm —
+            // the ordinary one — was a page a person could reach and not leave.
+            // "A door that cannot be walked back is not a door", one screen
+            // deeper than the front-door defect that produced the same finding.
+            onBackToNow: () => this.setState({ returnSessionId: null, returnSession: null }),
           })
         : React.createElement(Arrival, {
             electron: this.props.electron,
@@ -1136,11 +1142,25 @@ renderTabBar(): React.ReactNode {
               pausedSources: this.state.inboxPausedSources,
               recentlyDecided: this.state.inboxRecentlyDecided,
             },
-            onDecide: (id: number, decision: string, status: 'dismissed' | 'done') => {
-              void this.props.electron.ipcRenderer
-                .invoke(IPC_CHANNELS.INBOX_DECIDE, { id, decision, status })
-                .then(() => this.fetchAll());
+            // WP-54 · ITEM 5 — `onDecide` IS GONE, AND ITS ABSENCE IS THE FIX.
+            //
+            // Approve / Not now rode on the list rows. The designer's ruling,
+            // stronger than the owner's and correct: *a gate without its
+            // declaration is consent without context*, which is the failure XD-8
+            // exists to prevent. So no row is answered in place; the row's door
+            // leads to the gate and the gate is where the decision is made, with
+            // the declaration in front of the person making it.
+            //
+            // `INBOX_DECIDE` is untouched and still serves the surfaces that ask
+            // for a decision properly. What is removed is the one-click path
+            // that asked for consent with nothing to consent to.
+            onOpenSite: (siteName: string) => {
+              // The door carries its WHOLE target (WP-44's rule), so the panel
+              // opens scoped to the site the finding is about rather than at the
+              // top of something.
+              nexusStore.update({ nowDoorRequest: { kind: 'site', target: siteName } });
             },
+            onOpenAgent: (agentId: string) => this.setState({ activeTab: 'agents' }),
             onReopen: (id: number) => {
               void this.props.electron.ipcRenderer
                 .invoke(IPC_CHANNELS.INBOX_REOPEN, { id })

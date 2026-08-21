@@ -354,6 +354,36 @@ export type DeferralWake =
   | { kind: 'time'; at: string }
   | { kind: 'record'; from: string };
 
+/**
+ * WHICH WAKE CONDITIONS MAY BE OFFERED AND RECORDED TODAY — ruled at WP-56's
+ * gate, and it is the ruling's own sentence: **the surface does not offer a wake
+ * condition the platform cannot fire.**
+ *
+ * `wakeSource` on the snapshot discloses the missing `wakeFired` port to a
+ * reader of the fold. It does not disclose it to the PERSON CHOOSING THE WAKE
+ * CONDITION, and that is the person the disclosure is for: offering "wake me
+ * when the incident is closed" against a port nothing supplies would record a
+ * promise the platform cannot keep, and a deferral that silently never wakes is
+ * the furniture problem this affordance exists to prevent — manufactured by the
+ * affordance itself.
+ *
+ * So `record` is absent from this list, and until a producer publishes a
+ * vocabulary of record conditions the offer is **time, or unconditioned**.
+ * Unconditioned is the ABSENCE of a wake rather than a member here.
+ *
+ * **ONE LIST, TWO CONSUMERS, and that is the point of exporting it.** The
+ * producer's guard reads it and the picker reads it, so the day a record-wake
+ * producer lands, this list gains `'record'` and both the guard and the offer
+ * change together. A hardcoded picker and a hardcoded guard would be two places
+ * to remember, which is how the two would disagree.
+ *
+ * **The FOLD still implements `record` in full** (`wakeHasFired`, the
+ * `wakeFired` port). The ruled rule is built and pinned; what is withheld is the
+ * offer, not the mechanism. Dropping the mechanism would be silently not
+ * implementing a ruled rule — `deadlineFor`'s standing reasoning, applied here.
+ */
+export const OFFERABLE_WAKE_KINDS = ['time'] as const;
+
 export interface DeferralRecord {
   /**
    * THE SITUATION being deferred — never one of its parts.
@@ -494,6 +524,12 @@ export function recordDeferral(record: DeferralRecord): string | undefined {
 
   const wake = record.wake ?? null;
   if (wake !== null) {
+    // RULED AT THE GATE: a wake kind the platform cannot fire is not offered,
+    // and therefore not recorded. `record` is absent from `OFFERABLE_WAKE_KINDS`
+    // until a producer supplies the `wakeFired` port — see that constant. This
+    // is the FAIL-CLOSED half: refusing here means the promise is never written,
+    // rather than written and silently never kept.
+    if (!(OFFERABLE_WAKE_KINDS as readonly string[]).includes(wake.kind)) return undefined;
     if (wake.kind === 'time') {
       if (typeof wake.at !== 'string' || !Number.isFinite(Date.parse(wake.at))) return undefined;
     } else if (wake.kind === 'record') {

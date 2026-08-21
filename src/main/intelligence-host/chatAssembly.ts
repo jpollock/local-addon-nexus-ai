@@ -118,6 +118,41 @@ export function manifestScopeFor(armed: ProcedureScope | undefined): ManifestSco
   return { runnable: armed.runnable.map((cell) => cell.siteId), from: 'selection' };
 }
 
+/**
+ * WP-51 item 3 · THE ARMING'S CAUSE, ON THE MANIFEST — the third producer debt.
+ *
+ * WP-48b put the arming's SCOPE on the record; this puts what the arming was
+ * ANSWERING there, and the two are deliberately parallel in shape and opposite
+ * in one rule:
+ *
+ *   `scope`  — an arming that selected nothing records the EMPTY SET, because
+ *              "a predicate armed this and nobody chose targets" is a fact.
+ *   `cause`  — an arming that answers nothing records NOTHING AT ALL, because
+ *              there is no empty-set fact to state. A containment run that
+ *              answers no particular incident is not answering; `answers: []`
+ *              would assert that it was.
+ *
+ * A reader must never have to tell those two apart by reading a length, which
+ * is the whole reason `ManifestScope.from` exists — and here the distinction is
+ * carried by the key's presence instead, because there is no second provenance
+ * to name.
+ */
+export interface ManifestCause {
+  /** Ledger event ids of the incidents this arming answers. Never empty. */
+  answers: string[];
+}
+
+/**
+ * The cause this turn's manifest records, or nothing.
+ *
+ * Format-gated upstream, at `recordArmingRequest` — the queue is where a
+ * caller's value first meets this system, and gating at both ends would put the
+ * rule in two places.
+ */
+export function manifestCauseFor(answers: readonly string[] | undefined): ManifestCause | undefined {
+  return answers && answers.length > 0 ? { answers: [...answers] } : undefined;
+}
+
 const SEMANTIC_LIMIT = 5;
 
 export interface ChatAssemblyRequest {
@@ -364,6 +399,12 @@ export async function assembleForChatTurn(
       bundle.procedure?.status === 'delivered'
         ? manifestScopeFor(turnProcedure?.scope)
         : undefined,
+      // WP-51 · the arming's cause, on the same bound and for the same reason:
+      // a turn that armed nothing has no arming, and a REFUSED turn is not a
+      // turn of the run, so neither records what it was answering.
+      bundle.procedure?.status === 'delivered'
+        ? manifestCauseFor(turnProcedure?.answers)
+        : undefined,
     );
 
     // WP-26 · the three stream events, from the seam that folds the cursor.
@@ -609,7 +650,9 @@ function emitManifest(
   bundle: ContextBundle,
   targets: EntityRef[],
   /** WP-48b. Absent on an unarmed or refused turn — see the call site. */
-  scope?: ManifestScope
+  scope?: ManifestScope,
+  /** WP-51. Absent on the same terms, and also when the arming answered nothing. */
+  cause?: ManifestCause
 ): void {
   try {
     const entity: Record<string, string> = {};
@@ -632,6 +675,7 @@ function emitManifest(
       payload: {
         ...(bundle.manifest as unknown as Record<string, unknown>),
         ...(scope ? { scope } : {}),
+        ...(cause ? { cause } : {}),
       },
     });
     core.scheduleFolds();

@@ -23,13 +23,35 @@
  *     loaded look identical to the eye and mean opposite things.
  */
 import { IPC_CHANNELS } from '../../../src/common/constants';
-import { arrivalCounts } from '../../../src/renderer/components/return/arrivalModel';
+import { arrivalCounts, nowRows } from '../../../src/renderer/components/return/arrivalModel';
+
+/**
+ * Drain the microtask queue.
+ *
+ * `refreshNeedsYou` now reads TWO channels through `Promise.all`, with a
+ * `.catch` on the inbox read, so the settle takes more hops than a fixed number
+ * of `await Promise.resolve()` calls — and a test that awaits too few reads the
+ * INITIAL state and reports it as the answer, which is a false null rather than
+ * a failure. `setImmediate` runs after the microtask queue has drained
+ * completely, so the count of hops stops being something this file has to know.
+ * `setTimeout(0)` rather than `setImmediate`, which jsdom does not define.
+ */
+const settle = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, 0); });
 import type { TriageView } from '../../../src/main/intelligence-host/sessionRegistry';
 
 /** A triage with `n` waiting situations. Only the length is read here. */
 function triageWith(n: number): TriageView {
   return {
-    waiting: Array.from({ length: n }, (_, i) => ({ id: `sit_${i}` })) as any,
+    // WP-54: the rows carry `written` because the badge path now composes the
+    // list verdict too (one sentence, one count, one list — see `nowVerdict`),
+    // and `written` is what that sentence is derived from. It is a REQUIRED
+    // field of `Situation`; a fixture without it was a row the contract does not
+    // permit, and the omission stopped being invisible the moment a second
+    // consumer read it.
+    waiting: Array.from({ length: n }, (_, i) => ({
+      id: `sit_${i}`,
+      written: { done: 0, failed: 0, total: null },
+    })) as any,
     changed: [{ id: 'sit_changed' }] as any,
     reserved: { headline: 'x', dark: [], staleCount: 0, verdict: 'OK', degraded: false } as any,
     // WP-48's list verdict. The badge reads `waiting.length` and nothing else,
@@ -95,18 +117,80 @@ describe('the rail badge', () => {
 
   test('the count comes from RETURN_TRIAGE, through the arrival\'s own derivation', async () => {
     const triage = triageWith(3);
-    const invoke = jest.fn().mockResolvedValue(triage);
+    const invoke = jest.fn().mockImplementation((channel: string) =>
+      Promise.resolve(channel === IPC_CHANNELS.GET_INBOX ? { success: true, items: [] } : triage));
     const inst = container({ electron: { ipcRenderer: { invoke, on: () => {}, removeListener: () => {} } } });
     inst.setState = (patch: any) => { inst.state = { ...inst.state, ...patch }; };
 
     inst.refreshNeedsYou();
-    await Promise.resolve();
-    await Promise.resolve();
+    await settle();
 
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.RETURN_TRIAGE);
     // The SAME function the arrival's header calls — a badge served by its own
     // arithmetic is a second answer, free to disagree with the column beneath it.
-    expect(inst.state.needsYou).toBe(arrivalCounts(triage).needsYou);
+    expect(inst.state.needsYou).toBe(arrivalCounts(triage, { loaded: true, failed: false, items: [] }).needsYou);
+    expect(inst.state.needsYou).toBe(3);
+  });
+
+  /**
+   * WP-54 · ITEM 1 — THE BADGE COUNTS THE ROWS THE SCREEN DRAWS, BOTH
+   * DIRECTIONS.
+   *
+   * The measured defect: the badge read seven while twelve cards rendered,
+   * because the surface concatenated the fold's situations with the Inbox's
+   * items and deduplicated nothing, while the badge counted the situations
+   * alone. Two populations, one list, no reconciliation.
+   *
+   * BOTH DIRECTIONS is what makes this a pin rather than a coincidence:
+   *
+   *  - an Inbox item that IS one of the situations adds NO row and NO count —
+   *    a dedup that missed would show here as 4 where 3 is drawn;
+   *  - an Inbox item that is nothing the fold holds adds ONE row and ONE count —
+   *    a badge that ignored the Inbox would show 3 where 4 is drawn.
+   *
+   * The second case is the one on the owner's real fleet today: `auth-probe
+   * could not finish a run` is the ratified `agent.stuck` class and no producer
+   * emits it (WP-54a), so it reaches the person only as an Inbox row.
+   */
+  test('the badge equals the rows drawn — a matched item adds nothing, an unmatched one adds one', async () => {
+    const triage = triageWith(3);
+    (triage.waiting as any)[0].signature = { producer: 'security-sentinel', fact: 'FS-01', target: 'alpha' };
+
+    const items = [
+      // The same finding, from the other store. It rides on row 0.
+      { id: 1, source: 'security-sentinel', code: 'FS-01', scope: 'name:alpha', scopeLabel: 'alpha' },
+      // Nothing the fold holds. Its own row.
+      { id: 2, source: 'auth-probe', code: 'fail:9da26a69397e', scope: '*', scopeLabel: 'This agent' },
+    ];
+    const invoke = jest.fn().mockImplementation((channel: string) =>
+      Promise.resolve(channel === IPC_CHANNELS.GET_INBOX ? { success: true, items } : triage));
+    const inst = container({ electron: { ipcRenderer: { invoke, on: () => {}, removeListener: () => {} } } });
+    inst.setState = (patch: any) => { inst.state = { ...inst.state, ...patch }; };
+
+    inst.refreshNeedsYou();
+    await settle();
+
+    const inbox = { loaded: true, failed: false, items: items as any };
+    expect(nowRows(triage, inbox)).toHaveLength(4);
+    expect(inst.state.needsYou).toBe(4);
+    expect(inst.state.needsYou).toBe(nowRows(triage, inbox).length);
+  });
+
+  /**
+   * A FAILED INBOX READ IS NOT AN EMPTY ONE, and it does not take the badge with
+   * it. The triage answered, so the badge can say what the fold holds; what it
+   * must not do is turn a failed read into "nothing else needs you".
+   */
+  test('a failed inbox read still leaves the badge counting the situations', async () => {
+    const triage = triageWith(3);
+    const invoke = jest.fn().mockImplementation((channel: string) =>
+      channel === IPC_CHANNELS.GET_INBOX ? Promise.reject(new Error('inbox down')) : Promise.resolve(triage));
+    const inst = container({ electron: { ipcRenderer: { invoke, on: () => {}, removeListener: () => {} } } });
+    inst.setState = (patch: any) => { inst.state = { ...inst.state, ...patch }; };
+
+    inst.refreshNeedsYou();
+    await settle();
+
     expect(inst.state.needsYou).toBe(3);
   });
 

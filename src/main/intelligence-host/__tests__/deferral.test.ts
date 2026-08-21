@@ -40,6 +40,7 @@ import { setIntelligenceCore } from '../coreRegistry';
 import {
   DEFERRAL_PAYLOAD_SOURCE,
   DEFERRAL_SYSTEM,
+  OFFERABLE_WAKE_KINDS,
   RATIONALE_RECORDED_TOPIC,
   RATIONALE_RECORDED_SCHEMA,
   recordDeferral,
@@ -209,11 +210,13 @@ describe('the record — what a deferral writes, and what it must never write', 
     const { taskId, situationId } = armWaitingRun();
     expect(rationaleCount()).toBe(0);
 
+    const at = hoursAhead(48);
     const id = recordDeferral({
       situationId,
       taskId,
       reason: 'waiting on the payment gateway vendor',
-      wake: { kind: 'record', from: 'incident-closed' },
+      // A TIME wake: the only kind offerable today, per the gate's ruling.
+      wake: { kind: 'time', at },
     });
 
     expect(typeof id).toBe('string');
@@ -234,7 +237,7 @@ describe('the record — what a deferral writes, and what it must never write', 
       act: 'defer',
       situation: situationId,
       reason: 'waiting on the payment gateway vendor',
-      wake: { kind: 'record', from: 'incident-closed' },
+      wake: { kind: 'time', at },
     });
   });
 
@@ -299,6 +302,41 @@ describe('the record — what a deferral writes, and what it must never write', 
     // the event and then failed to return its id.
     expect(id).toBeUndefined();
     expect(rationaleCount()).toBe(before);
+  });
+
+  /**
+   * RULED AT THE GATE: the surface does not offer a wake condition the platform
+   * cannot fire. Until a producer supplies `wakeFired`, the offer is TIME or
+   * UNCONDITIONED, and the producer is the fail-closed half — the promise is
+   * never written rather than written and silently never kept.
+   */
+  it('REFUSES a `record` wake — the platform cannot fire it, so it is not offered', () => {
+    const { taskId, situationId } = armWaitingRun();
+    const before = rationaleCount();
+    expect(
+      recordDeferral({ situationId, taskId, reason: 'waiting on the vendor', wake: { kind: 'record', from: 'incident-closed' } })
+    ).toBeUndefined();
+    expect(rationaleCount()).toBe(before);
+  });
+
+  it('accepts the two kinds that ARE offerable — time, and unconditioned', () => {
+    const a = armWaitingRun(hoursAgo(70), 0);
+    const b = armWaitingRun(hoursAgo(60), 1);
+    expect(
+      typeof recordDeferral({ situationId: a.situationId, taskId: a.taskId, reason: 'monday', wake: { kind: 'time', at: hoursAhead(48) } })
+    ).toBe('string');
+    expect(
+      typeof recordDeferral({ situationId: b.situationId, taskId: b.taskId, reason: 'until I come back' })
+    ).toBe('string');
+    expect(triage().counts).toEqual({ needsYou: 0, deferred: 2 });
+  });
+
+  it('the offer list is the ONE list both the guard and the picker read', () => {
+    // A picker built from this constant and a guard built from this constant
+    // cannot disagree. Pinned so the day `record` becomes offerable, exactly one
+    // edit makes it so.
+    expect([...OFFERABLE_WAKE_KINDS]).toEqual(['time']);
+    expect((OFFERABLE_WAKE_KINDS as readonly string[]).includes('record')).toBe(false);
   });
 
   it('refuses a deferral from a non-human actor — the self-promotion power inverted', () => {
@@ -701,14 +739,40 @@ describe('three recorded ends, and each returns full escalation', () => {
     expect(justBefore.counts).toEqual({ needsYou: 0, deferred: 1 });
   });
 
+  /**
+   * RAW-EMITTED, and the reason is the gate's own ruling.
+   *
+   * `recordDeferral` now REFUSES a `record` wake — the surface does not offer a
+   * wake condition the platform cannot fire — so the producer can no longer
+   * write one. The FOLD still implements it in full, because the rule is ruled
+   * and dropping the mechanism would be silently not implementing it. Driving
+   * the fold therefore means writing the record directly, which is WP-46's rule
+   * again: pin the guarded builder across the domain its current callers cannot
+   * supply.
+   */
+  function emitRecordWakeDeferral(taskId: string, situationId: string, from: string): void {
+    core.emitter.emit({
+      observed_at: hoursAgo(1),
+      topic: RATIONALE_RECORDED_TOPIC,
+      schema: RATIONALE_RECORDED_SCHEMA,
+      entity: {},
+      actor: { id: 'act_local_operator', kind: 'human' },
+      source: { class: 'intent', system: DEFERRAL_SYSTEM, trust: 'elicited' },
+      correlation: taskId,
+      payload: {
+        source: DEFERRAL_PAYLOAD_SOURCE,
+        act: 'defer',
+        situation: situationId,
+        reason: 'waiting on the containment run',
+        wake: { kind: 'record', from },
+      },
+    });
+  }
+
   it('END 1 — a RECORD wake fires only when the port says so, and never by default', () => {
     const { taskId, situationId } = armWaitingRun();
-    recordDeferral({
-      situationId,
-      taskId,
-      reason: 'waiting on the containment run',
-      wake: { kind: 'record', from: 'containment-finished' },
-    });
+    emitRecordWakeDeferral(taskId, situationId, 'containment-finished');
+    expect(rationaleCount()).toBe(1); // the subject exists
 
     // No port: it has NOT fired. Honest, not a guess in either direction.
     expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
@@ -730,7 +794,8 @@ describe('three recorded ends, and each returns full escalation', () => {
 
   it('a throwing wake port costs the wake, not the row', () => {
     const { taskId, situationId } = armWaitingRun();
-    recordDeferral({ situationId, taskId, reason: 'later', wake: { kind: 'record', from: 'x' } });
+    emitRecordWakeDeferral(taskId, situationId, 'x');
+    expect(rationaleCount()).toBe(1);
     const view = triage({
       wakeFired: () => {
         throw new Error('port exploded');

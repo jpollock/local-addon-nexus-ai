@@ -43,6 +43,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
+import { controlLabel } from './control-label';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const FIXTURE_JS = path.join(
@@ -56,7 +57,7 @@ const OUT_FILE = path.join(
 let fixturePath = FIXTURE_JS;
 
 /** Bumped when the SHAPE changes, so a consumer can tell that from a content change. */
-const SHAPE_VERSION = 1;
+const SHAPE_VERSION = 3;
 
 /**
  * The five ratified ids, in the fixture's own order.
@@ -85,8 +86,145 @@ const RATIFIED_IDS = [
   'agent.stuck',
 ] as const;
 
-/** Every field a template must carry. A missing one is a hole, not a default. */
-const TEMPLATE_FIELDS = ['id', 'guard', 'headline', 'ask', 'chip', 'state', 'meta', 'rule'] as const;
+/**
+ * WP-54's merge · CLASSES THE FIXTURE DECLARES AND THE PRODUCT CANNOT YET FILL.
+ *
+ * The designer's cycle-seven sheet is AHEAD of the product, deliberately: it
+ * draws `incident.coalesced`, whose headline reads *"{target} has {leadFinding},
+ * and {restCount} more findings"*. Those are host fields nothing derives yet.
+ *
+ * The generator's whole purpose is that a template carrying a slot this product
+ * cannot fill is a BUILD FAILURE rather than a rendered `{leadFinding}`, and it
+ * fired on exactly that when this merge first ran it. Refusing the whole
+ * artifact would be the wrong answer to the right refusal, though — it would
+ * make a designer unable to draw ahead of the build, which is what a design
+ * sheet is FOR.
+ *
+ * So a class named here is SKIPPED, and skipped LOUDLY: the run prints which
+ * class it did not emit and why, so the omission is a line in the build output
+ * rather than a silence. Nothing unfillable reaches the module, nothing
+ * ratified is deleted, and a class that appears in the fixture WITHOUT being
+ * declared here still fails the build — a new class must reach a human.
+ *
+ * `incident.coalesced` leaves this list on the visit that gives it its host
+ * fields, which is WP-55's — the same visit that reconciles the composer.
+ */
+/**
+ * WP-51's CARRIED CONDITION, MECHANISED — the ruled amendments, asserted.
+ *
+ * **THE FAILURE THIS EXISTS TO PREVENT HAS ALREADY HAPPENED ONCE.** Two ruled
+ * guard amendments — WP-48's `&& gate === null` on class 1, and WP-50's removal
+ * of `total` from class 2 — were silently REVERTED when the designer's
+ * cycle-seven sheet replaced this fixture wholesale. Nothing caught it: the
+ * generator checked the ids, the fields and the slots, and had no opinion about
+ * a guard's CONTENT, so a ruling adjudicated at two separate gates was undone
+ * by a file copy and shipped to the base.
+ *
+ * A ruling recorded only in WORK_PACKETS is a ruling that survives exactly as
+ * long as the next person's memory. This is the same rule as the packet's own:
+ * **an instrument that cannot fail is not an instrument.** `:check` fails
+ * closed on a stale artifact; this makes it fail closed on a REVERTED RULING
+ * too, which is the half that was missing.
+ *
+ * Each entry names the class, the substring that must be present or absent, and
+ * the gate that ruled it. Adding one is how a future amendment stops being
+ * undoable by a paste.
+ */
+const RULED_AMENDMENTS: ReadonlyArray<{
+  id: string;
+  field: 'guard';
+  mustContain?: string;
+  mustNotContain?: string;
+  ruledAt: string;
+  why: string;
+}> = [
+  {
+    id: 'run.waiting.nothing-written',
+    field: 'guard',
+    mustContain: 'gate === null',
+    ruledAt: 'WP-48 gate, 2026-08-20',
+    why: 'a row STANDING AT A GATE can never be "cannot start", whatever any count says — '
+      + 'measured on the live fleet, where one such row received this class\'s ask and it was false about it',
+  },
+  {
+    id: 'run.waiting.mid-procedure',
+    field: 'guard',
+    mustNotContain: 'total',
+    ruledAt: 'WP-50 gate, 2026-08-21',
+    why: 'neither of this class\'s sentences reads {total}, and the clause withheld the designer\'s '
+      + 'own row from the sheet that drew it — a guard may condition only on facts its sentence claims',
+  },
+];
+
+const DEFERRED_IDS: Readonly<Record<string, string>> = {
+  'incident.coalesced':
+    'its headline slots ({leadFinding}, {restCount}, {memberCount}, {linkKind}) are host fields ' +
+    'nothing derives yet — WP-55 adds them, and the class is emitted on the same visit',
+};
+
+/**
+ * Every STRING field a template must carry. A missing one is a hole, not a
+ * default.
+ *
+ * **`chip` LEFT THIS LIST AT WP-54's MERGE, and it left the fixture too.** The
+ * Waiting chip was cut as the designer's own template error — chip-presence told
+ * the user which of OUR code paths ran — and the cycle-seven sheet carries no
+ * `chip` on any class. A field no ratified template declares is not an optional
+ * field; it is a field that no longer exists, and requiring it here would refuse
+ * the designer's own artifact. `SituationTemplate.chip` survives as `''` so the
+ * composer and every consumer are unchanged.
+ */
+const TEMPLATE_FIELDS = ['id', 'guard', 'headline', 'ask', 'state', 'meta', 'rule', 'door'] as const;
+
+/**
+ * WP-54 · THE TIER IS ONE FACT, DECLARED ONCE, AND THE RULE LINE READS IT.
+ *
+ * The architect's first finding: the fixture's `incident.no-run` printed
+ * "Tier 1 · nothing is holding it back but you" while the fold ranked the same
+ * row at tier 2 — the rule LINE and the RANK were two facts from two sources,
+ * so every waiting row landed at 2, `rankSituations` fell through to `since`,
+ * and the list degenerated to age order on the owner's real fleet.
+ *
+ * The fixture now declares `tier` as a NUMBER and writes the rule line with a
+ * `{tier}` SLOT. The composer fills that slot from the tier the row was RANKED
+ * at, and the ranker reads the declared number, so the displayed tier and the
+ * sort key are the same value by construction rather than by agreement. This
+ * function is the third guard on that: a template whose rule line does not
+ * OPEN with its own tier slot is refused here, at build time, because a rule
+ * line carrying a literal "Tier 2" would silently reintroduce the divergence
+ * the slot exists to remove.
+ */
+const RULE_PREFIX = 'Tier {tier} · ';
+
+/**
+ * The literal tier a designer writes at the head of a rule line, and the
+ * NORMALISATION that turns it into the slot.
+ *
+ * **WP-54's MERGE CHANGED WHERE THIS IS ENFORCED, and the change matters.** The
+ * packet required the FIXTURE to carry `Tier {tier} · …`. The designer's
+ * cycle-seven sheet instead writes the tier twice — as readable prose at the
+ * head of the rule line AND as a numeric `tier` field — which is the two-sources
+ * shape the packet exists to remove, arriving as data rather than as code.
+ *
+ * Editing the designer's prose to insert a brace would be a packet rewriting
+ * ratified copy. So the generator MECHANISES the property instead: it asserts
+ * the literal and the field agree, and emits the rule with the number replaced
+ * by its slot. The fixture keeps the designer's own sentence, the module carries
+ * one source, and a fixture whose two tiers disagree fails the build rather than
+ * shipping a card that prints a tier nothing sorted by.
+ */
+const RULE_TIER = /^Tier (\d) · /;
+
+/** The slots each non-template block may carry. Unfillable braces fail the build. */
+const DOOR_SLOTS = ['checkpoint', 'target', 'agentId'] as const;
+const ACCOUNTING_SLOTS = ['count'] as const;
+
+/** Every door the fixture declares, and the one way back. */
+const DOOR_KEYS = ['runAtGate', 'run', 'incident', 'agent', 'backToNow'] as const;
+/** Every colour. `tier4` is deliberately absent: tier 4 takes no stripe. */
+const COLOUR_KEYS = ['tier1', 'tier2', 'tier3', 'link'] as const;
+const RESERVED_KEYS = ['head', 'quiet'] as const;
+const ACCOUNTING_KEYS = ['changed', 'dark'] as const;
 
 /**
  * The fixture's own slot list, from its header comment, plus `runbookId` and
@@ -99,6 +237,9 @@ const TEMPLATE_FIELDS = ['id', 'guard', 'headline', 'ask', 'chip', 'state', 'met
 const KNOWN_SLOTS = [
   'runNoun', 'done', 'failed', 'total', 'age', 'checkpoint', 'position',
   'awaits', 'target', 'finding', 'agentId', 'timeout', 'runbookId', 'producer',
+  // WP-54 · the rule line's own tier, filled from the RANKED tier. See
+  // `RULE_PREFIX` for why the number is a slot rather than literal text.
+  'tier',
 ] as const;
 
 /**
@@ -152,9 +293,16 @@ interface Template { [field: string]: string }
 interface Extracted {
   runNoun: Record<string, string>;
   templates: Template[];
+  /** `null` where the fixture declares the tier in prose — see the extractor. */
+  tiers: Record<string, number | null>;
   verdict: { allUnwritten: string; someChanged: string };
   freshness: { now: string; then: string };
+  doors: Record<string, string>;
+  colours: Record<string, string>;
+  reserved: Record<string, string>;
+  accounting: Record<string, string>;
 }
+
 
 function extract(): Extracted {
   const h = readHeadlines();
@@ -174,15 +322,51 @@ function extract(): Extracted {
   // --- the five templates, by id, in order ---------------------------------
   const rawTemplates = h.templates;
   if (!Array.isArray(rawTemplates)) throw new Error('the fixture carries no templates array');
-  const ids = rawTemplates.map((t: Record<string, unknown>) => t && t.id);
-  if (ids.length !== RATIFIED_IDS.length || RATIFIED_IDS.some((id, i) => ids[i] !== id)) {
+  const ids = rawTemplates.map((t: Record<string, unknown>) => String((t && t.id) ?? ''));
+  // Every ratified id present, IN ORDER, ignoring deferred classes interleaved
+  // among them — the order is still the ratified artifact's and a reordered set
+  // must reach a human, but a class the sheet draws ahead of the build does not
+  // move the ones around it.
+  const emitted = ids.filter((id) => !(id in DEFERRED_IDS));
+  if (emitted.length !== RATIFIED_IDS.length || RATIFIED_IDS.some((id, i) => emitted[i] !== id)) {
     throw new Error(
-      `the ratified template set changed — expected [${RATIFIED_IDS.join(', ')}], read [${ids.join(', ')}]`,
+      `the ratified template set changed — expected [${RATIFIED_IDS.join(', ')}], read [${emitted.join(', ')}]`,
     );
+  }
+  for (const [id, why] of Object.entries(DEFERRED_IDS)) {
+    if (!ids.includes(id)) continue;
+    process.stdout.write(`  deferred: "${id}" is declared and NOT emitted — ${why}\n`);
+  }
+
+  // The ruled amendments, checked against the fixture as READ. See
+  // `RULED_AMENDMENTS`: this is the check whose absence let two adjudicated
+  // rulings be undone by a file copy.
+  for (const rule of RULED_AMENDMENTS) {
+    const template = (rawTemplates as Array<Record<string, unknown>>).find((t) => t && t.id === rule.id);
+    if (!template) {
+      throw new Error(
+        `the ruled amendment for "${rule.id}" (${rule.ruledAt}) names a class the fixture no longer carries`,
+      );
+    }
+    const value = String(template[rule.field] ?? '');
+    if (rule.mustContain && !value.includes(rule.mustContain)) {
+      throw new Error(
+        `RULED AMENDMENT REVERTED — "${rule.id}" ${rule.field} no longer contains ` +
+        `"${rule.mustContain}" (ruled at ${rule.ruledAt}): ${rule.why}`,
+      );
+    }
+    if (rule.mustNotContain && value.includes(rule.mustNotContain)) {
+      throw new Error(
+        `RULED AMENDMENT REVERTED — "${rule.id}" ${rule.field} contains ` +
+        `"${rule.mustNotContain}" again (ruled at ${rule.ruledAt}): ${rule.why}`,
+      );
+    }
   }
 
   const templates: Template[] = [];
+  const tiers: Record<string, number | null> = {};
   for (const raw of rawTemplates as Array<Record<string, unknown>>) {
+    if (String(raw.id ?? '') in DEFERRED_IDS) continue;
     const template: Template = {};
     for (const field of TEMPLATE_FIELDS) {
       const value = raw[field];
@@ -192,7 +376,7 @@ function extract(): Extracted {
       if (typeof value !== 'string') throw new Error(`template "${String(raw.id)}" is missing "${field}"`);
       template[field] = value;
     }
-    for (const field of ['headline', 'ask', 'meta'] as const) {
+    for (const field of ['headline', 'ask', 'meta', 'rule'] as const) {
       for (const slot of slotsIn(template[field])) {
         if (!(KNOWN_SLOTS as readonly string[]).includes(slot)) {
           throw new Error(
@@ -202,6 +386,63 @@ function extract(): Extracted {
         }
       }
     }
+
+    // WP-54 · THE TIER IS ONE FACT, and this is where two become one.
+    //
+    // The designer's sheet writes the tier TWICE — as prose at the head of the
+    // rule line and as a numeric field beside it. Both are ratified and neither
+    // is edited here; what happens instead is a normalisation with an agreement
+    // check, so the emitted module carries one source and the fixture keeps the
+    // designer's own sentence.
+    //
+    // THREE OUTCOMES, and the third is the interesting one:
+    //
+    //  - a numeric tier whose rule line agrees → emitted with the number
+    //    replaced by its `{tier}` slot, filled at compose time from the tier the
+    //    row was RANKED at;
+    //  - a numeric tier whose rule line DISAGREES → build failure, because a
+    //    card would print a tier nothing sorted by, which is the defect measured
+    //    on the owner's fleet;
+    //  - a tier the fixture states in PROSE (`incident.coalesced`: *"the highest
+    //    tier among the members"*) → emitted as `null`, meaning DERIVED. Its
+    //    rule line is still slot-ified, so it prints whatever the fold ranked
+    //    it at; there is simply no declaration to check that against, and
+    //    inventing one would be the fabrication this file exists to refuse.
+    const declared = raw.tier;
+    const written = RULE_TIER.exec(template.rule);
+    if (!written && !template.rule.startsWith(RULE_PREFIX)) {
+      throw new Error(
+        `template "${template.id}" rule line names no tier — expected "Tier N · …" or "${RULE_PREFIX}…"`,
+      );
+    }
+    if (typeof declared === 'number') {
+      if (!Number.isInteger(declared) || declared < 1 || declared > 4) {
+        throw new Error(
+          `template "${template.id}" declares tier ${String(declared)}, which the comparator cannot hold`,
+        );
+      }
+      if (written && Number(written[1]) !== declared) {
+        throw new Error(
+          `template "${template.id}" declares tier ${declared} and its rule line prints ` +
+          `Tier ${written[1]} — one rule, two sources, which is the defect this check exists to catch`,
+        );
+      }
+      tiers[template.id] = declared;
+    } else if (typeof declared === 'string' && declared.trim() !== '') {
+      // A prose declaration is a DERIVED tier. Recorded as null rather than
+      // refused: the fixture is telling the truth about a class whose tier is a
+      // function of its members, and the fold is where that function lives.
+      tiers[template.id] = null;
+    } else {
+      throw new Error(
+        `template "${template.id}" declares no tier at all — the ranker has nothing to read`,
+      );
+    }
+    // The rule line, normalised onto the slot. Idempotent: a line already
+    // written with the slot passes through untouched.
+    template.rule = written ? template.rule.replace(RULE_TIER, RULE_PREFIX) : template.rule;
+    // Every door is a CONTROL, so every door passes the class rule.
+    template.door = controlLabel(template.door);
     templates.push(template);
   }
 
@@ -225,12 +466,76 @@ function extract(): Extracted {
 
   const rawFreshness = h.freshness;
   if (!rawFreshness || typeof rawFreshness !== 'object') throw new Error('the fixture carries no freshness block');
+  // WP-54's merge · `then` IS OPTIONAL NOW, and its absence changes nothing
+  // rendered. The designer's cycle-seven sheet dropped it; `driftLine` composes
+  // its second sentence from `RETURN_COPY.DRIFT_REST` (the RETURN generator's
+  // copy of the same ratified sentence) and never read this one. What `then`
+  // was actually for is the cross-generator AGREEMENT PIN — two extractors,
+  // one sentence — so its absence costs that pin its anchor and nothing else.
+  // Emitted as `''` rather than defaulted from the other generator: inventing a
+  // value here would make this file the second source it exists to prevent.
+  const thenValue = (rawFreshness as Record<string, unknown>).then;
   const freshness = {
     now: requireString(rawFreshness as Record<string, unknown>, 'now', 'the freshness block'),
-    then: requireString(rawFreshness as Record<string, unknown>, 'then', 'the freshness block'),
+    then: typeof thenValue === 'string' ? thenValue : '',
   };
 
-  return { runNoun, templates, verdict, freshness };
+  // --- WP-54's four blocks -------------------------------------------------
+  //
+  // Each is read the same way and refused the same way: the block must exist,
+  // every key it is required to carry must be a string, and any `{slot}` in it
+  // must be one the composer can fill. A block that is silently short is a hole
+  // where a sentence belongs, which is the failure this whole generator exists
+  // to make impossible.
+  const doors = readBlock(h, 'doors', DOOR_KEYS, DOOR_SLOTS);
+  // Every door is a CONTROL, so every door passes the class rule. See
+  // `controlLabel`: the period the row door shipped with was appended by an
+  // extraction, and this is the appender's counterpart on this generator.
+  for (const key of Object.keys(doors)) doors[key] = controlLabel(doors[key]);
+
+  const colours = readBlock(h, 'colours', COLOUR_KEYS, []);
+  for (const [key, value] of Object.entries(colours)) {
+    if (!/^rgb\(\d{1,3},\d{1,3},\d{1,3}\)$/.test(value)) {
+      throw new Error(`the colour "${key}" is not an rgb() triple — read "${value}"`);
+    }
+  }
+
+  const reserved = readBlock(h, 'reserved', RESERVED_KEYS, []);
+  const accounting = readBlock(h, 'accounting', ACCOUNTING_KEYS, ACCOUNTING_SLOTS);
+
+  return { runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting };
+}
+
+/**
+ * One named block of the fixture, with its keys required and its slots closed.
+ *
+ * `allowedSlots` is the CLOSED set for this block — a brace outside it is a
+ * build failure, not a rendered `{newField}`. `[]` means the block's strings
+ * take no substitution at all, which is itself an assertion worth failing on.
+ */
+function readBlock(
+  headlines: Record<string, unknown>,
+  name: string,
+  keys: readonly string[],
+  allowedSlots: readonly string[],
+): Record<string, string> {
+  const raw = headlines[name];
+  if (!raw || typeof raw !== 'object') throw new Error(`the fixture carries no ${name} block`);
+  const source = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const key of keys) {
+    const value = requireString(source, key, `the ${name} block`);
+    for (const slot of slotsIn(value)) {
+      if (!allowedSlots.includes(slot)) {
+        throw new Error(
+          `the ${name} block's "${key}" carries the unknown slot "{${slot}}" — ` +
+          'the composer has no host field to fill it from',
+        );
+      }
+    }
+    out[key] = value;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,7 +548,7 @@ function literal(value: string): string {
 }
 
 function emit(): string {
-  const { runNoun, templates, verdict, freshness } = extract();
+  const { runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting } = extract();
   const lines: string[] = [
     '/**',
     ' * GENERATED — DO NOT EDIT. `npm run fixtures:situation-copy`.',
@@ -299,16 +604,45 @@ function emit(): string {
     '  headline: string;',
     '  /** What is being asked of the reader, and what stopping costs. */',
     '  ask: string;',
-    '  /** ONE WORD, or empty. A badge never carries a sentence. */',
+    '  /**',
+    '   * ONE WORD, or empty. A badge never carries a sentence.',
+    '   *',
+    '   * ALWAYS EMPTY SINCE WP-54: the Waiting chip was cut as the designer\'s own',
+    '   * template error — chip-presence told the user which of OUR code paths ran —',
+    '   * and the cycle-seven sheet carries no chip on any class. The field survives',
+    '   * so every consumer is unchanged; a class that wants a badge again declares',
+    '   * one in the fixture and this stops being a constant.',
+    '   */',
     '  chip: string;',
+    '  /**',
+    '   * THE ROW\'S DOOR, and it names where it goes.',
+    '   *',
+    '   * "Open where you are needed" was ratified and failed its first contact with',
+    '   * a person. `{slot}` braces are filled by the same composer that fills a',
+    '   * headline\'s, and no door carries a terminal full stop — enforced for the',
+    '   * class in `scripts/control-label.ts`, because the period that shipped was',
+    '   * APPENDED by an extraction rather than written by anyone.',
+    '   */',
+    '  door: string;',
     '  /** A status phrase for the meta line, or empty. */',
     '  state: string;',
     '  /** The meta line\'s identifier slot. */',
     '  meta: string;',
     '  /** The tier and why, in the designer\'s words. See the composer for why the',
     '   * rendered rule line reads this on a ratified card (WP-52 item 3) and',
-    '   * `Situation.tierReason` on a derived one. */',
+    '   * `Situation.tierReason` on a derived one. The tier itself is the `{tier}`',
+    '   * SLOT, filled from the tier the row was RANKED at — see `tier` below. */',
     '  rule: string;',
+    '  /**',
+    '   * WP-54 · THE CONSEQUENCE TIER THIS CLASS RANKS AT, declared once.',
+    '   *',
+    '   * The ranker reads this and the rule line renders the ranked value into its',
+    '   * own `{tier}` slot, so the tier a card DISPLAYS is the tier it was SORTED',
+    '   * BY — not by agreement between two derivations, but because there is one',
+    '   * number. The generator refuses a template whose rule line does not open',
+    '   * with that slot, which is what stops a literal tier creeping back in.',
+    '   */',
+    '  tier: number | null;',
     '}',
     '',
     '/**',
@@ -326,6 +660,9 @@ function emit(): string {
   for (const template of templates) {
     lines.push('  {');
     for (const field of TEMPLATE_FIELDS) lines.push(`    ${field}: ${literal(template[field])},`);
+    // See `SituationTemplate.chip`: no ratified class declares one any more.
+    lines.push(`    chip: ${literal('')},`);
+    lines.push(`    tier: ${tiers[template.id] === null ? 'null' : String(tiers[template.id])},`);
     lines.push('  },');
   }
   lines.push(
@@ -351,7 +688,68 @@ function emit(): string {
     `  then: ${literal(freshness.then)},`,
     '} as const;',
     '',
+    '/**',
+    ' * WP-54 · THE DOORS. Every row has one, and every one names where it goes.',
+    ' *',
+    ' * "Open where you are needed" was ratified and failed its first contact with',
+    ' * a person. These name the destination from a fact the row already carries,',
+    ' * so a reader knows what the click costs before making it. `{slot}` braces',
+    ' * are filled by the same composer that fills a headline\'s.',
+    ' *',
+    ' * NONE CARRIES A TERMINAL FULL STOP, and that is enforced in the generator',
+    ' * for the class rather than checked for these five: the period that shipped',
+    ' * was APPENDED by an extraction, so a door added tomorrow would have taken',
+    ' * one too.',
+    ' */',
+    'export const DOORS = {',
   );
+  for (const key of DOOR_KEYS) lines.push(`  ${key}: ${literal(doors[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-54 · THE SEVERITY STRIPE\'S COLOURS, and the door\'s.',
+    ' *',
+    ' * Three pixels on a row\'s left edge: red at tier 1, orange at tier 2, grey at',
+    ' * tier 3. **There is no tier-4 colour and that is the ratified encoding** —',
+    ' * tier 4 takes no stripe, because the section it renders in already says what',
+    ' * it is. The guard that rides with the stripe: it encodes TIER and must never',
+    ' * drift into a severity scale.',
+    ' *',
+    ' * `link` is the door\'s colour. A door is a link; brand green is the product\'s',
+    ' * own mark and not a destination.',
+    ' */',
+    'export const COLOURS = {',
+  );
+  for (const key of COLOUR_KEYS) lines.push(`  ${key}: ${literal(colours[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-54 · THE RESERVED ROW, IN THE USER\'S WORDS.',
+    ' *',
+    ' * "Reserved · the record\'s own health" was our noun for a thing the user',
+    ' * recognises as "is the platform watching my sites". The row\'s purpose is',
+    ' * untouched — XD-23\'s guaranteed seat, one row, unable to grow or be',
+    ' * scrolled away — and only its name and its good-news line changed.',
+    ' */',
+    'export const RESERVED = {',
+  );
+  for (const key of RESERVED_KEYS) lines.push(`  ${key}: ${literal(reserved[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-54 · THE ACCOUNTING CLAUSES, each rendered only when its count is real.',
+    ' *',
+    ' * The needs-you count is NOT here: it is the verdict\'s, stated once. A zero',
+    ' * is never enumerated — "0 checks dark" was contradicted two lines below by',
+    ' * the reserved row saying nothing was dark.',
+    ' */',
+    'export const ACCOUNTING = {',
+  );
+  for (const key of ACCOUNTING_KEYS) lines.push(`  ${key}: ${literal(accounting[key])},`);
+  lines.push('} as const;', '');
   return lines.join('\n');
 }
 
