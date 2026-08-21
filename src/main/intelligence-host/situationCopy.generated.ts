@@ -16,7 +16,7 @@
  * which is the property that makes it copy rather than logic.
  */
 
-export const SITUATION_COPY_SHAPE_VERSION = 3;
+export const SITUATION_COPY_SHAPE_VERSION = 4;
 
 /**
  * Controlled Vocabulary v1.4 — the run-noun column.
@@ -52,6 +52,30 @@ export interface SituationTemplate {
   guard: string;
   /** The verdict. World state first. */
   headline: string;
+  /**
+   * WP-55 · THE SECOND HEADLINE, or empty where the class declares none.
+   *
+   * `incident.coalesced` is the only class with one, and its fixture states
+   * the guard beside it: *"no member carries a severity field, so no member
+   * can lead"*. A coalesced row whose members carry no severity has no
+   * consequential member to name, and this is what it says instead — the
+   * count and the target, which are facts it does hold. It is NOT a
+   * fallback for an unfillable `{target}`: both arms read `{target}`, so a
+   * group spanning two sites falls all the way through to the derived
+   * sentence, which is the honest answer for a row with no one place.
+   */
+  headlineFallback: string;
+  /**
+   * WP-55 · THE PARTS DISCLOSURE, closed and open, or empty.
+   *
+   * A part is a LINE INSIDE THE CARD — no stripe, no chip, no ask, no gate.
+   * Closed by default and opening IN PLACE rather than through the door,
+   * because someone checking whether a verdict is true should not have to
+   * leave the list to do it. Both are controls and carry no terminal
+   * period, enforced for the class by `controlLabel`.
+   */
+  disclosure: string;
+  disclosureOpen: string;
   /** What is being asked of the reader, and what stopping costs. */
   ask: string;
   /**
@@ -115,6 +139,9 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     meta: '{runbookId}',
     rule: 'Tier {tier} · the world is untouched',
     door: 'Open the run',
+    headlineFallback: '',
+    disclosure: '',
+    disclosureOpen: '',
     chip: '',
     tier: 2,
   },
@@ -127,6 +154,9 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     meta: '{runbookId}',
     rule: 'Tier {tier} · the world is untouched',
     door: 'Open the run at {checkpoint}',
+    headlineFallback: '',
+    disclosure: '',
+    disclosureOpen: '',
     chip: '',
     tier: 2,
   },
@@ -139,6 +169,9 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     meta: '{runbookId}',
     rule: 'Tier {tier} · mid-change, only you can move it',
     door: 'Open the run at {checkpoint}',
+    headlineFallback: '',
+    disclosure: '',
+    disclosureOpen: '',
     chip: '',
     tier: 1,
   },
@@ -151,8 +184,26 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     meta: '{producer}',
     rule: 'Tier {tier} · nothing is holding it back but you',
     door: 'Open {target}',
+    headlineFallback: '',
+    disclosure: '',
+    disclosureOpen: '',
     chip: '',
     tier: 1,
+  },
+  {
+    id: 'incident.coalesced',
+    guard: 'row.kind === "incident" && memberCount > 1 && row.linkKind !== null',
+    headline: '{target} has {leadFinding}, and {restCount} more findings',
+    ask: 'Contain it now, or say why not. Nothing has been written under a procedure.',
+    state: 'No run attached',
+    meta: '{producer} · linked by {linkKind}',
+    rule: 'Tier {tier} · nothing is holding it back but you',
+    door: 'Open {target}',
+    headlineFallback: '{memberCount} security findings on {target}',
+    disclosure: '{memberCount} findings — show them',
+    disclosureOpen: 'Hide the findings',
+    chip: '',
+    tier: null,
   },
   {
     id: 'agent.stuck',
@@ -163,6 +214,9 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     meta: '{agentId}',
     rule: 'Tier {tier} · the agent is asking, not the fleet',
     door: 'Open {agentId}',
+    headlineFallback: '',
+    disclosure: '',
+    disclosureOpen: '',
     chip: '',
     tier: 3,
   },
@@ -251,4 +305,76 @@ export const RESERVED = {
 export const ACCOUNTING = {
   changed: '{count} changed overnight',
   dark: '{count} checks haven’t reported',
+} as const;
+
+/**
+ * WP-55 · GROUPING — XD-28, AND IT IS NOT COALESCING.
+ *
+ * A shared field is a fact; a shared cause is a verdict. Where the record
+ * does not link the members they stay SEPARATE ROWS under a label, and the
+ * label states the limit.
+ *
+ * **THE LABEL IS NOT A CARD: no border, no fill, no stripe, no door.** That
+ * is the whole visual difference and it must read without the words —
+ * coalescing produces one bordered object, grouping produces several under a
+ * caption. `guard` is carried as TEXT, like a template's, so the rule the
+ * surface implements and the rule the designer wrote stay one sentence.
+ */
+export const GROUP = {
+  guard: 'two or more rows share a target AND row.linkKind === null',
+  label: '{memberCount} findings on {target}',
+  limit: 'The record does not link these, so they are listed separately.',
+} as const;
+
+/**
+ * WP-55 · THE DEFERRED STATE. Cycle two, ratified.
+ *
+ * Keeps its tier, keeps its place, lowers escalation ONLY. It does not leave
+ * the list — leaving is a dismissal by another name. Dimmed, out of the
+ * badge, reason and wake condition on the row.
+ *
+ * `rule` REPLACES the class's rule line while a deferral stands, and it
+ * carries the same `{tier}` slot for the same reason: the tier a card shows
+ * is the tier it was sorted by, and a deferral changes neither.
+ *
+ * `endDoor` is a control and carries no terminal period.
+ */
+export const DEFERRED = {
+  rule: 'Tier {tier} · deferred by you — tier and place unchanged',
+  recorded: 'Deferred by you {deferredAge} — {reason}',
+  wake: '{wakeLabel}',
+  endDoor: 'End the deferral',
+} as const;
+
+/**
+ * WP-55 · THE HEADER. An absence of zero is not an absence.
+ *
+ * `away` renders only when the gap is an hour or more; otherwise the header
+ * is the product name alone. The fixture's `awayGuard` and `accounting`
+ * keys are PROSE ABOUT this copy rather than copy, so they are not emitted —
+ * the guard is implemented in the surface and the accounting rule is already
+ * enforced by `ACCOUNTING`'s own clauses.
+ */
+export const HEADER = {
+  away: 'You were away {age}',
+} as const;
+
+/**
+ * WP-55 · THE RESERVED ROW'S HEADING AND ITS TWO LINES.
+ *
+ * **`loud` IS EMPTY, AND THAT IS A REFUSAL RATHER THAN AN OMISSION.** The
+ * designer's sentence reads "{darkCount} checks haven't reported in
+ * {oldestAge}", and no producer supplies an `{oldestAge}`: every DARK health
+ * line means "has never reported" and therefore carries no timestamp, so the
+ * duration would have to be invented. The generator names the refusal and
+ * its reason in its build output, and it will FAIL the build if the slot
+ * ever becomes fillable and the sentence is still withheld.
+ *
+ * A consumer must branch on the empty string and use its own derived line —
+ * `ReservedRow.headline`, which states the count and stops.
+ */
+export const HEALTH = {
+  headingLoud: 'What Nexus can’t see right now',
+  loud: '',
+  quiet: 'All {checkCount} checks are reporting.',
 } as const;

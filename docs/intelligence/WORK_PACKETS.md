@@ -27797,3 +27797,341 @@ that was green an hour ago failing to load rather than failing to pass.
 Registered. And the same rebuild is the fix for the core that has been
 failing to start for days, which is why the ledger holds no `agent%`
 events — worth doing before the next owner sitting rather than at it.
+## WP-55 · THE COALESCED SCREEN — GATE REPORT (2026-08-21)
+
+Branch `wp-55`, cut from `poc/nexintelligence-ux` at `655f6058`.
+Nothing pushed, no tag, no version bump.
+
+### 0 · THE BASE, READ RATHER THAN RE-DERIVED
+
+`docs/intelligence/base-measure.json` at `239e4e32` — 629 suites,
+8,722 tests, 8,710 passed, 12 skipped, tree kind `worktree`. The
+fail-closed guard `git diff --name-only 239e4e32 HEAD -- src/ tests/
+scripts/` returned EMPTY, so the measurement was used and not repeated.
+
+```
+BASE  (worktree, 239e4e32)   629 suites   8,722 tests   8,710 passed   12 skipped
+FINAL (worktree, wp-55)      632 suites   8,769 tests   8,757 passed   12 skipped
+```
+
+**+3 suites, +47 tests, ALL PASSING, exit 0.** The three new suites are
+`venue-guard.test.ts`, `incidentIdentity.test.ts` and
+`coalescedRow.test.ts`. Skipped is unchanged at 12 — read first, per the
+protocol. `npx tsc -p . --noEmit` clean; eslint clean on every changed file.
+
+**ONE MEASUREMENT WAS DISCARDED AND WHY.** An intermediate full run showed
+2 suites failing to run on a shebang in `tests/intelligence-evals/sitting.ts`
+and a test count 76 lower. `--no-cache` on those two suites passed 76/76,
+and the final measurement above is after `npx jest --clearCache`. That is
+the poisoned-cache class WP-52 registered, met again: **the count moved and
+the code did not.**
+
+### 1 · THE FOUR HOST FIELDS, AND THE GUARD THAT FORCED THEM
+
+`incident.coalesced` is emitted. `DEFERRED_IDS` is EMPTY.
+
+- `leadFinding` — the highest-severity member's subject line, ranked by
+  `SEVERITY_ORDER`. A member with no severity, or one outside the
+  sentinel's vocabulary, cannot lead. **A tie is broken by the record's
+  own order, oldest first**, and that is not a corner: the owner's four
+  carry two `critical`s, so it is the live case and must be
+  deterministic or the headline changes between two folds of an unchanged
+  ledger.
+- `restCount` = memberCount − 1. `memberCount` = the count of member
+  FINDINGS.
+- `linkKind` — see §7. The FIELD stays the record noun; what is filled
+  is a label.
+
+**The class refuses rather than guesses, twice.** No member carrying a
+severity takes the fixture's own `headlineFallback` (its `fallbackGuard`
+says so in words). A group spanning two sites can fill neither arm —
+both read `{target}` — and falls to the derived sentence with a null
+door, because there is no one place it leads.
+
+**Shape #17 is closed.** `assertDeferralsStillHold` probes the condition
+each deferral states: a class deferred because it carries an unfillable
+slot must be emitted once every slot it carries is in `KNOWN_SLOTS`.
+Driven in BOTH directions by its own test, and the mutation
+`unfillable.length > 0` → `>= 0` was applied to the production line and
+killed by DIRECTION 2.
+
+### 2 · WP-56a — THE IDENTITY, WITH ONE CORRECTION AND ONE CONSEQUENCE
+
+An incident situation is named for its SUBJECT. Both are raised here
+rather than smoothed:
+
+1. **The anchor is load-bearing and the ruling's phrase does not name
+   it.** `incidentKey(component, fact)` is the key of a map the producer
+   builds PER ENTITY, so it is unique inside one site and not across the
+   fleet — every site can carry `FS-01`, the collision
+   `SituationSignature` exists to avoid. Implemented as
+   `(entity, component, fact)`, composed through the producer's own
+   function so the separator and the site-level default stay one
+   decision. Pinned by a test that fails if the anchor is dropped.
+2. **The identity cannot be taken without the supersession rule that
+   rides with it.** The producer reads its history newest-first, first
+   occurrence per key wins. Take the key alone and an opened-then-closed
+   finding becomes TWO rows carrying ONE id, which is worse than the
+   event id it replaced. So the fold supersedes within a subject —
+   **which closes WP-51's F3 as a consequence of this change rather than
+   as a separate one.**
+
+The deferral now survives the amendment, which is what the ruling was
+for, and the sharp case is driven: open → defer → close → REOPEN returns
+on the same id with the deferral still standing.
+
+### 3 · PARTS AS LINES · 4 · GROUPING AS CAPTION · 5 · THE DEFERRED ROW
+
+Built, and all three are on one screen in the exhibit. A part carries no
+stripe, no chip, no ask and no gate — asserted as four absences on the
+rendered node, not described. The caption carries no border, no fill, no
+stripe and no door, asserted the same way, with a non-vacuity guard on
+the node itself. The deferred row keeps its tier, its stripe and its
+place; `rowIsDeferred` is read, never re-derived.
+
+**One defect found while drawing it: the count was stated a third time.**
+`metaLine` appends "{n} parts · one situation" to any multi-part row, and
+on a coalesced row that is a third statement beside "3 more findings" and
+"4 findings — show them". The fixture's own note rules on it. The clause
+is now suppressed for a class that DISCLOSES its parts and kept for one
+that does not — deduplicated, not deleted, and driven both ways.
+
+### 6 · HEADER, HEALTH, DOOR_RULE, GROUP, DEFERRED — SITED
+
+`GROUP`, `DEFERRED`, `HEADER` and `HEALTH` are extracted and emitted.
+**`DOOR_RULE` is LAW, not copy, so it is mechanised as ASSERTIONS**
+rather than emitted as strings nothing could render:
+`noTerminalPunctuation` must be declared true, the stated door colour
+must name `COLOURS.link`'s actual value, and every ratified class must
+declare a door.
+
+### 7 · THE TWO THINGS THE CONTRACT COULD NOT FILL
+
+**`{oldestAge}` IS REFUSED, BY NAME AND REASON, AND REGISTERED.**
+Measured, not assumed: `health.ts` writes `verdict: 'DARK'` in exactly
+four places — `core` ("not started"), `producer:*` ("nothing yet"),
+`mirror` ("unavailable") and `entities` ("unavailable") — and **not one
+carries a timestamp**; the producer lines cannot even reach the reserved
+row (`countsTowardWorst: false`). A DARK line means "has never
+reported", so there is no duration to put after it. That is the same
+finding the ACCOUNTING block already ruled on in the designer's own
+words. `HEALTH.loud` emits as `''`; the generator names the refusal in
+its build output and **will fail the build if the slot becomes fillable
+and the sentence is still withheld.**
+
+To the designer, as the better form of the same question: if that line
+is meant to be about LATE rather than DARK, a late producer does carry an
+age (`STALE`, `last seen …`) — but it needs `staleCount` and a
+different sentence, which is a decision and not a value.
+
+**`{darkCount}` and `{checkCount}` were checked the same way and both
+EXIST.** `darkCount` is `ReservedRow.dark.length`. `checkCount` did not
+exist and is DERIVED in this packet — the health lines that count toward
+the verdict, the same set `dark` and `staleCount` are computed over, so
+a coverage number cannot get a denominator from somewhere else.
+
+**`{linkKind}` — THE READING, BROUGHT RATHER THAN DECIDED.** The field's
+value is `correlation`, a record noun, and `{producer} · linked by
+correlation` is the entity-id headline one line lower. The slot is filled
+with a word the fold ALREADY derives and already ships — `coalescedCopy`'s
+`origin`, read off `source.system`, which has rendered in the derived
+headline "4 open incidents from one scan" since WP-51 — so the meta line
+reads **"linked by one scan"**. Nothing is authored.
+
+The reading for the designer, and the problem inside it: the legible word
+depends on the ORIGIN (a sweep is "one scan", a run is "one run") and NOT
+on the link kind, so a label column keyed on `SituationLink` — the
+obvious shape, mirroring the run-noun column — **would be keyed on the
+wrong fact.** Proposed: a `LINK_LABEL` column keyed on the origin the
+fold derives. `Situation.linkKind` on the contract is untouched.
+
+### 8 · ONE RESIDUE CLOSED THAT WAS NOT ON THE LIST, AND ONE OPENED
+
+**CLOSED: the coalesced row's null `signature`.** WP-54 registered it as
+honestly null and routed it here; drawing the class is what made it
+visible. `Situation.signature` is now `signatures`, a SET — empty on a
+run row, one entry for a situation of one, N for a coalesced row — and
+`nowRows` absorbs EVERY matching Inbox item rather than the first.
+Without it a coalesced row of four rendered four duplicate rows beside
+it: WP-54's "twelve rows under a badge of seven", returning by a
+different door.
+
+**OPENED: a coalesced row surfaces ONE member's Inbox evidence.** The
+other three are absorbed without theirs. The join does not exist —
+`SituationPart` carries `eventId`, `topic`, `observedAt` and `summary`
+and no fact code — so drawing each member's evidence on its own part line
+needs a contract field. Registered at the code as well as here.
+
+### 9 · THE EXHIBIT
+
+`scripts/wp55-screen-exhibit.ts`, driven against a COPY of the owner's
+real ledger (the script refuses the live path). **It drives
+`Arrival.render()`, not the fold** — WP-56's own ruling is why.
+
+```
+VERDICT : 7 things need you, and none of them has changed anything yet
+BADGE   : 7 needs you · 1 deferred by you
+IDENTITY: arrivalCounts().needsYou(7) === triage.counts.needsYou(7) + unheld(0) → HOLDS
+
+  ┌ CAPTION (no border, no fill, no stripe, no door)
+  │ 4 findings on theawfulpm-test
+  │ The record does not link these, so they are listed separately.
+  │   [4 separate rows, each Tier 1, each with its own door]
+  └
+--- ROW task_01M0K0SBRF2VEAJ1BKCP9VEX5G
+    template : incident.coalesced
+    fold     : 4 findings, linked by correlation
+    headline : a11ycheck has PHP file(s) in mu-plugins/: index.php, and 3 more findings
+    [4 part lines, each with its own age and door]
+    meta     : 0h · No run attached · act_security_sentinel · linked by one scan
+--- ROW sess_task_01M0BJNBBQA1GABY2TFQ42H6B8
+    stripe   : tier 2   [DEFERRED — dimmed, tier and place unchanged]
+    rule     : Tier 2 · deferred by you — tier and place unchanged
+    deferral : client is rebuilding the site next week  (wake: unconditioned)
+```
+
+**THE CAPTION NEEDED NO APPEND.** The owner's four historical findings
+carry no correlation and sit on one site — they ARE the un-coalesced case
+XD-28 describes, live. The coalesced row and the deferral are appended
+through the SHIPPED producers (`recordSentinelIncidents`,
+`recordDeferral`), and what is read versus supplied is stated in the
+script's own header.
+
+### 10 · RECEIPTS, WITH THEIR UNITS
+
+- `SELECT COUNT(*) FROM events WHERE topic LIKE 'agent%'` → **0**, re-run
+  on the owner's live ledger 2026-08-21. So a tier histogram is still
+  `T3:0 live`; nothing in this packet drove an agent-failure row.
+- The owner's ledger holds **11,181 events** and **4** incident events,
+  with **four distinct facts** (ABS-04, ABS-05, ABS-07, FS-01), one
+  anchor, `correlation` NULL on all four, `component` absent on all four.
+- `sessionRegistry.ts`: **181,966 raw characters, 60,355 of executable
+  text (66.8% comment)** — measured, and the reason an anti-vacuity
+  threshold had to be re-aimed.
+- Exhibit numbers are from ONE fleet (the owner's, copied), driven
+  through the shipped components; the coalesced row and the deferral are
+  APPENDED to that copy, the caption is not.
+
+### 11 · ABI, DECLARED — AND IT MOVED UNDER THIS PACKET
+
+**The shared `node_modules` flipped to Electron ABI 146 mid-packet.**
+jest was green at 141 an hour earlier and then could not load
+`better_sqlite3.node` at all; `npm rebuild better-sqlite3` restored 141
+and everything above was measured there. Something outside this packet
+rebuilt it — the hazard is the symlinked `node_modules` every worktree
+shares.
+
+**The owner must `npm run rebuild` before loading Local**, which is also
+the fix for the core that has been failing to start for days on this
+mismatch (and is why the ledger holds no `agent%` events).
+
+### 12 · WHAT IS HELD FOR THE GATE
+
+1. The `{linkKind}` reading, and the problem inside it (§7).
+2. The `{oldestAge}` refusal, registered — and the late-versus-dark
+   question put back to the designer in its answerable form.
+3. `signatures` as a SET is a CONTRACT CHANGE made without a packet
+   naming it, taken under the residue WP-54 routed here (§8).
+4. The one-member-evidence residue (§8).
+
+---
+
+## WP-55 · THE TWO GATE ITEMS, LANDED (2026-08-21)
+
+### 1 · COMMITTED
+
+`c07f542e` on `wp-55`. The gate hold was read as a commit hold; it is
+not, and the correction is taken. Nothing pushed, no tag, no version
+bump.
+
+### 2 · THE EXIT CONDITION'S OWN CHECK
+
+`src/main/intelligence-host/__tests__/slotDerivation.test.ts`, two
+assertions, and the second is the one that was asked for:
+
+1. **Every name in `KNOWN_SLOTS` is carried by at least one ratified
+   template.** A slot named and used by nothing is dead weight the
+   deferral guard would treat as satisfied.
+2. **Every name resolves NON-EMPTY, at its own slot position, on a row
+   the REAL FOLD produced.** Every row comes out of
+   `createSessionRegistry(...).triage()` over a ledger built with the
+   shipped emitters and producers; the values are read back out of the
+   rendered sentences by position, never supplied here.
+
+**HOW AN EMPTY SLOT IS CAUGHT.** A template becomes an anchored regex —
+literals escaped, each `{slot}` a lazy capture — matched against what the
+fold rendered. `fillSituationSentence` collapses the whitespace an absent
+slot leaves, so an empty substitution changes the sentence's SHAPE and
+the literals stop lining up. A mismatch is RECORDED as a failure, not
+skipped.
+
+**DRIVEN IN BOTH DIRECTIONS, and mutation B is the one that matters.**
+
+- **A** — `{operatorName}` added to `KNOWN_SLOTS` and to `agent.stuck`'s
+  HEADLINE. Red: the unfillable headline declines the class, so the class
+  never appears and the coverage assertion fires.
+- **B** — the same slot in `agent.stuck`'s **meta** line, which
+  `selectSituationTemplate` does NOT gate on. The class still selects and
+  still renders. Red, with the silence quoted:
+
+```
+mismatches: [
+  "agent.stuck.meta: template \"{agentId} · {operatorName}\" vs rendered \"auth-probe ·\"",
+]
+```
+
+That is the state the ruling named — *"theawfulpm-test has , and 3 more
+findings"* — caught at its source, by template, field and both strings.
+**It cannot be satisfied by editing a constant:** adding a name fails
+until something derives a value, and a value is the only thing that
+passes.
+
+**BUILDING IT FOUND TWO SILENCES IN ITS OWN FIXTURE**, both the product
+being right and the fixture being quiet about it: a capability the
+run-noun column does not carry makes `{runNoun}` unfillable and declines
+`run.waiting.nothing-written` outright; and two manifests naming one
+`capability@hash` are two TURNS of one run, so `run.waiting.mid-procedure`
+never appeared. A coverage assertion over the classes actually produced —
+shape #15 applied to a sweep — is what made both red instead of quiet.
+
+### 3 · THE MERGE-REPORT QUESTION, ANSWERED
+
+*"Is the rule 'the count is stated once per row', or 'these two classes
+differ'?"*
+
+**The first, and the class id does not appear in the condition.**
+`arrivalModel.ts`:
+
+```ts
+function disclosesParts(situation: Situation): boolean {
+  const template = SITUATION_TEMPLATES.find((t) => t.id === situation.headlineTemplate);
+  return template !== undefined && template.disclosure !== '';
+}
+```
+
+The condition is *does another element on this row state the count* —
+read off the ratified template, so the day a second class gains a
+disclosure it is already true of that class with no edit here. A row with
+no class discloses nothing and keeps its clause, which is the other
+direction and is driven.
+
+### 4 · ACCEPTED CORRECTIONS, RECORDED
+
+- **`signatures` reached the gate rather than the announce.** The rule is
+  restated, not tightened: announce the quantity, not only the file, and
+  amend the announce when the need is measured. It cost nothing here
+  because nothing else was live against `Situation`; the rule exists for
+  the time it does.
+- **WP-56a's scope amendment** — `(entity, component, fact)` — is the
+  ruling as amended.
+
+### 5 · NUMBERS
+
+```
+BASE  (worktree, 239e4e32)   629 suites   8,722 tests   8,710 passed   12 skipped
+c07f542e                     632 suites   8,769 tests   8,757 passed   12 skipped
+FINAL (with the instrument)  633 suites   8,771 tests   8,759 passed   12 skipped
+```
+
+**+4 suites, +49 tests against the base, all passing.** Skipped unchanged
+at 12. ABI 141 — `npm run rebuild` before loading Local.

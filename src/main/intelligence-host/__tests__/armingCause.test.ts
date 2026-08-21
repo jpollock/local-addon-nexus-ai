@@ -373,7 +373,11 @@ describe('the fold joins a run to the incidents its arming named', () => {
     const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
     expect(triage.waiting).toHaveLength(2);
     const remainder = triage.waiting.find((s) => s.kind === 'incident')!;
-    expect(remainder.id).toBe(members[3]);          // the EVENT id, not the link
+    // WP-56a · THE SUBJECT, not the event and not the link. The point of the
+    // assertion is unchanged — the remainder is named for itself rather than
+    // for the group it did not join — and the identity it is named for moved
+    // from the report to the subject at WP-56's gate.
+    expect(remainder.id).toBe(`${SITE}|site|d`);
     expect(remainder.memberCount).toBe(1);
     expect(remainder.linkKind).toBeNull();
     expect(remainder.headlineTemplate).toBe('incident.no-run');

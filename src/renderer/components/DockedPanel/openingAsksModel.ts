@@ -82,6 +82,24 @@ export const AUTHORED = {
    */
   'incident.no-run': 'Why is nothing fixing the open findings?',
   /**
+   * WP-55 · THE SAME SENTENCE, FOR THE CLASS §5's BULLET WAS ACTUALLY ABOUT.
+   *
+   * `incident.coalesced` became reachable when its four host fields landed, and
+   * the ask map is asserted to cover every reachable class. **No new sentence is
+   * authored for it, and that is a reading rather than a shortcut.** §5's own
+   * bullet is *"Are the four findings on theawfulpm-test related?"* — a COUNT
+   * and a SITE, which is the coalesced case described exactly; the entry above
+   * generalised it by dropping both so it could serve the singleton class that
+   * existed at the time. The generalised sentence is true of both classes: an
+   * open finding with no run attached raises the same question whether it stands
+   * alone or with three siblings.
+   *
+   * Authoring a second sentence here would be a second place the same question
+   * lives, and the copy discipline's whole content is that a class the ratified
+   * set does not cover gets the derived form, never new prose.
+   */
+  'incident.coalesced': 'Why is nothing fixing the open findings?',
+  /**
    * NOT SUPPLIED BY THE POSITION DOCUMENT AT ALL. §5 draws a morning with no
    * part-changed row in it, and this is the class whose row matters most when it
    * appears — a part-changed world compounding against an untouched one.

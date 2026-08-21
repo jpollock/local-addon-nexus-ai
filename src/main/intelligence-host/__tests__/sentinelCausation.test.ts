@@ -72,6 +72,7 @@ import { setIntelligenceCore } from '../coreRegistry';
 import { INCIDENT_TOPIC, INCIDENT_SCHEMA, SCAN_TOPIC, recordSentinelIncidents } from '../incidentProducer';
 import { createSessionRegistry } from '../sessionRegistry';
 import type { NexusServices } from '../../mcp/types';
+import { taskId } from '../../../intelligence';
 
 let core: IntelligenceCore;
 let dir: string;
@@ -90,6 +91,20 @@ const FINDINGS = [
   { fact: 'ABS-07', symptom: 'Low-entropy plugin name(s) — likely attacker-created: noted, index', severity: 'high' },
   { fact: 'FS-01', symptom: 'PHP file(s) in mu-plugins/: index.php', severity: 'critical' },
 ];
+
+/**
+ * WP-56a · the same four, as SITUATION IDS.
+ *
+ * `emitFinding` stamps both `site` and `environment`, and the anchor rule is
+ * `environment ?? site` — the incident producer's own — so the environment is
+ * what these are scoped by. Written out rather than read back off the rows, so
+ * the test asserts the identity instead of agreeing with whatever the fold
+ * produced (shape #15).
+ */
+const SUBJECT_IDS = FINDINGS.map((f) => `${ENV}|site|${f.fact}`);
+
+/** A TaskId, minted the way the sentinel producer mints its scan's. */
+const mintTaskId = () => taskId();
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'intel-wp48a-'));
@@ -145,12 +160,16 @@ describe('WP-48a finding 1 · the run id cannot be written to either link field'
 
 describe('WP-48a finding 2 · the existing rules do not coalesce orphans, however they are linked', () => {
   test('the four real findings are FOUR situations, and each states its own limit', () => {
-    const ids = FINDINGS.map((f) => emitFinding(f));
+    FINDINGS.forEach((f) => emitFinding(f));
     expect(core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 10, order: 'desc' })).toHaveLength(4);
 
     const triage = createSessionRegistry({ core, now: NOW, runbooks: { byCapability: () => undefined } }).triage();
     expect(triage.waiting).toHaveLength(4);
-    expect(triage.waiting.map((s) => s.id).sort()).toEqual([...ids].sort());
+    // WP-56a · NAMED FOR THEIR SUBJECTS, not for the events that reported them.
+    // These four are the owner's real ledger, verbatim, and they are four
+    // because they carry four distinct facts — which is also why they cannot
+    // fold onto one another.
+    expect(triage.waiting.map((s) => s.id).sort()).toEqual(SUBJECT_IDS.slice().sort());
     for (const situation of triage.waiting) {
       expect(situation.kind).toBe('incident');
       expect(situation.parts).toHaveLength(1);
@@ -261,7 +280,7 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
 
   test('THE EXHIBIT · the historical four stay four rows BESIDE the new one — five, not eight', () => {
     // The four the owner's real ledger holds: no correlation, one payload origin.
-    const historical = FINDINGS.map((f) => emitFinding(f));
+    FINDINGS.forEach((f) => emitFinding(f));
     // …and one new sweep through the shipped producer.
     expect(scan('r_new_scan')).toBe(4);
     expect(core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 20, order: 'desc' })).toHaveLength(8);
@@ -275,8 +294,9 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
     expect(coalesced).toHaveLength(1);
 
     // The four that stayed separate are the four the record does not link, by
-    // id — not "four rows of some kind".
-    expect(separate.map((s) => s.id).sort()).toEqual([...historical].sort());
+    // id — not "four rows of some kind". WP-56a moved that id from the event to
+    // the subject; which four rows they are has not moved.
+    expect(separate.map((s) => s.id).sort()).toEqual(SUBJECT_IDS.slice().sort());
     for (const situation of separate) {
       expect(situation.memberCount).toBe(1);
       expect(situation.linkKind).toBeNull();
@@ -333,27 +353,48 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
     expect(new Set(waiting.map((s) => s.id)).size).toBe(2);
   });
 
-  test('the coalesced row takes the DERIVED sentence — the ratified class is WP-55\'s to draw', () => {
+  test('WP-55 · the coalesced row now takes the RATIFIED class, and still borrows no member\'s sentence', () => {
+    // WHAT THIS TEST USED TO PIN: the fold reported `headlineTemplate: null` and
+    // rendered "4 open incidents from one scan", because Q3's ratified guard is
+    // that a coalesced row *"can never be one member's sentence with a parts
+    // chip bolted on"* — so WP-51 refused to borrow `incident.no-run`'s headline
+    // and left the sheet's own class to WP-55. This is that class, arrived.
+    //
+    // THE GUARD IT WAS PROTECTING IS UNCHANGED AND IS STILL ASSERTED BELOW: the
+    // headline is derived from the members — target, the consequential member,
+    // and the count of the REST — and it is not any one member's sentence.
     scan('r_new_scan');
     const [situation] = triageOf().waiting;
-    // `incident.no-run`'s headline is ONE member's sentence ("{finding} on
-    // {target}"), and Q3's ratified guard is that a coalesced row "can never be
-    // one member's sentence with a parts chip bolted on". So the fold reports
-    // no template rather than borrowing that one, and the sheet's
-    // `incident.coalesced` lands with WP-55.
-    expect(situation.headlineTemplate).toBeNull();
-    for (const f of FINDINGS) expect(situation.headline).not.toContain(f.symptom);
-    // …and it is derived from ALL FOUR, not from one of them: the count is the
-    // whole of what a coalesced row can honestly say before the ratified class
-    // arrives, so it is asserted exactly rather than as "not empty". A verdict
-    // composed over one member would still avoid that member's symptom and
-    // still read as a sentence — and would say "1".
-    expect(situation.headline).toBe('4 open incidents from one scan');
-    // A derived row carries no ask and no chip — `derivedCopy`'s own shape.
-    expect(situation.ask).toBe('');
+    expect(situation.headlineTemplate).toBe('incident.coalesced');
+    // The lead IS one member's subject line, and that is the ratified design:
+    // "the highest-severity member's subject line". What the row must never be
+    // is one member's SENTENCE — `incident.no-run`'s "{finding} on {target}, and
+    // nothing is fixing it" — with a count bolted beside it.
+    expect(situation.headline).not.toContain('and nothing is fixing it');
+    // Derived from all four: the count of the rest is three, not "1".
+    expect(situation.headline).toContain('3 more findings');
+    // And the ask is the class's now, where a derived row had none.
+    expect(situation.ask).not.toBe('');
   });
 
-  test('a member the record CLOSED does not make the situation closed', () => {
+  /**
+   * WP-55 · F3 IS CLOSED, AS A CONSEQUENCE OF WP-56a RATHER THAN AS A FIX.
+   *
+   * WHAT THIS TEST USED TO PIN, kept because the finding is the reason: the fold
+   * read each event's OWN `resolved` field and never superseded an opening event
+   * with the amendment that closed it, so a resolved incident kept its open row
+   * forever — two rows per finding, one saying open and one saying closed.
+   * WP-51 reported it at its gate under the mid-task scope rule and left it to
+   * "whoever owns supersession".
+   *
+   * WP-56a took the producer's dedup key as the situation's identity, and the
+   * supersession rule is not separable from it: `incidentHistory` reads
+   * newest-first and lets the first occurrence per key win. Take the key without
+   * the rule and the two rows carry ONE id, which is worse than the event id it
+   * replaced. So the openings are superseded now, and the count moved from eight
+   * rows to one.
+   */
+  test('an amended finding is ONE row in its amended state — WP-51 F3, closed', () => {
     scan('r_new_scan');
     // The next sweep finds nothing and skipped nothing: the producer closes all
     // four, and the closures carry the CLOSING scan's task.
@@ -367,23 +408,58 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
       { services, core },
     );
     const triage = triageOf();
-    // TWO groups: the four openings, and the four closures that superseded
-    // them — each set shares its own scan's task, and the fold groups by that.
-    //
-    // **THE OPENINGS STILL RENDER AS WAITING, AND THAT IS A PRE-EXISTING
-    // DEFECT THIS PACKET DID NOT INTRODUCE AND DOES NOT FIX.** The fold reads
-    // each event's OWN `resolved` field and never supersedes an opening event
-    // with the amendment that closed it — so a resolved incident has always
-    // kept its open row, one row per event, with or without coalescing.
-    // Measured on the owner's real ledger: no resolution exists there, so
-    // nothing on the live screen is affected. Reported at the gate rather than
-    // folded in; the mid-task scope rule is why, and the fix belongs with
-    // whoever owns supersession.
-    expect(triage.waiting.map((s) => s.parts.length)).toEqual([4]);
+    // ONE group, not two. The four closures superseded the four openings, and
+    // the surviving subjects group by their CURRENT event's link — the closing
+    // scan's task, because a subject's state is its newest event and the act
+    // that produced that state is the act that links it.
+    expect(triage.waiting.map((s) => s.parts.length)).toEqual([]);
     expect(triage.changed.map((s) => s.parts.length)).toEqual([4]);
-    // What this case DOES pin: the closures group by the closing scan's task,
-    // so the amendment set is one row rather than four.
+    // The eight events are still all in the ledger. Nothing was rewritten; the
+    // fold reads the record differently.
+    expect(core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 20, order: 'desc' })).toHaveLength(8);
+    // What this case has always pinned, unchanged: the surviving subjects group
+    // by the CLOSING scan's task, so the amendment set is one row and not four.
     expect(triage.changed[0].memberCount).toBe(4);
     expect(triage.changed[0].linkKind).toBe('correlation');
+  });
+
+  /**
+   * THE CASE THE PREVIOUS TEST'S NAME CLAIMED AND ITS FIXTURE NEVER BUILT.
+   *
+   * *"A member the record CLOSED does not make the situation closed"* is a claim
+   * about a MIXED group, and the fixture above closes all four — so the guard it
+   * names (`open.length === 0`) was only ever reached at its extremes. Worse,
+   * supersession has now made the mixed shape **unproducible through the
+   * sentinel**: a closed subject's current event is the CLOSING scan's, so it
+   * leaves the opening scan's link group entirely and the two never share a row.
+   *
+   * DRIVEN DIRECTLY, AND SAID SO. Four events under one correlation, one of them
+   * resolved — a shape the fold must handle because the union of producers is
+   * open, and a shape no current caller can reach. This is WP-46's rule: a guard
+   * nothing can reach is a guard nothing can check.
+   */
+  test('DRIVEN DIRECTLY · a group with one closed member is still OPEN, and says so by count', () => {
+    const link = mintTaskId();
+    FINDINGS.forEach((f, i) => {
+      core.emitter.emit({
+        observed_at: '2026-08-18T22:25:24.386Z',
+        topic: INCIDENT_TOPIC,
+        schema: INCIDENT_SCHEMA,
+        entity: { site: SITE, environment: ENV },
+        actor: { id: 'act_security_sentinel', kind: 'agent' },
+        source: { class: 'work', system: 'sentinel:scan', trust: 'emitted' },
+        correlation: link,
+        payload: { ...f, resolved: i === 3 },
+      });
+    });
+
+    const triage = triageOf();
+    expect(triage.changed).toHaveLength(0);
+    const [group] = triage.waiting;
+    expect(group.memberCount).toBe(4);
+    expect(group.linkKind).toBe('correlation');
+    // The counts are STATED rather than the verdict inferred from the newest
+    // member — which is the whole of the original claim.
+    expect(group.tierReason).toContain('3 of 4 incidents');
   });
 });

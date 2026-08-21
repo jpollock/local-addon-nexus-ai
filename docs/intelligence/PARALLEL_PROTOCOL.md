@@ -1051,3 +1051,147 @@ announce declares a file. A packet that meets a load failure checks the
 ABI before it debugs its own code, and records the version it measured
 at, because a receipt taken under one ABI is not a receipt under
 another.
+## A deferral states a condition; the check that reads it must probe that condition (WP-55)
+
+Vacuous shape #17 — *a guard that subtracts its own exception before
+reading* — is closed, and the closing move generalises beyond the one
+guard it was found in.
+
+`RATIFIED_IDS` was compared against `ids.filter(id => !(id in
+DEFERRED_IDS))`. The deferral was subtracted before the guard read it, so
+the guard could not see the class it deferred. The exit condition —
+*"host fields nothing derives yet — WP-55 adds them"* — lived in a
+string, was announced by one `process.stdout.write`, and was tested by
+nothing.
+
+**Skipping loudly is not failing closed.** A `stdout` line is a courtesy
+to whoever is watching a build; it is not an instrument, because nothing
+reads it and nothing fails on it.
+
+The pattern that fixes it: **a deferral records a condition, and the
+check probes that condition.** Here the condition is mechanically
+checkable — a class is deferred because it carries a slot the product
+cannot fill, and `KNOWN_SLOTS` is the registry of slots it can fill — so
+`assertDeferralsStillHold` throws when every slot a deferred class
+carries has become fillable. It is driven in BOTH directions by its own
+test, because a refusal that only ever passes is not a refusal.
+
+The same mechanism now applies one level down, to a deferred BLOCK KEY
+(`DEFERRED_BLOCK_ENTRIES`), which is how `HEALTH.loud` is withheld
+without being forgotten.
+
+Generalisation worth keeping: **any exception with a stated end
+condition needs a check that can observe that condition.** An exception
+whose end is a sentence in a comment ends when someone remembers it.
+
+## A fixture that varies the wrong field is a fixture the producer cannot emit (WP-55)
+
+`sessionRegistry.test.ts` drove "four uncorrelated incidents on one site"
+with four events sharing ONE `fact` (`ABS-0x`) and four different
+`symptom`s. That shape is unreachable: `recordSentinelIncidents` keys
+`history.open` on `incidentKey(component, fact)` and refuses the second,
+third and fourth as already open. Measured on the owner's real ledger
+the four carry four DISTINCT facts — `ABS-04`, `ABS-05`, `ABS-07`,
+`FS-01`.
+
+The fixture passed for months because nothing read `fact`. It failed the
+moment the fold adopted the producer's own identity, and the failure
+looked like a regression in the change rather than a defect in the
+fixture. **Before editing a red fixture, check it against the producer
+that would have written it** — the count it asserts can be right for the
+wrong reason.
+
+## A threshold expressed as a fraction of the file measures the wrong thing (WP-55)
+
+`situationHeadlines.test.ts` guarded its comment-stripping regex with
+`expect(source.length).toBeGreaterThan(raw.length / 3)` — an anti-vacuity
+check against an over-greedy strip that had emptied `source`.
+
+It does not measure greediness. It measures COMMENT DENSITY, and it
+fails as a file gets better documented. Measured on `sessionRegistry.ts`
+2026-08-21: 181,966 raw characters, 60,355 of executable text — **66.8%
+comment**, which is what this subsystem's doc discipline produces, and it
+tripped the guard.
+
+An absolute floor measures the thing the check is about: a strip that ate
+the file leaves nothing, not 60kB. **A threshold relative to a quantity
+the change is expected to move is a threshold that fires on the change
+rather than on the fault.**
+
+## The venue guard is in the repository now (WP-55)
+
+`.githooks/commit-msg` refuses a commit whose conventional-commit scope
+names one packet (`docs(wp-56): …`) inside a worktree checked out for
+another (branch `wp-32`) — the observed failure, exactly. It does not
+gate the base branch (every packet's merge report is committed there), it
+does not read the body (a citation is not a venue claim), and
+`--no-verify` is named in its own output.
+
+**It is `commit-msg`, not `pre-commit`, and the correction is disclosed
+rather than silent.** The ruling named `pre-commit` because that file is
+already wired; `pre-commit` is never handed the message, and the message
+is the only place the intended packet is written down. `core.hooksPath`
+points at the whole `.githooks` directory, so `commit-msg` is wired by
+the same setting at the same cost — and can read the fact it gates on.
+
+Driven by `tests/unit/build/venue-guard.test.ts`, which executes the hook
+directly with a branch supplied through the environment. A guard that can
+only be exercised by constructing the failure it prevents is a guard
+nothing checks.
+
+## A guard's exit condition needs a check of its own (WP-55 gate)
+
+`assertDeferralsStillHold` probes the condition each deferral states and
+throws when it stops holding. The guard is right. **Its exit condition is
+a hand-written array, and nothing checked the array.**
+
+`KNOWN_SLOTS` appeared in the generator and its tests and nowhere else.
+`SlotBag` is `Record<string, string | number | undefined>` — an open
+record that cannot contradict it — and `fillSituationSentence` renders an
+absent slot as `''` and collapses the whitespace. So the failure the
+generator's own header names, *"a row that renders the six literal
+characters `{newField}` to a customer"*, was not the failure that
+composer could produce. **It produced silence.**
+
+And the sequence was worse than inert: add a name to `KNOWN_SLOTS`
+without deriving it, and the deferral guard throws DEMANDING the class be
+emitted. The class ships. The headline reads *"theawfulpm-test has , and
+3 more findings."* **The guard drove toward that state.**
+
+Shape #17 was closed one level up and open one level down.
+
+The check that closes it (`slotDerivation.test.ts`): every name the
+generator declares fillable must RESOLVE, non-empty, at its own slot
+position, on a row the REAL FOLD produced from real events. Values are
+read back out of the rendered sentences positionally — an empty
+substitution collapses the whitespace around it, so the literals stop
+lining up and the match fails, which is recorded rather than skipped.
+
+**It cannot be satisfied by editing a constant**, which is the property
+that matters: adding a name fails until something derives a value, and
+deriving a value is the only thing that passes. Both directions driven —
+mutation B put an underived `{operatorName}` in `agent.stuck`'s META
+line, which `selectSituationTemplate` does not gate on, so the class
+still selected and rendered `auth-probe ·`; the test named the template,
+the field and both strings.
+
+Generalisation: **a guard whose exit condition is a list needs a check on
+the list.** An instrument that fires correctly on a wrong input is only
+as good as the definition of "wrong", and a hand-maintained definition is
+memory with better spelling.
+
+## Building the instrument found two silences it was built to find (WP-55 gate)
+
+Both while writing the test above, in its own fixture:
+
+- A run whose capability the run-noun column does not carry
+  (`cap.cache_purge`) makes `{runNoun}` unfillable, which DECLINES
+  `run.waiting.nothing-written` and sends the row to the derived
+  sentence. The class simply never appeared.
+- Two manifests naming one `capability@hash` are two TURNS of one run and
+  not two rows, so `run.waiting.mid-procedure` never appeared either.
+
+Neither was a bug in the product; both were the product being right and
+the fixture being silent about it. **A coverage assertion over the
+classes actually produced** — shape #15 applied to a sweep rather than to
+one row — is what turned both into a red line instead of a quiet pass.

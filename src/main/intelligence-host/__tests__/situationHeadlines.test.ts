@@ -27,7 +27,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vm from 'vm';
 import { execFileSync } from 'child_process';
+
+// WP-55 · the generator's own guard, imported so it can be driven in BOTH
+// directions. `DEFERRED_IDS` lives in the generator, so `--fixture` — which
+// replaces the INPUT — cannot reach it; the function is the only surface that
+// can be exercised, and a guard nothing can reach is a guard nothing checks.
+import { assertDeferralsStillHold, KNOWN_SLOTS } from '../../../../scripts/generate-situation-copy';
 
 import {
   contradictedByTheRecord,
@@ -72,6 +79,12 @@ const FULL_BAG = {
   checkpoint: 'cp.approval', position: '3 of 8', awaits: 'approval',
   target: 'ent_env_X', finding: 'checkout returned 500', agentId: 'security-sentinel',
   timeout: '90s', runbookId: 'rb.x', producer: 'act_security_sentinel',
+  // WP-55 · `incident.coalesced`'s four. Present here for the same reason every
+  // other slot is: the agreement table pins GUARDS, and an unfillable headline
+  // would mask a guard result behind a fillability check. The unfillable cases
+  // get their own tests.
+  leadFinding: 'Known backdoor plugin detected: wp-compat', restCount: 3,
+  memberCount: 4, linkKind: 'one scan',
 };
 
 /**
@@ -108,6 +121,15 @@ const CASES: Array<{ name: string; input: SituationClassInput }> = [
   { name: 'incident, no run', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: null } },
   { name: 'incident, linked to a run', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: 's1' } },
 
+  // --- incident.coalesced (WP-55), and the two near-misses that separate its
+  // --- two clauses. The pair matters: `memberCount > 1` and
+  // --- `linkKind !== null` are not redundant, and a table exercising only
+  // --- their conjunction would agree with a guard that dropped either one.
+  { name: 'incident, four members, linked', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: null, memberCount: 4, linkKind: 'correlation' } },
+  { name: 'incident, four members, NO link — a fold nothing justified', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: null, memberCount: 4, linkKind: null } },
+  { name: 'incident, ONE member, linked — a group of one is not a group', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: null, memberCount: 1, linkKind: 'correlation' } },
+  { name: 'incident, two members, linked, and joined to a run', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: 's1', memberCount: 2, linkKind: 'correlation' } },
+
   // --- agent.stuck: WP-54a gave it a producer; these are still its ONLY
   // --- exercise of the corners the producer cannot supply ------------------
   { name: 'agent failure', input: { kind: 'agentFailure', done: 0, failed: 0, total: 0, gate: null, runId: null } },
@@ -128,7 +150,11 @@ function evaluateGuard(guard: string, input: SituationClassInput): boolean {
   // sides — the string here and the selector below — and a row that folded
   // nothing is a situation of one, which is why an absent count reads as 1 on
   // both sides rather than only on the TypeScript one.
-  const row = { kind: input.kind, runId: input.runId };
+  // WP-55 · `linkKind` joined `row` because `incident.coalesced`'s ratified
+  // guard reads `row.linkKind !== null`. Supplied to BOTH sides — the string
+  // here and the selector below — and absent reads as null on both, because a
+  // row that folded nothing was made one thing by nothing.
+  const row = { kind: input.kind, runId: input.runId, linkKind: input.linkKind ?? null };
   const memberCount = input.memberCount ?? 1;
   // eslint-disable-next-line no-new-func
   const fn = new Function(
@@ -190,14 +216,23 @@ describe('the guards — two copies of one rule, pinned together', () => {
     // does overlap a fifth, this fails and says which two — instead of leaving
     // the order silently load-bearing, which is what the wrong comment would
     // have done.
+    //
+    // WP-55 · THE SWEEP GAINED TWO DIMENSIONS, and it had to. `incident.no-run`
+    // and `incident.coalesced` are separated ONLY by `memberCount` and
+    // `linkKind`; a sweep blind to both would have found them overlapping on
+    // every incident input, or — worse, and this is the real risk — would have
+    // gone on reporting no overlap while never varying the one field that
+    // decides between them.
     const overlaps: string[] = [];
     for (const kind of ['run', 'incident', 'agentFailure'] as const) {
       for (const done of [0, 1, 2]) for (const failed of [0, 1, 2]) for (const total of [0, 1, 2, null]) {
         for (const g of [null, gate()]) for (const runId of [null, 's1']) {
-          const input: SituationClassInput = { kind, done, failed, total, gate: g, runId };
-          const holding = SITUATION_TEMPLATES.filter((t) => guardHolds(t, input));
-          if (holding.length > 1) {
-            overlaps.push(`${JSON.stringify({ kind, done, failed, total, gated: g !== null, runId })} → ${holding.map((t) => t.id).join(' + ')}`);
+          for (const memberCount of [undefined, 1, 2, 4]) for (const linkKind of [null, 'correlation'] as const) {
+            const input: SituationClassInput = { kind, done, failed, total, gate: g, runId, memberCount, linkKind };
+            const holding = SITUATION_TEMPLATES.filter((t) => guardHolds(t, input));
+            if (holding.length > 1) {
+              overlaps.push(`${JSON.stringify({ kind, done, failed, total, gated: g !== null, runId, memberCount, linkKind })} → ${holding.map((t) => t.id).join(' + ')}`);
+            }
           }
         }
       }
@@ -209,12 +244,17 @@ describe('the guards — two copies of one rule, pinned together', () => {
     expect(selected).toBeGreaterThan(5);
   });
 
-  test('the ratified set is the five, in the fixture\'s order', () => {
+  test('the ratified set is the SIX, in the fixture\'s order', () => {
+    // WP-55 · `incident.coalesced` joined it. It was DECLARED in the fixture and
+    // deferred by the generator until its four host fields existed; they exist
+    // now, and `assertDeferralsStillHold` is what would have failed the build
+    // had the entry been left behind.
     expect(SITUATION_TEMPLATES.map((t) => t.id)).toEqual([
       'run.waiting.nothing-written',
       'run.waiting.mid-procedure',
       'run.waiting.part-changed',
       'incident.no-run',
+      'incident.coalesced',
       'agent.stuck',
     ]);
     const midProcedure: SituationClassInput =
@@ -382,8 +422,13 @@ describe('the list verdict — generated from the rows it is about', () => {
   // the states current callers cannot supply, or the guard is decoration. The
   // battery proved it — both terms SURVIVED mutation until these landed.
   describe('the unheld term (WP-54) and the deferral filter (WP-56), in one sum', () => {
+    // WP-55 · `deferred` IS REQUIRED NOW, so the helper's default is EXPLICIT.
+    // It was optional and `listVerdict` reads `!row.deferred`, which meant an
+    // omitted field silently meant "escalating" — safe, and still the wrong
+    // mechanism. The compiler is what says so now, and this line is what it
+    // said it about.
     const unheld = (over: Partial<UnheldRow> = {}): UnheldRow =>
-      ({ written: { done: 0, failed: 0 }, ...over });
+      ({ written: { done: 0, failed: 0 }, deferred: false, ...over });
     const deferred = (): Situation =>
       ({
         written: { done: 0, failed: 0, total: 3 },
@@ -521,6 +566,19 @@ describe('the copy discipline, asserted over the ratified set', () => {
       expect({ id: t.id, opens: t.rule.startsWith('Tier {tier} · ') })
         .toEqual({ id: t.id, opens: true });
       // Put the number back; the designer's line must reappear exactly.
+      //
+      // WP-55 · A CLASS WHOSE TIER THE FIXTURE STATES IN PROSE declares no
+      // number to restore (`incident.coalesced`: "the highest tier among the
+      // members" → `tier: null`), and `String(null)` would look for the line
+      // "Tier null · …", which is in no file. Its rule line still carries a
+      // literal tier in the fixture, so the check restores ANY digit for it —
+      // weaker by exactly the amount the fixture is weaker, and stated rather
+      // than skipped.
+      if (t.tier === null) {
+        const anyTier = [1, 2, 3, 4].some((n) => normalised.includes(t.rule.replace('{tier}', String(n))));
+        expect({ id: t.id, verbatim: anyTier }).toEqual({ id: t.id, verbatim: true });
+        continue;
+      }
       const restored = t.rule.replace('{tier}', String(t.tier));
       expect({ id: t.id, verbatim: normalised.includes(restored) })
         .toEqual({ id: t.id, verbatim: true });
@@ -605,7 +663,16 @@ describe('the copy discipline, asserted over the ratified set', () => {
     expect(typed).toEqual([]);
     // The strip must not have eaten the file: an over-greedy regex would empty
     // `source` and make the assertion above vacuous — shape #7's own trap.
-    expect(source.length).toBeGreaterThan(raw.length / 3);
+    //
+    // **THE THRESHOLD WAS A FRACTION OF `raw` AND THAT WAS THE WRONG
+    // INSTRUMENT** (WP-55). `raw.length / 3` does not measure regex greediness;
+    // it measures COMMENT DENSITY, and it fails as a file gets better
+    // documented rather than as the strip gets worse. Measured on this file
+    // 2026-08-21: 181,966 raw characters, 60,355 of executable text — **66.8%
+    // comment**, which is what this subsystem's doc discipline produces and is
+    // the reason it tripped. An absolute floor measures the thing the check is
+    // actually about: a strip that ate the file leaves nothing, not 60kB.
+    expect(source.length).toBeGreaterThan(20_000);
     expect(source).toContain('function guardHolds');
     expect(source).toContain("from './situationCopy.generated'");
   });
@@ -645,7 +712,11 @@ describe('the generator — the tracked module is what the designer\'s file prod
     // per-template `door`, removed every `chip`, and declares one class's tier
     // in prose — three shape changes in one artifact, and the version is what
     // lets a consumer tell that from a content change.
-    expect(SITUATION_COPY_SHAPE_VERSION).toBe(3);
+    // WP-55 bumped it again: templates gained `headlineFallback`, `disclosure`
+    // and `disclosureOpen`, and the set gained a sixth class. Three shape
+    // changes, and the version is what lets a consumer tell that from a content
+    // change.
+    expect(SITUATION_COPY_SHAPE_VERSION).toBe(4);
   });
 
   /** Run the generator against a broken copy of the fixture; expect a loud death. */
@@ -745,6 +816,76 @@ describe('the generator — the tracked module is what the designer\'s file prod
     const r = refuses(() => '(function () { /* assigns no NEXUS_HEADLINES */ })();');
     expect(r.threw).toBe(true);
     expect(r.message).toContain('did not assign window.NEXUS_HEADLINES');
+  });
+
+  /**
+   * WP-55 · VACUOUS SHAPE #17, DRIVEN IN BOTH DIRECTIONS.
+   *
+   * *"A guard that subtracts its own exception before reading."* `RATIFIED_IDS`
+   * is compared against `ids.filter(id => !(id in DEFERRED_IDS))`, so the guard
+   * cannot see the class it defers. The exit condition — *"host fields nothing
+   * derives yet — WP-55 adds them"* — lived in a string, was announced by one
+   * `process.stdout.write`, and was tested by nothing: the day the fields
+   * arrived, forgetting to delete the entry would have left the build green with
+   * the class missing from the screen it was drawn for.
+   *
+   * **A deferral states a condition under which it ends; the check that reads it
+   * probes that condition, or the deferral is permanent by construction.**
+   * Skipping loudly is not failing closed.
+   *
+   * DRIVEN AS THE FUNCTION rather than through a broken fixture, because
+   * `DEFERRED_IDS` lives in the GENERATOR and `--fixture` can only replace the
+   * INPUT. Both directions are here and neither is hypothetical: direction 2 is
+   * the tracked fixture and the tracked slot list, with the entry this packet
+   * deleted put back — which is exactly the mistake the guard exists to catch.
+   */
+  describe('shape #17 — the deferral is probed, not merely announced', () => {
+    const templatesOf = () => {
+      const sandbox: Record<string, unknown> = { window: {} };
+      vm.createContext(sandbox);
+      vm.runInContext(fs.readFileSync(FIXTURE_JS, 'utf-8'), sandbox, { filename: FIXTURE_JS });
+      return ((sandbox.window as Record<string, unknown>).NEXUS_HEADLINES as { templates: Array<Record<string, unknown>> }).templates;
+    };
+
+    test('DIRECTION 1 · a deferral whose condition STILL HOLDS is allowed to stand', () => {
+      // A class carrying a slot the product cannot fill. This is what a
+      // legitimate deferral looks like, and the guard must not fire on it — a
+      // guard that refused every deferral would stop a designer drawing ahead
+      // of the build, which is what a design sheet is FOR.
+      expect(() => assertDeferralsStillHold(
+        { 'incident.coalesced': 'its slots do not exist yet' },
+        templatesOf(),
+        ['target', 'restCount', 'memberCount', 'linkKind', 'tier', 'producer'], // no `leadFinding`
+      )).not.toThrow();
+    });
+
+    test('DIRECTION 2 · a deferral whose condition HAS ENDED fails the build, by name', () => {
+      // The tracked fixture and the tracked slot list, with this packet's own
+      // deleted entry put back. Every slot `incident.coalesced` carries is now a
+      // host field, so the deferral has expired and the build must refuse.
+      expect(() => assertDeferralsStillHold(
+        { 'incident.coalesced': 'its headline slots are host fields nothing derives yet' },
+        templatesOf(),
+        KNOWN_SLOTS,
+      )).toThrow(/THE DEFERRAL OF "incident.coalesced" HAS EXPIRED/);
+    });
+
+    test('the LIVE generator carries no deferral at all, and the class is emitted', () => {
+      // The two directions above pin the instrument. This pins the outcome: the
+      // entry is gone from the tracked generator, and the class it deferred is
+      // in the tracked module.
+      expect(fs.readFileSync(GENERATOR, 'utf-8')).not.toContain("'incident.coalesced':\n");
+      expect(SITUATION_TEMPLATES.map((t) => t.id)).toContain('incident.coalesced');
+    });
+
+    test('a deferral naming a class the fixture no longer carries is not probed', () => {
+      // Declared and absent: the skip announcement covers it, and there is
+      // nothing to check the condition against. Refusing here would fail the
+      // build on a stale comment.
+      expect(() => assertDeferralsStillHold(
+        { 'a.class.that.never.existed': 'gone' }, templatesOf(), KNOWN_SLOTS,
+      )).not.toThrow();
+    });
   });
 });
 
