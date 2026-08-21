@@ -23950,3 +23950,218 @@ correctly sequenced behind WP-54/56 rather than racing them.
 land it as designed and generalize afterwards. And §9.1's honesty
 stands — the topic request dissolves, the `ConsequenceTier` vs Tier-3
 contradiction does not, and it is independent of this design.
+
+---
+
+## WP-54 · TWO RULINGS FROM THE BUILD (2026-08-21, architect)
+
+**RULING 1 · `ConsequenceTier` widens to `1 | 2 | 3 | 4`. GRANTED —
+and the reasoning corrects a mistake of mine, not the designer's.**
+Excluding `3` from the type was **a proxy standing in for a
+property**: it enforced "the reserved row is not a Situation and
+cannot enter the comparator" by making the number unrepresentable.
+That is the same shape as every defect this month — a fact enforced
+somewhere other than where it is stated — and it broke the moment
+ratified copy needed a rank at 3. **Asserting the property directly
+and widening the type is strictly better than the encoding accident
+it replaces.** Tear 3 is untouched: the reserved row remains
+STRUCTURE with a guaranteed seat, and its seat never came from a sort
+key.
+
+**And tier 3 gains a coherent meaning rather than being a hole with
+one resident:** T1 and T2 are the WORLD's state (mid-change; awaiting
+consent), T4 is what changed — **T3 is the PLATFORM'S OWN BUSINESS.**
+The record going blind and the agent that could not finish are the
+same species: *the platform is asking, not the fleet.* The designer's
+own `agent.stuck` rule line says exactly that. Relay to the designer
+for `moments-model` §4a's amendment — their document, this ruling.
+
+**RULING 2 · The seven authored strings: RATIFIED AS INTERIM**, on the
+handling as much as the words — placed in the ratified fixture and
+extracted through the generator is the correct disposition, and it
+means the designer replaces strings rather than code. They ride to
+the designer with three questions (below).
+
+**The reshaping is RATIFIED with emphasis, and it is the better
+answer.** The review asked for "in 9 hours"; the packet measured that
+**a DARK producer has never reported, so there is no last-seen moment
+to subtract from** — the duration is not derivable and stating it
+would be a fabricated value on a line whose entire job is admitting
+what the platform cannot see. Stating the count and stopping is the
+withhold-don't-guess doctrine applied to a request from the designer,
+which is the harder direction to apply it.
+
+**Three questions ride back with the strings:**
+1. **Dark and late are two states** — the shipped reserved copy said
+   "nothing dark, nothing late". If LATE means a producer with a
+   last-seen that is overdue, its duration IS derivable and the
+   reshaping may be over-broad. Does the late clause carry a
+   duration while the dark clause does not?
+2. **Does the reserved heading change with state?** "Watching your
+   sites" reads well over "Everything is reporting", but over a dark
+   producer it claims watching while the body admits it cannot see.
+   The designer proposed "What Nexus can't see right now", which only
+   works when something is missing. One heading or two?
+3. **The four door forms** want the designer's eyes as a set, since
+   `DOOR_RULE` now ships as an enforceable rule and these are its
+   first instances.
+
+**CREDITED — and it earns a protocol rule: an agreement pin cannot
+see an error that moves BOTH derivations.** The mutation that made the
+ranker ignore the ratified class left display and rank agreeing on the
+same wrong number, and **it survived**. That is the instrument's
+limit, found by driving it rather than by reasoning about it. The fix
+is the right one: **an agreement pin needs an ANCHOR outside both
+derivations** — here, the fixture's declared tier. Appended to the
+protocol.
+
+**Also credited:** the packet did not ship the disappearance.
+auth-probe survives as row 8, unranked, at the end of the list,
+because the fold does not hold it — honest, and exactly the
+instruction. When WP-54a lands it becomes a situation, the inbox card
+dedups onto it, and it takes its ratified place with no change here
+and no change to the count.
+
+---
+
+## WP-57 · LOCK ANNOUNCE (2026-08-21) — the agent task spine
+
+**Branch `wp-57`, worktree `.worktrees/wp-57`, to be cut from
+`poc/nexintelligence-ux` AFTER WP-51 merges** (see ruling request 1 — the
+sequencing is not a preference, it is a correctness condition).
+
+**Governing document:
+[`agent-actor-design-note.md`](agent-actor-design-note.md)**, committed
+`190a1025`, six architect findings applied `b3219aac`. This packet is **phase 1
+of its §12**, and phase 1 only. Implementation plan, task by task with test
+code: [`plans/2026-08-21-wp-57-agent-task-spine.md`](plans/2026-08-21-wp-57-agent-task-spine.md).
+
+**Scope, four deliverables, all additive.** Each is a fact the runtime ALREADY
+KNOWS and does not write down — the same shape as WP-51's scope line, one layer
+out.
+
+1. **ONE ACTOR PER AGENT.** `act_agent_<name>`, minted at the run frame.
+2. **A RUN IS A TASK MOMENT.** One TaskId per run; `task.run.assigned` and
+   `task.run.completed` bracket it.
+3. **THE TASK REACHES BOTH CHOKEPOINTS.** `ToolRegistry.call` and
+   `AgentDispatcher.dispatch` already accept `task`; the agent path passes
+   `undefined` today.
+4. **THE JOIN IS STORED.** `agent_runs.task_id`, and `run_id` finally read back.
+
+**Nothing gains a gate. Nothing is refused that is not refused now.** This
+packet is a record change; the authority half is phase 3 and is three rulings
+away.
+
+**LOCKED:**
+
+| surface | why this packet holds it |
+|---|---|
+| `src/main/intelligence-host/agentTaskFrame.ts` — **NEW** | the frame itself |
+| `src/main/agent-runtime/AgentRunner.ts` — `run()`'s open and close | item 2; **crossed with WP-54a, declared below** |
+| `src/main/agent-runtime/NexusToolProvider.ts` | item 3, chokepoint one's caller |
+| `src/main/agent-runtime/AgentDispatcher.ts` — the `recordGatedAction` call only | item 3, chokepoint two |
+| `src/main/agent-runtime/buildAgentContext.ts` | `ctx.task`, and the provider's new argument |
+| `src/main/agent-runtime/AgentStateStore.ts` | item 4, additive column |
+| `src/main/agent-sdk/types.ts` — `AgentContext.task`, `AgentResult.taskId` | the SDK surface |
+| `src/main/intelligence-host/actionProducer.ts` — `actorFor` and `GatedActionRecord` | item 1 |
+| `docs/intelligence/` | this record and the plan |
+
+**NOT LOCKED, and named so a sibling can take them:** **`sessionRegistry.ts` —
+this packet does not read or write it at all.** `src/intelligence/` (the core
+— untouched; no envelope field, no new topic, no new prefix). `src/renderer/`
+(WP-54 holds it; nothing here renders). `src/main/index.ts` and
+`src/main/ipc-handlers.ts` (no wiring change expected; if one proves necessary
+the announce is AMENDED on the base at that moment, per WP-52's rule, not
+claimed at merge). `incidentProducer.ts` — WP-51 holds it, and ruling request 1
+is about exactly that.
+
+**THE CROSSED CLAIM, DECLARED RATHER THAN DISCOVERED** (WP-20f/WP-37's rule).
+Two files, two siblings, and **neither is `sessionRegistry.ts`** — worth saying
+plainly, because the four-way claim on that file is the branch's loudest
+contention right now and this packet is not part of it.
+
+- **`AgentRunner.ts` — with WP-54a.** WP-54a locks "the run-completion
+  chokepoint only, beside the existing `recordSentinelIncidents` call". This
+  packet opens the frame at the top of `run()` and closes it beside the
+  `run.end` event-log write. Adjacent regions of one function, additive on both
+  sides; if WP-54a lands first this resolves by taking both, never by choosing.
+  **WP-51 explicitly names this file NOT locked by it** ("the call site is
+  untouched"), so the claim is two-way, not three.
+- **`incidentProducer.ts` — with WP-51, and it is not merely a file claim.**
+  See ruling request 1.
+
+**MEASURED AT ANNOUNCE, on the owner's real ledger (9.9 MB, 2026-08-21), so
+nothing surprises the gate:**
+
+- **`act_agent_runtime`: 58 events, and 58 of 58 carry NO correlation.** 29
+  `task.action.executed` + 29 `task.outcome.recorded`. Every act every agent
+  has ever performed on this machine is uncorrelated and attributed to one id.
+- **`act_chat_agent`: 20 events, 16 of them correlated.** The asymmetry in one
+  line: the chat path threads its task, the agent path has none to thread.
+- **`act_security_sentinel`: 4 `episodic.incident.recorded`** — the second,
+  disagreeing attribution scheme, from `incidentProducer.ts:90`'s constant.
+- **0 `task.run.*` events**, confirming WP-51's own measurement independently.
+  Both topics have been in the ratified §4.2 taxonomy since the layer was
+  designed and have never had a producer.
+- **13 distinct topics live**; the two this packet produces are not among them.
+
+**TWO RULING REQUESTS, RAISED AT ANNOUNCE RATHER THAN AT THE GATE**, both
+escalation triggers under PARALLEL_PROTOCOL.
+
+1. **`task.run.completed` HAS TWO CLAIMANTS, AND THIS IS THE COLLISION FAMILY'S
+   SIXTH INSTANCE.** WP-51 (at gate report) emits `task.run.completed` for the
+   sentinel **scan** — minted lazily inside `incidentProducer`, only when the
+   scan has findings, with no `assigned` counterpart. This packet emits it for
+   **every agent run**, at the run chokepoint, unconditionally. Shipped
+   together, a sentinel run with findings emits the topic TWICE and the topic
+   means two things — the `total`-shaped defect ruled at WP-48/50/52 and named
+   again at the design note's §A.2.
+
+   **These are not actually rivals: a sentinel scan IS a sentinel run**, so the
+   honest resolution is subsumption, not coexistence — the frame becomes the
+   sole producer and `incidentProducer` READS the run's task instead of minting
+   its own. That is strictly better for WP-51's own item 1, because a scan that
+   finds nothing would then still carry a correlation, where today it gets
+   none. But it edits a file WP-51 locks, and WP-51 is at its gate.
+
+   **Requested:** WP-51 merges unchanged (a packet at its gate is not
+   destabilized for a sibling's convenience), and WP-57 cuts after it and
+   performs the subsumption — deleting `emitScanAct`, keeping its semantics,
+   rewiring the correlation. The alternative — both producers, distinguished by
+   schema — is not recommended and is named only so the ruling is a choice.
+
+2. **IS A CONTRIBUTED-TOOL DISPATCH ITS OWN RUN?** `AgentDispatcher.dispatch()`
+   builds a full agent context and mints a `runId` today, but its `task` comes
+   from the caller: ChatService supplies one, an MCP client supplies none, and
+   the cross-agent fall-through in `NexusToolProvider` would supply the calling
+   agent's. So the same act can be one thread or two depending on who invoked
+   it. **The plan implements the conservative half only** — pass the caller's
+   task through, never mint — and the actor unconditionally. Ruling needed on
+   whether an uncalled-from-anywhere dispatch mints its own frame. Note this is
+   the *correlation* form of the design note's §D.7, which is the *authority*
+   form and a phase-3 precondition; ruling them together may be cheaper than
+   ruling them apart.
+
+**ONE STATED INTERPRETATION, at announce rather than discovered at the gate.**
+The design note's R2 amendment says `task.run.*` "carries **arm-to-first-write**".
+`ctx.arm()` does not exist until phase 3, so a literal reading ships a
+permanently-null field — the vacuous addition this branch refuses elsewhere.
+The plan ships **`first_gated_act_at`**, the end that IS observable now, from
+which the interval derives the day the arm stamps the other end, with no schema
+change. If the architect reads R2 as requiring the null field, say so and it
+changes.
+
+**CONTRACT ADDITIONS ARE GATE-HELD — the shapes are presented verbatim before
+merge.** Four are expected: `run.assigned/1` and `run.completed/1` payload
+schemas (both on already-ratified topics — no new topic, no new prefix),
+`GatedActionRecord.actor`, and `agent_runs.task_id`.
+
+**Baseline is taken at cut, not quoted from here.** WP-51's announce records an
+inherited red base (1 suite, 6 tests, `situationHeadlines.test.ts`, owned by
+WP-54/WP-55). Measure at the worktree cut and record the delta against what is
+actually there, not through it.
+
+Standard discipline, all of it, plus the live exhibit the DoD requires: one
+agent run from the UI producing `task.run.assigned` → N × `task.action.executed`
+→ `task.run.completed` under one correlation, with the actor naming the agent,
+and the before/after count of uncorrelated acts.
