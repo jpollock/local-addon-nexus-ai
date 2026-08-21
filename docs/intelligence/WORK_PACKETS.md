@@ -22394,3 +22394,55 @@ exactly as ruled.
 (renderer + composer), with item 2 riding on the designer's sentence
 set when it arrives. Cuts from `poc/nexintelligence-ux`; disjoint
 locks from WP-51 (producer + coalescer), so the two run in parallel.
+
+---
+
+## WP-52 · LOCK ANNOUNCE (2026-08-21) — the card is the template
+
+Announced ON THE BASE (`poc/nexintelligence-ux`) before the worktree is cut, per
+the WP-20f/WP-37 rule. The architect's uncommitted primary-checkout work (WP-50's
+acceptance, the designer's field findings, the WP-52 registration and the new
+receipts-unit protocol rule) was committed VERBATIM first in `f464de4c`, with
+md5, byte counts and a PREFIX check pasted from the print — sixth exercise of
+the precedent.
+
+**Verified free at the tail rather than assumed.** The last LOCK line in this
+file before this announce is WP-50's release: "**THE `src/main/intelligence-host/`,
+THE TWO ARMING CALLERS, `src/renderer/` AND `docs/intelligence/` LOCKS ARE
+RELEASED.**" — and nothing between it and here claims a surface. **WP-51 is
+RULED BUT NOT CUT**: it has no lock announce, and when it comes it holds the
+PRODUCER and the COALESCER (`incidentProducer.ts`, the orphan-grouping rule in
+the fold), which are disjoint from this packet's surfaces. The architect's
+registration says so explicitly ("disjoint locks from WP-51, so the two run in
+parallel"), and this announce is what makes that visible to WP-51's agent on the
+base rather than only on a branch.
+
+**LOCKED SURFACES — three:**
+
+1. `src/renderer/` — the card's render. Files expected: `return/Arrival.tsx`
+   (the row), and `return/arrivalModel.ts` only if a line moves between them.
+2. **THE COMPOSER in `src/main/intelligence-host/sessionRegistry.ts`** —
+   `composeSessionCopy` / `composeIncidentCopy` / `SituationCopy`, and the
+   `Situation` fields they fill. This is a NARROWER claim than the
+   intelligence-host lock WP-50 held: the fold, the producers and the query
+   contract's other surfaces are not this packet's. Named as one file because
+   the composer lives in it, not because the file is claimed wholesale.
+3. `docs/intelligence/` — this record.
+
+**NOT LOCKED and not touched:** `src/intelligence/` (the extraction seam),
+`src/main/index.ts`, `src/main/ipc-handlers.ts`, `incidentProducer.ts`, and the
+fold's incident-coalescing pass — all four are WP-51's or nobody's.
+
+**Scope:** finding 1 (the template owns the card — headline, ask and meta
+REPLACING the pre-template render, pinned as a COUNT), finding 3 (the rule line
+renders the template's own `rule` field, upright), and finding 4 (**measure card
+1's contradiction before fixing anything**, and fix only what the measurement
+names). Finding 2 rides on the designer's sentence set and is NOT built here; if
+the fixture lands mid-packet it folds in and the report says so.
+
+**Explicitly not a defect and not touched:** the older gateless run reading the
+derived sentence. WP-48b records scope going forward, an 80-hour-old manifest
+carries none, and the record is append-only — that target set is honestly
+unknown forever.
+
+Worktree `.worktrees/wp-52`, branch `wp-52`, cut from `poc/nexintelligence-ux`.
