@@ -936,3 +936,49 @@ The tell for the resolver: **a signature that differs between the two
 branches is a contract change, and a contract change never resolves by
 choosing the better-commented body.** Write the merged expression out as
 a sentence first, then make both bodies satisfy it.
+
+## Vacuous-guard shape #16 — indexing into a heterogeneous list (WP-56)
+
+A pin that reaches for `list[0]` when the list's members differ IN KIND
+selects whichever kind happens to be first, not the kind the assertion
+is about. WP-56's XD-28 pin read `situation.parts[0]` to get "a part
+with an id a deferral could name" — but `parts[0]` is always the
+synthetic `kind: 'run'` part, which carries NO `eventId`. The pin fell
+back to a fabricated string belonging to nothing, and the mutation that
+widened the deferral lookup to part ids SURVIVED: the assertion was
+true against the bug and against the fix, because its subject was
+absent from both.
+
+**Where members differ in kind, a pin selects BY KIND, never by index** —
+`parts.find(p => p.kind === 'outcome' && p.eventId)` — and then asserts
+the subject exists before asserting anything about it. Same family as
+shape #15 (a green assertion over an absent subject), reached from the
+other direction: #15's subject was never emitted, #16's was never
+selected.
+
+The tell at battery time is identical in both: a survivor whose
+mutation sits inside a function the tests visibly "cover".
+
+## A ruling states what must be true; only an exhibit shows whether the caller can say it (WP-56)
+
+Cycle two ruled that a deferral is "recorded on the run". The producer
+took a `taskId`, the fold read `correlation`, every test passed, and
+review found nothing — because every test supplied the taskId it was
+testing with. **The first run of the acceptance exhibit printed a
+deferral with no correlation**, and the cause was a shape nobody had
+looked at from the caller's side: a surface holding a `Situation` has a
+situation id and no turn id, because `taskIds` lives on `SessionRow`,
+which the triage view does not hand over. The rule was unsatisfiable
+from the only shape the caller has.
+
+A ruling is a claim about the world; a test is a claim about a function;
+**an exhibit is the only one of the three that has to find the caller.**
+Where a rule says a record must carry a fact, the exhibit that drives it
+end to end is not decoration on the gate report — it is the only
+instrument that asks whether the fact was reachable from where the call
+is actually made.
+
+Corollary, and it is why this earns a rule rather than a note: the
+defect was invisible to review, to types, and to a full mutation
+battery. Nothing that reads the code can see a field the caller never
+had.
