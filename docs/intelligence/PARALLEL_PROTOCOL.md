@@ -1016,3 +1016,38 @@ total: they are tied by a PINNED IDENTITY stating the difference
 exactly — here `arrivalCounts().needsYou === triage.counts.needsYou +
 <escalating unheld>`. The identity is the artifact that fails when one
 side drifts; a shared number is the artifact that quietly agrees.
+
+## An empty slot is the substitution defect wearing silence (WP-55)
+
+The generator refuses a template carrying a slot outside `KNOWN_SLOTS`,
+and its header describes the failure it prevents as *a row that renders
+the six literal characters `{newField}` to a customer*. The composer
+cannot produce that. `fillSituationSentence` returns `''` for a slot the
+bag does not hold and then collapses the whitespace, so an underived
+slot renders as a gap in a sentence: *"theawfulpm-test has , and 3 more
+findings"*.
+
+**A guard aimed at a failure mode the system cannot produce is not a
+guard.** Name the failure by rendering it once, then write the check
+against what actually happens.
+
+And the level below it: `KNOWN_SLOTS` is a hand-written array, `SlotBag`
+is an open record that cannot contradict it, and no test ties either to
+the fold that fills them. **A list asserting what the host can supply is
+a claim about the host, and a claim is checked or it is decoration.**
+Derive the list from the composer, or prove it against the composer with
+a test that fails when a slot is named and never derived — one that
+cannot be satisfied by editing the constant.
+
+## Shared node_modules is a shared mutable resource (WP-55)
+
+One `node_modules`, dozens of worktrees. A packet that rebuilds a native
+module changes the runtime under every other packet in flight, and the
+tell is a suite that was green an hour ago failing to LOAD rather than
+failing to pass — an ABI error, not an assertion.
+
+**A packet that rebuilds a native module declares it**, the way a lock
+announce declares a file. A packet that meets a load failure checks the
+ABI before it debugs its own code, and records the version it measured
+at, because a receipt taken under one ABI is not a receipt under
+another.

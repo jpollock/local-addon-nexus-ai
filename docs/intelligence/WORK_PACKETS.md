@@ -27657,3 +27657,143 @@ error about a symbol you can see with your own eyes.
 Clearing a stale zero-byte `index.lock` and verifying the earlier base
 commits were still ancestors before writing is the venue rule maturing
 into a pre-flight. Correct.
+
+---
+
+## WP-55 · GATE RULING — the class ships, and the guard that forced it needs one more level (2026-08-21, architect adjudication)
+
+**The gate is passed and the packet is cleared to merge**, after the two
+items below. Read on the branch rather than on the report: the four host
+fields are genuinely derived — `leadFindingOf(members)`, `total - 1`,
+`total`, `linkLabelFor(origin)` — `DEFERRED_IDS` is empty, and
+`assertDeferralsStillHold` is the mechanism that made the emptiness
+compulsory rather than remembered. Vacuous shape #17 is closed as ruled.
+
+### FIRST, AND URGENT: 632 suites of verified work exists only in an index
+
+The report says *built, green and staged*. `wp-55`'s branch tip is
+`655f6058` — the WP-56 docs commit — so nothing of this packet is on the
+branch. **A gate hold is a merge hold, not a commit hold.** Commit to
+`wp-55` now, before the ruling is read.
+
+This is the exposure that already cost this project two adjudications
+today, in its other form: an append into a conflicted file, correctly
+resolved away. Uncommitted work is not held, it is merely still there.
+
+### The guard is right, and its exit condition is a hand-written array
+
+`assertDeferralsStillHold` probes the condition each deferral states —
+*a class deferred for an unfillable slot must be emitted once every slot
+it carries is in `KNOWN_SLOTS`* — and throws when it stops holding.
+Driven both directions, with the production line mutated. That is the
+shape I asked for.
+
+**`KNOWN_SLOTS` is a hand-maintained list, and nothing checks it.**
+It appears in the generator and the generator's tests, nowhere else.
+`SlotBag` is `Record<string, string | number | undefined>` — an open
+record that cannot contradict it — and `fillSituationSentence` returns
+`''` for a slot the bag does not hold, then collapses the whitespace.
+
+So the failure the generator's header describes — *"a row that renders
+the six literal characters `{newField}` to a customer"* — **is not the
+failure the composer can produce.** It produces silence. Add a slot name
+to `KNOWN_SLOTS` without deriving it and the sequence is worse than
+inert: `assertDeferralsStillHold` **throws demanding the class be
+emitted**, the class ships, and the headline reads *"theawfulpm-test
+has , and 3 more findings"*. The guard drives toward that state.
+
+Nothing is wrong today — all four are derived, verified at
+`sessionRegistry.ts:3506-3510`. **Shape #17 is closed one level up and
+open one level down**: the deferral's exit condition is tested against a
+list, and the list is tested against nothing.
+
+**Ruled, and it is WP-55's to land before merge:** `KNOWN_SLOTS` is
+derived from the composer or proven against it. The cheapest honest form
+is a test that composes every ratified template with bags built by the
+real fold over fixture rows and asserts **every slot position resolved
+to a non-empty value for at least one real row** — which fails when a
+slot is named and never derived, and cannot be satisfied by editing a
+constant. *An empty slot is the substitution defect wearing silence.*
+
+### WP-56a's correction — accepted, and the error was mine
+
+`incidentKey(component, fact)` names a key inside a per-entity map, and
+every site can carry `FS-01`. **`(entity, component, fact)` is correct
+and the ruling is amended to it.** I named the producer's dedup key
+without checking its scope, which is the identical mistake I have ruled
+against twice this week: a fact read from the shape it sits in rather
+than from the shape that must supply it. Raising it instead of
+smoothing it is what the packet is for.
+
+The supersession rule not being separable from the key is right — an
+opened-then-closed finding under one id is two rows or it is none — and
+closing WP-51's F3 as a consequence rather than a side quest is the
+correct order.
+
+### `Situation.signature` → `signatures` — accepted, and it arrived the wrong way
+
+The change is right and the drawing forced it: four duplicate Inbox rows
+beside the card that had just folded them is a defect you cannot see
+until the card exists. Taking it under WP-54's routed residue is a
+defensible reading of scope.
+
+**It is still a contract change that reached me at the gate rather than
+at the announce**, and this week's own rule exists for it: *a packet that
+changes the meaning of a shared quantity announces the QUANTITY, not
+only the file*, together with the older one — *an announce is amended
+when the need is measured.* Both were available; neither fired. The cost
+here is zero because nothing else is live against `Situation`. The cost
+is not zero the next time, and the next time is the one the rule is for.
+
+**Accepted. The rule is restated, not tightened.**
+
+### The rest
+
+`DOOR_RULE` mechanised as assertions rather than emitted as strings
+nothing renders is correct — **law is asserted, copy is emitted**, and
+emitting a rule as a string is how a rule becomes decoration.
+
+`{oldestAge}` refused with its measurement — four DARK writes in
+`health.ts`, not one carrying a timestamp, producer lines unable to
+reach the reserved row at all — is the right answer and a better one
+than the question deserved. *A DARK line means never reported, so there
+is no duration to put after it.* The designer's late-versus-dark
+question is now settled by the record instead of by preference. The
+generator failing the build if the slot ever becomes fillable while the
+sentence is withheld is shape #17's lesson applied without being asked.
+
+`{checkCount}` derived over the same set as dark and staleCount, rather
+than counted separately, is one fact with one source.
+
+The exhibit's honest limit is disclosed and correctly labelled: the
+coalesced arm has **no live instance** — the owner's four findings are
+the un-coalesced case — so the class ships having rendered live only
+through its group and fallback arms, with the coalesced arm driven
+directly. Same treatment as WP-56's both-terms case, and the live
+receipts carry their units on the line: `LIKE 'agent%'` → 0, so T3:0
+live; 11,181 events; four distinct facts.
+
+`metaLine` stating the count a third time, suppressed for a class that
+discloses and kept for one that does not — accepted, with a question for
+the merge report rather than a hold: **is the rule "the count is stated
+once per row", or "these two classes differ"?** If the first, the
+suppression derives from whether any other element on the row states it,
+and the class id does not appear in the condition.
+
+New residue registered: **a coalesced row surfaces one member's evidence
+and `SituationPart` carries no fact code to join on.** Named at the code,
+which is where the next packet meets it.
+
+### The ABI moved under a running packet, and that is a shared resource
+
+The `node_modules` flipped to Electron 146 mid-packet; jest was green at
+141 an hour earlier and then could not load the binary. `npm rebuild
+better-sqlite3` restored it and everything reported was measured there.
+
+**This is the shared-dependency shape at the process level.** One
+`node_modules`, dozens of worktrees: any packet that rebuilds changes
+the runtime under every other packet in flight, and the tell is a suite
+that was green an hour ago failing to load rather than failing to pass.
+Registered. And the same rebuild is the fix for the core that has been
+failing to start for days, which is why the ledger holds no `agent%`
+events — worth doing before the next owner sitting rather than at it.
