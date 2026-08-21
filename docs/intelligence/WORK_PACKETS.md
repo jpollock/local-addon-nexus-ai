@@ -27657,3 +27657,58 @@ error about a symbol you can see with your own eyes.
 Clearing a stale zero-byte `index.lock` and verifying the earlier base
 commits were still ancestors before writing is the venue rule maturing
 into a pre-flight. Correct.
+
+---
+
+## WP-57 · CUT AND BASELINE (2026-08-21)
+
+**Branch `wp-57`, worktree `.worktrees/wp-57`, cut from
+`poc/nexintelligence-ux` at `655f6058`** — which is WP-56's merge acceptance,
+and therefore includes **all four** siblings the announce named: WP-51
+(`c51e713a`), WP-54 (`6dbac948`), WP-54a, and WP-56 (`239e4e32`).
+
+**One correction to the amendment:** it recorded WP-56 as "still in flight."
+It merged at `239e4e32` before this cut. It touches nothing this packet holds
+— the assessment is unchanged, only the fact was stale.
+
+**BASELINE, measured in the worktree after `npm run compile`, exit code
+captured before any pipe (protocol's `npm test | tail` warning):**
+
+```
+Test Suites: 629 passed, 629 total
+Tests:       12 skipped, 8710 passed, 8722 total
+Snapshots:   8 passed, 8 total
+Time:        176.911 s
+EXIT=0
+```
+
+**The skipped column is recorded because the protocol requires it both ways**
+(WP-04 and the WP-20c merge finding): 12 skipped here, and a delta in that
+column across the worktree/primary boundary explains a test-count change that
+would otherwise read as a regression or a phantom gain.
+
+**THE INHERITED RED IS GONE.** WP-51's announce recorded a red base — 1 suite,
+6 tests, `situationHeadlines.test.ts`, fail-closed on `RATIFIED_IDS` — and
+named WP-54/WP-55 as its owners. WP-54 has merged and the base is fully green.
+This packet's delta is therefore measured against green, with nothing to
+measure *through*.
+
+**RULING REQUEST 1 — RULED (owner, 2026-08-21): SUBSUME.** The frame is the
+sole producer of `task.run.completed`. `emitScanAct` and `SCAN_TOPIC` are
+deleted from `incidentProducer.ts`; the sentinel scan reads the run frame's
+TaskId instead of minting its own. Task 1 grows accordingly, and the merge
+report owes WP-51's semantics preserved test-for-test — including the
+improvement the subsumption buys: a scan that finds nothing gets a correlation,
+where under WP-51 alone it got none.
+
+**Ruling request 2 is NOT ruled** and the plan implements only its conservative
+half (pass the caller's task through; never mint at dispatch).
+
+**THE pwd HAZARD FIRED AGAIN, HERE, AND IS DISCLOSED RATHER THAN QUIETLY
+FIXED.** Writing this very section, the command was prefixed `cd
+.worktrees/wp-57 &&` from a shell already inside the worktree; the `cd` failed
+and the append never ran. No damage — both trees were verified clean and
+nothing reached the primary checkout — but it is another occurrence of the
+family WP-52 ruled on and WP-54 wrote the "a mechanism its author carries is
+still memory" rule about. Recorded because the rule's own evidence is a count
+of occurrences, and an undisclosed one makes that count wrong.
