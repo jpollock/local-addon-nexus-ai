@@ -22265,3 +22265,132 @@ on the real fleet reads a ratified sentence.
 
 **THE `src/main/intelligence-host/`, THE TWO ARMING CALLERS, `src/renderer/` AND
 `docs/intelligence/` LOCKS ARE RELEASED.**
+
+---
+
+## WP-50 · MERGE ACCEPTED — the producers pay (2026-08-21, architect adjudication)
+
+**Independent verification:** `git diff --stat 07969cb8^1 07969cb8` =
+**26 files, +2,905/−120** exact; the strip fix is on the branch
+(`{ key: 'now', label: 'Now', divider: true }` at
+`NexusOverview.tsx:135`); guard 2's amendment is in the RATIFIED
+FIXTURE with its own comment naming the ruling and why the amendment
+lives there rather than in the composer; content loss-proof passes —
+74 / 75 / 76 headers, none missing from either parent, zero
+line-anchored markers; chronology holds, report < ruling < landed.
+
+**An instrument error of my own, recorded:** my first chronology check
+reported FALSE because `find` matched WP-48's `RULING LANDED` header,
+not WP-50's. The check was wrong, not the merge. Same family as the
+unanchored-marker false alarm: a substring search over a record that
+documents its own headers will match the documentation. Re-run
+against occurrences after the ruling's offset: holds.
+
+**The three-section record merge: RATIFIED as the standard's
+generalization.** The branch carried two sections and the ruling
+belongs BETWEEN them, so the branch append was split at its own
+header. Four-way verification generalized without weakening —
+ancestor an exact prefix, all three sections exact substrings exactly
+once, chronology asserted by offset, residual 0. **The standard's
+third check was always chronology of content; the number of sections
+is whatever chronology requires.** This is the second time the
+ordering rule has been read correctly against its own precedent
+(WP-46 was the first).
+
+**§8 landed on the row it was drawn for**, verbatim from the real
+ledger: "A cp.backup step is waiting on your evidence / Waiting at
+cp.backup, 4 of 8. Nothing has been written yet, so stopping here
+costs nothing." All three run rows now read ratified sentences —
+class 1 on the two gateless runs, class 2 on the gated one. **The
+agreement pin earned its keep on the first amendment that tested it**
+(two copies of one rule in bundles that cannot import each other,
+caught the moment they diverged), and the withdrawn-rule pins were
+REPLACED rather than deleted, each saying what changed — "a withdrawn
+rule with its guard left standing is a test asserting the opposite of
+the law" enters the record as its own sentence.
+
+**THE RECEIPT DEFECT — found while taking a receipt, and corrected at
+source.** All three copy generators printed `${next.length}`: UTF-16
+code units, not bytes. The copy modules carry em dashes and §, so the
+figures drifted — and a wrong receipt HAD ALREADY REACHED THE RECORD:
+**WP-48's gate report's "6,168 bytes" for `situationCopy.generated.ts`
+was a character count; the file measures 6,155 bytes** (`wc -c`,
+merged tree — the correcting receipt, pasted from its own print).
+Corrected here rather than left standing. The generators now use
+`Buffer.byteLength` and agree with `wc -c`. **"Arithmetic in one named
+unit" binds the TOOL, not only the report** — appended to the
+protocol as the third member of the receipts family
+(pre-written · stale · wrong-unit).
+
+**The ABI rule paid for itself two days after it was written**: the
+tree had flipped to Electron 146 between sessions (the owner's
+`npm run rebuild`, taken on this packet's own advice), surfacing as
+WP-20e's mask — 40+ registry reds reading "Cannot read properties of
+undefined (reading 'emitter')" on a change that touched one guard
+string. The construct-a-Database probe named
+`NODE_MODULE_VERSION 146 … requires 141` first try. Nothing filed, no
+code touched. Battery 21/0/1-equivalent/0-anchor-miss with the ABI
+pinned both ends; skipped 12 → 2 in the documented direction, third
+recorded crossing.
+
+**WP-50 IS CLOSED. The debt is paid where it can be seen.** Standing:
+**WP-51** (the scan's TaskId + the orphan-grouping rule — ruled, not
+yet cut), item 6 on the owner's word, cycle seven's ask with the
+designer, WP-20c, and the owner's look at the front door.
+
+---
+
+## DESIGNER FIELD FINDINGS ON THE LIVE BUILD — FOUR RULED, ONE ADDED; WP-52 REGISTERED (2026-08-21)
+
+The designer read the owner's post-WP-50 screenshots. The strip is
+confirmed correct ("Now first, underlined, hairline after it,
+destinations following — the ruling made visible"). Four findings,
+all ratified, plus one the architect adds from the same image:
+
+1. **THE TEMPLATE OWNS THE CARD — the packet's real defect.** The
+   composer PREPENDS the ratified sentence and leaves the previous
+   render standing beneath it: card 2 carries the template headline
+   AND the old `0 done and standing, 0 failed` line AND the mono gate
+   line AND "Needs your evidence" — the gate stated three times. Same
+   on both incident cards ("and nothing is fixing it" above "incident
+   open: …" saying it again). **A template is the card's headline,
+   ask and meta — three lines, REPLACING what the row rendered
+   before.** Ratified as the designer states it; this is the defect,
+   not a polish item.
+2. **"You were away 0 hours" — an absence of zero is not an
+   absence.** Under an hour, the line has nothing to report and the
+   plain header stands instead. **And the accounting line states what
+   is TRUE, never enumerates what isn't**: "0 changed overnight · 0
+   checks dark" is both empty and self-contradicting — the reserved
+   row two lines down says nothing is dark. Ratified as a rule; the
+   sentence set is the designer's to supply in the fixture.
+3. **The rule lines are rendering as lowercase italic prose**
+   ("waiting, and nothing has been written in scope"). The ratified
+   form is the template's own `rule` field — `Tier 2 · the world is
+   untouched`, upright, tier named. "Italics is a treatment nothing
+   ratified, and a lowercase fragment reads like an apology for the
+   row." Ratified.
+4. **Card 1 has no template** — and the architect's addition:
+   **CARD 1'S FALLBACK META CONTRADICTS THE GUARD THAT PRODUCED IT.**
+   The card reads the derived sentence (guard 1 declined), yet its
+   own meta line asserts "no targets on record" — a KNOWN-EMPTY claim
+   from a row the guard treated as UNKNOWN. Exactly one of two things
+   is true and **WP-52 measures which before fixing**: either
+   `total` is `null` and the fallback meta is asserting knowledge the
+   platform does not have (the false-sentence class, in the
+   fallback's own words), or `total` is `0` and guard 1 should have
+   fired and did not (a composer defect). No design work proceeds on
+   this row until the measurement says which.
+
+**Expected and NOT a defect:** the older gateless run reading the
+derived sentence at all. WP-48b records scope on armings GOING
+FORWARD; manifests written 80 hours ago carry no scope key and the
+record is append-only, so that run's target set is honestly unknown
+forever. Card 2 lights up regardless because §8's amendment freed
+guard 2 from `total`. That asymmetry is the two rulings working
+exactly as ruled.
+
+**WP-52 · the card is the template is REGISTERED** — items 1, 3 and 4
+(renderer + composer), with item 2 riding on the designer's sentence
+set when it arrives. Cuts from `poc/nexintelligence-ux`; disjoint
+locks from WP-51 (producer + coalescer), so the two run in parallel.

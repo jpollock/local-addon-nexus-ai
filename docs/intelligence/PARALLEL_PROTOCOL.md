@@ -463,3 +463,15 @@ neither class-2 sentence reads `{total}`, so a true sentence was
 withheld from a real row on a fact it never states — and a withheld
 sentence is invisible, which makes it worse than a false one, which
 at least argues with the reader.
+
+## Receipts are measured in the unit they name (WP-50)
+
+`String.length` is UTF-16 code units; a "bytes" receipt taken that way
+is wrong wherever the text carries em dashes, §, or any non-ASCII —
+and the copy modules are full of them. Measure with `Buffer.byteLength`
+or `wc -c`, and make the GENERATOR do it: WP-50 found three generators
+printing character counts as bytes, and one of those figures had
+already reached the record (WP-48's 6,168 for a 6,155-byte file).
+Third member of the receipts family — pre-written, stale, wrong-unit —
+and the only one that survives a re-paste, because re-pasting a wrong
+unit reproduces it exactly.
