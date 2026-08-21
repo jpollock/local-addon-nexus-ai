@@ -223,11 +223,16 @@ produced these; nothing enters by drift. XD = experience decision.)*
   line with its door, and PROMOTES ITSELF into the list when it stalls
   or reaches a gate — the consequence order doing its job, not a new
   mechanism; a finished run belongs to Record, which already exists;
-  and NOW IS NOT A TAB — the addon opens on Now, always; the strip
-  becomes Sites / Record / Settings; the title bar returns to Now the
-  way a logo does. A tab is a peer, and a front door that is tab one
-  of four becomes a choice among five the day the next feature claims
-  a tab — a future destination must argue for being a destination.
+  and — AMENDED 2026-08-20, the not-a-tab clause WITHDRAWN BY ITS
+  AUTHOR on the owner's live evidence (field finding 5) — **Now is
+  the FIRST TAB, selected on arrival, with a hairline divider after
+  it**, so the strip reads home-then-destinations rather than
+  one-of-N peers. The withdrawal's reasoning is recorded: the guard
+  against a future feature claiming a peer slot is a GOVERNANCE
+  rule, not a geometry one, and hiding the destination people need
+  most cost the user their orientation. The governance half
+  SURVIVES AS LAW: a future feature must argue for being a
+  destination through this loop before it enters the strip.
   Row grammar per the Now screen: verdict headline derived from the
   rows it heads; world state first, then the ask; rows answerable in
   place get buttons (Approve / Not now), rows needing the session get

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/palette.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/semantic.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/typography.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/layout.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/base.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/components/local/fig-assets.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/styles.css">
+<script src="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/_ds_bundle.js"></script>
+<style>
+body { margin: 0; background: rgb(238,240,241); font-family: Inter, system-ui, sans-serif; }
+a { color: rgb(0,107,214); text-decoration: none; }
+a:hover { color: rgb(0,86,171); text-decoration: underline; }
+* { box-sizing: border-box; }
+</style>
+</helmet>
+
+<section style="width: 1500px; padding: 30px 30px 80px; display: flex; flex-direction: column; gap: 22px;">
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+      <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">2a</span>
+      <span style="font-size: 13px; font-weight: 600; color: rgb(32,32,32);">Now — the front door, built</span>
+      <span style="font-size: 12px; font-weight: 500; color: rgb(60,42,120); background: rgb(245,242,255); border-radius: 9999px; padding: 3px 10px;">1440 × 900 · the six situations from the shipped screens</span>
+    </div>
+    <div style="font-size: 13.5px; line-height: 1.55; color: rgb(115,133,140); text-wrap: pretty;">Every row is the same record the current Home reads, said as a verdict: what is true, what is being asked of you, and where. Nothing is invented — where a fact is missing the row says so in one clause and moves on. The four security findings stay four rows, because nothing in the record links them yet; what they share is stated instead.</div>
+  </div>
+
+  <div style="width: 1440px; height: 900px; border-radius: 16px; background: rgb(248,249,250); box-shadow: 0 0 0 1px rgb(226,230,232), 0 8px 24px rgba(0,0,0,0.08); overflow: hidden; display: flex;">
+
+    <nav style="width: 68px; flex-shrink: 0; align-self: stretch; background: var(--local-green); display: flex; flex-direction: column; align-items: center; padding: 14px 0 14px; gap: 12px;">
+      <span style="flex-shrink: 0;">
+        <x-import component-from-global-scope="LocalNextDesignSystem_d48872.Avatar" size="md" hint-size="40px,40px"></x-import>
+      </span>
+      <sc-for list="{{ localRail }}" as="l" hint-placeholder-count="6">
+        <span style="width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; background: {{ l.bg }}; display: flex; align-items: center; justify-content: center; color: {{ l.fg }};">
+          <sc-if value="{{ l.isNexus }}" hint-placeholder-val="{{ false }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" style="display: block;"><ellipse cx="12" cy="12" rx="10.4" ry="4.7" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.9"></ellipse><circle cx="12" cy="12" r="2.9" fill="currentColor"></circle></svg>
+          </sc-if>
+          <sc-if value="{{ l.isGlyph }}" hint-placeholder-val="{{ true }}">
+            <x-import component-from-global-scope="{{ l.comp }}" dc-props="{{ l.props }}" hint-size="18px,18px"></x-import>
+          </sc-if>
+        </span>
+      </sc-for>
+    </nav>
+
+    <div style="flex: 1; min-width: 0; align-self: stretch; background: rgb(255,255,255); display: flex; flex-direction: column; overflow: hidden;">
+
+      <div style="flex-shrink: 0; padding: 22px 28px 0;">
+        <h1 style="font-family: Geist, Inter, sans-serif; font-size: 25px; line-height: 31px; font-weight: 600; letter-spacing: -0.4px; color: rgb(32,32,32); margin: 0;">Nexus AI</h1>
+      </div>
+
+      <div style="flex-shrink: 0; padding: 14px 28px 0; display: flex; gap: 2px; border-bottom: 1px solid rgb(226,230,232);">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+          <span style="display: flex; align-items: stretch; gap: 2px;">
+            <span style="font-size: 13.5px; font-weight: {{ t.weight }}; color: {{ t.fg }}; padding: 8px 13px 11px; box-shadow: {{ t.underline }}; cursor: pointer;">{{ t.label }}</span>
+            <sc-if value="{{ t.divider }}" hint-placeholder-val="{{ false }}">
+              <span style="width: 1px; margin: 8px 9px 12px; background: rgb(226,230,232);"></span>
+            </sc-if>
+          </span>
+        </sc-for>
+      </div>
+
+      <div style="flex: 1; min-width: 0; overflow-y: auto; padding: 20px 28px 24px;">
+
+        <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+          <span style="font-family: Geist, Inter, sans-serif; font-size: 19px; line-height: 25px; font-weight: 600; color: rgb(32,32,32);">{{ verdict }}</span>
+          <span style="font-size: 13px; color: rgb(115,133,140);">{{ accounting }}</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 9px;">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+            <div style="border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); border-left: 3px solid {{ r.edge }}; padding: 14px 16px; display: flex; align-items: flex-start; gap: 16px; cursor: pointer;" style-hover="box-shadow: inset 0 0 0 1px rgb(198,214,229);">
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+                  <span style="font-family: Geist, Inter, sans-serif; font-size: 16px; line-height: 1.3; font-weight: 600; color: rgb(31,36,38); text-wrap: pretty;">{{ r.head }}</span>
+                  <sc-if value="{{ r.chip }}" hint-placeholder-val="{{ false }}">
+                    <x-import component-from-global-scope="LocalNextDesignSystem_d48872.Chip" variant="solid" size="xs" style2="subtle" color="{{ r.tone }}" label="{{ r.chip }}" hint-size="auto,20px"></x-import>
+                  </sc-if>
+                  <sc-if value="{{ r.state }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size: 12.5px; color: {{ r.stateFg }};">{{ r.state }}</span>
+                  </sc-if>
+                </div>
+                <span style="font-size: 13px; font-weight: 500; line-height: 1.45; color: rgb(31,36,38); background: rgb(248,249,250); border-radius: 7px; padding: 8px 11px; text-wrap: pretty;">{{ r.ask }}</span>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                  <span style="font-size: 12px; color: rgb(115,133,140);">{{ r.where }}</span>
+                  <span style="width: 3px; height: 3px; border-radius: 50%; background: rgb(198,205,208); flex-shrink: 0;"></span>
+                  <span style="font-size: 12px; color: rgb(115,133,140);">{{ r.age }}</span>
+                  <sc-if value="{{ r.rule }}" hint-placeholder-val="{{ false }}">
+                    <span style="width: 3px; height: 3px; border-radius: 50%; background: rgb(198,205,208); flex-shrink: 0;"></span>
+                    <span style="font-size: 12px; color: rgb(115,133,140);">{{ r.rule }}</span>
+                  </sc-if>
+                </div>
+              </div>
+              <div style="flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding-top: 2px;">
+                <sc-if value="{{ r.decide }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size: 12.5px; font-weight: 500; color: rgb(255,255,255); background: rgb(0,107,214); border-radius: 6px; padding: 8px 13px;">{{ r.primary }}</span>
+                  <span style="font-size: 12.5px; font-weight: 500; color: rgb(31,36,38); border: 1px solid rgb(226,230,232); border-radius: 6px; padding: 8px 13px;">Not now</span>
+                </sc-if>
+                <sc-if value="{{ r.open }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size: 12.5px; font-weight: 500; color: rgb(0,107,214);">Open where you are needed</span>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 9px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: rgb(115,133,140);">Nothing needed of you</span>
+          <div style="border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); padding: 13px 16px; display: flex; flex-direction: column; gap: 7px;">
+            <sc-for list="{{ quiet }}" as="q" hint-placeholder-count="3">
+              <div style="display: flex; align-items: baseline; gap: 10px;">
+                <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.5; color: rgb(46,53,56); text-wrap: pretty;">{{ q.text }}</span>
+                <sc-if value="{{ q.door }}" hint-placeholder-val="{{ false }}">
+                  <span style="flex-shrink: 0; font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ q.door }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <aside style="width: 380px; flex-shrink: 0; align-self: stretch; background: rgb(255,255,255); border-left: 1px solid rgb(226,230,232); display: flex; flex-direction: column; overflow: hidden;">
+      <div style="flex-shrink: 0; padding: 12px 14px; border-bottom: 1px solid rgb(226,230,232); display: flex; align-items: center; gap: 10px;">
+        <span style="width: 26px; height: 26px; border-radius: 9999px; flex-shrink: 0; background: rgb(14,202,212); color: rgb(255,255,255); display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" style="display: block;"><ellipse cx="12" cy="12" rx="10.4" ry="4.7" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.9"></ellipse><circle cx="12" cy="12" r="2.9" fill="currentColor"></circle></svg>
+        </span>
+        <span style="flex: 1; font-family: Geist, Inter, sans-serif; font-size: 15px; font-weight: 600; color: rgb(31,36,38);">Nexus</span>
+        <span style="font-size: 12px; color: rgb(0,107,214); cursor: pointer;">Open in full</span>
+      </div>
+
+      <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+        <span style="font-size: 12.5px; line-height: 1.55; color: rgb(115,133,140); text-wrap: pretty;">{{ panelLead }}</span>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <sc-for list="{{ panelAsks }}" as="a" hint-placeholder-count="3">
+            <span style="align-self: flex-start; font-size: 12.5px; line-height: 1.4; color: rgb(0,107,214); border: 1px solid rgb(198,214,229); border-radius: 9999px; padding: 6px 12px; cursor: pointer; text-wrap: pretty;">{{ a }}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex-shrink: 0; padding: 10px 14px 12px; border-top: 1px solid rgb(226,230,232); display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11.5px; color: rgb(115,133,140);">Asking about</span>
+          <span style="font-size: 12px; font-weight: 500; color: rgb(31,36,38); background: rgb(248,249,250); border-radius: 6px; padding: 4px 9px; cursor: pointer;">the whole fleet</span>
+          <span style="flex: 1;"></span>
+          <span style="font-size: 11.5px; color: rgb(0,107,214); cursor: pointer;">Choose a site</span>
+        </div>
+        <div style="border-radius: 10px; background: rgb(255,255,255); box-shadow: 0 2px 2px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.08); padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+          <span style="flex: 1; font-family: Geist, Inter, sans-serif; font-size: 14.5px; color: rgb(115,133,140);">What do you need?</span>
+          <span style="width: 28px; height: 28px; border-radius: 9999px; background: rgb(0,107,214); color: rgb(255,255,255); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <x-import component-from-global-scope="LocalNextDesignSystem_d48872.ArrowsArrowUp24" hint-size="13px,15px"></x-import>
+          </span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; align-items: start;">
+    <div style="padding: 15px 17px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 11px;">
+      <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">Every row, and the record it came from</span>
+      <sc-for list="{{ trace }}" as="t" hint-placeholder-count="6">
+        <div style="display: flex; flex-direction: column; gap: 3px; padding-bottom: 9px; border-bottom: 1px solid rgb(240,242,243);">
+          <span style="font-size: 12.5px; font-weight: 500; color: rgb(31,36,38); text-wrap: pretty;">{{ t.head }}</span>
+          <span style="font-family: 'Roboto Mono', monospace; font-size: 11px; line-height: 16px; color: rgb(115,133,140); text-wrap: pretty;">{{ t.from }}</span>
+        </div>
+      </sc-for>
+      <span style="font-size: 12px; line-height: 1.55; color: rgb(115,133,140); text-wrap: pretty;">Not one noun above is authored. What changed is the grammar: each row leads with the state of the world, then what is being asked, then where and how long. The runbook id moves to the meta line, because it identifies the procedure and never told anyone what happened.</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="padding: 15px 17px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 10px;">
+        <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">The decisions this screen makes</span>
+        <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="6">
+          <div style="display: flex; gap: 10px; align-items: flex-start;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 7px; background: {{ d.dot }};"></span>
+            <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ d.text }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="padding: 15px 17px; border-radius: 12px; background: rgb(255,251,247); box-shadow: inset 0 0 0 1px rgb(255,97,25); display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">One open question, and one that answered itself</span>
+        <sc-for list="{{ asks }}" as="a" hint-placeholder-count="2">
+          <span style="font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ a }}</span>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:1000}}">
+const GREY = 'rgb(115,133,140)';
+const RED = 'rgb(221,18,67)';
+const ORANGE = 'rgb(255,97,25)';
+
+class Component extends DCLogic {
+  renderVals() {
+    const rows = [
+      {
+        head: 'A backdoor plugin is active on theawfulpm-test and nothing is fixing it',
+        ask: 'Contain it now, or say why not. Nothing has been written under a procedure.',
+        chip: '',
+        state: 'No run attached',
+        stateFg: 'rgb(221,18,67)',
+        tone: 'error',
+        where: 'theawfulpm-test · security-sentinel',
+        age: 'open 43h',
+        rule: 'Tier 1 · nothing is holding it back but you',
+        edge: RED,
+        decide: true,
+        primary: 'Contain it',
+        open: false,
+      },
+      {
+        head: 'Three more findings on the same site have no run either',
+        ask: 'File manager plugins active, low-entropy plugin names, PHP in mu-plugins. Each needs the same decision.',
+        chip: '',
+        state: '3 findings, one site',
+        stateFg: 'rgb(221,18,67)',
+        tone: 'error',
+        where: 'theawfulpm-test · security-sentinel',
+        age: 'opened within a minute, 43h ago',
+        rule: 'Not coalesced — the record does not link them',
+        edge: RED,
+        decide: false,
+        open: true,
+      },
+      {
+        head: 'A backup step is waiting on evidence from you',
+        ask: 'Waiting at cp.backup, 4 of 8. Nothing has been written yet, so stopping here costs nothing.',
+        chip: 'Waiting',
+        tone: 'warning',
+        state: 'nothing written yet',
+        stateFg: 'rgb(180,72,20)',
+        where: 'rb.bulk-plugin-update',
+        age: 'waiting 44h',
+        rule: 'Tier 2 · the world is untouched',
+        edge: ORANGE,
+        decide: false,
+        open: true,
+      },
+      {
+        head: 'An update run has waited 60 hours and changed nothing',
+        ask: 'It never received a target list, so it cannot start. Give it one, or close it.',
+        chip: 'Waiting',
+        tone: 'warning',
+        state: 'nothing written yet',
+        stateFg: 'rgb(180,72,20)',
+        where: 'rb.bulk-plugin-update',
+        age: 'waiting 60h',
+        rule: 'Tier 2 · oldest of the untouched',
+        edge: ORANGE,
+        decide: false,
+        open: true,
+      },
+      {
+        head: 'A containment run is waiting and has changed nothing',
+        ask: 'No targets on record. The same fix as the update run above, on a different procedure.',
+        chip: 'Waiting',
+        tone: 'warning',
+        state: 'nothing written yet',
+        stateFg: 'rgb(180,72,20)',
+        where: 'rb.incident-containment',
+        age: 'waiting 42h',
+        rule: 'Tier 2 · the world is untouched',
+        edge: ORANGE,
+        decide: false,
+        open: true,
+      },
+      {
+        head: 'auth-probe could not finish a run',
+        ask: 'It timed out after five minutes. Retry it, or leave it stopped.',
+        chip: 'Stuck',
+        tone: 'neutral',
+        state: '',
+        stateFg: '',
+        where: 'auth-probe',
+        age: 'last run just now',
+        rule: 'Tier 3 · the agent is asking, not the fleet',
+        edge: 'rgb(198,205,208)',
+        decide: true,
+        primary: 'Retry',
+        open: false,
+      },
+    ];
+
+    return {
+      // Local's rail, as its own components. Names probed: some bundle exports render
+      // The Nexus mark is the addon's own asset (assets/nexus-mark.svg, copied verbatim
+      // from the repo's nexus-mark-current.svg). Its markup is inlined rather than masked
+      // so currentColor resolves at each mount; the file is the source of record and the
+      // two inlined copies must stay byte-identical to it.
+      // literal text rather than a glyph, so each of these was checked before use.
+      // Each glyph re-declares its own colour on its wrapper and spreads props.style last,
+      // so the rail's colour is inert and white has to be passed in. NavigationSites24 is
+      // avoided on purpose: its outer frame is unclosed subpaths, so filling drops it.
+      localRail: [
+        { comp: 'IconDashboard3Line' },
+        { comp: 'Connect' },
+        { comp: 'LocalBlueprints' },
+        { comp: 'NavigationHeadless24' },
+        { comp: 'Support' },
+        { nexus: true, on: true },
+      ].map((r) => ({
+        isNexus: !!r.nexus,
+        isGlyph: !r.nexus,
+        comp: r.comp ? 'LocalNextDesignSystem_d48872.' + r.comp : '',
+        props: { style: { color: 'rgb(255,255,255)', opacity: 0.88 } },
+        bg: r.on ? 'rgba(255,255,255,0.92)' : 'transparent',
+        fg: r.on ? 'var(--local-green)' : 'rgba(255,255,255,0.85)',
+      })),
+
+      // Now is IN the strip, first, and selected on arrival. Keeping it out of the
+      // strip left the front door unlabelled and the way back unmarked — the guard
+      // against a future feature claiming a peer slot is a rule about what earns a
+      // destination, not a hole in the navigation.
+      tabs: [
+        { label: 'Now', on: true, divider: true },
+        { label: 'Sites' },
+        { label: 'Record' },
+        { label: 'Settings' },
+      ].map((t) => ({
+        label: t.label,
+        divider: !!t.divider,
+        weight: t.on ? '600' : '500',
+        fg: t.on ? 'rgb(31,36,38)' : GREY,
+        underline: t.on ? 'inset 0 -2px 0 var(--local-teal)' : 'none',
+      })),
+
+      verdict: '6 things need you, and none of them has changed anything yet',
+      accounting: 'Two runs are waiting on targets · four security findings are open on one site · one agent is stuck',
+
+      rows: rows.map((r) => Object.assign({ state: '', stateFg: GREY }, r)),
+
+      // The panel is the chat. Its opening asks come from what is on the list beside it.
+      panelLead: 'Six things need you and none of them has written anything yet. Ask about any of them, or about the fleet.',
+      panelAsks: [
+        'Why has the update run changed nothing?',
+        'Are the four findings on theawfulpm-test related?',
+        'What does cp.backup need from me?',
+      ],
+
+      quiet: [
+        { text: 'Nothing finished while you were away.', door: '' },
+        { text: 'Freshness is not being reported yet, so no facts are listed as stale — each fact carries its own date where it lives.', door: 'See what is checked' },
+        { text: '31 WordPress events are recorded across your fleet. None of them needs a decision.', door: 'Open the record' },
+      ],
+
+      trace: [
+        { head: 'A backdoor plugin is active …', from: 'incident.opened · security-sentinel · theawfulpm-test · 43h · no run id on the incident' },
+        { head: 'Three more findings on the same site …', from: '3 × incident.opened · same producer, same target, within 60s · no causal link recorded' },
+        { head: 'A backup step is waiting …', from: 'run cursor = cp.backup · 4 of 8 · rb.bulk-plugin-update · writes in scope = 0' },
+        { head: 'An update run has waited 60 hours …', from: 'run armed 60h · targets = [] · writes in scope = 0 · rb.bulk-plugin-update' },
+        { head: 'A containment run is waiting …', from: 'run armed 42h · targets = [] · writes in scope = 0 · rb.incident-containment' },
+        { head: 'auth-probe could not finish a run', from: 'agent.run.failed · timeout 300000ms · auth-probe' },
+      ],
+
+      decisions: [
+        { dot: 'rgb(4,186,110)', text: 'The headline is a verdict about the whole list, not a count. Six rows that have all changed nothing is the single most useful sentence available from this data, and no row could say it alone.' },
+        { dot: 'rgb(4,186,110)', text: 'Every row leads with world state and follows with the ask. "Nothing has been written yet" appears where it is true, because it is the fact that decides how urgent the row is.' },
+        { dot: 'rgb(4,186,110)', text: 'The runbook id moves to the meta line. It identifies a procedure; it never told anyone what happened, and it was carrying the headline on all three run rows.' },
+        { dot: 'rgb(4,186,110)', text: 'Rows that can be answered here get buttons — the Inbox\u2019s Approve and Not now, in place. Rows that need the session get one door and no buttons, so the difference between deciding and going somewhere is visible before you click.' },
+        { dot: 'rgb(255,97,25)', text: 'The three sibling findings are one row that states its own limit: three findings, one site, not coalesced, and it says why. That is honest without being four identical rows, and it becomes a real coalesced situation the day the record links them.' },
+        { dot: 'rgb(221,18,67)', text: 'Now is the first tab and it is selected when you are on it, with a divider after it. Keeping it out of the strip was my ruling and it was wrong: the front door ended up unlabelled, the way back unmarked, and a strip with nothing underlined reads as nothing-selected rather than as you-are-home. The worry it was protecting against — a fifth feature claiming a peer slot — is a rule about what earns a destination, and it cannot be enforced by hiding the destination people need most.' },
+        { dot: 'rgb(0,107,214)', text: 'Nothing-needed-of-you is a section, not a footnote. Freshness gets one clause instead of a paragraph about producers, and the events count is stated with the fact that it needs nothing.' },
+      ],
+
+      asks: [
+        'Do the four security findings share a causal link in the record? If they do, they become one coalesced situation with its parts — the row above is drawn for the honest case where they do not.',
+        'Answered by reading the host: writes-in-scope already exists. sessionRegistry composes the current headline from done and failed, so "has changed nothing" is derivable today — done === 0 and failed === 0 is exactly that fact, and it is already on screen as two zeros.',
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

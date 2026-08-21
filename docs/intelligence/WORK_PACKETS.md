@@ -21244,3 +21244,115 @@ touched; version still `0.5.2`.
 
 **THE `src/renderer/`, `tests/intelligence-evals/` AND `docs/intelligence/`
 LOCKS ARE RELEASED.**
+
+---
+
+## WP-49 · MERGE ACCEPTED — the front door (2026-08-20, architect adjudication) — with one receipts correction
+
+**The merge is CORRECT and the report's arithmetic was STALE.** The
+loss-proof content check passes completely: 67 headers each side, 68
+merged, none missing, no merge-created duplicates, chronology right
+(report before ruling), zero line-anchored markers, `git diff --stat`
+= 28 files +2,821/−552. But the report's printed decomposition
+(1,231,065 + 17,256 + 2,993 = 1,251,314) does NOT reproduce against
+the blobs: the merge blob measures **1,260,723**, and the TRUE
+decomposition, re-derived by the architect, closes at residual zero
+as **1,240,310 (the actual shared base) + 17,401 (the branch's unique
+append) + 3,012 (the architect's unique append) = 1,260,723** —
+verified: branch blob = 1,240,310 + 17,401 exactly; primary parent =
+1,240,310 + 3,012 exactly. The reported figures were measured at an
+earlier state and not re-pasted after the final write — the STALE
+RECEIPT family (not fabricated: honestly measured, then outgrown).
+The receipts-are-pasted rule gains its corollary: **pasted from the
+FINAL print, after the last write — a receipt that was true when
+measured and stale when committed fails the same rule.** Accepted on
+the content proof; the correction is this entry.
+
+**Adjudications from the report:** the second mid-verification ABI
+flip caught by loading the addon rather than trusting
+process.versions — WP-33b's mask recognized, nothing false filed, the
+new protocol rule applied to suite runs unprompted: credited. The
+skipped column moved 12→2 in the documented direction, named. ABI
+declared. Unpushed verified properly.
+
+**THE OWNER'S FIRST LOOK — recorded as surface impressions, not the
+sitting.** Two screenshots of the live Now screen: the collapse is
+REAL — one list, the verdict line derived and true ("7 things need
+you, and none of them has changed anything yet"), the reserved row
+honest ("the record is reporting — nothing dark, nothing late"), the
+rail badge at 7, Now absent from the strip (five entries pending item
+6), incident rows carrying real findings with the ratified ask and
+the honest no-run/no-target-name limits. **Field findings, none
+regressions:**
+1. **Run rows show the derived FALLBACK sentences** ("running under
+   rb.bulk-plugin-update — 0 done…") — expected until WP-48b: no
+   manifest carries a scope, so the guards decline and the platform
+   withholds. The screenshots are the before-picture of the
+   producers' debt.
+2. **The headline repeats as the first meta line on every row** —
+   parts[0].summary equals the composed headline, so each card says
+   its sentence twice. A dedup (suppress a part summary identical to
+   the headline) — folds into WP-49a's packet as a one-line renderer
+   companion.
+3. **"You were away 0 hours"** on a fresh reopen — technically
+   derived, reads wrong. The away line below some threshold should
+   not claim an absence. Designer's wording to request (field note).
+4. **Targets render as entity ids** (`ent_env_2TH5EJB62X…`) — the
+   record's own content, honestly rendered with "nothing on record
+   names where the target is"; a name-resolution join where the
+   record knows the site is designer+producer territory, noted.
+
+**WP-49 is CLOSED. The addon opens on Now.** The remaining gap
+between the screenshots and the sheets is exactly the registered
+producers' debt (48a coalescence · 48b scopes · 49a working+capability)
+plus three small field notes — nothing undesigned, nothing unowned.
+
+---
+
+## FIELD FINDING 5 — THE FRONT DOOR IS UNLABELED (2026-08-20, owner's live look)
+
+The owner, on the live Now screen: "There's no Now tab though. Or
+nothing that says that." XD-27 is working as ruled — Now is not a tab,
+the title returns home — and the finding is that the RULING'S
+MECHANICS ARE INVISIBLE: nothing names the screen, nothing marks the
+title as the way back, and a strip with no active underline reads as
+"nothing selected" rather than "you are home." The person who made
+the not-a-tab ruling could not tell he was standing on its result.
+Scopes the designer's owed strip redraw: the screen needs an identity
+a person can see, and the back-to-Now affordance needs to look like
+one — without becoming a tab, which remains the law. Rides to the
+designer with field notes 3 (away-0-hours) and 4 (entity-id targets).
+
+---
+
+## XD-27 AMENDED — THE NOT-A-TAB CLAUSE WITHDRAWN BY ITS AUTHOR; THE STRIP RULED (2026-08-20)
+
+The designer, on the owner's live evidence (field finding 5): "I'd
+withdraw the ruling rather than defend it." **Now is the first tab,
+selected on arrival, hairline divider after it** — home-then-
+destinations, never one-of-N peers. The reasoning is recorded with
+the amendment: the collapse argument stood on its own and never
+required hiding its result; the peer-slot worry is a GOVERNANCE rule
+(what earns a destination — surviving as law in XD-27) and cannot be
+enforced by geometry; trying cost the user their orientation, "a much
+worse trade than the thing I was avoiding." The revised sheet is
+committed verbatim as `from-designer-13-now-screen-revised.dc.html`
+(26,384 bytes, md5 `5a385f3cf53e2be1f3633e9b7da2bfd4`), carrying the
+reversal in its own decisions list — a design artifact that records
+its author's error is the record's standard arriving in the sheets.
+Also noted from the sheet's own revision history: the brand-mark
+lesson ("a shape I typed can't track its source" — the designer
+reconstructed the mark byte-identically and treated the ACCURATE copy
+as the defect), which is the verbatim-extraction doctrine discovered
+independently on the design side.
+
+**The strip fix folds into WP-50** (renderer half, beside the dedup):
+interim strip **Now(selected) · | · Sites · Fleet · Record · Agents ·
+Settings** until item 6 rules the Fleet/Agents fold; the divider and
+first-position land now. **The designer's question about the cards is
+ANSWERED**: WP-48's templates ARE in the product — the live cards
+show the derived FALLBACK because no manifest carries a scope (the
+guards decline on null and the platform withholds); that is WP-48b,
+in WP-50's scope, and the triple-render collapses to
+rule-line + designer-headline + distinct-ask when it lands, with the
+dedup suppressing any part identical to the headline.
