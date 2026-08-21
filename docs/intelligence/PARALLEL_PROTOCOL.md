@@ -867,3 +867,22 @@ Same line, same rule as the receipts: **state the measurement, then the
 protection it buys, and never the second in place of the first.** A
 histogram assembled from two fleets is labelled with both, on the line
 that carries the numbers, not in the paragraph after it.
+
+## A battery belongs in a worktree (WP-54 merge)
+
+A mutation battery polls `git status` between every mutation — that is
+how its pristine check and its ANCHOR-MISS verdict work. An architect
+writing `WORK_PACKETS.md` in the same checkout is therefore racing it.
+Measured across WP-54's merge: three stale zero-byte `.git/index.lock`
+files and two runs ending `ALARM: tree is NOT pristine after the
+battery` on runs whose mutations were all sound.
+
+Both ALARMs were arguable — the modified files were markdown no suite
+reads, provably outside the battery's own write set, which its
+`MUTATIONS` table names. Neither was argued, because the rule directly
+above this one says an instrument that cannot fail is not an
+instrument, and the first time the harmless case is exempted is the
+last time the check means anything.
+
+**Run the battery in a worktree cut at the commit under test**, where
+nothing else writes. Same isolation, and the same reason, as a packet's.

@@ -26401,3 +26401,516 @@ Also noted: the core has been failing to start for 4 days on a
 ledger says about `agent%`, a producer cannot have emitted through a
 core that has not started. **That is the fact that decides this, and it
 was on the health report the whole time.**
+
+---
+
+## WP-54 · MERGE REPORT — the Now list is one list; tier 3 gets its first resident (2026-08-21)
+
+**Merged at `6dbac948`. Three conflicts, and the one that mattered was not one
+git could see. 627 suites / 8,666 tests green on the merged tree, 29/29 on the
+battery re-driven there, and the exhibit the ruling asked for is below with
+every tier printed.**
+
+### 1 · RECEIPTS
+
+```
+git diff --stat 6dbac948^1 6dbac948
+
+ docs/intelligence/PARALLEL_PROTOCOL.md             | 187 ++++++
+ docs/intelligence/WORK_PACKETS.md                  | 444 ++++++++++++++
+ docs/intelligence/dom-reach-inventory.json         |   2 +-
+ .../from-designer/fixtures/situation-headlines.js  | 131 +++-
+ scripts/control-label.ts                           |  37 ++
+ scripts/generate-return-copy.ts                    |  14 +-
+ scripts/generate-situation-copy.ts                 | 422 ++++++++++++-
+ scripts/wp54-battery.py                            | 381 ++++++++++++
+ .../__tests__/agentStuckSituation.test.ts          |  34 +-
+ .../__tests__/incidentTarget.test.ts               | 234 ++++++++
+ .../__tests__/placeSummary.test.ts                 |  33 +-
+ .../__tests__/sessionRegistry.test.ts              |  79 ++-
+ .../__tests__/situationHeadlines.test.ts           | 223 ++++++-
+ .../__tests__/tierAgreement.test.ts                | 166 ++++++
+ src/main/intelligence-host/sessionRegistry.ts      | 660 +++++++++++++++++++--
+ .../intelligence-host/situationCopy.generated.ts   | 134 ++++-
+ .../DockedPanel/DockedPanelContainer.tsx           |  58 +-
+ .../components/DockedPanel/openingAsksModel.ts     |  21 +-
+ src/renderer/components/NexusOverview.tsx          |  28 +-
+ src/renderer/components/designSystem.ts            |  49 ++
+ src/renderer/components/return/Arrival.tsx         | 463 +++++++++------
+ src/renderer/components/return/SessionReEntry.tsx  |  28 +-
+ src/renderer/components/return/arrivalModel.ts     | 206 ++++++-
+ .../components/return/returnCopy.generated.ts      |   2 +-
+ src/renderer/store/NexusStateManager.ts            |  12 +
+ tests/intelligence-evals/checks.ts                 | 141 +++--
+ tests/unit/renderer/nowList.test.tsx               | 505 ++++++++++++++++
+ tests/unit/renderer/nowScreen.test.tsx             |  82 +--
+ tests/unit/renderer/returnArrival.test.tsx         | 233 ++++++--
+ tests/unit/renderer/returnRailBadge.test.ts        |  96 ++-
+ 30 files changed, 4635 insertions(+), 470 deletions(-)
+```
+
+### 2 · THE EXHIBIT THE RULING ASKED FOR — every row, with its tier
+
+The ruling: *"auth-probe must appear as a RANKED situation at tier 3, not as
+the unranked orphan at the end of the list… that ordering is the proof the two
+packets compose rather than merely compile."*
+
+**MEASURED, NOT ASSERTED, and on the owner's real data.** A COPY of the live
+ledger (`initIntelligenceCore` opens for write, so it is never pointed at the
+owner's file) joined to the LIVE `graph.db` inbox opened read-only, folded by
+the real registry and rowed by the real renderer model.
+
+**One honest step was required first, and it is disclosed rather than smoothed:
+the owner's ledger holds ZERO agent-failure events.** Measured:
+`SELECT COUNT(*) FROM events WHERE topic LIKE 'agent%'` → 0. WP-54a's producer
+emits on the NEXT run, so as the ledger stands today auth-probe still reaches
+the person only as an Inbox row — which the first run below shows. To exhibit
+the composed row rather than describe it, WP-54a's REAL producer was then
+driven against the copy with the outcome the Inbox already recorded, the same
+`--append-` pattern WP-51's exhibit used.
+
+**BEFORE the producer runs** — `{"T1":4,"T2":3,"T-":1}`, and the last row is
+the unranked orphan the ruling names.
+
+**AFTER** — `{"T1":4,"T2":3,"T3":1}`:
+
+```
+ROWS DRAWN: 8 | BADGE: 8 | EQUAL: true
+verdict   : "8 things need you, and none of them has changed anything yet"
+accounting: ""                          <- no clause is true, so no line renders
+reserved  : "Everything is reporting."
+
+T1 | RED    | File manager plugin(s) active: fileorganizer, filester on theawful…
+        rule  Tier 1 · nothing is holding it back but you
+        door  Open theawfulpm-test  [site → theawfulpm-test]
+        item  #2 ABS-04
+T1 | RED    | Known backdoor plugin detected: wp-compat on theawfulpm-test, and …   #3 ABS-05
+T1 | RED    | Low-entropy plugin name(s) — likely attacker-created: noted, index…   #4 ABS-07
+T1 | RED    | PHP file(s) in mu-plugins/: index.php on theawfulpm-test, and noth…   #5 FS-01
+T2 | ORANGE | running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+        door  Open the run
+T2 | ORANGE | A cp.backup step is waiting on your evidence
+        rule  Tier 2 · the world is untouched
+        door  Open the run at cp.backup
+T2 | ORANGE | running under rb.incident-containment — 0 done and standing, 0 failed
+T3 | GREY   | auth-probe could not finish a run
+        rule  Tier 3 · the agent is asking, not the fleet
+        door  Open auth-probe  [agent → auth-probe]
+        item  #1 fail:9da26a69397e            <- THE INBOX COPY, RIDING ON THE ROW
+
+tier histogram: {"T1":4,"T2":3,"T3":1}
+```
+
+**Three things in that last row, and each is a separate claim being met.**
+
+1. **It is RANKED**, at the tier its own ratified class declares, printing the
+   rule line that names it. Tier 3 has a real resident — the widening's
+   justification arriving rather than being argued.
+2. **It wears a GREY stripe.** That arm of `stripeColour` was reachable by no
+   producer when WP-54 shipped it, and was pinned by driving the function
+   directly across its whole domain (WP-46's rule). It is now reached by the
+   product.
+3. **The Inbox's copy rides ON it** rather than beside it — `item #1
+   fail:9da26a69397e`. **The row count did not move: a situation was ADDED and
+   an orphan Inbox row was ABSORBED, net zero, badge and rows still equal.**
+   That is the dedup and the count doing exactly what they claim, across a seam
+   neither packet could test alone.
+
+### 3 · THE COLLISION — resolved, and the resolution is the packet's own finding
+
+WP-54a edited **none** of WP-54's eight named functions; WP-54 edited **none**
+of WP-54a's. Both announces named paths, and the paths were disjoint. The two
+collided anyway, in `composeAgentFailureCopy`, because `SituationCopy` gained
+three required fields in one packet while a function returning it lived in the
+other. **Locks partition files; they do not partition types.**
+
+`npx tsc -p . --noEmit` on the raw merge:
+
+```
+sessionRegistry.ts(2517,25): error TS2554: Expected 6-7 arguments, but got 4.
+sessionRegistry.ts(2518,3):  error TS2739: Type '{ … }' is missing the following
+                             properties from type 'SituationCopy': tier, door, signature
+sessionRegistry.ts(2580,5):  error TS2783: 'tier' is specified more than once
+sessionRegistry.ts(2856,5):  error TS2783: 'tier' is specified more than once
+sessionRegistry.ts(2913,10): error TS2554: Expected 6-7 arguments, but got 4.
+```
+
+Five errors, in a form nothing could ship past. **The three values, and the one
+that is now proven rather than proposed:**
+
+| field | value | how it was established |
+|---|---|---|
+| `tier` | the class's own declaration | `situationOfAgentFailure` had `tier: 3` at the call site — a second source for a number the fixture declares. That line is gone; the composer returns the tier beside the sentence that prints it. |
+| `door` | the ratified `agent.stuck` door | `Open auth-probe`, kind `agent` — the agent's own page, which is where its permissions live |
+| `signature` | `{producer, failureCode(message), '*'}` | **verified against the live store**: `failureCode('Agent "auth-probe" timed out after 300000ms')` = `fail:9da26a69397e`, byte-identical to the code the Inbox holds for that run. `'*'` is the Inbox's own fleet-level scope, so `sameThing` needed no change at all. |
+
+**A THIRD COMPOSER TURNED OUT TO BE IN THE SEAM**, and it is the one WP-51 left
+a note for. `situationOfCoalescedIncidents` carried `tier: resolved ? 4 : 2`
+with the comment: *"the ratified sheet's own tier line and this fold's rank
+disagree for EVERY incident row, coalesced or not; that is a sibling packet's
+finding and its fix, and taking half of it here would leave the two halves in
+two packets."* **This merge is where the two halves met**, so it now ranks from
+the members' own class declaration — which is also exactly what the ratified
+`incident.coalesced` class states its tier to be: *"the highest tier among the
+members."*
+
+**ONE FIELD IS HONESTLY NULL, AND IT IS A REGISTERED RESIDUE.** A coalesced
+row's `signature` is null, because a signature identifies ONE thing and a
+coalesced row is several. Nothing coalesces on the owner's ledger today, so
+nothing is affected — but the next sentinel sweep mints a link, and then a
+coalesced row of four will show four Inbox rows beside it rather than carrying
+them. The badge and the verdict stay honest (both count what is DRAWN), so this
+is redundancy rather than a lie. The fix is a signature SET, and it belongs to
+the visit that reconciles `incident.coalesced` into the emitted set — **WP-55**.
+Written at the code, not only here.
+
+### 4 · WP-51's CARRIED CONDITION — discharged, and then mechanised
+
+The condition: *"the fixture is corrected to carry them, in this packet or
+WP-55's, whichever opens the file first."* WP-54 opened it first, and both
+lines are restored:
+
+```
+run.waiting.nothing-written   + && gate === null        (WP-48's ruling)
+run.waiting.mid-procedure     − && total > 0            (WP-50's ruling)
+```
+
+**AND THE HALF THAT MATTERS MORE.** Those two amendments were adjudicated at
+two separate gates and were silently REVERTED when the designer's cycle-seven
+sheet replaced the fixture wholesale. Nothing caught it: the generator checked
+ids, fields and slots, and had no opinion about a guard's CONTENT.
+
+`RULED_AMENDMENTS` in `scripts/generate-situation-copy.ts` is now the guard
+that refuses it — each entry naming the class, the substring that must be
+present or absent, the gate that ruled it, and why. Driven in BOTH directions
+by its own test, because the two amendments fail in opposite directions and a
+check that tested one would be half an instrument. Demonstrated failing before
+it was trusted:
+
+```
+Error: RULED AMENDMENT REVERTED — "run.waiting.nothing-written" guard no longer
+contains "gate === null" (ruled at WP-48 gate, 2026-08-20): a row STANDING AT A
+GATE can never be "cannot start", whatever any count says …
+```
+
+### 5 · THE DESIGNER'S CYCLE-SEVEN SHEET — reconciled, and it ratifies most of the packet
+
+The sheet landed on the base mid-packet and independently ratifies nearly
+everything WP-54 authored, in the designer's own words:
+
+- **the four door forms, VERBATIM** — `Open the run`, `Open the run at
+  {checkpoint}`, `Open {target}`, `Open {agentId}`. Five of the seven strings
+  held at the gate as authored are ratified copy as of this sheet.
+- **a numeric `tier` field per class** — the same fact WP-54 added, reached
+  independently, which is what the ruling already recorded as convergence.
+- `HEADER.awayGuard`: *"render only when the gap is an hour or more"* — item 9.
+- `HEADER.accounting`: clauses omitted when zero, *"enumerating what is not true
+  is how a line becomes noise"* — item 9.
+- `DOOR_RULE`: no terminal punctuation, names its destination, **action blue
+  `rgb(0,107,214)` — never brand green**, every row has one — items 6 and 7.
+- every `chip` removed from every class — item 12, generalised by its author.
+
+**THREE RECONCILIATIONS WERE NEEDED, and each is a rule rather than a patch.**
+
+**(a) The tier is written twice, so the generator makes it one.** The sheet
+carries the tier as prose at the head of the rule line AND as a numeric field —
+the two-sources shape this packet exists to remove, arriving as data rather
+than as code. Editing the designer's sentence would be a packet rewriting
+ratified copy, so the generator NORMALISES: it asserts the two agree and emits
+the line with the numeral replaced by the slot that fills it. The fixture keeps
+the designer's own sentence; the module carries one source; a fixture whose two
+tiers disagree now fails the build. The verbatim-substring pin is replaced by a
+stronger one — substituting the declared tier back must reproduce the
+designer's line byte for byte.
+
+**(b) A designer may draw ahead of the build.** `incident.coalesced`'s headline
+reads *"{target} has {leadFinding}, and {restCount} more findings"* — host
+fields nothing derives yet. The generator's purpose is that an unfillable slot
+is a BUILD FAILURE rather than a rendered `{leadFinding}`, and it fired on
+exactly that. Refusing the whole artifact would have been the wrong answer to
+the right refusal: it would make a design sheet unable to be a design sheet. So
+a class named in `DEFERRED_IDS` is skipped **loudly**, by name and reason, in
+the build output —
+
+```
+deferred: "incident.coalesced" is declared and NOT emitted — its headline slots
+({leadFinding}, {restCount}, {memberCount}, {linkKind}) are host fields nothing
+derives yet — WP-55 adds them, and the class is emitted on the same visit
+```
+
+— and a class appearing in the fixture WITHOUT being declared there still fails
+the build, because a new class must reach a human.
+
+**(c) The agreement pin caught the new sheet the moment it arrived**, which is
+what it is for. `incident.no-run` gained `&& memberCount === 1` and the
+TypeScript selector did not have it, so the two copies of one rule stopped
+agreeing. Both sides now read it, with an absent count reading as 1 on BOTH —
+a row that folded nothing is a situation of one.
+
+### 6 · THE RECORD, REBUILT FROM THREE BLOBS
+
+Concatenation from blobs, never hunk-edited, with the ancestor DERIVED rather
+than assumed and the four-way verification pasted from the print:
+
+```
+ancestor ref : eb3682e289e85c9e90fd6aa5e638356d4ef8c6f9   (git merge-base)
+ancestor is a prefix of BASE  : True
+ancestor is a prefix of BRANCH: True
+
+ancestor       1,386,076 bytes
+branch append     25,491 bytes
+base append      126,116 bytes
+sum            1,537,683 bytes
+merged         1,537,683 bytes
+residual               0
+
+ancestor an exact PREFIX of the merge : True
+branch append an exact SUBSTRING      : True
+base append an exact SUBSTRING        : True
+chronological (branch before base)    : True
+md5 ec5385f1ae532e48f38e5f28d925c2ef
+```
+
+The md5 is **piped from `md5 -q`**, and cross-checked against the hash the
+rebuild script computed over the bytes it wrote — two tools, one number
+(WP-51's rule, whose own violation is what put it in the protocol).
+
+**Ordering, and its disclosed cost:** the branch's append goes first, so the
+architect's WP-54 gate ruling on the base follows the report it rules on. The
+cost is that this packet's gate report now sits above WP-54a's and WP-51's
+material, which was written earlier in wall-clock. Contiguity is not negotiable
+— the rule is concatenation from blobs — so one ordering had to take the
+anachronism, and the ruling-last ordering is the one a reader is served by.
+Same choice, and the same reasoning, as WP-51's merge.
+
+**Marker sweep, line-anchored** (`^<<<<<<<`) over every file in the merge:
+clean. The unanchored form matches this file's own prose about conflict
+markers, which is a false alarm the record has now caught three times.
+
+### 7 · THE MERGED TREE, MEASURED — and six inherited reds cleared
+
+The merged tree is a tree neither branch ever tested, so both instruments were
+re-driven on it.
+
+```
+FULL SUITE  (primary, merged 6dbac948)   627 suites / 8,666 tests
+                                         8,664 passed · 2 skipped · 0 failed · EXIT=0
+TYPECHECK                                clean
+LINT                                     0 errors, 6 warnings (all pre-existing)
+GENERATED ARTIFACTS                      all four :check scripts current
+```
+
+**The six `situationHeadlines` failures WP-51 named as "WP-55's to reconcile"
+are GONE**, and not by being deleted. They were the agreement pin and the
+copy-discipline pins failing against a fixture whose ruled guards had been
+reverted and whose shape the generator could not read. Discharging the carried
+condition and reconciling the generator fixed the cause; the pins were
+restated, never relaxed, and the suite gained six more.
+
+Counting reconciles against the base measured alone:
+
+```
+base alone      a90d48dc :  624 suites / 8,621 tests   (6 failed)
+WP-54's delta            :   +3 suites /   +45 tests
+expected merged          :  627 suites / 8,666 tests   (0 failed)
+MEASURED merged 6dbac948 :  627 suites / 8,666 tests    <- exact, no residual
+```
+
+The skipped column reads 2 in the primary and 12 in a worktree, in the
+documented direction and with the measured cause (WP-52: `models/` carries only
+the tracked `bge-small-en-v1.5` in a worktree; `all-MiniLM-L6-v2-quantized`
+lives in the primary alone), so ten embedding tests move from skipped to passed
+across that boundary.
+
+### 8 · THE BATTERY, RE-DRIVEN ON THE MERGED TREE — and it refused the first run
+
+`scripts/wp54-battery.py`, 29 mutations over nine suites, floor 200,
+`--no-cache` throughout, ABI pinned at both ends by CONSTRUCTING a Database.
+
+**THE FIRST RUN ON THE MERGED TREE WAS VOID, AND THE INSTRUMENT IS WHY WE KNOW.**
+Two things happened to it, and both are the battery refusing rather than
+reporting:
+
+```
+M02      ANCHOR-MISS (0 matches) — src/main/intelligence-host/sessionRegistry.ts
+CONTROL  ANCHOR-MISS (0 matches)
+ALARM: tree is NOT pristine after the battery — tracked files are modified:
+ M docs/intelligence/WORK_PACKETS.md
+```
+
+**The two ANCHOR-MISSes are the merge having moved the lines**, which is
+exactly the verdict's purpose: a mutation that silently fails to apply would
+otherwise report the pin it targets as strong when nothing had been done to it.
+`outrankedByTheRecord` gained `template.tier !== null` when the designer's
+sheet introduced a prose-declared tier; the `ConsequenceTier` comment now
+records both packets' reasonings. Both re-anchored at `2c0fed28`.
+
+**The ALARM is an architect's record entry arriving mid-run.** The edited file
+is markdown that no suite reads, so those 27 kills were almost certainly sound
+— and the rule does not carve out files that look harmless, because **a
+pristine check that can be argued past is not a pristine check.** Committed
+verbatim, re-run clean. A stale zero-byte `index.lock` came with it for the
+second time this session: a battery runs `git status` between every mutation,
+so a battery and a human editing one repo produce that race reliably. WP-20g's
+recovery, followed and verified by hash before and after.
+
+**THE CLEAN RUN:**
+
+```
+ABI AT START: 141
+PRISTINE BASELINE: 0 failed / 206 total, 0 suites failed (floor 200)
+M01..M29  all KILLED
+CONTROL   SURVIVED (correct)  0 failed / 206 total
+ABI AT END: 141
+
+TREE PRISTINE AFTER, ABI UNCHANGED. 29/29 killed.
+EXIT=0
+
+  run in .worktrees/wp-54-battery, cut at 7c14248f — see the finding below
+```
+
+The two mutations that matter most are the shipped defects restored — **M01**
+(the class's tier ignored, the list back to age order) and **M14** (the badge
+counting one population while the screen draws another) — and both die on the
+merged tree, against a fold that now also emits agent failures and groups
+incidents.
+
+
+**AND THE VENUE IS THE FINDING.** The second run reached the same 29/29 and the
+same correct control, and refused again on the same cause: a battery polls
+`git status` between every mutation, the architect edits the record
+continuously, and in one checkout those two are a race. It produced a stale
+zero-byte `index.lock` three times this session and a false ALARM twice.
+
+Both times the ALARM was arguable — the modified files are markdown no suite
+reads, and provably outside the battery's own six-file write set, which its own
+`MUTATIONS` table names. **Neither time was it argued.** The rule that went into
+the protocol this morning is that an instrument which cannot fail is not an
+instrument, and the first time the harmless case is exempted is the last time
+the check means anything.
+
+So the remedy is the VENUE rather than the argument: the run above is from
+`.worktrees/wp-54-battery`, cut at the merge, where nothing else writes. **A
+battery belongs in a worktree, for the same reason a packet does.**
+### 9 · FINDINGS
+
+**1 · A LOCK ANNOUNCE THAT NAMES ONLY PATHS CANNOT SEE A TYPE COLLISION.**
+Two packets kept disjoint file locks perfectly and collided through a shared
+interface. The type system caught it; no announce discipline could have.
+Appended to the protocol as a rule with an address: declare the SHAPES a packet
+changes — an interface it widens, a union it extends, a required field it adds.
+
+**2 · A GENERATOR MUST LET A DESIGNER DRAW AHEAD OF THE BUILD, WITHOUT LETTING
+THE BUILD SHIP A HOLE.** The refusal on `{leadFinding}` was correct and
+refusing the whole artifact would have been the wrong answer to it. `skipped,
+loudly, by name and reason` is the shape that keeps both properties, and an
+undeclared new class still fails the build.
+
+**3 · A REVERTED RULING HAS NO NATURAL ENEMY.** Two amendments adjudicated at
+two gates were undone by a file copy, and every existing check passed: ids,
+fields, slots and staleness were all satisfied by a fixture that had quietly
+lost them. `:check` failing closed on a stale artifact is not the same as
+failing closed on a reverted ruling, and the second guard did not exist until
+now. This is the sharpest instance yet of the packet's own rule — an instrument
+that cannot fail is not an instrument.
+
+**4 · WP-54a's OWN PIN PREDICTED ITS REVERSAL AND SAID SO IN ADVANCE**, which
+is the best possible shape for a cross-packet assertion. It read: *"the
+incident's 2 is not a typo and is not this packet's to fix… asserting the
+shipped value here keeps this file a measurement rather than a second, quieter
+fix; the ordering claim under test holds either way."* WP-54 landed the fix and
+the assertion moved 2 → 1 with the ordering claim untouched. A pin that names
+what it is standing in for is a pin the next packet can move honestly.
+
+**5 · A REFUSAL TEST WHOSE SUBJECT IS DELETED PASSES IN THE WORST WAY.** The
+generator's missing-field test removed `chip: 'Stuck'` — and the designer's
+sheet had removed every chip, so the mutation had nothing to delete and the
+"refusal" was never exercised. Re-aimed at a field that exists. Vacuous-guard
+family, arriving through a fixture change rather than through code.
+
+**6 · A STALE `index.lock` FIRED MID-MERGE**, and WP-20g's recovery worked as
+written: confirmed stale (zero bytes, no git process against this repo),
+removed, then the three resolved files verified by hash BEFORE and AFTER the
+removal — identical, so nothing was partially rewritten — and `git fsck` clean.
+The check that matters there is the one that could have failed.
+
+### 10 · LOCKS RELEASED
+
+**`src/renderer/`, the composer and situation derivation in
+`sessionRegistry.ts`, the ratified fixture, both copy generators and
+`docs/intelligence/` are RELEASED.**
+
+What landed in each, named so the queue can plan:
+
+- **`src/renderer/`** — `Arrival.renderSituation` and `renderInboxRow` are one
+  `renderRow(NowRow)`; `arrivalModel` gained `nowRows` / `sameThing` /
+  `nowVerdict` / `stripeColour` and the `NowRow` contract; `designSystem.ts` is
+  new; `SessionReEntry` gained `onBackToNow`; `DockedPanelContainer` reads the
+  Inbox for its badge; `NexusStateManager` gained `nowDoorRequest`.
+  **WP-56 is held on this** — the deferral affordance was drawn against the old
+  two-function shape and will need re-siting rather than re-merging. The row
+  contract it wants is `NowRow`.
+- **`sessionRegistry.ts`** — `ConsequenceTier` widened; `Situation` gained
+  `door` and `signature`; `SituationCopy` gained `tier`, `door`, `signature`;
+  `SituationClassInput` gained `memberCount`; `RowDoor`,
+  `SituationSignature`, `normalizeProducerId`, `twinNameOf`, `memberTier`,
+  `outrankedByTheRecord`, `rankableTier` are new. **Declared as SHAPES, per the
+  new rule.**
+- **the ratified fixture and both generators** — the designer's cycle-seven
+  sheet plus WP-54's four blocks and the two restored guards; `RULED_AMENDMENTS`
+  and `DEFERRED_IDS` in the situation generator; `scripts/control-label.ts`
+  shared by both.
+
+**Standing against this packet, for WP-55:** the coalesced row's null
+`signature` (§3), `incident.coalesced`'s emission and its host fields, and the
+designer's `HEALTH` / `HEADER` / `GROUP` / `DEFERRED` blocks, which are ratified
+copy no surface reads yet. Two of those blocks carry slots the contract cannot
+fill — `HEALTH.loud`'s `{oldestAge}` and `HEALTH.quiet`'s `{checkCount}` — and
+the first of them is the late-versus-dark question the ruling left open with
+the designer. The generator will refuse both until the facts exist, which is
+the correct order.
+
+### 11 · ABI, DECLARED
+
+**This session ran jest. `node -p process.versions.modules` = 141 (system Node
+25.9.0); the battery measured the same 141 by CONSTRUCTING a Database at both
+ends of its run.** `.nvmrc` pins 22.16.0 → ABI 127, which is what CI sees.
+**The owner must `npm run rebuild` before loading Local again.**
+
+### 12 · UNPUSHED, PROPERLY
+
+Nothing pushed, no tag, no version bump.
+
+### 13 · THE PWD HAZARD, THIRD OCCURRENCE, AND THE GUARD THAT ENDS IT
+
+**It happened again while this very report was being written**, which is the
+most useful place it could have happened. The merge report was appended to
+`WORK_PACKETS.md` in the primary; the `cd` from the previous command had not
+persisted the way the one before it did; and the NEXT command appended the new
+protocol rule and committed it — **in the battery worktree**, producing a commit
+whose message described a merge report it did not contain.
+
+**The tell was in my own output for the third time today.** Every one of those
+commands began with `pwd`. Every one printed the answer. The answer was read
+after the commit had already run.
+
+That is the rule this session put in the protocol — *printing the cwd isn't the
+control; branching on it is* — failing against its own author, twice more, in
+the hours after it was written. Recording it rather than quietly fixing it,
+because a rule that its author cannot follow from memory is a rule that needs a
+mechanism, and the third occurrence is the evidence for that.
+
+**THE MECHANISM, adopted for the rest of this merge and offered to the
+protocol:** every command that WRITES is prefixed by a guard that REFUSES.
+
+```bash
+BASE=/Users/…/local-addon-nexus-ai
+[ "$(pwd -P)" = "$BASE" ] || { echo "REFUSING: cwd is $(pwd -P)"; exit 1; }
+[ "$(git rev-parse --abbrev-ref HEAD)" = "poc/nexintelligence-ux" ] || { echo "REFUSING: wrong branch"; exit 1; }
+```
+
+Two lines, and they turn a log into a guard. The recovery here needed no
+archaeology precisely because the misplaced commit was found immediately:
+`git reset --mixed HEAD~1` in the battery worktree, the rule's bytes carried
+across, the worktree restored to pristine and verified, and the rule committed
+where it belongs. Nothing was lost and nothing was assumed.
