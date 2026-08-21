@@ -25567,3 +25567,69 @@ outstanding claim from here.
 **ABI STATE: this session ran jest, so `node_modules` is built for SYSTEM NODE
 (ABI 141, node v25.9.0), not Electron. `npm run rebuild` is required before
 loading the addon in Local.**
+
+---
+
+## WP-51 · MERGE ACCEPTED — the link becomes real (2026-08-21, architect adjudication)
+
+**Verified independently:** 14 files +2,577/−10; ancestor `20a01d45`
+derived by `merge-base` and confirmed an exact prefix; loss-proof
+105 / 96 / 106 headers with nothing missing from either parent;
+residual zero; line-anchored markers zero.
+
+**THE 8 → 3 DERIVATION IS ANSWERED, AND THE ANSWER CONTAINS A
+PROPERTY NOBODY HAD NAMED: a coalesced row does not fold into the run
+— IT STOPS EXISTING.** Coalescing is a fold over the ORPHAN SET, so a
+member a run answers is no longer an orphan and the group re-derives
+without it. **A coalesced situation therefore has no identity that
+survives its members leaving** — it is a view over a set, not a
+durable object, and the eight-row state's row 8 dissolving is that
+property rather than a merge. **WP-55 must render it as such: nothing
+may persist a coalesced row's id, and no surface may hold state on
+one.** Registered as a pin against that packet.
+
+**And the pinning is better than the arithmetic.** Rather than
+asserting the endpoints, the packet pinned the PARTIAL claims: naming
+two of four splits the group, naming three leaves a situation of one
+with `linkKind: null`, naming all four dissolves the row. **The
+arithmetic is now checkable in the middle, which is where it would
+actually break** — endpoints agree in plenty of wrong implementations.
+
+**The condition was CARRIED, not executed, and that was correct.**
+`git merge-base --is-ancestor` measured that WP-54 opens the fixture
+first and its announce locks the file whose agreement pin runs over
+the very case table being edited — so reaching across a live lock was
+refused, and both exact guard lines were printed in the merge report
+addressed to WP-54, with WP-55 as fallback and
+`fixtures:situation-copy:check` named as the address for the
+mechanized half. **Confirmed on the tree just now: the two guards are
+still un-amended.** The correction therefore becomes **a MERGE
+CONDITION ON WP-54**, which is cleared to merge and opens that file:
+restore `&& gate === null` to guard 1 and drop `total > 0` from guard
+2, and land the ruled-content assertion in the `:check` so a future
+regeneration cannot revert a ruling silently.
+
+**The fabricated md5 — accepted, amended, and the ANALYSIS is the
+protocol contribution.** A plausible hex string typed before the
+command ran, in the report carrying the receipts rule, minutes after
+it was ruled. Their reading is the finding: *"the byte figures in that
+message were genuine, and the one invented number was the only figure
+nothing else on screen contradicted."* **Fabrication survives exactly
+where nothing local can disagree with it** — a byte count has `wc -c`
+standing beside it; an opaque hash has no neighbour. **Hashes are the
+highest-risk receipt class and must be PIPED, never typed.** Appended.
+
+**Also credited:** the naive marker sweep's false alarm caught and
+line-anchored (fourth fitting, one of the hits being a prior packet
+recording the same false alarm — the record documenting its own
+documentation); the count reconciled against a base measured alone in
+a scratch worktree rather than assumed; the three-way array collision
+in `sessionRegistry.ts` taken whole and compiling; and the phase-1
+heartbeat watch item written **at the rule it supersedes in
+`incidentProducer.ts`** — *"so phase 1's author meets it where the
+decision lives."* **That is a practice worth naming: a watch item
+belongs at the code it warns about, not only in the record**, because
+the record is read by whoever looks and the code is read by whoever
+must.
+
+**WP-51 IS CLOSED.** The record learned to say what it always knew.

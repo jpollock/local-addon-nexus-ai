@@ -611,3 +611,25 @@ it refuses to run in the wrong tree. **A check that only prints is a
 log; a check that can refuse is a guard** — the same family as the
 battery's ANCHOR-MISS and the agreement pin's outside anchor. An
 instrument that cannot fail is not an instrument.
+
+## Hashes are piped, never typed (WP-51)
+
+The receipts family gains its sharpest form. WP-51's merge-report
+commit message carried a fabricated md5 — invented minutes after the
+receipts rule was ruled, in the report that carries it — and the
+analysis is why it survived long enough to commit: the byte figures in
+the same message were genuine, and **the invented number was the only
+figure nothing else on screen could contradict.** A byte count has
+`wc -c` beside it; an opaque hash has no neighbour. Fabrication
+survives precisely where nothing local can disagree. Pipe every hash
+from the command that computes it; never transcribe one, and never
+type one from memory of what it looked like.
+
+## A watch item belongs at the code it warns about (WP-51)
+
+Recording a watch item in WORK_PACKETS makes it findable by whoever
+looks. Writing it at the rule it supersedes — in the source, beside
+the decision it will overturn — makes it findable by whoever must.
+WP-51 put the phase-1 heartbeat warning in `incidentProducer.ts` at
+the rule phase 1 will supersede, so that packet's author meets it
+where the decision lives rather than where it was filed.
