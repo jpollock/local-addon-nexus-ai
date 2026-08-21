@@ -23553,3 +23553,91 @@ them before the code exists rather than after:
    disagree about whether 3 is a rank.
 
 Standard discipline, all of it.
+
+---
+
+## WP-56 · LOCK ANNOUNCE (2026-08-21) — the deferral affordance
+
+**Branch `wp-56`, worktree `.worktrees/wp-56`, cut from
+`poc/nexintelligence-ux` at `6e140e1a`** (WP-54a's own announce; the tree was
+clean at cut, so there was no architect record to commit under the WP-02
+precedent this time).
+
+**Scope: the MECHANICS of the cycle-two deferral ruling, not its appearance.**
+Only the user defers (an agent quieting its own gate is the self-promotion
+power inverted); a reason is recorded; a derivable wake condition may ride
+with it and returns the situation to full intensity when met. The fold keeps
+the situation's TIER and its PLACE and lowers ESCALATION ONLY — out of the
+badge, out of the verdict's count, **still in the list**. Deferral applies to
+the SITUATION, never to its parts. `from-designer-13`'s dimmed row is NOT this
+packet: the designer is drawing it and it lands with the render.
+
+**LOCKED:**
+
+| surface | why this packet holds it |
+|---|---|
+| `src/main/intelligence-host/actionProducer.ts` — a NEW deferral producer on the rationale family, and the payload widening it needs | cycle two ruled the deferral "recorded on the run (the rationale family; the payload widening goes through a gate hold like `canary_policy` did)" |
+| `src/main/intelligence-host/sessionRegistry.ts` — the `Deferral` shape on `Situation`, `TriageView.counts`, a NEW deferral fold applied as a post-pass over the situation array, `listVerdict`, and `triage()` inside `createSessionRegistry` | the fold half of the ruling |
+| `src/common/constants.ts` — one new IPC channel constant | the write path; a session act needs a channel |
+| `src/main/ipc-handlers.ts` — the one handler beside the four `RETURN_*` reads | **both WP-54 and WP-54a name this file as NOT locked**, so this packet takes it. Wiring only, per the integration-lock rule |
+
+**THE CROSSED CLAIM ON `sessionRegistry.ts`, DECLARED AT ANNOUNCE — and it is
+now a THREE-way claim** (WP-20f/WP-37's rule; WP-54a declared the two-way form
+one commit ago). WP-54 holds `composeSessionCopy`, `composeIncidentCopy`,
+`derivedCopy`, `situationOfSession`, `situationOfIncident`, `rankSession`,
+`rankSituations`, `deriveReserved`. WP-54a holds `ConsequenceTier`,
+`contradictedByTheRecord`, `foldSessionRegistry` and new agent-failure
+functions. Sequencing comes from the owner. Named so both siblings can see it
+without reading this branch:
+
+- **Disjoint by construction, and that shaped the design rather than following
+  it.** The deferral is applied as a POST-PASS over the situation array, not
+  inside `situationOfSession`/`situationOfIncident`, and it changes no tier and
+  no order — so `rankSituations` and all eight of WP-54's functions are
+  untouched. That is also the correct build: the ruling says a deferral lowers
+  escalation and changes nothing else, and a post-pass that CANNOT reach tier
+  or place is that rule enforced by shape rather than remembered.
+- **ONE GENUINE OVERLAP, named now rather than at merge:**
+  `foldSessionRegistry`, which WP-54a also claims. This packet adds one call
+  and one query to it. If WP-54a lands first this is an additive conflict in
+  one function, resolved by taking both.
+
+**NOT locked, and named so a sibling can take them:** `src/intelligence/` (the
+core — untouched; no new topic is minted, see below), the incident and agent
+producers, `src/main/index.ts`.
+
+**`src/renderer/` IS NOT CLAIMED, AND THE OMISSION IS A RULING, NOT AN
+OVERSIGHT.** `arrivalCounts()` (`arrivalModel.ts:115`) computes
+`needsYou: triage.waiting.length` — the rail badge re-deriving a count from a
+list, which is a latent defect independent of deferral and exactly what
+WP-49a's rider ruled against. The host therefore gains the counted field and
+the renderer will READ it instead of computing one. **That read lands in
+WP-56, after WP-54 releases `src/renderer/`, by an announce AMENDED on the
+base at that moment** (WP-52's rule) — never by reaching across a live lock.
+WP-54's item 1 is a pin asserting badge-count equals rendered-row count in
+both directions, and it is working in that file this minute. **This packet
+also inherits the amendment to that pin**: it becomes false the moment a
+deferral exists, because a deferred situation stays in the list and leaves the
+badge, and a pin left standing against a later ruling is a test asserting the
+opposite of the law.
+
+**THE GATE HOLDS THE MERGE, and the condition is stated at announce rather
+than discovered at the gate:** "out of the badge" is half of what deferral
+means, so a deferral that quiets nothing is not the ruled act. If WP-54 has
+not merged when this packet is otherwise ready, it says so and HOLDS.
+
+**TWO THINGS MEASURED AT ANNOUNCE, so neither surprises the gate:**
+
+1. **NO NEW TOPIC IS MINTED.** The deferral rides `task.rationale.recorded` —
+   the family cycle two named — as a payload widening, which is the
+   `canary_policy` precedent exactly. This is deliberately NOT the escalation
+   WP-54a raised for `agent.stuck`: that class had no family to ride.
+2. **THE INCIDENT PATH IS HELD, RULED TO THIS GATE.** Cycle two records a
+   deferral ON THE RUN, and an orphan incident (`situationOfIncident`) has no
+   run — while the designer's coalesced sheet draws Defer on an incident row.
+   This packet builds the RUN path and holds the incident path, presenting the
+   measurement of what record shape an incident-scoped deferral would need
+   rather than inventing one.
+
+**The contract additions are gate-held: the shapes are presented verbatim
+before merge.** Standard discipline, all of it.
