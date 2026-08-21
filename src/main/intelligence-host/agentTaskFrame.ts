@@ -65,13 +65,30 @@ export function autonomyForTrigger(trigger: RunTrigger): Autonomy {
 /**
  * The actor id for one agent.
  *
- * The agent's own name, verbatim — agent names are already validated
- * (`VALID_AGENT_NAME`: lowercase, no consecutive underscores) and are the
- * identity every other surface uses for the same thing, so translating them
- * here would create a second name for one agent.
+ * **`act_<name>` with hyphens as underscores, and the format is FORCED, not
+ * chosen.** `normalizeProducerId` (`sessionRegistry.ts`) is the join that
+ * decides whether a ledger-derived situation and an Inbox-derived situation
+ * are the same situation: it strips `act_`, turns `_` into `-`, lowercases,
+ * and the result is compared against the Inbox's AGENT id. So:
+ *
+ *   act_security_sentinel        -> security-sentinel   ✓ matches the agent id
+ *   act_agent_security-sentinel  -> agent-security-sentinel   ✗ matches nothing
+ *
+ * The second spelling was this function's first draft. It would have produced
+ * run-frame events that silently failed to dedup against the Inbox — a
+ * duplicate situation per run, which is the exact class WP-54's dedup closed.
+ *
+ * It also settles the design note's open question 1 by measurement rather than
+ * taste, and it means the sentinel's RUN and its INCIDENTS share one actor id
+ * (`incidentProducer`'s `SENTINEL_ACTOR` is already this spelling) instead of
+ * the two disagreeing schemes this packet exists to end.
+ *
+ * `tests/…/agentTaskFrame.test.ts` pins the round-trip over every shipped
+ * agent name — the same two-copies-of-one-rule pattern as `localDay` and
+ * `resolveAgentCron`.
  */
 export function agentActorId(agentName: string): string {
-  return `act_agent_${agentName}`;
+  return `act_${agentName.replace(/-/g, '_')}`;
 }
 
 export interface AgentTaskFrame {

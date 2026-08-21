@@ -24,6 +24,7 @@
  *     throwing close — each degrades to "unframed" and none reaches the caller.
  */
 import { setIntelligenceCore } from '../coreRegistry';
+import { normalizeProducerId } from '../sessionRegistry';
 import {
   RUN_ASSIGNED_TOPIC,
   RUN_COMPLETED_TOPIC,
@@ -118,8 +119,8 @@ describe('WP-57 · openAgentTask', () => {
     openAgentTask({ agentName: 'seo-insights', trigger: 'cron', startedAt: 1 })!.correlationId();
 
     expect(emitted.map((e) => e.actor.id)).toEqual([
-      'act_agent_security-sentinel',
-      'act_agent_seo-insights',
+      'act_security_sentinel',
+      'act_seo_insights',
     ]);
     // The defect this closes: one id for every agent.
     expect(new Set(emitted.map((e) => e.actor.id)).size).toBe(2);
@@ -168,9 +169,9 @@ describe('WP-57 · openAgentTask', () => {
   it('exposes the actor it minted, so callers need not re-derive it', () => {
     fakeCore();
     const frame = openAgentTask({ agentName: 'log-processor', trigger: 'event', startedAt: 1 })!;
-    expect(frame.actor).toEqual({ id: 'act_agent_log-processor', kind: 'agent' });
+    expect(frame.actor).toEqual({ id: 'act_log_processor', kind: 'agent' });
     expect(frame.autonomy).toBe('autonomous');
-    expect(agentActorId('log-processor')).toBe('act_agent_log-processor');
+    expect(agentActorId('log-processor')).toBe('act_log_processor');
   });
 });
 
@@ -278,5 +279,31 @@ describe('WP-57 · AgentTaskFrame.close', () => {
     // would misattribute the run to that site.
     expect(emitted[0].entity).toEqual({});
     expect(emitted[1].entity).toEqual({});
+  });
+});
+
+/**
+ * The two-copies-of-one-rule pin (`localDay` / `resolveAgentCron` pattern).
+ *
+ * `agentActorId` writes the actor id; `normalizeProducerId` reads it back to
+ * compare a ledger situation against an Inbox one. They are in different
+ * modules and nothing but this table makes them agree.
+ */
+describe('WP-57 · the actor id round-trips through normalizeProducerId', () => {
+  const SHIPPED = ['security-sentinel', 'seo-insights', 'log-processor', 'web-analytics', 'auth-probe'];
+
+  it.each(SHIPPED)('%s survives the write/read round trip', (agentName) => {
+    expect(normalizeProducerId(agentActorId(agentName))).toBe(agentName);
+  });
+
+  it('agrees with the incident producer\'s own shipped constant', () => {
+    // incidentProducer's SENTINEL_ACTOR is `act_security_sentinel`. One agent,
+    // one actor id — the two disagreeing schemes are what this packet ends.
+    expect(agentActorId('security-sentinel')).toBe('act_security_sentinel');
+  });
+
+  it('the rejected spelling would NOT have round-tripped', () => {
+    // The bug this pin exists to prevent, stated as a fact rather than a memory.
+    expect(normalizeProducerId('act_agent_security-sentinel')).not.toBe('security-sentinel');
   });
 });
