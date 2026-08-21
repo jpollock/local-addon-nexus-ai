@@ -23482,3 +23482,74 @@ than the shipped green rail, deliberately — *"a rail drawn from a
 screenshot would be the authored-vector defect wearing chrome"* — and
 its tab strip omits Fleet, drawing the post-item-6 world. Both are
 honest; neither is this packet's scope.
+
+---
+
+## WP-54a · LOCK ANNOUNCE (2026-08-21) — the `agent.stuck` producer
+
+**Branch `wp-54a`, worktree `.worktrees/wp-54a`, cut from
+`poc/nexintelligence-ux` at `a7bfa0ce`** (which is `eb3682e2` plus the
+architect's coalesced-sheet adjudication and `from-designer-14`, committed
+verbatim under the WP-02 precedent immediately before this announce — md5
+`4f023073ef4b54b7a9097e8397833530`, 34,122 bytes, matching the architect's own
+stated receipt).
+
+**Scope, one item** (the architect's own five, finding 4): `agent.stuck` is a
+ratified template class the fold cannot emit. auth-probe reaches the screen
+today only through the old inbox rendering, so WP-54's dedup removes it from
+Now entirely unless the fold learns to emit it. This packet teaches the fold,
+at **tier 3** per the template's own rule line, with the timeout **from the
+record, never composed**.
+
+**LOCKED:**
+
+| surface | why |
+|---|---|
+| `src/main/intelligence-host/sessionRegistry.ts` — `ConsequenceTier`, `contradictedByTheRecord`, `foldSessionRegistry`, and NEW functions for the agent-failure situation and its copy | the fold change itself |
+| a NEW agent-failure producer under `src/main/intelligence-host/` | WP-54's own announce names this: "the incident and agent producers (`incidentProducer.ts`, and whatever WP-54a grows)" are NOT locked by it |
+| `src/main/agent-runtime/AgentRunner.ts` — the run-completion chokepoint only, beside the existing `recordSentinelIncidents` call | the producer's one tap; no agent behaviour is touched |
+
+**THE CROSSED CLAIM, DECLARED RATHER THAN DISCOVERED (WP-20f/WP-37's rule).**
+WP-54's announce also locks `sessionRegistry.ts`, naming
+`composeSessionCopy`, `composeIncidentCopy`, `derivedCopy`,
+`situationOfSession`, `situationOfIncident`, `rankSession`, `rankSituations`
+and `deriveReserved`. **The sequencing comes from the owner and is stated in
+this packet's launch instruction** — WP-54a merges BEFORE or WITH WP-54's
+dedup — which is the protocol's own provision for a base that cannot arbitrate.
+Named so WP-54 can see it without reading this branch:
+
+- **Disjoint by intent.** WP-54a adds functions rather than editing WP-54's
+  eight, and calls them from `foldSessionRegistry`'s situation array, which
+  WP-54's announce does not claim.
+- **ONE GENUINE OVERLAP, named now rather than at merge:** the
+  `ConsequenceTier` TYPE (`sessionRegistry.ts:151`). WP-54's item 1 is the
+  tier-drift finding — "the card says Tier 1 and the fold ranks it Tier 2" —
+  and its fix may well touch the type or the ranker. WP-54a must widen the
+  type to admit `3`. See the ruling request below; if WP-54 lands first, this
+  is a one-line conflict in a type alias, resolved by taking both.
+
+**NOT locked, and named so a sibling can take them:** `src/intelligence/` (the
+core — untouched), `src/renderer/` (WP-54 holds it; the situation carries its
+own copy, so no renderer change is needed or attempted), `src/main/index.ts`
+and `src/main/ipc-handlers.ts` (no wiring change expected; if one turns out to
+be needed the announce is AMENDED on the base at that moment, per WP-52's
+rule, not claimed at merge time).
+
+**TWO RULING REQUESTS RAISED AT ANNOUNCE, NOT SAVED FOR THE GATE**, because
+both are escalation triggers under PARALLEL_PROTOCOL and the owner should see
+them before the code exists rather than after:
+
+1. **A NEW EVENT TOPIC.** Measured: there is no agent-failure topic in the
+   ledger, and `agent.run.failed` is not merely absent but structurally
+   impossible — the envelope's topic regex
+   (`src/intelligence/envelope/validate.ts:19`) admits only
+   `state|semantic|procedure|policy|episodic|task|control` as the type prefix.
+   `agent.stuck` is a TEMPLATE id, never a topic.
+2. **TIER 3 AS A RANK VALUE.** Tear 3 (moments-model §4a, ruled 2026-08-18,
+   ratified at WP-30's gate) put tier 3 into STRUCTURE — the reserved slot —
+   and `ConsequenceTier = 1 | 2 | 4` enforces it at the type level. The
+   ratified `agent.stuck` template then assigns `Tier 3 · the agent is asking,
+   not the fleet` and states its sort consequence. Both are ratified and they
+   disagree about whether 3 is a rank.
+
+Standard discipline, all of it.
