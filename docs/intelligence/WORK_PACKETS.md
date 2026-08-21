@@ -24165,3 +24165,249 @@ Standard discipline, all of it, plus the live exhibit the DoD requires: one
 agent run from the UI producing `task.run.assigned` → N × `task.action.executed`
 → `task.run.completed` under one correlation, with the actor naming the agent,
 and the before/after count of uncorrelated acts.
+
+---
+
+## WP-56 · GATE REPORT — the deferral affordance; HELD, and the hold is the ruling's own
+
+**Branch `wp-56`, three commits on `bb16e9de`. NOT MERGED, and the hold was
+ruled at launch rather than discovered here:** "out of the badge" is half of
+what deferral means, and a deferral that quiets nothing is not the ruled act.
+The renderer read that closes that half lives in `arrivalModel.ts`, inside
+WP-54's live lock. **`git merge-base --is-ancestor wp-54 poc/nexintelligence-ux`
+says NO as of this writing.** So this packet stops at its gate.
+
+### 1 · THE CONTRACT ADDITIONS, VERBATIM — gate-held, presented before merge
+
+**(a) The record.** No new topic: it rides `task.rationale.recorded`
+(`rationale.recorded/1`) as a payload widening, which is the `canary_policy`
+precedent exactly. Envelope: `source.system` is a NEW `gateway:deferral`
+(distinct from `gateway:approval`, so a provenance reader can tell consent from
+quieting); `actor` must be `kind: 'human'`; `correlation` is the run's newest
+turn; `causation` on an end record points at the deferral it supersedes.
+
+```
+// defer
+{ source: 'deferral-card', act: 'defer', situation: <situation id>,
+  reason: <masked free text>,
+  wake: null | { kind: 'time', at: <ISO> } | { kind: 'record', from: <string> } }
+
+// end
+{ source: 'deferral-card', act: 'end', situation: <situation id>,
+  supersedes: <deferral event id> }
+```
+
+**(b) `Situation.deferral?: SituationDeferral`** — present only while a
+deferral stands.
+
+```ts
+export type DeferralWake =
+  | { kind: 'time'; at: string }
+  | { kind: 'record'; from: string };
+
+export interface SituationDeferral {
+  eventId: string;      // the rationale event that recorded it
+  reason: string;       // the user's own words, masked, never composed, never empty
+  deferredAt: string;   // ISO — observed_at, the moment of the click
+  wake: DeferralWake | null;   // null = unconditioned, permitted, never wakes
+}
+```
+
+**(c) `TriageView.counts: TriageCounts`** — REQUIRED, deliberately. An optional
+count invites the `?? waiting.length` fallback that is the defect it removes.
+
+```ts
+export interface TriageCounts {
+  needsYou: number;   // situations CURRENTLY ESCALATING — the badge
+  deferred: number;   // deferred by the user, still standing in `waiting`
+}
+```
+
+`needsYou + deferred === waiting.length` always holds, and is pinned: the badge
+undercounts the list by exactly the number the accounting line states, and never
+by anything it does not.
+
+**(d) `SessionRegistryDeps.wakeFired?`** — the port for a `record` condition,
+plus `SessionRegistrySnapshot.wakeSource`, a note naming the absence honestly
+(the `deadlineSource` pattern). **Nothing supplies one**, so a record-conditioned
+deferral never wakes in production today and behaves as an unconditioned one. A
+`time` wake works, derived from the fold's own clock.
+
+**(e) `runCorrelationFor(situationId, deps)`** — exported from the registry.
+See finding 3.
+
+**(f) Two IPC channels**, `RETURN_DEFER` and `RETURN_END_DEFERRAL`.
+**Deliberately IPC and never GraphQL:** the CLI and renderer hit the identical
+GraphQL endpoint with the identical bearer token, so a mutation the CLI merely
+"does not call" would not be a boundary. An agent reaches tools and GraphQL; it
+does not reach `ipcMain`. That is what makes "only the user defers"
+architectural rather than aspirational — the same reasoning that keeps
+`TRUST_EXTERNAL_HOST_KEY` off the schema.
+
+### 2 · THE DRIVEN EXHIBIT — a real situation, on a real ledger
+
+`scripts/wp56-deferral-exhibit.ts`, run against a COPY of the developer's
+`ledger.db` (it refuses to run against the live path; it writes). Every reading
+is a real `createSessionRegistry().triage()`; every write is the real producer.
+Output pasted:
+
+```
+SUBJECT: sess_task_01M09M7ZHVS6XM58VA9G8TWPFH
+  "running under rb.bulk-plugin-update — 0 done and standing, 0 failed"
+
+1 · BEFORE      badge 7 · deferred 0 · rows 7 · "7 things need you…"
+                THE SUBJECT: PRESENT, tier 2, deferral (none — escalating)
+
+resolved correlation: task_01M09M7ZHVS6XM58VA9G8TWPFH
+recorded deferral evt_01M0JNA8GJM5A55F235NCXYAWF, wake at 2026-08-23T17:18:51Z
+
+2 · DEFERRED    badge 6 · deferred 1 · rows 7 · "6 things need you…"
+                THE SUBJECT: PRESENT, tier 2,
+                  reason "waiting on the payment gateway vendor"
+                  wake  {"kind":"time","at":"2026-08-23T17:18:51.357Z"}
+
+3 · WOKEN       badge 7 · deferred 0 · rows 7 · "7 things need you…"
+   (same record, clock +48h, NOTHING WRITTEN)
+                THE SUBJECT: PRESENT, tier 2, deferral (none — escalating)
+
+JOINABLE BACK TO THE RUN: correlation=task_01M09M7… returns 2 events,
+and the deferral IS among them
+
+4 · ENDED EARLY badge 7 · deferred 0 · rows 7
+```
+
+**Read the three numbers across state 2: the badge falls 7→6, the list stays at
+7, the verdict follows the badge.** That is the ruling, driven. And state 3 is
+the strongest form the wake demonstration can take, because nothing had to
+happen: the same record read by a later clock returns the row to full intensity.
+
+### 3 · FOUR FINDINGS, three of them measured rather than reviewed
+
+**FINDING 1 — A `decision` KEY ON THIS PAYLOAD WOULD HAVE BEEN A LIVE DEFECT,
+and it was measured before the shape was chosen.** All four readers of
+`task.rationale.recorded` key off `decision`, and both of `foldProcedureCursor`'s
+lanes are hostile:
+
+- `decision` + `tool`, no `checkpoint` → the LEGACY lane, where
+  `legacyLatest.set(payload.tool, decision)` **overwrites a standing legacy
+  approval for that tool.** Deferring a situation would silently REVOKE consent
+  already given.
+- `decision` + `checkpoint` → the BOUND lane, where a non-wanted decision is
+  pushed to `denied` — and `deriveCheckpointStates` rule 2 is that a denial is
+  an abort. Deferring would ABORT the run.
+
+The payload therefore carries no `decision`, and the honest reason is also the
+safe one: **a deferral is not a consent decision.** Guard 1 — "an event that
+records no decision is not a decision" — is what keeps all four readers still.
+`deferralIsNotConsent.test.ts` drives a real deferral through the legacy lane,
+the bound lane, `deriveCanaryPolicy` and `deriveApprovals` and pins that none of
+them move. **Disclosed rather than implied:** the fifth reader, `abortRecord`
+(`procedureStream.ts:400`), is private and reachable only through
+`notifyProcedureState`'s sink. It reads `decision` and nothing else, so it is
+guarded by the identical absence — but by argument here, not by execution.
+
+**FINDING 2 — MY OWN XD-28 PIN WAS VACUOUS, AND THE BATTERY CAUGHT IT.** The
+first version read `row.parts[0]`, which for a session situation is the
+synthetic `kind: 'run'` part carrying NO `eventId` — so the record named a
+fallback string belonging to nothing, which is true against the widened lookup
+as well as against the correct one. M11 SURVIVED. The honest witness emits a
+failed act first, so the situation has an OUTCOME part with a real event id
+distinct from the situation's, and defers THAT. The assertion ran; the subject
+was absent.
+
+**FINDING 3 — "RECORDED ON THE RUN" WAS UNSATISFIABLE FROM THE CALLER'S OWN
+SHAPE, and the exhibit found it, not review.** Its first run printed a deferral
+with NO `correlation`. The cause is a contract shape: a surface holding a
+`Situation` has a situation id and no turn id, because `taskIds` lives on
+`SessionRow`, which the triage view does not hand over. `runCorrelationFor`
+resolves it in the registry — the module that owns that relationship — and the
+IPC handler calls it. Resolving the SUBJECT of a write is not the shaping the
+thin-bridge rule forbids. The NEWEST turn, not the first: the deferral is a
+statement about this run at this moment, and the first turn is the session's
+identity, which is a different question.
+
+**FINDING 4 — the producer trimmed and the fold did not**, so a whitespace-only
+reason passed the AUTHORITATIVE gate and "a reason is recorded" was satisfied by
+three spaces. Found while writing the pin for M08. Fixed at
+`deferralEventOf`, with M08b added for the fold's own half of the rule.
+
+### 4 · THE INCIDENT PATH — HELD, and the measurement is the deliverable
+
+Ruled to this gate: cycle two records a deferral ON THE RUN, an orphan incident
+has no run, and the designer's coalesced sheet draws Defer on an incident row.
+Three findings, each a passing test in `deferral.test.ts` so they go red the day
+someone builds it:
+
+1. **The fold is NOT the blocker.** It already attaches a deferral to an
+   incident row — the lookup is by situation id and an incident situation has
+   one. Nothing needs building there.
+2. **The record carries no `correlation`.** `runCorrelationFor` returns
+   `undefined` for a non-session, correctly. Nothing can ask "what did the user
+   defer during this run", and no `runEvents` read will ever return it.
+3. **AND THIS IS THE ONE THAT DECIDES THE SHAPE.** An orphan incident's
+   situation id is the INCIDENT EVENT'S OWN ID (`situationOfIncident`:
+   `id: incident.id`), but the producer resolves an incident by writing a NEW
+   event carrying `resolved: true`, and dedups on
+   `incidentKey(component, fact)` — its real identity. Measured: the deferral
+   stays with the event it named, the amendment arrives UNDEFERRED, and a user
+   who quieted an incident sees it back in the badge under a different id the
+   moment it is amended.
+
+**So an incident-scoped deferral needs a STABLE SUBJECT, and the record already
+has one it is not using:** `incidentKey(component, fact)`. Naming the event id
+is the same class of error as keying a run on a turn instead of on
+`capability@hash`. Presented, not built.
+
+### 5 · RECEIPTS, pasted after they printed
+
+- **Baseline** (worktree, tree held still, exit captured before any pipe, taken
+  at `bb16e9de`): **620 suites / 8,527 passed / 12 skipped / 8,539 total,
+  exit 0.**
+- **After** (worktree): **622 suites / 8,573 passed / 12 skipped / 8,585 total,
+  exit 0.** Delta **+2 suites, +46 tests**, fully accounted: `deferral.test.ts`
+  39, `deferralIsNotConsent.test.ts` 7. **The skipped column is unmoved at 12**,
+  and both figures are the worktree's.
+- **THE POISONED ts-jest CACHE, TENTH OCCURRENCE, in WP-52's shared-dependency
+  shape.** The first "after" run reported 2 suites failed and a total of 8,509 —
+  BELOW the baseline while adding 46 tests, which is the tell. Both failures were
+  PARSE-level, in `tests/intelligence-evals/sitting.test.ts` and `probes.test.ts`
+  — suites this packet never touched, both importing a file it did.
+  `npx jest --clearCache` then re-measure produced the green above. Read the
+  shape, never the count.
+- **Mutation battery `scripts/wp56-battery.py`: 24/24 KILLED**, control
+  SURVIVED (correct), tree verified PRISTINE before and after, `--no-cache`
+  throughout, count-floored, both summary lines parsed, byte sweep over 12 files
+  first, **ABI pinned at both ends** with the constructing probe. Two survivors
+  in the first run (M08, M11) were both defects in the TESTS; the battery was
+  re-run WHOLE after the fixes, never spliced.
+- `npx tsc -p . --noEmit` clean.
+- **Diffstat, `bb16e9de..HEAD`:** 10 files, +2,544 / −4.
+
+### 6 · ABI STATE
+
+**SYSTEM NODE.** This session ran jest. The owner must `npm run rebuild` before
+loading Local again.
+
+### 7 · WHAT REMAINS, AND IT IS BLOCKED RATHER THAN UNDONE
+
+Both items wait on WP-54 releasing `src/renderer/`, and both are WP-56's, not
+WP-55's:
+
+1. **The renderer read.** `arrivalCounts()` reads `triage.counts.needsYou`
+   instead of computing `waiting.length`. Two lines. Until it lands the SHIPPED
+   BADGE STILL COUNTS DEFERRED ROWS — stated plainly, because the exhibit above
+   demonstrates the host contract, not the shipped badge.
+2. **WP-54's badge-equals-rows pin, amended.** It becomes false the moment a
+   deferral exists, because a deferred situation stays in the list and leaves
+   the badge. Its correct post-deferral form is: badge equals waiting rows MINUS
+   deferred, and the deferred row is still present in the list. A pin left
+   standing against a later ruling is a test asserting the opposite of the law.
+
+**Also expected at merge, named now rather than discovered then:** WP-54a has
+merged (`be858e5f`) and changed `foldSessionRegistry` and `ConsequenceTier` —
+both declared overlaps. This branch is measured at `bb16e9de` on purpose, so its
+receipts describe one tree; the merge will take both sides in
+`foldSessionRegistry`, which is additive.
+
+**Gate asks for one thing only: confirmation that the six contract shapes in §1
+are ratified as presented.** Nothing merges until WP-54 releases the renderer.
