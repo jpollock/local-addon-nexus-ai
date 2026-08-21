@@ -23851,3 +23851,102 @@ the generator's ratified id list, from the architect's fixture commit
 and measured **620 suites / 8,527 passed / 12 skipped / 8,539 total, exit 0**.
 The gate report reconciles against that figure and attributes the inherited red
 separately rather than absorbing it into its own delta.
+
+---
+
+## ARCHITECT'S REVIEW — `agent-actor-design-note.md` (2026-08-21)
+
+**Verdict: the diagnosis is right, the four rulings are sound, and the
+note is the most important document written on this branch since the
+moments model. Six findings, none fatal, two of which must be settled
+before phase 3 and one before phase 5.**
+
+**Facts spot-checked and TRUE:** `task.run.assigned` /
+`task.run.completed` have **zero producers** in the tree; `actorFor()`
+collapses every agent-runtime call to `act_agent_runtime`
+(`actionProducer.ts:328`), so four shipped agents share one ledger
+identity while `incidentProducer.ts:90` attributes the sentinel by a
+different scheme entirely — two attribution systems disagreeing in
+production, exactly as the note says.
+
+**The strongest thing in it, and it is ours:** ADR-7 has no population
+without agents. We wrote a law about autonomy for a class of actor the
+system does not yet contain, and the WP-25 smoke is the proof it
+matters — the chat model caught the sentinel's fabricated remediation
+checklist *on the one surface the procedural plane does not reach*.
+The note recovers this from the record rather than arguing it.
+
+**§A.2 is the FIFTH form of the collision family this week.** The
+SDK's `AgentAutonomy` (a ceremony preference) and the layer's
+`Autonomy` (an actor class) are one word over two meanings — the same
+shape as `total` at WP-48/50/52 and the tier/rule-line drift at WP-54.
+Deriving the class from the TRIGGER rather than a setting is correct,
+and *"conflating them would put a ceremony preference in charge of a
+safety rule"* belongs in the register.
+
+### The six findings
+
+1. **R4's comparison is self-serving in one axis, and the note is
+   otherwise rigorous about not doing that.** It claims the substitute
+   is *"strictly more governed than the chat path."* On review quality
+   — reviewed, versioned, hash-pinned, sequence-enforced — true. On
+   the one axis that motivates in-the-moment consent it is strictly
+   LESS: no human judges *this* situation as it happens. **Amend to
+   claim what is true: differently governed, more reviewed, less
+   contemporaneous.** And R4 must not ship on a ruling alone —
+   **an owner sitting on a real destructive path is required before
+   the first production enablement.** Nothing in this project with a
+   fraction of this consequence has shipped without one, and this is
+   the case where "nobody has sat in front of it" is least
+   affordable.
+2. **The arm is agent-timed and nothing bounds it.** R2's rejected
+   option worried about holding the procedure across a run's reading
+   majority — but under R2 as adopted, the agent chooses when to arm,
+   and an agent arming at line 1 reproduces the rejected shape
+   exactly. **The arm must be measurable, not merely recorded:** the
+   record should carry arm-to-first-write, and an arm followed by no
+   act within the run is a pattern the fold can see. Design the
+   measurement now; the enforcement can follow evidence.
+3. **A halted armed agent run is missing, and it is the highest tier
+   in the consequence order.** §F folds findings into situations, but
+   an agent that dies at checkpoint 4 of 8 with a write landed is
+   precisely T1 — *world mid-change, only you can move it* — the most
+   consequential row the model has. Chat has WP-30's re-fold-on-boot;
+   agents have nothing named here. **Name it in §F and phase it with
+   the fold.**
+4. **The grant migration needs WP-45's P4 pattern.** §D.1 makes an
+   absent `actor` mean interactive-only, which silently reinterprets
+   every existing materialized grant. WP-45 ruled precisely this
+   shape: grants whose meaning changes are **re-issued as visible
+   `control.grant.issued` events with a caller-supplied reason** —
+   the vocabulary already exists (`materialized` ·
+   `granted-at-control` · `law-review re-pin`) and wants a fourth
+   member. A silent reinterpretation is the thing the re-pin ruling
+   exists to forbid.
+5. **Open question 5 is a security ruling, not a sequencing note.**
+   Contributed tools called across agents: if the grant is checked
+   against the CALLER, agent B's tools are reachable by anyone who can
+   drive agent A; if against the CONTRIBUTOR, agent A escapes its own
+   scope. Both answers have a hole, so neither is a default.
+   **Elevate to a required ruling beside §D.5, same tier.**
+6. **§2.1 promises citations that §B does not carry.** The table says
+   consequence means *"findings are situations with provenance and
+   citations"*, but the `Finding` interface gains only `observedAt`.
+   Sentinel findings are model-authored prose; ADR-24's convention
+   exists for exactly that. **Either `Finding` carries the citation
+   contract or the table's claim is unbacked** — and on the
+   unattended path, an uncited finding is the WP-25 failure wearing a
+   type.
+
+**Phasing: agreed, with one change.** Phases 1 and 2 are safe,
+valuable and start immediately — the note is right that phase 1 is the
+smallest packet with the largest unblock. **Phase 3 gains finding 4
+(the re-pin) and finding 5 (the cross-agent ruling) as
+preconditions**; phase 5 gains finding 1's sitting. Phase 6 is
+correctly sequenced behind WP-54/56 rather than racing them.
+
+**On WP-54a: the note's read is right and generous.** The bespoke
+`agent.stuck` producer is phase 6's first instance built by hand;
+land it as designed and generalize afterwards. And §9.1's honesty
+stands — the topic request dissolves, the `ConsequenceTier` vs Tier-3
+contradiction does not, and it is independent of this design.
