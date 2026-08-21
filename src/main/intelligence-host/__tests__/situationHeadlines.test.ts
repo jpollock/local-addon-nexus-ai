@@ -34,6 +34,7 @@ import {
   fillSituationSentence,
   guardHolds,
   listVerdict,
+  type UnheldRow,
   selectSituationTemplate,
   type SituationClassInput,
   type Situation,
@@ -359,6 +360,91 @@ describe('the list verdict — generated from the rows it is about', () => {
   test('both arms come from the generated module, not from this file', () => {
     expect(LIST_VERDICT.allUnwritten).toContain('{needsYou}');
     expect(LIST_VERDICT.someChanged).toContain('{changedRuns}');
+  });
+
+  // -------------------------------------------------------------------------
+  // WP-56 · THE MERGED EXPRESSION — driven DIRECTLY, because its two new terms
+  // cannot be reached through any caller that exists.
+  // -------------------------------------------------------------------------
+  //
+  // Three packets edited this sum through different doors (WP-54's unheld term,
+  // WP-56's deferral filter, WP-54b's denominator) and the ruled resolution
+  // needs cases none of them could produce:
+  //
+  //   * NO CALLER CAN DEFER AN UNHELD ROW today — `rowIsDeferred` answers false
+  //     for a row with no situation, because a deferral names a SITUATION id
+  //     and the fold holds no unheld rows.
+  //   * NO CALLER CAN GIVE AN UNHELD ROW A WRITE today — `InboxItem` records no
+  //     outcomes at all, being a finding rather than a run.
+  //
+  // Both are ruled inputs with no producer, which is exactly WP-46's rule: pins
+  // on a guarded builder must drive it across its FULL input domain, including
+  // the states current callers cannot supply, or the guard is decoration. The
+  // battery proved it — both terms SURVIVED mutation until these landed.
+  describe('the unheld term (WP-54) and the deferral filter (WP-56), in one sum', () => {
+    const unheld = (over: Partial<UnheldRow> = {}): UnheldRow =>
+      ({ written: { done: 0, failed: 0 }, ...over });
+    const deferred = (): Situation =>
+      ({
+        written: { done: 0, failed: 0, total: 3 },
+        deferral: { eventId: 'e', reason: 'r', deferredAt: '2026-08-21T00:00:00.000Z', wake: null },
+      } as Situation);
+
+    test('an unheld row is counted — a verdict about only what the fold holds heads eight rows with "7"', () => {
+      expect(listVerdict([row(0, 0)], [unheld()])).toBe(
+        '2 things need you, and none of them has changed anything yet'
+      );
+    });
+
+    test('A DEFERRED UNHELD ROW IS NOT COUNTED — the deferral must quiet this term too', () => {
+      // The whole list is two rows; one of them is an unheld row the user
+      // quieted. A count that still included it would be the deferral
+      // deferring nothing, on the term WP-56 could not see while WP-54 held
+      // the file.
+      expect(listVerdict([row(0, 0)], [unheld({ deferred: true })])).toBe(
+        '1 things need you, and none of them has changed anything yet'
+      );
+      // And with nothing left escalating at all, the sentence says nothing —
+      // it does not say "0 things need you".
+      expect(listVerdict([deferred()], [unheld({ deferred: true })])).toBe('');
+    });
+
+    test('changedRuns IS MEASURED OVER THE UNION — WP-54b, and an unheld write flips the arm', () => {
+      // The defect: the branch was chosen from `waiting` alone while the count
+      // covered `waiting + alsoWaiting`, so the fixture's ratified guard
+      // ("allUnwritten when EVERY waiting row has done === 0 && failed === 0")
+      // was evaluated over a subset of the rows the sentence counts. An unheld
+      // row that HAS written is the case that tells the two apart.
+      expect(listVerdict([row(0, 0)], [unheld({ written: { done: 2, failed: 0 } })])).toBe(
+        '2 things need you, and 1 of them have already written somewhere'
+      );
+      // A failed write on an unheld row counts the same way it does on a held
+      // one — a target the run touched.
+      expect(listVerdict([row(0, 0)], [unheld({ written: { done: 0, failed: 1 } })])).toBe(
+        '2 things need you, and 1 of them have already written somewhere'
+      );
+    });
+
+    test('a DEFERRED unheld row is excluded from changedRuns as well as from the count', () => {
+      // Both terms of both numbers read the same set. A row quieted out of the
+      // count that still fed the branch would decide the sentence's arm from a
+      // row the sentence does not count.
+      expect(
+        listVerdict([row(0, 0)], [unheld({ written: { done: 5, failed: 0 }, deferred: true })])
+      ).toBe('1 things need you, and none of them has changed anything yet');
+    });
+
+    test('BOTH TERMS NON-ZERO AT ONCE — the case neither branch could produce', () => {
+      // One deferred situation, two escalating ones, one unheld row that wrote.
+      // Under WP-56's body alone this says 2; under the base's it says 4 and
+      // takes the wrong arm. The merged expression says 3, and says it wrote.
+      expect(
+        listVerdict(
+          [deferred(), row(0, 0), row(0, 0)],
+          [unheld({ written: { done: 1, failed: 0 } })]
+        )
+      ).toBe('3 things need you, and 1 of them have already written somewhere');
+    });
   });
 });
 
