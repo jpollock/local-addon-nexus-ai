@@ -27222,3 +27222,89 @@ worth stating: merged is not the same as run.**
 
 The announce's exhibit therefore stands as originally measured, and the
 before/after the DoD requires is still a real before.
+
+---
+
+## WP-56 · LOCK ANNOUNCE AMENDED (2026-08-21) — the re-site, WP-54b folded in, and THE QUANTITY declared alongside the paths
+
+*Gate RATIFIED (all six shapes as presented) with one addition ruled; WP-54
+merged at `6dbac948` and released at `3fb414c7`; the block is lifted. Amended on
+the base before the work starts.*
+
+**FIRST, THE NEW STANDING RULE APPLIED TO ITS OWN DISCOVERING PACKET —
+`listVerdict`'s EXPRESSION, before and after.** Locks partition files; they do
+not partition arithmetic. Both locks here were kept perfectly and the collision
+happened anyway, so this announce declares the sum:
+
+```
+BASE  (post WP-54, sessionRegistry.ts):
+    listVerdict(waiting, alsoWaiting = 0)
+    needsYou    = waiting.length + alsoWaiting
+    changedRuns = waiting.filter(written)          <- over a SUBSET of what it counts
+
+WP-56 TIP (this branch, before the re-site):
+    listVerdict(waiting)
+    needsYou    = escalating(waiting).length
+    changedRuns = escalatingRows.filter(written)   <- same set as its needsYou
+
+MERGED, as ruled — neither term a bare count:
+    listVerdict(waiting, alsoWaiting: UnheldRow[] = [])
+    held        = waiting.filter(not deferred)
+    unheld      = alsoWaiting.filter(not deferred)
+    needsYou    = held.length + unheld.length
+    changedRuns = held.filter(written).length + unheld.filter(written).length
+```
+
+**Taking either body whole is a silent regression, and both tempt.** Taking
+WP-56's deletes `alsoWaiting` and restores the eight-rows-headed-by-"7" defect
+WP-54 item 1 was chartered to remove. Taking the base's drops the deferral from
+the count, which is this packet. **Every test on either branch passes under
+either resolution**, because neither branch has a case where both terms are
+non-zero — which is exactly why the re-site's gate owes the exhibit below.
+
+**ADDED TO THE LOCK — paths:**
+
+| surface | what of it |
+|---|---|
+| `src/main/intelligence-host/sessionRegistry.ts` | `listVerdict` only — the merged expression above, plus the new `UnheldRow` shape. **Not** the composer, the ranker, or anything WP-54 declared. |
+| `src/renderer/components/return/arrivalModel.ts` | `arrivalCounts`, `ArrivalCounts`, `nowVerdict`, and one new exported predicate. RELEASED by WP-54 at `3fb414c7`. |
+| `tests/unit/renderer/nowList.test.tsx`, `tests/unit/renderer/returnRailBadge.test.ts` | the badge pins this packet inherited for amendment |
+| `src/main/intelligence-host/__tests__/situationHeadlines.test.ts` | drives `listVerdict` directly; its signature moves |
+
+**WP-54b IS FOLDED IN, not scheduled.** Its defect and this collision are the
+same sum: the base decides `changedRuns` over `waiting` while counting
+`waiting + alsoWaiting`, which fails the fixture's own ratified guard
+("allUnwritten when EVERY waiting row has done === 0 && failed === 0" — an
+unheld row is a waiting row). This packet already fixed the half where the
+branch and the count share a denominator, without knowing WP-54b existed.
+Splitting them now means writing the same sum twice.
+
+**`alsoWaiting` BECOMES A SHAPE, and it carries two fields for two different
+rulings** — WP-54b's written-state, and a `deferred` flag this collision adds,
+because a deferred Inbox card that still incremented the badge would be the
+deferral deferring nothing, which is this packet's own argument turned on the
+term it never saw.
+
+**THE READ IS NOT THE TWO-LINE CHANGE THE GATE REPORT PROMISED**, and the
+difference is WP-54 rather than a mis-estimate: `waiting.length` is already
+gone, and `arrivalCounts.needsYou` is now `nowRows(triage, inbox).length`. So
+`triage.counts.needsYou` is **not** the badge's number, and substituting it
+would drop every inbox orphan — item 1's defect inverted. The host cannot own
+this number alone: **the unheld rows exist only in the renderer.**
+`TriageView.counts` stays exactly as ratified and remains the host's truth for
+the situations the host holds; the badge is the escalating rows of the one list,
+and the bridge is an arithmetic identity, pinned both ways:
+
+```
+renderer needsYou  ===  host counts.needsYou  +  <escalating unheld rows>
+```
+
+**NOT TAKEN, named so WP-55 is not blocked:** `Arrival.tsx`. Its
+`renderSituation`/`renderInboxRow` collapsed into one `renderRow(NowRow)`, so a
+deferral affordance drawn against the old shape needs re-siting — and this
+packet draws no affordance and no dimmed row. The fixture's `DEFERRED` block
+stays ratified copy no surface reads yet.
+
+**THE GATE OWES ONE NEW EXHIBIT, DRIVEN:** both terms non-zero at once — an
+unheld row and a deferred situation in the same list. That is the case neither
+branch can currently produce and the only one that proves the merged expression.
