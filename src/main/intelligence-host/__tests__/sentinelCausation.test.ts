@@ -39,14 +39,39 @@
  * THIS IS A PIN, NOT A NOTE. Each test asserts a property of SHIPPED code. The
  * day the envelope widens or the coalescer gains an orphan rule, one of these
  * goes red and says WP-48a is buildable now.
+ *
+ * ---------------------------------------------------------------------------
+ * WP-51 · THAT DAY CAME, AND THE PIN'S OWN TRIPWIRE DID NOT FIRE. Recorded here
+ * because it is a finding about this file, not a note about the packet.
+ *
+ * The ruling (WP-50 gate, §7) minted the scan a TaskId and gave the coalescer
+ * an orphan-grouping rule — both halves the header above said were the
+ * architect's call. **Not one case below went red**, and the reason is exact:
+ * every probe here reaches for `causation`, because before a TaskId existed
+ * that was the only link a scan had to offer. The ruling produced a
+ * `correlation`. A tripwire that watches the wrong field is silent in the one
+ * event it was set for, which is a stronger version of WP-46's finding: a pin
+ * over an input the change cannot produce is decoration.
+ *
+ * So the cases below are kept EXACTLY as they were — every one of them is still
+ * true, and two of them are now the load-bearing statement that the four
+ * historical incidents did not move — and the post-ruling behaviour is pinned
+ * beneath them, in the same file, over the same four real findings.
+ *
+ * WHAT DID NOT CHANGE, and it is the packet's own instruction: **the four
+ * existing incidents stay four rows.** The record is append-only; a `correlation`
+ * exists only on events written after the producer learned to mint one, and
+ * nothing backfills. Their stated limit — "the record does not link them" —
+ * remains true OF THEM, forever.
  */
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import { setIntelligenceCore } from '../coreRegistry';
-import { INCIDENT_TOPIC, INCIDENT_SCHEMA } from '../incidentProducer';
+import { INCIDENT_TOPIC, INCIDENT_SCHEMA, SCAN_TOPIC, recordSentinelIncidents } from '../incidentProducer';
 import { createSessionRegistry } from '../sessionRegistry';
+import type { NexusServices } from '../../mcp/types';
 
 let core: IntelligenceCore;
 let dir: string;
@@ -151,5 +176,195 @@ describe('WP-48a finding 2 · the existing rules do not coalesce orphans, howeve
     // orphans. This is the escalation, driven rather than asserted.
     expect(triage.waiting).toHaveLength(4);
     expect(triage.waiting.every((s) => s.parts.length === 1)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-51 · the ruling, landed — the link is real, and only then does it group
+// ---------------------------------------------------------------------------
+
+/**
+ * The ordering the reversal turned on, in the architect's words: *"the instinct
+ * is right and the order is the thing — WP-51 mints the scan's TaskId so the
+ * link becomes REAL, and only then is coalescing legitimate rather than
+ * laundering."*
+ *
+ * These cases drive the SHIPPED producer into the SHIPPED fold. Nothing here
+ * hand-writes a correlation onto a finding: the whole claim is that the producer
+ * now knows one, so a test that supplied it would prove the fold and nothing
+ * else.
+ */
+describe('WP-51 · a newly produced sibling set coalesces; the historical four do not', () => {
+  /** Local's site store, as `entityRefsFor` reads it. */
+  const services = {
+    siteData: {
+      getSite: (id: string) => ({ id, name: 'The Awful PM Test', domain: 'awful.local' }),
+      getSites: () => ({ 'awful-pm-test': { id: 'awful-pm-test', name: 'The Awful PM Test', domain: 'awful.local' } }),
+    },
+  } as unknown as NexusServices;
+
+  /** The same four findings, through the real producer this time. */
+  function scan(runId: string, findings = FINDINGS) {
+    return recordSentinelIncidents(
+      {
+        agentId: 'security-sentinel',
+        runId,
+        observedAt: '2026-08-20T09:00:00.000Z',
+        sites: {
+          'awful-pm-test': {
+            status: 'escalated',
+            findings: findings.map((f) => ({ id: f.fact, severity: f.severity, title: f.symptom })),
+          },
+        },
+      },
+      { services, core },
+    );
+  }
+
+  const triageOf = () =>
+    createSessionRegistry({ core, now: NOW, runbooks: { byCapability: () => undefined } }).triage();
+
+  test('four findings from ONE scan are ONE situation with four parts', () => {
+    expect(scan('r_new_scan')).toBe(4);
+    const events = core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 10, order: 'desc' });
+    expect(events).toHaveLength(4);                              // shape #15
+    // The link is a RECORD link, written by the producer, naming an act that
+    // exists — not a payload field the coalescer reached into.
+    const link = events[0].correlation;
+    expect(link).toMatch(/^task_[0-9A-HJKMNP-TV-Z]{16,26}$/);
+    expect(events.every((e) => e.correlation === link)).toBe(true);
+    expect(core.ledger.query({ topicPrefix: SCAN_TOPIC, limit: 10 })).toHaveLength(1);
+
+    const waiting = triageOf().waiting;
+    expect(waiting).toHaveLength(1);
+    const [situation] = waiting;
+    expect(situation.kind).toBe('incident');
+    expect(situation.parts).toHaveLength(4);
+    expect(situation.parts.every((p) => p.kind === 'incident')).toBe(true);
+    // Every member is a part, by its own event id — a part with no event id is
+    // a claim (tear 2).
+    expect(new Set(situation.parts.map((p) => p.eventId)).size).toBe(4);
+    expect(situation.memberCount).toBe(4);
+    expect(situation.linkKind).toBe('correlation');
+    // The situation's id is the LINK, not one member's event id: a row named
+    // after one of its four parts would say that part is the situation.
+    expect(situation.id).toBe(link);
+  });
+
+  test('each part names its OWN finding — four parts saying four things', () => {
+    scan('r_new_scan');
+    const [situation] = triageOf().waiting;
+    const summaries = situation.parts.map((p) => p.summary);
+    expect(new Set(summaries).size).toBe(4);
+    for (const f of FINDINGS) expect(summaries.some((line) => line.includes(f.symptom))).toBe(true);
+  });
+
+  test('THE EXHIBIT · the historical four stay four rows BESIDE the new one — five, not eight', () => {
+    // The four the owner's real ledger holds: no correlation, one payload origin.
+    const historical = FINDINGS.map((f) => emitFinding(f));
+    // …and one new sweep through the shipped producer.
+    expect(scan('r_new_scan')).toBe(4);
+    expect(core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 20, order: 'desc' })).toHaveLength(8);
+
+    const waiting = triageOf().waiting;
+    expect(waiting).toHaveLength(5);
+
+    const separate = waiting.filter((s) => s.parts.length === 1);
+    const coalesced = waiting.filter((s) => s.parts.length > 1);
+    expect(separate).toHaveLength(4);
+    expect(coalesced).toHaveLength(1);
+
+    // The four that stayed separate are the four the record does not link, by
+    // id — not "four rows of some kind".
+    expect(separate.map((s) => s.id).sort()).toEqual([...historical].sort());
+    for (const situation of separate) {
+      expect(situation.memberCount).toBe(1);
+      expect(situation.linkKind).toBeNull();
+      // Their stated limit, unchanged and still true of them.
+      expect(situation.tierReason).toContain('no run linked to it');
+    }
+    expect(coalesced[0].memberCount).toBe(4);
+    expect(coalesced[0].linkKind).toBe('correlation');
+  });
+
+  test('a scan that recorded ONE finding is a situation of one, not a group of one', () => {
+    expect(scan('r_single', [FINDINGS[1]])).toBe(1);
+    const [situation] = triageOf().waiting;
+    expect(situation.parts).toHaveLength(1);
+    expect(situation.memberCount).toBe(1);
+    // It HAS a correlation; it is not coalesced, because there is nothing to
+    // coalesce with. `linkKind` names the link that justified a FOLD, and no
+    // fold happened here.
+    expect(situation.linkKind).toBeNull();
+    expect(situation.headlineTemplate).toBe('incident.no-run');
+  });
+
+  test('two scans are two situations — the group is the link, never the producer', () => {
+    scan('r_scan_a', [FINDINGS[0], FINDINGS[1]]);
+    // A different site, so the durable dedup does not swallow the second sweep.
+    recordSentinelIncidents(
+      {
+        agentId: 'security-sentinel',
+        runId: 'r_scan_b',
+        observedAt: '2026-08-20T10:00:00.000Z',
+        sites: {
+          'other-site': {
+            status: 'escalated',
+            findings: [FINDINGS[2], FINDINGS[3]].map((f) => ({ id: f.fact, severity: f.severity, title: f.symptom })),
+          },
+        },
+      },
+      {
+        services: {
+          siteData: {
+            getSite: (id: string) => ({ id, name: id, domain: `${id}.local` }),
+            getSites: () => ({ 'other-site': { id: 'other-site', name: 'other-site', domain: 'other.local' } }),
+          },
+        } as unknown as NexusServices,
+        core,
+      },
+    );
+
+    const waiting = triageOf().waiting;
+    expect(waiting).toHaveLength(2);
+    expect(waiting.every((s) => s.parts.length === 2)).toBe(true);
+    // Two situations, two distinct links. Same actor, same topic, same
+    // producer — none of which is a link.
+    expect(new Set(waiting.map((s) => s.id)).size).toBe(2);
+  });
+
+  test('the coalesced row takes the DERIVED sentence — the ratified class is WP-55\'s to draw', () => {
+    scan('r_new_scan');
+    const [situation] = triageOf().waiting;
+    // `incident.no-run`'s headline is ONE member's sentence ("{finding} on
+    // {target}"), and Q3's ratified guard is that a coalesced row "can never be
+    // one member's sentence with a parts chip bolted on". So the fold reports
+    // no template rather than borrowing that one, and the sheet's
+    // `incident.coalesced` lands with WP-55.
+    expect(situation.headlineTemplate).toBeNull();
+    expect(situation.headline).not.toBe('');
+    for (const f of FINDINGS) expect(situation.headline).not.toContain(f.symptom);
+    // A derived row carries no ask and no chip — `derivedCopy`'s own shape.
+    expect(situation.ask).toBe('');
+  });
+
+  test('a member the record CLOSED does not make the situation closed', () => {
+    scan('r_new_scan');
+    // The next sweep finds nothing and skipped nothing: the producer closes all
+    // four, and the closures carry the CLOSING scan's task.
+    recordSentinelIncidents(
+      {
+        agentId: 'security-sentinel',
+        runId: 'r_clean',
+        observedAt: '2026-08-20T11:00:00.000Z',
+        sites: { 'awful-pm-test': { status: 'clean', findings: [], notChecked: [] } },
+      },
+      { services, core },
+    );
+    const triage = triageOf();
+    // Nothing is waiting: every member of the open group was closed, and the
+    // closures are their own group in the changed column.
+    expect(triage.waiting.map((s) => s.parts.length)).toEqual([4]);
+    expect(triage.changed.map((s) => s.parts.length)).toEqual([4]);
   });
 });

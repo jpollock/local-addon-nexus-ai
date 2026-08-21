@@ -116,7 +116,7 @@ import {
 import { getIntelligenceCore } from './coreRegistry';
 import type { IntelligenceCore } from './bootstrap';
 import { collectIntelligenceHealth, type IntelligenceHealthReport } from './health';
-import { INCIDENT_TOPIC } from './incidentProducer';
+import { INCIDENT_TOPIC, SENTINEL_SYSTEM } from './incidentProducer';
 import { foldProcedureCursor, runEvents, type ProcedureRun } from './procedureCursor';
 import { deriveCheckpointStates, type CheckpointState } from './procedureView';
 import { placeLabel, placeToken, type ScopePlace } from './procedureScope';
@@ -374,6 +374,17 @@ export interface SituationPart {
   summary: string;
 }
 
+/**
+ * WP-51 · the ENVELOPE fields a fold may key on. Deliberately a closed union.
+ *
+ * `correlation` is the only member today: a scan's TaskId, minted by the
+ * sentinel producer, naming a `task.run.completed` act that exists. A second
+ * member (`causation`, say) would be a ruling, and adding it here is where that
+ * ruling would have to be written down — which is the point of naming the kind
+ * on the row rather than leaving the reader to infer it.
+ */
+export type SituationLink = 'correlation';
+
 /** The triage's unit. A situation of one is still a situation. */
 export interface Situation {
   /** The session id, or the incident event id for a situation of one. */
@@ -410,6 +421,39 @@ export interface Situation {
   /** Newest event id across the parts. */
   lastEventId: string;
   parts: SituationPart[];
+
+  // --- WP-51 · what the fold folded, and what justified folding it ---------
+
+  /**
+   * HOW MANY EVENTS THIS SITUATION FOLDED. Present on every incident row,
+   * absent on a session row.
+   *
+   * The designer's coalesced sheet reads it in two guards —
+   * `incident.no-run` gained `&& memberCount === 1` and `incident.coalesced`
+   * is `memberCount > 1 && row.linkKind !== null` — so it is their field, not
+   * this fold's invention, and a singleton carries `1` because folding one
+   * event is a true statement about it rather than a default standing in for
+   * a missing one.
+   *
+   * ABSENT on a session row: a session's members are its turns, its outcomes
+   * and its incidents, which is a different count with a different meaning,
+   * and giving it this name would be the `{total}` collision one field over.
+   */
+  memberCount?: number;
+  /**
+   * THE RECORD LINK THAT JUSTIFIED THE FOLD, or `null` when nothing was folded.
+   *
+   * `null` on every row that stands alone — including one that HAS a
+   * correlation and simply had no sibling to join. The field answers "what
+   * made these one thing", and a row that is one thing on its own was made so
+   * by nothing.
+   *
+   * A payload field can never appear here. That is the doctrine WP-50's ruling
+   * left unamended — *"the link becomes a genuine record link; the payload
+   * stays unread"* — and the type is what enforces it: `source: sentinel:<run>`
+   * is a payload string and has no value in this union.
+   */
+  linkKind?: SituationLink | null;
 
   // --- WP-48 · the verdict, composed ONCE here (the ratified placement) ----
 
@@ -817,6 +861,8 @@ interface ManifestTurn {
   capability: string;
   runbookId: string | null;
   hash: string;
+  /** WP-51 · the incidents this turn's arming named. See `answeredIncidents`. */
+  answers: string[];
 }
 
 function payloadOf(event: EventEnvelope): Record<string, unknown> {
@@ -852,7 +898,26 @@ function turnOf(event: EventEnvelope): ManifestTurn | undefined {
     capability,
     runbookId: str(procedure.runbook) ?? null,
     hash,
+    answers: answeredIncidents(payload),
   };
+}
+
+/**
+ * WP-51 item 3 · THE INCIDENTS AN ARMING SAID IT WAS ANSWERING.
+ *
+ * Read only from a DELIVERED turn, because `turnOf` returns before this on
+ * anything else — the same bound the writer holds to, from the other side.
+ *
+ * The designer's Q1 in one line: *"The containment run folds if and only if its
+ * arming names the incidents it answers."* The "only if" is what this function
+ * is: nothing here looks at a target, a timestamp, or a payload origin, so a
+ * run and an incident that merely happen to be about the same site within the
+ * same hour are two rows, permanently, unless the armer wrote the join down.
+ */
+function answeredIncidents(payload: Record<string, unknown>): string[] {
+  const cause = payload.cause as { answers?: unknown } | null | undefined;
+  if (!cause || typeof cause !== 'object' || !Array.isArray(cause.answers)) return [];
+  return cause.answers.filter((id): id is string => typeof id === 'string' && !!id);
 }
 
 /**
@@ -975,10 +1040,21 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
 
   // --- sessions, opened and closed as the record says ----------------------
   const open = new Map<string, OpenSession>(); // run key → the session still taking turns
+  // WP-51 · what each turn's arming said it was answering, kept by task id so
+  // the session that owns the turn can be resolved after the terminal split.
+  const answersByTask = new Map<string, string[]>();
 
   for (const manifest of manifests) {
     const turn = turnOf(manifest);
     if (!turn) continue;
+    if (turn.answers.length > 0) {
+      // A session takes many turns and any of them may have armed in answer to
+      // something; the union is what the run answers, and a later turn adding
+      // an incident must not drop what an earlier one named.
+      const named = answersByTask.get(turn.taskId) ?? [];
+      for (const id of turn.answers) if (!named.includes(id)) named.push(id);
+      answersByTask.set(turn.taskId, named);
+    }
     // `@` rather than a space, and that is a FINDING rather than a style choice:
     // the first draft of this line carried a literal NUL byte where the separator
     // should have been. It passed tsc, eslint and 48 tests, and announced itself
@@ -1022,10 +1098,32 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
   const sessionByTask = new Map<string, SessionRow>();
   for (const row of split) for (const taskId of row.taskIds) sessionByTask.set(taskId, row);
 
+  // WP-51 item 3 · the SECOND way an incident reaches a session: the run's own
+  // arming named it. `answeredBy` is keyed by the INCIDENT's event id, which is
+  // what the arming records, so an id naming nothing simply never matches and
+  // no part is manufactured for it.
+  const answeredBy = new Map<string, SessionRow>();
+  for (const row of split) {
+    for (const taskId of row.taskIds) {
+      for (const incidentId of answersByTask.get(taskId) ?? []) {
+        // First writer wins: two runs both claiming to answer one incident is a
+        // disagreement in the record, and the earlier claim is the one that was
+        // already true when the later one was written.
+        if (!answeredBy.has(incidentId)) answeredBy.set(incidentId, row);
+      }
+    }
+  }
+
   const attached = new Map<string, EventEnvelope[]>();
   const orphans: EventEnvelope[] = [];
   for (const incident of incidents) {
-    const owner = incident.correlation ? sessionByTask.get(incident.correlation) : undefined;
+    // Which run PRODUCED it outranks which run ANSWERS it, and both are record
+    // links. An abort incident belongs to the run whose failure opened it; a
+    // later containment arming naming it must not move it out of that run's
+    // situation, or the halt would leave the row that halted.
+    const owner =
+      (incident.correlation ? sessionByTask.get(incident.correlation) : undefined) ??
+      answeredBy.get(incident.id);
     if (!owner) {
       orphans.push(incident);
       continue;
@@ -1046,9 +1144,47 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     if (boundary) boundary.idProvisional = true;
   }
 
+  // WP-51 item 2 · THE ORPHAN-GROUPING RULE. Run-less incidents SHARING A
+  // CORRELATION are one situation with parts; everything else stands alone.
+  //
+  // The rule reads an ENVELOPE field and nothing else. Two incidents about the
+  // same site, from the same producer, in the same millisecond, are still two
+  // rows — a shared payload origin is not a link, and the four on the owner's
+  // real ledger are exactly that shape. What changed is upstream: the sentinel
+  // now records its scan as an act, so its findings carry a correlation that
+  // names something. The coalescer did not learn to guess; the record learned
+  // to say.
+  const bySharedLink = new Map<string, EventEnvelope[]>();
+  const alone: EventEnvelope[] = [];
+  for (const incident of orphans) {
+    const link = incident.correlation;
+    if (!link) {
+      alone.push(incident);
+      continue;
+    }
+    const siblings = bySharedLink.get(link) ?? [];
+    siblings.push(incident);
+    bySharedLink.set(link, siblings);
+  }
+  const coalesced: Situation[] = [];
+  for (const [link, members] of bySharedLink) {
+    // A GROUP OF ONE IS NOT A GROUP. It has a link and no sibling, so nothing
+    // was folded and the row is the situation of one the designer already drew.
+    if (members.length < 2) {
+      alone.push(members[0]);
+      continue;
+    }
+    coalesced.push(situationOfCoalescedIncidents(link, members, deps));
+  }
+
   const situations = [
     ...split.map((row) => situationOfSession(row, attached.get(row.id) ?? [], deps)),
-    ...orphans.map((incident) => situationOfIncident(incident, deps)),
+    // Every incident row states how many events it folded and what linked them,
+    // whether or not anything was folded — see `Situation.memberCount`. Set
+    // HERE rather than inside `situationOfIncident` because that function is
+    // held by a sibling packet's lock; when it releases, this belongs inside it.
+    ...alone.map((incident) => withFoldFacts(situationOfIncident(incident, deps), 1, null)),
+    ...coalesced,
   ];
 
   const cursor = maxId([
@@ -2001,6 +2137,156 @@ function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps)
     // set at all — null, not the size of its place set.
     written: { done: 0, failed: 0, total: null },
   };
+}
+
+/**
+ * WP-51 · every incident row says how many events it folded and what linked
+ * them.
+ *
+ * A separate helper rather than two fields set at two call sites, because the
+ * pair is one fact: `memberCount: 4, linkKind: null` would claim a fold nothing
+ * justified, and `memberCount: 1, linkKind: 'correlation'` would claim a link
+ * did work it did not do. Setting them together is the shape that cannot say
+ * either.
+ */
+function withFoldFacts(
+  situation: Situation,
+  memberCount: number,
+  linkKind: SituationLink | null,
+): Situation {
+  return { ...situation, memberCount, linkKind };
+}
+
+/**
+ * WP-51 item 2 · RUN-LESS INCIDENTS SHARING A CORRELATION ARE ONE SITUATION.
+ *
+ * The ruling: *"One orphan-grouping rule in the coalescer: run-less incidents
+ * sharing a correlation coalesce into one situation with parts. This does NOT
+ * breach 'record links, never payloads' — the link becomes a genuine record
+ * link; the payload stays unread."*
+ *
+ * Read the emphasis: the doctrine did not move. This function keys on
+ * `EventEnvelope.correlation` — a field the validator constrains to
+ * `task_<ULID>` and the sentinel producer now fills with the id of an act it
+ * emitted. Nothing here opens a payload to decide what belongs with what.
+ *
+ * THE ROW'S OWN VERDICT IS DERIVED FROM THE MEMBERS, NEVER BORROWED FROM ONE.
+ * The ratified `incident.no-run` headline is one member's sentence
+ * (`{finding} on {target}`), and Q3's guard is that a coalesced row *"can never
+ * be one member's sentence with a parts chip bolted on"* — the prepending
+ * defect one level up. So this takes the DERIVED path, reports
+ * `headlineTemplate: null`, and the ratified `incident.coalesced` class the
+ * designer has since drawn lands with WP-55, which owns the fixture and the
+ * generator. The fold supplies the facts that class reads (`memberCount`,
+ * `linkKind`); it does not write its words.
+ *
+ * THE SITUATION'S ID IS THE LINK. Naming the row after one of its members would
+ * say that member is the situation, and would change identity every time the
+ * oldest member resolved.
+ */
+function situationOfCoalescedIncidents(
+  link: string,
+  members: readonly EventEnvelope[],
+  deps: SessionRegistryDeps,
+): Situation {
+  // Oldest first, by ULID — the order the parts happened in, and the same
+  // ordering `runEvents` uses for a run's own events.
+  const ordered = [...members].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  // One anchor per member, by the incident producer's own rule
+  // (`refs.site ?? refs.environment`), deduplicated by `derivePlaces`. A
+  // sweep can span sites, so this is a set and not a single target.
+  const anchors = ordered
+    .map((event) => event.entity?.environment ?? event.entity?.site)
+    .filter((id): id is string => !!id);
+  const places = derivePlaces(anchors, deps.describePlace);
+
+  const open = ordered.filter((event) => payloadOf(event).resolved !== true);
+  const resolved = open.length === 0;
+
+  const parts: SituationPart[] = ordered.map((event) => ({
+    kind: 'incident',
+    eventId: event.id,
+    topic: event.topic,
+    observedAt: event.observed_at,
+    summary: incidentSummary(event),
+  }));
+
+  // A situation is not over while a part of it is open. The counts are stated
+  // rather than the verdict inferred from the newest member.
+  const column: TriageColumn = resolved ? 'changed' : 'waiting';
+  const tierReason = resolved
+    ? `${ordered.length} incidents share one record link and every one is recorded closed; nothing is waiting on you`
+    : `${open.length} of ${ordered.length} incidents sharing one record link are open, with no run linked to them` +
+      ' — nothing has been written under a procedure';
+
+  return {
+    id: link,
+    kind: 'incident',
+    column,
+    // The same rank an orphan incident takes today, for the same reason: this
+    // packet folds rows, it does not re-rank them. (The ratified sheet's own
+    // tier line and this fold's rank disagree for EVERY incident row, coalesced
+    // or not; that is a sibling packet's finding and its fix, and taking half of
+    // it here would leave the two halves in two packets.)
+    tier: resolved ? 4 : 2,
+    tierReason,
+    places,
+    since: oldestIso(ordered.map((event) => event.observed_at)),
+    lastEventId: maxId(ordered.map((event) => event.id)),
+    parts,
+    ...coalescedCopy(ordered, open.length, tierReason),
+    // A coalesced group of incidents was never armed under a procedure, so it
+    // has no target set at all — null, not the size of its member set.
+    written: { done: 0, failed: 0, total: null },
+    memberCount: ordered.length,
+    linkKind: 'correlation',
+  };
+}
+
+/** One member's line, in the words the fold has always used for an incident. */
+function incidentSummary(event: EventEnvelope): string {
+  const payload = payloadOf(event);
+  return `${payload.resolved === true ? 'incident closed' : 'incident open'}: ${
+    str(payload.symptom) ?? str(payload.fact) ?? 'no symptom recorded'
+  }`;
+}
+
+/**
+ * The coalesced row's derived verdict — counts and the origin, and nothing a
+ * member said.
+ *
+ * Two words are available for where the group came from and BOTH are read off
+ * the record's `source.system`: a sentinel sweep is "one scan", anything else
+ * reaching this function came from a procedure run and is "one run". Neither is
+ * a guess, and a mixed group (which no producer can currently create, since a
+ * correlation belongs to one act) takes the general word.
+ */
+function coalescedCopy(
+  members: readonly EventEnvelope[],
+  openCount: number,
+  tierReason: string,
+): SituationCopy {
+  const origin = members.every((event) => event.source?.system === SENTINEL_SYSTEM) ? 'one scan' : 'one run';
+  const total = members.length;
+  const headline =
+    openCount === total
+      ? `${total} open incidents from ${origin}`
+      : openCount === 0
+        ? `${total} incidents from ${origin}, all recorded closed`
+        : `${total} incidents from ${origin}, ${openCount} still open`;
+
+  // The producer, when every member names the same one. Two producers under one
+  // link is not a thing any current producer writes, and printing one of them
+  // would be a claim about the other.
+  const actors = new Set(members.map((event) => (event.actor as { id?: string } | undefined)?.id ?? ''));
+  const meta = actors.size === 1 ? [...actors][0] : '';
+
+  // The status phrase READ from the ratified set, exactly as the orphan
+  // fallback reads it — a coalesced group of run-less incidents is still a set
+  // of incidents with no run attached, and that phrase is the designer's.
+  const state = SITUATION_TEMPLATES.find((t) => t.id === 'incident.no-run')?.state ?? '';
+  return derivedCopy(headline, meta, state, tierReason);
 }
 
 function oldestIso(values: readonly (string | undefined)[]): string {

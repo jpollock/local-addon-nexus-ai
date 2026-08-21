@@ -44,6 +44,50 @@ export interface ArmingRequest {
    * present-but-undefined field is not byte-identical to a missing one.
    */
   scope?: ProcedureScope;
+  /**
+   * WP-51 item 3 · THE INCIDENTS THIS ARMING ANSWERS, as ledger event ids.
+   *
+   * The designer's Q1: *"The containment run folds IF AND ONLY IF its arming
+   * names the incidents it answers"* — with the reason stated as a preference
+   * about honesty rather than about rows: *"I'd rather have four honest rows
+   * than three where one join was inferred from a timestamp."* A run and the
+   * incidents it was launched over are joinable by anyone willing to infer from
+   * a target and a clock; the join is RECORDED only where the armer, which
+   * knows, writes it down.
+   *
+   * The shape is WP-25's `source: abort:<task>/<abort>` one field over: the
+   * record an act came out of, named in full.
+   *
+   * **Optional, and absent means absent** — same rule, same reason, as `scope`.
+   */
+  answers?: string[];
+}
+
+/**
+ * An incident is an EVENT, so an answer is an event id. Nothing else is written.
+ *
+ * The gate matters more here than a format check usually does, because the
+ * value's whole purpose is to be a JOIN: an id that cannot name an incident
+ * produces a `cause` the fold silently fails to resolve, which reads as "the
+ * run answers something the ledger has lost" rather than "a caller passed the
+ * wrong thing". WP-48a's finding is the same shape one field over — a sentinel
+ * RUN id (`r_msz8afwx00`) is not an event id, and does not become one by being
+ * written somewhere that accepts strings.
+ *
+ * Mirrors the envelope validator's own `causation` rule (`evt_<ULID>`) rather
+ * than inventing a looser one: the ids this carries are the ids that field
+ * holds, and two spellings of "an event id" is how they drift.
+ */
+const INCIDENT_EVENT_ID = /^evt_[0-9A-HJKMNP-TV-Z]{16,26}$/;
+
+function answeredIncidents(ids: readonly string[] | undefined): string[] | undefined {
+  if (!Array.isArray(ids)) return undefined;
+  // De-duplicated: the same incident named twice is one answer, and a repeated
+  // id would double-count the thing the row is about.
+  const kept = [...new Set(ids.filter((id) => typeof id === 'string' && INCIDENT_EVENT_ID.test(id)))];
+  // Nothing usable ⇒ NO key. An empty array would say the arming answered, and
+  // that what it answered was nothing.
+  return kept.length > 0 ? kept : undefined;
 }
 
 /**
@@ -65,10 +109,17 @@ let pending: ArmingRequest[] = [];
 export function recordArmingRequest(
   capability: string,
   at: Date = new Date(),
-  scope?: ProcedureScope
+  scope?: ProcedureScope,
+  answers?: readonly string[]
 ): void {
   if (!capability) return;
-  pending.push({ capability, at: at.toISOString(), ...(scope ? { scope } : {}) });
+  const answered = answeredIncidents(answers);
+  pending.push({
+    capability,
+    at: at.toISOString(),
+    ...(scope ? { scope } : {}),
+    ...(answered ? { answers: answered } : {}),
+  });
   // Oldest first out: a full queue means requests are not being consumed, and
   // the newest is the one a live turn is most likely waiting on.
   if (pending.length > MAX_PENDING) pending = pending.slice(-MAX_PENDING);
@@ -127,6 +178,13 @@ export function clearArmingRequests(): void {
 export interface TurnProcedure {
   request: ProcedureRequest;
   scope?: ProcedureScope;
+  /**
+   * WP-51 · the incidents the honoured arming answers. Present only when that
+   * arming carried them, for the same reason `scope` is: a cause belongs to the
+   * arming that named it, and handing it to a later turn's arming would be the
+   * re-derivation this seam exists to stop.
+   */
+  answers?: string[];
 }
 
 /**
@@ -182,6 +240,8 @@ export function procedureRequestForTurn(opts: {
           // arming that carried it, and handing it to a later turn's arming would
           // be the re-derivation-by-another-name this whole seam exists to stop.
           ...(req.scope ? { scope: req.scope } : {}),
+          // WP-51 · and the CAUSE with it, on exactly the same terms.
+          ...(req.answers ? { answers: req.answers } : {}),
         };
       }
     }

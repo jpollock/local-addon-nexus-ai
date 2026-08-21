@@ -207,3 +207,37 @@ describe('refusals are answers, each with its own remedy', () => {
     expect(scope!.opensRun).toBe(false);
   });
 });
+
+/**
+ * WP-51 · the arming's CAUSE reaches the queue through the same walk its scope
+ * does. The join is only ever recorded where the armer named it — see
+ * `armingCause.test.ts` for the format gate, the manifest and the fold.
+ */
+describe('the walk carries what the arming answers', () => {
+  const INCIDENT = 'evt_01M0BFNDD6XS21X8HTEMGY4NQV';
+
+  it('hands the incidents through to the request, beside the scope', () => {
+    armFromSelection(
+      CAPABILITY,
+      { from: FROM, cells: [cell('e.alpha', 'Alpha', STAGING)] },
+      new Date('2026-08-21T12:00:00.000Z'),
+      [INCIDENT],
+    );
+    const [request] = peekArmingRequests();
+    expect(request).toBeDefined();
+    expect(request.answers).toEqual([INCIDENT]);
+    // The scope still rides, unchanged — the cause is additive to WP-37's carrier.
+    expect(request.scope?.runnable).toHaveLength(1);
+  });
+
+  it('an arming made from a comparator alone answers nothing, and says so by omission', () => {
+    armFromSelection(CAPABILITY, { from: FROM, cells: [cell('e.alpha', 'Alpha', STAGING)] });
+    const [request] = peekArmingRequests();
+    expect(Object.prototype.hasOwnProperty.call(request, 'answers')).toBe(false);
+  });
+
+  it('previewScope still records NOTHING, cause or no cause', () => {
+    previewScope(CAPABILITY, { from: FROM, cells: [cell('e.alpha', 'Alpha', STAGING)] });
+    expect(peekArmingRequests()).toHaveLength(0);
+  });
+});

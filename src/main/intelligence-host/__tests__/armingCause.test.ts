@@ -1,0 +1,360 @@
+/**
+ * WP-51 item 3 · THE ARMING RECORDS ITS CAUSE — and the fold reads it back.
+ *
+ * The designer's Q1, ratified whole: *"The containment run folds IF AND ONLY IF
+ * its arming names the incidents it answers"*, with their own sentence as the
+ * doctrine — *"I'd rather have four honest rows than three where one join was
+ * inferred from a timestamp."*
+ *
+ * Read the "only if" as the load-bearing half. A containment run and four
+ * incidents about the same site, within minutes of each other, are ALREADY
+ * joinable by anyone willing to infer — and inferring is precisely what this
+ * layer refuses. So the join exists only where the ARMER wrote down what it was
+ * answering, which is a fact it has and does not record. Third producer paying
+ * the same debt: the sentinel's link, the arming's scope, and now the arming's
+ * cause.
+ *
+ * THE SHAPE IS WP-25's. That producer records `source: abort:<task>/<abort>` —
+ * a payload field naming the record an incident came out of. This is the same
+ * move one field over: `cause.answers`, ids in full, on the manifest the fold
+ * already reads.
+ *
+ * FOUR RULES THE CASES BELOW HOLD:
+ *
+ *  1. **An id that is not an event id is never written.** A `cause` naming
+ *     something that cannot be an incident is a fabricated join wearing a real
+ *     field's name, and the format gate is the only thing standing between the
+ *     record and a caller's typo.
+ *  2. **Absent means absent.** A turn that answers nothing carries NO `cause`
+ *     key — not an empty array, which reads as "it answered, and the answer was
+ *     nothing". The parity floor `ManifestScope` holds to, held to again.
+ *  3. **Only a DELIVERED procedure records one.** A refused turn is not a turn
+ *     of the run (`sessionRegistry`'s own rule), so it records no cause, exactly
+ *     as it records no scope.
+ *  4. **An id naming no incident joins nothing.** The fold attaches what it
+ *     finds; it never manufactures a part for an id the ledger does not hold.
+ *
+ * SHAPE #15 (PARALLEL_PROTOCOL): every fold case reads its events back out of
+ * the ledger and asserts they exist before asserting anything about the rows.
+ */
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
+import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
+import { setIntelligenceCore } from '../coreRegistry';
+import { CONTEXT_ASSEMBLED_TOPIC, manifestCauseFor } from '../chatAssembly';
+import { INCIDENT_SCHEMA, INCIDENT_TOPIC } from '../incidentProducer';
+import {
+  clearArmingRequests,
+  peekArmingRequests,
+  procedureRequestForTurn,
+  recordArmingRequest,
+} from '../procedureArming';
+import { createSessionRegistry, type RunbookLookup } from '../sessionRegistry';
+import { taskId as mintTaskId } from '../../../intelligence';
+import type { Runbook } from '../../../intelligence';
+import type { ResolvedGrant } from '../capabilityGrants';
+
+let core: IntelligenceCore;
+let dir: string;
+
+const NOW = new Date('2026-08-20T12:00:00.000Z');
+const hoursAgo = (h: number): string => new Date(NOW.getTime() - h * 3_600_000).toISOString();
+
+const SITE = 'ent_site_Y64Y113T3AQXYGGSAPXMQKMQHA';
+
+const RB: Runbook = {
+  id: 'rb.incident-remediation',
+  capability: 'cap.incident_remediation',
+  hash: 'sha256:remediate-1',
+  version: '1.0.0',
+  strictness: 'strict',
+  path: 'runbooks/rb.incident-remediation.md',
+  canonicalBytes: 1024,
+  steps: [],
+  tools: [],
+  toolScope: 'advisory',
+  body: '',
+  canonicalText: '',
+  frontmatter: {},
+  checkpoints: [],
+} as unknown as Runbook;
+
+const noDocument: RunbookLookup = { byCapability: () => undefined };
+
+beforeEach(() => {
+  clearArmingRequests();
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'intel-wp51-cause-'));
+  const kv = new Map<string, unknown>();
+  core = initIntelligenceCore({
+    storage: { get: (k) => kv.get(k) ?? null, set: (k, v) => kv.set(k, v) },
+    logger: { info: () => {}, error: () => {} },
+    dataDir: dir,
+  })!;
+  setIntelligenceCore(core);
+});
+
+afterEach(() => {
+  clearArmingRequests();
+  core.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/** One sentinel-shaped incident, standing alone on the record. */
+function emitIncident(symptom: string, at = hoursAgo(9)): string {
+  return core.emitter.emit({
+    observed_at: at,
+    topic: INCIDENT_TOPIC,
+    schema: INCIDENT_SCHEMA,
+    entity: { site: SITE },
+    actor: { id: 'act_security_sentinel', kind: 'agent' },
+    source: { class: 'work', system: 'sentinel:scan', trust: 'emitted' },
+    payload: { fact: symptom, symptom, resolved: false, severity: 'critical' },
+  }).id;
+}
+
+/**
+ * One manifest, emitted the way `chatAssembly.emitManifest` emits it — including
+ * the conditional spread, which is what the absent-key cases drive.
+ */
+function emitManifest(args: {
+  taskId: string;
+  observedAt: string;
+  status?: 'delivered' | 'refused';
+  cause?: ReturnType<typeof manifestCauseFor>;
+}): string {
+  return core.emitter.emit({
+    observed_at: args.observedAt,
+    topic: CONTEXT_ASSEMBLED_TOPIC,
+    schema: 'context.assembled/1',
+    entity: {},
+    actor: { id: 'act_chat_assembler', kind: 'system' },
+    source: { class: 'work', system: 'assembler:chat', trust: 'emitted' },
+    correlation: args.taskId,
+    payload: {
+      task: args.taskId,
+      procedure: {
+        capability: RB.capability,
+        runbook: RB.id,
+        hash: RB.hash,
+        status: args.status ?? 'delivered',
+      },
+      retrieval: [],
+      ...(args.cause ? { cause: args.cause } : {}),
+    },
+  }).id;
+}
+
+const grant = (): ResolvedGrant[] => [
+  {
+    capability: RB.capability,
+    runbookId: RB.id,
+    runbookHash: RB.hash,
+    strictness: 'strict',
+    scope: { environments: ['local'] },
+    source: 'shipped',
+  } as never,
+];
+
+// ---------------------------------------------------------------------------
+// 1 · the carrier — what the arming keeps, and what it refuses to keep
+// ---------------------------------------------------------------------------
+
+describe('the arming queue carries the incidents an arming answers', () => {
+  test('the ids ride on the request, in the order they were given', () => {
+    const a = 'evt_01M0BFNDD6XS21X8HTEMGY4NQV';
+    const b = 'evt_01M0BFNDD6XS21X8HTEMGY4NQW';
+    recordArmingRequest(RB.capability, new Date(), undefined, [a, b]);
+    const [request] = peekArmingRequests();
+    expect(request).toBeDefined();
+    expect(request.answers).toEqual([a, b]);
+  });
+
+  test('a request that answers nothing carries NO `answers` key', () => {
+    // Parity: everything predating this packet must be byte-identical, and a
+    // present-`undefined` is not byte-identical to a missing key.
+    recordArmingRequest(RB.capability);
+    const [request] = peekArmingRequests();
+    expect(request).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(request, 'answers')).toBe(false);
+  });
+
+  test('AN ID THAT IS NOT AN EVENT ID IS DROPPED — a join is never written for a value that cannot be one', () => {
+    recordArmingRequest(RB.capability, new Date(), undefined, [
+      'evt_01M0BFNDD6XS21X8HTEMGY4NQV',
+      'r_msz8afwx00',                 // a RUN id — WP-48a's own finding, one field over
+      'task_01M0BFNDD6XS21X8HTEMGY4NQV', // a TaskId is not an incident
+      'ent_site_Y64Y113T3AQXYGGSAPXMQKMQHA',
+      '',
+      'evt_not-a-ulid',
+    ]);
+    const [request] = peekArmingRequests();
+    expect(request.answers).toEqual(['evt_01M0BFNDD6XS21X8HTEMGY4NQV']);
+  });
+
+  test('an arming whose ids are ALL unusable carries no key at all, rather than an empty answer', () => {
+    recordArmingRequest(RB.capability, new Date(), undefined, ['r_msz8afwx00', 'nonsense']);
+    const [request] = peekArmingRequests();
+    expect(Object.prototype.hasOwnProperty.call(request, 'answers')).toBe(false);
+  });
+
+  test('the same incident named twice is one answer', () => {
+    const a = 'evt_01M0BFNDD6XS21X8HTEMGY4NQV';
+    recordArmingRequest(RB.capability, new Date(), undefined, [a, a]);
+    expect(peekArmingRequests()[0].answers).toEqual([a]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2 · the turn — the cause rides out on the arming that carried it
+// ---------------------------------------------------------------------------
+
+describe('the honoured arming, and only it, hands its cause to the turn', () => {
+  const runbooks = {
+    byCapability: (c: string) => (c === RB.capability ? RB : undefined),
+    runbooks: () => [RB],
+  } as never;
+
+  test('a model-requested arming carries the incidents it answers into the turn', () => {
+    const a = 'evt_01M0BFNDD6XS21X8HTEMGY4NQV';
+    recordArmingRequest(RB.capability, new Date(), undefined, [a]);
+    const turn = procedureRequestForTurn({ runbooks, userMessage: 'contain it', grants: grant() });
+    expect(turn?.request.armed?.armedBy).toBe('model-request');
+    expect(turn?.answers).toEqual([a]);
+  });
+
+  test('an arming that answered nothing hands the turn no key', () => {
+    recordArmingRequest(RB.capability);
+    const turn = procedureRequestForTurn({ runbooks, userMessage: 'x', grants: grant() });
+    expect(turn?.request.armed?.armedBy).toBe('model-request');
+    expect(Object.prototype.hasOwnProperty.call(turn!, 'answers')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3 · the derivation
+// ---------------------------------------------------------------------------
+
+describe('manifestCauseFor — one derivation', () => {
+  test('ids become the cause', () => {
+    expect(manifestCauseFor(['evt_01M0BFNDD6XS21X8HTEMGY4NQV'])).toEqual({
+      answers: ['evt_01M0BFNDD6XS21X8HTEMGY4NQV'],
+    });
+  });
+
+  test('nothing answered is UNDEFINED, not an empty cause', () => {
+    // The opposite reading from `manifestScopeFor`, and deliberately so: an
+    // arming that selected nothing KNOWS its target set is empty, which is a
+    // fact. An arming that answers nothing is not answering — there is no
+    // empty-set fact to record, and `cause: { answers: [] }` would assert a
+    // containment run that answers nothing in particular.
+    expect(manifestCauseFor(undefined)).toBeUndefined();
+    expect(manifestCauseFor([])).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4 · the fold — the join the record now supports
+// ---------------------------------------------------------------------------
+
+describe('the fold joins a run to the incidents its arming named', () => {
+  test('FOUR INCIDENTS AND THE RUN ANSWERING THEM ARE ONE ROW — not four rows and a run', () => {
+    const incidents = [
+      emitIncident('Known backdoor plugin detected: wp-compat'),
+      emitIncident('PHP file(s) in mu-plugins/: index.php'),
+      emitIncident('File manager plugin(s) active: fileorganizer'),
+      emitIncident('Low-entropy plugin name(s): noted, index'),
+    ];
+    const task = mintTaskId();
+    const manifestId = emitManifest({
+      taskId: task,
+      observedAt: hoursAgo(8),
+      cause: manifestCauseFor(incidents),
+    });
+
+    // shape #15 — the events exist, and the manifest really carries the ids.
+    expect(core.ledger.query({ topicPrefix: INCIDENT_TOPIC, limit: 20 })).toHaveLength(4);
+    const manifest = core.ledger.get(manifestId);
+    expect(manifest).toBeDefined();
+    expect((manifest!.payload as { cause?: { answers: string[] } }).cause?.answers).toEqual(incidents);
+
+    const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(triage.waiting).toHaveLength(1);
+    const [situation] = triage.waiting;
+    expect(situation.kind).toBe('session');
+    // The run, and the four incidents it answers, as its parts.
+    const parts = situation.parts.filter((p) => p.kind === 'incident');
+    expect(parts.map((p) => p.eventId).sort()).toEqual([...incidents].sort());
+  });
+
+  test('WITHOUT the cause the same events are FIVE rows — so the join is the record, not the timestamps', () => {
+    // The other half of the measurement, and the designer's sentence made
+    // executable: same site, same minutes, same everything except the one fact
+    // the armer wrote down.
+    for (const symptom of ['a', 'b', 'c', 'd']) emitIncident(symptom);
+    emitManifest({ taskId: mintTaskId(), observedAt: hoursAgo(8) });
+
+    const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(triage.waiting).toHaveLength(5);
+    expect(triage.waiting.filter((s) => s.kind === 'incident')).toHaveLength(4);
+  });
+
+  test('a REFUSED turn records no cause, so it joins nothing', () => {
+    const incident = emitIncident('Known backdoor plugin detected: wp-compat');
+    emitManifest({
+      taskId: mintTaskId(),
+      observedAt: hoursAgo(8),
+      status: 'refused',
+      cause: manifestCauseFor([incident]),
+    });
+
+    // A refused turn is not a turn of the run at all, so there is no session for
+    // anything to join — the incident stands alone, as it did before.
+    const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(triage.waiting).toHaveLength(1);
+    expect(triage.waiting[0].kind).toBe('incident');
+  });
+
+  test('an id naming no incident joins NOTHING — no part is manufactured for it', () => {
+    const real = emitIncident('Known backdoor plugin detected: wp-compat');
+    const ghost = 'evt_01M0BFNDD6XS21X8HTEMGY4NQZ';
+    emitManifest({
+      taskId: mintTaskId(),
+      observedAt: hoursAgo(8),
+      cause: manifestCauseFor([real, ghost]),
+    });
+
+    const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(triage.waiting).toHaveLength(1);
+    const parts = triage.waiting[0].parts.filter((p) => p.kind === 'incident');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].eventId).toBe(real);
+  });
+
+  test('an incident already correlated into its own run keeps that run — the answer never steals it', () => {
+    // An abort incident belongs to the run that PRODUCED it. A later containment
+    // arming naming it must not move it out of its producing run's situation:
+    // "which run produced this" outranks "which run answers it", and both are
+    // record links.
+    const producing = mintTaskId();
+    emitManifest({ taskId: producing, observedAt: hoursAgo(20) });
+    const incident = core.emitter.emit({
+      observed_at: hoursAgo(19),
+      topic: INCIDENT_TOPIC,
+      schema: INCIDENT_SCHEMA,
+      entity: { site: SITE },
+      actor: { id: 'act_chat_assembler', kind: 'system' },
+      source: { class: 'work', system: 'procedure:abort', trust: 'emitted' },
+      correlation: producing,
+      payload: { fact: 'ab.backup', symptom: 'cp.backup failed', resolved: false, source: 'abort:x/ab.backup' },
+    }).id;
+
+    const answering = mintTaskId();
+    emitManifest({ taskId: answering, observedAt: hoursAgo(8), cause: manifestCauseFor([incident]) });
+
+    const snapshot = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).snapshot();
+    const owner = snapshot.situations.find((s) => s.parts.some((p) => p.eventId === incident));
+    expect(owner).toBeDefined();
+    expect(owner!.sessionId).toBe(`sess_${producing}`);
+  });
+});
