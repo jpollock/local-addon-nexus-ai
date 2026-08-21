@@ -23689,3 +23689,118 @@ incident has none) is untouched. Both stay open, both go back with
 this ratification, and **WP-55 must not resolve either by choosing**
 — the pin amendment is the designer's, and the incident-deferral
 record shape is WP-56's held measurement.
+
+---
+
+## WP-51 · LOCK ANNOUNCE (2026-08-21) — three producers paying debts they already owe
+
+**Branch `wp-51`, worktree `.worktrees/wp-51`, cut from
+`poc/nexintelligence-ux` at `09c32d99`** (which is `bb16e9de` plus the
+architect's coalesced fixture and two designer position documents, committed
+verbatim under the WP-02 precedent immediately before this announce — eighth
+exercise; all four designer receipts matched the architect's own stated
+figures, and three things are flagged in that commit message, one of them a
+red base described below).
+
+**Scope: the WP-50 gate ruling's §7, both parts, plus the designer's Q1 as its
+third item.** Each is a fact a producer ALREADY KNOWS and does not write down.
+
+1. **THE SCAN MINTS A TaskId.** A sentinel scan is an ACT and belongs in the
+   record as one; its findings then carry a real `correlation: task_<ULID>`.
+   The envelope validator is not bent — the id becomes valid because the thing
+   it names becomes real, which is why the act is recorded and not merely the
+   id minted.
+2. **ONE ORPHAN-GROUPING RULE IN THE COALESCER.** Run-less incidents sharing a
+   correlation coalesce into one situation with parts. This does not breach
+   "record links, never payloads": the link becomes a genuine record link and
+   the payload stays unread. That doctrine is unamended.
+3. **THE ARMING RECORDS ITS CAUSE.** When a containment run is armed in answer
+   to incidents, the arming writes the incident ids as its causation — the
+   shape WP-25 already carries as `source: abort:<task>/<abort>`. The
+   designer's sentence is the doctrine: *"I'd rather have four honest rows than
+   three where one join was inferred from a timestamp."*
+
+**THE RECORD IS APPEND-ONLY. The four existing incidents stay four rows**, and
+their stated limit remains true of them. No history is rewritten to make a
+screenshot better, and the gate report says so in those words.
+
+**LOCKED:**
+
+| surface | why this packet holds it |
+|---|---|
+| `src/main/intelligence-host/incidentProducer.ts` — the sentinel tap | item 1; WP-54's announce names this file NOT locked by it |
+| `src/main/intelligence-host/procedureArming.ts`, `src/main/comparator/armFromSelection.ts`, and `chatAssembly.ts`'s manifest write (`ManifestScope`'s neighbourhood and `emitManifest`) | item 3 — the arming path, end to end |
+| `src/main/intelligence-host/sessionRegistry.ts` — **the COALESCER only**: `foldSessionRegistry`'s incident-attachment pass, and NEW functions for the coalesced situation | item 2 |
+| `src/main/ipc-handlers.ts` — the arming handler's one pass-through | wiring only, per the integration lock, as this packet's final step. WP-54 and WP-54a both name this file NOT locked; WP-56 claims a DIFFERENT handler in it (`RETURN_*` neighbourhood), so the two are disjoint within the file |
+| `docs/intelligence/` | this record |
+
+**THE CROSSED CLAIM ON `sessionRegistry.ts` IS NOW FOUR-WAY, DECLARED RATHER
+THAN DISCOVERED** (WP-20f/WP-37's rule; WP-54a declared the two-way form, WP-56
+the three-way). WP-54 holds the composer and eight named functions; WP-54a
+holds `ConsequenceTier`, `contradictedByTheRecord`, `foldSessionRegistry` and
+new agent-failure functions; WP-56 holds the `Deferral` shape, a post-pass,
+`listVerdict` and `triage()`. Sequencing comes from the owner. Named so three
+siblings can see it without reading this branch:
+
+- **Disjoint by intent.** This packet adds functions rather than editing any of
+  WP-54's eight, and calls `derivedCopy` without changing it.
+- **ONE GENUINE OVERLAP, and it is the same one WP-56 named:**
+  `foldSessionRegistry`, claimed by WP-54a and WP-56 already. This packet
+  changes its incident-attachment pass — the loop that today sorts every
+  incident into `attached` or `orphans`. All three additions are additive and
+  in different regions of one function; if a sibling lands first this is an
+  additive conflict resolved by taking all sides, never by choosing.
+
+**NOT LOCKED, and named so a sibling can take them:** `src/intelligence/` (the
+core — untouched; no envelope field and no new topic PREFIX, see below),
+`src/renderer/` (WP-54 holds it; nothing here renders), the composer and the
+ratified fixture (WP-54), the generators and their artifacts (WP-54),
+`src/main/index.ts`, `src/main/agent-runtime/AgentRunner.ts` (WP-54a's tap
+sits beside the existing `recordSentinelIncidents` call; this packet changes
+what that call WRITES, not where it is made — the call site is untouched).
+
+**MEASURED AT ANNOUNCE, on the owner's real ledger, so nothing surprises the
+gate:**
+
+- **4 incident events, 0 with a correlation.** All four carry
+  `source: sentinel:r_msz8afwx00` — ONE scan, one site
+  (`ent_site_Y64Y113T3AQXYGGSAPXMQKMQHA`), severities `high, critical, high,
+  critical`. They share a payload origin and nothing else, which is exactly
+  the reversal the designer's own position-11 sheet drew honestly and the
+  review asked us to override. They stay four rows.
+- **0 of 36 manifests carry `scope`**, one packet after WP-50 shipped the
+  writer — no chat turn has been taken on this machine since. So item 3's
+  exhibit must be DRIVEN through the shipped functions, not found by reading.
+  0 carry `cause`, which is this packet's field and does not exist yet.
+- **0 `task.run.*` events.** `task.run.assigned` / `task.run.completed` are in
+  the ratified taxonomy (architecture §4.2) and have never had a producer.
+
+**CONTRACT ADDITIONS ARE GATE-HELD — the shapes are presented verbatim before
+merge.** Four are expected: the scan act's payload schema on an
+already-declared topic, `Situation.linkKind` and `Situation.memberCount`, the
+manifest's `cause`, and `ArmingRequest.answers`. **`linkKind` and `memberCount`
+are not this packet's invention** — the designer's coalesced sheet
+(`incident.coalesced`, committed one commit ago) reads both in its own guard,
+and WP-55 cannot draw the class without the fold supplying them.
+
+**TWO STATED CONSEQUENCES, at announce rather than at the gate:**
+
+1. **THE COALESCED ROW'S DRAWING IS WP-55's, NOT THIS PACKET'S.** The readiness
+   verdict's order is explicit — dedup, then WP-51's three producer items, then
+   the coalesced drawing and build. So a coalesced row produced here takes the
+   DERIVED path (`headlineTemplate: null`) rather than the ratified
+   `incident.no-run` sentence, because that class's headline is ONE member's
+   sentence and Q3's ratified guard is that a coalesced row *"can never be one
+   member's sentence with a parts chip bolted on"*. The fold supplies the
+   facts; the sheet supplies the words, in WP-55.
+2. **THE BASE THIS PACKET CUTS FROM IS RED — 1 suite, 6 tests**, inherited and
+   not caused here: the designer's new sheet adds `incident.coalesced` and
+   `generate-situation-copy.ts:179` fail-closes on its `RATIFIED_IDS` list, so
+   `situationHeadlines.test.ts` cannot regenerate the tracked module. It is
+   WP-54/WP-55's to resolve — they hold the fixture and the generators — and
+   this packet's baseline records it as an inherited condition with the suite
+   named, so its own delta is measured against it rather than through it.
+
+Standard discipline, all of it, plus the real-ledger exhibit the launch
+instruction requires: a newly produced sibling set coalescing into one
+situation with parts, BESIDE the four historical ones staying separate.
