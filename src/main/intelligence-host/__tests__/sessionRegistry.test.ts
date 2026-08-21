@@ -1680,29 +1680,73 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     expect(situation.ask).not.toContain('never received a target list');
   });
 
-  test('a gated run whose selection was EMPTY gets neither class — the guard\'s new clause', () => {
-    // `total === 0` WITH a gate: guard 1's ratified clause `&& gate === null`
-    // declines it, and guard 2 needs `total > 0`. A row standing at a gate can
-    // never be "cannot start", whatever the count says — the belt-and-suspenders
-    // half of the ruling, pinned at the fold.
+  test('a gated run whose selection was EMPTY is STILL the mid-procedure class — WP-50\'s amendment', () => {
+    // AMENDED AT WP-50'S RULING, and the amendment is the point of the test.
+    //
+    // This used to assert that the row got NEITHER class: guard 1's `gate ===
+    // null` declined it and guard 2 required `total > 0`. Measured on the
+    // owner's real fleet, that combination withheld the designer's own class-2
+    // sentence from the designer's own class-2 row — the `cp.backup, 4 of 8`
+    // run, whose target set is genuinely empty.
+    //
+    // `total > 0` is gone from guard 2, because **a guard may condition only on
+    // facts its sentence's claim depends on** and NEITHER class-2 sentence reads
+    // `{total}`: the headline names the checkpoint and what it awaits, the ask
+    // names the position and says nothing has been written. Both are true of
+    // this row whatever the count is.
+    //
+    // Guard 1 is unaffected and still declines — it carries `gate === null` —
+    // so mutual exclusivity holds on the gate, which is asserted here rather
+    // than assumed.
     unwrittenRunUnderDocument(0);
     const [situation] = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) })).situations;
     expect(situation.gate).toBeDefined();
     expect(situation.written).toEqual({ done: 0, failed: 0, total: 0 });
-    expect(situation.headlineTemplate).toBeNull();
-    expect(situation.ask).toBe('');
+    expect(situation.headlineTemplate).toBe('run.waiting.mid-procedure');
+    expect(situation.ask).toContain('Nothing has been written yet, so stopping here costs nothing.');
+    // …and NOT the class that would tell her it cannot start. A row standing at
+    // a gate can never be "cannot start", whatever any count says.
+    expect(situation.ask).not.toContain('never received a target list');
   });
 
   test('a run whose arming carried NO scope reports the target set as null, never as zero', () => {
-    // The state 36 of 36 manifests on the developer's live ledger are in: armed
-    // by predicate, nothing selected. "Nothing selected anything" is a different
-    // fact from "a selection chose nothing", and only the second is the class
-    // that says a run never received a target list.
+    // The state 36 of 36 manifests on the developer's live ledger were in before
+    // WP-48b: armed by a model request, nothing selected, and NOTHING RECORDED
+    // about it. "Nothing on record says anything about a target set" is a
+    // different fact from "a selection chose nothing", and the row reports the
+    // first as `null` — never as a count.
     unwrittenRunUnderDocument(); // no `targets` ⇒ no `scope` key at all
     const snapshot = foldSessionRegistry(deps({ runbooks: lookup(RB_REMEDIATE) }));
     expect(snapshot.sessions[0].targetSet).toBeNull();
     expect(snapshot.situations[0].written.total).toBeNull();
+    // WP-50: the row IS gated, so class 2 composes — the unknown target set is
+    // not something either class-2 sentence claims. `null` reaching the surface
+    // as `null` is what this test is for, and it still does.
+    expect(snapshot.situations[0].headlineTemplate).toBe('run.waiting.mid-procedure');
+  });
+
+  test('THE HONEST GAP STAYS HONEST · a GATELESS run with an UNKNOWN target set gets no class at all', () => {
+    // WP-50's ruling names this case explicitly, so it is pinned explicitly:
+    // guard 1 requires `total === 0` and this is `null`; guard 2 requires a
+    // gate and there is none. The row falls to the DERIVED sentence, and that
+    // is correct — the record genuinely does not say what the run was armed
+    // with, so neither ratified sentence is available to say anything about it.
+    //
+    // This is the case the amendment must NOT have swallowed: dropping
+    // `total > 0` widened guard 2 to every gated run, not to every run.
+    const t = mintTaskId();
+    emitManifest({
+      taskId: t,
+      observedAt: hoursAgo(6),
+      procedure: { capability: RB_REMEDIATE.capability, runbook: RB_REMEDIATE.id, hash: RB_REMEDIATE.hash, status: 'delivered' },
+      // no `targets` ⇒ no scope key, and no runbook in the lookup ⇒ no gate
+    });
+    const snapshot = foldSessionRegistry(deps({ runbooks: lookup() }));
+    expect(snapshot.sessions).toHaveLength(1);          // shape #15
+    expect(snapshot.sessions[0].targetSet).toBeNull();
+    expect(snapshot.sessions[0].gate).toBeUndefined();
     expect(snapshot.situations[0].headlineTemplate).toBeNull();
+    expect(snapshot.situations[0].ask).toBe('');
   });
 
   test('a scope whose runnable is not a list reports null, never a guessed size', () => {

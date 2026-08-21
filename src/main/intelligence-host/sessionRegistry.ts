@@ -1610,7 +1610,16 @@ export function guardHolds(template: SituationTemplate, input: SituationClassInp
     case 'run.waiting.nothing-written':
       return kind === 'run' && done === 0 && failed === 0 && total === 0 && gate === null;
     case 'run.waiting.mid-procedure':
-      return kind === 'run' && done === 0 && failed === 0 && total !== null && total > 0 && gate !== null;
+      // WP-50's ruling: `&& total !== null && total > 0` REMOVED, to match the
+      // amended ratified guard. Neither of this class's sentences reads
+      // `{total}`, and the clause withheld the designer's own row from the sheet
+      // that drew it. **A guard may condition only on facts its sentence's claim
+      // depends on** — gating on an unstated fact is how a TRUE sentence gets
+      // withheld, and a withheld sentence is invisible, which makes it worse
+      // than a false one. `total` is deliberately no longer read here; the
+      // agreement pin over the shared case table is what keeps this copy and
+      // the fixture's one rule.
+      return kind === 'run' && done === 0 && failed === 0 && gate !== null;
     case 'run.waiting.part-changed':
       return kind === 'run' && (done > 0 || failed > 0) && gate !== null;
     case 'incident.no-run':
@@ -1657,9 +1666,20 @@ export function selectSituationTemplate(
  * four checkpoints into it. It is the designer's CLASS 2, and class 2 cannot
  * fire.
  *
- * WHY CLASS 2 CANNOT FIRE, structurally. Guard 2 needs `total > 0` with nothing
- * written, and `{total}` is `row.places.total`, which `foldOneSession` derives
- * from `outcomes.succeeded` + `outcomes.failed` and from nothing else. So
+ * **WP-50: THE PARAGRAPH BELOW IS HISTORY, AND IT IS KEPT AS HISTORY.** It
+ * describes the world before WP-48's ruling and before WP-50's amendment.
+ * `{total}` is no longer `places.total` (WP-48 rebound it to the arming's own
+ * scope), and guard 2 no longer reads `total` at all (WP-50 dropped the clause,
+ * because neither class-2 sentence claims anything about a target set). Class 2
+ * fires on the real cp.backup row now. The refusal below still cannot be reached
+ * through `selectSituationTemplate` — guard 1 carries `gate === null` — so it
+ * remains a tripwire, directly pinned, exactly as the WP-48 ruling made it
+ * permanent.
+ *
+ * WHY CLASS 2 COULD NOT FIRE, structurally, AT THE TIME. Guard 2 needed
+ * `total > 0` with nothing written, and `{total}` was `row.places.total`, which
+ * `foldOneSession` derives from `outcomes.succeeded` + `outcomes.failed` and
+ * from nothing else. So
  * `done === 0 && failed === 0` FORCES `total === 0`, guard 2 is unreachable by
  * construction, and every one of its real instances lands in guard 1. The fold
  * carries no intended-target set for a run that has not acted yet — there is no

@@ -163,6 +163,12 @@ MUTATIONS = [
      "  'run.waiting.part-changed': 'What has {runNoun} already changed?',",
      "  'run.waiting.part-changed': 'What has {runbookId} already changed?',",
      "the second interim form comes back — a PROCEDURE identifier standing where a run noun belongs, on the class whose row matters most when it appears"),
+
+    # --- family 5: the ruling's amendment (§8) -------------------------------
+    ("M22", REGISTRY,
+     "      return kind === 'run' && done === 0 && failed === 0 && gate !== null;",
+     "      return kind === 'run' && done === 0 && failed === 0 && total !== null && total > 0 && gate !== null;",
+     "guard 2 goes back to conditioning on a fact NEITHER of its sentences states — and the designer's own class-2 row on the owner's own fleet goes back to the derived fallback, silently, because a withheld sentence is invisible"),
 ]
 
 # EQUIVALENT MUTANTS — RECORDED, NOT EXCUSED.

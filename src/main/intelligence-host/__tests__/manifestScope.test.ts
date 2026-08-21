@@ -175,7 +175,7 @@ describe('manifestScopeFor — one derivation, both armings', () => {
 // ---------------------------------------------------------------------------
 
 describe('the fold reads what the producer writes — three states, three answers', () => {
-  test('NO SCOPE KEY · targetSet is null, and the run renders the derived sentence', () => {
+  test('NO SCOPE KEY · targetSet is null, and a GATELESS run falls to the derived sentence', () => {
     const task = mintTaskId();
     const id = emitManifest({ taskId: task, observedAt: hoursAgo(60) });
 
@@ -184,15 +184,40 @@ describe('the fold reads what the producer writes — three states, three answer
     const payload = readBack(id);
     expect(Object.prototype.hasOwnProperty.call(payload, 'scope')).toBe(false);
 
-    const registry = createSessionRegistry({ core, now: NOW, runbooks: lookup });
+    // Gateless, so the ONE remaining `total`-reading guard is the one that
+    // decides. (WP-50's ruling dropped `total > 0` from class 2, because
+    // neither of its sentences reads it; class 1 still requires `total === 0`
+    // and this is `null`.)
+    const registry = createSessionRegistry({ core, now: NOW, runbooks: noDocument });
     const [row] = registry.sessions();
     expect(row).toBeDefined();
     expect(row.targetSet).toBeNull();
 
     const [situation] = registry.triage().waiting;
     expect(situation.written.total).toBeNull();
-    // Both `total`-reading guards decline on null, so no ratified class fires.
+    // The honest gap: the record does not say what this run was armed with, so
+    // neither ratified sentence is available to say anything about it.
     expect(situation.headlineTemplate).toBeNull();
+  });
+
+  test('NO SCOPE KEY, GATED · class 2 composes anyway — the amendment, at the fold', () => {
+    // The other side of the same absence, and the one WP-50's ruling changed.
+    // A run standing at a gate with nothing written IS the designer's class 2,
+    // and neither of that class's sentences claims anything about a target set,
+    // so an unknown one does not withhold them.
+    const task = mintTaskId();
+    emitManifest({ taskId: task, observedAt: hoursAgo(6) });
+
+    const registry = createSessionRegistry({ core, now: NOW, runbooks: lookup });
+    const [row] = registry.sessions();
+    expect(row).toBeDefined();
+    expect(row.targetSet).toBeNull();
+    expect(row.gate).toBeDefined();
+
+    const [situation] = registry.triage().waiting;
+    expect(situation.written.total).toBeNull();       // still unknown, still said so
+    expect(situation.headlineTemplate).toBe('run.waiting.mid-procedure');
+    expect(situation.ask).toContain('Nothing has been written yet, so stopping here costs nothing.');
   });
 
   test('EMPTY SET · targetSet is 0, and the DESIGNER\'S CLASS 1 fires — the fleet\'s real case', () => {

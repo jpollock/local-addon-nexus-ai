@@ -379,7 +379,15 @@ function main(): void {
 
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, next, 'utf-8');
-  process.stdout.write(`wrote ${path.relative(REPO_ROOT, out)} (${next.length} bytes)\n`);
+  // WP-50: `next.length` is UTF-16 CODE UNITS, not bytes — this line said
+  // "bytes" and printed characters, and the copy modules are full of em dashes
+  // and `§`, so the two differ by 18 on this one file alone. A receipt-printing
+  // tool that names the wrong unit produces a wrong receipt every time someone
+  // pastes it, and one already reached the record (WP-48's gate report).
+  // "Arithmetic in one named unit" applies to the tool as well as the report.
+  process.stdout.write(
+    `wrote ${path.relative(REPO_ROOT, out)} (${Buffer.byteLength(next, 'utf-8')} bytes)\n`,
+  );
 }
 
 if (require.main === module) main();

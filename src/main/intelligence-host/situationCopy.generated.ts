@@ -88,7 +88,7 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
   },
   {
     id: 'run.waiting.mid-procedure',
-    guard: 'row.kind === "run" && done === 0 && failed === 0 && total > 0 && gate !== null',
+    guard: 'row.kind === "run" && done === 0 && failed === 0 && gate !== null',
     headline: 'A {checkpoint} step is waiting on your {awaits}',
     ask: 'Waiting at {checkpoint}, {position}. Nothing has been written yet, so stopping here costs nothing.',
     chip: 'Waiting',

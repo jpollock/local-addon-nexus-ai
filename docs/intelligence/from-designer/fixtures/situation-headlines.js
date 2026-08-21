@@ -70,7 +70,30 @@
     },
     {
       id: 'run.waiting.mid-procedure',
-      guard: 'row.kind === "run" && done === 0 && failed === 0 && total > 0 && gate !== null',
+      // WP-50 GATE RULING (2026-08-21, architect). Amended in the RATIFIED
+      // SOURCE rather than patched in the composer, as WP-48's amendment was,
+      // so the guard and the code stay one rule and the agreement pin holds.
+      //
+      // `&& total > 0` REMOVED. Neither of this class's sentences reads
+      // `{total}` — the headline names the checkpoint and what it awaits, and
+      // the ask names the position and states that nothing has been written.
+      // The clause gated a sentence on a fact the sentence never states, and it
+      // withheld this row from the sheet that drew it: measured on the owner's
+      // real fleet, the `cp.backup, 4 of 8` run has a GENUINELY EMPTY target
+      // set, so `total > 0` failed, guard 1's own `gate === null` excluded it
+      // too, and the row fell to the derived sentence.
+      //
+      // NEW STANDING RULE, from this: **a guard may condition only on facts its
+      // sentence's claim depends on.** Gating on an unstated fact is how a TRUE
+      // sentence gets withheld — and a withheld sentence is invisible, which
+      // makes it worse than a false one, which at least argues with the reader.
+      //
+      // Mutual exclusivity still holds on `gate`: guard 1 carries
+      // `gate === null` and this carries `gate !== null`. And the honest gap
+      // stays honest — a gateless run whose target set is UNKNOWN (null)
+      // matches neither guard and falls to the derived sentence, because the
+      // record genuinely does not say what it was armed with.
+      guard: 'row.kind === "run" && done === 0 && failed === 0 && gate !== null',
       headline: 'A {checkpoint} step is waiting on your {awaits}',
       ask: 'Waiting at {checkpoint}, {position}. Nothing has been written yet, so stopping here costs nothing.',
       chip: 'Waiting',
