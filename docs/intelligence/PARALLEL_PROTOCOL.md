@@ -475,3 +475,30 @@ already reached the record (WP-48's 6,168 for a 6,155-byte file).
 Third member of the receipts family — pre-written, stale, wrong-unit —
 and the only one that survives a re-paste, because re-pasting a wrong
 unit reproduces it exactly.
+
+## An announce is amended when the need is measured (WP-52)
+
+A lock announce that turns out to be too narrow is amended ON THE BASE
+at the moment the need is discovered, never corrected retroactively in
+the merge report. A lock claimed at merge time is a claim no sibling
+could have acted on, which is the whole purpose of announcing.
+
+## pwd: the hazard is a compound command, not an hour (WP-52)
+
+The documented form of the wrong-tree hazard is a `cd` from hours
+earlier. WP-52's was FOUR COMMANDS earlier, inside a compound command
+whose stated purpose was something else entirely — and it silently
+substituted the primary's baseline for the worktree's. Re-anchor at
+every measurement, not at every session. The tell remains the skipped
+column: primary and worktree disagree by exactly ten in the
+documented direction, so a baseline whose skipped count belongs to the
+other tree is announcing itself.
+
+## The poisoned cache has no fixed count (WP-52)
+
+The recorded signature — exactly one unrelated suite failing to parse
+— is not a rule about the number. WP-52's ninth occurrence broke TWO
+suites because both import a file the packet had edited: the poisoned
+entry was a shared dependency rather than a suite's own first line.
+Read the shape (unrelated suites, parse-level failure, cleared by the
+documented move), never the count.

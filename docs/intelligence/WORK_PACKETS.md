@@ -22480,3 +22480,89 @@ the producer and the coalescer, which are disjoint from it.
 report** — the WP-20f/WP-37 rule does not stop applying because the need was
 discovered mid-packet, and a lock claimed only on a worktree is not visible to
 the agent it warns.
+
+---
+
+## WP-52 · GATE RULING — the card is the template (2026-08-21, architect adjudication)
+
+**Verdict: PASS. Cleared to merge as held.** No escalations, none
+needed. Verified independently: 12 files +1,380/−90;
+`situationCopy.generated.ts` **6,212 bytes / md5
+`08756f9c9e9853119c97e913aa7dde2a`** — reproduced exactly, in the
+unit it names, on the first packet since the wrong-unit rule; and
+"no targets on record" survives in the tree ONLY inside the test that
+asserts against it.
+
+**Item 4's measurement: ACCEPTED, and it is the same collision a
+third time.** `targetSet: null` (the ARMED set) beside
+`places.total: 0` (the OUTCOME set), with `summarisePlaces` speaking
+about "targets on record" while its subject was the targets with an
+outcome. Guard 1 was right to decline; the composer was not the
+defect; the SENTENCE was. **Binding at WP-48 · registration gap at
+WP-50 · sentence at WP-52 — one collision, three forms**, and the
+second-order proof is the one that settles it: a run with five armed
+targets and nothing written also said there were none. That is a
+false sentence about a real fleet, found by measuring rather than by
+reading.
+
+**The fix — SILENCE — is RATIFIED, with its guard.** An empty place
+set reports no place clause: any phrase would be authored copy on a
+surface whose discipline is that nothing is authored, and the
+designer's §2 meta columns carry no place clause on any run row.
+**"Silence is the strongest available form of 'say unknown, not
+empty'"** enters the record as its own sentence. Critically, the
+non-empty branches are pinned unchanged with two battery mutations
+over them, so a summary returning `''` for everything cannot pass —
+the fix cannot degrade into blanket silence, which is the only way
+this ruling could have gone wrong.
+
+**The card-owning pin: RATIFIED, and its exemption with it.** Counted
+over every ratified class including the unreachable `agent.stuck`:
+the ask occurs exactly once, no pre-template line survives (by marker
+AND by text), and all three template-owned lines are present — so a
+card that dropped everything fails too. **The derived card KEEPS its
+parts, gate and needs lines, because it has no ask and those are the
+only place its WHERE appears** — the replacement rule binds templated
+cards only, and the exemption is derived from the moment's own law
+(a row that knows something needs you but not where is the defect M6
+exists to prevent), not from convenience.
+
+**The three grown evals: RATIFIED, and two grew STRICTER —**
+`J-Glance#key_step[3]` and `J-Return#must_not[2]` now read per-row
+rather than per-column, because the old forms could be satisfied by
+one card carrying ANOTHER card's checkpoint id, and `must_not[2]`
+never checked position at all. An instrument that had to be rewritten
+for a ruling was found to have been weak all along; that is the
+second time growing an eval has exposed a latent hole (WP-49's
+exhaustive account was the first).
+
+**The lock amendment: RATIFIED AS THE STANDARD.** The eval surface
+was outside the announced lock, and the announce was amended ON THE
+BASE the moment the need was measured — not retroactively at merge.
+**An announce is amended when the need is discovered; an announce
+corrected at merge time is a claim nobody could have acted on.**
+Appended to the protocol.
+
+**Two environment findings, both sharpening rules:**
+- **The pwd rule caught its author** — a `cd` into the primary for
+  the architect commit persisted, so the "worktree baseline" was the
+  primary's (2 skipped where the worktree reports 12); discarded and
+  re-taken, nothing landed in the wrong tree, **and the tell was the
+  skipped column, read exactly as the protocol says to read it.** The
+  documented hazard is a `cd` hours earlier; this one was four
+  commands earlier, inside a compound command whose purpose was
+  something else. Protocol sharpened.
+- **The poisoned cache, ninth occurrence, in a NEW SHAPE:** two
+  suites failed rather than the documented one, because both import
+  `checks.ts` — the poisoned entry was a shared DEPENDENCY, not a
+  suite's own first line. **"The rule holds; the count in it
+  doesn't."** Protocol amended.
+
+**Credits:** M09's first form killed at the type checker rather than
+by an assertion — honest, but WP-24 requires the mutant to change
+emitted behaviour, so it was reshaped to compile and run and the
+battery re-driven whole. Item 2 built nothing because the designer's
+sentence set has not arrived, checked at the gate rather than
+assumed.
+
+**Merge as held.** Standard sequence on `poc/nexintelligence-ux`.
