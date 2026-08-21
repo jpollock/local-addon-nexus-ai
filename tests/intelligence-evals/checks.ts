@@ -2610,6 +2610,19 @@ const UX2_DRIVEN: RegisteredCheck[] = [
         // cannot call is a sentence-producing path it cannot account for, and
         // an unaccountable path reads as prose whether or not it is.
         ...[...s.triage.waiting, ...s.triage.changed].map((x: any) => model.metaLine(x, s.now)),
+        // WP-55 · THE NINTH GENERATOR — `nowGroups`, and it had to be added
+        // here rather than to the fold set.
+        //
+        // XD-28's caption is composed IN THE SURFACE from the ratified `GROUP`
+        // block and a count of the rows about to be drawn, exactly the way the
+        // accounting line and the list verdict are. So it is a generator, and a
+        // composition this check cannot CALL is a sentence-producing path it
+        // cannot account for — which reads as prose whether or not it is. That
+        // is what caught it: the caption rendered, the eval found two
+        // unaccounted sentences, and it was right to.
+        ...model.nowGroups(model.nowRows(s.triage, s.inbox))
+          .filter((g: any) => g.caption)
+          .flatMap((g: any) => [g.caption.label, g.caption.limit]),
         ...Object.values(RETURN_COPY).map(String),
         ...Object.values(model.AUTHORED).map(String),
       ]);
@@ -2622,8 +2635,9 @@ const UX2_DRIVEN: RegisteredCheck[] = [
           `${long.length} sentence-length string(s) render on the arrival, and EVERY ONE is either ` +
             'a field of the fold (a rule, a part summary, a place set, the reserved headline, and ' +
             'since WP-48 the row\'s own verdict, ask, status and identifier) or the exact output ' +
-            'of one of the EIGHT generators — accountingLine, nowVerdict, driftLine, awayHeadline, ' +
-            'gateLine, needsLine, reservedDetail, metaLine — called here with the fold\'s own values',
+            'of one of the NINE generators — accountingLine, nowVerdict, driftLine, awayHeadline, ' +
+            'gateLine, needsLine, reservedDetail, metaLine, nowGroups — called here with the ' +
+            'fold\'s own values',
           `unaccounted strings: ${JSON.stringify(unaccounted)}`,
           'the accounting line and the gate line are COMPOSED — counts and gate fields inside ' +
             'ratified connectives — so they are matched against the generator\'s own output rather ' +

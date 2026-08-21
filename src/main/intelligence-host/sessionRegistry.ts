@@ -119,7 +119,7 @@ import { AGENT_FAILURE_TOPIC, type AgentFailurePayload } from './agentFailurePro
 import { getIntelligenceCore } from './coreRegistry';
 import type { IntelligenceCore } from './bootstrap';
 import { collectIntelligenceHealth, type IntelligenceHealthReport } from './health';
-import { INCIDENT_TOPIC, SENTINEL_SYSTEM } from './incidentProducer';
+import { INCIDENT_TOPIC, SENTINEL_SYSTEM, SEVERITY_ORDER, SITE_LEVEL, incidentKey } from './incidentProducer';
 // WP-54's merge: the Inbox's OWN hash, imported rather than reimplemented. The
 // signature that lets an Inbox row ride on the situation it duplicates has to
 // produce the code the Inbox actually stored, and a second implementation of a
@@ -692,10 +692,26 @@ export interface Situation {
    */
   door: RowDoor | null;
   /**
-   * WP-54 · ITEM 1 — the identity an Inbox item is matched against, or `null`.
-   * See `SituationSignature`.
+   * WP-54 · ITEM 1 — the identities an Inbox item is matched against.
+   *
+   * **A SET SINCE WP-55, and the plural is the fix rather than a generalisation.**
+   * It was one signature or `null`, which is exactly right for a situation of
+   * one and structurally wrong for a coalesced row: a signature identifies ONE
+   * thing, a coalesced row is several, so the Inbox's copies of its four members
+   * matched nothing and rendered as four duplicate rows beside the one card that
+   * had just folded them. WP-54 registered that as an honest null and routed the
+   * fix here, and this packet is where it became visible — a coalesced row is
+   * drawn now, so the duplicates are drawn beside it.
+   *
+   * EMPTY on every run row: nothing in the Inbox is a run. ONE entry for a
+   * situation of one — a set of one, which is the same reading `memberCount: 1`
+   * already carries on this contract. N entries for a coalesced row, one per
+   * member finding.
+   *
+   * COMPOSED HERE rather than matched in the surface, because a match rule in
+   * the renderer is a second opinion about identity.
    */
-  signature: SituationSignature | null;
+  signatures: readonly SituationSignature[];
   /**
    * The three numbers the headline was composed FROM, carried on the row.
    *
@@ -734,6 +750,25 @@ export interface ReservedRow {
   dark: Array<{ system: string; label: string; detail?: string }>;
   /** Producers reporting late but not dark — counted, never promoted to a row. */
   staleCount: number;
+  /**
+   * WP-55 · HOW MANY CHECKS THE VERDICT IS OVER — the denominator, published.
+   *
+   * The ratified `HEALTH.quiet` line is *"All {checkCount} checks are
+   * reporting."*, and it could not be rendered because nothing said how many
+   * checks there were. This is that number: the health lines that COUNT TOWARD
+   * THE VERDICT, which is the same set `dark` and `staleCount` are computed
+   * over — so the three are one arithmetic and a surface cannot print a count
+   * whose denominator came from somewhere else.
+   *
+   * Lines marked `countsTowardWorst: false` are excluded, for the reason they
+   * are excluded everywhere: a source never in use on this machine is not a
+   * check that is failing, and counting it would make the good-news line
+   * understate itself forever.
+   *
+   * ZERO when the health report could not be read at all, which is the same
+   * degraded state `verdict: 'DARK'` and `degraded: true` already report.
+   */
+  checkCount: number;
   /** The worst verdict the health report reached. */
   verdict: IntelligenceHealthReport['worst'];
   /** True when the health check itself could not measure something. */
@@ -1522,16 +1557,29 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
   // now records its scan as an act, so its findings carry a correlation that
   // names something. The coalescer did not learn to guess; the record learned
   // to say.
-  const bySharedLink = new Map<string, EventEnvelope[]>();
-  const alone: EventEnvelope[] = [];
-  for (const incident of orphans) {
-    const link = incident.correlation;
+  //
+  // WP-56a · AND IT NOW GROUPS SUBJECTS, NOT EVENTS. The producer's own dedup
+  // key is the identity of "the same incident" (see `incidentSubjectKey`), so a
+  // finding opened on Monday and closed on Tuesday is ONE subject with two
+  // events, not two rows. Both halves of that come from the same ruling: taking
+  // the key without the supersession rule that rides with it would give the two
+  // rows ONE id, which is worse than the event id it replaced.
+  const subjects = incidentSubjects(orphans);
+
+  const bySharedLink = new Map<string, IncidentSubject[]>();
+  const alone: IncidentSubject[] = [];
+  for (const subject of subjects) {
+    // THE CURRENT EVENT'S LINK, not the opening one's. A subject's state is its
+    // newest event, and the act that produced that state is the act that links
+    // it — a closing scan is an observation of THIS sweep, which is the same
+    // reading `recordSentinelIncidents` uses when it stamps an amendment.
+    const link = subject.current.correlation;
     if (!link) {
-      alone.push(incident);
+      alone.push(subject);
       continue;
     }
     const siblings = bySharedLink.get(link) ?? [];
-    siblings.push(incident);
+    siblings.push(subject);
     bySharedLink.set(link, siblings);
   }
   const coalesced: Situation[] = [];
@@ -1551,7 +1599,7 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     // whether or not anything was folded — see `Situation.memberCount`. Set
     // HERE rather than inside `situationOfIncident` because that function was
     // held by a sibling packet's lock when this landed; it belongs inside it.
-    ...alone.map((incident) => withFoldFacts(situationOfIncident(incident, named), 1, null)),
+    ...alone.map((subject) => withFoldFacts(situationOfIncident(subject, named), 1, null)),
     ...coalesced,
     ...openAgentFailures(agentFailures).map((event) => situationOfAgentFailure(event)),
   ];
@@ -2161,6 +2209,21 @@ export interface SituationClassInput {
    * caller in the tree today, not a convenience.
    */
   memberCount?: number;
+  /**
+   * WP-55 · THE RECORD LINK THAT JUSTIFIED THE FOLD, or null.
+   *
+   * `incident.coalesced`'s ratified guard reads `row.linkKind !== null`, so the
+   * selector has to read it or the two copies of one rule stop agreeing. It is
+   * the SECOND clause of that guard and it is not redundant with
+   * `memberCount > 1`: the doctrine is that **a fold requires a record link**,
+   * and a future producer that grouped on anything else would satisfy the count
+   * while failing the rule. The guard states both because both are required.
+   *
+   * Absent reads as null — a row that folded nothing was made one thing by
+   * nothing, which is `Situation.linkKind`'s own answer for every row that
+   * stands alone.
+   */
+  linkKind?: SituationLink | null;
 }
 
 /** Every `{slot}` a string carries. */
@@ -2242,6 +2305,14 @@ export function guardHolds(template: SituationTemplate, input: SituationClassInp
       // guard a run-less incident. A row that folded nothing is a situation of
       // one, so an absent count reads as 1.
       return kind === 'incident' && input.runId === null && (input.memberCount ?? 1) === 1;
+    case 'incident.coalesced':
+      // WP-55 · the designer's guard, transcribed. BOTH clauses, and the second
+      // is the doctrine rather than a redundancy: a fold requires a RECORD LINK,
+      // and a shared payload origin, target or timestamp is not one. Note it
+      // does NOT read `runId` — a coalesced group is by construction run-less
+      // (`foldSituations` coalesces only orphans), and gating on a fact the
+      // sentence never claims is what WP-50 ruled against.
+      return kind === 'incident' && (input.memberCount ?? 1) > 1 && (input.linkKind ?? null) !== null;
     case 'agent.stuck':
       return kind === 'agentFailure';
     default:
@@ -2267,8 +2338,39 @@ export function selectSituationTemplate(
 ): SituationTemplate | null {
   for (const template of SITUATION_TEMPLATES) {
     if (!guardHolds(template, input)) continue;
-    if (slotsOf(template.headline).some((slot) => bag[slot] === undefined)) return null;
+    if (headlineArmOf(template, bag) === null) return null;
     return template;
+  }
+  return null;
+}
+
+/**
+ * WP-55 · WHICH OF A CLASS'S HEADLINES THIS ROW CAN FILL, or null.
+ *
+ * Most classes have one. `incident.coalesced` has two, and its fixture states
+ * the guard on the second beside it: *"no member carries a severity field, so
+ * no member can lead"*. A coalesced row whose members carry no severity has no
+ * consequential member to name — so instead of naming one anyway (a guess) or
+ * rendering `{leadFinding}` as six literal characters (the substitution defect),
+ * it says the count and the target, which are facts it holds.
+ *
+ * THE ORDER IS THE FIXTURE'S: the derived headline first, the fallback second.
+ * Both arms are checked the same way and by the same rule — every slot fillable
+ * — so an arm is never rendered with a hole in it.
+ *
+ * A CLASS WITH NEITHER ARM FILLABLE SELECTS NOTHING. That is the case a group
+ * spanning two sites reaches, because both of this class's arms read `{target}`
+ * and there is no one target; the derived sentence is true of it and this
+ * returns null so the caller uses it.
+ *
+ * EXPORTED for its own pins: the second arm is unreachable through any current
+ * producer's happy path, and a guard nothing can reach is a guard nothing can
+ * check (WP-46).
+ */
+export function headlineArmOf(template: SituationTemplate, bag: SlotBag): string | null {
+  const arms = [template.headline, template.headlineFallback].filter((arm) => arm !== '');
+  for (const arm of arms) {
+    if (!slotsOf(arm).some((slot) => bag[slot] === undefined)) return arm;
   }
   return null;
 }
@@ -2380,7 +2482,7 @@ interface SituationCopy {
    */
   tier: ConsequenceTier;
   door: RowDoor | null;
-  signature: SituationSignature | null;
+  signatures: readonly SituationSignature[];
 }
 
 /**
@@ -2438,7 +2540,7 @@ function derivedCopy(
   rule: string,
   tier: ConsequenceTier,
   door: RowDoor | null,
-  signature: SituationSignature | null = null,
+  signatures: readonly SituationSignature[] = [],
 ): SituationCopy {
   return {
     headline,
@@ -2468,7 +2570,7 @@ function derivedCopy(
     headlineTemplate: null,
     tier,
     door,
-    signature,
+    signatures,
   };
 }
 
@@ -2548,7 +2650,12 @@ function composeSessionCopy(
   if (!template) return derivedCopy(runSummary(row), runbookId, '', tierReason, derivedTier, door);
   const tier = rankableTier(template.tier, derivedTier);
   return {
-    headline: fillSituationSentence(template.headline, bag),
+    // WP-55 · THE ARM THE SELECTOR CHOSE, not the first one declared. A class
+    // may carry a second headline for a case its first cannot fill
+    // (`incident.coalesced`), and `selectSituationTemplate` has already proven
+    // one of them fillable — so the non-null assertion is the selector's
+    // guarantee restated, not an assumption about the bag.
+    headline: fillSituationSentence(headlineArmOf(template, bag) ?? template.headline, bag),
     ask: fillSituationSentence(template.ask, bag),
     chip: template.chip,
     state: template.state,
@@ -2563,7 +2670,10 @@ function composeSessionCopy(
     headlineTemplate: template.id,
     tier,
     door,
-    signature: null,
+    // EMPTY, not "one null". Nothing in the Inbox is a run, so a run row has no
+    // identity to match against — which is a different fact from "its identity
+    // could not be built", and the empty set is the one that says it.
+    signatures: [],
   };
 }
 
@@ -2630,10 +2740,13 @@ function composeIncidentCopy(
   // into one row.
   const producer = (incident.actor as { id?: string } | undefined)?.id;
   const fact = str(payload.fact);
-  const signature: SituationSignature | null =
+  //
+  // WP-55 · A SET OF ONE. A situation of one is still a situation, and its
+  // identity is still a set — the same reading `memberCount: 1` already carries.
+  const signatures: readonly SituationSignature[] =
     producer && fact && target
-      ? { producer: normalizeProducerId(producer), fact, target }
-      : null;
+      ? [{ producer: normalizeProducerId(producer), fact, target }]
+      : [];
 
   // An orphan is BY CONSTRUCTION a situation with no run: it reached this
   // function because nothing correlated it into a session. `runId: null` is
@@ -2667,12 +2780,17 @@ function composeIncidentCopy(
       tierReason,
       derivedTier,
       door,
-      signature,
+      signatures,
     );
   }
   const tier = rankableTier(template.tier, derivedTier);
   return {
-    headline: fillSituationSentence(template.headline, bag),
+    // WP-55 · THE ARM THE SELECTOR CHOSE, not the first one declared. A class
+    // may carry a second headline for a case its first cannot fill
+    // (`incident.coalesced`), and `selectSituationTemplate` has already proven
+    // one of them fillable — so the non-null assertion is the selector's
+    // guarantee restated, not an assumption about the bag.
+    headline: fillSituationSentence(headlineArmOf(template, bag) ?? template.headline, bag),
     ask: fillSituationSentence(template.ask, bag),
     chip: template.chip,
     state: template.state,
@@ -2683,7 +2801,7 @@ function composeIncidentCopy(
     headlineTemplate: template.id,
     tier,
     door,
-    signature,
+    signatures,
   };
 }
 
@@ -2756,10 +2874,15 @@ function composeAgentFailureCopy(
   };
 
   if (!template) {
-    return derivedCopy(derived, payload.agent_id, '', tierReason, DERIVED_AGENT_TIER, door, signature);
+    return derivedCopy(derived, payload.agent_id, '', tierReason, DERIVED_AGENT_TIER, door, [signature]);
   }
   return {
-    headline: fillSituationSentence(template.headline, bag),
+    // WP-55 · THE ARM THE SELECTOR CHOSE, not the first one declared. A class
+    // may carry a second headline for a case its first cannot fill
+    // (`incident.coalesced`), and `selectSituationTemplate` has already proven
+    // one of them fillable — so the non-null assertion is the selector's
+    // guarantee restated, not an assumption about the bag.
+    headline: fillSituationSentence(headlineArmOf(template, bag) ?? template.headline, bag),
     ask: fillSituationSentence(template.ask, bag),
     chip: template.chip,
     state: template.state,
@@ -2773,7 +2896,7 @@ function composeAgentFailureCopy(
     headlineTemplate: template.id,
     tier: rankableTier(template.tier, DERIVED_AGENT_TIER),
     door,
-    signature,
+    signatures: [signature],
   };
 }
 
@@ -2938,8 +3061,18 @@ export interface UnheldRow {
    * flows through one rule rather than a second one being written. Same honest
    * treatment as `wakeFired` and `deadlineFor`: the ruled input is implemented
    * and its absence is stated, never quietly dropped.
+   *
+   * **REQUIRED SINCE WP-55, and the one character is the whole change.** It was
+   * optional, and `listVerdict` reads `!row.deferred` — so an OMITTED field
+   * meant ESCALATING. That is the safe direction and it is still the wrong
+   * mechanism: it made "remember to pass this" the thing standing between a
+   * deferred row and the badge it was supposed to have left. Required moves the
+   * decision from a reader's memory to the compiler, and the one construction
+   * site passes it explicitly. WP-56's own ruling (c), applied to WP-56's own
+   * field: *an optional value invites the fallback that is the defect it
+   * removes.*
    */
-  deferred?: boolean;
+  deferred: boolean;
 }
 
 /**
@@ -3042,8 +3175,78 @@ function rankSession(
   };
 }
 
+/**
+ * WP-56a · ONE INCIDENT SUBJECT — what the producer means by "the same
+ * incident", carried into the fold.
+ *
+ * The producer's `incidentHistory` reads its ledger newest-first and lets the
+ * first occurrence per key win, because *"a resolution supersedes the incident
+ * it closes"*. This is that structure, one layer up: the events for one subject,
+ * and the one of them that decides its state.
+ */
+interface IncidentSubject {
+  /** The situation's id. See `incidentSubjectKey`. */
+  key: string;
+  /** The NEWEST event. Its payload is the subject's current state. */
+  current: EventEnvelope;
+  /** Every event for this subject, oldest first. The subject's own history. */
+  events: readonly EventEnvelope[];
+}
+
+/**
+ * WP-56a · THE IDENTITY, RATIFIED — and the one thing the ruling's phrase does
+ * not say out loud.
+ *
+ * The ruling names `incidentKey(component, fact)`. That is the key of a map the
+ * producer builds PER ENTITY, so it is unique inside one site and not across the
+ * fleet: every site can carry `FS-01`, which is the collision
+ * `SituationSignature` was built to avoid and which this fold would walk
+ * straight into if it took the phrase literally. **The anchor is prefixed**, by
+ * the producer's own function so the separator and the site-level default are
+ * one decision rather than two.
+ *
+ * FALLS BACK TO THE EVENT ID when the record cannot name the subject — no
+ * anchor, or no `fact`. That is not the old behaviour surviving by accident; it
+ * is the honest identity for a record that says nothing about what it is about,
+ * and it is why the deferral of such a row still cannot outlive its event. A
+ * fabricated key would be worse: it would claim two unrelated silent records
+ * are one thing.
+ */
+function incidentSubjectKey(event: EventEnvelope): string {
+  const anchor = event.entity?.environment ?? event.entity?.site;
+  const payload = payloadOf(event);
+  const fact = str(payload.fact);
+  if (!anchor || !fact) return event.id;
+  return incidentKey(anchor, incidentKey(str(payload.component) ?? SITE_LEVEL, fact));
+}
+
+/**
+ * Every orphan incident, folded onto its subject.
+ *
+ * NEWEST BY EVENT ID, which is what the producer orders by (`ledger.query`
+ * `order: 'desc'` is an id ordering) and what the rest of this fold means by
+ * newest (`maxId`). Deliberately NOT `observed_at`: two producers' clocks are
+ * two clocks, and the ULID is the record's own sequence.
+ */
+function incidentSubjects(events: readonly EventEnvelope[]): IncidentSubject[] {
+  const byKey = new Map<string, EventEnvelope[]>();
+  for (const event of events) {
+    const key = incidentSubjectKey(event);
+    const list = byKey.get(key) ?? [];
+    list.push(event);
+    byKey.set(key, list);
+  }
+  const subjects: IncidentSubject[] = [];
+  for (const [key, list] of byKey) {
+    const ordered = [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    subjects.push({ key, current: ordered[ordered.length - 1], events: ordered });
+  }
+  return subjects;
+}
+
 /** An incident nothing links into a run is its own situation of one (tear 2). */
-function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps): Situation {
+function situationOfIncident(subject: IncidentSubject, deps: SessionRegistryDeps): Situation {
+  const incident = subject.current;
   const payload = payloadOf(incident);
   // ONE target, by the anchor rule the incident producer itself uses
   // (`refs.site ?? refs.environment`). `Object.values(entity)` would count an
@@ -3078,14 +3281,20 @@ function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps)
   );
 
   return {
-    id: incident.id,
+    // WP-56a · THE SUBJECT, NOT THE REPORT. A deferral names this, and the
+    // producer answers an incident by writing a NEW EVENT — so under the event
+    // id a user's deferral was silently discarded the moment the record changed.
+    id: subject.key,
     kind: 'incident',
     column,
     // `tier` and `door` arrive with `...copy` below. See the session path.
     tierReason,
     places,
-    since: incident.observed_at,
-    lastEventId: incident.id,
+    // THE AGE OF THE SUBJECT, not of its newest event. A finding opened on
+    // Monday and amended on Tuesday has been true since Monday, and the sort
+    // reads this.
+    since: oldestIso(subject.events.map((event) => event.observed_at)),
+    lastEventId: maxId(subject.events.map((event) => event.id)),
     parts: [
       {
         kind: 'incident',
@@ -3149,30 +3358,35 @@ function withFoldFacts(
  */
 function situationOfCoalescedIncidents(
   link: string,
-  members: readonly EventEnvelope[],
+  members: readonly IncidentSubject[],
   deps: SessionRegistryDeps,
 ): Situation {
   // Oldest first, by ULID — the order the parts happened in, and the same
   // ordering `runEvents` uses for a run's own events.
-  const ordered = [...members].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  //
+  // WP-56a · MEMBERS ARE SUBJECTS NOW, and each one contributes ONE line. That
+  // is also what makes `{memberCount}` mean what the designer's sentence says:
+  // *"{memberCount} findings on {target}"* counts FINDINGS, and a finding that
+  // was opened and later amended is one finding with a history, not two.
+  const ordered = [...members].sort((a, b) => (a.current.id < b.current.id ? -1 : a.current.id > b.current.id ? 1 : 0));
 
   // One anchor per member, by the incident producer's own rule
   // (`refs.site ?? refs.environment`), deduplicated by `derivePlaces`. A
   // sweep can span sites, so this is a set and not a single target.
   const anchors = ordered
-    .map((event) => event.entity?.environment ?? event.entity?.site)
+    .map((subject) => subject.current.entity?.environment ?? subject.current.entity?.site)
     .filter((id): id is string => !!id);
   const places = derivePlaces(anchors, deps.describePlace);
 
-  const open = ordered.filter((event) => payloadOf(event).resolved !== true);
+  const open = ordered.filter((subject) => payloadOf(subject.current).resolved !== true);
   const resolved = open.length === 0;
 
-  const parts: SituationPart[] = ordered.map((event) => ({
+  const parts: SituationPart[] = ordered.map((subject) => ({
     kind: 'incident',
-    eventId: event.id,
-    topic: event.topic,
-    observedAt: event.observed_at,
-    summary: incidentSummary(event),
+    eventId: subject.current.id,
+    topic: subject.current.topic,
+    observedAt: subject.current.observed_at,
+    summary: incidentSummary(subject.current),
   }));
 
   // A situation is not over while a part of it is open. The counts are stated
@@ -3201,10 +3415,10 @@ function situationOfCoalescedIncidents(
     // by the composer, filled into the rule line it prints.
     tierReason,
     places,
-    since: oldestIso(ordered.map((event) => event.observed_at)),
-    lastEventId: maxId(ordered.map((event) => event.id)),
+    since: oldestIso(ordered.flatMap((subject) => subject.events.map((event) => event.observed_at))),
+    lastEventId: maxId(ordered.map((subject) => subject.current.id)),
     parts,
-    ...coalescedCopy(ordered, open.length, tierReason),
+    ...coalescedCopy(ordered, open.length, column, tierReason, deps.nameOf),
     // A coalesced group of incidents was never armed under a procedure, so it
     // has no target set at all — null, not the size of its member set.
     written: { done: 0, failed: 0, total: null },
@@ -3232,13 +3446,16 @@ function incidentSummary(event: EventEnvelope): string {
  * correlation belongs to one act) takes the general word.
  */
 function coalescedCopy(
-  members: readonly EventEnvelope[],
+  members: readonly IncidentSubject[],
   openCount: number,
+  column: TriageColumn,
   tierReason: string,
+  /** WP-54 · what the target is CALLED, from the record. See `deps.nameOf`. */
+  nameOf: ((entityId: string) => string | undefined) | undefined,
 ): SituationCopy {
-  const origin = members.every((event) => event.source?.system === SENTINEL_SYSTEM) ? 'one scan' : 'one run';
+  const origin = members.every((s) => s.current.source?.system === SENTINEL_SYSTEM) ? 'one scan' : 'one run';
   const total = members.length;
-  const headline =
+  const derived =
     openCount === total
       ? `${total} open incidents from ${origin}`
       : openCount === 0
@@ -3248,32 +3465,196 @@ function coalescedCopy(
   // The producer, when every member names the same one. Two producers under one
   // link is not a thing any current producer writes, and printing one of them
   // would be a claim about the other.
-  const actors = new Set(members.map((event) => (event.actor as { id?: string } | undefined)?.id ?? ''));
+  const actors = new Set(members.map((s) => (s.current.actor as { id?: string } | undefined)?.id ?? ''));
   const meta = actors.size === 1 ? [...actors][0] : '';
 
   // The status phrase READ from the ratified set, exactly as the orphan
   // fallback reads it — a coalesced group of run-less incidents is still a set
   // of incidents with no run attached, and that phrase is the designer's.
   const state = SITUATION_TEMPLATES.find((t) => t.id === 'incident.no-run')?.state ?? '';
-  // WP-54's merge · THE THREE FIELDS, and the one that is honestly absent.
+  const tier = memberTier();
+
+  // WP-55 · THE TARGET, AND WHY IT IS ALL-OR-NOTHING.
   //
-  // `tier` is the members' own class's, for the reason the caller states.
-  // `door` is null: a group's members can sit on DIFFERENT targets — grouping
-  // by a shared record link says nothing about a shared site — so there is no
-  // one place this row leads to, and a door naming one member's site would be
-  // the prepending defect in its navigation form.
+  // Both ratified arms of this class read `{target}`. A group whose members sit
+  // on DIFFERENT sites has no one target — grouping by a shared record link says
+  // nothing about a shared site — and naming one member's site would be the
+  // prepending defect in its navigation form. So a group with exactly one
+  // distinct anchor names it, and any other group leaves the slot absent, which
+  // declines the class and falls to the derived sentence above.
+  const anchors = new Set(
+    members
+      .map((s) => s.current.entity?.environment ?? s.current.entity?.site)
+      .filter((id): id is string => !!id),
+  );
+  let target: string | undefined;
+  if (anchors.size === 1) {
+    const [anchor] = [...anchors];
+    let named: string | undefined;
+    try {
+      named = nameOf?.(anchor);
+    } catch {
+      named = undefined; // a faulty resolver costs the NAME, never the row
+    }
+    target = named ?? anchor;
+  }
+
+  const bag: SlotBag = {
+    target,
+    // WP-55 · THE CONSEQUENTIAL MEMBER — see `leadFindingOf`. Absent when no
+    // member carries a severity, which is the fixture's own `fallbackGuard`.
+    leadFinding: leadFindingOf(members),
+    restCount: total - 1,
+    memberCount: total,
+    // WP-55 · THE LABEL, NOT THE RECORD NOUN. See `linkLabelFor`.
+    linkKind: linkLabelFor(origin),
+    producer: meta === '' ? undefined : meta,
+  };
+
+  // SELECTED FOR THE WAITING COLUMN ONLY, the same reading the singleton path
+  // uses: these templates select rows of the NOW list, and the changed column is
+  // a different list with its own head. A closed group handed "Contain it now"
+  // would be the ratified-sentence-contradicts-the-record defect.
+  const template =
+    column === 'waiting'
+      ? selectSituationTemplate(
+          { kind: 'incident', done: 0, failed: 0, total: null, gate: null, runId: null, memberCount: total, linkKind: 'correlation' },
+          bag,
+        )
+      : null;
+
+  // WP-55 · THE DOOR NAMES THE ONE PLACE, when there is one.
   //
-  // `signature` is null, AND THAT IS A REGISTERED RESIDUE RATHER THAN A
-  // DECISION. A signature identifies ONE thing; a coalesced row is several, so
-  // the Inbox's copies of its members cannot ride on it and render as their own
-  // rows beside it. Nothing coalesces on the owner's ledger today (the four
-  // findings carry no link), so nothing is affected yet — but the next sentinel
-  // sweep mints one, and then a coalesced row of four shows four Inbox rows
-  // beside it. The badge and the verdict stay honest, because both count what
-  // is DRAWN; this is redundancy rather than a lie. The fix is a signature SET,
-  // and it belongs with the packet that reconciles `incident.coalesced` into
-  // the generated template set — WP-55 — because that is the same visit.
-  return derivedCopy(headline, meta, state, tierReason, memberTier(), null, null);
+  // WP-54's merge left this `null` unconditionally, reasoning that a group's
+  // members can sit on different targets. True — and it is a reason to withhold
+  // the door for THOSE groups, not for every group. A single-site group has
+  // exactly one place it leads to, and every row having a door that names its
+  // destination is the ratified rule (`DOOR_RULE.everyRowHasOne`).
+  const door: RowDoor | null =
+    column === 'waiting' && target
+      ? { label: fillSituationSentence(DOORS.incident, { target }), kind: 'site', target }
+      : null;
+
+  // WP-55 · ONE SIGNATURE PER MEMBER — the residue WP-54 registered as honestly
+  // null and routed here, closed on the visit that made it visible.
+  //
+  // A signature identifies ONE thing and a coalesced row is several, so a single
+  // one could not be built and `null` was the honest answer. The consequence was
+  // real and is drawn now that this class renders: the Inbox holds a copy of
+  // each member finding, `sameThing` matched none of them against the folded
+  // row, and four duplicate rows rendered beside the one card that had just
+  // folded them — WP-54's "twelve rows under a badge of seven", returning by a
+  // different door. The set is the fix, and it is a set on EVERY row rather than
+  // a special case here, so a situation of one is a set of one.
+  const signatures = members
+    .map((member) => memberSignature(member, target))
+    .filter((sig): sig is SituationSignature => sig !== null);
+
+  if (!template) {
+    return derivedCopy(derived, meta, state, tierReason, tier, door, signatures);
+  }
+  return {
+    headline: fillSituationSentence(headlineArmOf(template, bag) ?? template.headline, bag),
+    ask: fillSituationSentence(template.ask, bag),
+    chip: template.chip,
+    state: template.state,
+    meta: fillSituationSentence(template.meta, bag),
+    rule: fillSituationSentence(template.rule, { ...bag, tier }),
+    headlineTemplate: template.id,
+    tier,
+    door,
+    signatures,
+  };
+}
+
+/**
+ * One member's identity, by the same three-fact rule a situation of one uses.
+ *
+ * ALL THREE OR NONE. A partial signature matches on fewer facts than the rule
+ * requires, which is how a dedup starts folding two different findings into one
+ * row — `SituationSignature`'s own reasoning, applied per member.
+ *
+ * `target` is the GROUP'S resolved target, and it is passed in rather than
+ * re-derived because the Inbox compares against the name a person reads. A group
+ * with no single target has no signatures at all: its members sit on different
+ * sites, so matching them by a target the row cannot name is precisely the
+ * partial match this rule forbids.
+ */
+function memberSignature(member: IncidentSubject, target: string | undefined): SituationSignature | null {
+  const payload = payloadOf(member.current);
+  const producer = (member.current.actor as { id?: string } | undefined)?.id;
+  const fact = str(payload.fact);
+  return producer && fact && target
+    ? { producer: normalizeProducerId(producer), fact, target }
+    : null;
+}
+
+/**
+ * WP-55 · THE CONSEQUENTIAL MEMBER'S SUBJECT LINE, or absent.
+ *
+ * *"The highest-severity member's subject line"*, from the slot table. Severity
+ * IS in the incident payload (`incidentProducer`'s `IncidentPayload.severity`),
+ * so the lead is DERIVABLE and this never guesses which finding leads.
+ *
+ * THREE PROPERTIES, each of which a wrong answer would break:
+ *
+ *  - **A member with no severity, or a severity outside the sentinel's own
+ *    vocabulary, cannot lead.** `SEVERITY_ORDER.indexOf` returns -1 for both,
+ *    and an unknown word is not a known-high one — the same reading
+ *    `atOrAboveFloor` uses at the producer.
+ *  - **A tie is broken by the RECORD'S OWN ORDER**, oldest first, because
+ *    `members` arrives sorted by ULID. Two criticals is the shape the owner's
+ *    real ledger holds (`ABS-05` and `FS-01`), so this is not a corner: it is
+ *    the live case, and it must be deterministic or the headline changes between
+ *    two folds of an unchanged ledger.
+ *  - **NO MEMBER CARRIES ONE → undefined**, which declines the first headline
+ *    arm and takes the fixture's own fallback. Absent, never a guess.
+ */
+function leadFindingOf(members: readonly IncidentSubject[]): string | undefined {
+  let best: { rank: number; line: string } | undefined;
+  for (const member of members) {
+    const payload = payloadOf(member.current);
+    const rank = SEVERITY_ORDER.indexOf(str(payload.severity) as never);
+    if (rank < 0) continue;
+    if (best && rank <= best.rank) continue; // `<=` keeps the OLDEST of a tie
+    const line = str(payload.symptom) ?? str(payload.fact);
+    if (!line) continue; // a member with no subject line cannot be named
+    best = { rank, line };
+  }
+  return best?.line;
+}
+
+/**
+ * WP-55 · `{linkKind}` IS A SLOT FOR A LABEL, AND THE FIELD IS THE FACT.
+ *
+ * The ratified meta line is `{producer} · linked by {linkKind}`. `SituationLink`
+ * is a closed union whose only member is `correlation` — a RECORD NOUN — so
+ * filling the slot with the field's own value renders *"linked by correlation"*
+ * to a person. That is the entity-id headline WP-54 removed, one line lower, and
+ * it is squarely inside the owner's own "derived is not the same as legible"
+ * finding. WP-51 raised it as F4 and routed the LABEL to WP-55 and the designer
+ * rather than inventing a display word in the fold.
+ *
+ * WHAT IS FILLED HERE IS A WORD THE FOLD ALREADY DERIVES AND ALREADY SHIPS:
+ * `coalescedCopy`'s `origin`, read off `source.system`, which has rendered in
+ * the derived headline *"4 open incidents from one scan"* since WP-51. Nothing
+ * is authored — an existing derived value is put in a second place, which is
+ * what a slot is for.
+ *
+ * **HELD AT THE GATE, with a reading for the designer rather than a decision
+ * taken here.** The word depends on the ORIGIN (a sweep is "one scan", a run is
+ * "one run") and not on the LINK KIND, so a label column keyed on `SituationLink`
+ * — the obvious shape, mirroring the run-noun column — would be keyed on the
+ * wrong fact. The reading offered is: a `LINK_LABEL` column in the fixture keyed
+ * on the origin the fold derives, so the words stay the designer's and the fact
+ * stays the record's. Until that column exists this is the interim, and it is an
+ * existing derived word rather than a new one.
+ *
+ * `Situation.linkKind` on the CONTRACT is untouched and still says `correlation`.
+ * The record noun stays where it is the fact and never reaches a person.
+ */
+function linkLabelFor(origin: string): string {
+  return origin;
 }
 
 /**
@@ -3570,6 +3951,7 @@ function deriveReserved(
       headline: 'the record\'s own health could not be read',
       dark: [],
       staleCount: 0,
+      checkCount: 0,
       verdict: 'DARK',
       degraded: true,
     };
@@ -3593,6 +3975,10 @@ function deriveReserved(
     headline: reservedHeadline(dark.length, staleCount),
     dark,
     staleCount,
+    // The denominator, over the same set the numerators came from. A coverage
+    // metric whose numerator and denominator span different sets is the
+    // `fleet_overview` "1 of 0" defect, and it is one line away here.
+    checkCount: counted.length,
     verdict: report.worst,
     degraded: report.errors.length > 0,
   };

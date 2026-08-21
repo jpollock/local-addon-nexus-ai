@@ -48,6 +48,7 @@ import {
   type UnheldRow,
   normalizeProducerId,
 } from '../../../main/intelligence-host/sessionRegistry';
+import type { DeferralWake } from '../../../main/intelligence-host/actionProducer';
 import type { InboxItem } from '../../../main/inbox/types';
 import type { DeclaredProcedure } from '../../../main/intelligence-host/procedureView';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
@@ -56,6 +57,8 @@ import {
   COLOURS,
   DOORS,
   FRESHNESS,
+  GROUP,
+  SITUATION_TEMPLATES,
 } from '../../../main/intelligence-host/situationCopy.generated';
 import { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
 
@@ -240,12 +243,24 @@ export interface NowRow {
  * every run row: nothing in the Inbox is a run.
  */
 export function sameThing(situation: Situation, item: InboxItem): boolean {
-  const signature = situation.signature;
-  if (!signature) return false;
-  if (signature.fact !== item.code) return false;
-  if (signature.producer !== normalizeProducerId(item.source)) return false;
-  const scoped = item.scope.includes(':') ? item.scope.slice(item.scope.indexOf(':') + 1) : item.scope;
-  return signature.target === scoped || signature.target === item.scopeLabel;
+  // WP-55 · ANY OF THE SITUATION'S IDENTITIES. A coalesced row holds one per
+  // member finding, so the Inbox's copy of any member matches the row that
+  // folded it — before this, a coalesced row matched nothing and its four
+  // members rendered as four duplicate rows beside it. A row with no identities
+  // matches nothing, which is still the correct answer for every run row.
+  //
+  // `?? []` IS THE SEAM, NOT A DEFAULT FOR A MISSING FIELD. `signatures` is
+  // required on the contract and TypeScript enforces it for every caller inside
+  // this process — but a `Situation` reaches this surface as JSON over IPC, and
+  // "everything on this seam is non-fatal by construction" is a law of the
+  // layer. An absent field reads as NO identities, which fails in the safe
+  // direction: a duplicate row, never a renderer that throws.
+  return (situation.signatures ?? []).some((signature) => {
+    if (signature.fact !== item.code) return false;
+    if (signature.producer !== normalizeProducerId(item.source)) return false;
+    const scoped = item.scope.includes(':') ? item.scope.slice(item.scope.indexOf(':') + 1) : item.scope;
+    return signature.target === scoped || signature.target === item.scopeLabel;
+  });
 }
 
 /**
@@ -271,8 +286,22 @@ export function nowRows(triage: TriageView, inbox?: NowInboxRead): NowRow[] {
   const matched = new Set<number>();
 
   const rows: NowRow[] = triage.waiting.map((situation) => {
-    const item = items.filter((candidate) => sameThing(situation, candidate))[0] ?? null;
-    if (item) matched.add(item.id);
+    // WP-55 · EVERY MATCH IS ABSORBED, not only the first.
+    //
+    // A coalesced row folds several findings and carries one identity per
+    // member, so the Inbox holds a copy of EACH of them. Marking only the first
+    // as matched left the other three to render as their own rows beside the
+    // card that had just folded them — the duplicate-row defect, one fold later.
+    const mine = items.filter((candidate) => sameThing(situation, candidate));
+    for (const candidate of mine) matched.add(candidate.id);
+    // The row's own Inbox affordance is the FIRST match. **REGISTERED RESIDUE:**
+    // a coalesced row therefore surfaces one member's evidence and absorbs the
+    // rest without theirs. The join that would fix it does not exist —
+    // `SituationPart` carries `eventId`, `topic`, `observedAt` and `summary`,
+    // and no fact code to match an item against — so drawing each member's
+    // evidence on its own part line needs a contract field, which is a different
+    // packet. Absorbing them is still strictly better than rendering them twice.
+    const item = mine[0] ?? null;
     return { key: situation.id, situation, item, tier: situation.tier, door: situation.door };
   });
 
@@ -294,6 +323,120 @@ export function nowRows(triage: TriageView, inbox?: NowInboxRead): NowRow[] {
   }
 
   return rows;
+}
+
+/**
+ * WP-55 · ITEM 5 — THE WAKE CONDITION, IN WORDS, OR THE NO-WAKE SENTENCE.
+ *
+ * `DEFERRED.wake` is the slot `{wakeLabel}` and nothing else, so the whole of
+ * this sentence is derived here. Three states and each is stated rather than
+ * implied:
+ *
+ *  - **`time`** — the instant, cited in full. Not humanised into "in about a
+ *    day": a wake is a promise about a moment, and rounding a promise is how it
+ *    stops being one.
+ *  - **`record`** — offered by nothing today (`OFFERABLE_WAKE_KINDS` is
+ *    `['time']`, ruled at WP-56's gate: *the surface does not offer a wake
+ *    condition the platform cannot fire*), and the FOLD still implements it. So
+ *    a record wake can only reach this surface from a record written before that
+ *    ruling, and it is named honestly rather than dressed up.
+ *  - **`null`** — UNCONDITIONED, which is a permitted deferral rather than a
+ *    degraded one: *"an unconditioned deferral is permitted and simply never
+ *    wakes — the item keeps its tier and place forever at low intensity, which
+ *    is your never-a-dismissal rule holding."* The row says **never wakes**,
+ *    because a blank line here would read as a condition the reader could not
+ *    see rather than as the absence of one.
+ */
+export function wakeLabel(wake: DeferralWake | null | undefined): string {
+  if (!wake) return 'This deferral never wakes — it keeps its tier and its place until you end it';
+  if (wake.kind === 'time') return `Wakes ${wake.at}`;
+  return `Wakes when ${wake.from} changes`;
+}
+
+// ---------------------------------------------------------------------------
+// WP-55 · ITEM 4 — GROUPING IS A CAPTION, AND COALESCING IS A CARD (XD-28)
+// ---------------------------------------------------------------------------
+
+/**
+ * A run of rows the list draws together, with or without a caption over them.
+ *
+ * **THE WHOLE DESIGN IS THE DIFFERENCE BETWEEN THESE TWO SHAPES**, and it must
+ * read without any words: coalescing produces ONE BORDERED OBJECT, grouping
+ * produces SEVERAL under a caption. The caption is not a card — no border, no
+ * fill, no stripe, no door — because it is not a thing that happened; it is a
+ * remark about several things that did.
+ */
+export interface NowGroup {
+  /** The caption, or `null` for rows that stand on their own. */
+  caption: { label: string; limit: string } | null;
+  rows: NowRow[];
+}
+
+/**
+ * WHAT A ROW IS ABOUT, for the purpose of grouping — or nothing.
+ *
+ * ONLY A SITE. A run row's door target is a session id and an agent row's is an
+ * agent, and grouping four runs under "4 findings on s_01J…" would be the
+ * entity-id headline with a caption around it. `kind` is what says which, which
+ * is why `RowDoor` carries it.
+ */
+function groupTargetOf(row: NowRow): string | undefined {
+  return row.door?.kind === 'site' ? row.door.target : undefined;
+}
+
+/**
+ * WP-55 · ITEM 4 — the list, with captions over the rows that share a target
+ * and nothing else.
+ *
+ * THE RATIFIED GUARD, transcribed from `GROUP.guard`: *"two or more rows share
+ * a target AND `row.linkKind === null`"*. The second clause is the doctrine, not
+ * a detail — a shared target is a FACT and a shared cause is a VERDICT, so where
+ * the record does not link the members they stay separate rows and the caption
+ * states the limit. A row the record DID link is already one card and must never
+ * be captioned as well; that would say the same thing in two shapes.
+ *
+ * AN UNHELD INBOX ROW HAS NO `linkKind` and no situation, and it is grouped on
+ * the same terms as any other: it is a finding on a site the record does not
+ * link to its neighbours, which is exactly what the caption says. `?? null`
+ * reads its absent link as absent, which is what it is.
+ *
+ * ORDER IS PRESERVED, and the group takes its FIRST member's place. The list is
+ * ranked by consequence; a caption may not promote or demote anything, so the
+ * group sits where its most consequential row already sat.
+ */
+export function nowGroups(rows: readonly NowRow[]): NowGroup[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if ((row.situation?.linkKind ?? null) !== null) continue;
+    const target = groupTargetOf(row);
+    if (!target) continue;
+    counts.set(target, (counts.get(target) ?? 0) + 1);
+  }
+
+  const groups: NowGroup[] = [];
+  const openAt = new Map<string, NowGroup>();
+  for (const row of rows) {
+    const target = (row.situation?.linkKind ?? null) === null ? groupTargetOf(row) : undefined;
+    if (!target || (counts.get(target) ?? 0) < 2) {
+      groups.push({ caption: null, rows: [row] });
+      continue;
+    }
+    const existing = openAt.get(target);
+    if (existing) {
+      existing.rows.push(row);
+      continue;
+    }
+    const group: NowGroup = {
+      caption: {
+        label: fillSituationSentence(GROUP.label, { memberCount: counts.get(target), target }),
+        limit: GROUP.limit,
+      },
+      rows: [row],
+    };
+    openAt.set(target, group);
+    groups.push(group);
+  }
+  return groups;
 }
 
 /**
@@ -620,8 +763,35 @@ export function metaLine(situation: Situation, now: Date): string {
     ageLabel(situation.since, now),
     situation.state,
     situation.meta,
-    situation.parts.length > 1 ? `${situation.parts.length} ${RETURN_COPY.PARTS_CHIP}` : '',
+    // WP-55 · THE COUNT IS STATED ONCE, and on a class that DISCLOSES its parts
+    // this is not the once.
+    //
+    // `incident.coalesced` states it twice already, both ratified: "3 more
+    // findings" in the headline and "4 findings — show them" in the disclosure.
+    // The fixture's own note rules on the third — *"the count is stated in the
+    // headline and in the disclosure, so the row needs no parts chip"* — which
+    // is the same finding WP-54 made about the badge, the accounting line and
+    // the verdict, one row down.
+    //
+    // DEDUPLICATED, NOT DELETED: a row whose class carries no disclosure has
+    // nowhere else to say how many parts it folded, and it keeps the clause.
+    // The test drives both directions.
+    situation.parts.length > 1 && !disclosesParts(situation)
+      ? `${situation.parts.length} ${RETURN_COPY.PARTS_CHIP}`
+      : '',
   ].filter(Boolean).join(SEP);
+}
+
+/**
+ * Does this row's own class state its part count somewhere else on the card?
+ *
+ * Read off the ratified template rather than from a list of class ids here: the
+ * day a second class gains a disclosure, this is already true of it. A row with
+ * no class (`headlineTemplate: null`) discloses nothing and keeps its clause.
+ */
+function disclosesParts(situation: Situation): boolean {
+  const template = SITUATION_TEMPLATES.find((t) => t.id === situation.headlineTemplate);
+  return template !== undefined && template.disclosure !== '';
 }
 
 /** A situation's session id, when it has one. The re-entry's only input. */

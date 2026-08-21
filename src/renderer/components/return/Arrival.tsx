@@ -57,9 +57,13 @@
  */
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
-import type { ReservedRow, RowDoor, Situation, TriageView } from '../../../main/intelligence-host/sessionRegistry';
-import { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
-import { COLOURS, RESERVED } from '../../../main/intelligence-host/situationCopy.generated';
+import type {
+  ReservedRow, RowDoor, Situation, SituationDeferral, TriageView,
+} from '../../../main/intelligence-host/sessionRegistry';
+import { ageLabel, fillSituationSentence } from '../../../main/intelligence-host/sessionRegistry';
+import {
+  COLOURS, DEFERRED, RESERVED, SITUATION_TEMPLATES,
+} from '../../../main/intelligence-host/situationCopy.generated';
 import type { InboxItem } from '../../../main/inbox/types';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
 import { NOW_COPY } from '../DockedPanel/openingCopy.generated';
@@ -72,10 +76,14 @@ import {
   gateLine,
   metaLine,
   needsLine,
+  nowGroups,
   nowRows,
   nowVerdict,
   reservedDetail,
+  rowIsDeferred,
   stripeColour,
+  wakeLabel,
+  type NowGroup,
   type NowRow,
 } from './arrivalModel';
 
@@ -138,6 +146,24 @@ export interface ArrivalProps {
   onReopen?: (id: number) => void;
   /** Clear an agent's auto-pause so it may run automatically again. */
   onResumeAgent?: (agentId: string) => void;
+  /**
+   * WP-55 · ITEM 5 — END A STANDING DEFERRAL EARLY.
+   *
+   * One of the three ratified ways a deferral ends (the wake fires, the user
+   * ends it, the situation is answered), and the only one that is a control.
+   * It carries the DEFERRAL EVENT ID rather than the situation id, because
+   * ending is recorded as a superseding event that names the one it supersedes —
+   * `DeferralEndRecord.supersedes`, which is how the record stays append-only.
+   *
+   * OPTIONAL, and an absent handler renders the control anyway: a deferral the
+   * user cannot end is the furniture problem this affordance exists to prevent,
+   * so a host that mounts this surface without wiring the handler must see a
+   * dead control and fix it, rather than see a row that quietly cannot be
+   * un-quieted. That is the opposite of `renderDoor`'s rule and the asymmetry is
+   * deliberate: a missing door costs a journey, a missing end-deferral costs a
+   * row its way back into the badge.
+   */
+  onEndDeferral?: (deferralEventId: string) => void;
   /** Re-read the inbox after a failed read. */
   onRetryInbox?: () => void;
   /** Test seam. Production reads `window.localStorage`. */
@@ -152,6 +178,21 @@ export interface ArrivalState {
   error: string | null;
   /** Milliseconds since this surface was last opened, or null on a first open. */
   awayMs: number | null;
+  /**
+   * WP-55 · ITEM 3 — WHICH ROWS HAVE THEIR PARTS OPEN, by situation id.
+   *
+   * CLOSED BY DEFAULT, and opening IN PLACE rather than through the door,
+   * because someone checking whether a verdict is true should not have to leave
+   * the list to do it. Keyed by id and not by index: the list re-ranks on every
+   * poll, and an index would open a different row's parts the moment anything
+   * moved.
+   *
+   * **A COALESCED ROW STOPS EXISTING WHEN ITS MEMBERS LEAVE, and no surface may
+   * persist its id** — so this is component state and is deliberately NOT
+   * written to `props.store` beside `awayMs`. An open/closed flag surviving a
+   * restart would be a surface remembering a row the record no longer holds.
+   */
+  openParts: Record<string, boolean>;
 }
 
 const styles = {
@@ -290,6 +331,45 @@ const styles = {
     color: COLOURS.link,
     cursor: 'pointer',
   },
+  /**
+   * WP-55 · ITEM 4 — THE GROUP CAPTION. NOT A CARD, and the absences are the
+   * design.
+   *
+   * No border, no fill, no stripe, no door. That is the entire visual difference
+   * between grouping and coalescing and it must read without the words: a
+   * coalesced set is ONE BORDERED OBJECT, a grouped set is SEVERAL under a
+   * remark. Anything added here that a row also has erases the distinction.
+   */
+  groupCaption: { fontSize: 11, color: 'var(--nxai-card-text)', marginTop: 6 },
+  groupLimit: { fontSize: 10, color: 'var(--nxai-muted-text)', marginTop: 2 },
+  /**
+   * WP-55 · ITEM 3 — A PART IS A LINE, and a line is not a row.
+   *
+   * No stripe, no chip, no ask, no gate. It carries its own sentence, its own
+   * age and its own door, indented under the verdict it is evidence for.
+   */
+  partLine: { fontSize: 11, color: 'var(--nxai-card-text)', marginTop: 6, paddingLeft: 10 },
+  partAge: { fontSize: 10, color: 'var(--nxai-muted-text)', marginLeft: 6 },
+  /** The disclosure and the deferral's own control — links, like every door. */
+  inlineControl: {
+    background: 'none', border: 'none', padding: 0, font: 'inherit',
+    fontSize: 11, color: COLOURS.link, cursor: 'pointer', marginTop: 6,
+  },
+  partDoor: {
+    background: 'none', border: 'none', padding: 0, font: 'inherit',
+    fontSize: 10, color: COLOURS.link, cursor: 'pointer', marginLeft: 6,
+  },
+  /**
+   * WP-55 · ITEM 5 — THE DEFERRED ROW. DIMMED, and dimmed is ALL.
+   *
+   * Cycle two, ratified: it keeps its tier, keeps its place, and lowers
+   * escalation only. There is deliberately no rule here that could move it, hide
+   * it or restripe it — leaving the list is a dismissal by another name, and the
+   * opacity is the whole of what a deferral is allowed to change about how a row
+   * looks.
+   */
+  deferredOpacity: 0.55,
+  deferredLine: { fontSize: 10, color: 'var(--nxai-muted-text)', marginTop: 4 },
   filed: { fontSize: 10, color: 'var(--nxai-muted-text)', marginTop: 6, lineHeight: 1.6 },
   drift: { fontSize: 11, color: 'var(--nxai-muted-text)', lineHeight: 1.6, marginTop: 4 },
   empty: { fontSize: 11, color: 'var(--nxai-muted-text)' },
@@ -311,7 +391,7 @@ export { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
 export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
   constructor(props: ArrivalProps) {
     super(props);
-    this.state = { triage: null, loading: true, error: null, awayMs: null };
+    this.state = { triage: null, loading: true, error: null, awayMs: null, openParts: {} };
   }
 
   componentDidMount(): void {
@@ -376,29 +456,47 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
     const { situation, item } = row;
     const ratified = situation !== null && situation.headlineTemplate !== null;
     const stripe = stripeColour(row.tier);
+    // WP-55 · ITEM 5 — THE ONE PREDICATE, read and never re-derived. The badge,
+    // the verdict and the accounting line all ask this question, and a fourth
+    // copy here is how they would start disagreeing.
+    const deferred = rowIsDeferred(row);
 
     return React.createElement(
       'div',
       {
         key: row.key,
-        style: stripe
-          ? { ...styles.row, borderLeft: `${styles.stripeWidth}px solid ${stripe}` }
-          : styles.row,
+        style: {
+          ...styles.row,
+          // TIER AND PLACE UNCHANGED. The stripe is the tier's and a deferral
+          // does not touch it — a quieted row is still a tier-1 row.
+          ...(stripe ? { borderLeft: `${styles.stripeWidth}px solid ${stripe}` } : {}),
+          ...(deferred ? { opacity: styles.deferredOpacity } : {}),
+        },
         ...(situation ? { 'data-situation': situation.id, 'data-tier': situation.tier } : {}),
         ...(item ? { 'data-inbox-row': String(item.id) } : {}),
         // The stripe's own colour, exposed so a pin can read the ENCODING
         // rather than a computed style string.
         ...(stripe ? { 'data-stripe': stripe } : {}),
+        ...(deferred ? { 'data-deferred': 'true' } : {}),
       },
 
       // XD-23: every row shows the rule that placed it — and WP-52 ratified
       // WHICH rule. WP-54 item 2 made the tier in it the tier the row was sorted
       // by, filled into the ratified line's own `{tier}` slot in the host.
+      //
+      // WP-55 · ITEM 5 — WHILE A DEFERRAL STANDS, THE DEFERRAL'S RULE LINE
+      // REPLACES THE CLASS'S. `DEFERRED.rule` carries the same `{tier}` slot for
+      // the same reason the class's does: the tier a card shows is the tier it
+      // was sorted by, and a deferral changes neither. What it changes is the
+      // REASON half — "deferred by you — tier and place unchanged" — which is
+      // the row telling the reader why it is quiet without leaving the list.
       ...(situation
         ? [React.createElement(
             'div',
-            { key: 'rule', style: styles.rule, 'data-rule': ratified ? 'template' : 'derived' },
-            situation.rule,
+            { key: 'rule', style: styles.rule, 'data-rule': deferred ? 'deferred' : (ratified ? 'template' : 'derived') },
+            deferred
+              ? fillSituationSentence(DEFERRED.rule, { tier: situation.tier })
+              : situation.rule,
           )]
         : []),
 
@@ -445,6 +543,9 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
             )
         : []),
 
+      // WP-55 · ITEM 3 — THE PARTS, AS LINES, BEHIND A DISCLOSURE.
+      ...(situation ? this.renderParts(situation, now) : []),
+
       // J-Return's WHERE — the gate, by checkpoint id, with its position. On a
       // RATIFIED card the ask already carries it; on a derived card these are
       // the only place it appears.
@@ -477,7 +578,151 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
         : []),
 
       ...(row.door ? [this.renderDoor(row.key, row.door)] : []),
+
+      // WP-55 · ITEM 5 — THE DEFERRAL'S OWN LINES, BENEATH THE DOOR.
+      //
+      // The reason in the user's own words, the wake condition, and the way to
+      // end it early. They are beneath the door rather than above the verdict
+      // because the row's verdict has not changed: it is still the same finding
+      // at the same tier, and the deferral is a note about how loudly it is
+      // being said.
+      ...(deferred && situation?.deferral ? this.renderDeferral(situation.deferral, now) : []),
     );
+  }
+
+  /**
+   * WP-55 · ITEM 3 — A PART IS A LINE INSIDE THE CARD.
+   *
+   * *"No stripe, no chip, no ask, no gate — its own sentence, its own age, its
+   * own door. Closed by default, opening IN PLACE rather than through the door,
+   * because someone checking whether a verdict is true should not have to leave
+   * the list to do it."*
+   *
+   * A RATIFIED CARD ONLY, and only one with something to disclose. The derived
+   * path above already prints its parts unconditionally — that is a card with no
+   * ask, supplemented by its record — and a row with a single part has nothing
+   * to open: the disclosure would be a control that reveals the sentence
+   * directly above it.
+   *
+   * THE COUNT IS STATED ONCE. The class's headline names the rest and its
+   * disclosure names the whole; neither is a chip, and the row carries none.
+   */
+  private renderParts(situation: Situation, now: Date): React.ReactElement[] {
+    const template = SITUATION_TEMPLATES.find((t) => t.id === situation.headlineTemplate);
+    if (!template || template.disclosure === '' || situation.parts.length < 2) return [];
+    // `?? {}` BECAUSE SIX EXTERNAL DRIVERS REPLACE THIS STATE WHOLESALE — five
+    // test harnesses and the eval's `checks.ts` all assign `instance.state = {…}`
+    // rather than patching it, so a state object without this key is a shape
+    // this component genuinely receives. The constructor always sets it; a
+    // driver that does not is answered with CLOSED, which is the default anyway.
+    // A renderer that threw here would take the whole panel down over a
+    // disclosure, and this seam is non-fatal by construction.
+    const open = (this.state.openParts ?? {})[situation.id] === true;
+
+    return [
+      React.createElement(
+        'button',
+        {
+          key: 'parts-toggle',
+          type: 'button',
+          style: styles.inlineControl,
+          'data-parts-toggle': situation.id,
+          'data-parts-open': String(open),
+          onClick: () => this.toggleParts(situation.id),
+        },
+        open
+          ? template.disclosureOpen
+          : fillSituationSentence(template.disclosure, { memberCount: situation.parts.length }),
+      ),
+      ...(open
+        ? situation.parts.map((part, i) =>
+            React.createElement(
+              'div',
+              { key: `line-${i}`, style: styles.partLine, 'data-part-line': part.eventId ?? String(i) },
+              // ITS OWN SENTENCE — the record's words for this member, never a
+              // sentence composed about it here.
+              React.createElement('span', { key: 'text' }, part.summary),
+              // ITS OWN AGE. Absent where the record has no time for the part,
+              // which is a state the synthetic run part is in — withheld rather
+              // than filled with the row's age, which would be a claim about the
+              // part that the row made.
+              ...(part.observedAt
+                ? [React.createElement(
+                    'span',
+                    { key: 'age', style: styles.partAge, 'data-part-age': part.observedAt },
+                    ageLabel(part.observedAt, now),
+                  )]
+                : []),
+              // ITS OWN DOOR. The row's destination, named for the row — a part
+              // of a coalesced situation sits on the situation's own target by
+              // construction (the class only fires when there is exactly one),
+              // so this is where the part is answered too. A row with no door
+              // gives its parts none rather than inventing one.
+              ...(situation.door
+                ? [React.createElement(
+                    'button',
+                    {
+                      key: 'door',
+                      type: 'button',
+                      style: styles.partDoor,
+                      'data-part-door': situation.door.target,
+                      onClick: () => this.walkThrough(situation.door as RowDoor),
+                    },
+                    situation.door.label,
+                  )]
+                : []),
+            ),
+          )
+        : []),
+    ];
+  }
+
+  private toggleParts(situationId: string): void {
+    this.setState({
+      openParts: { ...this.state.openParts, [situationId]: !this.state.openParts[situationId] },
+    });
+  }
+
+  /**
+   * WP-55 · ITEM 5 — THE DEFERRAL, ON THE ROW.
+   *
+   * Reason and wake condition, in the ratified words, plus the way to end it
+   * early. Three lines at most and none of them a card.
+   *
+   * **THE SURFACE DOES NOT OFFER A WAKE CONDITION THE PLATFORM CANNOT FIRE**
+   * (ruled at WP-56's gate). This RENDERS whatever the record holds and offers
+   * nothing — the picker is a different surface — but the same rule decides what
+   * it says about an unconditioned deferral: `wakeSource` on the snapshot names
+   * the missing `wakeFired` port honestly, so an unconditioned deferral is
+   * described as never waking rather than as waiting for something.
+   */
+  private renderDeferral(deferral: SituationDeferral, now: Date): React.ReactElement[] {
+    return [
+      React.createElement(
+        'div',
+        { key: 'deferred-reason', style: styles.deferredLine, 'data-deferral': deferral.eventId },
+        fillSituationSentence(DEFERRED.recorded, {
+          deferredAge: ageLabel(deferral.deferredAt, now),
+          reason: deferral.reason,
+        }),
+      ),
+      React.createElement(
+        'div',
+        { key: 'deferred-wake', style: styles.deferredLine, 'data-deferral-wake': deferral.wake ? 'set' : 'none' },
+        fillSituationSentence(DEFERRED.wake, { wakeLabel: wakeLabel(deferral.wake) }),
+      ),
+      React.createElement(
+        'button',
+        {
+          key: 'deferred-end',
+          type: 'button',
+          style: styles.inlineControl,
+          'data-deferral-end': deferral.eventId,
+          onClick: () => this.props.onEndDeferral?.(deferral.eventId),
+        },
+        DEFERRED.endDoor,
+      ),
+    ];
   }
 
   /**
@@ -494,6 +739,47 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
    * Brand green is the product's own mark, not a destination, and the colour is
    * read from the ratified palette rather than typed here.
    */
+  /**
+   * WP-55 · ITEM 4 — XD-28. GROUPING IS A CAPTION; COALESCING IS A CARD.
+   *
+   * *"A shared field is a fact; a shared cause is a verdict. Where the record
+   * does not link the members, they stay separate rows under a label, and the
+   * label states the limit."*
+   *
+   * **THE LABEL IS NOT A CARD: no border, no fill, no stripe, no door.** That is
+   * the entire visual difference and it has to read without the words —
+   * coalescing produces ONE BORDERED OBJECT, grouping produces SEVERAL under a
+   * caption. Anything given to this caption that a row also has erases the
+   * distinction the design is made of.
+   *
+   * A group of one is not a group and `nowGroups` never builds one, so an
+   * ungrouped row renders exactly as it did before this item: a bare row, no
+   * wrapper, no caption.
+   */
+  private renderGroup(group: NowGroup, index: number, now: Date): React.ReactElement {
+    if (!group.caption) return this.renderRow(group.rows[0], now);
+    return React.createElement(
+      'div',
+      { key: `group-${index}` },
+      React.createElement(
+        'div',
+        { key: 'caption', style: styles.groupCaption, 'data-group-caption': String(group.rows.length) },
+        group.caption.label,
+      ),
+      // THE LIMIT, STATED. The caption says how many and this says what the
+      // platform does NOT know about them — that the record does not link
+      // these, so they are listed separately. Without it a caption over four
+      // rows reads as a claim that they are related, which is the verdict the
+      // record has not made.
+      React.createElement(
+        'div',
+        { key: 'limit', style: styles.groupLimit, 'data-group-limit': 'true' },
+        group.caption.limit,
+      ),
+      ...group.rows.map((row) => this.renderRow(row, now)),
+    );
+  }
+
   private renderDoor(key: string, door: RowDoor): React.ReactElement {
     return React.createElement(
       'button',
@@ -699,7 +985,11 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
             React.createElement('span', { key: 'label' }, RETURN_COPY.WAITING_HEAD),
           ),
           ...this.renderInboxChrome(),
-          ...rows.map((row) => this.renderRow(row, now)),
+          // WP-55 · ITEM 4 — THE ONE LIST, WITH CAPTIONS OVER THE ROWS THE
+          // RECORD DOES NOT LINK. `nowGroups` is a partition of `rows` and
+          // never a filter: every row it was given is drawn exactly once, so
+          // the badge, the verdict and the columns still count the same set.
+          ...nowGroups(rows).map((group, i) => this.renderGroup(group, i, now)),
         ),
 
         // WP-54 · ITEM 13 — THE SECTION DOES NOT RENDER WHEN IT IS EMPTY.

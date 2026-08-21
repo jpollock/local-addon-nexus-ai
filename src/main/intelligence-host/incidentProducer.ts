@@ -571,8 +571,15 @@ export function recordAbortIncidents(args: AbortObservation): number {
 // Shared
 // ---------------------------------------------------------------------------
 
-/** A site-level incident, where no component is named. P2's own wording. */
-const SITE_LEVEL = 'site';
+/**
+ * A site-level incident, where no component is named. P2's own wording.
+ *
+ * EXPORTED AT WP-56a, because the fold now defaults an absent `component` back
+ * to it exactly as `incidentHistory` does. Two readers of one key must not
+ * disagree about what the absent value means, and a second literal `'site'` in
+ * `sessionRegistry` would be that disagreement waiting to happen.
+ */
+export const SITE_LEVEL = 'site';
 
 /**
  * The `component` field, or nothing at all when the incident is site-level.
@@ -598,7 +605,25 @@ function componentField(component: string): { component?: string } {
  */
 const KEY_SEPARATOR = '|';
 
-function incidentKey(component: string, fact: string): string {
+/**
+ * THE DEDUP KEY — and, since WP-56a, THE INCIDENT SITUATION'S IDENTITY TOO.
+ *
+ * Ratified at WP-56's gate: *"the producer's own dedup key is `(component,
+ * fact)` — it has a notion of 'the same incident' that the fold declined to use,
+ * and invented a different one from the report instead of the subject."* So this
+ * is exported and `sessionRegistry` composes the situation id from it, rather
+ * than the two layers each holding an opinion about what "the same incident"
+ * means.
+ *
+ * **IT IS A KEY WITHIN ONE ENTITY'S HISTORY, and that scope is load-bearing.**
+ * `incidentHistory` builds one map per `entityId`, so `(component, fact)` is
+ * unique inside a site and NOT across the fleet — every site can carry `FS-01`,
+ * which is the collision `SituationSignature` was built to avoid. The fold is
+ * fleet-wide, so it prefixes the anchor; see `incidentSubjectKey` there. Reusing
+ * this function for the tail is what keeps the separator and the site-level
+ * default one decision rather than two.
+ */
+export function incidentKey(component: string, fact: string): string {
   return `${component}${KEY_SEPARATOR}${fact}`;
 }
 

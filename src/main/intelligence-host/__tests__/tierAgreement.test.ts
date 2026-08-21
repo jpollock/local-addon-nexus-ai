@@ -44,7 +44,13 @@ function tierInRuleLine(rule: string): number | null {
 describe('the ratified set declares one tier per class, and the rule line reads it', () => {
   test('every template declares a tier, and its rule line is a SLOT rather than a literal', () => {
     for (const template of SITUATION_TEMPLATES) {
-      expect(typeof template.tier).toBe('number');
+      // WP-55 · `null` IS A DECLARATION — of a DERIVED tier. The fixture states
+      // `incident.coalesced`'s in prose ("the highest tier among the members"),
+      // and the generator emits `null` rather than inventing a number, which is
+      // the fabrication it exists to refuse. What must never happen is a class
+      // declaring NOTHING; both a number and an explicit null are declarations.
+      expect(['number', 'object']).toContain(typeof template.tier);
+      if (typeof template.tier === 'object') expect(template.tier).toBeNull();
       // The slot is what makes the displayed tier the ranked one. A literal here
       // would render a number nothing sorted by — the defect, restored.
       expect(template.rule.startsWith('Tier {tier} · ')).toBe(true);
@@ -60,6 +66,12 @@ describe('the ratified set declares one tier per class, and the rule line reads 
       'run.waiting.part-changed': 1,
       // The one the fold contradicted, and the whole reason this suite exists.
       'incident.no-run': 1,
+      // WP-55 · DERIVED, and `null` says so. Its tier is "the highest tier among
+      // the members" — a function of the row rather than a property of the
+      // class — so there is no number here to check the fold against, and
+      // `outrankedByTheRecord` correctly cannot contradict a claim never made.
+      // The fold's answer is pinned where it is computed (`coalescedRow.test.ts`).
+      'incident.coalesced': null,
       // Ratified as tier 3, which `ConsequenceTier` did not hold until WP-54
       // widened it. No producer emits this class yet (WP-54a); the type holds it
       // so the ratified rank is representable the day one does.
@@ -92,7 +104,7 @@ describe('the agreement pin — display and rank are one number', () => {
     rule,
     headlineTemplate: null,
     door: null,
-    signature: null,
+    signatures: [],
     written: { done: 0, failed: 0, total: null },
   });
 

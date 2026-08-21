@@ -1198,7 +1198,7 @@ describe('the consequence order (moments-model 1.3 §4a)', () => {
       // WP-54's two additions, inert here for the same reason: the comparator
       // reads neither.
       door: null,
-      signature: null,
+      signatures: [],
       written: { done: 0, failed: 0, total: 1 },
     };
     const place = (highest: string | null) => ({
@@ -1962,7 +1962,23 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     // Coalescing keys off `correlation` into a session's task set, so with no
     // link there is no session to fold them into and each states its own limit
     // exactly as the designer drew it.
-    const findings = ['fileorganizer', 'wp-compat', 'noted, index', 'index.php'];
+    //
+    // WP-55 · THE FIXTURE WAS UNFAITHFUL TO THE RECORD, and WP-56a's identity
+    // change is what exposed it. It gave all four findings ONE `fact`
+    // (`ABS-0x`) and varied only `symptom` — a shape the producer cannot emit,
+    // because `recordSentinelIncidents` keys `history.open` on
+    // `incidentKey(component, fact)` and would refuse the second, third and
+    // fourth as already open. Re-measured on the owner's real ledger
+    // (2026-08-21, 4 incident events): the four carry four DISTINCT facts —
+    // `ABS-04`, `ABS-05`, `ABS-07`, `FS-01` — one anchor, `correlation` null on
+    // every one. Those are the values below, and the row count is unchanged at
+    // four because four subjects is what the record actually holds.
+    const findings = [
+      { fact: 'ABS-04', symptom: 'File manager plugin(s) active: fileorganizer, filester' },
+      { fact: 'ABS-05', symptom: 'Known backdoor plugin detected: wp-compat' },
+      { fact: 'ABS-07', symptom: 'Low-entropy plugin name(s) — likely attacker-created: noted, index' },
+      { fact: 'FS-01', symptom: 'PHP file(s) in mu-plugins/: index.php' },
+    ];
     for (const finding of findings) {
       core.emitter.emit({
         observed_at: hoursAgo(7),
@@ -1971,7 +1987,7 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
         entity: { environment: CHARLIE_1, site: CHARLIE_2 },
         actor: { id: 'act_security_sentinel', kind: 'agent' },
         source: { class: 'work', system: 'agent:security-sentinel', trust: 'emitted' },
-        payload: { fact: 'ABS-0x', symptom: finding, severity: 'high', resolved: false },
+        payload: { ...finding, severity: 'high', resolved: false },
       });
     }
     expect(ledgerCount(INCIDENT_TOPIC)).toBe(4); // shape #15

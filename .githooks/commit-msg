@@ -1,0 +1,71 @@
+#!/bin/sh
+# WP-55 · THE VENUE GUARD. Refuse a commit whose message names one packet while
+# the checkout belongs to another.
+#
+# The pwd hazard recurred three times in one day. Each answer was a stronger
+# rule, carried in the prologue of whoever happened to be writing the command —
+# which protects one operator, in one session. This is the same rule as a
+# mechanism: versioned, wired by the `core.hooksPath` setting the secret scanner
+# already needs, and running in every clone for every author.
+#
+# THE ONE THING IT GATES ON: a conventional-commit scope naming a packet
+# (`docs(wp-56): …`) inside a worktree checked out for a DIFFERENT packet
+# (branch `wp-32`). That is the observed failure, exactly — a merge report for
+# WP-56 committed in the WP-32 battery worktree — and it is visible from the
+# message and the branch alone, which is the only pair of facts a hook has.
+#
+# WHAT IT DELIBERATELY DOES NOT GATE ON:
+#   - the base branch. Every packet's merge report is committed there by design.
+#   - the body. `Supersedes wp-56a` in a paragraph is a citation, not a venue
+#     claim, and refusing on it would make merge reports unwritable.
+#   - a message with no packet scope. Ordinary work is not a venue claim.
+#
+# Escape hatch: `git commit --no-verify`. Named here rather than left to be
+# discovered, because a guard with no stated way past it gets disabled wholesale
+# the first time it is wrong.
+set -e
+
+msg_file="$1"
+[ -n "$msg_file" ] && [ -r "$msg_file" ] || exit 0
+
+# The branch, from the environment when a test drives this directly, otherwise
+# from the checkout itself. A guard that can only be exercised by constructing
+# the failure it prevents is a guard nothing checks.
+branch="${NEXUS_VENUE_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')}"
+
+# Only a PACKET worktree makes a venue claim. Anything else — the base branch, a
+# feature branch, a detached head — is out of scope by construction.
+case "$branch" in
+  wp-[0-9]*) ;;
+  *) exit 0 ;;
+esac
+
+# The scope from the conventional-commit HEADER — the first line, and only the
+# first line.
+header=$(head -n 1 "$msg_file")
+scope=$(printf '%s' "$header" | sed -n 's/^[a-zA-Z][a-zA-Z]*(\([^)]*\))!*:.*$/\1/p')
+
+case "$scope" in
+  wp-[0-9]*) ;;
+  *) exit 0 ;;
+esac
+
+# Case-insensitively, because a scope is written by hand and `WP-56` is the same
+# packet as `wp-56`.
+lower_scope=$(printf '%s' "$scope" | tr '[:upper:]' '[:lower:]')
+lower_branch=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]')
+[ "$lower_scope" = "$lower_branch" ] && exit 0
+
+echo ""
+echo "Commit blocked: WRONG VENUE."
+echo ""
+echo "  the message names   $scope"
+echo "  the checkout is     $branch"
+echo ""
+echo "A packet-scoped commit belongs in that packet's own worktree. This is the"
+echo "pwd hazard: both halves are correct on their own, and the turn is not."
+echo ""
+echo "  git status   in both trees, before anything else."
+echo ""
+echo "If this really is intended, commit with --no-verify."
+exit 1

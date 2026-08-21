@@ -57,7 +57,7 @@ const OUT_FILE = path.join(
 let fixturePath = FIXTURE_JS;
 
 /** Bumped when the SHAPE changes, so a consumer can tell that from a content change. */
-const SHAPE_VERSION = 3;
+const SHAPE_VERSION = 4;
 
 /**
  * The five ratified ids, in the fixture's own order.
@@ -83,6 +83,12 @@ const RATIFIED_IDS = [
   'run.waiting.mid-procedure',
   'run.waiting.part-changed',
   'incident.no-run',
+  // WP-55 · `incident.coalesced` LEAVES THE DEFERRAL AND JOINS THE SET. Its four
+  // host fields (`{leadFinding}`, `{restCount}`, `{memberCount}`, `{linkKind}`)
+  // are derived in the fold now, so the condition its deferral stated has ended
+  // — and `assertDeferralsStillHold` below is what makes that a build failure
+  // rather than a thing someone had to remember.
+  'incident.coalesced',
   'agent.stuck',
 ] as const;
 
@@ -157,10 +163,64 @@ const RULED_AMENDMENTS: ReadonlyArray<{
 ];
 
 const DEFERRED_IDS: Readonly<Record<string, string>> = {
-  'incident.coalesced':
-    'its headline slots ({leadFinding}, {restCount}, {memberCount}, {linkKind}) are host fields ' +
-    'nothing derives yet — WP-55 adds them, and the class is emitted on the same visit',
+  // EMPTY, AND THAT IS THE POINT. `incident.coalesced` was the one entry; WP-55
+  // derived its four host fields and deleted it. The mechanism that FORCED the
+  // deletion is `assertDeferralsStillHold` below — not a reader remembering.
 };
+
+/**
+ * WP-55 · VACUOUS SHAPE #17, CLOSED — the guard that reads its own exception.
+ *
+ * `RATIFIED_IDS` is compared against `ids.filter(id => !(id in DEFERRED_IDS))`.
+ * The deferral is SUBTRACTED before the guard reads it, so the guard cannot see
+ * the class it is deferring: the day the host fields arrived, forgetting to
+ * delete the entry would have left the build green with the class missing from
+ * the screen it was drawn for. That is registered as shape #17 —
+ * *a guard that subtracts its own exception before reading* — and this is it
+ * closed.
+ *
+ * **A DEFERRAL STATES A CONDITION UNDER WHICH IT ENDS. THIS PROBES THAT
+ * CONDITION.** Every entry in `DEFERRED_IDS` is deferred for exactly one reason:
+ * the class carries a slot this product cannot fill. `KNOWN_SLOTS` is the
+ * registry of slots it CAN fill. So the condition is mechanically checkable —
+ * if every slot the deferred class carries is now known, the deferral has
+ * expired and the class must be emitted. Refusing to emit it is then a hole in
+ * the screen, and this throws instead.
+ *
+ * SKIPPING LOUDLY IS NOT FAILING CLOSED. The `process.stdout.write` that
+ * announces a skip is a courtesy to whoever is watching a build; it is not an
+ * instrument, because nothing reads it and nothing fails on it.
+ *
+ * EXPORTED so it can be driven in BOTH directions without constructing a broken
+ * fixture: a deferral whose condition still holds passes, and a deferral whose
+ * condition has ended throws. A guard nothing can reach is a guard nothing can
+ * check — this packet's own rule, turned on the packet.
+ */
+export function assertDeferralsStillHold(
+  deferred: Readonly<Record<string, string>>,
+  templates: ReadonlyArray<Record<string, unknown>>,
+  knownSlots: readonly string[],
+): void {
+  for (const [id, why] of Object.entries(deferred)) {
+    const template = templates.find((t) => t && t.id === id);
+    if (!template) continue; // declared and absent — the skip announcement covers it
+    const slots = new Set<string>();
+    for (const value of Object.values(template)) {
+      if (typeof value !== 'string') continue;
+      for (const slot of slotsIn(value)) slots.add(slot);
+    }
+    const unfillable = [...slots].filter((slot) => !knownSlots.includes(slot));
+    if (unfillable.length > 0) continue; // the condition still holds
+    throw new Error(
+      `THE DEFERRAL OF "${id}" HAS EXPIRED and the class is still not emitted. ` +
+      `It was deferred because: ${why}. Every slot it carries is now a host field ` +
+      'the composer can fill, so the condition that justified the deferral has ended — ' +
+      `delete the "${id}" entry from DEFERRED_IDS and add it to RATIFIED_IDS in the ` +
+      'fixture\'s own order. A deferral that outlives its own condition is a class ' +
+      'the designer drew and the product silently refuses to render.',
+    );
+  }
+}
 
 /**
  * Every STRING field a template must carry. A missing one is a hole, not a
@@ -175,6 +235,28 @@ const DEFERRED_IDS: Readonly<Record<string, string>> = {
  * composer and every consumer are unchanged.
  */
 const TEMPLATE_FIELDS = ['id', 'guard', 'headline', 'ask', 'state', 'meta', 'rule', 'door'] as const;
+
+/**
+ * WP-55 · FIELDS ONLY SOME CLASSES CARRY, emitted as `''` where absent.
+ *
+ * `incident.coalesced` is the first class with a SECOND headline and a
+ * disclosure, and both are class-specific facts rather than universal ones: a
+ * fallback headline exists because that class's lead can be genuinely
+ * underivable (no member carries a severity, so no member can lead), and a
+ * disclosure exists because that class is the only one with parts to disclose.
+ *
+ * REQUIRING them of every class would refuse the designer's own artifact, and
+ * defaulting a MISSING one on a class that should carry it would be the
+ * blank-where-a-sentence-belongs defect. `''` is the honest emission: the
+ * consumer branches on presence, and the fixture is what decides presence.
+ *
+ * The two disclosure strings are CONTROLS and take the class rule — no terminal
+ * full stop — for the same reason every door does.
+ */
+const OPTIONAL_TEMPLATE_FIELDS = ['headlineFallback', 'disclosure', 'disclosureOpen'] as const;
+
+/** The optional fields that are CONTROL LABELS, and so take `controlLabel`. */
+const CONTROL_TEMPLATE_FIELDS: readonly string[] = ['disclosure', 'disclosureOpen'];
 
 /**
  * WP-54 · THE TIER IS ONE FACT, DECLARED ONCE, AND THE RULE LINE READS IT.
@@ -221,6 +303,64 @@ const ACCOUNTING_SLOTS = ['count'] as const;
 
 /** Every door the fixture declares, and the one way back. */
 const DOOR_KEYS = ['runAtGate', 'run', 'incident', 'agent', 'backToNow'] as const;
+
+// --- WP-55 · the four blocks the cycle-seven sheet drew and nothing read ----
+
+/** §5 · GROUPING, which is NOT coalescing. See `GROUP` in the fixture. */
+const GROUP_KEYS = ['guard', 'label', 'limit'] as const;
+const GROUP_SLOTS = ['memberCount', 'target'] as const;
+
+/** §6 · the deferred state. Keeps its tier, keeps its place, lowers escalation. */
+const DEFERRED_BLOCK_KEYS = ['rule', 'recorded', 'wake', 'endDoor'] as const;
+const DEFERRED_BLOCK_SLOTS = ['tier', 'deferredAge', 'reason', 'wakeLabel'] as const;
+
+/** §7 · the header. `awayGuard` and `accounting` are PROSE ABOUT the copy, not copy. */
+const HEADER_KEYS = ['away'] as const;
+const HEADER_SLOTS = ['age'] as const;
+
+/**
+ * The reserved row's own heading and its two lines.
+ *
+ * **`oldestAge` IS DELIBERATELY ABSENT FROM THIS LIST, and its absence is the
+ * refusal.** See `DEFERRED_BLOCK_ENTRIES`.
+ */
+const HEALTH_KEYS = ['headingLoud', 'loud', 'quiet'] as const;
+const HEALTH_SLOTS = ['darkCount', 'checkCount'] as const;
+
+/**
+ * WP-55 · BLOCK KEYS DECLARED AND NOT EMITTED, by name and reason — the
+ * `DEFERRED_IDS` mechanism, one level down, and probed by the same rule.
+ *
+ * **`HEALTH.loud` reads `{oldestAge}` AND NO PRODUCER SUPPLIES IT.** Measured
+ * rather than assumed: `reserved.dark` is built from health lines whose verdict
+ * is `DARK`, and there are exactly four places `health.ts` writes that verdict —
+ * `core` ("not started"), `producer:*` ("nothing yet"), `mirror` ("unavailable")
+ * and `entities` ("unavailable"). **Not one of them carries a timestamp**, and
+ * the producer lines cannot even reach the reserved row (`countsTowardWorst:
+ * false` filters them out). A DARK line is one that has NEVER reported, so there
+ * is no duration to put after it — which is the identical finding the ACCOUNTING
+ * block already ruled on, in the designer's own words: *"a DARK producer is one
+ * that has NEVER reported, so there is no duration to put after it, and the
+ * designer's 'in 9 hours' would have to be invented."*
+ *
+ * So the sentence is REFUSED rather than filled. This is the designer's open
+ * late-versus-dark question, and blocking it at the contract is what converts it
+ * from an opinion into a fact: the answer is not "which reads better", it is
+ * "the record does not hold an age for a thing that never reported". A LATE
+ * producer does have one (`STALE`, with `last seen …`), and if the line is meant
+ * to be about late rather than dark then it needs `staleCount` and a different
+ * sentence — which is a decision for the designer, not a value for this file.
+ *
+ * `{darkCount}` and `{checkCount}` were checked the same way and both EXIST:
+ * `ReservedRow.dark.length` and `ReservedRow.checkCount`. The second is derived
+ * in this packet (the count of health lines that count toward the verdict); it
+ * was not a producer that had to be invented, only one that had to be exposed.
+ */
+const DEFERRED_BLOCK_ENTRIES: Readonly<Record<string, string>> = {
+  'health.loud':
+    'it reads {oldestAge}, and no producer supplies one — every DARK health line means ' +
+    '"has never reported", so it carries no timestamp and the duration would have to be invented',
+};
 /** Every colour. `tier4` is deliberately absent: tier 4 takes no stripe. */
 const COLOUR_KEYS = ['tier1', 'tier2', 'tier3', 'link'] as const;
 const RESERVED_KEYS = ['head', 'quiet'] as const;
@@ -234,12 +374,23 @@ const ACCOUNTING_KEYS = ['changed', 'dark'] as const;
  * This is the closed set the composer can fill. See the header for why a slot
  * outside it is a build failure rather than a rendered brace.
  */
-const KNOWN_SLOTS = [
+export const KNOWN_SLOTS = [
   'runNoun', 'done', 'failed', 'total', 'age', 'checkpoint', 'position',
   'awaits', 'target', 'finding', 'agentId', 'timeout', 'runbookId', 'producer',
   // WP-54 · the rule line's own tier, filled from the RANKED tier. See
   // `RULE_PREFIX` for why the number is a slot rather than literal text.
   'tier',
+  // WP-55 · THE COALESCED CLASS'S FOUR, derived in the fold and nowhere else.
+  //
+  //   leadFinding  the highest-severity member's subject line
+  //   restCount    memberCount - 1
+  //   memberCount  how many FINDINGS the situation folded — see
+  //                `Situation.memberCount`; a finding opened and later amended
+  //                is one finding with a history, not two
+  //   linkKind     the record link that justified the fold, as a LABEL. The
+  //                field on the contract stays the record noun (`correlation`);
+  //                what is filled here is the word a person reads. See the fold.
+  'leadFinding', 'restCount', 'memberCount', 'linkKind',
 ] as const;
 
 /**
@@ -301,6 +452,11 @@ interface Extracted {
   colours: Record<string, string>;
   reserved: Record<string, string>;
   accounting: Record<string, string>;
+  /** WP-55 · the four blocks the cycle-seven sheet drew and nothing read. */
+  group: Record<string, string>;
+  deferred: Record<string, string>;
+  header: Record<string, string>;
+  health: Record<string, string>;
 }
 
 
@@ -337,6 +493,9 @@ function extract(): Extracted {
     if (!ids.includes(id)) continue;
     process.stdout.write(`  deferred: "${id}" is declared and NOT emitted — ${why}\n`);
   }
+  // WP-55 · shape #17, closed. The line above ANNOUNCES a skip; this REFUSES a
+  // deferral that has outlived the condition it stated. See the function.
+  assertDeferralsStillHold(DEFERRED_IDS, rawTemplates as Array<Record<string, unknown>>, KNOWN_SLOTS);
 
   // The ruled amendments, checked against the fixture as READ. See
   // `RULED_AMENDMENTS`: this is the check whose absence let two adjudicated
@@ -376,7 +535,18 @@ function extract(): Extracted {
       if (typeof value !== 'string') throw new Error(`template "${String(raw.id)}" is missing "${field}"`);
       template[field] = value;
     }
-    for (const field of ['headline', 'ask', 'meta', 'rule'] as const) {
+    // The optional fields, when the class declares them. A value that is
+    // present must be a STRING — a class carrying `disclosure: 4` is a fixture
+    // error, not an absent field — and absence emits `''`.
+    for (const field of OPTIONAL_TEMPLATE_FIELDS) {
+      const value = raw[field];
+      if (value === undefined) { template[field] = ''; continue; }
+      if (typeof value !== 'string') {
+        throw new Error(`template "${String(raw.id)}" declares "${field}" as something other than a string`);
+      }
+      template[field] = CONTROL_TEMPLATE_FIELDS.includes(field) ? controlLabel(value) : value;
+    }
+    for (const field of ['headline', 'ask', 'meta', 'rule', ...OPTIONAL_TEMPLATE_FIELDS] as const) {
       for (const slot of slotsIn(template[field])) {
         if (!(KNOWN_SLOTS as readonly string[]).includes(slot)) {
           throw new Error(
@@ -503,7 +673,83 @@ function extract(): Extracted {
   const reserved = readBlock(h, 'reserved', RESERVED_KEYS, []);
   const accounting = readBlock(h, 'accounting', ACCOUNTING_KEYS, ACCOUNTING_SLOTS);
 
-  return { runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting };
+  // --- WP-55's four blocks -------------------------------------------------
+  const group = readBlock(h, 'group', GROUP_KEYS, GROUP_SLOTS);
+  const deferred = readBlock(h, 'deferred', DEFERRED_BLOCK_KEYS, DEFERRED_BLOCK_SLOTS);
+  // `endDoor` is a CONTROL and takes the class rule, like every door.
+  deferred.endDoor = controlLabel(deferred.endDoor);
+  const header = readBlock(h, 'header', HEADER_KEYS, HEADER_SLOTS);
+  const health = readBlock(h, 'health', HEALTH_KEYS, HEALTH_SLOTS);
+
+  // WP-55 · DOOR_RULE IS LAW, NOT COPY — so it is mechanised as ASSERTIONS.
+  //
+  // Every value in that block is a sentence ABOUT the doors ("a door says where
+  // it goes", "action blue rgb(0,107,214) — never brand green") rather than a
+  // string any surface renders. Emitting them would put prose in a copy module
+  // that nothing could ever print; checking them is what the block is actually
+  // for, and it makes a ruling undoable-by-paste in the same way
+  // `RULED_AMENDMENTS` does.
+  assertDoorRule(h, colours, templates);
+
+  return {
+    runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting,
+    group, deferred, header, health,
+  };
+}
+
+/**
+ * WP-55 · `DOOR_RULE`, MECHANISED. Ratified as law, so asserted rather than
+ * emitted.
+ *
+ * The block's four values are statements ABOUT doors, not strings a surface
+ * renders — so the honest way to "site DOOR_RULE as ratified" is to make each
+ * one a build-time check. Each is the same kind of instrument as
+ * `RULED_AMENDMENTS`: a ruling that would otherwise survive exactly as long as
+ * the next person's memory.
+ *
+ *  - `noTerminalPunctuation` — already enforced for the CLASS by
+ *    `controlLabel`; here the fixture's own declaration of it is checked, so a
+ *    designer who set it false would fail the build rather than silently
+ *    disagree with the code.
+ *  - `color` — the door's colour is asserted to name `COLOURS.link`'s actual
+ *    value. Two places state this colour and this is what pins them together;
+ *    "action blue" drifting to brand green is precisely the failure the rule
+ *    names.
+ *  - `everyRowHasOne` — every ratified class declares a `door`. A class without
+ *    one is a row with nowhere to go, which the rule forbids by name.
+ */
+function assertDoorRule(
+  headlines: Record<string, unknown>,
+  colours: Record<string, string>,
+  templates: readonly Template[],
+): void {
+  const raw = headlines.doorRule;
+  if (!raw || typeof raw !== 'object') throw new Error('the fixture carries no doorRule block');
+  const rule = raw as Record<string, unknown>;
+
+  if (rule.noTerminalPunctuation !== true) {
+    throw new Error(
+      'DOOR_RULE REVERSED — the fixture no longer declares `noTerminalPunctuation: true`. ' +
+      'A control takes no terminal full stop; the period that shipped on the row door was ' +
+      'APPENDED by an extraction, which is why the rule belongs to the class and not to a string.',
+    );
+  }
+  const colour = String(rule.color ?? '');
+  if (!colour.includes(colours.link)) {
+    throw new Error(
+      `DOOR_RULE DISAGREES WITH THE PALETTE — the door's colour is stated as "${colour}" ` +
+      `and the link colour is "${colours.link}". A door is a link and reads as one; brand green ` +
+      'is the product\'s own mark, not a destination.',
+    );
+  }
+  for (const template of templates) {
+    if (template.door === '') {
+      throw new Error(
+        `DOOR_RULE BROKEN — the class "${template.id}" declares no door. ` +
+        `${String(rule.everyRowHasOne ?? 'every row has one')}`,
+      );
+    }
+  }
 }
 
 /**
@@ -525,13 +771,37 @@ function readBlock(
   const out: Record<string, string> = {};
   for (const key of keys) {
     const value = requireString(source, key, `the ${name} block`);
-    for (const slot of slotsIn(value)) {
-      if (!allowedSlots.includes(slot)) {
+    const unfillable = slotsIn(value).filter((slot) => !allowedSlots.includes(slot));
+
+    // WP-55 · A KEY MAY BE DEFERRED, by name and reason, exactly as a CLASS may
+    // — and it is probed by the same rule. A deferred key is emitted as `''`,
+    // so a consumer branches on presence and never renders a hole; and if every
+    // slot it carries becomes fillable, the deferral has expired and the build
+    // refuses rather than quietly keeping the sentence out of the product.
+    const deferral = DEFERRED_BLOCK_ENTRIES[`${name}.${key}`];
+    if (deferral !== undefined) {
+      if (unfillable.length === 0) {
         throw new Error(
-          `the ${name} block's "${key}" carries the unknown slot "{${slot}}" — ` +
-          'the composer has no host field to fill it from',
+          `THE DEFERRAL OF "${name}.${key}" HAS EXPIRED and the sentence is still not emitted. ` +
+          `It was deferred because: ${deferral}. Every slot it carries is now fillable, so the ` +
+          `condition that justified the deferral has ended — delete the "${name}.${key}" entry ` +
+          'from DEFERRED_BLOCK_ENTRIES. A deferral that outlives its own condition is a sentence ' +
+          'the designer wrote and the product silently refuses to render.',
         );
       }
+      process.stdout.write(
+        `  deferred: "${name}.${key}" is declared and NOT emitted — ${deferral} ` +
+        `(unfillable: ${unfillable.map((slot) => `{${slot}}`).join(', ')})\n`,
+      );
+      out[key] = '';
+      continue;
+    }
+
+    if (unfillable.length > 0) {
+      throw new Error(
+        `the ${name} block's "${key}" carries the unknown slot "{${unfillable[0]}}" — ` +
+        'the composer has no host field to fill it from',
+      );
     }
     out[key] = value;
   }
@@ -548,7 +818,10 @@ function literal(value: string): string {
 }
 
 function emit(): string {
-  const { runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting } = extract();
+  const {
+    runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting,
+    group, deferred, header, health,
+  } = extract();
   const lines: string[] = [
     '/**',
     ' * GENERATED — DO NOT EDIT. `npm run fixtures:situation-copy`.',
@@ -602,6 +875,30 @@ function emit(): string {
     '  guard: string;',
     '  /** The verdict. World state first. */',
     '  headline: string;',
+    '  /**',
+    '   * WP-55 · THE SECOND HEADLINE, or empty where the class declares none.',
+    '   *',
+    '   * `incident.coalesced` is the only class with one, and its fixture states',
+    '   * the guard beside it: *"no member carries a severity field, so no member',
+    '   * can lead"*. A coalesced row whose members carry no severity has no',
+    '   * consequential member to name, and this is what it says instead — the',
+    '   * count and the target, which are facts it does hold. It is NOT a',
+    '   * fallback for an unfillable `{target}`: both arms read `{target}`, so a',
+    '   * group spanning two sites falls all the way through to the derived',
+    '   * sentence, which is the honest answer for a row with no one place.',
+    '   */',
+    '  headlineFallback: string;',
+    '  /**',
+    '   * WP-55 · THE PARTS DISCLOSURE, closed and open, or empty.',
+    '   *',
+    '   * A part is a LINE INSIDE THE CARD — no stripe, no chip, no ask, no gate.',
+    '   * Closed by default and opening IN PLACE rather than through the door,',
+    '   * because someone checking whether a verdict is true should not have to',
+    '   * leave the list to do it. Both are controls and carry no terminal',
+    '   * period, enforced for the class by `controlLabel`.',
+    '   */',
+    '  disclosure: string;',
+    '  disclosureOpen: string;',
     '  /** What is being asked of the reader, and what stopping costs. */',
     '  ask: string;',
     '  /**',
@@ -660,6 +957,7 @@ function emit(): string {
   for (const template of templates) {
     lines.push('  {');
     for (const field of TEMPLATE_FIELDS) lines.push(`    ${field}: ${literal(template[field])},`);
+    for (const field of OPTIONAL_TEMPLATE_FIELDS) lines.push(`    ${field}: ${literal(template[field])},`);
     // See `SituationTemplate.chip`: no ratified class declares one any more.
     lines.push(`    chip: ${literal('')},`);
     lines.push(`    tier: ${tiers[template.id] === null ? 'null' : String(tiers[template.id])},`);
@@ -749,6 +1047,79 @@ function emit(): string {
     'export const ACCOUNTING = {',
   );
   for (const key of ACCOUNTING_KEYS) lines.push(`  ${key}: ${literal(accounting[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-55 · GROUPING — XD-28, AND IT IS NOT COALESCING.',
+    ' *',
+    ' * A shared field is a fact; a shared cause is a verdict. Where the record',
+    ' * does not link the members they stay SEPARATE ROWS under a label, and the',
+    ' * label states the limit.',
+    ' *',
+    ' * **THE LABEL IS NOT A CARD: no border, no fill, no stripe, no door.** That',
+    ' * is the whole visual difference and it must read without the words —',
+    ' * coalescing produces one bordered object, grouping produces several under a',
+    ' * caption. `guard` is carried as TEXT, like a template\'s, so the rule the',
+    ' * surface implements and the rule the designer wrote stay one sentence.',
+    ' */',
+    'export const GROUP = {',
+  );
+  for (const key of GROUP_KEYS) lines.push(`  ${key}: ${literal(group[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-55 · THE DEFERRED STATE. Cycle two, ratified.',
+    ' *',
+    ' * Keeps its tier, keeps its place, lowers escalation ONLY. It does not leave',
+    ' * the list — leaving is a dismissal by another name. Dimmed, out of the',
+    ' * badge, reason and wake condition on the row.',
+    ' *',
+    ' * `rule` REPLACES the class\'s rule line while a deferral stands, and it',
+    ' * carries the same `{tier}` slot for the same reason: the tier a card shows',
+    ' * is the tier it was sorted by, and a deferral changes neither.',
+    ' *',
+    ' * `endDoor` is a control and carries no terminal period.',
+    ' */',
+    'export const DEFERRED = {',
+  );
+  for (const key of DEFERRED_BLOCK_KEYS) lines.push(`  ${key}: ${literal(deferred[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-55 · THE HEADER. An absence of zero is not an absence.',
+    ' *',
+    ' * `away` renders only when the gap is an hour or more; otherwise the header',
+    ' * is the product name alone. The fixture\'s `awayGuard` and `accounting`',
+    ' * keys are PROSE ABOUT this copy rather than copy, so they are not emitted —',
+    ' * the guard is implemented in the surface and the accounting rule is already',
+    ' * enforced by `ACCOUNTING`\'s own clauses.',
+    ' */',
+    'export const HEADER = {',
+  );
+  for (const key of HEADER_KEYS) lines.push(`  ${key}: ${literal(header[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-55 · THE RESERVED ROW\'S HEADING AND ITS TWO LINES.',
+    ' *',
+    ' * **`loud` IS EMPTY, AND THAT IS A REFUSAL RATHER THAN AN OMISSION.** The',
+    ' * designer\'s sentence reads "{darkCount} checks haven\'t reported in',
+    ' * {oldestAge}", and no producer supplies an `{oldestAge}`: every DARK health',
+    ' * line means "has never reported" and therefore carries no timestamp, so the',
+    ' * duration would have to be invented. The generator names the refusal and',
+    ' * its reason in its build output, and it will FAIL the build if the slot',
+    ' * ever becomes fillable and the sentence is still withheld.',
+    ' *',
+    ' * A consumer must branch on the empty string and use its own derived line —',
+    ' * `ReservedRow.headline`, which states the count and stops.',
+    ' */',
+    'export const HEALTH = {',
+  );
+  for (const key of HEALTH_KEYS) lines.push(`  ${key}: ${literal(health[key])},`);
   lines.push('} as const;', '');
   return lines.join('\n');
 }

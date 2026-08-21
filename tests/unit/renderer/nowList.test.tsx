@@ -15,7 +15,7 @@
 import * as React from 'react';
 
 import { serializeTree } from './helpers/serializeTree';
-import { NOW } from './helpers/returnMorning';
+import { NOW, hoursAgo } from './helpers/returnMorning';
 import { Arrival } from '../../../src/renderer/components/return/Arrival';
 import { SessionReEntry } from '../../../src/renderer/components/return/SessionReEntry';
 import { Button, hasDesignSystem } from '../../../src/renderer/components/designSystem';
@@ -28,9 +28,13 @@ import {
 } from '../../../src/renderer/components/return/arrivalModel';
 import {
   COLOURS,
+  DEFERRED,
   DOORS,
+  GROUP,
   RESERVED,
+  SITUATION_TEMPLATES,
 } from '../../../src/main/intelligence-host/situationCopy.generated';
+import { fillSituationSentence } from '../../../src/main/intelligence-host/sessionRegistry';
 import { RETURN_COPY } from '../../../src/renderer/components/return/returnCopy.generated';
 import type { Situation, TriageView } from '../../../src/main/intelligence-host/sessionRegistry';
 import type { InboxItem } from '../../../src/main/inbox/types';
@@ -71,8 +75,41 @@ function incident(f: { id: string; fact: string; symptom: string }): Situation {
     rule: 'Tier 1 · nothing is holding it back but you',
     headlineTemplate: 'incident.no-run',
     door: { label: 'Open theawfulpm-test', kind: 'site', target: 'theawfulpm-test' },
-    signature: { producer: 'security-sentinel', fact: f.fact, target: 'theawfulpm-test' },
+    signatures: [{ producer: 'security-sentinel', fact: f.fact, target: 'theawfulpm-test' }],
     written: { done: 0, failed: 0, total: null },
+  };
+}
+
+/**
+ * WP-55 · THE SAME FOUR, FOLDED INTO ONE COALESCED ROW.
+ *
+ * One card, four member identities. Composed from the same `FINDINGS` table so
+ * the Inbox items below are literally the other store's copies of these members.
+ */
+function coalesced(): Situation {
+  return {
+    ...incident(FINDINGS[0]),
+    id: 'task_01SCAN',
+    memberCount: 4,
+    linkKind: 'correlation',
+    // COMPOSED FROM THE RATIFIED TEMPLATE, never retyped — a fixture that types
+    // the sentence is a second place the ratified wording lives, which is the
+    // defect the generator exists to prevent.
+    headline: fillSituationSentence(
+      SITUATION_TEMPLATES.find((t) => t.id === 'incident.coalesced')!.headline,
+      { target: 'theawfulpm-test', leadFinding: FINDINGS[1].symptom, restCount: 3 },
+    ),
+    headlineTemplate: 'incident.coalesced',
+    parts: FINDINGS.map((f) => ({
+      kind: 'incident' as const,
+      eventId: f.id,
+      topic: 'episodic.incident.recorded',
+      observedAt: '2026-08-18T22:25:24.386Z',
+      summary: `incident open: ${f.symptom}`,
+    })),
+    signatures: FINDINGS.map((f) => ({
+      producer: 'security-sentinel', fact: f.fact, target: 'theawfulpm-test',
+    })),
   };
 }
 
@@ -109,7 +146,7 @@ function triageOf(waiting: Situation[]): TriageView {
     waiting,
     changed: [],
     working: [],
-    reserved: { headline: RESERVED.quiet, dark: [], staleCount: 0, verdict: 'OK', degraded: false } as any,
+    reserved: { headline: RESERVED.quiet, dark: [], staleCount: 0, checkCount: 7, verdict: 'OK', degraded: false } as any,
     verdict: '',
     cursor: 'evt_d',
     // WP-56 · DERIVED FROM `waiting`, exactly as the host derives it, so a
@@ -186,6 +223,48 @@ describe('item 1 · the list renders each thing once', () => {
     for (const finding of FINDINGS) {
       expect(screen.split(finding.symptom)).toHaveLength(2);
     }
+  });
+
+  /**
+   * WP-55 · THE SAME DEFECT, ONE FOLD LATER — and the reason `signature` became
+   * a SET.
+   *
+   * When the four coalesce into ONE card, the Inbox still holds four copies. A
+   * single signature identifies ONE thing, so the folded row matched none of
+   * them and all four rendered as their own rows beside the card that had just
+   * folded them: five rows for four findings, and each finding's words on the
+   * screen twice. That is WP-54's "twelve rows under a badge of seven" returning
+   * by a different door, and it became reachable the moment this class rendered.
+   */
+  test('a COALESCED row absorbs its four inbox copies — ONE row, not five', () => {
+    const triage = triageOf([coalesced()]);
+    const items = FINDINGS.map((f, i) => inboxItem({ id: i + 1, code: f.fact, title: f.symptom }));
+
+    expect(nowRows(triage, fullInbox(items))).toHaveLength(1);
+
+    const { instance, tree } = render(triage, fullInbox(items));
+    expect(byAttr(walk(tree), 'data-situation')).toHaveLength(1);
+
+    // CLOSED, the lead member's words appear ONCE — in the headline — and the
+    // other three do not appear at all, because their lines are not open.
+    const closed = textOf(tree).join(' ');
+    expect(closed.split(FINDINGS[1].symptom)).toHaveLength(2);
+
+    // OPEN, each of the three non-lead members appears exactly once, on its own
+    // line. This is the half that catches the duplicate: an unabsorbed Inbox
+    // copy would print the same words a second time in its own row.
+    //
+    // THE LEAD APPEARS TWICE, DELIBERATELY — once as the verdict and once as
+    // one of the four lines the disclosure promised. Dropping its line would
+    // deliver three findings under a control that says four, and the fixture's
+    // own note ratifies both counts: *"the count is stated in the headline and
+    // in the disclosure, so the row needs no parts chip."*
+    instance.state = { ...instance.state, openParts: { task_01SCAN: true } };
+    const opened = textOf(serializeTree(instance.render())).join(' ');
+    for (const finding of [FINDINGS[0], FINDINGS[2], FINDINGS[3]]) {
+      expect(opened.split(finding.symptom)).toHaveLength(2);
+    }
+    expect(opened.split(FINDINGS[1].symptom)).toHaveLength(3);
   });
 
   test('an inbox item with NO matching situation is its own row, and keeps its door', () => {
@@ -315,11 +394,13 @@ describe('item 1 · the list renders each thing once', () => {
 
     // The two stores spell the producer differently and neither is rewritten:
     // the ledger stamps an actor, the Inbox stores an agent.
-    expect(situation.signature!.producer).toBe('security-sentinel');
+    expect(situation.signatures[0].producer).toBe('security-sentinel');
     expect(sameThing(situation, inboxItem({ source: 'security_sentinel' }))).toBe(true);
 
-    // A run has no signature, so nothing in the Inbox is ever the same thing.
-    expect(sameThing({ ...situation, signature: null }, inboxItem())).toBe(false);
+    // A row with NO identities matches nothing — which is every run row, since
+    // nothing in the Inbox is a run. WP-55 made this an empty SET rather than a
+    // null; the claim is unchanged.
+    expect(sameThing({ ...situation, signatures: [] }, inboxItem())).toBe(false);
   });
 
   /**
@@ -569,7 +650,7 @@ describe('item 14 · the identifier is printed once, and two rows on one runbook
     rule: 'waiting, and nothing has been written in scope',
     headlineTemplate: null,
     door: { label: 'Open the run', kind: 'session', target: id },
-    signature: null,
+    signatures: [],
     written: { done: 0, failed: 0, total: null },
   });
 
@@ -592,5 +673,202 @@ describe('item 14 · the identifier is printed once, and two rows on one runbook
 
     expect(rows).toHaveLength(2);
     expect(textOf(rows[0]).join(' ')).not.toBe(textOf(rows[1]).join(' '));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-55 · the coalesced screen — parts as lines, grouping as caption, and the
+// deferred row, all in the one list
+// ---------------------------------------------------------------------------
+
+describe('WP-55 item 3 · a part is a LINE inside the card', () => {
+  /**
+   * *"A part is a line inside the card: no stripe, no chip, no ask, no gate —
+   * its own sentence, its own age, its own door. Closed by default, opening IN
+   * PLACE rather than through the door, because someone checking whether a
+   * verdict is true should not have to leave the list to do it."*
+   */
+  test('CLOSED BY DEFAULT · the members are not drawn, and the disclosure states the count', () => {
+    const { tree, nodes } = render(triageOf([coalesced()]), fullInbox([]));
+    const screen = textOf(tree).join(' ');
+
+    // The disclosure is the class's own, filled with the count it folded.
+    const template = SITUATION_TEMPLATES.find((t) => t.id === 'incident.coalesced')!;
+    expect(screen).toContain(fillSituationSentence(template.disclosure, { memberCount: 4 }));
+    // …and none of the three non-lead members is drawn.
+    for (const f of FINDINGS.slice(2)) expect(screen).not.toContain(f.symptom);
+    // The control is a control, and it is on the row.
+    expect(byAttr(nodes, 'data-parts-toggle')).toHaveLength(1);
+  });
+
+  test('OPENS IN PLACE · every member is a line on the same card, with its own age', () => {
+    const { instance } = render(triageOf([coalesced()]), fullInbox([]));
+    instance.state = { ...instance.state, openParts: { 'task_01SCAN': true } };
+    const tree = serializeTree(instance.render());
+    const nodes = walk(tree);
+    const screen = textOf(tree).join(' ');
+
+    const lines = byAttr(nodes, 'data-part-line');
+    expect(lines).toHaveLength(4);
+    for (const f of FINDINGS) expect(screen).toContain(f.symptom);
+
+    // NO STRIPE, NO CHIP, NO ASK, NO GATE on a part — the four things that make
+    // a card a card. A part that grew any of them would read as a row.
+    for (const line of lines) {
+      expect(props(line)['data-stripe']).toBeUndefined();
+      expect(props(line)['data-chip']).toBeUndefined();
+      expect(props(line)['data-ask']).toBeUndefined();
+      expect(props(line)['data-gate']).toBeUndefined();
+    }
+    // Its own age, and its own door.
+    expect(byAttr(nodes, 'data-part-age')).toHaveLength(4);
+    expect(byAttr(nodes, 'data-part-door')).toHaveLength(4);
+
+    // It opened IN PLACE: the row is still one row, and the toggle now offers
+    // the way back in the class's own words.
+    expect(byAttr(nodes, 'data-situation')).toHaveLength(1);
+    expect(screen).toContain(SITUATION_TEMPLATES.find((t) => t.id === 'incident.coalesced')!.disclosureOpen);
+  });
+
+  /**
+   * THE COUNT IS STATED ONCE — and on this class the disclosure is where.
+   *
+   * `metaLine` appends "{n} parts · one situation" to any row with more than one
+   * part, and on a coalesced row that is the THIRD statement of the same number:
+   * the headline says "3 more findings", the disclosure says "4 findings", and
+   * the meta line said "4 parts". The fixture's own note rules on it — *"the
+   * count is stated in the headline and in the disclosure, so the row needs no
+   * parts chip"* — and the two the designer ratified are the two that stay.
+   */
+  test('a row whose class DISCLOSES its parts carries no parts clause on the meta line', () => {
+    const { tree } = render(triageOf([coalesced()]), fullInbox([]));
+    const screen = textOf(tree).join(' ');
+    expect(screen).not.toContain(RETURN_COPY.PARTS_CHIP);
+    // …and the two ratified statements of the count are both still there.
+    expect(screen).toContain('3 more findings');
+    expect(screen).toContain(fillSituationSentence(
+      SITUATION_TEMPLATES.find((t) => t.id === 'incident.coalesced')!.disclosure, { memberCount: 4 },
+    ));
+  });
+
+  test('a DERIVED multi-part row keeps its parts clause — nothing else on it states the count', () => {
+    // The clause is not deleted, it is deduplicated. A row with no disclosure
+    // has nowhere else to say how many parts it folded.
+    const derived = { ...coalesced(), headlineTemplate: null, headline: '4 open incidents from one scan' };
+    const { tree } = render(triageOf([derived]), fullInbox([]));
+    expect(textOf(tree).join(' ')).toContain(RETURN_COPY.PARTS_CHIP);
+  });
+
+  test('a row with ONE part discloses nothing — there is nothing to open', () => {
+    const { nodes } = render(triageOf([incident(FINDINGS[0])]), fullInbox([]));
+    expect(byAttr(nodes, 'data-parts-toggle')).toHaveLength(0);
+  });
+});
+
+describe('WP-55 item 4 · grouping is a CAPTION, and coalescing is a CARD (XD-28)', () => {
+  test('two rows sharing a target with NO link are listed separately, under a label', () => {
+    // The owner's real four: one site, no correlation on any of them. This is
+    // what the un-coalesced case renders as.
+    const { tree, nodes } = render(triageOf(FINDINGS.map(incident)), fullInbox([]));
+    const screen = textOf(tree).join(' ');
+
+    const captions = byAttr(nodes, 'data-group-caption');
+    expect(captions).toHaveLength(1);
+    expect(screen).toContain(fillSituationSentence(GROUP.label, { memberCount: 4, target: 'theawfulpm-test' }));
+    // The limit, stated. The record does not link these and the caption says so.
+    expect(screen).toContain(GROUP.limit);
+
+    // FOUR ROWS, still. A caption groups; it does not fold.
+    expect(byAttr(nodes, 'data-situation')).toHaveLength(4);
+  });
+
+  test('THE LABEL IS NOT A CARD · no border, no fill, no stripe, no door', () => {
+    const { nodes } = render(triageOf(FINDINGS.map(incident)), fullInbox([]));
+    const [caption] = byAttr(nodes, 'data-group-caption');
+    // NOT VACUOUS: every assertion below is about a node, so an absent caption
+    // would pass all of them by reading `undefined` off nothing.
+    expect(caption).toBeDefined();
+    const style = props(caption).style ?? {};
+
+    expect(style.border).toBeUndefined();
+    expect(style.borderLeft).toBeUndefined();
+    expect(style.background).toBeUndefined();
+    expect(style.backgroundColor).toBeUndefined();
+    expect(props(caption)['data-stripe']).toBeUndefined();
+    // …and it carries no door: a caption is not a destination.
+    expect(walk(caption).filter((n: any) => props(n)['data-door'] !== undefined)).toHaveLength(0);
+  });
+
+  test('a LINKED set is a card and is never captioned — the visual difference, asserted', () => {
+    const { nodes } = render(triageOf([coalesced()]), fullInbox([]));
+    expect(byAttr(nodes, 'data-group-caption')).toHaveLength(0);
+    // One bordered object, with a stripe and a door.
+    const [row] = byAttr(nodes, 'data-situation');
+    expect(props(row)['data-stripe']).toBeDefined();
+  });
+
+  test('rows on DIFFERENT targets are not grouped, however many there are', () => {
+    const elsewhere = { ...incident(FINDINGS[1]), id: 'evt_far', door: { label: 'Open other', kind: 'site' as const, target: 'other' } };
+    const { nodes } = render(triageOf([incident(FINDINGS[0]), elsewhere]), fullInbox([]));
+    expect(byAttr(nodes, 'data-group-caption')).toHaveLength(0);
+  });
+});
+
+describe('WP-55 item 5 · the deferred row', () => {
+  const deferredRow = () => ({
+    ...incident(FINDINGS[0]),
+    deferral: {
+      eventId: 'evt_defer',
+      reason: 'client is rebuilding the site',
+      deferredAt: hoursAgo(4),
+      wake: null,
+    },
+  });
+
+  test('IT STAYS IN THE LIST, at its tier and in its place', () => {
+    const rows = [deferredRow(), incident(FINDINGS[1])];
+    const { nodes } = render(triageOf(rows), fullInbox([]));
+    const drawn = byAttr(nodes, 'data-situation');
+
+    expect(drawn).toHaveLength(2);
+    // Its place is unchanged — it is still first.
+    expect(props(drawn[0])['data-situation']).toBe('evt_a');
+    // Its tier is unchanged, and so is its stripe.
+    expect(props(drawn[0])['data-tier']).toBe(1);
+    expect(props(drawn[0])['data-stripe']).toBe(COLOURS.tier1);
+  });
+
+  test('IT IS DIMMED, and the dimming is the only thing that changed about it', () => {
+    const { nodes } = render(triageOf([deferredRow()]), fullInbox([]));
+    const [drawn] = byAttr(nodes, 'data-situation');
+    expect(props(drawn)['data-deferred']).toBe('true');
+    expect(props(drawn).style.opacity).toBeLessThan(1);
+  });
+
+  test('the REASON and the WAKE CONDITION are on the row, in the ratified words', () => {
+    const { tree } = render(triageOf([deferredRow()]), fullInbox([]));
+    const screen = textOf(tree).join(' ');
+
+    expect(screen).toContain(fillSituationSentence(DEFERRED.recorded, {
+      deferredAge: '4h', reason: 'client is rebuilding the site',
+    }));
+    // An UNCONDITIONED deferral never wakes, and the row says so rather than
+    // offering a condition the platform cannot fire.
+    expect(screen).toContain('never wakes');
+    expect(screen).toContain(DEFERRED.endDoor);
+  });
+
+  test('the RULE LINE is the deferral\'s, with the tier the row was sorted by', () => {
+    const { nodes } = render(triageOf([deferredRow()]), fullInbox([]));
+    const [rule] = byAttr(nodes, 'data-rule');
+    expect(textOf(rule).join('')).toBe(fillSituationSentence(DEFERRED.rule, { tier: 1 }));
+  });
+
+  test('AN UNDEFERRED ROW IS UNTOUCHED — no dim, no deferral lines, its own rule', () => {
+    const { nodes, tree } = render(triageOf([incident(FINDINGS[0])]), fullInbox([]));
+    const [drawn] = byAttr(nodes, 'data-situation');
+    expect(props(drawn)['data-deferred']).toBeUndefined();
+    expect(props(drawn).style.opacity).toBeUndefined();
+    expect(textOf(tree).join(' ')).not.toContain(DEFERRED.endDoor);
   });
 });

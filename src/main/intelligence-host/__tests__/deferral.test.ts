@@ -920,8 +920,16 @@ describe('three recorded ends, and each returns full escalation', () => {
  * ruled to WP-56's gate: build the run path, hold the incident path, present
  * what record shape an incident-scoped deferral would need.
  *
- * These tests are the presentation. They pin TODAY'S behaviour so the day
- * someone builds the incident path they go red and say what has to change.
+ * These tests were the presentation. They pinned TODAY'S behaviour so the day
+ * someone built the incident path they would go red and say what had to change.
+ *
+ * **WP-55 IS THAT DAY, AND THEY WENT RED EXACTLY AS DESIGNED.** WP-56a was
+ * approved at WP-56's gate on the strength of FINDING 3 below; the fold now
+ * names an incident situation for its SUBJECT — `(entity, component, fact)`,
+ * the producer's own dedup key — so the two findings that measured the defect
+ * are rewritten here to measure the fix. FINDING 2 is unchanged and still
+ * holds: a deferral on an orphan incident still joins to no run, because the
+ * incident still has none.
  */
 describe('MEASURED AND HELD — what an incident-scoped deferral would need', () => {
   function emitOrphanIncident(fact: string, resolved: boolean): string {
@@ -943,24 +951,33 @@ describe('MEASURED AND HELD — what an incident-scoped deferral would need', ()
     }).id;
   }
 
+  /**
+   * The subject, in the producer's own key, scoped by the anchor its history map
+   * is keyed on. Written out here rather than read back off the row, so the test
+   * asserts the identity instead of agreeing with whatever the fold produced.
+   */
+  const subjectId = (fact: string) => `${SITE}|site|${fact}`;
+
   it('FINDING 1 — the fold is NOT the blocker: it already attaches a deferral to an incident row', () => {
-    const incidentId = emitOrphanIncident('backdoor:wp-compat', false);
-    const row = triage().waiting.find((s) => s.id === incidentId);
+    // WP-56a: the row is found by its SUBJECT, not by the event that reported
+    // it. The event id is deliberately not used here any more.
+    emitOrphanIncident('backdoor:wp-compat', false);
+    const row = triage().waiting.find((s) => s.id === subjectId('backdoor:wp-compat'));
     expect(row).toBeDefined();
     expect(row!.kind).toBe('incident');
 
     // No `taskId` — an orphan incident has no run to be recorded on.
-    const id = recordDeferral({ situationId: incidentId, reason: 'client is rebuilding the site' });
+    const id = recordDeferral({ situationId: subjectId('backdoor:wp-compat'), reason: 'client is rebuilding the site' });
     expect(typeof id).toBe('string');
 
     const after = triage();
-    expect(after.waiting.find((s) => s.id === incidentId)!.deferral).toBeDefined();
+    expect(after.waiting.find((s) => s.id === subjectId('backdoor:wp-compat'))!.deferral).toBeDefined();
     expect(after.counts).toEqual({ needsYou: 0, deferred: 1 });
   });
 
   it('FINDING 2 — the record carries NO correlation, so it joins to no run', () => {
-    const incidentId = emitOrphanIncident('backdoor:wp-compat', false);
-    const id = recordDeferral({ situationId: incidentId, reason: 'client is rebuilding' })!;
+    emitOrphanIncident('backdoor:wp-compat', false);
+    const id = recordDeferral({ situationId: subjectId('backdoor:wp-compat'), reason: 'client is rebuilding' })!;
 
     const event = core.ledger.query({ topicPrefix: RATIONALE_RECORDED_TOPIC, limit: 10 }).find((e) => e.id === id)!;
     // THE HELD PART, stated as a fact rather than a worry: "recorded on the run"
@@ -970,26 +987,30 @@ describe('MEASURED AND HELD — what an incident-scoped deferral would need', ()
   });
 
   /**
-   * FINDING 3 — AND IT IS THE ONE THAT DECIDES THE SHAPE.
+   * FINDING 3 — THE ONE THAT DECIDED THE SHAPE, NOW MEASURING ITS FIX (WP-56a).
    *
-   * An orphan incident's situation id is the INCIDENT EVENT'S OWN ID
-   * (`situationOfIncident`: `id: incident.id`). But the incident producer
-   * resolves an incident by writing a NEW event carrying `resolved: true`
-   * (`incidentProducer.ts:39`) — superseding, never mutating — and it dedups on
-   * `incidentKey(component, fact)`, which is its real identity.
+   * WHAT THIS TEST USED TO PIN, kept because the finding is the reason the fix
+   * exists: an orphan incident's situation id was the INCIDENT EVENT'S OWN ID
+   * (`situationOfIncident`: `id: incident.id`). The producer resolves an
+   * incident by writing a NEW event carrying `resolved: true` — superseding,
+   * never mutating — and dedups on `incidentKey(component, fact)`, which is its
+   * real identity. So the id a deferral named was the id of ONE EVENT in a
+   * chain, not the id of the thing, and **the deferral did not follow the
+   * incident across its own amendment**: a user who quieted a finding got it
+   * back in the badge, under a different id, the moment the record changed.
    *
-   * So the id a deferral would name is the id of ONE EVENT in a chain, not the
-   * id of the thing. The deferral does not follow the incident across its own
-   * amendment.
-   *
-   * **An incident-scoped deferral therefore needs a STABLE SUBJECT, and the
-   * record already has one it is not using:** `incidentKey(component, fact)`,
-   * the producer's own dedup key. Naming the event id is the same class of
-   * error as keying a run on a turn instead of on `capability@hash`.
+   * WP-56a took the producer's key. Two consequences, both driven below, and
+   * the second is not optional: the id survives the amendment, AND the two
+   * events fold onto ONE row — because taking the key without the supersession
+   * rule that rides with it would have given two rows one id, which is worse
+   * than the event id it replaced.
    */
-  it('FINDING 3 — the situation id is an EVENT id, and it does not survive the incident\'s own amendment', () => {
+  it('FINDING 3, FIXED — the deferral survives the incident\'s own amendment', () => {
     const openId = emitOrphanIncident('backdoor:wp-compat', false);
-    recordDeferral({ situationId: openId, reason: 'client is rebuilding' });
+    const subject = subjectId('backdoor:wp-compat');
+    expect(subject).not.toBe(openId);
+
+    recordDeferral({ situationId: subject, reason: 'client is rebuilding' });
     expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
 
     // The producer's resolution: a NEW event, same component and fact.
@@ -997,18 +1018,29 @@ describe('MEASURED AND HELD — what an incident-scoped deferral would need', ()
     expect(resolvedId).not.toBe(openId);
 
     const after = triage();
-    const openRow = [...after.waiting, ...after.changed].find((s) => s.id === openId);
-    const resolvedRow = [...after.waiting, ...after.changed].find((s) => s.id === resolvedId);
+    const rows = [...after.waiting, ...after.changed].filter((s) => s.kind === 'incident');
 
-    // Two situations from one incident — the open event and its amendment. That
-    // is today's fold, measured, not proposed.
-    expect(openRow).toBeDefined();
-    expect(resolvedRow).toBeDefined();
-    // The deferral stayed with the EVENT it named, and the amendment arrived
-    // undeferred. A user who quieted this incident sees it back in the badge
-    // under a different id the moment it is amended.
-    expect(openRow!.deferral).toBeDefined();
-    expect(resolvedRow!.deferral).toBeUndefined();
+    // ONE row, not two. The amendment superseded the opening rather than
+    // standing beside it forever — WP-51's F3, closed by this identity.
+    expect(rows.map((s) => s.id)).toEqual([subject]);
+    // It is the AMENDED state that is rendered, and it is ANSWERED — which is
+    // end 3 of the three ratified ways a deferral ends, so the row correctly
+    // carries none. Under the old id this was two rows: a deferred open one
+    // that never went away, and a closed one beside it.
+    expect(after.waiting.filter((s) => s.kind === 'incident')).toHaveLength(0);
+    expect(rows[0].column).toBe('changed');
+    expect(rows[0].deferral).toBeUndefined();
+
+    // AND THE SHARP HALF — the recurrence. The producer reopens a finding by
+    // writing another unresolved event, and THIS is the case the ruling
+    // described: under the event id it came back with a NEW id the deferral did
+    // not name, so a user who quieted it found it in the badge again. Under the
+    // subject it comes back as itself, and the standing deferral still covers it.
+    emitOrphanIncident('backdoor:wp-compat', false);
+    const reopened = triage();
+    expect(reopened.waiting.filter((s) => s.kind === 'incident').map((s) => s.id)).toEqual([subject]);
+    expect(reopened.waiting.find((s) => s.id === subject)!.deferral).toBeDefined();
+    expect(reopened.counts).toEqual({ needsYou: 0, deferred: 1 });
   });
 });
 

@@ -145,11 +145,14 @@ describe('the incident headline names the site', () => {
     // The Inbox stores the site by NAME (`scope: 'name:theawfulpm-test'`), so a
     // signature carrying the id could never match the card it duplicates — which
     // is why item 4 is a dependency of item 1 rather than a cosmetic fix.
-    expect(row.signature).toEqual({
+    // WP-55 · A SET OF ONE. The field became a set so a coalesced row can hold
+    // one identity per member; a situation of one still holds exactly one, and
+    // the identity itself is unchanged.
+    expect(row.signatures).toEqual([{
       producer: 'security-sentinel',
       fact: 'ABS-05',
       target: 'theawfulpm-test',
-    });
+    }]);
   });
 
   test('an injected resolver wins over the twin — the seam is real, not decoration', () => {

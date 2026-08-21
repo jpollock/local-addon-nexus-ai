@@ -200,9 +200,20 @@ describe('the asks are drawn from the visible rows, by situation class', () => {
     // noun they actually want is derivable from ratified vocabulary" —
     // WP-49a landed `Situation.capability`, so §5's own bytes template again and
     // the interim stand-in is deleted rather than kept beside its replacement.
-    expect(Object.values(AUTHORED)).toEqual([
+    //
+    // WP-55 · ASSERTED AS A SET, because `incident.coalesced` REUSES the first
+    // sentence rather than authoring a third. The guard's own content is "a
+    // third authored SENTENCE appearing without a ruling fails here", and a
+    // second class pointing at an existing sentence is not one — §5's bullet
+    // ("Are the four findings on theawfulpm-test related?") is the coalesced
+    // case, and the entry above is that bullet generalised. The keys are
+    // asserted beside it so a new CLASS is still visible.
+    expect([...new Set(Object.values(AUTHORED))]).toEqual([
       'Why is nothing fixing the open findings?',
       'What has {runNoun} already changed?',
+    ]);
+    expect(Object.keys(AUTHORED)).toEqual([
+      'incident.no-run', 'incident.coalesced', 'run.waiting.part-changed',
     ]);
 
     // AND NO `{runbookId}` SURVIVES AS A RUN'S SUBJECT ANYWHERE ON THIS SURFACE.

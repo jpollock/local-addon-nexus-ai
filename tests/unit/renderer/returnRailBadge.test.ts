@@ -51,6 +51,11 @@ function triageWith(n: number): TriageView {
     waiting: Array.from({ length: n }, (_, i) => ({
       id: `sit_${i}`,
       written: { done: 0, failed: 0, total: null },
+      // WP-55 · and again, for the same reason the comment above gives:
+      // `signatures` is a REQUIRED field, a fixture without it is a row the
+      // contract does not permit, and the omission stopped being invisible the
+      // moment `sameThing` read it on every row rather than on some.
+      signatures: [],
     })) as any,
     changed: [{ id: 'sit_changed' }] as any,
     reserved: { headline: 'x', dark: [], staleCount: 0, verdict: 'OK', degraded: false } as any,
@@ -154,7 +159,7 @@ describe('the rail badge', () => {
    */
   test('the badge equals the rows drawn — a matched item adds nothing, an unmatched one adds one', async () => {
     const triage = triageWith(3);
-    (triage.waiting as any)[0].signature = { producer: 'security-sentinel', fact: 'FS-01', target: 'alpha' };
+    (triage.waiting as any)[0].signatures = [{ producer: 'security-sentinel', fact: 'FS-01', target: 'alpha' }];
 
     const items = [
       // The same finding, from the other store. It rides on row 0.
