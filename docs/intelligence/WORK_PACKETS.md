@@ -22446,3 +22446,37 @@ carries none, and the record is append-only — that target set is honestly
 unknown forever.
 
 Worktree `.worktrees/wp-52`, branch `wp-52`, cut from `poc/nexintelligence-ux`.
+
+---
+
+## WP-52 · LOCK ANNOUNCE AMENDED (2026-08-21) — `tests/intelligence-evals/` added
+
+**A fourth surface, claimed the moment the need was measured rather than at the
+merge.** Landing item 1 turned three eval criteria RED, and they are red because
+they read the card the way it rendered before the ruling:
+
+- `J-Glance-cold-open-to-answered#key_step[3]` — asserts the literal string
+  `Needs your <awaits>`, which a ratified card no longer draws as its own line.
+- `J-Return-away-during-a-halt#must_not[2]` — asserts a `data-gate` element per
+  gated row; a ratified card carries its WHERE inside the ask.
+- `J-Return-away-during-a-halt#must_not[3]` — the no-prose accounting
+  enumerates every string the surface can produce, and the rule line now renders
+  `Situation.rule`, which is not yet in that enumeration.
+
+None of these is a regression in the criterion; each is an instrument reading
+for a shape the ruling replaced. **WP-49's precedent governs and is followed:
+"an eval predating a ruling must grow to account for it; the alternative is a
+ruling unshippable by its own instruments."** The growths make two of the three
+STRICTER — per-row rather than per-column — which is the only kind of growth
+that is not a weakening.
+
+**Verified free at the tail rather than assumed.** The last claim on
+`tests/intelligence-evals/` is WP-49's release (line ~21245, "**THE
+`src/renderer/`, `tests/intelligence-evals/` AND `docs/intelligence/` LOCKS ARE
+RELEASED.**"); nothing has claimed it since, and WP-51's registered surfaces are
+the producer and the coalescer, which are disjoint from it.
+
+**The announce is amended here, on the base, rather than only in the branch's
+report** — the WP-20f/WP-37 rule does not stop applying because the need was
+discovered mid-packet, and a lock claimed only on a worktree is not visible to
+the agent it warns.
