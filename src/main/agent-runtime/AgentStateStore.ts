@@ -12,6 +12,21 @@ export interface AgentRunRow {
   findingsCount: number;
   logFile?: string;
   reportFile?: string;
+  /**
+   * WP-57 · the LOG correlator (`grep run=<id>`).
+   *
+   * Written since WP-19 and never read back — `SELECT *` fetched the column
+   * and this mapping dropped it, so the run history had no way to reach the
+   * lines a run produced. Returned now.
+   */
+  runId?: string;
+  /**
+   * WP-57 · the LEDGER correlator (`WHERE correlation = <id>`).
+   *
+   * Absent for a run the frame never wrote — the frame is lazy, and storing an
+   * id that names no events would be a join to nothing.
+   */
+  taskId?: string;
 }
 
 const SCHEMA = `
@@ -47,6 +62,10 @@ export class AgentStateStore {
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN log_file TEXT`); } catch {}
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN report_file TEXT`); } catch {}
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN run_id TEXT`); } catch {}
+    // WP-57 · the ledger join. Additive and guarded, like every column above:
+    // an existing database gains it, a new one is created with it, and
+    // `agent_runs` is user history that is never rebuilt.
+    try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN task_id TEXT`); } catch {}
   }
 
   get<T>(agentName: string, key: string): T | undefined {
@@ -100,8 +119,8 @@ export class AgentStateStore {
   recordRun(result: AgentResult): void {
     const findingsCount = result.findings?.length ?? 0;
     this.db
-      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error, summary, findings_count, log_file, report_file, run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null, result.summary ?? null, findingsCount, result.logFile ?? null, result.reportFile ?? null, result.runId ?? null);
+      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error, summary, findings_count, log_file, report_file, run_id, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null, result.summary ?? null, findingsCount, result.logFile ?? null, result.reportFile ?? null, result.runId ?? null, result.taskId ?? null);
 
     this.db.prepare(`
       DELETE FROM agent_runs
@@ -133,6 +152,7 @@ export class AgentStateStore {
         id: number; agent_name: string; started_at: number; finished_at: number;
         status: string; error: string | null; summary: string | null; findings_count: number;
         log_file: string | null; report_file: string | null;
+        run_id: string | null; task_id: string | null;
       }>;
     return rows.map(r => ({
       id: r.id,
@@ -145,6 +165,10 @@ export class AgentStateStore {
       findingsCount: r.findings_count ?? 0,
       logFile: r.log_file ?? undefined,
       reportFile: r.report_file ?? undefined,
+      // WP-57 · both ids returned. `run_id` was fetched and dropped here since
+      // WP-19; the history had no route to either the log or the ledger.
+      runId: r.run_id ?? undefined,
+      taskId: r.task_id ?? undefined,
     }));
   }
 }

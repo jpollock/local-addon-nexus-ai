@@ -541,3 +541,68 @@ test('with no intelligence core at all, both producers are silent no-ops', () =>
     })
   ).toBeUndefined();
 });
+
+/**
+ * WP-57 · WHO acted.
+ *
+ * Added because the mutation battery found this branch UNCOVERED: deleting
+ * `if (supplied) return supplied;` from `actorFor` left every test green, so
+ * the one behaviour Task 4 exists for was pinned nowhere. The dispatcher's own
+ * suite mocks `recordGatedAction`, so it proves the field is PASSED and can
+ * never prove it is USED.
+ */
+describe('WP-57 · the supplied actor outranks the surface inference', () => {
+  it('names the agent when the run frame supplies it', () => {
+    recordGatedAction({
+      toolName: 'wpe_site_deep_refresh',
+      args: { site: SITE_A },
+      services: services(),
+      accessMethod: 'agent',
+      dispatch: 'registry',
+      tier: 2,
+      actor: { id: 'act_security_sentinel', kind: 'agent' },
+      taskId: 'task_01J5X8K3V9Q2M7ABCDEFGHJKMN',
+      outcome: 'success',
+    });
+
+    const [action] = eventsOf(core, ACTION_EXECUTED_TOPIC);
+    expect(action).toBeDefined();
+    expect(action.actor.id).toBe('act_security_sentinel');
+    // The outcome beside it agrees — one act, one actor.
+    expect(eventsOf(core, OUTCOME_RECORDED_TOPIC)[0].actor.id).toBe('act_security_sentinel');
+  });
+
+  it('PARITY: falls back to the collapsed id when no actor is supplied', () => {
+    recordGatedAction({
+      toolName: 'wpe_site_deep_refresh',
+      args: { site: SITE_A },
+      services: services(),
+      accessMethod: 'agent',
+      dispatch: 'registry',
+      tier: 2,
+      outcome: 'success',
+    });
+
+    // Every caller predating WP-57 behaves exactly as before. This is the
+    // parity floor, and it is why the field is optional rather than required.
+    expect(eventsOf(core, ACTION_EXECUTED_TOPIC)[0].actor.id).toBe('act_agent_runtime');
+  });
+
+  it('two agents produce two actors — the 58-of-58 collapse, closed', () => {
+    recordGatedAction({
+      toolName: 'wpe_site_deep_refresh', args: { site: SITE_A }, services: services(),
+      accessMethod: 'agent', dispatch: 'registry', tier: 2, outcome: 'success',
+      actor: { id: 'act_security_sentinel', kind: 'agent' },
+    });
+    recordGatedAction({
+      toolName: 'wpe_site_deep_refresh', args: { site: SITE_B }, services: services(),
+      accessMethod: 'agent', dispatch: 'registry', tier: 2, outcome: 'success',
+      actor: { id: 'act_seo_insights', kind: 'agent' },
+    });
+
+    const ids = eventsOf(core, ACTION_EXECUTED_TOPIC).map((e) => e.actor.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual(expect.arrayContaining(['act_security_sentinel', 'act_seo_insights']));
+  });
+});
+

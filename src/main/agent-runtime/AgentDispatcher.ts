@@ -14,6 +14,7 @@ import { getAgentSetting } from '../ipc-handlers';
 import type { EventLog } from '../logging/eventLog';
 import { newRunId } from '../logging/runId';
 import { recordGatedAction } from '../intelligence-host/actionProducer';
+import { agentActorId } from '../intelligence-host/agentTaskFrame';
 import { checkCheckpointSequence } from '../intelligence-host/sequenceGuard';
 
 // Ban consecutive underscores so the __ MCP delimiter is unambiguous.
@@ -208,6 +209,15 @@ export class AgentDispatcher {
     // same population. The safety table cannot answer for these names.
     recordGatedAction({
       toolName: `${agentName}/${toolName}`,
+      // WP-57 · the CONTRIBUTING agent — the one whose code ran. Without this
+      // every contributed-tool act collapsed into `act_agent_runtime`, and
+      // this chokepoint reaches neither ToolRegistry.call nor its audit write,
+      // so nothing else could supply it.
+      //
+      // `taskId` below is PASSED THROUGH and never minted here: ruling request
+      // 2 (is a dispatch its own run?) is unruled, and minting would answer it
+      // by accident.
+      actor: { id: agentActorId(agentName), kind: 'agent' },
       args: args && typeof args === 'object' ? (args as Record<string, unknown>) : {},
       services: this.services,
       accessMethod: 'agent',

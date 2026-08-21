@@ -35,7 +35,7 @@ function frameStub() {
     noted,
     frame: {
       id: 'task_01M0K5X3R17VEHR26JGA2RV931',
-      actor: { id: 'act_a', kind: 'agent' as const },
+      actor: { id: 'act_security_sentinel', kind: 'agent' as const },
       noteGatedAct: (at: number) => { noted.push(at); },
     },
   };
@@ -51,7 +51,13 @@ describe('WP-57 · NexusToolProvider threads the run task', () => {
 
     expect(calls).toHaveLength(1);
     // Positional: (name, args, services, accessMethod, requireConfirmation, runId, task)
-    expect(calls[0][6]).toEqual({ id: 'task_01M0K5X3R17VEHR26JGA2RV931' });
+    // The actor rides on the task object — the smallest change that reaches
+    // audit chokepoint one, and what stops every agent act collapsing into
+    // `act_agent_runtime`.
+    expect(calls[0][6]).toEqual({
+      id: 'task_01M0K5X3R17VEHR26JGA2RV931',
+      actor: { id: 'act_security_sentinel', kind: 'agent' },
+    });
   });
 
   it('passes undefined when there is no frame — the pre-WP-57 shape, unchanged', async () => {

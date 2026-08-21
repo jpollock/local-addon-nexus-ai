@@ -181,7 +181,14 @@ export class ToolRegistry {
     // where a `false` was meant. runId is appended instead.
     requireConfirmation: boolean = true,
     runId?: string,
-    task?: { id?: string; causation?: string },
+    /**
+     * WP-57 · the caller's task moment, and — when the caller knows it — WHO
+     * is acting. The actor rides HERE rather than as a new positional
+     * parameter, because this file is audit chokepoint one and widening an
+     * object it already accepts is the smallest change that closes the
+     * collapsed-actor gap.
+     */
+    task?: { id?: string; causation?: string; actor?: { id: string; kind: 'agent' } },
   ): Promise<McpToolResult> {
     const startTime = Date.now();
     logger.debug(`call: name="${name}" via ${accessMethod || 'unknown'}`, { args });
@@ -305,6 +312,9 @@ export class ToolRegistry {
         dispatch: 'registry',
         taskId: task?.id,
         causation: task?.causation,
+        // WP-57 · absent for every caller that does not know, which is the
+        // parity floor: `actorFor` falls back to its existing inference.
+        actor: task?.actor,
         outcome: result.isError ? 'failure' : 'success',
         error: result.isError ? (result.content?.[0]?.text || 'Unknown error') : undefined,
         durationMs: duration,
@@ -363,6 +373,9 @@ export class ToolRegistry {
         dispatch: 'registry',
         taskId: task?.id,
         causation: task?.causation,
+        // WP-57 · absent for every caller that does not know, which is the
+        // parity floor: `actorFor` falls back to its existing inference.
+        actor: task?.actor,
         outcome: 'failure',
         error: message,
         durationMs: duration,

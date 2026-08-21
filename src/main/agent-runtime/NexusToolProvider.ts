@@ -39,6 +39,7 @@ export class NexusToolProvider implements ToolProvider {
    */
   private readonly frame?: {
     id: string;
+    actor: { id: string; kind: 'agent' };
     noteGatedAct(at: number): void;
   };
 
@@ -47,7 +48,7 @@ export class NexusToolProvider implements ToolProvider {
     services: NexusServices,
     tools: string[] | undefined,
     events?: ToolEventContext,
-    frame?: { id: string; noteGatedAct(at: number): void },
+    frame?: { id: string; actor: { id: string; kind: 'agent' }; noteGatedAct(at: number): void },
   ) {
     this.frame = frame;
     this.registry = registry;
@@ -229,7 +230,7 @@ export class NexusToolProvider implements ToolProvider {
       name, args, this.services, 'agent', true, this.events?.runId,
       // WP-57 · the run's task, so every gated act joins the run that made it.
       // Absent when unframed — the pre-WP-57 shape, byte-identical.
-      this.frame ? { id: this.frame.id } : undefined,
+      this.frame ? { id: this.frame.id, actor: this.frame.actor } : undefined,
     );
 
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)

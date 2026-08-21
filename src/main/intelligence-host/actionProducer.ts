@@ -88,6 +88,16 @@ export interface GatedActionRecord {
   /** For target resolution. Absent is fine — targets simply go unresolved. */
   services?: NexusServices;
   accessMethod?: string;
+  /**
+   * WP-57 · WHO acted, when the caller actually knows.
+   *
+   * A run frame knows which agent it is; `accessMethod` can only say "some
+   * agent", which is why every agent-runtime act collapsed into
+   * `act_agent_runtime` (measured at WP-57's announce: 58 of 58 events).
+   * Supplied ⇒ used verbatim. Absent ⇒ the inference below, unchanged, which
+   * is the parity floor for every caller that predates this field.
+   */
+  actor?: { id: string; kind: 'agent' };
   dispatch: DispatchPath;
   /**
    * The caller's authoritative tier, where it has one. Contributed agent tools
@@ -186,7 +196,7 @@ export function recordGatedAction(record: GatedActionRecord): string | undefined
       topic: ACTION_EXECUTED_TOPIC,
       schema: ACTION_EXECUTED_SCHEMA,
       entity: actionEntity,
-      actor: actorFor(core, record.accessMethod),
+      actor: actorFor(core, record.accessMethod, record.actor),
       source: { class: 'work', system: GATEWAY_SYSTEM, trust: 'emitted' },
       ...(record.taskId ? { correlation: record.taskId } : {}),
       // Absent when no approval preceded this call — honest, not empty.
@@ -209,7 +219,7 @@ export function recordGatedAction(record: GatedActionRecord): string | undefined
         topic: OUTCOME_RECORDED_TOPIC,
         schema: OUTCOME_RECORDED_SCHEMA,
         entity,
-        actor: actorFor(core, record.accessMethod),
+        actor: actorFor(core, record.accessMethod, record.actor),
         source: { class: 'work', system: GATEWAY_SYSTEM, trust: 'emitted' },
         ...(record.taskId ? { correlation: record.taskId } : {}),
         causation: action.id,
@@ -595,8 +605,11 @@ export function recordDeferralEnded(record: DeferralEndRecord): string | undefin
  */
 function actorFor(
   core: IntelligenceCore,
-  accessMethod: string | undefined
+  accessMethod: string | undefined,
+  supplied?: { id: string; kind: 'agent' }
 ): { id: string; kind: 'human' | 'agent' | 'ability' | 'system' } {
+  // WP-57 · a caller that KNOWS outranks an inference from the surface.
+  if (supplied) return supplied;
   if (accessMethod === 'mcp') return { id: 'act_chat_agent', kind: 'agent' };
   if (accessMethod === 'agent') return { id: 'act_agent_runtime', kind: 'agent' };
   // 'cli' and unknown: a session on this machine drove it. An unknown session

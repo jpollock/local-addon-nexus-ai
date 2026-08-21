@@ -28041,3 +28041,94 @@ sweep above would have added a second `task.run.completed` of its own.
 that is Task 5. So `first_gated_act_at` is absent from the payload above, and
 the security-sentinel sweep's ten tier-2 `wpe_site_deep_refresh` calls did NOT
 flush a bracket. Correct for today's code, and the reason Tasks 5–8 remain.
+
+---
+
+## WP-57 · TASKS 4–8 — the surface, and the collapse actually closed (2026-08-21)
+
+Phase 1 of the design note is now complete end to end.
+
+| task | what landed |
+|---|---|
+| **4** | `GatedActionRecord.actor`; `actorFor` prefers a supplied actor over its surface inference |
+| **5** | `NexusToolProvider` threads the task (and the actor) into `ToolRegistry.call`; `noteGatedAct` at tier ≥ 2 |
+| **6** | `AgentDispatcher` names the CONTRIBUTING agent on chokepoint two |
+| **7** | `ctx.task` on `AgentContext`, key omitted when unframed |
+| **8** | `agent_runs.task_id` — and `run_id` finally read back |
+
+**The actor rides on the `task` object through chokepoint one.** `tool-registry.ts`
+is audit chokepoint one, so widening an object it already accepts
+(`task?: { id?, causation?, actor? }`) is a strictly smaller change than a new
+positional parameter — the design note's §D.1 reasoning, applied.
+
+### The parity proof, pasted rather than summarised
+
+The agent path used to pass `task: undefined` and now passes a real id, so
+`checkCheckpointSequence` could in principle decide differently. Driven against
+the REAL guard, not a mock:
+
+```
+tool                       | unframed   | framed
+------------------------------------------------------------------------------
+wp_plugin_list             | ALLOW      | ALLOW        SAME
+wpe_site_deep_refresh      | ALLOW      | ALLOW        SAME
+bulk_plugin_update         | ALLOW      | ALLOW        SAME
+wpe_create_backup          | REFUSE     | REFUSE       SAME
+wp_plugin_update           | ALLOW      | ALLOW        SAME
+wp_core_update             | ALLOW      | ALLOW        SAME
+local_wpe_push             | ALLOW      | ALLOW        SAME
+nexus_site_refresh         | ALLOW      | ALLOW        SAME
+------------------------------------------------------------------------------
+PARITY HOLDS — 8/8 identical decisions
+```
+
+`wpe_create_backup` is the row that earns the table: it is genuinely refused by
+`reachRefusal`, and refused **identically** either way.
+
+### Mutation battery — M14–M20, and TWO of them taught something
+
+| # | mutation | result |
+|---|---|---|
+| M14 | tier floor 2 → 1 (a browsing agent would make its run real) | killed |
+| M15 | note the act BEFORE the gates (a refusal would make the run real) | killed — **after** a false SURVIVED, below |
+| M16 | stop sending the task to the registry | killed |
+| M17 | dispatcher stops naming the contributing agent | killed |
+| M18 | `actorFor` ignores the supplied actor | **SURVIVED — a real gap**, below |
+| M19 | `task_id` written but not read back (the `run_id` defect, recreated) | killed |
+| M20 | `run_id` still dropped by the mapping | killed |
+
+**M15 was a FALSE SURVIVED**, and it is the trap the protocol already names: the
+`perl -0pi` regex silently failed to match, so the run measured unmutated code
+and reported green. Re-applied with an asserted anchor (`assert block in s`), it
+kills. **A mutation script must assert its anchor matched** — a substitution
+that quietly does nothing is indistinguishable from a surviving mutant.
+
+**M18 was a REAL GAP, and the battery is the only reason it was found.**
+Deleting `if (supplied) return supplied;` from `actorFor` left every test
+green: the dispatcher's own suite MOCKS `recordGatedAction`, so it can prove
+the actor is PASSED and can never prove it is USED. Task 4's entire purpose was
+pinned nowhere. Three tests added to `actionProducer.test.ts` — the supplied
+actor reaching the emitted event, the parity fallback to `act_agent_runtime`,
+and two agents producing two actors. M18 now kills 2.
+
+### Full suite, and the skipped column moved — explained, not celebrated
+
+```
+BASELINE   629 suites · 8710 passed · 12 skipped · 8722 total · EXIT=0
+NOW        634 suites · 8764 passed ·  2 skipped · 8766 total · EXIT=0
+```
+
+Every number reconciles exactly:
+
+- **suites +5** — five new test files.
+- **total +44** — 43 new tests (26 frame, 7 runner, 5 tool-provider, 3 state
+  store, 2 dispatcher) + 3 in `actionProducer` − 2 from rewriting WP-51's
+  seven-test block as five.
+- **skipped −10, passed +54** (= 44 + 10). **Cause: mine, and not a code
+  change.** Earlier in this packet I symlinked `models/` from the primary
+  checkout to avoid a 150 MB re-download before the live smoke. That gave the
+  worktree BOTH embedding model files where a fresh worktree has one, so ten
+  embedding tests moved from skipped to passed. This is *precisely* the
+  worktree/primary skipped-column hazard WP-20c's merge finding documents,
+  reproduced by a convenience symlink. **A reviewer comparing only the passed
+  column would read +54 and see ten tests that do not exist.**
