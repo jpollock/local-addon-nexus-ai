@@ -502,3 +502,49 @@ suites because both import a file the packet had edited: the poisoned
 entry was a shared dependency rather than a suite's own first line.
 Read the shape (unrelated suites, parse-level failure, cleared by the
 documented move), never the count.
+
+## The wrong-unit rule binds the VERIFIER too (WP-52)
+
+WP-50 fixed three copy generators printing characters as bytes; WP-52's
+record verifier was still doing it one packet later, and its four
+figures reproduced exactly as UTF-16 character counts. Note the shape:
+a wrong-unit proof is INTERNALLY CONSISTENT — same unit throughout,
+residual zero, every conclusion true — so nothing inside the proof can
+reveal it. Only measuring the same objects with a second tool does.
+Every harness that prints "bytes" measures bytes: `Buffer.byteLength`,
+`wc -c`, `len(bytes)`. A verification script is a tool.
+
+## Four-way verification guards the ancestor, not only the output (WP-52)
+
+The check that the ancestor is an exact PREFIX of the merged blob is
+not ceremony around the arithmetic — it is the only thing standing
+between the operator and a wrong assumption about which blob the
+ancestor IS. WP-52's rebuild took the amended lock announce as the
+ancestor (the obvious choice; the branch was cut before the amendment
+landed, so it is not a superset of it). The prefix check refused, and
+`git merge-base` named the true one. A splice would have duplicated or
+dropped the amendment silently, and `--stat` would have shown nothing.
+When the prefix check refuses, the assumption is wrong — re-derive the
+base, never adjust the arithmetic to fit.
+
+## Cite the cause, not the precedent (WP-52)
+
+The worktree↔primary skipped-column boundary was cited as "documented"
+across three crossings before anyone measured WHY: `models/` carries
+only the tracked `bge-small-en-v1.5` in a fresh worktree, while
+`all-MiniLM-L6-v2-quantized` is untracked and exists in the primary
+alone. A fact re-cited three times without a cause is a habit, not a
+measurement — and habits are how a real regression gets waved through
+as a known boundary.
+
+## Derived is not the same as legible (owner's review, 2026-08-21)
+
+Derived-never-authored stops the platform inventing facts. It does not
+stop the platform speaking its own vocabulary at a person: "checks
+dark", "the record's own health", "nothing written in scope" are all
+true, all derived, and all unreadable by the user they address. Every
+derived sentence must ALSO be sayable to someone who has never read
+the record — where the internal noun has no plain equivalent, name the
+thing the user recognises, not the structure that stores it. A
+surface that is honest and incomprehensible has failed the same test
+as one that lies, one step later.

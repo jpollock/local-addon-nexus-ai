@@ -23008,3 +23008,364 @@ sentence set**, which had not arrived at the gate.
 
 **THE `src/renderer/`, THE COMPOSER IN `sessionRegistry.ts`,
 `tests/intelligence-evals/` AND `docs/intelligence/` LOCKS ARE RELEASED.**
+
+---
+
+## WP-52 · MERGE ACCEPTED — the card is the template (2026-08-21, architect adjudication) — plus the wrong-unit rule's first recurrence, in the verifier itself
+
+**The merge is CORRECT, proved in BYTES by the architect:**
+ancestor `187f51b1` **1,332,817** + primary tail **6,456** + branch
+tail **14,999** = **1,354,272 = the merged blob, residual zero**;
+ancestor an exact prefix; branch tail an exact substring exactly once
+at 1,334,680; the primary's tail split for chronology (amendment <
+report < ruling); zero line-anchored markers; content loss-proof
+82 / 81 / 83 with nothing missing from either parent and the three
+repeated sub-headers pre-existing in the primary at identical counts.
+`git diff --stat` = 12 files +1,380/−90, matching the gate ruling's
+independent figure.
+
+**AND the report's arithmetic is in the WRONG UNIT — the rule written
+one packet ago, recurring in the verification harness that proves the
+rule.** Measured both ways: the agent's four figures
+(1,322,828 + 1,848 + 14,891 + 4,561 = 1,344,128) reproduce EXACTLY as
+UTF-16 CHARACTER counts — ancestor, both primary sections, branch
+tail and total, all four to the digit. So it is a **valid proof in an
+unnamed unit**, not a false one: internally consistent, residual
+zero, and every conclusion it draws is true. What is wrong is the
+label. WP-50 fixed the three copy GENERATORS and left the record
+verifier measuring `len(str)`; the receipts family's third member
+found its first recurrence in the instrument that verifies receipts.
+**The rule is extended: every tool that prints a "bytes" figure — the
+generators, the record verifier, the byte sweep, any future harness —
+measures in bytes, and a verification script is a tool.** The
+corrected receipts of record for this merge are the byte figures
+above.
+
+**The ancestor-assumption finding: RATIFIED, and it is the deepest
+methodological point the standard has produced.** The first rebuild
+took the AMENDED ANNOUNCE as the ancestor — the obvious choice, and
+wrong, because the branch was cut before the amendment landed on the
+base and is therefore not a superset of it. **The prefix check
+refused, the rebuild stopped, and `git merge-base` named the true
+ancestor.** Recorded as its own protocol note: the four-way
+verification is not only a proof about the output — **it is a guard
+on the operator's assumption about which blob is the ancestor**, and
+this is the failure it caught that nothing else would: a splice would
+have silently duplicated or dropped the amendment, and `--stat` would
+have shown nothing wrong.
+
+**The embedding boundary, MEASURED for the first time in four
+crossings:** `models/` carries only the tracked `bge-small-en-v1.5` in
+a fresh worktree, while `all-MiniLM-L6-v2-quantized` is untracked and
+lives in the primary alone. A fact cited as "documented" three times
+is now a fact with a cause. **Amended in the protocol: cite the
+cause, not the precedent.**
+
+**WP-52 IS CLOSED.** The card is the template; the third form of the
+target-set collision is silenced; two evals are stricter than the
+ruling required. Standing: **WP-51** (ruled, uncut), item 2's
+sentence set with the designer, item 6 on the owner's word, WP-20c,
+and the owner's look at a screen where every card now states its
+business once.
+
+---
+
+## THE OWNER'S SCREEN-BY-SCREEN REVIEW — EIGHT FINDINGS, AND A DOCTRINE-LEVEL ONE UNDER THEM (2026-08-21)
+
+The owner reviewed the shipped Now screen against the requirements.
+Eight findings, all accepted. **Six of the eight share one cause, and
+it is bigger than any of them: DERIVED IS NOT THE SAME AS LEGIBLE.**
+The doctrine "nothing is authored, everything is derived" was written
+to stop the platform inventing facts, and it did. But a sentence
+derived from the RECORD'S OWN VOCABULARY is a sentence written in our
+words — "checks dark", "the record's own health", "nothing has been
+written in scope", "filed before you arrived". Each is true, derived,
+and unreadable by the person it addresses. **The rule gains its
+missing half: a derived sentence must also be sayable to someone who
+has never read the record.** Where the record's noun has no plain
+equivalent, the surface names the thing the user recognises, not the
+structure that stores it.
+
+**A · ENGINEERING DEFECTS — WP-54, registered**
+
+1. **THE LIST RENDERS THE SAME FINDING TWICE.** Confirmed in source:
+   `Arrival.tsx:624-625` concatenates `triage.waiting.map(...)` with
+   `renderInboxRows()` and **dedups nothing**. Four security findings
+   appear as situations AND again as inbox cards; the badge reads 7
+   while twelve cards render. WP-49's collapse moved the Inbox cards
+   "in place" — but in place meant *the buttons ride on the rows*,
+   and instead both renders survived. **This is the prepending defect
+   one level up: the LIST is prepending too.** The inbox item's
+   affordance belongs ON the situation it duplicates; an inbox item
+   with no matching situation is its own row.
+2. **The door is a dead end.** "Open where you are needed" leads to a
+   page of green links with **no way back to Now** — the same class
+   as field finding 5, and worse: the front door at least had the
+   title. A door that cannot be walked back is not a door.
+3. **The chip signals an internal distinction.** The Waiting chip
+   appears only on the templated card, because the derived fallback
+   carries no chip — so chip-presence tells the user which of OUR
+   code paths ran. Either both carry state or neither does; the user
+   never learns our branch names.
+4. **The buttons are not the design system's.** Approve / Not now are
+   hand-styled, not `local-components`' Button. Nothing hand-drawn —
+   the same rule the designer applied to the brand mark.
+
+**B · DESIGN AND DOCTRINE — to the designer, cycle six-b**
+
+5. **"You were away 0 hours"** — already ruled, still shipped; rides
+   with WP-54 now, no longer waiting on a packet of its own.
+6. **"0 checks dark"** — jargon, and contradicted two lines below by
+   the reserved row saying nothing is dark. The accounting line
+   states what is true; it should not enumerate zeroes at all.
+7. **"RESERVED · THE RECORD'S OWN HEALTH"** — our noun. A person does
+   not have a "record" whose "health" they track; they have a
+   platform that either is or is not watching their sites. The
+   reserved row's PURPOSE stands (XD-23's guaranteed seat, unable to
+   grow or be scrolled away); its NAME does not survive contact.
+8. **"NOTHING NEEDED OF YOU" renders as an empty section holding two
+   sentences of our own doctrine** ("Filed before you arrived — the
+   record was written when the run finished, not when you opened
+   this"). That sentence exists to reassure an ARCHITECT that nothing
+   is composed on demand. To a user it is a section with no contents
+   and a lecture. Either the section carries items or it does not
+   render.
+9. **"Open where you are needed"** — the owner: *"not sure what that
+   really means."* Ratified copy, failing its first contact with a
+   person. The designer's call.
+10. **Approve / Not now on an INCIDENT is the wrong species of
+    control** — the owner: *"one would not do them piecemeal without
+    full context."* Approving a finding is meaningless; the ask on
+    that row is "contain it", which is a procedure launch requiring
+    consent, not a one-click approve. The buttons belong on rows
+    whose ask is genuinely a yes/no; incidents want their door.
+
+**Standing:** WP-54 takes 1–4 and rides 5. The rest go to the
+designer as cycle six-b with the doctrine finding at the top, because
+copy is theirs and this is a copy failure of a kind the loop has not
+had before: not wrong, not invented — **unreadable**.
+
+---
+
+## THE ARCHITECT'S OWN FIVE — READ FROM THE SAME SCREENSHOTS, VERIFIED IN SOURCE (2026-08-21)
+
+The owner asked what the architect saw. Five, none of them in his
+eight, and the first is a law not in force.
+
+1. **THE CONSEQUENCE ORDER IS NOT BEING APPLIED — the card says Tier
+   1 and the fold ranks it Tier 2.** Verified: `sessionRegistry.ts`
+   assigns an open run-less incident `tier: resolved ? 4 : 2`, while
+   the ratified template for `incident.no-run` carries the rule string
+   **"Tier 1 · nothing is holding it back but you"**. The rule LINE
+   and the RANK are two different facts from two different sources —
+   the family that has produced every defect this week. The
+   consequence: every waiting row lands at tier 2, `rankSituations`
+   falls through to `since`, and **the list degenerates to age
+   order** — 82h, 66h, 65h, 65h, 65h, 65h, 64h, exactly as
+   photographed. Four Tier-1 security findings render BELOW a Tier-2
+   backup step. The order the entire triage rests on (§4a,
+   moments-model 1.3, XD-23) is not in force on screen, and no test
+   caught it because the pins assert the SORT is correct given tiers,
+   never that the tier a card displays is the tier it was sorted by.
+   **The fix is one derivation, not two: the rule line renders from
+   the ranked tier, or the ranker reads the template's tier — and a
+   pin asserts they agree, the same agreement pin that caught WP-52's
+   divergence.**
+2. **The headline names an entity id, and the meta line asserts a
+   falsehood the next card disproves.** Four cards read "… on
+   `ent_env_2TH5EJB62XMHN2YRX5V0JTHWMA`, and nothing is fixing it"
+   with the meta "nothing on record names where the target is" — yet
+   the DUPLICATE inbox card six inches below renders the same finding
+   as "theawfulpm-test · security-sentinel". **The platform has the
+   name and is claiming it does not.** Same family as WP-52's "no
+   targets on record": a sentence about the record's knowledge,
+   written from the wrong side of a join.
+3. **Two lines state the same count.** "7 need you · 0 changed
+   overnight · 0 checks dark" and then "7 things need you, and none of
+   them has changed anything yet". The designer's sheet has ONE
+   verdict with the accounting beneath it; we render the verdict
+   twice, once in numerals and once in words.
+4. **`agent.stuck` is a ratified class with no producer.** auth-probe
+   appears only as an old inbox card, never as a situation — WP-52's
+   own pin calls the class "unreachable" and pinned it anyway. A class
+   the designer specified, the fold cannot emit, and the only reason
+   it is on screen at all is the duplication defect that WP-54 is
+   about to remove. **When the dedup lands, auth-probe disappears from
+   Now entirely unless the fold learns to emit it.**
+5. **"Open where you are needed." ships with a terminal period**; the
+   ratified string has none. A control does not take terminal
+   punctuation, and the drift entered between the fixture and the
+   render — which the copy generators exist to prevent.
+
+**All five fold into WP-54's scope** except 4, which is registered
+separately (**WP-54a · the agent.stuck producer**) because it is a
+fold change, not a render one, and it must land BEFORE or WITH the
+dedup or the screen loses a row it should keep.
+
+---
+
+## THE DESIGNER'S SCREEN REVIEW — ADJUDICATED, WITH ONE REVERSAL NAMED AND ONE OWNER CORRECTION (2026-08-21)
+
+The designer reviewed the same screenshots and produced fourteen
+findings across two passes. **Convergence first:** their duplication
+finding, their meta-contradicts-headline finding, and their
+dedupe-before-coalesce sequencing all match the architect's
+independently — three findings reached twice from the same image is
+the loop working as a check rather than an echo.
+
+**AGREED without qualification:** the away-line and accounting rules
+(one statement of the count, no enumerated zeroes, no away-line under
+an hour — the verdict is currently stated THREE times); "checks dark"
+→ plain ("3 checks haven't reported in 9 hours", clause absent when
+none are); the reserved row's heading in the user's words with a
+quiet line when the news is good (XD-23's guarantee is a SEAT, not a
+panel — the amendment is ratified); the Waiting chip cut as the
+designer's own template error; **Approve / Not now removed from list
+rows entirely** — their statement is stronger than the owner's and
+correct: *a gate without its declaration is consent without context*,
+which is the failure XD-8 exists to prevent, so the row's door leads
+to the gate and the gate is where the decision is made; the
+design-system `Button` wherever an action renders; the door naming
+its destination, in link blue, with a way back; incident rows getting
+the door they DO have (the site the finding is about); the empty
+section not rendering and the two doctrine sentences deleted; the
+entity-id resolution; the agent-timeout buttons; two same-runbook
+rows being indistinguishable, with the runbook id printed twice on
+one card.
+
+**AGREED AND CREDITED — the sequencing rule: DEDUPE BEFORE COALESCE.**
+"Eleven cards to seven is a bug fix; seven to three is the situation
+rule." It matches the architect's ordering reached separately, and
+their reason is better: the coalescer must never be handed duplicates
+it should never have received.
+
+**AGREED AND REGISTERED — the furniture problem, arriving in live
+data.** Rows waiting 65–82 hours under a header saying "away 0
+hours"; on a real fleet the same four rows greet the user every
+morning, and "the top of the list will train people to stop reading
+it." The answer was RULED IN CYCLE TWO — deferral: user-only, wake
+conditions, never a dismissal — designed, ratified, and never built.
+**Registered as WP-56 · the deferral affordance**, and it is the only
+item on this list whose absence gets WORSE with time rather than
+staying constant.
+
+**ONE REVERSAL, NAMED KINDLY.** The designer's headline finding asks
+for the four security findings to coalesce because "causally linked
+events coalesce into one row" — but **their own position-11 sheet
+drew that row UN-COALESCED, with "Not coalesced — the record does not
+link them" as its stated limit**, and the architect ratified that
+honesty. WP-50 then MEASURED it: `correlation: null` and
+`causation: null` on all four; what they share is a payload origin,
+and the coalescer reads record links, never payloads — doctrine the
+designer's own sheet honoured first. **So the instinct is right and
+the order is the thing: WP-51 (ruled, uncut) mints the scan's TaskId
+so the link becomes REAL, and only then is coalescing legitimate
+rather than laundering.** Their sheet had it right the first time;
+the review asks the surface to assert what the record still does not
+say.
+
+**ONE OWNER CORRECTION, RULING THE DESIGNER'S ITEM 4 WRONG:** the
+designer listed "Agents is still separate from Settings (item 4 —
+merge the permission panes)" as an unshipped roadmap item. **The
+owner rules: Agents STAYS a destination, and carries agent-scoped
+permissions within its own context.** Item 6 therefore narrows to
+Fleet-folds-into-Sites only. This opens a genuine architectural
+question, registered rather than answered here: a permission model
+with TWO dimensions — capability grants at Govern, agent scope at
+Agents — needs a composition rule and a precedence rule before either
+surface is drawn.
+
+**THE ARCHITECT'S SIXTH, which neither pass caught:** **the severity
+stripe was ratified and never shipped.** The revised sheet
+(`from-designer-13`) carries `border-left: 3px solid {{ r.edge }}` —
+red at Tier 1, orange at Tier 2, grey at Tier 3 — and `Arrival.tsx`
+has no left border at all. It matters more than a missing decoration:
+the stripe is the only thing that would have made the tier-drift
+defect (T1 rows rendering below T2, list degenerated to age order)
+VISIBLE at a glance. A ratified severity encoding was dropped in
+build, and its absence hid a law not being applied.
+
+---
+
+## THE DESIGNER'S SIX ANSWERS — ALL RATIFIED; XD-28 ENTERS; Q3'S DEPENDENCY MEASURED AND SATISFIED (2026-08-21)
+
+**Q1 · The containment run folds IF AND ONLY IF its arming names the
+incidents it answers. RATIFIED**, with the designer's sentence as the
+doctrine: *"I'd rather have four honest rows than three where one join
+was inferred from a timestamp."* The precedent they reached for is
+correct — WP-25's `source: abort:<task>/<abort>` is the same shape.
+**Folded into WP-51's scope as its third item: when a containment run
+is armed in answer to incidents, the arming RECORDS THE INCIDENT IDS
+AS ITS CAUSE.** Third producer paying the same debt: the sentinel's
+link, the arming's scope, and now the arming's cause — each a fact the
+producer already knows and does not write down. The badge reads four
+until it lands, three after, and both numbers are honest.
+
+**Q2 · GROUPING BY TARGET IS NOT COALESCING BY CAUSE — ratified, and
+it enters the register as XD-28.** This is a genuinely new mechanism
+and the sharpest thing in the exchange: *coalescing needs a record
+link and produces ONE ROW WITH ONE VERDICT; grouping needs a SHARED
+FIELD and produces SEVERAL ROWS UNDER A LABEL; the row says which it
+is.* It solves the visual problem (four rows about one site is bad
+even when the record cannot join them) without asserting a
+relationship — the shared target is a fact, not a verdict about
+relationship. It also gives the un-coalesced class a permanent home:
+WP-51 makes SOME findings linkable, never ALL of them, and any
+producer that mints no TaskId keeps the class alive, rarer, with its
+limit stated.
+
+**Q3 · New class `incident.coalesced`, headline DERIVED from members
+rather than borrowed — ratified, and the dependency is MEASURED AND
+SATISFIED.** The sentinel's payload already carries `severity`
+(`incidentProducer.ts:263`, written from `Finding.severity`, with
+`SEVERITY_ORDER = ['info','low','medium','high','critical']` at :96).
+So the headline takes the strong form the designer wanted — target +
+highest-severity member + count of the remainder ("theawfulpm-test has
+a known backdoor, and 3 more findings") — and the weaker fallback is
+not needed. Their Charlie row is the right precedent, and their
+guard is the one that matters: **it can never be one member's sentence
+with a parts chip bolted on** — the prepending defect one level up.
+
+**Q4 · The architect's phrasing was WRONG and is corrected by its own
+author's ruling.** The backlog said a deferred situation "leaves the
+list". Cycle two ruled otherwise and the designer is right: **a
+deferred situation KEEPS ITS TIER AND ITS PLACE, and lowers
+ESCALATION ONLY** — dimmed, out of the badge, reason and wake
+condition on the row. *Leaving the list is a dismissal by another
+name, and the ruling refused that.* Owned: the architect misstated a
+ruling he adjudicated. **New pin, theirs: deferral applies to the
+SITUATION, never to its parts** — deferring one finding while its
+siblings escalate would split a situation the platform just asserted
+is one thing. And deferral does NOT wait for the coalesced screen.
+
+**Q5 · INTERSECTION, and denial wins. RATIFIED as law.** An agent may
+act only where the capability is granted AND the agent's scope
+includes it. Union would let an agent's scope widen a capability
+nobody granted — *the deny-flip inverted*, which settles it. Under
+intersection there is no disagreement to adjudicate; what matters is
+that **the refusal names WHICH DIMENSION refused, because the doors
+are different surfaces**: "not granted to anyone" → Govern, that
+grant; "granted, but not to auth-probe" → Agents, that agent's
+permissions. Never a generic "not permitted" — a refusal without a
+door, which J-Refusal already forbids. The Govern row gains the
+derived cell `Granted · 2 of 4 agents`.
+
+**Q6 · Stripe confirmed as drawn**, red T1 / orange T2 / grey T3, with
+their guard ratified: **the stripe encodes TIER and must never drift
+into a severity scale**, and tier 4 takes no stripe because the column
+already says what it is. Note the discipline this preserves now that
+severity is confirmed present in the payload: the headline may name
+the highest-SEVERITY member while the stripe encodes the highest-TIER
+member, and those are different facts on purpose.
+
+**Their own bonus finding, ACCEPTED and generalized:** the terminal
+period on the door is a CLASS, not an instance — the fixture has no
+full stop, so the render is APPENDING punctuation, which means it is
+doing so to every door string. Better framing than the architect's.
+WP-54 fixes the appender, not the string.
+
+**VERDICT ON READINESS: the Now backlog is EXECUTABLE.** Nothing in
+group A waits on anyone. Group B's blocker is resolved (Q3 measured);
+its order stands — dedup, then WP-51's three producer items, then the
+coalesced drawing and build. Group C is ready and independent. Group
+D's design can start on Q5's ruled intersection.

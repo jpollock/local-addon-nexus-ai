@@ -243,6 +243,22 @@ produced these; nothing enters by drift. XD = experience decision.)*
   collapse ruling, 2026-08-20; the sheet's own four-tab strip is
   superseded by this entry and the designer redraws it.
 
+- **XD-28 · Grouping is not coalescing** — two mechanisms, never
+  conflated, and the row says which it is. **Coalescing needs a RECORD
+  LINK and produces ONE row with ONE verdict**, ranked at its highest
+  member's tier, its parts folded inside it. **Grouping needs a SHARED
+  FIELD and produces SEVERAL rows under a label** ("theawfulpm-test ·
+  4 findings"). The shared target is a fact; a shared cause is a
+  verdict about relationship, and only the record can supply it. The
+  distinction exists because four rows about one site read badly even
+  when nothing joins them — grouping gives the person the visual
+  collapse while the platform claims nothing it cannot prove, which is
+  the only alternative to laundering. Coalesced headlines are DERIVED
+  from members (target + highest-severity member + count of the
+  remainder), never one member's sentence with a parts chip bolted on.
+  Deferral applies to the situation, never to its parts. Source:
+  designer's answers to the architect's six questions, 2026-08-21.
+
 ## How a ruling gets here
 
 Designer position or architect note → ratification response (both
