@@ -75,20 +75,48 @@ export function agentActorId(agentName: string): string {
 }
 
 export interface AgentTaskFrame {
-  /** `task_<ULID>` — the ledger correlator. Distinct from the log's runId. */
+  /**
+   * `task_<ULID>` — minted in memory at open, and NOT yet written anywhere.
+   *
+   * Read this only to pass into something that is about to make it real; to
+   * obtain an id you may safely record as a `correlation`, call
+   * `correlationId()`, which flushes first.
+   */
   id: string;
   actor: { id: string; kind: 'agent' };
   autonomy: Autonomy;
   /**
-   * Record that a gated act happened under this run. The FIRST wins.
+   * The id, with its `task.run.assigned` guaranteed on the ledger — or
+   * `undefined` if that could not be written.
    *
-   * This is the measurable end of R2's arm-to-first-write. The arm does not
-   * exist until capability grants land, so shipping the interval now would
-   * ship a permanently-null field; this is the end the platform can observe
-   * today, and the interval derives with no schema change once the arm stamps
-   * the other.
+   * This is WP-51's `scanCorrelation()`, generalized from the sentinel to
+   * every agent: **an id whose assignment was refused is not written
+   * anywhere**, because it would satisfy the validator's regex and name
+   * nothing. Call this immediately before recording anything that carries the
+   * correlation, so the bracket precedes what it explains.
+   */
+  correlationId(): string | undefined;
+  /**
+   * Record that a gated act happened under this run, and flush the bracket.
+   * The FIRST timestamp wins.
+   *
+   * An act is by definition something worth recording, so this is one of the
+   * two things that make a run real. It is also the measurable end of R2's
+   * arm-to-first-write: the arm does not exist until capability grants land,
+   * so shipping the interval now would ship a permanently-null field. This is
+   * the end observable today; the interval derives with no schema change once
+   * the arm stamps the other.
    */
   noteGatedAct(at: number): void;
+  /** Whether anything was actually written for this run. */
+  didEmit(): boolean;
+  /**
+   * Close the run.
+   *
+   * Emits `task.run.completed` only when this run is REAL — it already
+   * flushed, or its outcome is itself worth recording (a finding, or any
+   * non-success status). A quiet successful run writes nothing at all.
+   */
   close(outcome: {
     status: string;
     finishedAt: number;
@@ -112,41 +140,83 @@ export function openAgentTask(opts: {
     const actor = { id: agentActorId(opts.agentName), kind: 'agent' as const };
     const autonomy = autonomyForTrigger(opts.trigger);
     let firstGatedActAt: number | undefined;
+    let flushAttempted = false;
+    let flushed = false;
 
-    core.emitter.emit({
-      // The run's own start, carried in. Never the emitter's clock.
-      observed_at: new Date(opts.startedAt).toISOString(),
-      topic: RUN_ASSIGNED_TOPIC,
-      schema: RUN_ASSIGNED_SCHEMA,
-      // Deliberately empty, and it is `actionProducer`'s own rule: an entity
-      // map naming ONE of several targets would misattribute the run to that
-      // site. A run spans every site in its scope; the per-site entity rides
-      // on the acts and findings, where it is true.
-      entity: {},
-      actor,
-      // `emitted`, matching WP-51's scan act: this is a fact the runtime
-      // reports about its own activity, not one it observed in the estate.
-      source: { class: 'work', system: AGENT_RUN_SYSTEM, trust: 'emitted' },
-      correlation: id,
-      payload: {
-        agent: opts.agentName,
-        trigger: opts.trigger,
-        autonomy,
-        // Absent rather than invented, the same conditional spread the
-        // incident producer's `source` uses for the same reason.
-        ...(opts.runId ? { run_id: opts.runId } : {}),
-      },
-    });
+    /**
+     * Write `task.run.assigned`, once, the first time this run turns out to be
+     * real. Returns whether the bracket is on the ledger.
+     */
+    const flush = (): boolean => {
+      if (flushAttempted) return flushed;
+      flushAttempted = true;
+      try {
+        core.emitter.emit({
+          // The run's own start, carried in. Never the emitter's clock — and
+          // note this is the START even though the write happens later: the
+          // fact is when the run began, not when we noticed it mattered.
+          observed_at: new Date(opts.startedAt).toISOString(),
+          topic: RUN_ASSIGNED_TOPIC,
+          schema: RUN_ASSIGNED_SCHEMA,
+          // Deliberately empty, and it is `actionProducer`'s own rule: an
+          // entity map naming ONE of several targets would misattribute the
+          // run to that site. A run spans every site in its scope; the
+          // per-site entity rides on the acts and findings, where it is true.
+          entity: {},
+          actor,
+          // `emitted`, matching WP-51's scan act: this is a fact the runtime
+          // reports about its own activity, not one observed in the estate.
+          source: { class: 'work', system: AGENT_RUN_SYSTEM, trust: 'emitted' },
+          correlation: id,
+          payload: {
+            agent: opts.agentName,
+            trigger: opts.trigger,
+            autonomy,
+            // Absent rather than invented, the same conditional spread the
+            // incident producer's `source` uses for the same reason.
+            ...(opts.runId ? { run_id: opts.runId } : {}),
+          },
+        });
+        flushed = true;
+      } catch {
+        flushed = false; // and the correlation falls away with it
+      }
+      return flushed;
+    };
 
     return {
       id,
       actor,
       autonomy,
+      correlationId(): string | undefined {
+        return flush() ? id : undefined;
+      },
+      didEmit(): boolean {
+        return flushed;
+      },
       noteGatedAct(at: number): void {
         if (firstGatedActAt === undefined) firstGatedActAt = at;
+        // An act is worth recording, so the bracket becomes real here — and
+        // BEFORE the act's own record, which is WP-51's ordering rule.
+        flush();
       },
       close(outcome): void {
         try {
+          // LAZINESS, and it is WP-51's rule rather than an optimisation.
+          // `auth-probe` fires every two minutes (measured 2026-08-21), so a
+          // frame emitted unconditionally would write 1,440 events a day
+          // forever from one diagnostic agent — an 84% increase in this
+          // ledger's total write rate, into a substrate §4.4 never deletes.
+          // A quiet, successful run that touched nothing is not an act worth
+          // recording, and nothing needs a correlation to point at.
+          const worthRecording =
+            flushed ||
+            outcome.status !== 'success' ||
+            (outcome.findings !== undefined && outcome.findings > 0);
+          if (!worthRecording) return;
+          // The bracket must precede what it explains, even when the outcome
+          // is what made the run real.
+          if (!flush()) return;
           core.emitter.emit({
             // The run's own finish, carried in from the result. Never "now":
             // a bracket stamped at fold time is the data laundering the

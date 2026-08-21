@@ -20,6 +20,7 @@ import type { ResolvedAIProvider } from '../../../src/main/ai/getAIProvider';
 const opened: any[] = [];
 const closed: any[] = [];
 let openReturnsUndefined = false;
+let frameDidEmit: boolean | undefined;
 
 jest.mock('../../../src/main/intelligence-host/agentTaskFrame', () => ({
   agentActorId: (n: string) => `act_agent_${n}`,
@@ -31,6 +32,8 @@ jest.mock('../../../src/main/intelligence-host/agentTaskFrame', () => ({
       actor: { id: `act_agent_${o.agentName}`, kind: 'agent' },
       autonomy: o.trigger === 'manual' ? 'interactive' : 'autonomous',
       noteGatedAct: jest.fn(),
+      correlationId: () => 'task_TEST',
+      didEmit: () => (frameDidEmit !== undefined ? frameDidEmit : closed.length > 0),
       close: (c: any) => closed.push(c),
     };
   },
@@ -50,7 +53,7 @@ function makeRunner() {
 }
 
 describe('WP-57 · AgentRunner run frame', () => {
-  beforeEach(() => { opened.length = 0; closed.length = 0; openReturnsUndefined = false; });
+  beforeEach(() => { opened.length = 0; closed.length = 0; openReturnsUndefined = false; frameDidEmit = undefined; });
 
   it('opens with the caller-stated trigger and closes with the run outcome', async () => {
     const agent = defineAgent({
@@ -65,6 +68,7 @@ describe('WP-57 · AgentRunner run frame', () => {
     expect(opened[0].startedAt).toEqual(expect.any(Number));
     expect(closed).toHaveLength(1);
     expect(closed[0]).toMatchObject({ status: 'success', finishedAt: result.finishedAt });
+    // didEmit() is true once close() ran in this stub, so the id surfaces.
     expect(result.taskId).toBe('task_TEST');
   });
 
@@ -122,6 +126,22 @@ describe('WP-57 · AgentRunner run frame', () => {
     expect(result.status).toBe('success');
     expect(result.taskId).toBeUndefined();
     expect(closed).toHaveLength(0);
+  });
+
+  it('withholds taskId when the frame wrote nothing — no id that names no events', async () => {
+    // The lazy frame emits nothing for a quiet successful run. Recording its
+    // id in agent_runs anyway would store a correlation naming no events —
+    // the fabricated join the ledger's id rules refuse.
+    frameDidEmit = false;
+    const agent = defineAgent({
+      name: 'auth-probe', version: '1.0.0', triggers: [cron('*/2 * * * *')], run: async () => undefined,
+    });
+
+    const result = await makeRunner().run(agent, undefined, { trigger: 'cron' });
+
+    expect(result.status).toBe('success');
+    expect(closed).toHaveLength(1);       // close() is still called
+    expect(result.taskId).toBeUndefined(); // but no id is surfaced
   });
 
   it('reports the findings count it actually produced', async () => {

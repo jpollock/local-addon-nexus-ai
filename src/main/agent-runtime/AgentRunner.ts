@@ -152,7 +152,7 @@ export class AgentRunner {
       }
     }
 
-    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error, runId, taskId: frame?.id };
+    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error, runId };
 
     // Merge structured log events accumulated during the run
     if (accFindings.length > 0) result.findings = accFindings;
@@ -222,6 +222,15 @@ export class AgentRunner {
     } catch (frameErr: any) {
       logger.error(`run frame close failed for ${agent.name}:`, frameErr?.message);
     }
+
+    // WP-57 · surface the task id ONLY if the frame actually wrote.
+    //
+    // The frame is lazy (WP-51's rule, generalized): a quiet successful run
+    // emits nothing at all. Recording its id in `agent_runs` anyway would
+    // store a correlation that names no events — the fabricated join the
+    // ledger's own id rules exist to refuse. Set after close, because
+    // `didEmit()` is not final until then.
+    if (frame?.didEmit()) result.taskId = frame.id;
 
     this.stateStore.recordRun(result);
 
