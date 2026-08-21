@@ -24858,3 +24858,150 @@ discovered as a type error with no explanation attached.
   three-way context conflict in that one array and nothing semantic** — every
   side is adding a distinct element to the same list.
 
+
+---
+
+## WP-51 · GATE RULING — the producers pay (2026-08-21, architect adjudication)
+
+**Verdict: PASS. Cleared to merge with ONE CONDITION and one question
+to answer in the merge report.**
+
+**THE CONDITION — the ratified fixture has REVERTED TWO STANDING
+RULINGS, and the architect committed it without noticing.** Verified
+on the tree: guard 1 reads `... && total === 0` with **no
+`&& gate === null`** (WP-48's amendment, absent) and guard 2 reads
+`... && total > 0 && gate !== null` with **`total > 0` restored**
+(WP-50's amendment, reverted). Both rulings STAND; the fixture is
+corrected to carry them, in this packet or WP-55's, whichever opens
+the file first — named as a merge instruction so it cannot fall
+between them.
+
+**And the architect's own error is the more useful half.** I verified
+the fixture's md5 against the upload and committed it verbatim —
+which proves FIDELITY TO THE SENDER and says nothing about
+CONSISTENCY WITH THE RECORD. A byte-perfect artifact can revert a
+ruling, and a hash will never see it. **New protocol rule: a
+verbatim commit of a shared artifact is followed by a RULED-CONTENT
+check** — every amendment the record has made to that file must still
+be present, asserted mechanically, and the `:check` script is where
+it belongs. The six inherited reds in `situationHeadlines.test.ts` are
+the same divergence in its other direction (the sheet ahead of the
+generator's RATIFIED_IDS); WP-55 owns reconciling them.
+
+**THE QUESTION for the merge report: show the row-by-row derivation of
+8 → 3.** The badge is a pin and its arithmetic must be legible. Seven
+before, eight after a scan (four historical + one coalesced + three
+runs) is clear; three after the containment arming is not — state
+which rows folded into which, and on which link, so the number can be
+checked rather than believed.
+
+**The three items, ratified:**
+1. **The scan's act.** Two properties carry it and both are right:
+   the act is emitted BEFORE the first finding, and **if it cannot be
+   emitted, no correlation is written at all** — *"an id that passes
+   the regex and names nothing is the join WP-48a refused to
+   fabricate."* And a scan that records nothing records no act,
+   because at timer cadence an act at entry is a heartbeat.
+   **Watch item registered:** the agent-actor design note's phase 1
+   proposes `task.run.assigned`/`completed` for EVERY run, which
+   supersedes this rule. When it lands, the heartbeat question needs
+   its own answer — a swept-and-found-nothing run has content, a
+   bare "I ran" does not, and phase 1 must say which it is emitting.
+2. **The orphan-grouping rule keys on the envelope and nothing else.**
+   *"The doctrine is unamended; what changed is upstream — the record
+   learned to say."* That sentence is the packet, and it enters the
+   record as its own. **And the restraint is the credit: the coalesced
+   row reports `headlineTemplate: null`** rather than borrowing
+   `incident.no-run`'s one-member sentence, because Q3 forbids exactly
+   that. The fold produced a situation and declined to supply a
+   sentence it was not entitled to. Handing WP-55 a null instead of a
+   wrong headline is the whole discipline in one field.
+3. **The arming records its cause**, with provenance precedence
+   ruled correctly: **which run PRODUCED an incident still outranks
+   which run ANSWERS it.**
+
+**Findings, all accepted:**
+- **WP-48a's anticipatory pin watched `causation`; the ruling moved
+  `correlation`, so it never fired.** Recorded as a protocol nuance:
+  **a pin written in anticipation is a hypothesis about the SHAPE of
+  the future fix, not a guard on its outcome** — keep the cases,
+  amend the header, and never read a silent anticipatory pin as
+  confirmation.
+- The cause gate is a **tripwire, not a filter** (grantedRunbooks
+  re-checks the hash first, so no refusal is reachable) — disclosed
+  rather than presented as protection. Same species as
+  `contradictedByTheRecord`.
+- **Pre-existing and untouched: the fold never supersedes a resolved
+  incident's opening event.** No resolution exists on the ledger, so
+  nothing on screen is affected. **Registered as WP-51a.**
+- **`linkKind` is a record noun** — a meta line reading "linked by
+  correlation" is the derived-is-not-legible doctrine arriving in a
+  brand-new field. Routed to WP-55 and the designer, not decided here.
+- The tier disagreement left untouched as WP-54's item: correct.
+
+**The pwd incident, and the sharper half is the finding.** The
+addendum landed in the primary and swept in 99 lines of the
+architect's uncommitted work; recovered by the drill, verified to
+exactly 99 insertions, fsck clean, the work intact. **And the commit
+message carried a hand-computed byte figure while the print said
+something else — a PASTED receipt would have caught the wrong tree on
+the same screen.** The receipts rule is not only about fidelity; it is
+a wrong-tree detector. Appended to the protocol.
+
+---
+
+## WP-54 · GATE RULING — the Now screen tells the truth (2026-08-21, architect adjudication)
+
+**Verdict: PASS. Cleared to merge**, with the compile-collision
+resolved as the packet describes and one addition to the merge
+report's exhibit.
+
+**The three items needing a pen were already ruled** (the tier
+widening GRANTED with the proxy-versus-property reasoning; the seven
+strings RATIFIED AS INTERIM on their handling; the duration reshaping
+RATIFIED with emphasis) — nothing changes. Two notes: **WP-54a made
+the identical widening independently from the same evidence**, which
+is convergence rather than duplication and worth recording as such;
+and the LATE-versus-DARK question stays open with the designer — this
+packet correctly establishes that a dark producer's duration needs a
+PRODUCER change, and says nothing about a late one, which is the
+honest boundary of what it measured.
+
+**THE COLLISION IS THE PACKET'S BEST FINDING, and its framing is
+right: "which is the good outcome."** WP-54a edited none of the eight
+named functions — accurate — and the two packets still collide,
+because `SituationCopy` gained three required fields here and
+`composeAgentFailureCopy` predates them. **Locks partition FILES; they
+do not partition TYPES.** Two packets can hold provably disjoint file
+locks and still collide through a shared shape, and no announce
+discipline can see it. What saw it was the type system, at compile
+time, loudly, in a form that cannot be shipped past — and the
+badge/row pin stands behind it as the second net ("without the join
+the merge reintroduces the duplicate this packet removes and the pin
+goes red — correctly"). **Appended to the protocol: declare the SHAPES
+a packet changes in its lock announce, not only the paths.**
+
+**THE PWD SHARPENING IS THE BEST SENTENCE OF THE DAY AND BECOMES A
+RULE:** *"The command printed pwd; I read it after the commit had run.
+Printing the cwd isn't the control; branching on it is."* WP-52's
+version of this rule said re-anchor at every measurement; this one
+names why a printed anchor is not an anchor at all — **a check that
+only prints is a log; a check that can refuse is a guard.** Same
+family as the battery's ANCHOR-MISS and the agreement pin's outside
+anchor: an instrument that cannot fail is not an instrument.
+
+**The commit left on the base: RATIFIED, and the destination was right
+for the wrong reason.** A gate-report amendment warning three sibling
+packets belongs on the base BY ITS NATURE — that is what a lock
+announce is, and this is the same species. The slip was the
+mechanism, not the destination; leaving it at `211a9a77` with a
+pointer and the slip recorded on the branch is the correct
+disposition.
+
+**One addition to the merge report's exhibit:** with WP-54a merged,
+**auth-probe must appear as a RANKED situation at tier 3**, not as the
+unranked orphan at the end of the list. Show the post-merge rows with
+their tiers — four Tier 1, three Tier 2, one Tier 3 — because that
+ordering is the proof the two packets compose rather than merely
+compile, and tier 3 having its first real resident is the widening's
+whole justification arriving.

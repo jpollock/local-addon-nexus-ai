@@ -558,3 +558,56 @@ the same wrong number, and the mutant SURVIVED. Pair every agreement
 pin with a companion that anchors the agreed value to a source outside
 both — the ratified fixture, the law document, the record. Two things
 agreeing is not evidence; two things agreeing WITH A THIRD is.
+
+## A verbatim commit proves fidelity, not consistency (WP-51)
+
+Committing a counterpart's artifact byte-perfect and verifying its md5
+proves it matches what the SENDER sent. It says nothing about whether
+it still honours what the RECORD has ruled. WP-51 found the ratified
+fixture had silently reverted two amendments — WP-48's `gate === null`
+and WP-50's dropped `total > 0` — in a file whose hash verified
+perfectly, and the architect had committed it without noticing. Follow
+every verbatim commit of a SHARED artifact with a ruled-content check:
+every amendment the record has made to that file must still be
+present, asserted mechanically, in the file's own `:check`.
+
+## A pasted receipt is also a wrong-tree detector (WP-51)
+
+The receipts rule is usually argued from fidelity. WP-51 shows the
+second use: an addendum landed in the wrong checkout, and the commit
+message carried a HAND-COMPUTED byte figure while the terminal's print
+said something else. A pasted receipt puts the true number and the
+wrong tree on the same screen; a hand-computed one hides the
+discrepancy that would have named the mistake.
+
+## An anticipatory pin is a hypothesis, not a guard (WP-51)
+
+A pin written to catch a ruling that has not happened yet encodes an
+assumption about the SHAPE that ruling will take. WP-48a's escalation
+pin watched `causation`; the ruling produced a `correlation`, so the
+pin never fired and its silence meant nothing. Keep the cases, amend
+the header when the shape is known, and never read a quiet
+anticipatory pin as confirmation that the thing it watches for did not
+happen.
+
+## Locks partition files; they do not partition types (WP-54)
+
+WP-54 and WP-54a held provably disjoint file locks and collided anyway:
+`SituationCopy` gained three required fields in one while a function in
+the other predated them, and the merged tree would not compile. No
+announce discipline could have seen it, because the announce names
+paths. **Declare the SHAPES a packet changes — types, contract fields,
+generated artifacts — in the lock announce alongside the paths.** And
+note the good news in the failure: a type collision fails loudly at
+compile time and cannot be shipped past, which is the best failure
+mode available to a two-agent merge.
+
+## Printing the cwd is not the control; branching on it is (WP-54)
+
+The pwd rule's sharpest form, and it generalizes past pwd: a command
+that PRINTS its working directory produces a receipt of the mistake,
+readable after the commit has already run. A command that BRANCHES on
+it refuses to run in the wrong tree. **A check that only prints is a
+log; a check that can refuse is a guard** — the same family as the
+battery's ANCHOR-MISS and the agreement pin's outside anchor. An
+instrument that cannot fail is not an instrument.
