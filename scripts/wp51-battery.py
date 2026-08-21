@@ -150,10 +150,10 @@ MUTATIONS = [
      "the cause never reaches the record — WP-48b's defect reproduced exactly: a complete carrier, a "
      "complete reader, and nothing in between"),
     ("M19", REGISTRY,
-     "      answersByTask.set(turn.taskId, named);",
-     "      answersByTask.set(turn.taskId, turn.answers);",
-     "a later turn's arming DROPS what an earlier turn answered, so a part disappears from the row and "
-     "nothing says it went"),
+     "    for (const taskId of row.taskIds) {\n      for (const incidentId of answersByTask.get(taskId) ?? []) {",
+     "    for (const taskId of [row.taskIds[0]]) {\n      for (const incidentId of answersByTask.get(taskId) ?? []) {",
+     "only the run's FIRST turn is consulted, so an incident answered on any later turn of the same run is "
+     "dropped from the row and nothing says it went"),
     ("M20", REGISTRY,
      "    const owner =\n      (incident.correlation ? sessionByTask.get(incident.correlation) : undefined) ??\n      answeredBy.get(incident.id);",
      "    const owner =\n      answeredBy.get(incident.id) ??\n      (incident.correlation ? sessionByTask.get(incident.correlation) : undefined);",

@@ -1047,14 +1047,12 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
   for (const manifest of manifests) {
     const turn = turnOf(manifest);
     if (!turn) continue;
-    if (turn.answers.length > 0) {
-      // A session takes many turns and any of them may have armed in answer to
-      // something; the union is what the run answers, and a later turn adding
-      // an incident must not drop what an earlier one named.
-      const named = answersByTask.get(turn.taskId) ?? [];
-      for (const id of turn.answers) if (!named.includes(id)) named.push(id);
-      answersByTask.set(turn.taskId, named);
-    }
+    // Keyed by TASK, not by run: a session takes many turns, any of them may
+    // have armed in answer to something, and the union across a run's turns is
+    // taken below where its task list is known. Accumulating here would be
+    // unreachable — one manifest carries one task — and a battery mutation
+    // proved it: nothing could tell the two apart.
+    if (turn.answers.length > 0) answersByTask.set(turn.taskId, turn.answers);
     // `@` rather than a space, and that is a FINDING rather than a style choice:
     // the first draft of this line carried a literal NUL byte where the separator
     // should have been. It passed tsc, eslint and 48 tests, and announced itself

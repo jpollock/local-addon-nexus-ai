@@ -342,8 +342,13 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
     // no template rather than borrowing that one, and the sheet's
     // `incident.coalesced` lands with WP-55.
     expect(situation.headlineTemplate).toBeNull();
-    expect(situation.headline).not.toBe('');
     for (const f of FINDINGS) expect(situation.headline).not.toContain(f.symptom);
+    // …and it is derived from ALL FOUR, not from one of them: the count is the
+    // whole of what a coalesced row can honestly say before the ratified class
+    // arrives, so it is asserted exactly rather than as "not empty". A verdict
+    // composed over one member would still avoid that member's symptom and
+    // still read as a sentence — and would say "1".
+    expect(situation.headline).toBe('4 open incidents from one scan');
     // A derived row carries no ask and no chip — `derivedCopy`'s own shape.
     expect(situation.ask).toBe('');
   });
@@ -362,9 +367,23 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
       { services, core },
     );
     const triage = triageOf();
-    // Nothing is waiting: every member of the open group was closed, and the
-    // closures are their own group in the changed column.
+    // TWO groups: the four openings, and the four closures that superseded
+    // them — each set shares its own scan's task, and the fold groups by that.
+    //
+    // **THE OPENINGS STILL RENDER AS WAITING, AND THAT IS A PRE-EXISTING
+    // DEFECT THIS PACKET DID NOT INTRODUCE AND DOES NOT FIX.** The fold reads
+    // each event's OWN `resolved` field and never supersedes an opening event
+    // with the amendment that closed it — so a resolved incident has always
+    // kept its open row, one row per event, with or without coalescing.
+    // Measured on the owner's real ledger: no resolution exists there, so
+    // nothing on the live screen is affected. Reported at the gate rather than
+    // folded in; the mid-task scope rule is why, and the fix belongs with
+    // whoever owns supersession.
     expect(triage.waiting.map((s) => s.parts.length)).toEqual([4]);
     expect(triage.changed.map((s) => s.parts.length)).toEqual([4]);
+    // What this case DOES pin: the closures group by the closing scan's task,
+    // so the amendment set is one row rather than four.
+    expect(triage.changed[0].memberCount).toBe(4);
+    expect(triage.changed[0].linkKind).toBe('correlation');
   });
 });

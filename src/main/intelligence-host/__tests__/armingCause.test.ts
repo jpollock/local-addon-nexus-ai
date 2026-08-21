@@ -122,6 +122,14 @@ function emitManifest(args: {
   observedAt: string;
   status?: 'delivered' | 'refused';
   cause?: ReturnType<typeof manifestCauseFor>;
+  /**
+   * The run key is `capability@hash`, so a second run needs a second hash —
+   * without one, two manifests are two TURNS OF ONE RUN and a case about two
+   * runs disagreeing proves nothing. A battery survivor is how this was found:
+   * the precedence mutation could not be killed because both sides of the
+   * disagreement were the same session.
+   */
+  hash?: string;
 }): string {
   return core.emitter.emit({
     observed_at: args.observedAt,
@@ -136,7 +144,7 @@ function emitManifest(args: {
       procedure: {
         capability: RB.capability,
         runbook: RB.id,
-        hash: RB.hash,
+        hash: args.hash ?? RB.hash,
         status: args.status ?? 'delivered',
       },
       retrieval: [],
@@ -368,12 +376,47 @@ describe('the fold joins a run to the incidents its arming named', () => {
       payload: { fact: 'ab.backup', symptom: 'cp.backup failed', resolved: false, source: 'abort:x/ab.backup' },
     }).id;
 
+    // A DIFFERENT run — different document hash, so this is genuinely a second
+    // session and not a later turn of the first.
     const answering = mintTaskId();
-    emitManifest({ taskId: answering, observedAt: hoursAgo(8), cause: manifestCauseFor([incident]) });
+    emitManifest({
+      taskId: answering,
+      observedAt: hoursAgo(8),
+      hash: 'sha256:remediate-2',
+      cause: manifestCauseFor([incident]),
+    });
 
     const snapshot = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).snapshot();
+    expect(snapshot.sessions).toHaveLength(2);                      // two runs, not two turns
     const owner = snapshot.situations.find((s) => s.parts.some((p) => p.eventId === incident));
     expect(owner).toBeDefined();
     expect(owner!.sessionId).toBe(`sess_${producing}`);
+    // …and the answering run does NOT also carry it: one incident, one row.
+    const answeringRow = snapshot.situations.find((s) => s.sessionId === `sess_${answering}`);
+    expect(answeringRow?.parts.some((p) => p.eventId === incident)).toBe(false);
+  });
+
+  test('TWO runs claiming one incident: the EARLIER claim holds, and the incident is in one row only', () => {
+    // Two runs, each armed in answer to the same incident. The record carries
+    // two claims and they disagree about which run answers it; the earlier one
+    // was already true when the later was written, so it stands — and the
+    // incident appears in exactly one row either way, because a part in two
+    // situations is one thing the platform says is two.
+    const incident = emitIncident('Known backdoor plugin detected: wp-compat');
+    const first = mintTaskId();
+    const second = mintTaskId();
+    emitManifest({ taskId: first, observedAt: hoursAgo(9), cause: manifestCauseFor([incident]) });
+    emitManifest({
+      taskId: second,
+      observedAt: hoursAgo(8),
+      hash: 'sha256:remediate-2',
+      cause: manifestCauseFor([incident]),
+    });
+
+    const snapshot = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).snapshot();
+    expect(snapshot.sessions).toHaveLength(2);
+    const carrying = snapshot.situations.filter((s) => s.parts.some((p) => p.eventId === incident));
+    expect(carrying).toHaveLength(1);
+    expect(carrying[0].sessionId).toBe(`sess_${first}`);
   });
 });
