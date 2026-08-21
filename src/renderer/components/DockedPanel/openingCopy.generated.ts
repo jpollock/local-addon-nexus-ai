@@ -42,6 +42,7 @@ export const PANEL_INVITATION = 'Ask about any of them, or about the fleet.';
  */
 export const OPENING_ASKS: Readonly<Record<string, string>> = {
   'run.waiting.mid-procedure': 'What does {checkpoint} need from me?',
+  'run.waiting.nothing-written': 'Why has {runNoun} changed nothing?',
 };
 
 /**

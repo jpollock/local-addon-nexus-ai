@@ -21407,6 +21407,498 @@ Worktree `.worktrees/wp-50`, branch `wp-50`, cut from `poc/nexintelligence-ux`.
 
 ---
 
+## WP-50 · GATE REPORT — the producers pay their debts (2026-08-20). HOLDING.
+
+**Three registered debts and one dedup. Two debts paid in full and driven on the
+owner's real ledger; one ESCALATED on a measurement that says it cannot be paid
+as written; the dedup landed; the strip amended. TWO ESCALATIONS, both driven
+rather than argued.**
+
+### 1 · THE ACCEPTANCE EXHIBIT — the owner's real ledger, before and after
+
+The exhibit this packet uniquely owed. `scripts/wp50-refold-exhibit.ts` is
+committed so it is reproducible rather than a paragraph: it opens a **COPY** of
+`~/Library/Application Support/Local/nexus-ai/ledger.db` (it refuses to run
+against the live path at all), folds it through the real `sessionRegistry`, and
+prints the actual sentences.
+
+**The AFTER half appends, it never rewrites.** The record is append-only and
+rewriting history is escalation-grade, so "after" is produced by appending, for
+each armed run on the ledger, **THE NEXT TURN of that same run** — same
+capability, same document hash, read back off the run's own newest manifest —
+through `manifestScopeFor`, the very function `chatAssembly` now calls. Nothing
+about the target set is supplied by the script. It is what the changed producer
+writes the next time each of these runs takes a turn.
+
+**BEFORE — and it matches the owner's screenshots exactly:**
+
+```
+=== WP-50 REFOLD EXHIBIT · BEFORE (record untouched) ===
+manifests read: 36  sessions: 3
+
+VERDICT: 7 things need you, and none of them has changed anything yet
+
+--- WAITING · sess_task_01M09M7ZHVS6XM58VA9G8TWPFH
+    template : DERIVED (no ratified class fired)
+    headline : running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+    written  : done=0 failed=0 total=null
+    part     : [run] running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+
+--- WAITING · sess_task_01M0BBHDGE8W4FJM5BJJ5DVAEF
+    template : DERIVED (no ratified class fired)
+    headline : running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+    written  : done=0 failed=0 total=null
+    gate     : cp.backup 4 of 8 (evidence)
+    part     : [run] running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+
+--- WAITING · sess_task_01M0BJNBBQA1GABY2TFQ42H6B8
+    template : DERIVED (no ratified class fired)
+    headline : running under rb.incident-containment — 0 done and standing, 0 failed
+    written  : done=0 failed=0 total=null
+    part     : [run] running under rb.incident-containment — 0 done and standing, 0 failed
+
+    (+ the four uncorrelated incidents, each `incident.no-run`, each one part)
+```
+
+Three run rows, all on the derived fallback, `total: null` on every one, and
+**`headline === parts[0].summary` on all three** — which is field finding 2,
+photographed by the fold rather than by a screenshot.
+
+**AFTER — the designer's sentences, live on the real fleet:**
+
+```
+[appended] next turn of cap.bulk_plugin_update — scope.runnable=[] from=no-selection
+[appended] next turn of cap.incident_containment — scope.runnable=[] from=no-selection
+[appended] next turn of cap.bulk_plugin_update — scope.runnable=[] from=no-selection
+=== WP-50 REFOLD EXHIBIT · AFTER (next turn appended) ===
+manifests read: 39  sessions: 3
+
+VERDICT: 7 things need you, and none of them has changed anything yet
+
+--- WAITING · sess_task_01M09M7ZHVS6XM58VA9G8TWPFH
+    template : run.waiting.nothing-written
+    capability: cap.bulk_plugin_update
+    headline : A plugin update run has waited 68h and changed nothing
+    ask      : It never received a target list, so it cannot start. Give it one, or close it.
+    written  : done=0 failed=0 total=0
+    part     : [run] running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+
+--- WAITING · sess_task_01M0BBHDGE8W4FJM5BJJ5DVAEF
+    template : DERIVED (no ratified class fired)
+    headline : running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+    written  : done=0 failed=0 total=0
+    gate     : cp.backup 4 of 8 (evidence)
+
+--- WAITING · sess_task_01M0BJNBBQA1GABY2TFQ42H6B8
+    template : run.waiting.nothing-written
+    capability: cap.incident_containment
+    headline : A containment run has waited 50h and changed nothing
+    ask      : It never received a target list, so it cannot start. Give it one, or close it.
+    written  : done=0 failed=0 total=0
+    part     : [run] running under rb.incident-containment — 0 done and standing, 0 failed
+
+WORKING (nothing needed of you): 0
+CHANGED: 0
+```
+
+**Two of the designer's revised-sheet rows are now the product's, verbatim** —
+row 4 ("An update run has waited 60 hours and changed nothing" / "It never
+received a target list, so it cannot start. Give it one, or close it.") and row 5
+("A containment run is waiting and has changed nothing"), each rendered with its
+own run noun from Controlled Vocabulary v1.4 and its own age from the record.
+
+**THE cp.backup ROW DID NOT REACH GUARD 2, AND THAT IS ESCALATION 2 (§8).** The
+acceptance asked for guard 2 on that row. It cannot fire, and not because the
+producer failed: that run's target set is **genuinely empty**, and guard 2
+requires `total > 0`. The packet's own instruction — "do not manufacture targets
+to make sentences fire" — is what stopped this from being closed by a fabricated
+count, so it is escalated with the measurement instead.
+
+### 2 · THE TWO CONTRACT SHAPES, VERBATIM (gate-held)
+
+**`TriageView.working` + `WorkingRow`** — rider 1's fact:
+
+```ts
+export interface WorkingRow {
+  sessionId: string;
+  capability: string;
+  /** The one line, composed from RUN_NOUN[capability] (v1.4) and the fold's own status. */
+  line: string;
+  /** ISO — when the run started, so a surface can age the line with `ageLabel`. */
+  since: string;
+  /** The newest folded event id. The change cursor, as everywhere else. */
+  lastEventId: string;
+}
+
+export interface TriageView {
+  waiting: Situation[];
+  reserved: ReservedRow;
+  changed: Situation[];
+  working: WorkingRow[];     // ← the addition
+  verdict: string;
+  cursor: string;
+}
+```
+
+Selection rule, and the third guard is WP-49's own measurement kept as code:
+
+```ts
+if (row.status !== 'running') continue;
+if (row.gate) continue;
+if (row.documentUnavailable) continue;   // XD-26's 6c — never "needs nobody"
+```
+
+**`Situation.capability`** — the join two escalations were waiting on:
+
+```ts
+/** Present on `kind: 'session'`. The run's capability, off the row. */
+capability?: string;
+```
+
+Absent on an orphan incident, and absent rather than `''`: it was never armed
+under a capability, and an empty string reads as one the fold could not spell.
+
+**A third shape is presented for ratification because it is new on the record —
+`ManifestScope`** (WP-48b's payload widening, `src/main/intelligence-host/chatAssembly.ts`):
+
+```ts
+export interface ManifestScope {
+  /** The site ids the arming selected. Empty when the arming selected nothing. */
+  runnable: string[];
+  /** `selection` is WP-37's comparator carrier; `no-selection` is a predicate or a model request. */
+  from: 'selection' | 'no-selection';
+}
+```
+
+**Why it is NOT the whole `ProcedureScope`, which is the obvious alternative and
+was tried first.** `ProcedureScope.from` is typed `{ surface: 'comparator', … }`
+by WP-37's ruling ("`ScopeFrom.surface` stays typed `'comparator'` and nothing
+widens"), and a predicate arming has no comparator provenance — writing one
+would put a false provenance on the record to satisfy a type. Two different
+shapes under one key is how a reader starts guessing. So the manifest records the
+one fact the fold reads plus how it was resolved, and every field is read.
+`armedTargetCount` reads `scope.runnable.length`, unchanged.
+
+### 3 · WP-48b — the arming records its scope on EVERY manifest
+
+**The correction that is half the fix.** `sessionRegistry.armedTargetSetOf`'s own
+comment said "`chatAssembly` spreads the honoured arming's `scope` onto the
+manifest payload (WP-37's carrier)". **It did not.** The scope was spread onto
+`notifyProcedureState`, which is an **IPC stream to the renderer** and reaches no
+ledger at all. That is why 0 of 36 manifests carried the key and why WP-48's
+reader was correct and permanently null. The paragraph is corrected IN PLACE with
+its correction stated, not quietly rewritten.
+
+**The half that lights the screen is the empty set.** It would be easy to read
+"no selection" as "nothing to record" and write nothing — and that reading leaves
+`targetSet` null on every run on the real fleet, which is exactly the state the
+owner photographed. It is the wrong reading: **an arming that selected nothing
+KNOWS it selected nothing.**
+
+```
+null → nothing on record says anything about a target set   (UNKNOWN)
+0    → the arming resolved its target set and it was empty   (KNOWN)
+```
+
+WP-48's own null-is-not-zero rule, applied in the direction it had not yet been
+applied in. **Nothing is derived from the turn**: the turn's resolved site is not
+the arming's target set, and binding it would rebuild WP-48's name collision one
+field over — `places` is the set with an OUTCOME, this is the set a SELECTION
+chose, and the turn's subject is neither.
+
+**The bound is the parity floor:** written only when `bundle.procedure?.status
+=== 'delivered'`. An unarmed or refused turn's manifest is byte-identical to what
+it was before this packet. (A refused turn is not a turn of the run by
+`sessionRegistry`'s own rule — a refusal's hash may be null, which would fork the
+run key on a value naming no document.)
+
+Driven end to end through `assembleForChatTurn` in `procedureTurnCarrier.test.ts`,
+including the comparator-selection path through the real arming queue — WP-37's
+carrier reaching the record for the first time.
+
+### 4 · WP-49a — the two contract additions, and a narrowing of WP-49's own finding
+
+`Situation.capability` and `TriageView.working` land as registered. The rider's
+guards are WP-49's measurements kept as code rather than as prose.
+
+**WP-49's rider-1 FINDING 1 IS NARROWED, and the narrowing is this packet's own
+correction of the packet it inherited.** Finding 1 reads "a session the registry
+can place against a document ALWAYS has a gate", and it was measured over the
+golden morning — where **every runbook declares checkpoints**. Measured
+2026-08-20 over the runbooks the product actually ships: **two of seven declare
+none** — `law/runbooks/diagnose-site.md` and `law/runbooks/wpe-pull.md`. A run
+armed under either is placed, gateless and `running` forever, because
+`deriveStatus` calls a checkpoint list complete only when it is non-empty and
+`deriveGate` finds no active checkpoint to name.
+
+That is the rider's state exactly: nothing on the document asks the user for
+anything, so the run is in flight and needs nobody. **Controlled Vocabulary v1.4
+names both** — "A diagnosis" and "A site pull" — which is why a ratified line is
+composable for the row at all. Finding 1 holds for a CHECKPOINTED document and
+does not generalise to the document set that ships; `needsNothingOfYou.test.ts`
+carries the narrowing beside the original, both left standing.
+
+**Measured on the owner's real ledger: `working` is EMPTY** (0 of 3 sessions —
+one is gated at `cp.backup`, the other two are gateless AND `documentUnavailable`,
+which is WP-49's finding 3 twice over). Nothing moves out of the waiting column
+today. The field is not decoration: its population is reachable and shipped.
+
+### 5 · The renderer — consumption only, as the packet required
+
+**Field finding 2's dedup**, one comparison in `Arrival.tsx`, pinned BOTH
+directions (an identical part suppressed, a distinct part shown) **and against an
+index rule** — a duplicate in second position is the one dropped. A
+one-direction pin would pass against `parts.filter(() => false)`, which deletes
+the expansion tear 2 exists for.
+
+**XD-27 AMENDED — the strip.** `Now(first, selected on arrival, hairline
+divider) · Sites · Fleet · Record · Agents · Settings`, Fleet and Agents pending
+item 6. The divider carries `data-testid="strip-divider-now"`, deliberately NOT
+`tab-*`: it is a rule, not a destination, and a strip scan that counted it would
+make six entries read as seven.
+
+**The Now-absent-from-the-strip pin is REPLACED, not deleted**, by pins on the
+amendment's three properties. A withdrawn ruling with its guard left standing is
+a test asserting the opposite of the law. The two surfaces Now ABSORBED — `home`
+and `inbox` — are still asserted absent: that half of XD-27 was never withdrawn.
+
+**Rider 1's line** renders in Nothing-needed-of-you with its door.
+
+### 6 · The retirement — AUTHORED falls 3 → 2
+
+WP-49's ruling: both `{runbookId}` asks "retire when WP-49a lands, because the
+run noun they actually want is derivable from ratified vocabulary". Done:
+
+- **`run.waiting.nothing-written` LEAVES `AUTHORED` entirely.**
+  `generate-opening-copy.ts` gains a second templated ask, splitting §5's own
+  bytes — *"Why has **the update run** changed nothing?"* — on the run noun. The
+  sentence is the designer's again, on both sides of the brace.
+- **`run.waiting.part-changed` keeps its authored frame** (§5 supplies no bullet
+  for it) but its subject moves to `{runNoun}`. No `{runbookId}` stands for a run
+  noun anywhere on the surface, and the pin asserts that as well as the count.
+- **`incident.no-run` stays authored and stays escalated**: §5's specimen needs
+  the site NAME and a sibling COUNT, and the count depends on WP-48a's
+  coalescence, which is escalation 1.
+
+**ONE MECHANICAL TRANSFORM, declared.** v1.4's nouns are written to HEAD a
+sentence ("A plugin update run has waited…"), so the capital article is a
+rendering artifact where the noun sits mid-sentence. `runNounInSentence`
+lowercases the FIRST CHARACTER and nothing else, and skips even that when the
+second character is uppercase so an acronym is never damaged. It invents no
+vocabulary. Rendered: *"Why has a plugin update run changed nothing?"* and, on a
+containment row, *"Why has a containment run changed nothing?"* — the
+false-subject class WP-48 built a tripwire for is now unreachable on this surface.
+
+### 7 · ESCALATION 1 — WP-48a CANNOT BE PAID AS WRITTEN. Two blockers, both driven.
+
+The packet: "The run id it writes into `payload.source` is recorded as proper
+causation on `incident.opened`… you change the producer, never the coalescer."
+The WP-48 ruling added: "The day it does, the four become one row of parts BY THE
+EXISTING RULES."
+
+**BLOCKER 1 — the envelope validator refuses the value's FORMAT on both link
+fields.** `src/intelligence/envelope/validate.ts`:
+
+```
+causation    must match  evt_<ULID>     — an EVENT id
+correlation  must match  task_<ULID>    — a TaskId
+```
+
+A sentinel run id is `r_msz8afwx00` (measured on the owner's ledger; it is
+`AgentRunner`'s `run_id`). It is neither, and the refusal is a hard `ZodError` at
+`Emitter.emit`, not a soft degrade a producer could route around. **The sentinel
+run emits no event of its own** to point `causation` at — measured: `SELECT …
+WHERE payload LIKE '%r_msz8afwx00%'` returns exactly the four incidents and
+nothing else — and nothing in the runtime mints a TaskId for an agent run.
+
+**BLOCKER 2 — the existing rules would not coalesce them anyway.** The fold
+attaches an incident to a session by `correlation → session taskId` and files
+everything else as an orphan, **one situation apiece**. There is no rule anywhere
+that groups orphans by a shared link. Driven: four findings all carrying
+`causation` to the first finding's event id still produce **four rows**. So a
+producer change alone structurally cannot close this, and the packet's escalation
+list names "any change to coalescing rules".
+
+**NOTHING WAS LAUNDERED IN THE MEANTIME.** The tempting fix — pointing findings
+2..4 at finding 1 — records SIBLINGS as a causal chain, which is the same class
+of dishonesty as stamping `observed_at` with "now". The four real incidents stay
+four rows and each still states its own limit, exactly as the designer's revised
+sheet draws them ("Not coalesced — the record does not link them"). Both blockers
+are pinned in `sentinelCausation.test.ts` so the day either moves, a test says so.
+
+**Three options, for the ruling:**
+
+1. **Mint a TaskId for the scan.** `recordSentinelIncidents` mints one
+   `task_<ULID>` per report and stamps every finding of that scan with it as
+   `correlation`; `payload.source` keeps the run id, so the two are joinable.
+   Honest (a scan IS a unit of work), no envelope change, no new topic. Still
+   needs the coalescer half.
+2. **Widen `correlation`'s format** to admit a run id. Smallest producer change,
+   but it is an ENVELOPE FIELD change — escalation-grade by the protocol's own
+   list — and it makes one field carry two id species.
+3. **Give the sentinel run a first-class event** to point `causation` at. Most
+   faithful to "causation", and it is a NEW LEDGER TOPIC — the most escalation-
+   grade of the three.
+
+**Recommended: option 1 for the producer half, PLUS a coalescer rule that groups
+ORPHAN incidents by a shared record link** — which is applying the existing law
+("read record links only, never adjacency or similarity") to a link that would
+now exist, not weakening it. Both halves want the architect's word; neither is
+taken here.
+
+### 8 · ESCALATION 2 — guard 2's `total > 0` withholds the designer's own sentence from the designer's own row
+
+The acceptance asked for **guard 2 on the cp.backup row**. It does not fire, and
+the reason is not the producer.
+
+The ratified guard (`from-designer/fixtures/situation-headlines.js`):
+
+```
+run.waiting.mid-procedure
+  guard: row.kind === "run" && done === 0 && failed === 0 && total > 0 && gate !== null
+```
+
+The real row, after WP-48b: `done=0 failed=0 total=0 gate=cp.backup 4 of 8`. Its
+target set is **genuinely empty** — nothing selected targets for that run and the
+record now says so honestly. `total > 0` fails, guard 1 is excluded by its own
+`gate === null` clause (WP-48's ruling), and the row falls to the derived
+sentence.
+
+**The argument for amending it comes from the template's own slots.** Class 2's
+two sentences are:
+
+```
+headline: 'A {checkpoint} step is waiting on your {awaits}'
+ask:      'Waiting at {checkpoint}, {position}. Nothing has been written yet, so stopping here costs nothing.'
+```
+
+**Neither reads `{total}`.** The clause gates a sentence on a fact the sentence
+never states. And the designer's revised sheet draws this exact row as class 2 —
+"A backup step is waiting on evidence from you" — with a trace that names no
+target count at all (`run cursor = cp.backup · 4 of 8 · rb.bulk-plugin-update ·
+writes in scope = 0`). What makes the row class 2 is the GATE, not the count.
+
+**Proposed amendment, not taken here** (it is ratified designer copy, and WP-48's
+own guard change went through a gate ruling): drop `&& total > 0` from guard 2,
+keeping `&& gate !== null`. Mutual exclusivity is preserved by inspection —
+guard 1 requires `gate === null`, guard 2 `gate !== null`, guard 3 requires a
+non-zero done/failed — and the brute-force exclusivity check that WP-48 added
+would re-prove it. A run with targets, no gate and nothing written stays derived,
+which is right: class 1's "it never received a target list" would be false of it.
+
+The amendment would land in `situation-headlines.js` (the ratified source, not
+the composer), `fixtures:situation-copy` re-run, and the cp.backup row would then
+read the designer's class-2 sentence on the owner's real fleet with no further
+producer work.
+
+### 9 · Findings worth carrying
+
+- **`require('better-sqlite3')` does NOT load the native binding.** This
+  session's first ABI probe was `node -e "require('better-sqlite3')"` and it
+  printed success against a tree built for Electron; the very next call opened a
+  database and produced the real `NODE_MODULE_VERSION 146` mismatch. The module's
+  binding is loaded lazily in the `Database` CONSTRUCTOR. WP-33b's unmasking
+  probe is right and this is the sharpened form of it: **construct a Database**,
+  do not `require` and do not ask node its own ABI. Both batteries here do
+  exactly that, before and after.
+- **`npm run --silent <script> && echo OK || echo FAIL` reported six generator
+  `:check` scripts as FAILING when all six were green.** The pipeline ate the
+  exit code. Re-measured by capturing `$?` directly: all six exit 0. Same family
+  as the protocol's "a pass-condition substring must not be a substring of a
+  failure" — verify the measurement method before believing the measurement.
+- **A stale battery is a trap, and it is labelled rather than left.**
+  `scripts/wp49-battery.py`'s family-1 chrome mutations were written against the
+  withdrawn not-a-tab ruling, so M02's anchor no longer matches this tree. Its
+  header now says so and points at `wp50-battery.py`.
+
+### 10 · The mutation battery
+
+`scripts/wp50-battery.py`, 21 mutations over four families, `--no-cache`
+throughout, count-floored, both summary lines parsed, byte sweep first, tree
+verified pristine before and after, **and the ABI pinned at both ends per WP-49's
+new protocol rule.**
+
+```
+NON-PRINTING SWEEP: 18 file(s) swept byte-by-byte, no non-printing characters
+ABI PROBE (before): better-sqlite3 loads — the shared node_modules matches this node
+PRISTINE BASELINE: 0 failed / 184 total, 0 suites failed (floor 180)
+CONTROL  SURVIVED (correct)  0 failed / 184 total
+ABI PROBE (after): better-sqlite3 loads — the shared node_modules matches this node
+
+=== WP-50 BATTERY: 20 killed / 0 survived / 1 equivalent / 0 anchor-miss, of 21 ===
+TREE PRISTINE AFTER.
+```
+
+**The first drive was 19/21 with two survivors, and both were real work:**
+
+- **M07 was a GAP, and the battery is why the test exists.** `status !==
+  'running'` mutated to `status === 'complete'` survived: nothing drove a HALTED,
+  GATELESS run. It is reachable — a zero-checkpoint document plus an open abort
+  incident correlated into the run — and the lie it ships is the worst thing that
+  section can say: a run that STOPPED, filed under "nothing needed of you". Now
+  driven through real emitters.
+- **M04 is EQUIVALENT, measured rather than argued.** The unconditional payload
+  spread writes `scope: undefined` where the conditional writes no key, and
+  `Ledger.append` serialises through `JSON.stringify`, which drops a key whose
+  value is `undefined` — verified: `JSON.stringify({a:1, scope: undefined})` is
+  `{"a":1}`. Nothing else reads the in-memory envelope. The conditional spread
+  stays because it states the contract at the seam (the same reasoning
+  `procedureStream.ts` already records for its own equivalent mutant), and the
+  line that actually holds the parity floor is M03's `status === 'delivered'`
+  gate, which the battery kills. The battery now REPORTS it as equivalent so a
+  future reader does not chase it.
+
+The battery was **re-driven whole** after the fix, never spliced.
+
+### 11 · Receipts — pasted from the FINAL print, after the last write
+
+| | suites | tests | passed | skipped | exit |
+|---|---|---|---|---|---|
+| baseline (`c2d5066a`, in `.worktrees/wp-50`) | 610 → **614** | **8,475** | 8,463 | 12 | 0 |
+| **WP-50 at the gate** | **618** | **8,509** | **8,497** | **12** | **0** |
+
++4 suites, +34 tests, **the skipped column did not move** (12 both sides — the
+worktree's own embedding split, per WP-20c; the primary checkout will read 2).
+
+```
+tsc -p . --noEmit                     clean
+eslint src --ext .ts,.tsx             0 errors, 6 warnings (all pre-existing, none in a touched file)
+fixtures:situation-copy:check         exit 0 — up to date
+fixtures:return-copy:check            exit 0 — up to date
+fixtures:opening-copy:check           exit 0 — up to date
+fixtures:procedures:check             exit 0 — up to date
+fixtures:citations:check              exit 0 — current
+inventory:dom-reach:check             exit 0 — current
+byte sweep                            20 changed files, CLEAN
+mutation battery                      20 killed / 0 survived / 1 equivalent / 0 anchor-miss, of 21
+```
+
+### 12 · ABI, declared
+
+This session ran jest repeatedly, so `better-sqlite3` is built for **system Node
+(this machine v25.9.0, ABI 141)** — verified by CONSTRUCTING a Database, not by
+`require` and not by asking node its own version (§9). `.nvmrc` pins 22.16.0 →
+ABI 127, which is what CI sees. **The owner must `npm run rebuild` before loading
+Local.**
+
+Note for the record: the tree was left built for **Electron (ABI 146)** when this
+packet started — the owner's last `npm run rebuild` — and `npm test`'s `pretest`
+hook flipped it to 141 for the baseline.
+
+### 13 · Unpushed, properly
+
+Zero remote `wp-50` refs; no upstream on `poc/nexintelligence-ux`; no tags
+touched; version still `0.5.2`.
+
+**HOLDING FOR THE RULING.** Two escalations (§7, §8) and one contract shape
+offered for ratification (§2's `ManifestScope`). The merge is not taken until the
+ruling lands.
+
+**THE `src/main/intelligence-host/`, the two arming callers, `src/renderer/` AND
+`docs/intelligence/` LOCKS REMAIN HELD** pending acceptance.
+
+---
+
 ## WP-50 · GATE RULING — the producers pay (2026-08-21, architect adjudication)
 
 **Verdict: PASS. Cleared to merge with §8's amendment landed; §7
@@ -21486,3 +21978,126 @@ identical either way); M07 was real and is driven. AUTHORED 3 → 2 with
 **Protocol:** WP-33b's ABI rule is sharpened — `require('better-sqlite3')`
 does not load the native binding; **construct a Database** or the
 probe passes against a tree that will blow up on the next call.
+
+---
+
+## WP-50 · RULING LANDED — the guard amendment, and what it did to the live fleet (2026-08-21)
+
+The gate ruling implemented. §8 landed here; §7 is **WP-51** and does not hold
+this merge; `ManifestScope` needed no change, being ratified as shaped.
+
+### The amendment, in the RATIFIED SOURCE
+
+```
+run.waiting.mid-procedure
+- guard: 'row.kind === "run" && done === 0 && failed === 0 && total > 0 && gate !== null'
++ guard: 'row.kind === "run" && done === 0 && failed === 0 && gate !== null'
+```
+
+Amended in `from-designer/fixtures/situation-headlines.js`, not in the composer —
+WP-48's precedent, so the guard and the code stay one rule. New receipts:
+
+```
+situation-headlines.js        8966 bytes  md5 74bcbc47d0f3e8e1e9d8b234647b388a
+situationCopy.generated.ts    6155 bytes  md5 32d81f55cfbfd3d401f81c358ed74d09
+```
+
+### THE AGREEMENT PIN CAUGHT THE CODE COPY, which is what it is for
+
+Amending the fixture alone made `situationHeadlines.test.ts` report two
+disagreements over the shared case table:
+
+```
+run.waiting.mid-procedure × "run, nothing written, empty selection, GATED": fixture says true, code says false
+run.waiting.mid-procedure × "run, nothing written, NO scope recorded, gated": fixture says true, code says false
+```
+
+`guardHolds` amended to match. Two copies of one rule in bundles that cannot
+import each other, pinned together by a shared case table — the same pattern as
+`resolveAgentCron`/`effectiveCadenceExpression` and `localDay` — working exactly
+as designed, on the first amendment that tested it.
+
+### THE ACCEPTANCE CASE, MET ON THE OWNER'S REAL LEDGER
+
+The row the ruling was about, re-folded after the amendment:
+
+```
+--- WAITING · sess_task_01M0BBHDGE8W4FJM5BJJ5DVAEF
+    template : run.waiting.mid-procedure
+    capability: cap.bulk_plugin_update
+    headline : A cp.backup step is waiting on your evidence
+    ask      : Waiting at cp.backup, 4 of 8. Nothing has been written yet, so stopping here costs nothing.
+    written  : done=0 failed=0 total=0
+    gate     : cp.backup 4 of 8 (evidence)
+```
+
+**All three run rows on the real fleet now carry ratified sentences** — class 1
+on the two gateless runs, class 2 on the gated one. The gap between the owner's
+screenshots and the designer's sheets, for the run rows, is closed.
+
+(The sheet's own head reads "A backup step is waiting on evidence from you"; the
+ratified template renders `{checkpoint}` as the checkpoint id in full. That is
+the documented divergence `gateLine` and the Govern matrix already hold to — an
+id cited in full, never softened into prose.)
+
+### The pins: two replaced, one added, one annotated as history
+
+- **REPLACED, not deleted** — "a gated run whose selection was EMPTY gets
+  neither class" and "a run whose arming carried NO scope … headlineTemplate
+  null". Both asserted the withholding the ruling removed. Each now pins class 2
+  firing, and each carries in its own comment what changed and why. A withdrawn
+  rule with its guard left standing is a test asserting the opposite of the law.
+- **ADDED** — `THE HONEST GAP STAYS HONEST · a GATELESS run with an UNKNOWN
+  target set gets no class at all`. The ruling names this case explicitly, so it
+  is pinned explicitly: dropping `total > 0` widened guard 2 to every GATED run,
+  not to every run, and this is what pins the difference.
+- **ANNOTATED AS HISTORY** — `contradictedByTheRecord`'s explanatory paragraph
+  describes a world two rulings ago. It is marked as history rather than
+  rewritten. The tripwire itself is still unreachable through the composer
+  (guard 1 carries `gate === null`) and stays permanent and directly pinned.
+
+### An adjacent receipt defect, found and fixed
+
+All three copy generators printed `${next.length} bytes` — **UTF-16 code units,
+not bytes.** The copy modules carry em dashes and `§`, so the two differ by 18 on
+`situationCopy.generated.ts` alone, and a wrong receipt has already reached this
+record: WP-48's gate report quotes `situationCopy.generated.ts 6168 bytes`, which
+was the character count. Now `Buffer.byteLength(next, 'utf-8')`; all three agree
+with `wc -c`. **"Arithmetic in one named unit" applies to the tool as well as to
+the report** — a receipt-printing tool that names the wrong unit produces a wrong
+receipt every time someone pastes it, and pastes it honestly.
+
+### The environment flipped between sessions, and the new rule caught it first try
+
+The tree was built for **Electron (ABI 146)** at the start of this session — the
+owner's `npm run rebuild`, taken on this packet's own advice. It surfaced as
+WP-20e's mask: `Cannot read properties of undefined (reading 'emitter')` across
+the entire registry suite, 40+ reds on a change that touched one guard string.
+**The CONSTRUCT-a-Database probe named the real mismatch on the first try** —
+`NODE_MODULE_VERSION 146 … requires 141` — which is the rule this packet
+contributed to the protocol two days after contributing it. `npm rebuild
+better-sqlite3` recovered it. Nothing was filed and no code was touched for it.
+
+### Battery, suite, and the receipts
+
+The battery gains **M22**: re-introducing `total > 0` into `guardHolds`. The lie
+it ships is the amendment run backwards — a true sentence goes back to being
+withheld from a real row, silently.
+
+```
+=== WP-50 BATTERY: 21 killed / 0 survived / 1 equivalent / 0 anchor-miss, of 22 ===
+PRISTINE BASELINE: 0 failed / 186 total, 0 suites failed (floor 182)
+CONTROL  SURVIVED (correct)  0 failed / 186 total
+ABI PROBE (before/after): better-sqlite3 loads — the shared node_modules matches this node
+TREE PRISTINE AFTER.
+```
+
+| | suites | tests | passed | skipped | exit |
+|---|---|---|---|---|---|
+| baseline (`c2d5066a`) | 614 | 8,475 | 8,463 | 12 | 0 |
+| WP-50 at the gate | 618 | 8,509 | 8,497 | 12 | 0 |
+| **ruling landed** | **618** | **8,511** | **8,499** | **12** | **0** |
+
+`tsc` clean; `eslint` 0 errors, 6 pre-existing warnings; all six generator
+`:check` scripts exit 0; byte sweep clean. ABI: system Node v25.9.0 / **141** —
+**the owner must `npm run rebuild` before loading Local.**

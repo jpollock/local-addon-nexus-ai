@@ -30,6 +30,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { initIntelligenceCore, IntelligenceCore } from '../../../../src/main/intelligence-host/bootstrap';
+import { manifestScopeFor } from '../../../../src/main/intelligence-host/chatAssembly';
 import { setIntelligenceCore } from '../../../../src/main/intelligence-host/coreRegistry';
 import {
   ACTION_EXECUTED_TOPIC,
@@ -231,18 +232,21 @@ export function buildMorning(): Morning {
         task: args.taskId,
         procedure: args.procedure,
         retrieval: args.consulted ? [{ store: 'ledger', query: 'entity=x topic=episodic.*', returned: 2 }] : [],
+        // WP-50 · built by the PRODUCER'S OWN function, so this morning cannot
+        // drift from what a real turn writes.
         ...(args.targets === undefined
           ? {}
           : {
-              scope: {
+              scope: manifestScopeFor({
                 capability: args.procedure?.capability ?? 'cap.x',
                 runbookId: args.procedure?.runbook ?? 'rb.x',
                 runnable: Array.from({ length: args.targets }, (_, i) => ({
                   siteId: `site-${i}`, siteName: `Site ${i}`, place: { host: 'local' },
                 })),
                 barred: [], excluded: [], places: ['local'],
-                from: 'selection', opensRun: args.targets > 0,
-              },
+                from: { surface: 'comparator', comparatorId: 'cmp-1', filter: 'all' },
+                opensRun: args.targets > 0,
+              }),
             }),
       },
     }).id;

@@ -32,6 +32,7 @@ import { supplyFromBundle } from '../../intelligence/citation/resolve';
 import type { CitationSupply } from '../../intelligence/citation/resolve';
 import { getIntelligenceCore } from './coreRegistry';
 import { procedureRequestForTurn } from './procedureArming';
+import type { ProcedureScope } from './procedureScope';
 import {
   armProcedureRun,
   foldProcedureCursor,
@@ -54,6 +55,68 @@ const CHAT_SURFACE = 'chat.docked-panel';
 /** The manifest's topic + payload schema (architecture doc §4.2, §6.4). */
 export const CONTEXT_ASSEMBLED_TOPIC = 'task.context.assembled';
 export const CONTEXT_ASSEMBLED_SCHEMA = 'context.assembled/1';
+
+/**
+ * WP-48b · THE ARMING'S OWN SCOPE, ON THE RECORD — the producer's registered debt.
+ *
+ * WP-48 bound the designer's `{total}` slot ("size of the derived target set")
+ * to the manifest's `scope.runnable`, and then measured that **0 of 36 manifests
+ * on the owner's real ledger carry a `scope` key at all**. The reader was
+ * complete and nothing filled it, so `targetSet` read `null` on every row and
+ * both waiting classes withheld their sentences. This is the writer.
+ *
+ * **The comment WP-48 left here was wrong, and correcting it is half the fix.**
+ * `sessionRegistry.armedTargetSetOf` says "`chatAssembly` spreads the honoured
+ * arming's `scope` onto the manifest payload (WP-37's carrier)". It never did:
+ * the scope is spread onto `notifyProcedureState`, which is an IPC STREAM to the
+ * renderer and not the ledger. Measured, not inferred — no event of any topic on
+ * that ledger carries a `runnable` key.
+ *
+ * **AND `[]` IS THE OTHER HALF, WHICH IS THE HALF THAT LIGHTS THE SCREEN.** Every
+ * run on the real fleet was armed by a model request or a predicate, and neither
+ * carries a selection. It would be easy to read that as "no scope to record" and
+ * write nothing — which is what leaves `targetSet` null and the sentences
+ * withheld. It is the wrong reading. **An arming that selected nothing KNOWS it
+ * selected nothing**, and that is a fact, not an absence:
+ *
+ *   `null`  — nothing on record says anything about a target set (UNKNOWN)
+ *   `0`     — the arming resolved its target set and it was empty (KNOWN)
+ *
+ * WP-48's own rule, applied in the direction it had not yet been applied in.
+ * Recording the empty set is what makes the designer's class 1 fire — *"An update
+ * run has waited 60 hours and changed nothing / It never received a target list,
+ * so it cannot start"* — on the two real runs that are exactly that, and it is
+ * the whole of "a fact the armer knows reaches the record".
+ *
+ * **NOTHING IS DERIVED FROM THE TURN.** The turn's own resolved site is NOT the
+ * arming's target set, and binding it here would rebuild WP-48's name collision
+ * one field over: `places` is the set with an OUTCOME, this is the set a
+ * SELECTION chose, and the turn's subject is neither. A model request that named
+ * a capability while a site happened to be open in the panel selected nothing,
+ * and the record says so.
+ */
+export interface ManifestScope {
+  /** The site ids the arming selected. Empty when the arming selected nothing. */
+  runnable: string[];
+  /**
+   * How the set was resolved, so a reader never has to infer it from a length.
+   * `selection` is WP-37's comparator carrier; `no-selection` is a predicate or
+   * a model request, which arm from words and select no targets.
+   */
+  from: 'selection' | 'no-selection';
+}
+
+/**
+ * The scope this turn's manifest records. One derivation, both cases.
+ *
+ * Exported so the acceptance exhibit (`scripts/wp50-refold-exhibit.ts`) folds the
+ * real ledger through the SHIPPED function rather than through a copy of its
+ * reasoning — the exhibit proves this code, or it proves nothing.
+ */
+export function manifestScopeFor(armed: ProcedureScope | undefined): ManifestScope {
+  if (!armed) return { runnable: [], from: 'no-selection' };
+  return { runnable: armed.runnable.map((cell) => cell.siteId), from: 'selection' };
+}
 
 const SEMANTIC_LIMIT = 5;
 
@@ -286,7 +349,22 @@ export async function assembleForChatTurn(
       forgetProcedureRun(req.sessionId);
     }
 
-    emitManifest(core, bundle, targets);
+    // WP-48b · the arming's scope, recorded on the manifest the fold reads.
+    //
+    // ONLY ON A DELIVERED PROCEDURE, and that bound is the parity floor: a turn
+    // that armed nothing has no arming and therefore no scope, and its manifest
+    // stays byte-identical to every manifest written before this packet. A
+    // REFUSED procedure is not a turn of the run either (`sessionRegistry`'s own
+    // rule — a refusal's hash may be null, which would fork the run key on a
+    // value naming no document), so it records none.
+    emitManifest(
+      core,
+      bundle,
+      targets,
+      bundle.procedure?.status === 'delivered'
+        ? manifestScopeFor(turnProcedure?.scope)
+        : undefined,
+    );
 
     // WP-26 · the three stream events, from the seam that folds the cursor.
     // AFTER the manifest, deliberately, and the stream re-folds rather than
@@ -529,7 +607,9 @@ function truncate(text: string, max: number): string {
 function emitManifest(
   core: NonNullable<ReturnType<typeof getIntelligenceCore>>,
   bundle: ContextBundle,
-  targets: EntityRef[]
+  targets: EntityRef[],
+  /** WP-48b. Absent on an unarmed or refused turn — see the call site. */
+  scope?: ManifestScope
 ): void {
   try {
     const entity: Record<string, string> = {};
@@ -545,7 +625,14 @@ function emitManifest(
       actor: { id: 'act_chat_assembler', kind: 'system' },
       source: { class: 'work', system: 'assembler:chat', trust: 'emitted' },
       correlation: bundle.manifest.task,
-      payload: bundle.manifest as unknown as Record<string, unknown>,
+      // The manifest, plus the arming's scope when there was an arming. Spread
+      // CONDITIONALLY: an absent key and a present-`undefined` one are not the
+      // same fact, and only the first is byte-identical to every manifest that
+      // predates WP-48b. Same rule the arming carrier itself holds to.
+      payload: {
+        ...(bundle.manifest as unknown as Record<string, unknown>),
+        ...(scope ? { scope } : {}),
+      },
     });
     core.scheduleFolds();
   } catch {

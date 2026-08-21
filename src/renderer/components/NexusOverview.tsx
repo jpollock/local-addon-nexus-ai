@@ -114,6 +114,25 @@ interface SetupAIResult {
  * Moving them here would cost more in binding than the duplication saves.
  */
 const TABS = [
+  // XD-27 AMENDED (2026-08-20) — **NOW IS THE FIRST TAB**, selected on arrival,
+  // with a hairline divider after it, so the strip reads home-then-destinations
+  // rather than one-of-N peers.
+  //
+  // The not-a-tab clause was WITHDRAWN BY ITS AUTHOR on the owner's live
+  // evidence (field finding 5: "There's no Now tab though. Or nothing that says
+  // that"). The ruling was working exactly as written and its MECHANICS WERE
+  // INVISIBLE — nothing named the screen, nothing marked the title as the way
+  // back, and a strip with no active underline reads as "nothing selected"
+  // rather than as "you are home." The designer's own words: "the worry it was
+  // protecting against — a fifth feature claiming a peer slot — is a rule about
+  // what earns a destination, and it cannot be enforced by hiding the
+  // destination people need most."
+  //
+  // **THE GOVERNANCE HALF SURVIVES AS LAW**: a future feature must argue for
+  // being a destination through the design loop before it enters this array.
+  // That is what the withdrawn geometry was trying to enforce, and it is the
+  // half that can actually be enforced.
+  { key: 'now',        label: 'Now', divider: true },
   { key: 'sites',      label: 'Sites' },
   // ITEM 6, NOT WP-49's: Fleet folds into Sites on the web-property unit once
   // the owner rules on it. It stays a strip entry until then, because the
@@ -130,17 +149,17 @@ const TABS = [
 ] as const;
 
 /**
- * WP-49 · XD-27 — **NOW IS NOT IN `TABS`, AND THAT IS THE LAW, NOT AN OMISSION.**
+ * WP-50 · XD-27 AMENDED — the union is the strip, and `'now'` is IN it.
  *
- * "A tab is a peer, and a front door that is tab one of four becomes a choice
- * among five the day the next feature claims a tab — a future destination must
- * argue for being a destination." So the union is the strip PLUS `'now'`: the
- * addon opens on it, the title bar returns to it the way a logo does, and
- * nothing in the strip points at it. `nowScreen.test.tsx` pins both halves —
- * the opening route AND the absence — because the absence is what makes that
- * argument mandatory for whatever comes next.
+ * It used to be the strip PLUS `'now'`, because Now was ruled out of the strip.
+ * That ruling was withdrawn (see `TABS`), so the union needs no extra member and
+ * the type says what the strip says. The addon still opens on Now and the title
+ * bar still returns to it the way a logo does — those halves of XD-27 are
+ * untouched; what changed is that the destination is now visible and marked.
+ * `nowScreen.test.tsx` pins the amendment's three properties: FIRST POSITION,
+ * SELECTED ON ARRIVAL, and the DIVIDER.
  */
-type TabKey = typeof TABS[number]['key'] | 'now';
+type TabKey = typeof TABS[number]['key'];
 
 interface NexusOverviewState {
   stats: DashboardStats | null;
@@ -843,9 +862,9 @@ renderTabBar(): React.ReactNode {
         marginBottom: '0',
       },
     },
-      ...tabs.map((tab) => {
+      ...tabs.flatMap((tab) => {
         const isActive = activeTab === tab.key;
-        return React.createElement('div', {
+        const entry = React.createElement('div', {
           key: tab.key,
           'data-testid': `tab-${tab.key}`,
           style: {
@@ -858,6 +877,26 @@ renderTabBar(): React.ReactNode {
           },
           onClick: () => this.setState({ activeTab: tab.key }),
         }, tab.label);
+        // XD-27 amended: the hairline after Now. It is what makes the strip read
+        // home-then-destinations instead of a row of peers, and it is the
+        // divider the designer's revised sheet draws — a rule, not a gap.
+        return (tab as { divider?: boolean }).divider
+          ? [
+              entry,
+              React.createElement('div', {
+                key: `${tab.key}-divider`,
+                // NOT `tab-*`: the divider is a rule, not a destination, and a
+                // strip scan that counted it as a tab would be counting a line.
+                'data-testid': `strip-divider-${tab.key}`,
+                style: {
+                  width: '1px',
+                  alignSelf: 'stretch',
+                  margin: '8px 8px 10px',
+                  backgroundColor: 'var(--nxai-card-border, #e5e7eb)',
+                },
+              }),
+            ]
+          : [entry];
       }),
     );
   }

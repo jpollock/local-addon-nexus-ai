@@ -76,12 +76,34 @@ const SHAPE_VERSION = 1;
  * The class id is `situation-headlines.js`'s own, so the ask and the headline
  * that selected the row are keyed by the same name.
  */
-const TEMPLATED_ASK = {
-  classId: 'run.waiting.mid-procedure',
-  /** The specimen's own checkpoint id — the span the split removes. */
-  specimenValue: 'cp.backup',
-  slot: 'checkpoint',
-} as const;
+const TEMPLATED_ASKS = [
+  {
+    classId: 'run.waiting.mid-procedure',
+    /** The specimen's own checkpoint id — the span the split removes. */
+    specimenValue: 'cp.backup',
+    slot: 'checkpoint',
+    what: 'the mid-procedure opening ask',
+  },
+  {
+    /**
+     * WP-50 · THE SECOND ASK TEMPLATES NOW, and the reason is `Situation.capability`.
+     *
+     * WP-49 could not extract this one: §5's *"Why has **the update run** changed
+     * nothing?"* splits on the RUN NOUN, and the noun is `RUN_NOUN[capability]`
+     * (Controlled Vocabulary v1.4) while `Situation` carried no capability. So
+     * the packet shipped an interim authored ask reading *"Why has {runbookId}
+     * changed nothing?"* — honest, gate-held, and named at its own gate as
+     * retiring the day the field landed. WP-49a landed it; this is the
+     * retirement, and the sentence is the designer's own bytes again on both
+     * sides of the brace.
+     */
+    classId: 'run.waiting.nothing-written',
+    /** The specimen's own run noun — the span the split removes. */
+    specimenValue: 'the update run',
+    slot: 'runNoun',
+    what: 'the nothing-written opening ask',
+  },
+] as const;
 
 // ---------------------------------------------------------------------------
 // Reading the designer's sheet
@@ -170,18 +192,17 @@ function extract(): Extracted {
 
   // --- the three opening asks; one of them templates ------------------------
   const specimens = askSpecimens(md);
-  const specimen = specimens.find((s) => s.includes(TEMPLATED_ASK.specimenValue));
-  if (!specimen) {
-    throw new Error(
-      `no §5 opening ask carries "${TEMPLATED_ASK.specimenValue}" — the one mechanically ` +
-      'templatable ask is gone, and the rest are authored elsewhere by design',
-    );
+  const askTemplates: Record<string, string> = {};
+  for (const ask of TEMPLATED_ASKS) {
+    const specimen = specimens.find((s) => s.includes(ask.specimenValue));
+    if (!specimen) {
+      throw new Error(
+        `no §5 opening ask carries "${ask.specimenValue}" — a mechanically templatable ` +
+        'ask is gone, and an ask this generator cannot extract is authored elsewhere by design',
+      );
+    }
+    askTemplates[ask.classId] = templateFrom(specimen, ask.specimenValue, ask.slot, ask.what);
   }
-  const askTemplates: Record<string, string> = {
-    [TEMPLATED_ASK.classId]: templateFrom(
-      specimen, TEMPLATED_ASK.specimenValue, TEMPLATED_ASK.slot, 'the mid-procedure opening ask',
-    ),
-  };
 
   // --- the scope line, from its own emphasis marks --------------------------
   //
@@ -336,7 +357,15 @@ function main(): void {
 
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, next, 'utf-8');
-  process.stdout.write(`wrote ${path.relative(REPO_ROOT, out)} (${next.length} bytes)\n`);
+  // WP-50: `next.length` is UTF-16 CODE UNITS, not bytes — this line said
+  // "bytes" and printed characters, and the copy modules are full of em dashes
+  // and `§`, so the two differ by 18 on this one file alone. A receipt-printing
+  // tool that names the wrong unit produces a wrong receipt every time someone
+  // pastes it, and one already reached the record (WP-48's gate report).
+  // "Arithmetic in one named unit" applies to the tool as well as the report.
+  process.stdout.write(
+    `wrote ${path.relative(REPO_ROOT, out)} (${Buffer.byteLength(next, 'utf-8')} bytes)\n`,
+  );
 }
 
 if (require.main === module) main();

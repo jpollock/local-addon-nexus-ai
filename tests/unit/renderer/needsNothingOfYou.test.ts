@@ -30,6 +30,24 @@
  * now. An escalation recorded only in prose would still be sitting in a document
  * nobody re-reads.
  *
+ * ---------------------------------------------------------------------------
+ * WP-50 · WHAT BECAME OF THESE THREE FINDINGS. The rider is BUILT — WP-49a put
+ * `TriageView.working` on the contract and `workingRuns.test.ts` drives it —
+ * and two of the three findings below became its GUARDS rather than its
+ * obituary: finding 3 is why `workingRows` refuses a `documentUnavailable` run,
+ * and finding 2 is why the predicate reads `status` and the absence of a gate
+ * rather than `awaits`.
+ *
+ * **Finding 1 was narrowed, and the narrowing is the packet's own correction.**
+ * It is measured over the golden morning, and every runbook in the golden
+ * morning declares checkpoints. Two of the seven runbooks the product SHIPS
+ * declare none (`law/runbooks/diagnose-site.md`, `law/runbooks/wpe-pull.md`,
+ * measured 2026-08-20), and a run armed under either is placed, gateless and
+ * `running` — which is the rider's state exactly. So finding 1 holds for a
+ * CHECKPOINTED document and does not generalise to the document set that ships.
+ * The tests below are unchanged and still true of what they measure.
+ * ---------------------------------------------------------------------------
+ *
  * SHAPE #15: every test asserts the fixture's events exist (via
  * `assertGoldenShape` / an explicit `sessions()` length) before asserting
  * anything about what the fold made of them. A fold over an empty ledger would
