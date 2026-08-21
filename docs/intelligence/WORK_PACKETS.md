@@ -24411,3 +24411,329 @@ receipts describe one tree; the merge will take both sides in
 
 **Gate asks for one thing only: confirmation that the six contract shapes in §1
 are ratified as presented.** Nothing merges until WP-54 releases the renderer.
+
+---
+
+## WP-54a · GATE REPORT — the fold emits `agent.stuck`, and the measurement the packet asked for first
+
+**MERGED at `be858e5f`, BEFORE WP-54's dedup**, which is the sequencing this
+packet was launched under and the condition the architect's finding 4 attached
+to it. Verified rather than assumed at merge time: `git merge-base
+--is-ancestor wp-54 poc/nexintelligence-ux` says NO, so `971c0014` is still on
+its branch and the order holds. **The one thing WP-54 must know: auth-probe no
+longer depends on the duplication defect to be on screen.** It is a situation
+now, and dedup can remove the inbox card without removing the row.
+
+    git diff --stat be858e5f^1 be858e5f
+
+     scripts/wp54a-exhibit.ts                           | 135 ++++++++++
+     src/main/agent-runtime/AgentRunner.ts              |  29 +++
+     .../__tests__/agentFailureProducer.test.ts         | 284 ++++++++++++++++++
+     .../__tests__/agentStuckSituation.test.ts          | 281 ++++++++++++++++++
+     .../__tests__/situationHeadlines.test.ts           |  49 +++-
+     src/main/intelligence-host/agentFailureProducer.ts | 287 +++++++++++++++++++
+     src/main/intelligence-host/sessionRegistry.ts      | 246 +++++++++++++++++-
+     tests/unit/agent-runtime/agentFailureTap.test.ts   | 197 ++++++++++++++
+     8 files changed, 1492 insertions(+), 16 deletions(-)
+
+### 1 · THE MEASUREMENT, WHICH IS THE PACKET'S FIRST ASK
+
+**There is no `agent.run.failed` topic, and there could never have been one.**
+Not "it does not exist yet" — the envelope's own validator forbids the SHAPE.
+`src/intelligence/envelope/validate.ts` matches
+`^(state|semantic|procedure|policy|episodic|task|control)\.[a-z0-9_]+\.[a-z0-9_]+$`,
+so `agent` is not a legal type prefix and any such topic is a hard `ZodError`
+at `Emitter.emit`. `agent.stuck` is a TEMPLATE id; it was never a topic, and
+reading it as one is the same class of error as reading a rule line as a rank.
+
+**Live ledger census, 2026-08-21 — 13 topics, 11,181 events, and not one of
+them is about an agent run:**
+
+| topic | count |
+|---|---|
+| `state.plugin.observed` | 8,576 |
+| `state.theme.observed` | 1,137 |
+| `state.site.observed` | 756 |
+| `state.drift.detected` | 548 |
+| `task.action.executed` | 39 |
+| `task.outcome.recorded` | 39 |
+| `task.context.assembled` | 36 |
+| `semantic.content.changed` | 27 |
+| `control.grant.issued` | 14 |
+| `episodic.incident.recorded` | 4 |
+| `control.grant.revoked` | 2 |
+| `episodic.sync.pulled` | 2 |
+| `task.rationale.recorded` | 1 |
+
+**So the answer to "does it carry the timeout and the agent id" is: the
+producer did not exist, and the fact lives somewhere else entirely.** It is in
+`graph.db`'s `inbox_items`, one row, written by `recordRunToInbox`
+(`src/main/inbox/recordRun.ts:82`):
+
+    source        auth-probe
+    title         auth-probe could not finish a run
+    detail        Agent "auth-probe" timed out after 300000ms
+    payload       {"status":"timeout"}
+    first_seen_at 1786982447204   (2026-08-17T16:00:47.204Z)
+
+Read against the two slots the ratified class needs:
+
+- **`{agentId}` — PRESENT and structured.** `source` is the agent id, and
+  `title` is already byte-identical to the ratified headline filled from it.
+  The inbox and the designer reached the same sentence independently, which is
+  a small piece of evidence that the class is the right one.
+- **`{timeout}` — ABSENT as a fact.** The number exists only as free text
+  inside an error message. `payload` carries `{"status":"timeout"}` and nothing
+  else; `agent_runs` has no timeout column; `AgentResult`
+  (`agent-sdk/types.ts:191`) carries `status` and `error` and no duration.
+  Meanwhile `AgentRunner.run:61` computes `timeoutMs = agent.timeoutMs ??
+  DEFAULT_TIMEOUT_MS` and line 123 interpolates it into that string. **The
+  runtime knows the number at the moment of failure and throws it away** —
+  a producer debt of exactly the shape WP-51's three are: a fact the producer
+  already holds and does not write down.
+
+**IT IS NAMED, AND IT IS ALSO PAID, and the difference from WP-51's three is
+worth stating.** Those three are debts in producers this packet does not own.
+This one is a debt in a producer that DID NOT EXIST, and the packet's whole
+scope was to write it — so paying it is the work, not scope creep. It is paid
+at the only honest place: `AgentRunner` hands `timeoutMs` to the producer from
+its own local. **Nothing parses the number back out of the message.** Doing so
+would make the record a derivation of its own prose, and the mutation battery's
+M03 shows what the alternative costs.
+
+### 2 · THE TWO RULING REQUESTS — AND THE DESIGNER HAS ALREADY ANSWERED THE SECOND
+
+Both were raised ON THE BASE at announce (`6e140e1a`) rather than saved for
+here, because both are PARALLEL_PROTOCOL escalation triggers and the owner
+should see an escalation before the code exists.
+
+**(a) A NEW EVENT TOPIC: `episodic.agent_run.failed`, schema
+`agent_run.failed/1`.** Still open. `episodic` because this is an occurrence
+the record remembers; a separate topic rather than `episodic.incident.recorded`
+because the designer's own note is that this is *"the one class where the
+subject is the platform rather than the fleet"*, and folding a platform failure
+into the fleet's incident stream would put it in front of `situationOfIncident`
+and the assembler's `episodicSummary` as though a site were broken.
+
+*A stale doc found on the way, in a file this packet may not edit:*
+`architecture.md` §4.2 still describes `episodic.*` as **"reserved: episodic IS
+the ledger; this namespace exists only for imported histories."** That stopped
+being true at WP-25 — `episodic.incident.recorded` and `episodic.sync.pulled`
+are both live, both platform-produced, and between them are six of the events
+in the census above. This topic is the third. **The line needs the owner's pen,
+not a packet's.**
+
+**(b) TIER 3 AS A RANK VALUE — ANSWERED BY THE DESIGNER, IN THE RATIFIED
+SOURCE, WHILE THIS PACKET WAS IN FLIGHT.** `ConsequenceTier` was `1 | 2 | 4`,
+and the absence of `3` was deliberate: tear 3 (moments-model §4a, ruled
+2026-08-18, ratified at WP-30's gate) put tier 3 into STRUCTURE as the reserved
+slot, and the missing type member was the enforcement. The packet widened it to
+`1 | 2 | 3 | 4` and declared the collision, because ranking the row 2 under a
+card reading `Tier 3` would have reproduced the architect's finding 1 in a new
+class the same week it was raised.
+
+**Then the architect's fixture commit `09c32d99` landed the designer's revised
+`situation-headlines.js`, and every template in it now carries an explicit
+`tier` FIELD — `agent.stuck`'s is `tier: 3`.** So the widening is no longer a
+packet's judgement call against a ruling; it is the implementation of a number
+the ratified source now states. Two consequences the owner should see:
+
+1. **The designer has answered the architect's finding 1 at its root.** "The
+   rule line renders from the ranked tier, or the ranker reads the template's
+   tier" — the fixture chose the second, for every class. WP-54's item 1 has a
+   ratified input now.
+2. **`situationOfAgentFailure` still writes the literal `3`**, because the
+   GENERATED module has not been regenerated (see §5) and `SituationTemplate`
+   carries no `tier` field yet. The day it does, that literal should become
+   `template.tier` and the agreement pin becomes structural rather than
+   asserted. **Registered, not done here** — the generator is WP-55's.
+
+### 3 · WHAT LANDED
+
+- **`agentFailureProducer.ts`** (12,431 bytes). Tapped at `AgentRunner`'s
+  run-completion chokepoint beside `recordSentinelIncidents`, in its own try
+  block for the same reason that one has its own. `incidentProducer`'s five
+  rules are transcribed rather than re-derived, because a second, divergent set
+  of the same five is the drift they exist to prevent: never fabricate a time;
+  never invent the timeout; resolution is observed and supersedes; dedup is a
+  ledger read (NOT the change gate — an episodic occurrence folds into no twin,
+  so the gate would degrade to a process-lifetime cache and re-emit after every
+  restart); non-fatal by construction.
+- **The failure carries NO entity, and that is a decision, not an omission.**
+  An agent run that timed out did not fail AT a site. The inbox reached the
+  same answer independently (`scope: '*'`, `scopeLabel: 'This agent'`), and an
+  entity borrowed from whatever the run touched last would file a platform
+  failure on a site's record where every entity-scoped reader would find it.
+- **The actor is `act_agent_runtime`, kind `system`** — the agent did not
+  observe its own timeout; it was still running when the race was lost.
+- **`sessionRegistry`** — `Situation.kind` gains `agentFailure`,
+  `SituationPart.kind` likewise, the fold reads the new topic, and an open
+  failure becomes a situation of one at tier 3.
+- **`contradictedByTheRecord` gains its second arm, and it is the first one
+  that fires in production.** The first arm has been a tripwire since WP-48
+  ruled it permanent; nothing can reach it. This one runs. `agent.stuck`'s ask
+  STATES a timeout, and its guard is only `row.kind === "agentFailure"`, which
+  every agent failure satisfies including the ones that did not time out. So a
+  row with no recorded duration refuses the class and takes the derived
+  sentence. Without it the row reads **"It timed out after ."** on a run that
+  errored — a hole and a falsehood in one sentence, and
+  `selectSituationTemplate`'s own fillability check cannot catch either,
+  because it guards the HEADLINE and this class's headline is true and fillable
+  in both cases.
+- **A resolved failure is not a row at all** — not moved to `changed`. "An
+  agent ran fine today" is not a change to the fleet, and inventing a column
+  placement the designer has not drawn is the thing this discipline forbids.
+
+### 4 · THE REAL-LEDGER EXHIBIT
+
+`scripts/wp54a-exhibit.ts` runs the SHIPPED producer and the SHIPPED fold over
+a **copy** of the owner's real ledger, with the agent id, the timeout and the
+failure moment read out of the live `graph.db` at run time and printed beside
+the row they produce. Neither live database is written. Reproduced on the
+merged tree:
+
+    === THE NOW LIST, RANKED ===
+      verdict: 8 things need you, and none of them has changed anything yet
+
+      1. [T2] running under rb.bulk-plugin-update — 0 done and standing, 0 failed   83h
+      2. [T2] A cp.backup step is waiting on your evidence                          67h
+      3. [T2] File manager plugin(s) active: … and nothing is fixing it             66h
+      4. [T2] Known backdoor plugin detected: wp-compat … and nothing is fixing it  66h
+      5. [T2] Low-entropy plugin name(s) … and nothing is fixing it                 66h
+      6. [T2] PHP file(s) in mu-plugins/: index.php … and nothing is fixing it      66h
+      7. [T2] running under rb.incident-containment — 0 done and standing, 0 failed 65h
+      8. [T3] auth-probe could not finish a run                                     97h
+            ask   It timed out after 300s. Retry it, or leave it stopped.
+            rule  Tier 3 · the agent is asking, not the fleet
+            meta  auth-probe
+            class agent.stuck   kind agentFailure   chip Stuck
+
+**Row 8 of 8 while being the OLDEST thing on the fleet by fourteen hours.** The
+template's note says it "sorts below both waiting classes however old it is",
+and the live data is the strongest possible test of that sentence: age order
+puts it FIRST. Tier is the only thing keeping it last.
+
+**AND THE EXHIBIT PHOTOGRAPHS THE ARCHITECT'S FINDING 1 IN THE WILD, which is
+WP-54's and is deliberately NOT fixed here.** Rows 3 to 6 render the rule line
+`Tier 1 · nothing is holding it back but you` while their ranked tier is `[T2]`
+— the card and the ranker disagreeing, exactly as reported, now with a receipt.
+`agentStuckSituation.test.ts` asserts the incident's **2** rather than the 1 its
+card claims, with a comment saying whose finding that is, so this packet stays
+a measurement of that defect rather than a second and quieter fix of it.
+
+### 5 · TESTS, THE BATTERY, AND THE INHERITED RED
+
+**Baseline, taken in the worktree before any edit** (`npm test`, exit 0):
+620 suites / 8,527 passed / **12 skipped** / 8,539 total.
+
+**The base, measured separately in the primary at `20a01d45`** so the inherited
+red is attributed and not absorbed: 1 suite failed / 619 passed / 620 total;
+6 failed / **2 skipped** / 8,531 passed / 8,539 total.
+
+*The skipped columns differ by exactly ten, in the documented direction and for
+the documented cause — `models/` carries only the tracked `bge-small-en-v1.5`
+in a fresh worktree while `all-MiniLM-L6-v2-quantized` exists in the primary
+alone. Stated because a comparison across that boundary that reads only the
+passed column sees a phantom ten either way.*
+
+**The merged tree** (primary, `7a4310c0`, `npm run typecheck` clean):
+**623 suites / 8,573 passed / 2 skipped / 8,581 total, 6 failed.**
+
+    base    620 suites   8,539 total   6 failed   8,531 passed   2 skipped
+    merged  623 suites   8,581 total   6 failed   8,573 passed   2 skipped
+    delta    +3 suites     +42 tests   UNCHANGED    +42 passed   unchanged
+
+`+42 = 16 producer + 17 fold + 8 tap + 1 refusal pin`, and it reconciles
+exactly. **The failing set is byte-identical to the base's** — diffed name by
+name, not eyeballed: six tests in `situationHeadlines.test.ts`, all of them the
+generator's own checks, red because the designer's revised fixture arrived at
+`09c32d99` ahead of the regeneration. **This packet neither caused it nor
+fixed it, and it edited that suite** — so the identity of the failure set is
+the load-bearing receipt, not the count.
+
+**MUTATION BATTERY: 20 of 21 killed.** ABI 141 at both ends (probe CONSTRUCTS
+a Database, per WP-50); tree verified pristine before and after; every run
+`--no-cache`; the pass condition line-anchored on jest's own `Tests:` summary.
+
+*The harness lied first, and its own guard caught it.* The first run reported
+`(no Tests: summary line)` on the UNMUTATED baseline: jest writes that summary
+to stderr, including on success, and the harness captured stdout only. Had the
+guard asserted merely a clean tree rather than a GREEN baseline, it would have
+reported 21 of 21 KILLED and measured nothing whatsoever. Same family as WP-32's
+substring finding — the assertion was satisfiable by the wrong thing.
+
+**The first honest run left six standing. Three were real and are now pinned:**
+
+- **M03 — an `error` run carrying a timeout still wrote no `timeout_ms`, and
+  nothing drove it.** This is not a corner: `AgentRunner` passes `timeoutMs`
+  from its own local on EVERY run, so an errored run reaches the producer with
+  a real number in hand, and `status === 'timeout' &&` is the only thing
+  between that number and a row saying **"It timed out after 300s"** about a
+  run that did not time out. The clause was load-bearing in production and
+  untested. Pinned at the producer and at the tap.
+- **M10 — nothing asserted the empty entity.** The claim was a paragraph. It is
+  a pin now.
+- **M21 — and this one is a vacuous-guard shape worth recording.** The
+  assertion checked that `observed_at` fell inside a window taken around the
+  call. A `Date.now()` at the TAP falls inside that window too, so replacing
+  the run's own moment with the fold's survived. Tightening it to equality
+  **survived a second time**, and the reason was a measurement limit rather
+  than a coverage one: on an idle machine the tap fires within the same
+  MILLISECOND as `finishedAt`, so the two render the same string and no
+  assertion on the value can separate them. The kill required making the gap
+  REAL — a 25ms inbox sink between the run and the tap, which is what a real
+  inbox write is in production. **A pin whose subject differs by less than its
+  measurement resolution is not a pin.**
+
+**Of the other three, none was a survival.** M05 and M11 were HARNESS ERRORS:
+M05 did not compile (inverting `if (!open) return 0` narrows `open` to null and
+the next line stops type-checking; reported as `Tests: 0 total`) and M11
+changed only a comment. Both were repaired and re-run rather than credited —
+a mutation the type-checker rejects measures nothing, and a no-op mutation's
+survival means nothing.
+
+**M09 is EQUIVALENT, and saying so is more honest than inventing a pin for
+it.** Removing `emit`'s inner `catch { return undefined }` lets the throw
+propagate into `recordAgentRunOutcome`'s own outer guard, which returns 0 — the
+observable result is identical on both branches. The inner catch is defence in
+depth. It stays, and it is not claimed as covered.
+
+### 6 · REGISTERED, NOT DONE — five, and two of them go red on somebody else's tree
+
+1. **`UNREACHABLE_CLASSES = ['agent.stuck']` is now FALSE, and it lives behind
+   WP-54's lock.** `src/renderer/components/DockedPanel/openingAsksModel.ts:98`
+   carries a paragraph explaining that the class is absent from the opening-ask
+   set "because it is UNREACHABLE rather than because it was forgotten …
+   nothing constructs `kind: 'agentFailure'`". That sentence was true when
+   written and is not any more. Its TEST still passes — it only asserts the
+   class has no ask — so nothing goes red; the constant simply needs a new
+   reason, or the designer needs to supply an opening ask for a class that now
+   reaches the screen. **Not touched, because `src/renderer/` is WP-54's.**
+2. **When WP-55 regenerates `situationCopy.generated.ts`, `agent.stuck` loses
+   its `chip`.** The designer's revised fixture drops `chip` from every
+   template (their own ratified error, per the owner's finding 3), adds `door:
+   'Open {agentId}'`, and adds `tier`. `agentStuckSituation.test.ts` asserts
+   `chip === 'Stuck'` against the CURRENT generated module. **That assertion
+   going red is the pin working, not breaking** — it is the sentence "the chip
+   was cut" arriving at the one place that renders it. The fix is one line and
+   it belongs with the regeneration.
+3. **The literal `tier: 3` should become `template.tier`** once the generated
+   `SituationTemplate` carries the field — see §2(b).
+4. **The timeout's UNIT is a copy question for the designer.** `300s` follows
+   the fixture's own specimen (`timeout: '90s'`) and `ageLabel`'s existing
+   shape (`82h`), so it is not a scheme invented here — but "It timed out after
+   300s" is the kind of sentence the owner's doctrine finding is about, and
+   "five minutes" may be what a person would say. **Deliberately not decided by
+   a packet.**
+5. **A non-timeout agent failure has no ratified sentence.** The set has ONE
+   agent class and its ask asserts a timeout, so an errored run renders the
+   derived form (`auth-probe: provider refused the request`, no ask, the
+   derived reason as its rule line). That is the honest fallback and it is
+   pinned; whether the designer wants a sibling class for it is theirs.
+
+**Not registered as a follow-up because it is already registered as WP-54's:**
+the incident rows' tier drift, photographed in §4.
+
+**ABI state on leaving: better-sqlite3 is built for SYSTEM NODE (ABI 141),
+because this session ran jest.** `npm run rebuild` is required before loading
+Local again.
