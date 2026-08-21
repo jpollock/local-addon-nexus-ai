@@ -105,10 +105,24 @@ if (before.waiting.length === 0) {
   process.exit(2);
 }
 
-// The subject: the first waiting row, whatever the real record happens to hold.
-// Not chosen for convenience — `waiting[0]` is the consequence order's own top
-// row, which is the one a user would actually be looking at.
-const subject = before.waiting[0]!;
+// THE SUBJECT: the highest-ranked waiting row THAT IS A SESSION.
+//
+// Not `waiting[0]` unconditionally, and the reason is a measurement rather than
+// convenience. After WP-54's tier work the top row on this ledger is an ORPHAN
+// INCIDENT at tier 1, and the incident path is HELD (WP-56a): an orphan incident
+// was never armed under a procedure, so `runCorrelationFor` returns undefined
+// and "recorded on the run" is unsatisfiable for it. Deferring one would exhibit
+// the held path, not the built one. Which row was skipped, and why, is printed.
+const firstSession = before.waiting.find((r) => runCorrelationFor(r.id, { core }) !== undefined);
+if (!firstSession) {
+  console.error('this ledger has no waiting SESSION to defer — only orphan incidents, whose path is held (WP-56a)');
+  process.exit(2);
+}
+if (before.waiting[0] !== firstSession) {
+  console.log(`NOTE: waiting[0] is ${before.waiting[0]!.id} (tier ${before.waiting[0]!.tier}), an orphan `
+    + 'incident with no run — the HELD path (WP-56a). Skipped to the highest-ranked SESSION.');
+}
+const subject = firstSession;
 const sessionId = subject.id;
 const WAKE_HOURS = 48;
 const wakeAt = new Date(NOW.getTime() + WAKE_HOURS * 3_600_000).toISOString();
@@ -144,9 +158,21 @@ show(
 );
 
 // Prove the join the correlation buys, from the record itself.
-const runEvents = core.ledger.query({ correlation, limit: 200 }).map((e: { id: string }) => e.id);
-console.log(`\nJOINABLE BACK TO THE RUN: reading correlation=${correlation} returns ${runEvents.length} events, `
-  + `and the deferral ${runEvents.includes(deferralId) ? 'IS' : 'IS NOT'} among them`);
+//
+// GUARDED, and the guard is a defect this exhibit found in ITSELF on its second
+// run: `query({ correlation: undefined })` does not filter — it returns the
+// whole window — so an unguarded check printed "200 events, and the deferral IS
+// NOT among them" and read as a failed join when it was a query that asked
+// nothing. A measurement that cannot distinguish "no match" from "no filter" is
+// not a measurement.
+if (!correlation) {
+  console.log('\nNO CORRELATION TO JOIN ON — the subject is not a session, so this half of '
+    + 'the exhibit does not apply (the held incident path, WP-56a).');
+} else {
+  const runEvents = core.ledger.query({ correlation, limit: 200 }).map((e: { id: string }) => e.id);
+  console.log(`\nJOINABLE BACK TO THE RUN: reading correlation=${correlation} returns ${runEvents.length} events, `
+    + `and the deferral ${runEvents.includes(deferralId) ? 'IS' : 'IS NOT'} among them`);
+}
 
 const endId = recordDeferralEnded({ situationId: sessionId, taskId: correlation, supersedes: deferralId });
 console.log(`\nrecorded early end ${endId}, superseding ${deferralId}`);
