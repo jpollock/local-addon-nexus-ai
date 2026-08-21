@@ -31,6 +31,17 @@ export class NexusToolProvider implements ToolProvider {
   private _failedCallCount = 0;
 
   /**
+   * WP-57 · every tool this run REACHED, in call order — the run's citable
+   * universe (ADR-24 P1's "trace" half).
+   *
+   * Collected past the gates, beside `reached.tool`, for the reason the
+   * `mutation` event uses the same boundary: a call refused by scope, by the
+   * Tier-3 gate or by the sequence guard OBSERVED NOTHING, and letting a
+   * finding cite it would warrant a claim with a non-event.
+   */
+  private readonly _trace: string[] = [];
+
+  /**
    * WP-57 · this run's ledger frame. Absent on the MCP path and in tests.
    *
    * Structural, not the whole `AgentTaskFrame`: this class needs the id to
@@ -60,6 +71,16 @@ export class NexusToolProvider implements ToolProvider {
   /** Returns how many tool calls failed or were refused. */
   failedCallCount(): number {
     return this._failedCallCount;
+  }
+
+  /**
+   * The tools this run reached, in order. Feed to `supplyFromAgentRun`.
+   *
+   * A copy, not the live array: a caller that mutated it would be editing what
+   * the run is allowed to have cited, after the fact.
+   */
+  toolTrace(): string[] {
+    return [...this._trace];
   }
 
   /**
@@ -218,6 +239,11 @@ export class NexusToolProvider implements ToolProvider {
     // Placed AFTER `reached.tool`, deliberately: a call refused by scope or by
     // the Tier-3 gate changed nothing, and making the run real on the strength
     // of a refusal would be the same dishonesty as logging it as a mutation.
+    // WP-57 · the citable trace. EVERY reached call, not only gated ones: a
+    // read is exactly what warrants a finding ("I saw this in the plugin
+    // list"), so the citation universe is wider than the act record.
+    this._trace.push(name);
+
     if (getToolSafety(name).tier >= 2) {
       try { this.frame?.noteGatedAct(Date.now()); } catch { /* never throw into a tool call */ }
     }

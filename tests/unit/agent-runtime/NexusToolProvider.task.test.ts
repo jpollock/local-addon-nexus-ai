@@ -117,3 +117,38 @@ describe('WP-57 · NexusToolProvider threads the run task', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('WP-57 · the run\'s citable trace', () => {
+  it('records every tool it REACHED, in order, tier regardless', async () => {
+    const calls: unknown[][] = [];
+    const p = new NexusToolProvider(registryStub(calls), {} as never, undefined);
+
+    await p.invoke('wp_plugin_list', {});
+    await p.invoke('wp_plugin_list', {});
+
+    // Reads are citable: "I saw this in the plugin list" is exactly the kind of
+    // warrant a finding needs, so the trace is wider than the act record.
+    expect(p.toolTrace()).toEqual(['wp_plugin_list', 'wp_plugin_list']);
+  });
+
+  it('does NOT record a call refused before it ran', async () => {
+    const calls: unknown[][] = [];
+    const p = new NexusToolProvider(registryStub(calls), {} as never, ['something_else']);
+
+    await expect(p.invoke('wp_plugin_list', {})).rejects.toThrow();
+
+    // A refused call observed nothing. Citing it would warrant a claim with a
+    // non-event — the same boundary the `mutation` event uses.
+    expect(p.toolTrace()).toEqual([]);
+  });
+
+  it('hands back a copy — the universe cannot be edited after the fact', async () => {
+    const calls: unknown[][] = [];
+    const p = new NexusToolProvider(registryStub(calls), {} as never, undefined);
+    await p.invoke('wp_plugin_list', {});
+
+    p.toolTrace().push('wp_user_list');
+
+    expect(p.toolTrace()).toEqual(['wp_plugin_list']);
+  });
+});

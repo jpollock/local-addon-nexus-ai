@@ -28214,3 +28214,84 @@ Three properties fell out of this that the unit tests could only approximate:
 - **Phases 2–6** of the design note. Phase 1 is the spine; the surface,
   authority, assembly, procedure and UX halves remain, and three of them are
   blocked on rulings (§D.5, §D.6, §D.7, R4's sitting).
+
+---
+
+## WP-57 · THE CITATION SUPPLY — the half of phase 2 nothing blocks (2026-08-21)
+
+Phase 2's widening is held behind four rulings
+(`agent-output-disposition-design-note.md` §6). **This is the piece none of
+them gate**, and it is a precondition for all of them: every disposition
+benefits from a finding that can cite what it saw.
+
+**`supplyFromAgentRun(toolCallNames)`** — an agent run's citable universe.
+
+ADR-24 P1 fixes the universe as "the manifest and the trace, and nothing
+else". A chat turn has both. **An agent run today has only the trace** — the
+assembler does not reach the agent path until phase 4 — so its universe is its
+own tool calls. That is the honest universe, not a degraded one: a finding's
+warrant is what the run actually observed, and what it observed is what it
+called.
+
+**ONE derivation, not two (P5).** Addresses are numbered by `numberToolCalls`
+— the same function `citationDelivery` uses for chat — and resolved by
+`resolveCitations`, the same join the judge and the renderer use. This module
+contributes no matching logic of its own. A second numbering here is exactly
+the defect P5 names: the judge and the user looking at two different universes.
+
+**The trace is collected past the gates**, beside `reached.tool`, on the same
+boundary the `mutation` event uses: a call refused by scope, by the Tier-3 gate
+or by the sequence guard **observed nothing**, and letting a finding cite it
+would warrant a claim with a non-event. It records EVERY reached call, not only
+gated ones — a read is precisely what warrants a finding ("I saw this in the
+plugin list"), so the citable universe is deliberately wider than the act
+record.
+
+**Why it matters most here.** The WP-25 smoke caught security-sentinel's
+fabricated remediation checklist — model-authored prose no record supported, on
+the unattended path, where nobody is watching when the claim is made.
+`cited-but-unresolvable` is the loudest state in the contract, and this is the
+surface that most needs it to fire.
+
+### A vacuous pass, caught by asserting the reason
+
+The first draft of `a finding citing a call INDEX the run never reached is
+unresolvable` **passed immediately** — and for the wrong reason. The fixture
+used `[[cite:scan_site_files#2]]` where the convention is
+`[[cite:tool:<name>#<n>]]`, so the marker was MALFORMED and the state was
+`cited-but-unresolvable` because the platform could not read it, not because
+the universe refused it. A state assertion alone cannot tell those apart.
+
+Fixed by asserting the REASON (`not-in-supply`) rather than only the state, and
+recorded in the test itself. **Adds to the vacuous-guard catalogue:** when a
+type has several routes to the same value, assert the route, not just the
+value.
+
+### Battery — M21–M24, all killed
+
+| # | mutation | result |
+|---|---|---|
+| M21 | global call numbering instead of per-tool | killed (3) |
+| M22 | supply what the agent DECLARED, not what it called | killed (3) |
+| M23 | trace records refused calls too (cite a non-event) | killed |
+| M24 | `toolTrace()` returns the live array, editable after the fact | killed |
+
+Packet total: **24 mutations, 24 killed.**
+
+### Suite
+
+```
+635 suites · 8,774 passed · 2 skipped · EXIT=0
+```
++1 suite, +10 tests (7 supply + 3 trace) against the previous 634/8,764.
+
+### NOT done, and deliberately
+
+Nothing yet RESOLVES a finding's citations at fold time — `Finding.citation` is
+designed in the agent-actor note but not populated, because the producer that
+would populate it is the widening this is blocked behind. The supply exists and
+is proven; wiring it to findings is one small step once ruling 1 lands.
+
+And the other half is agent-side: for citations to bite, sentinel's specialists
+must EMIT spans, which is prompt work inside the agent. The platform can verify
+a citation it is given; it cannot invent one.
