@@ -113,6 +113,7 @@ import {
   OUTCOME_RECORDED_TOPIC,
   RATIONALE_RECORDED_TOPIC,
 } from './actionProducer';
+import { AGENT_FAILURE_TOPIC, type AgentFailurePayload } from './agentFailureProducer';
 import { getIntelligenceCore } from './coreRegistry';
 import type { IntelligenceCore } from './bootstrap';
 import { collectIntelligenceHealth, type IntelligenceHealthReport } from './health';
@@ -144,11 +145,36 @@ const MANIFEST_TOPIC = 'task.context.assembled';
 // ---------------------------------------------------------------------------
 
 /**
- * Tiers 1, 2 and 4. **There is deliberately no `3`**: tear 3 ruled tier 3 out of
- * the comparator and into structure, and a tier value nothing can hold is how
- * that ruling is enforced rather than merely documented.
+ * Tiers 1, 2, 3 and 4.
+ *
+ * **WP-54a WIDENED THIS, AND THE WIDENING IS A RULING REQUEST, NOT A TIDY-UP.**
+ * It used to read `1 | 2 | 4` with the note: *"there is deliberately no 3: tear
+ * 3 ruled tier 3 out of the comparator and into structure, and a tier value
+ * nothing can hold is how that ruling is enforced rather than merely
+ * documented."* That note recorded a real ruling — moments-model §4a tear 3,
+ * 2026-08-18, ratified at WP-30's gate: *"Tier 3 is STRUCTURE, not rank: one
+ * RESERVED slot…"*
+ *
+ * TWO RATIFIED FACTS DISAGREE, and this is the family that has produced every
+ * defect this week — one rule, two sources. The ratified `agent.stuck` template
+ * (`from-designer/fixtures/situation-headlines.js`) carries **`Tier 3 · the
+ * agent is asking, not the fleet`** and states its own sort consequence: *"the
+ * one class where the subject is the platform rather than the fleet, which is
+ * why it sorts below both waiting classes however old it is."* That is a RANK
+ * claim, and it is newer than tear 3.
+ *
+ * Ranking it 2 while the card reads Tier 3 would reproduce the architect's
+ * finding 1 in a brand-new class the same week it was raised, so the packet
+ * takes the template's own number and declares the collision rather than
+ * choosing quietly. **What tear 3 rules is not damaged by this:** the reserved
+ * slot is `ReservedRow`, a separate field on the snapshot that
+ * `rankSituations` never sees, so tier 3 as a rank value does not compete with
+ * it for a seat. What is lost is the type-level ENFORCEMENT DEVICE — and a
+ * device is not the ruling.
+ *
+ * Held for the owner. Exactly one ratified class holds a 3 today.
  */
-export type ConsequenceTier = 1 | 2 | 4;
+export type ConsequenceTier = 1 | 2 | 3 | 4;
 
 /** Return's two columns, one verdict (designer §1 objection 1; the split refused). */
 export type TriageColumn = 'waiting' | 'changed';
@@ -364,7 +390,7 @@ export interface SessionRow {
  * is against: "a correct list of parts is not a verdict about the whole."
  */
 export interface SituationPart {
-  kind: 'run' | 'outcome' | 'incident';
+  kind: 'run' | 'outcome' | 'incident' | 'agentFailure';
   /** The ledger event this part is, when it is one. */
   eventId?: string;
   topic?: string;
@@ -378,7 +404,19 @@ export interface SituationPart {
 export interface Situation {
   /** The session id, or the incident event id for a situation of one. */
   id: string;
-  kind: 'session' | 'incident';
+  /**
+   * WP-54a added `agentFailure`, and the addition is the whole packet in one
+   * word: the fold built situations from sessions and orphan incidents and
+   * nothing else, so the ratified `agent.stuck` class had a working selector
+   * arm and no input that could reach it.
+   *
+   * Deliberately NOT folded into `incident`. The designer's own note is that
+   * this is "the one class where the subject is the platform rather than the
+   * fleet", and an agent timeout filed as an incident would reach
+   * `situationOfIncident` and the assembler's episodic summary as though a
+   * site were broken.
+   */
+  kind: 'session' | 'incident' | 'agentFailure';
   column: TriageColumn;
   tier: ConsequenceTier;
   /** WHY this tier, naming the evidence. Derived, never authored. */
@@ -681,6 +719,14 @@ export const MANIFEST_SCAN_LIMIT = 2000;
  * mention.
  */
 const INCIDENT_SCAN_LIMIT = 500;
+
+/**
+ * Agent failures read per fold, newest first — same bound and same direction as
+ * the incidents, for the same two reasons. Generous relative to the traffic:
+ * the topic records one event per agent per open-or-close transition, and the
+ * owner's live ledger holds one such fact in total.
+ */
+const AGENT_FAILURE_SCAN_LIMIT = 500;
 
 const CONCURRENCY_LIMIT_NOTE =
   'the ledger records no chat-session id, so two chats whose runs are BOTH IN FLIGHT at the same ' +
@@ -1046,14 +1092,33 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     if (boundary) boundary.idProvisional = true;
   }
 
+  // --- agent failures, the platform's own situations of one (WP-54a) --------
+  //
+  // Read like the incidents and for the same reasons: newest-first, bounded,
+  // and an unreadable slice costs this class its rows rather than the fold.
+  // These are NOT correlated into sessions — an agent run has no TaskId, which
+  // WP-48a measured and pinned — so every one of them is its own row.
+  let agentFailures: EventEnvelope[] = [];
+  try {
+    agentFailures = ledger.query({
+      topicPrefix: AGENT_FAILURE_TOPIC,
+      limit: AGENT_FAILURE_SCAN_LIMIT,
+      order: 'desc',
+    });
+  } catch {
+    agentFailures = [];
+  }
+
   const situations = [
     ...split.map((row) => situationOfSession(row, attached.get(row.id) ?? [], deps)),
     ...orphans.map((incident) => situationOfIncident(incident, deps)),
+    ...openAgentFailures(agentFailures).map((event) => situationOfAgentFailure(event)),
   ];
 
   const cursor = maxId([
     ...split.map((row) => row.lastEventId),
     ...incidents.map((e) => e.id),
+    ...agentFailures.map((e) => e.id),
     ...manifests.map((e) => e.id),
   ]);
 
@@ -1762,8 +1827,34 @@ export function selectSituationTemplate(
 export function contradictedByTheRecord(
   template: SituationTemplate | null,
   gate: PendingGate | null,
+  bag: SlotBag = {},
 ): boolean {
-  return template?.id === 'run.waiting.nothing-written' && gate !== null;
+  if (template?.id === 'run.waiting.nothing-written') return gate !== null;
+  // WP-54a · THE SECOND ARM, and it is the first one that fires in production.
+  //
+  // `agent.stuck`'s ask STATES a timeout — "It timed out after {timeout}." —
+  // and the class's guard is only `row.kind === "agentFailure"`, which every
+  // agent failure satisfies including the ones that did not time out at all.
+  // Two ways the sentence goes wrong, and the second is worse than the first:
+  //
+  //   - the run ended in `error`, so nothing timed out. A FALSEHOOD.
+  //   - the run DID time out but no duration is on record, so the sentence
+  //     renders "It timed out after ." — a hole in a ratified sentence, which
+  //     is the substitution defect the copy generator exists to prevent.
+  //
+  // `selectSituationTemplate`'s own fillability check cannot catch either: it
+  // guards the HEADLINE, and this class's headline (`{agentId} could not finish
+  // a run`) is true and fillable in both cases. So the refusal lives here, in
+  // the function whose whole job is "the class's own sentence is false about
+  // this row", and the row falls to the derived sentence with
+  // `headlineTemplate: null` so the fallback is visible rather than mistaken
+  // for ratified copy.
+  //
+  // NOTE THE DIRECTION OF THE WP-50 RULE. That ruling forbids WITHHOLDING a
+  // true sentence on a fact it never states; this withholds a sentence that
+  // STATES the missing fact. The two are the same rule read from its two ends.
+  if (template?.id === 'agent.stuck') return bag.timeout === undefined;
+  return false;
 }
 
 /** Everything a row renders, composed once. */
@@ -1892,6 +1983,147 @@ function composeIncidentCopy(
     rule: template.rule,
     headlineTemplate: template.id,
   };
+}
+
+/**
+ * WP-54a · An agent failure's verdict.
+ *
+ * The bag carries exactly two slots, both read from the payload the producer
+ * wrote and neither recomputed: `{agentId}` (the headline and the meta line)
+ * and `{timeout}` (the ask). `{timeout}` is ABSENT when the record has no
+ * duration, and an absent one refuses the class rather than shortening its
+ * sentence — see `contradictedByTheRecord`'s second arm.
+ */
+function composeAgentFailureCopy(
+  payload: AgentFailurePayload,
+  derived: string,
+  /** WP-52 · the derived reason, for a row the ratified set does not cover. */
+  tierReason: string,
+): SituationCopy {
+  const bag: SlotBag = {
+    agentId: payload.agent_id,
+    timeout: timeoutLabel(payload.timeout_ms),
+  };
+
+  const selected = selectSituationTemplate(
+    // A failure that is on the list is by construction one nothing has closed,
+    // and it was never armed under a procedure: no gate, no targets, nothing
+    // written. Every field but `kind` is the record's own answer rather than a
+    // default standing in for one.
+    { kind: 'agentFailure', done: 0, failed: 0, total: null, gate: null, runId: null },
+    bag,
+  );
+  const template = contradictedByTheRecord(selected, null, bag) ? null : selected;
+
+  if (!template) return derivedCopy(derived, payload.agent_id, '', tierReason);
+  return {
+    headline: fillSituationSentence(template.headline, bag),
+    ask: fillSituationSentence(template.ask, bag),
+    chip: template.chip,
+    state: template.state,
+    meta: fillSituationSentence(template.meta, bag),
+    rule: template.rule,
+    headlineTemplate: template.id,
+  };
+}
+
+/**
+ * The recorded timeout, in the unit the designer's own specimen uses.
+ *
+ * `situation-headlines.js`'s slot table writes `timeout: '90s'`, and
+ * `ageLabel` a few lines above renders `82h` — a bare number with a unit
+ * suffix is this file's existing shape and the fixture's, so seconds is not a
+ * choice made here. The live value is 300000ms, which renders `300s`; whether
+ * the designer wants a minutes form above some threshold is a copy question
+ * raised at the gate, not one answered by inventing a second scheme.
+ *
+ * `undefined` in, `undefined` out — the absence is carried, never rounded into
+ * a zero.
+ */
+function timeoutLabel(ms: number | undefined): string | undefined {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return undefined;
+  return `${Math.round(ms / 1000)}s`;
+}
+
+/**
+ * WP-54a · An open agent failure is a situation of one — the class the fold
+ * could not emit.
+ *
+ * TIER 3, from the template's own rule line rather than from a second
+ * judgement beside it: "the agent is asking, not the fleet … which is why it
+ * sorts below both waiting classes however old it is." The live row is 82 hours
+ * old and belongs last; a ranker that reached its own conclusion here would be
+ * the architect's finding 1 in a new class.
+ */
+function situationOfAgentFailure(event: EventEnvelope): Situation {
+  const payload = (event.payload ?? {}) as AgentFailurePayload;
+  const agentId = payload.agent_id;
+  const status = payload.status === 'timeout' ? 'timeout' : 'error';
+
+  // The derived sentence for a row the ratified class refuses: the record's own
+  // words, and no ratified copy retyped. The runner's message when it recorded
+  // one, the status when it did not — never a verb this file invented.
+  const derived = payload.message
+    ? `${agentId}: ${payload.message}`
+    : `${agentId}: a run ended in ${status}`;
+
+  const tierReason = `the run ended in ${status} and the agent has not succeeded since`;
+  const copy = composeAgentFailureCopy(payload, derived, tierReason);
+
+  return {
+    id: event.id,
+    kind: 'agentFailure',
+    // It needs you: the ask is "Retry it, or leave it stopped", which is a
+    // decision only the user makes. A resolved failure never reaches here —
+    // the fold filters it out rather than moving it to `changed`, because
+    // "an agent ran fine today" is not a change to the fleet.
+    column: 'waiting',
+    tier: 3,
+    tierReason,
+    // NO PLACES. An agent run that timed out did not fail at a site, and
+    // `derivePlaces([])` reports a set of zero with an empty summary — the
+    // honest rendering of an empty place set is no place clause at all.
+    places: derivePlaces([]),
+    since: event.observed_at,
+    lastEventId: event.id,
+    parts: [
+      {
+        kind: 'agentFailure',
+        eventId: event.id,
+        topic: event.topic,
+        observedAt: event.observed_at,
+        summary: derived,
+      },
+    ],
+    ...copy,
+    // Never armed under a procedure, so there is no target set at all — null,
+    // not zero. `capability` is absent for the same reason it is absent on an
+    // orphan incident: `''` would read as one the row could not name.
+    written: { done: 0, failed: 0, total: null },
+  };
+}
+
+/**
+ * The agent failures that are still open, newest state per agent.
+ *
+ * The producer's resolution model is the incident producer's: a closing event
+ * SUPERSEDES the one it closes rather than mutating it, so the newest event for
+ * an agent IS that agent's current state. Read newest-first, first hit per
+ * agent wins, and a hit that says `resolved` takes the agent off the list.
+ */
+function openAgentFailures(events: readonly EventEnvelope[]): EventEnvelope[] {
+  const seen = new Set<string>();
+  const open: EventEnvelope[] = [];
+  for (const event of events) {
+    const payload = (event.payload ?? {}) as AgentFailurePayload;
+    const agentId = payload.agent_id;
+    if (typeof agentId !== 'string' || !agentId) continue;
+    if (seen.has(agentId)) continue;
+    seen.add(agentId);
+    if (payload.resolved === true) continue;
+    open.push(event);
+  }
+  return open;
 }
 
 /**

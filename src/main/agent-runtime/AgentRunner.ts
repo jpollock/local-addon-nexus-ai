@@ -257,6 +257,35 @@ export class AgentRunner {
       logger.error(`incident record failed for ${agent.name}:`, incidentErr?.message);
     }
 
+    // WP-54a · the agent-failure producer's tap, at the same chokepoint and in
+    // its OWN try block for the same reason: a fault in one record must not
+    // cost another, and neither may cost the run.
+    //
+    // `timeoutMs` IS PASSED FROM THIS FUNCTION'S OWN LOCAL, deliberately. It is
+    // already interpolated into `error` above, and the inbox stores it there as
+    // prose — `detail: 'Agent "auth-probe" timed out after 300000ms'`. Parsing
+    // a number back out of a sentence the same function composed would make the
+    // record a derivation of its own output; the field is the measurement and
+    // this is the one place that holds it.
+    //
+    // The success path is not a no-op: it is what CLOSES an open failure, so
+    // a stuck agent that starts working again stops asking.
+    try {
+      const { recordAgentRunOutcome } = await import('../intelligence-host/agentFailureProducer');
+      recordAgentRunOutcome({
+        agentId: agent.name,
+        status: result.status,
+        // Only meaningful on a timeout, and the producer writes it only there.
+        timeoutMs,
+        error: result.error,
+        runId: result.runId,
+        // The run's own moment. The producer must never stamp "now".
+        finishedAt: result.finishedAt,
+      });
+    } catch (failureErr: any) {
+      logger.error(`agent failure record failed for ${agent.name}:`, failureErr?.message);
+    }
+
     return result;
   }
 }
