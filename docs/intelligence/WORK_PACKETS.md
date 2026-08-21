@@ -28437,3 +28437,91 @@ what already exists, and the sole creator is a local disk walk. **The
 routes are conditioned on the thing only local sites can produce**, which
 is a construction proof rather than the report's honest "I found no
 route."
+
+---
+
+## WP-58 · LOCK ANNOUNCE (2026-08-21) — the collision decline
+
+**Priority: first of the three registered from the fleet-tool report. A tool
+that answers about the wrong site poisons everything downstream of it.**
+
+### THE QUANTITY THIS PACKET CHANGES — announced before the paths
+
+Per the WP-56 rule (*locks partition files; they do not partition
+arithmetic*), the announce names the quantity and its expression on both
+sides. **The quantity is WHAT A BARE IDENTIFIER RESOLVES TO.** It is not a
+count or a sort key, but it is the same class of thing: a shared meaning two
+packets can compute differently and a merge cannot see.
+
+| resolver | before | after |
+|---|---|---|
+| `resolveSite` (`mcp/site-resolver.ts:12`, 115 invocations / 49 files) | `local(n)` — Local store only, no source constraint, no decline | renamed `resolveLocalSite`; `local(n)` **unless** the match was by NAME and `graph(n)` is non-empty, in which case null + a stated reason |
+| `resolveAnySite` (`:196`) | `local(n) ?? graph(n)` — local-first short-circuit; the graph, and its collision-decline logic, reached only on a MISS | `local(n) ⊕ graph(n)` — BOTH consulted; both present ⇒ `ambiguous` carrying the disambiguated forms |
+| `resolveSite` (`graphql/resolver-utils.ts:46`) | a SECOND function of the same name, matching case-**sensitively** | reconciled — one function, one case policy |
+| `resolveRemoteGraphSite` (`:57`) | graph-scoped, declines on collision — already correct | unchanged in behaviour; its `ok` variant gains `matches` so a cross-source decline can name the remote form |
+
+An identifier that resolves today will resolve tomorrow **except** where it
+names two different sites, which is the case this packet exists to refuse.
+
+### The collision set, measured on the owner's fleet before any code was written
+
+45 Local sites; 372 active `wpe`/`external` rows. **Six names in both:**
+`goldenecomm`, `jpp0413p`, `myloop`, `psbtest2`, `testjppstg`, `thelocalshed`.
+`CLAUDE.md:471` names the first five; `thelocalshed` is new since that line was
+written, which is the argument for a mechanism rather than a list.
+
+### Paths locked
+
+| Path | Claim |
+|---|---|
+| `src/main/mcp/site-resolver.ts` | **exclusive** — the packet's subject |
+| `src/main/graphql/resolver-utils.ts` | exclusive, one function (`resolveSite`) plus its docblock |
+| `src/main/graphql/resolvers/sites.ts` | its only importer; import line only |
+| the 49 files importing `resolveSite` from `mcp/site-resolver` | **a rename sweep, mechanical** — identifier and one added argument, no logic. Named in full rather than summarised because ANY sibling editing a `resolveSite(` call line conflicts with this |
+| `src/main/mcp/modules/site-context/get-index-status.ts`, `content/search-content.ts`, `content/describe-site-fields.ts`, `transport/resolveTargetArgs.ts` | **more than a rename** — these four run local-then-graph, so a Local decline must not fall through and silently answer with the remote row |
+| new: the collision-decline test | tests only |
+
+**NOT locked:** `src/main/index.ts`, `ipc-handlers.ts`, `src/intelligence/`,
+`src/renderer/`. This packet needs none of them.
+
+### SHAPES changed (WP-54's rule — locks partition files, not types)
+
+- `resolveSite` → **`resolveLocalSite`**, and it takes a **third required
+  parameter** (the graph handle). Required is the mechanism: a new call site
+  cannot narrow its scope by forgetting, because it will not compile.
+- **new** `resolveLocalSiteResult` returning a discriminated
+  `LocalSiteResult` (`ok` | `none` | `collision`), so the refusal carries its
+  reason. `resolveLocalSite` stays `LocalSiteInfo | null` for the 115
+  call sites that only need the site.
+- `RemoteGraphSiteResult`'s `ok` variant **gains `matches: string[]`** —
+  additive, no existing consumer breaks.
+- `AnySiteResult` unchanged; its `ambiguous` arm becomes reachable for the
+  cross-source case for the first time.
+
+A sibling holding any function that returns or consumes one of these should
+say so now.
+
+### The mechanism, stated as the deliverable
+
+The rule has been prose in `CLAUDE.md` since before the defect was written,
+and **nothing would ever have failed if a new call site forgot** — which is
+how the resolver built to be the correct path forgot in its first ten lines
+while its own docblock credited it with the logic. So the packet ships two
+mechanisms, not one fix:
+
+1. **The required third parameter** — forgetting is a compile error.
+2. **A test that enumerates the collision set from the live sources** and
+   drives every resolver over every name in it. Shape #15 is the live risk
+   here and it is named up front: the set is data-dependent and EMPTY on a
+   clean machine, so a fixture with no colliding names would pass perfectly
+   and prove nothing. The five `CLAUDE.md` names are pinned as a FLOOR, the
+   floor is anchored to `CLAUDE.md` itself (an agreement pin needs an anchor
+   outside both derivations — WP-54), and the fixture is asserted to hold
+   each name in BOTH sources before anything is asserted about declining.
+
+### Carried, and it gets worse before it gets better
+
+ADR-21's lifecycle model has a working copy and a remote environment
+**sharing a name by design** — that is what "pull it down and work on it"
+means. Six collisions today is the rare case. The IA now being drawn makes
+it the normal one.
