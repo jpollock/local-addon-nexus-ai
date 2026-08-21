@@ -23369,3 +23369,43 @@ group A waits on anyone. Group B's blocker is resolved (Q3 measured);
 its order stands — dedup, then WP-51's three producer items, then the
 coalesced drawing and build. Group C is ready and independent. Group
 D's design can start on Q5's ruled intersection.
+
+---
+
+## WP-54 · LOCK ANNOUNCE (2026-08-21) — group A, the fourteen
+
+**Branch `wp-54`, worktree `.worktrees/wp-54`, cut from
+`poc/nexintelligence-ux` at `10ad1af7`** (which is `1f029ad8` plus the
+architect's own uncommitted record, committed verbatim under the WP-02
+precedent immediately before this announce).
+
+**LOCKED, and the announce is deliberately wider than "the composer" because
+the packet's fourteen items reach every one of these:**
+
+| surface | why this packet holds it |
+|---|---|
+| `src/renderer/` | items 1, 3, 5, 6, 8, 9, 11, 13 all render here — `Arrival.tsx`, `arrivalModel.ts`, and the generated copy modules the two read |
+| `src/main/intelligence-host/sessionRegistry.ts` — the composer (`composeSessionCopy`, `composeIncidentCopy`, `derivedCopy`) and the situation derivation (`situationOfSession`, `situationOfIncident`, `rankSession`, `rankSituations`, `deriveReserved`) | items 2, 4, 10, 11, 14 |
+| `docs/intelligence/from-designer/fixtures/situation-headlines.js` — **the ratified fixture** | items 3, 7, 12, and every string this packet changes, per the launch instruction's "through the generator, never hand-typed" |
+| `scripts/generate-situation-copy.ts` and `scripts/generate-return-copy.ts` | item 7 is a fix to the APPENDER, which lives in the extraction, not in the string |
+| `src/main/intelligence-host/situationCopy.generated.ts`, `src/renderer/components/return/returnCopy.generated.ts`, `src/renderer/components/DockedPanel/openingCopy.generated.ts` | generated artifacts of the two scripts above; only ever written by their generators |
+
+**NOT locked, and named so a sibling can take them:** `src/intelligence/`
+(the core — untouched by this packet), the incident and agent producers
+(`incidentProducer.ts`, and whatever WP-54a grows), `src/main/index.ts` and
+`src/main/ipc-handlers.ts` (no wiring change is expected; if one turns out to
+be needed the announce is AMENDED on the base at that moment, per WP-52's
+rule, not claimed at merge time).
+
+**MEASURED AT ANNOUNCE, and it is a dependency the packet must report on:
+WP-54a HAS NOT LANDED.** `git branch -a | grep wp-5` shows `wp-50` and
+`wp-52` and no `wp-54a`; there is no worktree for it. The architect's fifth
+finding is explicit that the `agent.stuck` producer must land BEFORE or WITH
+the dedup or auth-probe disappears from Now entirely. This packet therefore
+carries the disappearance as a STATED CONSEQUENCE at its gate rather than
+shipping it silently — see the gate report.
+
+Standard discipline, plus the three the launch instruction adds: every string
+this packet changes comes from the ratified fixture through a generator;
+receipts are measured in the unit they name; the mutation battery pins its ABI
+at both ends.
