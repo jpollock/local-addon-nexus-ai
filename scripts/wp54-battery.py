@@ -38,7 +38,7 @@ import subprocess
 import sys
 import re
 
-FLOOR = 190
+FLOOR = 200
 
 SUITES = [
     "src/main/intelligence-host/__tests__/sessionRegistry.test.ts",
@@ -100,10 +100,20 @@ MUTATIONS = [
      "the meta line contradicts the headline above it again — the platform claiming it cannot name what it just named"),
 
     # --- item 1 · the identity, and the dedup ------------------------------
-    ("M09", SEAM,
-     "    producer && fact && target\n      ? { producer: normalizeProducerId(producer), fact, target }\n      : null;",
-     "    producer && fact\n      ? { producer: normalizeProducerId(producer), fact, target: target ?? '' }\n      : null;",
-     "a partial signature: two findings with the same code on DIFFERENT sites fold into one row"),
+    # RE-AIMED AFTER THE FIRST RUN. The first form of M09 loosened the signature
+    # guard to `producer && fact` with `target: target ?? ''` — and SURVIVED,
+    # correctly: with a real anchor the two forms are identical, so the mutation
+    # only moved behaviour in a corner no fixture reaches. A mutation that cannot
+    # change an observable answer is not evidence about the pins; it is evidence
+    # about the mutation (WP-24's rule, in its "syntactic shadow" form).
+    #
+    # The rule actually worth defending is the one the `||` hides: the target is
+    # matched on the Inbox's SCOPE or on its LABEL, and both branches are live.
+    ("M09", MODEL,
+     "  const scoped = item.scope.includes(':') ? item.scope.slice(item.scope.indexOf(':') + 1) : item.scope;\n"
+     "  return signature.target === scoped || signature.target === item.scopeLabel;",
+     "  return signature.target === item.scopeLabel;",
+     "the match rests on a DISPLAY field alone — 'This agent' and '12 sites' are real values of it"),
     ("M10", SEAM,
      "  return value.replace(/^act_/, '').replace(/_/g, '-').toLowerCase();",
      "  return value.replace(/^act_/, '').toLowerCase();",

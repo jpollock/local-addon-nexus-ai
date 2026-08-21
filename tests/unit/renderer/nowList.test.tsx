@@ -231,6 +231,30 @@ describe('item 1 · the list renders each thing once', () => {
     expect(sameThing({ ...situation, signature: null }, inboxItem())).toBe(false);
   });
 
+  /**
+   * BATTERY SURVIVOR M09 — the two spellings of the target, each pinned alone.
+   *
+   * The Inbox keys on a NAMESPACED scope (`name:theawfulpm-test`) and displays a
+   * LABEL, and the match accepts either. Both branches were live and neither was
+   * pinned on its own, so a mutation removing one survived behind the other —
+   * the vacuous-guard shape where an `||` hides a dead half.
+   *
+   * They are not redundant. `scopeLabel` is a DISPLAY field: "12 sites" and
+   * "This agent" are both real values of it, so a match resting on it alone
+   * would be resting on prose. `scope` is what the store keys on and is the
+   * fact; the label is the courtesy.
+   */
+  test('the target matches on the SCOPE alone, and on the LABEL alone', () => {
+    const situation = incident(FINDINGS[0]);
+
+    // Label says something else entirely — the scope still carries the fact.
+    expect(sameThing(situation, inboxItem({ scopeLabel: 'This site' }))).toBe(true);
+    // Scope is unnamespaced — the label still carries it.
+    expect(sameThing(situation, inboxItem({ scope: 'somethingelse' }))).toBe(true);
+    // Neither: no match, and no falling back to producer-and-fact.
+    expect(sameThing(situation, inboxItem({ scope: 'name:other', scopeLabel: 'other' }))).toBe(false);
+  });
+
   test('a FAILED inbox read contributes no rows — and is not read as an empty inbox', () => {
     const triage = triageOf(FINDINGS.map(incident));
     const failed = { loaded: false, failed: true, items: [AUTH_PROBE], total: 1, pausedSources: [], recentlyDecided: [] };

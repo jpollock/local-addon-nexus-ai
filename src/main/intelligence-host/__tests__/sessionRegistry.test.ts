@@ -1718,6 +1718,21 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     expect(situation.ask).toContain('Nothing has been written yet, so stopping here costs nothing.');
     // …and it is NOT the class that would have told her it cannot start.
     expect(situation.ask).not.toContain('never received a target list');
+
+    // WP-54 · ITEM 6 — THE DOOR NAMES WHERE IT GOES, by the row's own gate.
+    //
+    // BATTERY SURVIVOR M20, and the pin that was missing: the render tests
+    // compare the door's rendered text to the row's OWN `door.label`, which is
+    // true of any label the fold composes — including one that names nothing. A
+    // door that says where it goes has to be checked against WHERE, and the only
+    // place that fact exists independently is the gate itself.
+    expect(situation.door).toEqual({
+      label: `Open the run at ${situation.gate!.checkpointId}`,
+      kind: 'session',
+      target: situation.sessionId,
+    });
+    // A control takes no terminal full stop (item 7).
+    expect(situation.door!.label).not.toMatch(/\.$/);
   });
 
   test('a gated run whose selection was EMPTY is STILL the mid-procedure class — WP-50\'s amendment', () => {
