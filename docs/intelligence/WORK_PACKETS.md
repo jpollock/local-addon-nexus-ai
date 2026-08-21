@@ -28135,3 +28135,127 @@ FINAL (with the instrument)  633 suites   8,771 tests   8,759 passed   12 skippe
 
 **+4 suites, +49 tests against the base, all passing.** Skipped unchanged
 at 12. ABI 141 — `npm run rebuild` before loading Local.
+
+---
+
+## WP-55 · MERGED, AND THE NEXT BASE PUBLISHED (2026-08-21)
+
+Merged at `3f2ae945` into `poc/nexintelligence-ux`. Nothing pushed, no
+tag, no version bump.
+
+### The merge found two things before it found a conflict
+
+**1 · THE BASE HAD MOVED, and the branch point was stale.**
+`poc/nexintelligence-ux` was at `182fe2fa`, two commits ahead of the
+`655f6058` this packet branched from — both benchmark docs, landed by
+another hand while WP-55 was in flight. Neither touches code, so the
+merge was clean on `src/`, `tests/` and `scripts/`; had they not been,
+the packet would have measured a base that no longer existed. **Check the
+branch point at merge time, not only at cut time.**
+
+**2 · THE ARCHITECT'S OWN GATE RULING WAS SITTING UNCOMMITTED** in the
+primary's working tree — 175 lines across the same two files this packet
+appends to. Committed VERBATIM at `bd0230c4`, separately, by the
+precedent at `09c32d99`, so the adjudication carries its own hash instead
+of being folded into a merge.
+
+It is the ruling's own first item arriving as its own evidence: *"a gate
+hold is a merge hold, not a commit hold; uncommitted work is not held, it
+is merely still there."* That was true of the adjudication as well as of
+the packet it adjudicated, and neither party noticed from inside.
+
+### The conflict, and the check that is not a false alarm
+
+Both sides appended to the end of `PARALLEL_PROTOCOL.md` and
+`WORK_PACKETS.md`. Neither deletes anything the other wrote, so the
+resolution is BOTH, in the order they were written — the ruling first,
+this packet's answer to it second (`27663` then `28039`).
+
+**Verified by naming eleven distinctive headings from BOTH sides and
+counting them in the resolved files**, because *an append written into a
+conflicted file is on neither side* and a resolution that silently drops
+one half looks exactly like a resolution that worked.
+
+**AND THE MARKER SWEEP MUST BE LINE-ANCHORED.** The first attempt used
+`'<<<<<<<' not in out` and failed on a file that had resolved perfectly:
+this record contains PROSE about conflict markers in six places. The
+record has caught that same false alarm four separate times and written
+it down each time — this is the fifth, and it was met by reading them.
+`^<<<<<<<`, `^=======$`, `^>>>>>>>` is the honest form.
+
+### THE NEXT BASE
+
+`docs/intelligence/base-measure.json`, hash piped and never typed:
+
+```
+{ "commit": "3f2ae945…", "suites": 633, "tests": 8771,
+  "passed": 8769, "skipped": 2, "tree": "primary" }
+```
+
+```
+PREVIOUS BASE (worktree, 239e4e32)   629 suites   8,722 tests   8,710 passed   12 skipped
+WP-55 BRANCH  (worktree, 2adb6c32)   633 suites   8,771 tests   8,759 passed   12 skipped
+THIS BASE     (primary,  3f2ae945)   633 suites   8,771 tests   8,769 passed    2 skipped
+```
+
+**+4 suites and +49 tests against the previous base; zero failures, exit
+0.**
+
+**THE SKIPPED COLUMN MOVED 12 → 2 AND NOTHING REGRESSED.** Suites and
+total tests are identical between the branch run and the merged run; ten
+tests moved from SKIPPED to PASSED across the worktree/primary boundary,
+which is the protocol's own documented effect — the primary holds both
+embedding model files where a worktree holds one. **This is exactly why
+the measure records its tree kind**, and why the next packet must compare
+against a `primary` number with a `primary` run, or read the delta as a
+gain it did not make.
+
+The fail-closed guard is armed and empty at this commit.
+
+### LOCKS RELEASED, WITH THE SHAPES DECLARED
+
+- `src/main/intelligence-host/sessionRegistry.ts` — RELEASED.
+  **`Situation.signature` → `signatures` (a SET)**, `Situation.id` on
+  incident rows is now the SUBJECT, `ReservedRow.checkCount` added,
+  `UnheldRow.deferred` REQUIRED, `SituationClassInput.linkKind` added,
+  `SituationCopy.signatures`; new: `IncidentSubject`,
+  `incidentSubjectKey`, `incidentSubjects`, `headlineArmOf`,
+  `leadFindingOf`, `linkLabelFor`, `memberSignature`.
+- `src/main/intelligence-host/incidentProducer.ts` — RELEASED.
+  `incidentKey` and `SITE_LEVEL` are exported.
+- `src/renderer/components/return/` — RELEASED. `ArrivalState.openParts`,
+  `ArrivalProps.onEndDeferral`, `NowGroup`, `nowGroups`, `wakeLabel`.
+- `scripts/generate-situation-copy.ts` + the generated module — RELEASED.
+  SHAPE_VERSION 3 → 4; `SituationTemplate` gains `headlineFallback`,
+  `disclosure`, `disclosureOpen`; `GROUP`, `DEFERRED`, `HEADER`, `HEALTH`
+  emitted; `assertDeferralsStillHold` and `KNOWN_SLOTS` exported.
+- `.githooks/` — RELEASED. `commit-msg` is new and runs in every clone.
+- `tests/intelligence-evals/checks.ts` — RELEASED. `nowGroups` is the
+  NINTH accounted generator.
+
+### THE EXPRESSIONS, AFTER
+
+`arrivalCounts().needsYou`, `.deferred`, `.changed`, `.dark` and
+`listVerdict`'s two terms are ARITHMETICALLY UNCHANGED. The pinned
+identity still holds and is asserted in the exhibit:
+`arrivalCounts().needsYou === triage.counts.needsYou + <escalating
+unheld>`. What moved is the row COUNT — `memberCount` collapses rows, and
+it moves both sides of the identity together. Grouping adds no row;
+deferral leaves the badge and keeps the row.
+
+### CARRIED FORWARD
+
+1. **`{linkKind}`'s label** — a reading is offered and the problem inside
+   it is named: the legible word depends on the ORIGIN, not the link
+   kind, so the obvious `SituationLink`-keyed column would be keyed on
+   the wrong fact. For the designer.
+2. **`{oldestAge}`** — refused with its measurement, registered, and the
+   generator fails if it ever becomes fillable while withheld.
+3. **A coalesced row surfaces ONE member's Inbox evidence.**
+   `SituationPart` carries no fact code to join the others on.
+4. **ABI 141.** `npm run rebuild` before loading Local — which is also
+   the fix for the core that has failed to start for days, and why the
+   ledger still holds zero `agent%` events.
+
+**WP-55 IS CLOSED.** The screen the sheet drew is the screen the product
+renders.
