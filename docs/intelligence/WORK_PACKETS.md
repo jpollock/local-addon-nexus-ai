@@ -24774,3 +24774,87 @@ report (the new topic; and the `episodic.*` line in `architecture.md` §4.2,
 which needs the owner's pen and not a packet's), and the five registered
 follow-ups in §6 — two of which are one-line changes that ride with WP-55's
 regeneration and are expected to go RED there rather than be forgotten.
+
+---
+
+## WP-54 · GATE REPORT AMENDED (2026-08-21) — WP-54a LANDED WHILE THIS PACKET WAS BUILDING, and the seam between them is measured
+
+**§2 of the report above is STALE and this corrects it at the moment the need
+was measured, rather than quietly in a merge report** (the amendment rule,
+WP-52). At announce and again when §2 was written, `git branch -a | grep wp-5`
+showed `wp-50` and `wp-52` and no `wp-54a`. It is now merged at `be858e5f`,
+with its locks released at `2ca087f9`, along with WP-51's and WP-56's
+announces and a four-way crossed claim on `sessionRegistry.ts`.
+
+**What §2 got right and keeps:** the dedup does not ship the disappearance —
+an inbox item matching no situation is its own row, so `auth-probe` reaches the
+person either way. **What §2 no longer describes:** once these two packets are
+merged, `auth-probe` is a SITUATION, ranked at the tier its ratified class
+declares, and the unranked-orphan residue disappears with it. That is the
+better outcome and it is the one the fold was shaped for.
+
+### THE TWO PACKETS AGREED, INDEPENDENTLY, ON THE RULING THIS REPORT HELD
+
+WP-54a's release note: *"`ConsequenceTier` widened to `1 | 2 | 3 | 4`."* This
+packet made the same widening, from the same evidence, in a different file
+region and without either packet seeing the other. **Ruling request 1 in §3 is
+therefore already settled on the base**; what remains for the architect is the
+comment, not the type — two independent derivations of one change, which is
+convergence rather than conflict.
+
+### THE MERGE IS NOT MECHANICAL, AND THE TYPE SYSTEM WILL SAY SO FIRST
+
+`WP-54a` states that *"none of WP-54's eight named functions was edited"*, and
+that is accurate. The collision is not in those functions; it is in the
+**shape they share**. This packet widened `SituationCopy` with three required
+fields — `tier`, `door` and `signature` — and WP-54a added
+`composeAgentFailureCopy`, which returns that interface and predates them.
+
+**So the merged tree will not compile until the new copy function fills them,
+and that is a property to be grateful for**: the alternative was a silent
+merge shipping an agent-failure row with no door, no signature, and a tier
+assigned in a second place.
+
+**The three values, MEASURED rather than proposed:**
+
+| field | value | measured from |
+|---|---|---|
+| `tier` | the `agent.stuck` template's own declared tier, **3** | the ratified fixture; both packets already rank it 3, so this replaces `tier: 3` at the call site with the one declaration |
+| `door` | `DOORS.agent` filled with `agent_id` → `Open auth-probe`, `kind: 'agent'` | the door block added to the ratified fixture by this packet |
+| `signature` | `{ producer: normalizeProducerId(agent_id), fact: failureCode(message), target: '*' }` | see below |
+
+**THE SIGNATURE JOIN IS EXACT, and it needs no change to `sameThing`.**
+`recordRunToInbox` (`src/main/inbox/recordRun.ts:82-93`) writes an agent
+failure as `source: run.agentId`, `code: failureCode(message)`, `scope: '*'`,
+`scopeLabel: 'This agent'` — with `message = run.error || 'The run ended with
+status "<status>"'`. `AgentFailurePayload` carries `agent_id` and `message`
+verbatim, so `failureCode(payload.message)` reproduces the Inbox's own code
+byte for byte, and `'*'` is the Inbox's existing fleet-level scope convention.
+`sameThing` extracts the scope's tail only when it carries a `:`, so `'*'`
+compares as `'*'` and matches. Measured on the owner's live inbox: item #1,
+`auth-probe`, `fail:9da26a69397e`, scope `*`.
+
+**WITHOUT THAT SIGNATURE THE MERGE REINTRODUCES THE DEFECT THIS PACKET
+REMOVES** — `auth-probe could not finish a run` would render twice, once as
+the new situation and once as the inbox card that matches nothing, and the
+badge/row equality pin would go red. It going red is correct: that pin is the
+instrument, and this is exactly the case it was built to catch.
+
+**Whoever merges owns this.** It is one function in WP-54a's file region and
+three values this packet already generates; it is named here so it is not
+discovered as a type error with no explanation attached.
+
+### THE OTHER TWO CLAIMANTS, so the queue can plan
+
+- **WP-56** is HELD until WP-54 releases the renderer (`4a8a7f44`). This
+  packet rewrote `Arrival.renderSituation` into `renderRow` and removed
+  `renderInboxRow` entirely, so a deferral affordance drawn against the old
+  two-function shape will need re-siting rather than re-merging. The row
+  contract it wants is on `NowRow`.
+- **WP-51** claims `foldSessionRegistry`'s incident-attachment pass. This
+  packet added ONE line to that function (`const named = …`, the name-resolver
+  default) and changed the two `.map` calls in the `situations` array literal
+  to pass it. WP-54a added two spreads to the same literal. **Expect a
+  three-way context conflict in that one array and nothing semantic** — every
+  side is adding a distinct element to the same list.
+
