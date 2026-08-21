@@ -28259,3 +28259,181 @@ deferral leaves the badge and keeps the row.
 
 **WP-55 IS CLOSED.** The screen the sheet drew is the screen the product
 renders.
+
+---
+
+## WP-55 · MERGE ACCEPTED — the Now screen is done end to end (2026-08-21, architect adjudication)
+
+**Accepted at `3f2ae945`, report at `38df788c`.** Verified on the tree:
+working tree clean, `base-measure.json` published at the merge commit
+with `"tree": "primary"`, the fail-closed guard armed and empty, and
+`.githooks/commit-msg` present at 2,993 bytes with `core.hooksPath`
+pointing at it. **The mechanism-over-memory ruling is now a mechanism in
+the repository rather than a paragraph about one.**
+
+### Three things this merge did that the merge before it could not
+
+**It checked the branch point at merge time, not only at cut time.** The
+base had moved two commits — benchmark docs by another hand — and docs
+only, so `src/`, `tests/` and `scripts/` merged clean. Had they not, the
+packet would have reconciled against a base that no longer existed. That
+is now written down, and it is the missing half of the base-measure
+rule: the measure names a commit, and the commit has to still be the
+one you branched from.
+
+**It found my ruling uncommitted in the primary and committed it
+verbatim, separately, at `bd0230c4`.** That is the third time today an
+adjudication of mine has been left in a working tree and rescued by the
+packet that was about to append beside it. **The rule I ratified this
+morning applies to its author: a rule its own author cannot follow from
+memory needs a mechanism.** The mechanism already exists — it is the
+`09c32d99` precedent, running in a merging packet's procedure — and it
+has now fired often enough to be law rather than habit. Written into the
+protocol.
+
+**It caught its own false alarm by reading the record.** The unanchored
+`'<<<<<<<'` sweep failed on a file that had resolved perfectly, because
+this record contains prose *about* conflict markers in six places — and
+the record documents that same false alarm four separate times. This was
+the fifth. **The fix came from reading the four, not from debugging the
+fifth**, which is the first time in this project the record has paid for
+its own weight in a way that can be pointed at.
+
+### The skipped count, and the finding inside it
+
+`12 → 2` with suites and totals identical is arithmetically sound and
+correctly labelled — the measure carries its tree kind, and the next
+packet must compare a primary number with a primary run.
+
+**But tree kind names the difference; it does not close it.** The
+mechanism is concrete and better stated than "the worktree/primary
+boundary": these suites gate on artifacts that live OUTSIDE git —
+`describeWithModel = MODEL_EXISTS ? describe : describe.skip`,
+`describeWithVocab`, `describeLocal = hasLocal ? …`. A fresh worktree
+has the tracked files and none of the downloaded ones.
+
+**Every packet builds in a worktree. So these ten tests run at no
+packet's gate, ever, and their first run is the merge** — which is the
+moment you least want a first run, and the one place a failure is most
+expensive to unwind. A gate that cannot reach a suite is a gate with a
+blind spot, whether or not anyone has been bitten yet.
+
+**Ruled, and it belongs to no packet, so it belongs to the next one that
+touches the harness:** either the worktree gets the artifacts, so both
+trees measure the same set — or, cheaper and in the house style, **the
+gate declares by name the suites it could not reach.** A receipt states
+its unit and its coverage. "633 suites, 12 skipped" says how many; it
+does not say which, and which is the part a reader needs to know what
+was not measured.
+
+### ABI — leave it at 141
+
+Asked directly, so answered directly. **Leave the tree at 141**, because
+that is what the published measure was taken at, and a base measure
+whose ABI does not match the tree it names is a receipt in the wrong
+unit — this week's most-repeated defect, in its newest costume.
+
+`npm run rebuild` is an act the owner performs when he wants to load
+Local, not a state the tree is left in. **The tree serves the packets;
+the application is a separate act.** That the same command is also the
+fix for a core that has failed to start for days is a coincidence of
+mechanism, not a reason to conflate the two.
+
+### Shapes released
+
+`Situation.signature → signatures`, `Situation.id` on incident rows as
+the subject, `ReservedRow.checkCount`, `UnheldRow.deferred` required,
+`SituationClassInput.linkKind`, `SHAPE_VERSION 3 → 4`, `nowGroups` as
+the ninth accounted generator — and the counting expressions
+arithmetically unchanged, with the row count moving both sides of the
+pinned identity together. **That last clause is the announce-the-quantity
+rule discharged**, and it is the first release in this project to state
+the quantity's invariant rather than the file it lives in.
+
+### The Now screen is finished
+
+WP-51, WP-54, WP-54a, WP-56, WP-55. Eleven cards to seven was a bug;
+seven to four is the situation rule; the front door has one list, one
+verdict, one count, and a stripe that makes the consequence order
+legible without reading. **What began as "I don't see Now" is closed.**
+
+---
+
+## FLEET-TOOL DEFECT REPORT — ADJUDICATED; WP-58/59/60 REGISTERED (2026-08-21, architect adjudication)
+
+Six defects reported by an agent validating an 8-site demo fleet.
+**Verified against source rather than accepted: four confirmed as
+written, D5 materially overstated, D6 misattributed, and the stated root
+cause understated in the way that matters most.**
+
+### The root cause is not "inconsistent resolution"
+
+The report names four resolvers and calls the failure mode *"the same
+identifier resolves in one tool and 404s in another."* There are **five**
+— two of them exporting the same name from different modules, differing
+in case-sensitivity — and **the failure mode is a WRONG ANSWER, not a
+404.**
+
+`CLAUDE.md:471` already states the rule and names the five sites it bites
+on. `resolveSite` (117 call sites, 54 files) matches Local-only with no
+source constraint and no decline. And **`resolveAnySite`, built to be the
+correct shared path, has the same hole**: local is checked first and
+returns immediately, so the graph — and the collision-decline logic its
+own docblock credits it with — is only reached on a miss. The
+cross-source collision the rule exists for is never tested.
+
+**A docblock claiming a guarantee the code does not deliver.** That is
+this week's defect, in the layer nobody was watching.
+
+### The owner's question, answered honestly
+
+*"I thought we had this in a good place."* **The model is in a good
+place** — ADRs 21–23, the entity graph, `ScopePlace`, `resolveLineage`;
+nothing found here touches any of it. **The rule is in a good place** —
+stated precisely, with its five real names. Three call sites honour it.
+
+**The mechanism was never built.** Nothing would ever have failed if a
+new call site forgot, which is why the resolver written to be correct
+could forget in its first ten lines and ship.
+
+This is **the pwd ruling arriving in a second layer, eleven hours after
+it was ratified**: *a rule its own author cannot follow from memory needs
+a mechanism.* The rule's own author wrote `resolveAnySite`.
+
+And it gets worse before better: ADR-21's model has a working copy and a
+remote environment **sharing a name by design**, so every site that
+follows the happy path becomes a colliding name. The coin toss is rare
+today because most sites are one thing.
+
+### Registered
+
+- **WP-58 · the collision decline.** Both resolvers test both sources
+  before answering; `resolveSite` becomes `resolveLocalSite` and refuses
+  a name that also exists in the graph; the duplicate is reconciled.
+  **The mechanism is the packet**: a test enumerating the live collision
+  set, with the five `CLAUDE.md` names pinned as a FLOOR — shape #15 in
+  its most likely form here, since the collision set is data-dependent
+  and empty on a clean machine.
+- **WP-59 · the structure store and the tool surface.** D5 corrected:
+  `wpe_sync_sites` is unregistered but the capability has three live
+  callers, so the defect is eight messages naming a tool that does not
+  exist — which matters because **an agent has no button**. Plus a check
+  that no error string may name a tool the registry does not carry. D3/D4
+  ruled: **say what is true rather than smuggle in a remote extractor** —
+  `compare_sites` declines with the real reason and stops implying
+  cross-source support.
+- **WP-60 · the source filter.** D1 and its label, pinned over the whole
+  value set rather than the two lines.
+- **D6 reopened after WP-58.** `get_site_structure` has no SSH path at
+  all — three local tiers — so it cannot hang on a ControlMaster socket,
+  and a Local-only resolver should have refused a WPE install instantly.
+  The likely cause is WP-58's defect wearing a stopwatch.
+
+### The strongest thing in the report
+
+D3 is stronger than its author knew. The two `structure` refresh writers
+are guarded by `if (existingEntry?.structure)` — they can only refresh
+what already exists, and the sole creator is a local disk walk. **The
+routes are conditioned on the thing only local sites can produce**, which
+is a construction proof rather than the report's honest "I found no
+route."

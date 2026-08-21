@@ -1195,3 +1195,52 @@ Neither was a bug in the product; both were the product being right and
 the fixture being silent about it. **A coverage assertion over the
 classes actually produced** — shape #15 applied to a sweep rather than to
 one row — is what turned both into a red line instead of a quiet pass.
+
+## The merging packet checks the primary for uncommitted adjudications (WP-55)
+
+Three times in one day an architect ruling was appended to
+`WORK_PACKETS.md` or `PARALLEL_PROTOCOL.md` in the primary and left
+uncommitted, and each time the next merging packet was about to append
+beside it. Once it was resolved away by a correct three-blob rebuild.
+
+**Before appending to either document, the merging packet runs
+`git status` in the primary and commits any adjudication it finds
+VERBATIM and SEPARATELY**, by the `09c32d99` precedent, so the ruling
+carries its own hash instead of being folded into a merge. Verbatim
+because it is not the packet's text; separately because an adjudication
+that arrives inside a merge commit cannot be cited.
+
+The architect's half: an adjudication written during a hold is handed
+over with its commit in the same breath, and is not assumed committed
+because it was written.
+
+## Tree kind names the difference; it does not close it (WP-55)
+
+A base measured in a worktree and one measured in the primary differed
+by ten tests — suites and totals identical, `skipped 12 → 2`. The cause
+is not an abstraction about trees: these suites gate on artifacts that
+live OUTSIDE git (`MODEL_EXISTS`, `vocabExists`, `hasLocal`), and a
+fresh worktree has every tracked file and none of the downloaded ones.
+
+**Every packet builds in a worktree, so those suites run at no gate and
+their first run is the merge** — the moment a failure is most expensive
+and least expected.
+
+Labelling the measure with its tree kind is necessary and is not
+sufficient. **A gate declares BY NAME the suites it could not reach.** A
+count of skips says how many; it never says which, and which is the only
+part that tells a reader what was not measured. A receipt states its
+unit and its coverage.
+
+## A false alarm the record has already caught is a reading failure (WP-55)
+
+An unanchored `'<<<<<<<'` sweep failed on a perfectly resolved file,
+because this record discusses conflict markers in prose in six places.
+The record documents that same false alarm four separate times. The
+fifth was fixed by reading the four.
+
+**Anchor the marker sweep — `^<<<<<<<`, `^=======$`, `^>>>>>>>` — and
+before debugging a surprise, search the record for its own name.** A
+document that has recorded a failure four times and does not prevent the
+fifth is being written to and not read from, which is the more expensive
+half of keeping one.
