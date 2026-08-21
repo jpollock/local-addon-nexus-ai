@@ -38,6 +38,15 @@ export interface AgentContextDeps {
   eventLog?: EventLog;
   /** Correlation id stamped on every line this run produces. */
   runId?: string;
+  /**
+   * WP-57 · this run's ledger frame, from `AgentRunner`. Absent on the
+   * dispatcher paths and in tests — every use is guarded.
+   */
+  frame?: {
+    id: string;
+    actor: { id: string; kind: 'agent' };
+    noteGatedAct(at: number): void;
+  };
 }
 
 /**
@@ -58,7 +67,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accSites: Record<string, { status: string; findings: Finding[] }>;
   toolProvider: NexusToolProvider;
 } {
-  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId } = deps;
+  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId, frame } = deps;
   const agentName = agent.name;
   const agentSettings = getAgentSettings(agentName);
 
@@ -85,6 +94,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
     // `[]` to `undefined` here.
     agent.tools,
     aiEvents,
+    frame,
   );
 
   // Build AI client per-run so it gets this agent's scoped tool set.
@@ -264,6 +274,9 @@ export function buildAgentContext(deps: AgentContextDeps): {
     credentials,
     db,
     fullRun: fullRun ?? false,
+    // WP-57 · absent when unframed, and the key is omitted rather than set to
+    // undefined: an agent asking `if ('task' in ctx)` gets a true answer.
+    ...(frame ? { task: { id: frame.id, actor: frame.actor } } : {}),
   };
 
   return { ctx, agentLog, accFindings, accActions, accSites, toolProvider };

@@ -111,6 +111,9 @@ export class AgentRunner {
         logFileName: options?.logFileName,
         eventLog: this.eventLog,
         runId,
+        // WP-57 · so the tool provider can thread the task and note gated acts,
+        // and so `ctx.task` exists for the agent itself.
+        ...(frame ? { frame } : {}),
       });
       ctx = built.ctx;
       accFindings = built.accFindings;

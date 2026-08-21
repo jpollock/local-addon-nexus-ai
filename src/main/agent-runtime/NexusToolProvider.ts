@@ -30,12 +30,26 @@ export class NexusToolProvider implements ToolProvider {
   /** Counts how many tool calls threw — either failed or refused. */
   private _failedCallCount = 0;
 
+  /**
+   * WP-57 · this run's ledger frame. Absent on the MCP path and in tests.
+   *
+   * Structural, not the whole `AgentTaskFrame`: this class needs the id to
+   * thread and the act to note, and nothing else. Narrowing it here keeps the
+   * tool provider from acquiring an opinion about the frame's lifecycle.
+   */
+  private readonly frame?: {
+    id: string;
+    noteGatedAct(at: number): void;
+  };
+
   constructor(
     registry: ToolRegistry,
     services: NexusServices,
     tools: string[] | undefined,
     events?: ToolEventContext,
+    frame?: { id: string; noteGatedAct(at: number): void },
   ) {
+    this.frame = frame;
     this.registry = registry;
     this.services = services;
     this.allowedTools = tools !== undefined ? new Set(tools) : undefined;
@@ -192,11 +206,31 @@ export class NexusToolProvider implements ToolProvider {
     // refused, which is what decides whether a `mutation` event is honest.
     reached.tool = true;
 
+    // WP-57 · the measurable end of R2's arm-to-first-write, and one of the two
+    // things that make a run REAL for the lazy frame.
+    //
+    // Tier 2 is the floor, matching `actionProducer`'s `GATED_TIER_FLOOR` and
+    // the durable audit write: a Tier-1 read is not an act. A browsing agent
+    // therefore never flushes a bracket, which is what keeps auth-probe's 720
+    // clean runs a day out of an uncompactable substrate.
+    //
+    // Placed AFTER `reached.tool`, deliberately: a call refused by scope or by
+    // the Tier-3 gate changed nothing, and making the run real on the strength
+    // of a refusal would be the same dishonesty as logging it as a mutation.
+    if (getToolSafety(name).tier >= 2) {
+      try { this.frame?.noteGatedAct(Date.now()); } catch { /* never throw into a tool call */ }
+    }
+
     // Call the registry with 'agent' as the access method and the run ID for audit trail joining.
     // requireConfirmation stays true as belt-and-suspenders: Tier 3 is already refused above for
     // agents, so no destructive call reaches here, but if a tool's tier ever changes this keeps
     // the registry-level gate armed rather than silently waived.
-    const result = await this.registry.call(name, args, this.services, 'agent', true, this.events?.runId);
+    const result = await this.registry.call(
+      name, args, this.services, 'agent', true, this.events?.runId,
+      // WP-57 · the run's task, so every gated act joins the run that made it.
+      // Absent when unframed — the pre-WP-57 shape, byte-identical.
+      this.frame ? { id: this.frame.id } : undefined,
+    );
 
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
     const duration_ms = Date.now() - startTime;

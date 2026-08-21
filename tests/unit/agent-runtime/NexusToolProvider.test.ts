@@ -21,7 +21,10 @@ describe('NexusToolProvider', () => {
     expect(result).toEqual([{ name: 'mysite' }]);
     // requireConfirmation sits at position 5 — an agent loop has no human confirmation of its
     // own, so it must never be the caller that waives the Tier 3 gate. runId follows it.
-    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', true, undefined);
+    // WP-57 added a 7th parameter (the run's task). An unframed provider passes
+    // `undefined` there, which is what `ToolRegistry.call` already saw for a
+    // missing optional — the ARITY changed, the behaviour did not.
+    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', true, undefined, undefined);
   });
 
   it('throws for an undeclared tool', async () => {
@@ -55,7 +58,9 @@ describe('NexusToolProvider', () => {
     );
     const result = await provider.invoke('nexus_list_sites', {});
     expect(result).toEqual([{ name: 'mysite' }]);
-    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', true, 'r_abc123');
+    // 7th parameter is WP-57's task; unframed here, so `undefined`. runId is
+    // still position 6, which is what this test is about.
+    expect(registry.call).toHaveBeenCalledWith('nexus_list_sites', {}, fakeServices, 'agent', true, 'r_abc123', undefined);
   });
 
   it('throws when tool returns isError=true', async () => {

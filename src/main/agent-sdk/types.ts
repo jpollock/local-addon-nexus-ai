@@ -116,6 +116,17 @@ export interface AgentContext {
   settings: Readonly<Record<string, unknown>>;
   /** True when the user explicitly requested a full (non-incremental) run from the Run Now modal. */
   fullRun: boolean;
+  /**
+   * WP-57 · this run's identity ON THE LEDGER.
+   *
+   * Distinct from the log's run id and neither replaces the other: the log id
+   * correlates LOG LINES (`grep run=<id>`), this correlates EVENTS
+   * (`WHERE correlation = <id>`). Two records, two questions.
+   *
+   * Absent when the intelligence core was unavailable. An unframed run is
+   * honest, not an error, and an agent must treat this as optional.
+   */
+  task?: { id: string; actor: { id: string; kind: 'agent' } };
 }
 
 export interface AgentDefinition {
