@@ -27360,3 +27360,192 @@ WP-56 built the run path and held this deliberately, presenting the measurement
 rather than inventing a shape. The three findings stay as passing tests in
 `deferral.test.ts` so that the day WP-56a lands they go red and say exactly what
 changed — the watch-item rule, written at the code rather than only here.
+
+---
+
+## WP-56 · MERGE REPORT — the deferral affordance; the collision resolved, WP-54b fixed, and the first `base-measure.json`
+
+**Merged at `239e4e32`** on `poc/nexintelligence-ux`. Diffstat against its first
+parent:
+
+```
+ scripts/wp56-battery.py                            |  371 +++++++
+ scripts/wp56-deferral-exhibit.ts                   |  181 ++++
+ src/common/constants.ts                            |   18 +
+ .../intelligence-host/__tests__/deferral.test.ts   | 1048 ++++++++++++++++++++
+ .../__tests__/deferralIsNotConsent.test.ts         |  316 ++++++
+ .../__tests__/situationHeadlines.test.ts           |   86 ++
+ src/main/intelligence-host/actionProducer.ts       |  272 +++++
+ src/main/intelligence-host/sessionRegistry.ts      |  514 +++++++++-
+ src/main/ipc-handlers.ts                           |   69 +-
+ src/renderer/components/return/arrivalModel.ts     |   89 +-
+ tests/unit/renderer/cardIsTemplate.test.tsx        |    9 +
+ tests/unit/renderer/nowList.test.tsx               |   93 +-
+ tests/unit/renderer/returnRailBadge.test.ts        |   12 +
+ 13 files changed, 3051 insertions(+), 27 deletions(-)
+```
+
+### 1 · THE COLLISION, resolved as ruled
+
+Three packets edited `listVerdict`'s arithmetic through different doors and none
+could see the others. **Both bodies were correct and taking either whole was a
+silent regression** — WP-56's deletes the unheld term and heads eight rows with
+"7"; the base's drops the deferral. Every test on either branch passed under
+either resolution, because neither branch had a case where both terms were
+non-zero.
+
+```
+held        = waiting.filter(not deferred)
+unheld      = alsoWaiting.filter(not deferred)
+needsYou    = held.length + unheld.length
+changedRuns = held.filter(written).length + unheld.filter(written).length
+```
+
+**`alsoWaiting` became `UnheldRow[]`** carrying written-state (WP-54b) and a
+`deferred` flag (this collision). **WP-54b is FIXED here, not scheduled.**
+
+**MEASURED, and it is a fact rather than a default:** `InboxItem` carries no
+outcome fields at all — it is a FINDING, not a run — so every unheld row today
+is `{done: 0, failed: 0}`. One call site changes if that ever stops being true.
+
+### 2 · THE READ WAS NOT THE TWO-LINE CHANGE THE GATE REPORT PROMISED
+
+WP-54 had already rebound the badge from `waiting.length` to
+`nowRows(triage, inbox).length`. So `triage.counts.needsYou` is **not** the
+badge's number, and substituting it would have dropped every inbox orphan —
+item 1's defect inverted. **The host cannot own this number alone: the unheld
+rows exist only in the renderer.** `TriageView.counts` is unchanged from what
+the gate ratified and remains the host's truth for what the host holds; the
+badge is the escalating rows of the one list, tied to it by a pinned identity:
+
+```
+arrivalCounts().needsYou  ===  triage.counts.needsYou  +  <escalating unheld rows>
+```
+
+One exported predicate (`rowIsDeferred`) serves the badge, the verdict and
+WP-55's dimmed row, so the three cannot drift.
+
+### 3 · THE RULED ADDITION (d), BUILT
+
+`OFFERABLE_WAKE_KINDS` is **one exported list read by both the producer's guard
+and the picker**, so the day a record-wake producer lands, one edit changes both.
+`record` is absent; the offer is time or unconditioned. **The FOLD still
+implements record wakes in full** — what is withheld is the offer, not the
+mechanism — so its pins now raw-emit, which is WP-46's rule again.
+
+### 4 · WP-54's PIN AMENDED, not deleted
+
+"Badge equals rows drawn, both directions" became false the moment a deferral
+existed. Its post-deferral form: **badge equals rows drawn MINUS the ones
+quieted, and the quieted row is still drawn.** A pin left standing against a
+later ruling is a test asserting the opposite of the law.
+
+### 5 · THE BATTERY EARNED ITS KEEP AGAIN — twice
+
+**32/32 KILLED**, control SURVIVED, tree pristine, `--no-cache`, ABI pinned both
+ends. But the number that matters is the two rounds it took:
+
+- **M11 and M08 survived the first run.** M11 exposed **vacuous shape #16** in
+  this packet's own XD-28 pin — `parts[0]` is the synthetic run part with no
+  `eventId`, so the assertion was true against the bug and the fix alike.
+  Writing M08's pin then found a real defect: the producer trimmed the reason
+  and the fold did not, so three spaces satisfied "a reason is recorded" at the
+  authoritative gate.
+- **M05c and M05d survived the round after the merge**, and they are the
+  ruling's own new terms. **No caller can defer an unheld row and no caller can
+  give one a write**, so the exhibit through `nowRows` proved the composition
+  but never reached the arithmetic. Five direct pins on `listVerdict` fixed it —
+  including the case the ruling named, where WP-56's body says 2, the base's
+  says 4 and takes the wrong arm, and the merged expression says 3.
+
+### 6 · THE EXHIBIT, and the two defects it found in ITSELF
+
+Driven against a COPY of the real ledger (it refuses the live path; it writes):
+
+```
+NOTE: waiting[0] is evt_01M0BFNDD6XS21X8HTEMGY4NQV (tier 1), an orphan incident
+      with no run — the HELD path (WP-56a). Skipped to the highest-ranked SESSION.
+SUBJECT: sess_task_01M09M7ZHVS6XM58VA9G8TWPFH
+
+1 · BEFORE      badge 7 · deferred 0 · rows 7 · "7 things need you…"
+2 · DEFERRED    badge 6 · deferred 1 · rows 7 · "6 things need you…"   <- both halves
+3 · WOKEN       badge 7 · deferred 0 · rows 7   (clock +48h, NOTHING WRITTEN)
+4 · ENDED EARLY badge 7 · deferred 0 · rows 7
+
+JOINABLE BACK TO THE RUN: correlation=task_01M09M7… returns 2 events,
+and the deferral IS among them
+```
+
+**Its second run found two defects in the exhibit itself**, both surfaced only
+because the merge changed what the real ledger ranks first:
+
+1. **A query that asked nothing, read as a failed join.**
+   `query({ correlation: undefined })` does not filter — it returns the whole
+   window — so the unguarded check printed "200 events, and the deferral IS NOT
+   among them". **A measurement that cannot distinguish "no match" from "no
+   filter" is not a measurement.**
+2. **The subject was the held path.** After WP-54's tier work the top waiting row
+   is an orphan incident, so the exhibit was about to demonstrate the path this
+   packet deliberately did not build. It now picks the highest-ranked SESSION and
+   prints which row it skipped and why — the skip is itself evidence for WP-56a.
+
+### 7 · RECEIPTS, pasted after they printed
+
+- **Merged tree: 629 suites / 8,710 passed / 12 skipped / 8,722 total, exit 0.**
+  `npx tsc -p . --noEmit` clean.
+- **The merge commit's tree is byte-identical to `wp-56`'s tip**
+  (`35bbd1e5a7261b07d7d66a82d7107d3e9503e6cb` both), so the measurement above IS
+  this commit's tree and not a second one that happens to agree.
+- **Battery 32/32 killed**, control SURVIVED (correct), tree verified PRISTINE
+  before and after, ABI pinned at both ends, re-run WHOLE after each round of
+  survivors rather than spliced.
+- **The poisoned ts-jest cache, tenth occurrence** (recorded at the gate): the
+  tell was a total BELOW baseline while adding tests.
+
+### 8 · `base-measure.json` — THE FIRST ONE
+
+Absent until now, and the protocol's own note called that out three times. This
+packet publishes it, and the tree kind is stated because it is part of the
+figure: **`worktree`**, which is the tree kind the next packet will be reading
+from, since packets work in worktrees. A primary-checkout run of the same commit
+differs in the skipped column by the documented embedding-model boundary.
+
+The guard was run against the file's own commit and returns empty.
+
+### 9 · ONE INCIDENT, and it is a new shape of a documented hazard
+
+**The pwd rule's edit-tool form, met as ONE logical change split across TWO
+trees.** The `Edit` tool took an absolute worktree path and landed correctly; a
+follow-up `python` one-liner in the same turn used a RELATIVE path while the
+shell's cwd was the primary checkout. The import went to the primary and the
+code block to the worktree. **The tell was a `TS2305` on a symbol that
+demonstrably existed.** Recovery: saved the stray hunk, `git checkout --` the
+primary's file, verified the primary clean, re-applied in the worktree, re-ran
+green. Also cleared a **stale zero-byte `index.lock`** (11:53, no git process
+owning the repo) and verified all four earlier base commits still ancestors
+before writing.
+
+**Mixing absolute-path edits with relative-path shell edits inside one change is
+the hazard.** Re-anchor between them, not between sessions.
+
+### 10 · ABI STATE
+
+**SYSTEM NODE (141).** This session ran jest. **The owner must `npm run rebuild`
+before loading Local** — and note the standing observation from WP-54a's report
+that the app's core has been failing to start for days needing 146, which is why
+no `task.run.*` events exist on this machine.
+
+### 11 · STANDING AFTER THIS PACKET
+
+- **WP-56a** is registered with its contract note: it CHANGES INCIDENT SITUATION
+  IDS, so it lands before WP-55 draws the coalesced row. `SituationSignature` is
+  unaffected. Its three findings are passing tests today that will go red when it
+  lands, which is the watch-item rule written at the code.
+- **WP-55 owns the appearance**: the dimmed row, the Defer affordance, the
+  accounting line's deferred clause. `ArrivalCounts.deferred` and the ratified
+  `DEFERRED` block are both waiting for it; nothing renders either yet.
+- **A record wake has no producer.** `OFFERABLE_WAKE_KINDS` is the one edit that
+  changes when one exists.
+
+**WP-56 IS CLOSED.** The list never forgets; it stops shouting, and it knows
+when to start again.
