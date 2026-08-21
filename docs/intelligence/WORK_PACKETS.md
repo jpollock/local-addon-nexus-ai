@@ -26914,3 +26914,53 @@ archaeology precisely because the misplaced commit was found immediately:
 `git reset --mixed HEAD~1` in the battery worktree, the rule's bytes carried
 across, the worktree restored to pristine and verified, and the rule committed
 where it belongs. Nothing was lost and nothing was assumed.
+
+---
+
+## WP-54 · LOCKS RELEASED (2026-08-21)
+
+Merged at `6dbac948`, merge report at `2020ff02`. **Released so the siblings
+queued behind them can move.**
+
+- **`src/renderer/`** — RELEASED. **WP-56 IS HELD ON THIS AND SHOULD READ THE
+  NEXT SENTENCE FIRST:** `Arrival.renderSituation` and `renderInboxRow` are
+  gone, collapsed into one `renderRow(NowRow)`, because item 5's ruling removed
+  the structural distinction they existed to enforce. A deferral affordance
+  drawn against the two-function shape needs **re-siting, not re-merging**. The
+  row contract it wants is `NowRow` (`arrivalModel.ts`), and the fixture's
+  `DEFERRED` block is ratified copy no surface reads yet.
+- **`sessionRegistry.ts`** — RELEASED, and **declared as SHAPES per the new
+  protocol rule, not only as paths**: `ConsequenceTier` widened to
+  `1 | 2 | 3 | 4`; `Situation` gained `door` and `signature`; `SituationCopy`
+  gained the three required fields `tier`, `door`, `signature` — *this is the
+  one that collided, and any function returning that interface must fill them*;
+  `SituationClassInput` gained optional `memberCount`; new exports `RowDoor`,
+  `SituationSignature`, `normalizeProducerId`, `outrankedByTheRecord`,
+  `rankableTier`, and internal `twinNameOf` / `memberTier` / `sessionDoor`.
+- **the ratified fixture and both copy generators** — RELEASED.
+  `situation-headlines.js` now carries the designer's cycle-seven sheet plus
+  WP-54's four blocks and the two restored guards; the situation generator
+  gained `RULED_AMENDMENTS` and `DEFERRED_IDS`; `scripts/control-label.ts` is
+  new and shared by both generators.
+- **`docs/intelligence/`** — RELEASED.
+
+**Standing against this packet, all for WP-55, and all written at the code as
+well as here:**
+
+1. the coalesced row's `signature` is null, so the Inbox's copies of its members
+   render beside it rather than on it — a signature SET is the fix;
+2. `incident.coalesced` is declared and NOT emitted, by name and reason, until
+   its host fields exist (`{leadFinding}`, `{restCount}`, `{memberCount}`,
+   `{linkKind}`);
+3. the designer's `HEALTH`, `HEADER`, `GROUP` and `DEFERRED` blocks are ratified
+   copy no surface reads yet. **Two of their slots the contract cannot fill —
+   `HEALTH.loud`'s `{oldestAge}` and `HEALTH.quiet`'s `{checkCount}`** — and the
+   first is the late-versus-dark question the ruling left open with the
+   designer. The generator will refuse both until the facts exist, which is the
+   right order: the copy is ready and the producer is not.
+
+**Nothing pushed, no tag, no version bump. ABI 141 — the owner must
+`npm run rebuild` before loading Local.**
+
+**WP-54 IS CLOSED.** The list is one list, and the tier a card shows is the
+tier it was sorted by.
