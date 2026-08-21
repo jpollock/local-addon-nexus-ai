@@ -23804,3 +23804,299 @@ and WP-55 cannot draw the class without the fold supplying them.
 Standard discipline, all of it, plus the real-ledger exhibit the launch
 instruction requires: a newly produced sibling set coalescing into one
 situation with parts, BESIDE the four historical ones staying separate.
+
+---
+
+## WP-51 · GATE REPORT — three producers paid, and the link became real (2026-08-21)
+
+**All three ruled items landed. 22/22 mutation battery with the control
+correct and the ABI pinned at both ends. The real-ledger exhibit is the packet:
+a newly produced sibling set coalescing into one situation with four parts,
+BESIDE the four historical ones staying separate. No history was rewritten and
+the report says so. Five findings, one escalation-adjacent measurement, no
+escalations raised.**
+
+### 1 · THE EXHIBIT, ON THE OWNER'S REAL LEDGER
+
+Driven by `scripts/wp51-coalesce-exhibit.ts` (committed, reproducible), which
+refuses to run against the live ledger at all and only ever appends to a copy.
+The three runs, each from a fresh copy:
+
+```
+BEFORE (record untouched)          rows: 7   incident events: 4   scan acts: 0
+  SESSION  sess_task_01M09M7Z…     - member, not folded
+  SESSION  sess_task_01M0BBHD…     - member, not folded
+  INCIDENT evt_01M0BFNDD6…NQV      1 member, not folded
+  INCIDENT evt_01M0BFNDD6…NQW      1 member, not folded
+  INCIDENT evt_01M0BFNDD6…NQX      1 member, not folded
+  INCIDENT evt_01M0BFNDD7…TZ2      1 member, not folded
+  SESSION  sess_task_01M0BJNB…     - member, not folded
+
+--append-scan                      rows: 8   incident events: 8   scan acts: 1
+  …the four above, UNCHANGED, still one member each, still not folded…
+  INCIDENT task_01M0JMH78D…        4 members, linked by correlation
+      headline : 4 open incidents from one scan
+      part     : incident open: PHP file(s) in mu-plugins/: index.php
+      part     : incident open: Low-entropy plugin name(s) — likely attacker-created: noted, index
+      part     : incident open: Known backdoor plugin detected: wp-compat
+      part     : incident open: File manager plugin(s) active: fileorganizer, filester
+
+--append-containment               rows: 3
+  SESSION  sess_task_01M0BJNB…  (rb.incident-containment)
+      part     : [run] running under rb.incident-containment — 0 done and standing, 0 failed
+      part     : [incident] incident open: PHP file(s) in mu-plugins/: index.php
+      part     : [incident] incident open: Low-entropy plugin name(s) …
+      part     : [incident] incident open: Known backdoor plugin detected: wp-compat
+      part     : [incident] incident open: File manager plugin(s) active: fileorganizer, filester
+```
+
+**The badge reads 7 before and 3 after the containment arming records what it
+answers** — the packet's own stated outcome, measured rather than predicted.
+And the four historical rows are visibly untouched in the middle column: they
+carry no correlation, nothing linked them, and each still states its own limit.
+
+**WHAT IN THE APPEND IS SUPPLIED, stated rather than blurred**, because an
+exhibit that reads as "the real ledger did this" when part of it was authored
+is the thing the whole loop is against. The scan's FINDING CLASSES and their
+symptom lines are read verbatim off the owner's four incident events; the
+TARGET is a second real site resolved through the ledger's own entity aliases
+(the durable dedup correctly suppresses these four classes on the site that
+already has them open, and the script prints it when that happens); what is
+supplied is the fact that a scan happened at all — no sweep has run since the
+producer learned to mint a TaskId, so there is nothing on the record to replay.
+The producer and the fold are shipped code, and they are what the exhibit
+proves. The containment half appends THE NEXT TURN of a containment run this
+ledger already holds, reading capability, runbook and hash off that run's own
+newest manifest — WP-50's exhibit shape, followed.
+
+### 2 · MEASURED AT ANNOUNCE, AND WHAT IT MEANT
+
+- **4 incident events, 0 with a correlation**, all four `sentinel:r_msz8afwx00`
+  — one scan, one site. A shared payload origin and nothing else.
+- **0 of 36 manifests carry `scope`** one packet after WP-50 shipped the
+  writer: no chat turn has been taken on this machine since. So item 3's
+  exhibit had to be DRIVEN through the shipped functions, not found.
+- **0 `task.run.*` events.** The topic is in the ratified §4.2 taxonomy and had
+  never had a producer.
+
+### 3 · THE CONTRACT ADDITIONS, VERBATIM
+
+**(a) The scan act's topic and schema** (`incidentProducer.ts`). The TOPIC is
+not new — §4.2 has carried `task.run.completed` beside `task.run.assigned`
+since the layer was designed, with zero events. The payload schema is new:
+
+```ts
+export const SCAN_TOPIC  = 'task.run.completed';
+export const SCAN_SCHEMA = 'run.completed/1';
+
+payload: {
+  agent: 'security-sentinel',
+  ...(runId ? { run: runId } : {}),   // the runtime's own run id, when there is one
+  sites: <how many site slices this report carried>,
+}
+entity: {}    // a sweep spans its report's sites; naming one would misattribute
+```
+
+Not `task.action.executed`: that topic's payload is a gated TOOL CALL's
+(`tool`, `tier`, `dispatch`, `access_method`, `args`), and filling that shape
+for a sweep would put five invented fields on the record to avoid one honest
+one.
+
+**(b) Two fields on `Situation`** — and they are the DESIGNER's, not this
+fold's invention. The coalesced sheet committed one commit before this packet
+reads both in its own guards (`incident.no-run` gained `&& memberCount === 1`;
+`incident.coalesced` is `memberCount > 1 && row.linkKind !== null`):
+
+```ts
+export type SituationLink = 'correlation';
+
+  memberCount?: number;              // present on every incident row, absent on a session row
+  linkKind?: SituationLink | null;   // null on every row that stands alone
+```
+
+`linkKind` is a closed union deliberately: a payload field can never appear in
+it, which is the doctrine enforced by the type rather than remembered.
+
+**(c) The manifest's cause** (`chatAssembly.ts`):
+
+```ts
+export interface ManifestCause { answers: string[] }   // ledger event ids; never empty
+export function manifestCauseFor(answers: readonly string[] | undefined): ManifestCause | undefined
+payload: { ...manifest, ...(scope ? { scope } : {}), ...(cause ? { cause } : {}) }
+```
+
+**(d) The carrier** (`procedureArming.ts`, `armFromSelection.ts`):
+
+```ts
+  ArmingRequest.answers?: string[];
+  TurnProcedure.answers?: string[];
+  recordArmingRequest(capability, at?, scope?, answers?)
+  armFromSelection(capability, selection, at?, answers?)
+```
+
+**ONE DELIBERATE ASYMMETRY WITH WP-48b, and it is the packet's sharpest
+distinction.** `manifestScopeFor(undefined)` records the EMPTY SET, because "a
+predicate armed this and nobody chose targets" is a fact the armer knows.
+`manifestCauseFor([])` records NOTHING, because an arming that answers nothing
+is not answering — there is no empty-set fact to state, and `answers: []` would
+assert a containment run that answers nothing in particular. `null` is UNKNOWN
+and `0` is KNOWN-EMPTY still holds; this is the case where neither applies.
+
+### 4 · THE MUTATION BATTERY — 22 KILLED / 0 SURVIVED / 0 ANCHOR-MISS
+
+`scripts/wp51-battery.py`, harness inherited from WP-45/46/47/49/50/52.
+Byte sweep first (12 files, no non-printing characters), tree verified pristine
+before and after, `--no-cache` throughout, count-floored, **ABI pinned at both
+ends with the probe that CONSTRUCTS** (WP-50's sharpening).
+
+```
+PRISTINE BASELINE: 0 failed / 175 total, 0 suites failed (floor 171)
+=== WP-51 BATTERY: 22 killed / 0 survived / 0 anchor-miss, of 22 ===
+CONTROL  SURVIVED (correct)  0 failed / 175 total
+TREE PRISTINE AFTER.
+```
+
+The one worth naming is **M08 — the doctrine, breached**: group the orphans by
+the `payload.source` the four historical incidents share. It coalesces exactly
+the four rows the designer's review asked for and the architect's ruling
+refused, and four tests kill it. That mutation is the packet's own tripwire
+against the thing it was told not to do.
+
+**THE FIRST RUN WAS 18/4, AND THE FOUR SURVIVORS ARE THE MOST USEFUL THING THE
+BATTERY PRODUCED.** Three were flaws in the PINS and one was a finding about
+the code:
+
+- **M10** (the coalesced verdict composed over one member) survived because the
+  pin asserted only that the headline avoids a member's symptom and reports no
+  template — both still true of *"1 incidents from one scan, 4 still open"*.
+  The headline is now asserted EXACTLY. A count is the whole of what a
+  coalesced row can honestly say before the ratified class arrives, so the
+  count is the thing to pin.
+- **M20 and M22** (precedence; two runs claiming one incident) survived because
+  both manifests in each case carried the same capability and hash — **so they
+  were two TURNS OF ONE RUN**, and a case about two runs disagreeing proves
+  nothing when both sides are the same session. Same family as vacuous-guard
+  shape #15: the assertion never ran against the situation it named. Both cases
+  now assert `sessions.length === 2` BEFORE asserting anything about ownership.
+- **M19 was a finding about the code, not the pins.** The per-task union of
+  answers was unreachable — one manifest carries one task — so nothing could
+  distinguish the accumulating version from a plain assignment. That is what the
+  mutation measured. The speculative code is gone, and the mutation is
+  retargeted at the loop that IS load-bearing (consulting only a run's first
+  turn), which the two-turn case kills.
+
+### 5 · FIVE FINDINGS
+
+**F1 · WP-48a's ESCALATION PIN DID NOT FIRE ON THE RULING IT PREDICTED.**
+`sentinelCausation.test.ts` closes with *"The day the envelope widens or the
+coalescer gains an orphan rule, one of these goes red and says WP-48a is
+buildable now."* Both halves happened in this packet and **not one case went
+red**. The reason is exact: every probe in that file reaches for `causation`,
+because before a TaskId existed that was the only link a scan had to offer —
+and the ruling produced a `correlation`. A tripwire watching the wrong field is
+silent in the one event it was set for. This is a stronger form of WP-46's
+finding (a pin over an input the change cannot produce is decoration), and it
+is now recorded in that file's own header. **Every case was KEPT, not deleted**
+— they are still true, and two of them are now the load-bearing statement that
+the four historical incidents did not move.
+
+**F2 · NO REFUSAL IS REACHABLE THROUGH THE ARMING QUEUE — measured while
+writing the pin, and it changes what that pin proves.** Both integrity
+refusals (`hash-mismatch` on id and on hash) are excluded one step earlier by
+`grantedRunbooks`, which re-checks both before arming, and an over-ceiling
+document is never returned by `byCapability`. So a queue-armed turn that
+reaches `resolveProcedure` is a DELIVERED turn, and a refusal arrives only on
+the caller-supplied path, which by 20c's contract carries neither a scope nor a
+cause. **The delivered-gate in `emitManifest` is therefore a tripwire rather
+than a filter** — the same standing WP-48's `contradictedByTheRecord` refusal
+has, and kept for the same reason: the day a refusal path DOES carry an arming
+(a late arm at the gate, say), a cause must not be recorded for it.
+
+**F3 · A PRE-EXISTING DEFECT, OBSERVED AND NOT FIXED: the fold never supersedes
+a resolved incident's opening event.** `situationOfIncident` reads each event's
+own `resolved` field, so an incident that was opened and later closed keeps its
+open row forever, one row per event. This predates the packet and is unchanged
+by it — coalescing groups the openings and the closures into two rows instead of
+2n, which is the same behaviour at a different grain. **Measured on the owner's
+real ledger: no resolution exists there, so nothing on the live screen is
+affected today.** Reported rather than folded in (mid-task scope rule), and
+pinned as an observation in `sentinelCausation.test.ts` so the next reader finds
+the fact rather than rediscovering it.
+
+**F4 · `linkKind`'s VALUE IS A RECORD NOUN, and the ratified sheet renders it.**
+`incident.coalesced`'s meta line is `{producer} · linked by {linkKind}`, which
+with this fold's value reads *"linked by correlation"* — true, derived, and
+squarely inside the owner's own "derived is not the same as legible" finding.
+The FIELD is the fact and the LABEL is the designer's; flagged for WP-55 rather
+than decided here, because inventing a display word for it in the fold is the
+authoring this layer forbids.
+
+**F5 · THE TIER DISAGREEMENT IS UNTOUCHED, DELIBERATELY.** Every incident row
+ranks tier 2 in the fold while the ratified `incident.no-run` rule line says
+*"Tier 1 · nothing is holding it back but you"* — the architect's own finding 1,
+which is WP-54's item. The coalesced row follows the fold's EXISTING rule
+(`resolved ? 4 : 2`) rather than the sheet's, so when WP-54 fixes the
+disagreement both halves move together. Taking half of that fix here would have
+left one packet's rows ranked by one rule and another's by the other.
+
+### 6 · THE CONSEQUENCE THIS PACKET SHIPS WITH, STATED
+
+**The carrier for item 3 is complete and nothing fills it yet.** A user contains
+an incident from the row that reports it, and that row's door lives in
+`src/renderer/`, which WP-54 holds. So `armFromSelection`'s `answers` parameter
+has exactly one production caller — the IPC handler, passing whatever the
+renderer sends — and the renderer sends nothing yet. **This is the shape of the
+defect WP-48b measured, and it is named rather than hidden**: the difference is
+that here the filling end is behind a live lock, the reader is driven end to end
+by the exhibit and by four pins, and the packet says so at its gate instead of
+leaving a comment asserting a wiring that does not exist.
+
+### 7 · NUMBERS, AND THE ABI STATE
+
+```
+BASELINE (worktree, 20a01d45)   620 suites / 8,539 tests   8,521 passed  12 skipped  6 failed (1 suite)
+FINAL    (worktree, c2c4e3e4)   621 suites / 8,576 tests   8,558 passed  12 skipped  6 failed (1 suite)
+```
+
++1 suite, +37 tests, **all passing**. The skipped column is unchanged at 12 —
+read first, per the protocol, and it is the worktree's own number. **The six
+failures are identical before and after and are the inherited red declared at
+announce**: `situationHeadlines.test.ts`, because the designer's new sheet adds
+`incident.coalesced` and `generate-situation-copy.ts:179` fail-closes on its
+`RATIFIED_IDS` list. That is WP-54/WP-55's to resolve — they hold the fixture
+and the generators — and nothing in this packet touches either.
+
+**Two things flagged in `09c32d99`'s message when the architect's uncommitted
+work was committed verbatim, repeated here so the gate sees them:** the record
+entry names "the 6,588-byte version" as superseded, and the fixture's history
+shows 6,588 is `2f1794a9` — the version as it stood BEFORE WP-48 and WP-50
+amended it (8,966 at `b2fe4a10` is the ratified source). **The new sheet's
+guards 1 and 2 are byte-for-byte `2f1794a9`'s**, so WP-48's `&& gate === null`
+and WP-50's dropped `total > 0` are absent from it. *UNVERIFIED HYPOTHESIS: the
+sheet was authored from the pre-amendment copy.* Both rulings stand and nothing
+here touches either; which text governs is the architect's to say.
+
+**ABI STATE: this session ran jest, so `node_modules` is built for SYSTEM NODE
+(ABI 141, node v25.9.0), not Electron.** `npm run rebuild` is required before
+loading the addon in Local. The battery's probe confirmed the same ABI at both
+ends of its run.
+
+### 8 · WHAT THIS PACKET DID NOT DO
+
+- No history rewritten. The four incidents are four rows and their limit is
+  still true of them.
+- No new topic PREFIX and no envelope field. `task.run.completed` was already
+  in the ratified taxonomy; every link this packet writes goes in fields that
+  already exist.
+- No renderer change, no fixture change, no generator change, no composer
+  change — WP-54's eight functions are untouched and `derivedCopy` is called,
+  not edited. `situationOfIncident` is likewise untouched: the two new fields
+  are set at the fold's own call site, with a comment saying they belong inside
+  that function the day its lock releases.
+- No coalesced-row COPY. The row reads the derived sentence and reports
+  `headlineTemplate: null`; the ratified class is WP-55's.
+
+**The locks stay held until the merge.** `incidentProducer.ts`,
+`procedureArming.ts` + `armFromSelection.ts` + `chatAssembly.ts`'s manifest
+write, `foldSessionRegistry`'s incident-attachment pass, `ipc-handlers.ts`'s one
+pass-through, and `docs/intelligence/`.
