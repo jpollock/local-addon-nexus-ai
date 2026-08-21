@@ -23807,3 +23807,49 @@ eb3682e2 docs(wp-54): LOCK ANNOUNCE — group A, the fourteen …
 Nothing pushed, no tag, no version bump. **HOLDING at the gate** for two
 rulings: the `ConsequenceTier` widening (§3) and the seven authored strings
 (§4).
+
+---
+
+## WP-54 · §2 IS STALE, AND THE AMENDMENT IS ON THE BASE (2026-08-21)
+
+**WP-54a merged while this packet was building** (`be858e5f`, locks released
+at `2ca087f9`), so §2 of the gate report above — *"WP-54a HAS NOT LANDED"* —
+was true when measured and is not true now.
+
+**THE FULL AMENDMENT LIVES ON THE BASE, at `211a9a77`**, and deliberately:
+most of what it says is a warning to THREE SIBLING PACKETS (WP-51's and
+WP-56's claims on the same file, and whoever performs this merge) about a
+collision in a shape rather than in a function, and *a warning that lives only
+on a worktree is not visible to the agent it warns* — the WP-20f/WP-37 rule,
+applied to a gate report instead of to a lock announce. This pointer exists so
+neither record can be read without finding the other.
+
+Its four measured claims, in one line each, so this branch's record is not
+left with a hole:
+
+1. Both packets **independently widened `ConsequenceTier` to `1 | 2 | 3 | 4`**
+   from the same evidence — ruling request 1 in §3 is already settled on the
+   base, and what is left for the architect is the comment, not the type.
+2. `auth-probe` stops being an unranked orphan once the two are merged: it
+   becomes a SITUATION at its ratified tier, which is the outcome §2's residue
+   was waiting for.
+3. **The merged tree will not compile until `composeAgentFailureCopy` fills
+   `tier`, `door` and `signature`** — the three fields this packet added to
+   `SituationCopy`. The values are measured, not proposed; the signature join
+   to the Inbox (`agent_id` ↔ `source`, `failureCode(message)` ↔ `code`, `'*'`
+   ↔ `scope`) is exact and needs no change to `sameThing`.
+4. Without that signature the merge **reintroduces the duplicate this packet
+   removes**, and the badge/row equality pin goes red — correctly. That pin is
+   the instrument, and this is the case it was built for.
+
+**AND THE SLIP THAT PUT IT THERE IS DISCLOSED, because the amendment being in
+the right place was luck rather than judgement.** The `cd` into the primary
+checkout — made to READ WP-54a's release note — persisted, and the amendment
+was committed from that shell. This is WP-39's incident exactly, and it
+survived the documented guard: the command DID print `pwd`, and the output was
+read after the commit had already run. **Printing the cwd is not the control;
+BRANCHING on it is.** The recovery was not needed (the commit is 84 additions
+to one file, nothing swept in, and the base was otherwise pristine — verified
+with `git show --numstat`), and the content belongs on the base on its merits,
+so it stays. A slip that lands somewhere defensible is still a slip.
+
