@@ -1167,6 +1167,7 @@ describe('the consequence order (moments-model 1.3 §4a)', () => {
       chip: '',
       state: '',
       meta: '',
+      rule: '',
       headlineTemplate: null,
       written: { done: 0, failed: 0, total: 1 },
     };

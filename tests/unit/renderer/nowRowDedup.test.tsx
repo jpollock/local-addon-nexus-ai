@@ -94,16 +94,39 @@ describe('field finding 2 — a part summary identical to the headline is not a 
     expect(textOf(row).join(' ')).toContain(derived);
   });
 
-  test('SHOWN · a part that differs from the headline still renders', () => {
+  test('SHOWN · a part that differs from the headline still renders — on the card that renders parts', () => {
+    // AMENDED AT WP-52, and the amendment moves the case rather than weakening
+    // it. This used to drive a RATIFIED row (`headlineTemplate:
+    // 'run.waiting.nothing-written'`), which is now the card that renders no
+    // parts at all — the template owns it. The comparison this test is about
+    // still exists, and it lives where parts are still drawn: the DERIVED card.
+    //
+    // Both halves of the dedup therefore remain pinned, on the surface that has
+    // them: identical suppressed (above), distinct shown (here).
     const { view, id } = withRow({
-      headline: 'A plugin update run has waited 60h and changed nothing',
-      headlineTemplate: 'run.waiting.nothing-written',
+      headline: 'halted under rb.bulk-plugin-update — 2 done and standing, 1 failed',
+      headlineTemplate: null,
       parts: [{ kind: 'run', summary: 'running under rb.bulk-plugin-update — 0 done and standing, 0 failed' }],
     });
 
     expect(partsOf(render(view), id)).toEqual([
       'running under rb.bulk-plugin-update — 0 done and standing, 0 failed',
     ]);
+  });
+
+  test('AND THE RATIFIED CARD RENDERS NO PARTS AT ALL — WP-52 subsumes the comparison there', () => {
+    // The same input on a ratified card: the distinct part is suppressed too,
+    // because the template owns every line. Pinned here so the two behaviours
+    // are visible side by side rather than one being mistaken for a regression
+    // in the other.
+    const { view, id } = withRow({
+      headline: 'A plugin update run has waited 60h and changed nothing',
+      headlineTemplate: 'run.waiting.nothing-written',
+      ask: 'It never received a target list, so it cannot start. Give it one, or close it.',
+      parts: [{ kind: 'run', summary: 'running under rb.bulk-plugin-update — 0 done and standing, 0 failed' }],
+    });
+
+    expect(partsOf(render(view), id)).toEqual([]);
   });
 
   test('IT IS A COMPARISON, NOT AN INDEX RULE · a duplicate in second position is the one dropped', () => {

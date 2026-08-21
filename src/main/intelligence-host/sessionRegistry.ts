@@ -436,6 +436,30 @@ export interface Situation {
   /** The meta line's identifier — the runbook id, the producer, the agent. */
   meta: string;
   /**
+   * WP-52 · THE RULE LINE'S TEXT, COMPOSED ONCE HERE — item 3, ratified.
+   *
+   * The designer read the live build: "the rule lines are rendering as lowercase
+   * italic prose. The ratified form is the template's own `rule` field —
+   * `Tier 2 · the world is untouched`, upright, tier named. Italics is a
+   * treatment nothing ratified, and a lowercase fragment reads like an apology
+   * for the row."
+   *
+   * So a row composed from a ratified class carries that class's `rule`. A row
+   * that reached the DERIVED fallback has no class and therefore no ratified
+   * rule, and carries `tierReason` instead — the derived evidence that placed it
+   * ("a write has landed in scope — 2 target(s) …"), which is XD-23's own
+   * requirement and is exactly right for a row the ratified set does not cover.
+   *
+   * ONE FIELD, FILLED HERE, so the component renders it unconditionally. The
+   * alternative — a renderer choosing between `rule` and `tierReason` — would
+   * put a branch on "which sentence a row deserves" back in the surface, which
+   * is the property WP-48's placement argument bought.
+   *
+   * `tierReason` STAYS ON THE CONTRACT and is unchanged: it is the audit answer
+   * to "why is this row here", and the eval's no-prose accounting reads it.
+   */
+  rule: string;
+  /**
    * WHICH ratified class composed the headline, by the designer's own id, or
    * `null` when no template's guard selected this row and the derived sentence
    * was used instead. Reported rather than inferred: a surface that cannot say
@@ -737,7 +761,36 @@ function summarisePlaces(
   total: number,
   unresolved: number
 ): string {
-  if (total === 0) return 'no targets on record';
+  // WP-52 · ITEM 4, AND IT IS THE MEASUREMENT'S OWN ANSWER.
+  //
+  // This branch used to return **'no targets on record'**, and the architect
+  // caught it contradicting the guard that produced the row it appeared on: the
+  // oldest gateless run renders the DERIVED fallback (guard 1 declined, because
+  // guard 1 needs `total === 0` and `total` is `null`), yet its meta line
+  // asserted a KNOWN-EMPTY target set. MEASURED on the owner's real ledger,
+  // 2026-08-21, and the measurement named which of the two candidates was true:
+  //
+  //     SessionRow.targetSet : null      <- the ARMED set, UNKNOWN
+  //     places.total         : 0         <- the OUTCOME set, empty
+  //     places.summary       : "no targets on record"
+  //
+  // So the composer was right and the WORDING was the defect. `total` here is
+  // `PlaceSet.total` — the targets that have an OUTCOME — and zero of them
+  // means nothing has been written yet. It never meant "no targets were
+  // recorded", which is a fact about the ARMING and lives on `targetSet`. WP-48's
+  // name collision, in its third form: not a binding this time, but a sentence.
+  //
+  // THE HONEST RENDERING OF AN EMPTY PLACE SET IS NO PLACE CLAUSE AT ALL. A set
+  // with no members has no place to report, `metaLine` filters falsy values, and
+  // the row keeps its age, its state and its identifier. Saying nothing is the
+  // strongest form of "say unknown, not empty" available here: any replacement
+  // phrase would be authored copy on the one surface whose whole discipline is
+  // that nothing is authored — and the designer's §2 meta columns carry NO place
+  // clause on any of the three run rows, so silence is also the drawn rendering.
+  //
+  // Note this was never ratified copy: from-designer-10 QUOTES this line as an
+  // example of a host derivation, not as a sentence the designer wrote.
+  if (total === 0) return '';
   if (!highest) return `nothing on record names where ${total === 1 ? 'the target is' : `the ${total} targets are`}`;
   const label = readablePlace(highest);
   const head = `touches ${label} on ${atHighest} of ${total}`;
@@ -1425,7 +1478,7 @@ function situationOfSession(
 
   const since = oldestIso([row.startedAt, ...incidents.map((e) => e.observed_at)]);
   const lastEventId = maxId([row.lastEventId, ...incidents.map((e) => e.id)]);
-  const copy = composeSessionCopy(row, column, deps.now ?? new Date(), since);
+  const copy = composeSessionCopy(row, column, deps.now ?? new Date(), since, tierReason);
 
   return {
     id: row.id,
@@ -1720,6 +1773,8 @@ interface SituationCopy {
   chip: string;
   state: string;
   meta: string;
+  /** WP-52 · the ratified rule, or the derived reason. See `Situation.rule`. */
+  rule: string;
   headlineTemplate: string | null;
 }
 
@@ -1730,12 +1785,19 @@ interface SituationCopy {
  * new sentence is authored here: the ratified set covers the classes it covers,
  * and inventing prose for the rest is exactly what the copy discipline forbids.
  */
-function derivedCopy(headline: string, meta: string, state: string): SituationCopy {
-  return { headline, ask: '', chip: '', state, meta, headlineTemplate: null };
+function derivedCopy(headline: string, meta: string, state: string, rule: string): SituationCopy {
+  return { headline, ask: '', chip: '', state, meta, rule, headlineTemplate: null };
 }
 
 /** A session row's verdict. */
-function composeSessionCopy(row: SessionRow, column: TriageColumn, now: Date, since: string): SituationCopy {
+function composeSessionCopy(
+  row: SessionRow,
+  column: TriageColumn,
+  now: Date,
+  since: string,
+  /** WP-52 · the derived reason, for a row the ratified set does not cover. */
+  tierReason: string,
+): SituationCopy {
   const done = row.outcomes.succeeded.length;
   const failed = row.outcomes.failed.length;
   // WP-48's ruling: `{total}` is THE ARMED TARGET SET, not the targets that
@@ -1770,19 +1832,28 @@ function composeSessionCopy(row: SessionRow, column: TriageColumn, now: Date, si
       : null;
   const template = contradictedByTheRecord(selected, gate) ? null : selected;
 
-  if (!template) return derivedCopy(runSummary(row), runbookId, '');
+  if (!template) return derivedCopy(runSummary(row), runbookId, '', tierReason);
   return {
     headline: fillSituationSentence(template.headline, bag),
     ask: fillSituationSentence(template.ask, bag),
     chip: template.chip,
     state: template.state,
     meta: fillSituationSentence(template.meta, bag),
+    // WP-52 item 3: the ratified rule, upright and tier-named. Read from the
+    // template like every other field of a ratified card — never retyped.
+    rule: template.rule,
     headlineTemplate: template.id,
   };
 }
 
 /** An orphan incident's verdict — a situation of one is still a situation. */
-function composeIncidentCopy(incident: EventEnvelope, places: PlaceSet, derived: string): SituationCopy {
+function composeIncidentCopy(
+  incident: EventEnvelope,
+  places: PlaceSet,
+  derived: string,
+  /** WP-52 · the derived reason, for a row the ratified set does not cover. */
+  tierReason: string,
+): SituationCopy {
   const payload = payloadOf(incident);
   const bag: SlotBag = {
     finding: str(payload.symptom) ?? str(payload.fact),
@@ -1809,7 +1880,7 @@ function composeIncidentCopy(incident: EventEnvelope, places: PlaceSet, derived:
     // attached, and that phrase is the designer's. Absent if the set ever drops
     // the class, which renders no state line rather than a stale one.
     const state = SITUATION_TEMPLATES.find((t) => t.id === 'incident.no-run')?.state ?? '';
-    return derivedCopy(derived, fillSituationSentence('{producer}', bag), state);
+    return derivedCopy(derived, fillSituationSentence('{producer}', bag), state, tierReason);
   }
   return {
     headline: fillSituationSentence(template.headline, bag),
@@ -1817,6 +1888,8 @@ function composeIncidentCopy(incident: EventEnvelope, places: PlaceSet, derived:
     chip: template.chip,
     state: template.state,
     meta: fillSituationSentence(template.meta, bag),
+    // WP-52 item 3, on the incident card too: the ratified rule, upright.
+    rule: template.rule,
     headlineTemplate: template.id,
   };
 }
@@ -1898,7 +1971,10 @@ function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps)
   const derived = `${resolved ? 'incident closed' : 'incident open'}: ${
     str(payload.symptom) ?? str(payload.fact) ?? 'no symptom recorded'
   }`;
-  const copy = composeIncidentCopy(incident, places, derived);
+  const tierReason = resolved
+    ? 'the incident is recorded closed; nothing is waiting on you'
+    : 'an open incident with no run linked to it — nothing has been written under a procedure';
+  const copy = composeIncidentCopy(incident, places, derived, tierReason);
 
   return {
     id: incident.id,
@@ -1907,9 +1983,7 @@ function situationOfIncident(incident: EventEnvelope, deps: SessionRegistryDeps)
     // waiting. Same rule the sessions use: the world's state, not the kind.
     column: resolved ? 'changed' : 'waiting',
     tier: resolved ? 4 : 2,
-    tierReason: resolved
-      ? 'the incident is recorded closed; nothing is waiting on you'
-      : 'an open incident with no run linked to it — nothing has been written under a procedure',
+    tierReason,
     places,
     since: incident.observed_at,
     lastEventId: incident.id,

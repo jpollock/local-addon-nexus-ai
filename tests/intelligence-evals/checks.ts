@@ -2399,21 +2399,45 @@ const UX2_DRIVEN: RegisteredCheck[] = [
       const drawn = drawnColumn(s, 'waiting');
       const gatesInFold = s.triage.waiting.filter((x: any) => x.gate);
       const col = s.arrival.find((e) => attr(e, 'data-now-list') === NOW_LIST.waiting);
-      const gateIds = withAttr(elementsOf(col), 'data-gate').map((e) => String(attr(e, 'data-gate')));
-      const expected = gatesInFold.map((x: any) => x.gate.checkpointId);
-      const gateLines = withAttr(elementsOf(col), 'data-gate').map((e) => textsOf(e).join(''));
-      const everyGateLineNamesItsId = gateIds.every((id, i) => gateLines[i].includes(id));
+
+      // WP-52 · GROWN FOR THE RULING, AND GROWN STRICTER.
+      //
+      // This used to require a `data-gate` ELEMENT per gated row — one
+      // particular line, in one particular place. The template now OWNS the
+      // ratified card, and its WHERE rides inside the ask ("Waiting at
+      // cp.backup, 4 of 8"), so the element is gone from exactly the cards that
+      // say the most. The must-not is "a needs-you row that knows THAT but not
+      // WHERE"; it was never about which line carries the where.
+      //
+      // So the reading is: EVERY GATED ROW'S OWN TEXT names its checkpoint id
+      // AND its position. Per-row, and both halves — which is stricter than the
+      // old form in two ways: the old one compared a column-ordered LIST of ids
+      // against a fold-ordered list (an ordering coincidence could satisfy it),
+      // and it never checked the position at all beyond the evidence prose.
+      const rowText = new Map<string, string>();
+      for (const el of withAttr(elementsOf(col), 'data-situation')) {
+        rowText.set(String(attr(el, 'data-situation')), textsOf(el).join(' | '));
+      }
+      const namesWhere = gatesInFold.every((x: any) => (rowText.get(x.id) ?? '').includes(x.gate.checkpointId));
+      const namesPosition = gatesInFold.every(
+        (x: any) => (rowText.get(x.id) ?? '').includes(`${x.gate.index} of ${x.gate.of}`),
+      );
       return {
         ok:
           gatesInFold.length > 0 &&
-          JSON.stringify(gateIds) === JSON.stringify(expected) &&
-          everyGateLineNamesItsId &&
+          namesWhere &&
+          namesPosition &&
           drawn.length === s.triage.waiting.length,
         evidence: [
           `${gatesInFold.length} of ${s.triage.waiting.length} waiting row(s) stand at a gate, and ` +
-            `every one of them RENDERS it by checkpoint id: ${JSON.stringify(gateLines)}`,
-          'the position beside the id is the runbook\'s own — "3 of 8" comes from the document\'s ' +
-            'ordered checkpoint list through `PendingGate`, never counted by the surface',
+            `every one of them NAMES it by checkpoint id in its own text: ` +
+            `${JSON.stringify(gatesInFold.map((x: any) => x.gate.checkpointId))}`,
+          `…and names the position beside it — ` +
+            `${JSON.stringify(gatesInFold.map((x: any) => `${x.gate.index} of ${x.gate.of}`))} — which ` +
+            'comes from the document\'s ordered checkpoint list through `PendingGate`, never counted ' +
+            'by the surface',
+          'read PER ROW and without requiring a particular line: a ratified card carries the where ' +
+            'inside its ask, a derived one on its gate line, and the must-not is about neither',
           `the rows the fold gave no gate are still drawn (${drawn.length} rows for ` +
             `${s.triage.waiting.length} situations); a run that ended has no pending step, and its ` +
             'parts say so rather than the surface inventing a WHERE',
@@ -2491,6 +2515,13 @@ const UX2_DRIVEN: RegisteredCheck[] = [
       const fromFold = new Set<string>();
       for (const situation of [...s.triage.waiting, ...s.triage.changed]) {
         fromFold.add(String(situation.tierReason));
+        // WP-52 · the rule line's text. It arrives exactly the way `tierReason`
+        // does — a FIELD of the fold, composed once in `sessionRegistry` — and
+        // it is what the rule line renders now: the ratified class's own `rule`
+        // on a ratified card, the derived reason on a derived one. Adding it
+        // here rather than to the generator set for the reason the paragraph
+        // above gives: its origin is the record, not the surface.
+        fromFold.add(String(situation.rule));
         fromFold.add(String(situation.places.summary));
         fromFold.add(String(situation.headline));
         fromFold.add(String(situation.ask));
@@ -2600,16 +2631,37 @@ const UX2_DRIVEN: RegisteredCheck[] = [
       const col = s.arrival.find((e) => attr(e, 'data-now-list') === 'needs-you');
       const els = elementsOf(col);
       const gated = s.triage.waiting.filter((x: any) => x.gate);
-      const text = textsOf(col).join(' | ');
-      const namesWhat = gated.every((x: any) => text.includes(`Needs your ${x.gate.awaits}`));
-      const namesWhere = gated.every((x: any) => text.includes(x.gate.checkpointId));
+
+      // WP-52 · GROWN FOR THE RULING, AND GROWN STRICTER.
+      //
+      // This used to search the WHOLE COLUMN for the literal string
+      // `Needs your <awaits>` — the platform's own phrasing, on its own line.
+      // A ratified card no longer draws that line: the template OWNS the card,
+      // and class 2 names what is needed in the designer's words instead ("A
+      // cp.backup step is waiting on your evidence"). The criterion is "the
+      // needs-you row NAMES what is needed", not "the surface prints one
+      // particular sentence", so the reading moves to the gate's own `awaits`
+      // WORD, however the row says it.
+      //
+      // And it moves from the COLUMN to the ROW. The old form was satisfiable
+      // by one row carrying another row's checkpoint id — a column-wide
+      // `includes` cannot tell which card said what. Per-row is what the
+      // criterion always meant, and it is why this growth is not a weakening.
+      const rowsById = new Map<string, string>();
+      for (const el of withAttr(els, 'data-situation')) {
+        rowsById.set(String(attr(el, 'data-situation')), textsOf(el).join(' | '));
+      }
+      const namesWhat = gated.every((x: any) => (rowsById.get(x.id) ?? '').includes(x.gate.awaits));
+      const namesWhere = gated.every((x: any) => (rowsById.get(x.id) ?? '').includes(x.gate.checkpointId));
       return {
         ok: gated.length > 0 && namesWhat && namesWhere && withAttr(els, 'data-situation').length > 0,
         evidence: [
-          `each waiting row names WHAT is needed from the gate's own \`awaits\`: ` +
-            `${JSON.stringify(gated.map((x: any) => `Needs your ${x.gate.awaits}`))}`,
-          `…and WHERE, by checkpoint id: ${JSON.stringify(gated.map((x: any) => x.gate.checkpointId))}`,
-          'both come from `PendingGate`, so the row cannot say one without the other',
+          `each gated row names WHAT is needed, in its OWN text, from the gate's own \`awaits\`: ` +
+            `${JSON.stringify(gated.map((x: any) => x.gate.awaits))}`,
+          `…and WHERE, by checkpoint id, in that same row: ` +
+            `${JSON.stringify(gated.map((x: any) => x.gate.checkpointId))}`,
+          'both come from `PendingGate`, so the row cannot say one without the other — and the ' +
+            'reading is per-ROW, so one card cannot satisfy the criterion on another card\'s behalf',
         ],
       };
     },
