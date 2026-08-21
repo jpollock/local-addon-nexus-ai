@@ -124,6 +124,34 @@ describe('WP-54a · the run-completion tap', () => {
     expect(failures()[0].observed_at).toBe(new Date(result.finishedAt).toISOString());
   });
 
+  test('…AND IT IS THE RUN\'S MOMENT EVEN WHEN THE TAP RUNS LATER — a slow sink proves it', async () => {
+    // THE SECOND BATTERY ROUND STILL SURVIVED the equality assertion above, and
+    // the reason is a measurement problem rather than a coverage one: the tap
+    // fires within the same MILLISECOND as `finishedAt` on an idle machine, so
+    // `Date.now()` at the tap and the run's own moment are the same string and
+    // no assertion on the value can tell them apart.
+    //
+    // A real inbox write is what sits between them in production, so this test
+    // supplies one that takes measurable time. `observed_at` must still be the
+    // run's own moment; a producer stamping "now" now renders a DIFFERENT
+    // string and the pin goes red.
+    const slowInbox = {
+      record: () => { const until = Date.now() + 25; while (Date.now() < until) { /* block */ } },
+    };
+    const slowRunner = new AgentRunner(
+      stateStore,
+      registry,
+      { contributedRegistry: { list: () => [] }, inboxStore: slowInbox } as never,
+      { provider: 'anthropic', apiKey: 'sk-test', modelName: 'claude-sonnet-4' } as never,
+    );
+
+    const result = await slowRunner.run(STALLS);
+    const [event] = failures();
+    expect(event.observed_at).toBe(new Date(result.finishedAt).toISOString());
+    // …and the gap is real, so the assertion above had something to catch.
+    expect(Date.parse(event.recorded_at) - result.finishedAt).toBeGreaterThanOrEqual(20);
+  });
+
   test('an ERRORED run carries its message but not a timeout — the runner hands over both', async () => {
     // The runner passes `timeoutMs` on every run, errored ones included, so
     // this is the production path for the producer's status clause rather than
