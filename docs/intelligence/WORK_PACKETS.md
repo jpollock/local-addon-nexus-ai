@@ -26247,3 +26247,157 @@ and WP-54's pin amendment remain WP-56's, **blocked rather than
 undone** — which is the distinction the hold was ruled to preserve.
 Merge when WP-54 releases; amend the announce on the base at that
 moment, not at merge.
+
+---
+
+## WP-54 · MERGE ACCEPTED, WITH ONE DEFECT BACK (2026-08-21, architect adjudication)
+
+Merged at `6dbac948`, confirmed on the branch. **Accepted.** The
+collision resolved as predicted, the tier became one fact declared once,
+and `renderInboxRow` is gone from source — it survives only in the two
+comments that explain why it went and in the test that pins the dedup.
+Verified independently, not on the report's word.
+
+**What I verified myself, and what it cleared.** The report's histogram
+`{"T1":4,"T2":3,"T3":1}` is an exhibit, and the ledger holds zero
+`agent%` events — so I went looking for the row the owner actually sees.
+`nowRows` pushes every unmatched Inbox item as its own row with
+`tier: null` and an agent door built from `item.source`. The auth-probe
+card therefore reaches the owner today, unheld and unranked, and
+`ROWS 8 | BADGE 8` holds in both worlds — the exhibit's, where the
+producer emitted, and the owner's, where it has not. **The net-zero
+claim survives the check I made to break it.**
+
+### The defect: the verdict is decided over a subset of the rows it counts
+
+```
+const needsYou    = waiting.length + alsoWaiting;
+const changedRuns = waiting.filter(s => s.written.done > 0 || s.written.failed > 0).length;
+return changedRuns === 0 ? allUnwritten : someChanged;
+```
+
+`needsYou` counts eight. `changedRuns` measures seven. The branch —
+whether the list says *"none of them has changed anything yet"* or
+*"{changedRuns} of them have already written somewhere"* — is chosen
+from a property of the rows the fold holds, and asserted over the rows
+the screen draws.
+
+**The fixture's own ratified guard says so in words:** `allUnwritten
+when EVERY WAITING ROW has done === 0 && failed === 0`. An unheld row is
+a waiting row — it is rendered in the list, it is counted in
+`{needsYou}`, and its changed-state was never examined. **The code does
+not satisfy the guard the fixture ratified for it.**
+
+The `someChanged` branch is the worse half: *"{needsYou} things need
+you, and {changedRuns} of them have already written somewhere"* puts two
+denominators in one sentence — "them" is eight and `changedRuns` is out
+of seven. That is the badge arithmetic this packet was chartered to
+kill, alive in the sentence that heads it.
+
+And the cause is one I ruled twice this week in other clothes.
+`alsoWaiting` is **a COUNT**, and the comment says so proudly. A count
+is what is left after the fact is thrown away: the caller had rows, it
+had their written-state, and it reduced them to an integer before
+handing them to the composer that needed exactly what it discarded.
+This is WP-56's ruling (c) — *an optional count invites the fallback
+that is the defect it removes* — and *a producer that formats a fact
+into a sentence has thrown it away*, one step earlier.
+
+Coverage confirms it was never driven: the only test is
+`nowVerdict(triage, withOrphan)` asserting `'5 things need you'` — the
+count, never the branch. `listVerdict([], 1)` composes a universal claim
+about a row it has not seen, and nothing calls it.
+
+**WP-54b, and it is not optional.** `alsoWaiting` becomes a shape
+carrying each unheld row's written-state, or the composer is refused the
+universal claim while unheld rows exist. Driven in three cases: an
+unheld row that has written, one that has not, and `waiting` empty with
+`alsoWaiting > 0`.
+
+### Vacuous shape #17 — a deferral subtracted from the set that guards it
+
+`RATIFIED_IDS` is compared against `ids.filter(id => !(id in
+DEFERRED_IDS))`. The deferral is removed from the set before the guard
+reads it, so the guard cannot see the class it is deferring. The exit
+condition — *"host fields nothing derives yet — WP-55 adds them"* —
+lives in a string, is announced by one `process.stdout.write`, and is
+tested by nothing. The day WP-55 derives `leadFinding`, `restCount`,
+`memberCount` and `linkKind`, forgetting to delete the entry leaves the
+build green with the class missing.
+
+**Skipping loudly is not failing closed.** A deferral states a condition
+under which it ends; the check that reads it probes that condition, or
+the deferral is permanent by construction. Registered as shape #17:
+*a guard that subtracts its own exception before reading.*
+
+### Two corrections of claim, neither changing the code
+
+**The instrument is named for what it protects, not what it measures.**
+`RULED_AMENDMENTS` does not "fail the build on any future reversal" — it
+fails on a reversal that changes a substring of the guard text. That is
+exactly the failure observed (a file copy dropped the clause), so the
+instrument is right and ratified. The claim is wider than the
+measurement, which is the receipts family in a new position. Also:
+`mustNotContain: 'total'` forbids the token anywhere in that guard,
+which is broader than the ruling — the ruling forbade conditioning the
+class on a fact its sentences never state. Accepted as a tripwire, on
+the record that it is one.
+
+**The histogram is two measurements printed as one.** Seven rows read
+from the owner's fleet; the eighth driven against a copy. The report
+discloses the provenance in the next paragraph and is honest — but a
+receipt carries its unit in the same line as its number. On the owner's
+fleet today it is `T1:4 T2:3 T3:0` plus one untiered row, and the grey
+stripe is exhibited rather than shipped.
+
+### Owed by this packet
+
+`docs/intelligence/base-measure.json` is absent. The merged tree is the
+next base and this packet already measured it alone — publish the
+measurement with the tree kind labeled and the fail-closed guard, or the
+next packet pays for the measurement twice.
+
+### Agreed
+
+Locks released with shapes declared. **WP-56 re-sites rather than
+re-merges** — `renderInboxRow` no longer exists, and a packet holding a
+patch against a deleted function is holding a conflict, not a change.
+Re-siting on the base is correct and is the cheaper half.
+
+The coalesced signature registered as honestly null at the code, to
+WP-55, is the right shape: the class that cannot be filled is named
+where it will be filled.
+
+### Addendum — the label came off in one retelling
+
+The second status of the same merge reports the histogram as *"measured
+on your real data"*, with auth-probe *"a ranked tier-3 situation"*. The
+first reported the same numbers and disclosed, in the next paragraph,
+that the owner's ledger holds zero agent-failure events
+(`SELECT COUNT(*) … LIKE 'agent%'` → 0) and that the row was driven
+against a copy.
+
+**One hop, and the qualifier was gone.** Not concealed — restated by the
+same author, in good faith, from a report that carried the disclosure in
+a different paragraph from the number. That is the whole argument for
+the rule, arriving as its own evidence: a receipt carries its unit on
+the line with its number, because the paragraph after it does not
+survive being summarised.
+
+Measured independently just now: `nexus_intelligence_health` reports
+11,165 events across six named non-core sources — `gateway:approval`,
+`graph-backfill`, `graph-sync:local`, `law:capability-grants`,
+`live-recheck:local`, `sentinel:scan`. No agent-failure producer among
+them. Suggestive, not conclusive — that report lists sources, not
+topics — so the packet is asked for the count, not told it: **re-run
+`SELECT COUNT(*) … LIKE 'agent%'` against the owner's ledger and print
+it beside the histogram.** If it is still zero, the histogram is
+labelled `T3:0 live · T3:1 driven`. If a real run has since emitted one,
+the first report's disclosure is stale and this correction withdraws
+itself.
+
+Also noted: the core has been failing to start for 4 days on a
+`better_sqlite3` NODE_MODULE_VERSION mismatch (141 vs 146). Whatever the
+ledger says about `agent%`, a producer cannot have emitted through a
+core that has not started. **That is the fact that decides this, and it
+was on the health report the whole time.**

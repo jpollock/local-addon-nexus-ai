@@ -820,3 +820,50 @@ guard's CONTENT. A ruling recorded only in `WORK_PACKETS.md` survives
 exactly as long as the next person's memory. `RULED_AMENDMENTS` in
 `scripts/generate-situation-copy.ts` is the guard that now refuses it,
 and its own test drives both directions rather than asserting it exists.
+
+## An append written into a conflicted file is on neither side (WP-54)
+
+Two adjudications, 9,651 bytes, were appended to `WORK_PACKETS.md` while
+the file held live conflict markers. The merge was then resolved
+correctly — three blobs, receipt order, four-way verified — and the
+appends went out with the markers, because a rebuild reads the ANCESTOR,
+OURS and THEIRS blobs and the working file is none of those. Every
+check passed. The record lost two rulings and the byte arithmetic
+reconciled exactly, because it was reconciling the wrong three numbers.
+
+**While a merge is in progress, the record is not writable.** An
+adjudication written during a hold goes to a file of its own and is
+appended after the merge commits, or it is written to a working file
+that the correct resolution is guaranteed to discard.
+
+For the resolver: the rebuild is `ancestor + ours_tail + theirs_tail`,
+and if the working file is LARGER than that sum, the excess is somebody's
+uncommitted text. Measure the residual before discarding it. A residual
+of zero is the proof; a positive residual is a question, not a rounding.
+
+## Vacuous shape #17 — a guard that subtracts its own exception before reading
+
+`RATIFIED_IDS` was compared against the emitted ids with the deferred
+class already filtered out, so the guard could not see the class it was
+deferring. The deferral's exit condition — "the host fields WP-55 adds"
+— lived in a string, was announced once on stdout, and was tested by
+nothing. Deleting the deferral is what makes the class ship, and nothing
+fails if nobody does.
+
+**Skipping loudly is not failing closed.** A deferral states a condition
+under which it ends; the check that reads it PROBES that condition, or
+the deferral is permanent by construction and the announcement is a
+comment with a stack trace's self-regard.
+
+## An instrument is described by what it measures (WP-54)
+
+`RULED_AMENDMENTS` was reported as failing the build "on any future
+reversal". It fails on a reversal that changes a substring of the guard
+text — which is the reversal that happened, so the instrument is right.
+The claim is wider than the measurement, and a wider claim is how the
+next reader stops looking for the gap the instrument leaves.
+
+Same line, same rule as the receipts: **state the measurement, then the
+protection it buys, and never the second in place of the first.** A
+histogram assembled from two fleets is labelled with both, on the line
+that carries the numbers, not in the paragraph after it.
