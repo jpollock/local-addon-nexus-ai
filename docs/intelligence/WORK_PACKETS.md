@@ -27712,3 +27712,105 @@ nothing reached the primary checkout — but it is another occurrence of the
 family WP-52 ruled on and WP-54 wrote the "a mechanism its author carries is
 still memory" rule about. Recorded because the rule's own evidence is a count
 of occurrences, and an undisclosed one makes that count wrong.
+
+---
+
+## WP-57 · THE SUBSUMPTION LANDED (2026-08-21) — and two defects found on the way
+
+**Ruling request 1 executed as ruled: SUBSUME.** `SCAN_TOPIC`, `SCAN_SCHEMA`
+and `emitScanAct` are **deleted** from `incidentProducer.ts`. The run frame is
+the sole producer of `task.run.completed`; the incident producer now RECEIVES
+the correlation.
+
+**WP-51's semantics are preserved, and the mechanism that preserves them is
+the same one it invented.** `SentinelReport.correlationId` is a **function**,
+not a value — calling it is what writes `task.run.assigned`, so the producer
+flushes the bracket itself, just-in-time, immediately before the first record
+that needs something to point at. That is `scanCorrelation()` generalized from
+the sentinel to every agent. Rule by rule:
+
+| WP-51's rule | after subsumption |
+|---|---|
+| one act per report | one correlation per report, shared by every finding — pinned |
+| lazy; a scan recording nothing records no act | a scan recording nothing never CALLS `correlationId` — pinned by call count |
+| an amendment carries the CLOSING scan's act | carries the closing RUN's correlation — pinned |
+| an unrecordable act leaves findings uncorrelated | frame returns `undefined`, findings uncorrelated — pinned |
+| — | **NEW:** a scan that finds nothing but closes an incident now carries a correlation, where WP-51 gave it none |
+
+**What moved rather than died.** The act's SHAPE — payload, actor, source
+system, `observed_at`, empty entity — is now the frame's contract and is pinned
+in `agentTaskFrame.test.ts`. Re-asserting it in `incidentProducer.test.ts`
+would be a second opinion about a fact another module owns. The rewritten
+block says so in its own header, and `sentinelCausation.test.ts`'s scan-act
+assertion is replaced by a comment naming where the property lives.
+
+**`sessionRegistry.ts:3239` is unaffected**, checked rather than assumed: its
+`'one scan' | 'one run'` derivation reads `source.system` off the INCIDENTS,
+which are untouched, not off the scan act.
+
+**`close()` MOVED to after the producer taps**, and it is a consequence of
+laziness rather than a preference. `assigned` is flushed by whoever first needs
+the correlation, so the bracket already opens before what it explains; if
+`close()` still ran first, a clean scan that closes a prior incident would
+flush `assigned` with **no `completed` ever written** — a half-bracket, worse
+than none.
+
+### Mutation battery — 13/13 killed, all `--no-cache`
+
+Frame (M01–M05), runner (M06–M09), the `didEmit` gate (M10), subsumption
+(M11–M13): ignore the injected frame · flush eagerly at entry · stamp a
+correlation the frame refused. **M10 exists because the gate was initially
+UNPINNED** — the stub returned true after any close, so deleting the guard
+passed. Found by mutating, not by reading.
+
+### TWO DEFECTS FOUND, one mine, one inherited
+
+**1. MINE, and it would have shipped: the actor id format.**
+`agentActorId` first returned `act_agent_<name>`. `normalizeProducerId`
+(`sessionRegistry.ts:522`) is the join deciding whether a ledger situation and
+an Inbox situation are the SAME situation — it strips `act_`, turns `_` into
+`-`, and compares against the Inbox's agent id:
+
+```
+act_security_sentinel        -> security-sentinel        matches
+act_agent_security-sentinel  -> agent-security-sentinel  matches nothing
+```
+
+Every run-frame event would have silently failed to dedup and produced a
+duplicate row per run — **the exact class WP-54's dedup work just closed.**
+Fixed to `act_<name>` with hyphens as underscores. Three consequences: the
+design note's open question 1 is settled by measurement rather than taste; the
+sentinel's RUN and its INCIDENTS now share one actor id, because
+`SENTINEL_ACTOR` is already that spelling; and the packet ends the two schemes
+instead of adding a third. Pinned with the two-copies-of-one-rule pattern
+(`localDay` / `resolveAgentCron`): a table over all five shipped agent names
+asserting the round trip, **plus a negative pin recording that the rejected
+spelling does not round-trip**, so the bug is a fact in the suite rather than a
+memory in a commit message.
+
+**2. INHERITED, filed not fixed: `recordSentinelIncidents` counts attempts, not
+emissions.**
+
+```ts
+emitIncident(core, { … });          // returns undefined on failure
+history.open.set(key, 'just-emitted');
+written++;                          // increments regardless
+```
+
+`emitIncident` swallows a throw and returns `undefined`; the return is never
+checked. Its own doc says the count exists "so the caller can log a number
+rather than a hope" — it is a hope. **Measured, not reasoned:** an invalid
+correlation made the envelope validator reject all three incidents, and the
+function returned `3` having written `0`. That is how this was found.
+
+Not fixed here, deliberately — it is WP-25/WP-51 contract and changing it
+changes a shipped return value's meaning (counts would drop where emits fail).
+**Registered for its owner.** Note the subsumption slightly raises exposure:
+the correlation now arrives from another module, so a bad one loses incidents
+while still reporting success.
+
+**A third, smaller note for the record:** two of this packet's own test
+fixtures used invalid ULIDs (`CLSE`, `CLN00` — Crockford base32 excludes
+I/L/O/U), and both were caught by a charset assertion over every `task_`
+literal rather than by reading. A fixture that fails validation makes a
+producer look broken; the check is cheap and worth copying.

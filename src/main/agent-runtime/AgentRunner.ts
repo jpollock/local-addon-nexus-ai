@@ -205,33 +205,6 @@ export class AgentRunner {
       message: error,
     });
 
-    // WP-57 · close the frame BEFORE the producer taps below, because WP-51's
-    // own rule is that the act is "recorded before the findings it explains" —
-    // a reader following this correlation should find the run frame already
-    // present when the records that reference it arrive.
-    //
-    // Its OWN try, matching the two taps beside it: a fault in one record must
-    // not cost another, and none of them may cost the run.
-    try {
-      frame?.close({
-        status,
-        finishedAt: result.finishedAt,
-        findings: result.findings?.length,
-        error,
-      });
-    } catch (frameErr: any) {
-      logger.error(`run frame close failed for ${agent.name}:`, frameErr?.message);
-    }
-
-    // WP-57 · surface the task id ONLY if the frame actually wrote.
-    //
-    // The frame is lazy (WP-51's rule, generalized): a quiet successful run
-    // emits nothing at all. Recording its id in `agent_runs` anyway would
-    // store a correlation that names no events — the fabricated join the
-    // ledger's own id rules exist to refuse. Set after close, because
-    // `didEmit()` is not final until then.
-    if (frame?.didEmit()) result.taskId = frame.id;
-
     this.stateStore.recordRun(result);
 
     // Record to inbox and check auto-pause. Wrapped so an inbox fault never fails a run.
@@ -288,6 +261,11 @@ export class AgentRunner {
           // true at its source.
           observedAt: result.finishedAt,
           sites: result.sites,
+          // WP-57 · the run's correlation, as a FUNCTION. Calling it is what
+          // writes `task.run.assigned`, so the producer flushes the bracket
+          // itself, immediately before the first incident it records — which
+          // is exactly when WP-51's own `scanCorrelation` used to mint one.
+          correlationId: frame ? () => frame.correlationId() : undefined,
         },
         { services: this.services },
       );
@@ -323,6 +301,34 @@ export class AgentRunner {
     } catch (failureErr: any) {
       logger.error(`agent failure record failed for ${agent.name}:`, failureErr?.message);
     }
+
+    // WP-57 · close the frame AFTER the producer taps, and the ordering is a
+    // consequence of the frame being lazy rather than a preference.
+    //
+    // `task.run.assigned` is flushed by whoever first needs the correlation —
+    // usually the incident producer, immediately before the record it writes —
+    // so the bracket already OPENS before what it explains, which is WP-51's
+    // rule. `completed` must therefore close after those records exist, or a
+    // clean scan that closes a prior incident would flush `assigned` here with
+    // no `completed` ever written: a half-bracket, which is worse than none.
+    //
+    // Its OWN try, matching the two taps above: a fault in one record must not
+    // cost another, and none of them may cost the run.
+    try {
+      frame?.close({
+        status,
+        finishedAt: result.finishedAt,
+        findings: result.findings?.length,
+        error,
+      });
+    } catch (frameErr: any) {
+      logger.error(`run frame close failed for ${agent.name}:`, frameErr?.message);
+    }
+
+    // Surface the task id ONLY if the frame actually wrote. The frame is lazy:
+    // a quiet successful run emits nothing, and recording its id in
+    // `agent_runs` would store a correlation that names no events.
+    if (frame?.didEmit()) result.taskId = frame.id;
 
     return result;
   }
