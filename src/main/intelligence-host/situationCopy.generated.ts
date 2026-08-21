@@ -61,7 +61,8 @@ export interface SituationTemplate {
   /** The meta line's identifier slot. */
   meta: string;
   /** The tier and why, in the designer's words. See the composer for why the
-   * rendered rule line stays `Situation.tierReason` instead. */
+   * rendered rule line reads this on a ratified card (WP-52 item 3) and
+   * `Situation.tierReason` on a derived one. */
   rule: string;
 }
 

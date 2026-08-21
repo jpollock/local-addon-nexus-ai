@@ -191,18 +191,41 @@ describe('WP-48 · the verdict is READ, and the badge holds one word', () => {
     }
   });
 
-  test('the rule line stays the DERIVED tierReason, not the template\'s tier label', () => {
-    // XD-23's line names the evidence that placed the row. The ratified `rule`
-    // field restates the tier, and trading evidence for a label would be the
-    // regression that line exists to prevent — so it is carried and not drawn.
+  test('the rule line is the RATIFIED rule on a ratified card — WP-52 item 3', () => {
+    // REPLACED AT WP-52, and the replacement is the finding.
+    //
+    // This test used to assert the opposite: "the rule line stays the DERIVED
+    // tierReason, not the template's tier label", on the reasoning that XD-23's
+    // line names the EVIDENCE and a tier label would trade evidence for a word.
+    // The designer read the result on the live build and ruled against it: "the
+    // rule lines are rendering as lowercase italic prose. The ratified form is
+    // the template's own `rule` field — `Tier 2 · the world is untouched`,
+    // upright, tier named. Italics is a treatment nothing ratified, and a
+    // lowercase fragment reads like an apology for the row."
+    //
+    // A withdrawn rule with its guard left standing is a test asserting the
+    // opposite of the law, so the assertion is inverted rather than deleted —
+    // and XD-23 is not lost: `tierReason` is still the fold's answer for a row
+    // the ratified set does not cover, which the next test pins.
     const { tree } = arrival();
     const rows = byAttr(walk(tree), 'data-situation');
-    for (const situation of triage.waiting) {
+    for (const situation of triage.waiting.filter((x) => x.headlineTemplate !== null)) {
       const row = rows.find((n) => props(n)['data-situation'] === situation.id);
       const text = textOf(row).join(' ');
-      expect(text).toContain(situation.tierReason);
-      expect(text).not.toContain('Tier 1 · mid-change');
-      expect(text).not.toContain('Tier 2 · the world is untouched');
+      expect(text).toContain(situation.rule);
+      expect(situation.rule).toMatch(/^Tier [124] · /);      // tier named, upright
+      expect(text).not.toContain(situation.tierReason);
+    }
+  });
+
+  test('…and the DERIVED reason on a card the ratified set does not cover — XD-23, where it applies', () => {
+    const { tree } = arrival();
+    const rows = byAttr(walk(tree), 'data-situation');
+    const derivedRows = triage.waiting.filter((x) => x.headlineTemplate === null);
+    for (const situation of derivedRows) {
+      const row = rows.find((n) => props(n)['data-situation'] === situation.id);
+      expect(textOf(row).join(' ')).toContain(situation.tierReason);
+      expect(situation.rule).toBe(situation.tierReason);
     }
   });
 
@@ -217,17 +240,29 @@ describe('WP-48 · the verdict is READ, and the badge holds one word', () => {
     expect(walk(empty.tree).find((n) => props(n)['data-verdict'] !== undefined)).toBeUndefined();
   });
 
-  test('the parts still render beneath the verdict — a verdict does not replace the record', () => {
-    // Tear 2: a correct list of parts is not a verdict about the whole. The row
-    // now says both, and this is what would fail if the parts were dropped in
-    // favour of the sentence.
+  test('a RATIFIED card does not render the parts — WP-52 item 1, the template owns the card', () => {
+    // REPLACED AT WP-52. This used to read "the parts still render beneath the
+    // verdict — a verdict does not replace the record", on tear 2's reasoning
+    // that a correct list of parts is not a verdict about the whole.
+    //
+    // The designer read the result on the live build: card 2 stated its gate
+    // THREE times and both incident cards said their finding twice, because the
+    // ratified sentence was PREPENDED and the previous render left standing.
+    // The ruling: "a template is the card's headline, ask and meta — three
+    // lines, REPLACING what the row rendered before."
+    //
+    // Tear 2 is not overturned — a situation is still expandable to its parts,
+    // and the parts are still on the contract. What changed is that a card whose
+    // verdict is ratified does not print them as meta lines beneath it.
     const { tree } = arrival();
     const rows = byAttr(walk(tree), 'data-situation');
     const charlie = triage.waiting[0];
+    expect(charlie.headlineTemplate).not.toBeNull();     // the case this is about
+    expect(charlie.parts.length).toBeGreaterThan(1);     // …and it HAS parts to suppress
     const row = rows.find((n) => props(n)['data-situation'] === charlie.id);
-    const parts = walk(row).filter((n) => props(n)['data-part'] !== undefined);
-    expect(parts).toHaveLength(charlie.parts.length);
-    expect(parts.map((n) => textOf(n).join(''))).toEqual(charlie.parts.map((p) => p.summary));
+    expect(walk(row).filter((n) => props(n)['data-part'] !== undefined)).toHaveLength(0);
+    // The parts count still reaches the reader, on the meta line, as a count.
+    expect(textOf(row).join(' ')).toContain(`${charlie.parts.length} parts`);
   });
 });
 
@@ -256,33 +291,52 @@ describe('the arrival renders the fold — row for row', () => {
     expect(idsIn(nothingNeeded)).toHaveLength(1);
   });
 
-  test('every waiting row names its gate BY CHECKPOINT ID, from PendingGate', () => {
+  test('every waiting row names its gate BY CHECKPOINT ID and POSITION — wherever its card carries them', () => {
     const { nodes } = arrival();
-    const gated = byAttr(nodes, 'data-gate');
+    const rows = byAttr(nodes, 'data-situation');
 
-    // The fold puts a gate on exactly one of this morning's waiting situations
-    // (Bravo's); the assertion is over what the FOLD says, never over a number
-    // typed here.
-    const expected = triage.waiting.filter((s) => s.gate).map((s) => s.gate!.checkpointId);
-    expect(expected.length).toBeGreaterThan(0);
-    expect(gated.map((n) => props(n)['data-gate'])).toEqual(expected);
+    // GROWN AT WP-52, AND GROWN STRICTER. This used to require a `data-gate`
+    // ELEMENT per gated row and compare the column-ordered list of ids against
+    // the fold-ordered one — a reading an ordering coincidence could satisfy,
+    // and one the ruling breaks: the template now OWNS the ratified card and
+    // its WHERE rides inside the ask ("Waiting at cp.approval, 3 of 8"), so
+    // there is no separate line to find.
+    //
+    // J-Return's must-not is "a needs-you row that knows THAT but not WHERE".
+    // It was never about which line carries the where. So the reading is
+    // per-ROW and covers both halves — the id AND the position — which is more
+    // than the old form checked.
+    const gates = triage.waiting.filter((s) => s.gate);
+    expect(gates.length).toBeGreaterThan(0);
 
-    // The checkpoint id is rendered AS AN ID, and the position beside it is the
-    // document's own — every value read off the fold's `PendingGate`, never
-    // typed here. BOTH of this morning's waiting rows carry a gate: Charlie
-    // stopped at `cp.verify` 7 of 8, Bravo waits at `cp.approval` 3 of 8, which
-    // is the designer's own "approval gate 3 of 8 in remediate".
-    const gates = triage.waiting.filter((s) => s.gate).map((s) => s.gate!);
-    for (const [i, gate] of gates.entries()) {
-      const line = textOf(gated[i]).join('');
-      expect(line).toContain(gate.checkpointId);
-      expect(line).toContain(`${gate.index} of ${gate.of}`);
-      expect(line).toContain(gate.runbookId as string);
+    for (const situation of gates) {
+      const row = rows.find((n) => props(n)['data-situation'] === situation.id);
+      expect(row).toBeDefined();
+      const text = textOf(row).join(' ');
+      expect(text).toContain(situation.gate!.checkpointId);
+      expect(text).toContain(`${situation.gate!.index} of ${situation.gate!.of}`);
     }
 
-    // …and the morning is the designer's, so the gate line reads as drawn.
-    const lines = gated.map((n) => textOf(n).join(''));
-    expect(lines).toContain('Waiting at cp.approval — 3 of 8 in rb.remediate');
+    // A DERIVED card still draws the mono gate line — it has no ask to carry
+    // the where, so that line is the only place it appears.
+    const gated = byAttr(nodes, 'data-gate');
+    const derivedGated = gates.filter((s) => s.headlineTemplate === null);
+    expect(gated).toHaveLength(derivedGated.length);
+    for (const [i, situation] of derivedGated.entries()) {
+      const line = textOf(gated[i]).join('');
+      expect(line).toContain(situation.gate!.checkpointId);
+      expect(line).toContain(`${situation.gate!.index} of ${situation.gate!.of}`);
+      expect(line).toContain(situation.gate!.runbookId as string);
+    }
+
+    // …and the morning is the designer's, so wherever the where is said, it is
+    // said with the document's own values. Asserted against the ROW rather than
+    // against the mono line, because the ratified card carries it in its ask.
+    const bravo = gates.find((s) => s.gate!.checkpointId === 'cp.approval');
+    expect(bravo).toBeDefined();
+    const bravoText = textOf(rows.find((n) => props(n)['data-situation'] === bravo!.id)).join(' ');
+    expect(bravoText).toContain('cp.approval');
+    expect(bravoText).toContain('3 of 8');
   });
 
   test('the headline is about the ABSENCE, and the accounting line is one breath of the same counts', () => {
@@ -461,8 +515,14 @@ describe('the absences — pins, not omissions', () => {
     const rows = byAttr(nodes, 'data-situation');
     const all = [...triage.waiting, ...triage.changed];
 
+    // WP-52: still the fold's own, and still on every row — what changed is
+    // WHICH field of the fold. `Situation.rule` is the ratified class's rule on
+    // a ratified card and `tierReason` on a derived one, composed once in the
+    // host so this line has no branch in it. Reading `rule` here rather than
+    // `tierReason` is what keeps the assertion true of both kinds of card.
     for (const [i, row] of rows.entries()) {
-      expect(textOf(row).join(' ')).toContain(all[i].tierReason);
+      expect(textOf(row).join(' ')).toContain(all[i].rule);
+      expect(all[i].rule).not.toBe('');
     }
   });
 

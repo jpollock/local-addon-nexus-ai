@@ -212,9 +212,15 @@ const styles = {
     lineHeight: 1.5,
     color: 'var(--nxai-card-text)',
   },
+  /**
+   * WP-52 · ITEM 3 — UPRIGHT. The designer, on the live build: "italics is a
+   * treatment nothing ratified, and a lowercase fragment reads like an apology
+   * for the row." The lowercase half is fixed at the source (the line now reads
+   * the template's own `rule` — `Tier 2 · the world is untouched`, tier named);
+   * the italic half was this rule, and it is gone.
+   */
   rule: {
     fontSize: 10,
-    fontStyle: 'italic' as const,
     color: 'var(--nxai-muted-text)',
     marginBottom: 4,
   },
@@ -329,18 +335,39 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
    */
   private renderSituation(situation: Situation, now: Date): React.ReactElement {
     const sessionId = promotableSessionId(situation);
+    // WP-52 · ITEM 1 — THE TEMPLATE OWNS THE CARD.
+    //
+    // The composer used to PREPEND the ratified sentence and leave the previous
+    // render standing beneath it. The owner's live build showed what that costs:
+    // card 2 stated its gate THREE TIMES — the template ask ("Waiting at
+    // cp.backup, 4 of 8"), the mono gate line ("Waiting at cp.backup — 4 of 8 in
+    // rb.bulk-plugin-update") and "Needs your evidence" — with the pre-template
+    // headline ("0 done and standing, 0 failed") sitting between them as a part.
+    // Both incident cards said "and nothing is fixing it" and then "incident
+    // open: …" saying it again.
+    //
+    // THE RULE, as the designer states it: a template is the card's HEADLINE,
+    // ASK and META — three lines, REPLACING what the row rendered before.
+    //
+    // WHY THIS IS A LAYOUT DECISION AND NOT A BRANCH ON WHICH SENTENCE A ROW
+    // DESERVES (the property WP-48's placement argument bought): a ratified card
+    // is COMPLETE — the template supplies every line the card needs, and the
+    // gate's WHERE is inside its own ask. A derived card is incomplete BY
+    // CONSTRUCTION: it has no ask at all, so the row must supplement it with the
+    // parts, the gate and what the gate needs, or J-Return's "knows THAT but not
+    // WHERE" must-not fires. The host already reports which kind this is; the
+    // surface reads that report rather than deciding it.
+    const ratified = situation.headlineTemplate !== null;
 
     return React.createElement(
       'div',
       { key: situation.id, style: styles.row, 'data-situation': situation.id, 'data-tier': situation.tier },
-      // XD-23: every row shows the rule that placed it. Derived, never authored.
-      // This stays `tierReason` rather than the template's own `rule` field: the
-      // reason names the EVIDENCE that placed the row ("a write has landed in
-      // scope — 2 target(s) … (evt_…)"), where the template's rule restates the
-      // tier. Trading derived evidence for an authored tier label would be the
-      // regression XD-23 exists to prevent, so the ratified `rule` is carried in
-      // the generated module and deliberately not rendered here.
-      React.createElement('div', { key: 'rule', style: styles.rule }, situation.tierReason),
+      // XD-23: every row shows the rule that placed it — and WP-52 ratified WHICH
+      // rule. A ratified card carries its class's own `rule` ("Tier 2 · the world
+      // is untouched", tier named); a derived one carries `tierReason`, the
+      // evidence that placed it. Both arrive on ONE field, composed in the host,
+      // so this line has no branch in it.
+      React.createElement('div', { key: 'rule', style: styles.rule, 'data-rule': ratified ? 'template' : 'derived' }, situation.rule),
       // ONE WORD, when the class has one. A row whose chip is empty renders no
       // badge at all rather than an empty pill.
       ...(situation.chip
@@ -370,17 +397,30 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
       // rule: suppressing `parts[0]` positionally would hide a distinct first
       // part the day the headline is a template's, which is the more common
       // case once the producers pay their debts.
-      ...situation.parts
-        .filter((part) => part.summary !== situation.headline)
-        .map((part, i) =>
-          React.createElement(
-            'div',
-            { key: `part-${i}`, style: styles.meta, 'data-part': part.kind },
-            part.summary,
-          ),
-        ),
+      //
+      // WP-50 · FIELD FINDING 2 kept its comparison, and WP-52 subsumes it on a
+      // ratified card: the parts do not render there at all. The filter stays
+      // because a DERIVED card still needs it — that is the card where the
+      // headline IS `runSummary(row)` and `parts[0].summary` is too.
+      ...(ratified
+        ? []
+        : situation.parts
+            .filter((part) => part.summary !== situation.headline)
+            .map((part, i) =>
+              React.createElement(
+                'div',
+                { key: `part-${i}`, style: styles.meta, 'data-part': part.kind },
+                part.summary,
+              ),
+            )),
       // J-Return's WHERE — the gate, by checkpoint id, with its position.
-      ...(situation.gate
+      //
+      // ON A RATIFIED CARD THE ASK ALREADY CARRIES IT: every class whose row can
+      // hold a gate says the checkpoint and the position in its own words
+      // ("Waiting at {checkpoint}, {position}"), so these two lines were the
+      // second and third statement of one fact. On a DERIVED card there is no
+      // ask, and these are the only place the WHERE appears.
+      ...(!ratified && situation.gate
         ? [
             React.createElement('div', { key: 'gate', style: styles.gate, 'data-gate': situation.gate.checkpointId }, gateLine(situation.gate)),
             React.createElement('div', { key: 'needs', style: styles.meta }, needsLine(situation.gate)),
