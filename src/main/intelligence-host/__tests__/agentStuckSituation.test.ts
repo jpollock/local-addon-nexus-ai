@@ -124,7 +124,12 @@ describe('WP-54a · a timed-out agent run becomes a situation', () => {
       agentId: AGENT_ID, status: 'timeout', timeoutMs: TIMEOUT_MS, finishedAt: FAILED_AT,
     }, { core });
     const [row] = waiting();
-    expect(row.chip).toBe('Stuck');
+    // THE CHIP IS GONE FROM EVERY CLASS. WP-54 cut `Waiting` — chip-presence
+    // told the user which of OUR code paths ran, because only the templated
+    // card carried one — and the designer's cycle-seven sheet then carried the
+    // cut to the whole set, `Stuck` included. The field survives as `''` so
+    // every consumer is unchanged.
+    expect(row.chip).toBe('');
     expect(row.state).toBe('');
     expect(row.meta).toBe(AGENT_ID);
   });
@@ -186,14 +191,18 @@ describe('WP-54a · tier 3, and the sort consequence the template states', () =>
     const rows = waiting();
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.headlineTemplate)).toEqual(['incident.no-run', 'agent.stuck']);
-    // THE INCIDENT'S 2 IS NOT A TYPO AND IS NOT THIS PACKET'S TO FIX. Its
-    // ratified rule line reads "Tier 1 · nothing is holding it back but you"
-    // while `situationOfIncident` ranks it `resolved ? 4 : 2` — the architect's
-    // finding 1, registered as WP-54's item. Asserting the shipped value here
-    // keeps this file a measurement rather than a second, quieter fix; the
-    // ordering claim under test holds either way, because 1 and 2 both sort
-    // above 3.
-    expect(rows.map((r) => r.tier)).toEqual([2, 3]);
+    // **THE INCIDENT'S 2 BECAME A 1 AT WP-54'S MERGE, AND THIS PACKET SAID SO
+    // IN ADVANCE.** It read: *"the incident's 2 is not a typo and is not this
+    // packet's to fix — its ratified rule line reads Tier 1 while
+    // `situationOfIncident` ranks it `resolved ? 4 : 2`, the architect's finding
+    // 1, registered as WP-54's item. Asserting the shipped value here keeps this
+    // file a measurement rather than a second, quieter fix; the ordering claim
+    // under test holds either way, because 1 and 2 both sort above 3."*
+    //
+    // WP-54 landed that fix: the class's declared tier IS the rank now, so the
+    // incident ranks at the 1 its rule line always printed. The ordering claim
+    // this test is actually about is untouched, exactly as predicted.
+    expect(rows.map((r) => r.tier)).toEqual([1, 3]);
     // …and the agent row really is the older one, so age did not produce this.
     expect(rows[1].since < rows[0].since).toBe(true);
   });
@@ -274,8 +283,9 @@ describe('WP-54a · nothing else in the fold moved', () => {
     const [row] = waiting();
     expect(row.kind).toBe('incident');
     expect(row.headlineTemplate).toBe('incident.no-run');
-    // The shipped value, unchanged by this packet — see the ordering test above
-    // for why it is 2 and whose finding that is.
-    expect(row.tier).toBe(2);
+    // 2 → 1 at WP-54's merge, for the reason the ordering test above records.
+    // What this test is about is unchanged: the agent-failure query moved
+    // nothing on an incident row's class or its rank derivation.
+    expect(row.tier).toBe(1);
   });
 });

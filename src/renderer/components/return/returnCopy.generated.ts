@@ -44,7 +44,7 @@ export const RETURN_COPY = {
   REENTRY_STANDING_HEAD: 'The standing approval',
   RESERVED_HEAD: 'Reserved · the record’s own health',
   RESUMED: 'Resumed where it stopped · nothing re-derived, nothing re-asked',
-  ROW_DOOR: 'Open where you are needed.',
+  ROW_DOOR: 'Open where you are needed',
   STANDING_APPROVAL_PREFIX: 'You approved this plan ',
   STANDING_APPROVAL_SUFFIX: '. That approval still stands — you are not being asked again.',
   UNKNOWN_ARM_BODY: 'The arming record for it is not in the ledger this session can reach, so the checkpoints, the document and the attest words cannot be shown. Nothing here is armed now: no write can be made under this session, and the run it belonged to is intact in the record.',

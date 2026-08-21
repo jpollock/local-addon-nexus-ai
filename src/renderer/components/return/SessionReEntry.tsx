@@ -54,6 +54,7 @@ import {
   referenceLine,
 } from '../DockedPanel/procedureModel';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
+import { COLOURS, DOORS } from '../../../main/intelligence-host/situationCopy.generated';
 import {
   armUnestablished,
   cursorCheckpointId,
@@ -69,6 +70,20 @@ export interface SessionReEntryProps {
   onFindInRecord?: (session: SessionRow | null) => void;
   /** §6c's offer. A NEW run, never a re-arm of this one. */
   onStartNewRun?: (session: SessionRow | null) => void;
+  /**
+   * WP-54 · ITEM 6 — THE WAY BACK TO NOW.
+   *
+   * The two doors above are §6c's, and §6c is the case where the platform
+   * cannot establish the arm. An ESTABLISHED arm — the ordinary case, the one a
+   * row's door lands on — had no control that returned anywhere, so "Open where
+   * you are needed" led to a page of links a person could not leave. That is the
+   * missing-front-door defect one screen deeper, and it is the same finding the
+   * owner raised about the strip: the way back must be marked.
+   *
+   * Optional, because a caller that renders this sheet without a Now to return
+   * to should render no door rather than a dead one.
+   */
+  onBackToNow?: () => void;
 }
 
 const styles = {
@@ -106,7 +121,9 @@ const styles = {
     padding: 0,
     font: 'inherit',
     fontWeight: 600,
-    color: '#51bb7b',
+    // WP-54 · ITEM 6 — link blue, for the same reason it is link blue on the
+    // Now row: a door is a link, and brand green is the product's mark.
+    color: COLOURS.link,
     cursor: 'pointer',
   },
 };
@@ -223,6 +240,15 @@ export class SessionReEntry extends React.Component<SessionReEntryProps> {
     return React.createElement(
       'section',
       { style: styles.surface, 'data-surface': 'return-reentry', 'data-session': session.id, 'data-arm': 'established' },
+
+      // WP-54 item 6: the way back, first, where a way back belongs.
+      ...(this.props.onBackToNow
+        ? [React.createElement(
+            'button',
+            { key: 'back', style: styles.door, 'data-door': 'back-to-now', onClick: this.props.onBackToNow },
+            DOORS.backToNow,
+          )]
+        : []),
 
       React.createElement(
         'header',

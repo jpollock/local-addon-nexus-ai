@@ -96,6 +96,18 @@ export interface NexusState {
    * every component along the path believed it had honoured the door.
    */
   governDoorRequest?: GovernDoorTarget | null;
+  /**
+   * WP-54 · ITEM 6 — a door a Now row opened, on its way to the docked panel.
+   *
+   * Same bridge and same reasoning as `governDoorRequest`: the dashboard and the
+   * panel are separate React roots that share this store and nothing else, and
+   * the door must carry the WHOLE target rather than a destination name — a
+   * bridge that dropped the site on the way would deliver a person to a panel
+   * scoped to the fleet while every component along the path believed it had
+   * honoured the door. Cleared by its consumer, or a request left in the store
+   * re-scopes the panel every time anything else in the store changes.
+   */
+  nowDoorRequest?: { kind: 'site'; target: string } | null;
   credentialConnectRequest?: {
     provider: string;
     agentId: string;

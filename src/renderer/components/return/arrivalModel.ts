@@ -33,16 +33,29 @@
  * human reading the tree for stray prose — the copy discipline's own rule.
  */
 import type {
+  ConsequenceTier,
   PendingApproval,
   PendingGate,
   ReservedRow,
+  RowDoor,
   SessionRow,
   Situation,
   TriageView,
 } from '../../../main/intelligence-host/sessionRegistry';
+import {
+  fillSituationSentence,
+  listVerdict,
+  normalizeProducerId,
+} from '../../../main/intelligence-host/sessionRegistry';
+import type { InboxItem } from '../../../main/inbox/types';
 import type { DeclaredProcedure } from '../../../main/intelligence-host/procedureView';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
-import { FRESHNESS } from '../../../main/intelligence-host/situationCopy.generated';
+import {
+  ACCOUNTING,
+  COLOURS,
+  DOORS,
+  FRESHNESS,
+} from '../../../main/intelligence-host/situationCopy.generated';
 import { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
 
 /**
@@ -110,12 +123,167 @@ export interface ArrivalCounts {
   dark: number;
 }
 
-export function arrivalCounts(triage: TriageView): ArrivalCounts {
+export function arrivalCounts(triage: TriageView, inbox?: NowInboxRead): ArrivalCounts {
   return {
-    needsYou: triage.waiting.length,
+    // WP-54 · ITEM 1 — THE BADGE COUNTS THE ROWS. It counted `waiting.length`
+    // while the surface rendered `waiting` PLUS every inbox item, deduplicated
+    // against nothing: seven on the badge, twelve on the screen. It is now the
+    // length of the one list, derived by the one function that builds it, so the
+    // two cannot differ — there is nothing for them to differ ABOUT.
+    needsYou: nowRows(triage, inbox).length,
     changed: triage.changed.length,
     dark: triage.reserved.dark.length,
   };
+}
+
+// ---------------------------------------------------------------------------
+// WP-54 · ITEM 1 — ONE LIST, BUILT ONCE
+// ---------------------------------------------------------------------------
+
+/**
+ * What this module needs of the Inbox. A subset of the surface's own prop, so a
+ * caller that has the prop can pass it and a caller that has nothing passes
+ * nothing.
+ *
+ * ABSENT IS A REAL STATE and it is not the same as empty (the rule this surface
+ * inherited from the tab it replaced): a triage read without an inbox renders
+ * the situation rows alone, which is what it did before the collapse. A FAILED
+ * read is likewise not an empty one — it contributes no rows here and the
+ * surface renders its own failure row, because "nothing needs you when we
+ * simply could not look" is the worst thing this screen can say.
+ */
+export interface NowInboxRead {
+  loaded: boolean;
+  failed: boolean;
+  items: InboxItem[];
+}
+
+/**
+ * One row of the Now list.
+ *
+ * `situation` and `item` are not alternatives on every row: a situation row that
+ * DEDUPLICATED an inbox item carries both, because the inbox item's affordances
+ * — its evidence, and the fact that a decision is still open on it — belong on
+ * the row the user actually sees. A row with only an item is one the fold does
+ * not hold.
+ */
+export interface NowRow {
+  key: string;
+  situation: Situation | null;
+  item: InboxItem | null;
+  tier: ConsequenceTier | null;
+  door: RowDoor | null;
+}
+
+/**
+ * WP-54 · ITEM 1 — DOES THIS INBOX ITEM AND THIS SITUATION NAME ONE THING?
+ *
+ * THREE FACTS, ALL REQUIRED, and the host composed the situation's half (see
+ * `SituationSignature`). Any two of them collide in the real data: every site
+ * can carry `FS-01`, four findings sit on one site, and a producer is an agent
+ * rather than an event. The Inbox's `scope` is namespaced (`name:<site>`), so
+ * the target is compared against BOTH that value's tail and the label — the
+ * label is what a person reads and the scope is what the store keys on, and a
+ * match on either is a match on the same fact.
+ *
+ * A situation with no signature matches nothing, which is the correct answer for
+ * every run row: nothing in the Inbox is a run.
+ */
+export function sameThing(situation: Situation, item: InboxItem): boolean {
+  const signature = situation.signature;
+  if (!signature) return false;
+  if (signature.fact !== item.code) return false;
+  if (signature.producer !== normalizeProducerId(item.source)) return false;
+  const scoped = item.scope.includes(':') ? item.scope.slice(item.scope.indexOf(':') + 1) : item.scope;
+  return signature.target === scoped || signature.target === item.scopeLabel;
+}
+
+/**
+ * THE NOW LIST. Every row the screen draws, deduplicated, in order.
+ *
+ * The rule, in the owner's words: *an inbox item matching a situation
+ * contributes its affordance to that row; one with no match is its own row.* So
+ * a finding the platform recorded twice — once as a ledger incident, once as an
+ * Inbox card — is ONE row carrying both records, and an Inbox item the fold
+ * cannot yet represent still reaches the person it is addressed to.
+ *
+ * ORDER, AND ITS HONEST LIMIT. The situations arrive already ranked by the
+ * consequence order; the unmatched inbox rows follow them, unranked, because the
+ * fold does not hold them and nothing else may assign a tier to a row it did not
+ * derive. On the owner's fleet that is exactly one row — `auth-probe could not
+ * finish a run`, the ratified `agent.stuck` class no producer emits yet
+ * (WP-54a). When that producer lands, the row arrives as a situation, this
+ * function deduplicates the inbox card onto it, and the row takes its ratified
+ * place in the order with no change here and no change in the count.
+ */
+export function nowRows(triage: TriageView, inbox?: NowInboxRead): NowRow[] {
+  const items = inbox && inbox.loaded && !inbox.failed ? inbox.items : [];
+  const matched = new Set<number>();
+
+  const rows: NowRow[] = triage.waiting.map((situation) => {
+    const item = items.filter((candidate) => sameThing(situation, candidate))[0] ?? null;
+    if (item) matched.add(item.id);
+    return { key: situation.id, situation, item, tier: situation.tier, door: situation.door };
+  });
+
+  for (const item of items) {
+    if (matched.has(item.id)) continue;
+    rows.push({
+      key: `inbox-${item.id}`,
+      situation: null,
+      item,
+      tier: null,
+      // The agent that raised it is where it is answered. `source` is the agent
+      // id, which is the destination's own name — nothing here invents one.
+      door: {
+        label: fillSituationSentence(DOORS.agent, { agentId: item.source }),
+        kind: 'agent',
+        target: item.source,
+      },
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * THE LIST VERDICT, over the list actually rendered.
+ *
+ * It calls the HOST'S OWN composer with the count of rows the fold does not
+ * hold, so there is still exactly one place the sentence is composed and one
+ * number in it. Recomposing it here with a template of its own would be the
+ * second-place-the-wording-lives defect the generators exist to prevent; asking
+ * the host for a sentence about seven rows and drawing eight would be item 1
+ * again, one line higher.
+ */
+export function nowVerdict(triage: TriageView, inbox?: NowInboxRead): string {
+  const unheld = nowRows(triage, inbox).filter((row) => row.situation === null).length;
+  return listVerdict(triage.waiting, unheld);
+}
+
+/**
+ * WP-54 · ITEM 3 — THE SEVERITY STRIPE. Three pixels, and it encodes TIER.
+ *
+ * Red at 1, orange at 2, grey at 3, and **nothing at 4** — the section a tier-4
+ * row renders in already says what it is, so a stripe there would be decoration
+ * competing with the only three that mean something.
+ *
+ * THE GUARD, RATIFIED WITH THE STRIPE: it must never drift into a severity
+ * scale. This function's ONLY argument is the tier, which is the strongest form
+ * that guard can take — there is no severity in scope for it to drift towards.
+ * It matters more now that severity is confirmed present in the incident
+ * payload: a coalesced headline may name its highest-SEVERITY member while the
+ * stripe encodes the highest-TIER one, and those are different facts on purpose.
+ *
+ * Driven DIRECTLY across its whole domain by its pins, tier 3 included, which no
+ * producer can currently reach — WP-46's rule that a render test cannot pin a
+ * guard the render never reaches.
+ */
+export function stripeColour(tier: ConsequenceTier | null): string | null {
+  if (tier === 1) return COLOURS.tier1;
+  if (tier === 2) return COLOURS.tier2;
+  if (tier === 3) return COLOURS.tier3;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,10 +342,25 @@ export function arrivalCounts(triage: TriageView): ArrivalCounts {
  */
 export function accountingLine(counts: ArrivalCounts): string {
   return [
-    `${counts.needsYou} ${RETURN_COPY.ACCOUNTING_NEEDS_YOU}`,
-    `${counts.changed} ${RETURN_COPY.ACCOUNTING_CHANGED}`,
-    `${counts.dark} ${RETURN_COPY.ACCOUNTING_DARK}`,
-  ].join(SEP);
+    // WP-54 · ITEM 9 — THE NEEDS-YOU COUNT IS NOT HERE ANY MORE. It was on the
+    // badge, in this line and in the verdict: "7 need you · 0 changed overnight
+    // · 0 checks dark" above "7 things need you, and none of them has changed
+    // anything yet". The verdict is the one that says something, so it keeps the
+    // number and this line stops repeating it.
+    //
+    // WP-54 · ITEM 9 — AND A ZERO IS NEVER ENUMERATED. "0 checks dark" was
+    // contradicted two lines below by the reserved row saying nothing was dark.
+    // A clause about nothing is a clause that should not be there, so each one
+    // renders only when its own count is real — and on a quiet morning this line
+    // is empty, which the header renders as no line at all.
+    counts.changed > 0 ? fillSituationSentence(ACCOUNTING.changed, { count: counts.changed }) : '',
+    // WP-54 · ITEM 10 — "checks dark" was jargon, and this is the plain
+    // sentence. It states the count and stops: a DARK producer is one that has
+    // NEVER reported, so there is no duration to put after it and the "in 9
+    // hours" the review asked for would have to be invented. See the gate
+    // report — the clause says what is true and nothing more.
+    counts.dark > 0 ? fillSituationSentence(ACCOUNTING.dark, { count: counts.dark }) : '',
+  ].filter(Boolean).join(SEP);
 }
 
 /**
@@ -191,6 +374,15 @@ export function accountingLine(counts: ArrivalCounts): string {
 export function awayHeadline(awayMs: number | null): string {
   if (awayMs === null || !Number.isFinite(awayMs) || awayMs < 0) return AUTHORED.AWAY_UNKNOWN;
   const hours = Math.floor(awayMs / 3_600_000);
+  // WP-54 · ITEM 9 — NO AWAY-LINE AT ALL UNDER AN HOUR.
+  //
+  // "You were away 0 hours" was ruled against once and shipped anyway. The
+  // reason it is an EMPTY STRING rather than a rounded-up "1 hour" or a
+  // minutes-and-seconds sentence: an absence of under an hour is not news, and
+  // the alternatives are a false number and a sentence about nothing. The
+  // header renders no element for an empty headline, so the screen opens on the
+  // verdict — which is what the person came for.
+  if (hours < 1) return '';
   return `${RETURN_COPY.AWAY_PREFIX}${hours} ${RETURN_COPY.AWAY_UNIT}${RETURN_COPY.AWAY_SUFFIX}`;
 }
 

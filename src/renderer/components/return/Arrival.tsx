@@ -57,11 +57,13 @@
  */
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
-import type { ReservedRow, Situation, TriageView } from '../../../main/intelligence-host/sessionRegistry';
+import type { ReservedRow, RowDoor, Situation, TriageView } from '../../../main/intelligence-host/sessionRegistry';
 import { ageLabel } from '../../../main/intelligence-host/sessionRegistry';
+import { COLOURS, RESERVED } from '../../../main/intelligence-host/situationCopy.generated';
 import type { InboxItem } from '../../../main/inbox/types';
 import { RETURN_COPY, SEP } from './returnCopy.generated';
 import { NOW_COPY } from '../DockedPanel/openingCopy.generated';
+import { Button } from '../designSystem';
 import {
   accountingLine,
   arrivalCounts,
@@ -70,8 +72,11 @@ import {
   gateLine,
   metaLine,
   needsLine,
-  promotableSessionId,
+  nowRows,
+  nowVerdict,
   reservedDetail,
+  stripeColour,
+  type NowRow,
 } from './arrivalModel';
 
 /**
@@ -117,8 +122,18 @@ export interface ArrivalProps {
    * its situation rows with or without it.
    */
   inbox?: NowInbox;
-  /** Answer an inbox row in place — the card's own Approve / Not now. */
-  onDecide?: (id: number, decision: string, status: 'dismissed' | 'done') => void;
+  /**
+   * WP-54 · ITEM 5 — THE ROW'S DOOR TO THE SITE A FINDING IS ABOUT.
+   *
+   * An incident's ask is "contain it", which is a procedure launch requiring
+   * consent — not a one-click approve. The row therefore leads to where that
+   * decision is made, carrying the site with it (WP-44's rule: a door that names
+   * a destination without carrying its target delivers the person to the top of
+   * the destination instead of to the thing).
+   */
+  onOpenSite?: (siteName: string) => void;
+  /** The agent an Inbox row was raised by, and where it is answered. */
+  onOpenAgent?: (agentId: string) => void;
   /** Reverse a DECISION, never a live change. */
   onReopen?: (id: number) => void;
   /** Clear an agent's auto-pause so it may run automatically again. */
@@ -213,6 +228,19 @@ const styles = {
     color: 'var(--nxai-card-text)',
   },
   /**
+   * WP-54 · ITEM 3 — THE SEVERITY STRIPE, ratified and never built.
+   *
+   * Three pixels on the left edge, from `stripeColour`. It is not decoration:
+   * it is the only thing that would have made the tier drift this packet fixes
+   * VISIBLE at a glance — four Tier-1 findings rendering below a Tier-2 backup
+   * step is obvious with a stripe and invisible without one.
+   *
+   * The width and the position are here; the COLOUR is not, and never will be:
+   * the colour is a function of the tier alone, so the mapping cannot drift into
+   * a severity scale by being edited in a stylesheet.
+   */
+  stripeWidth: 3,
+  /**
    * WP-52 · ITEM 3 — UPRIGHT. The designer, on the live build: "italics is a
    * treatment nothing ratified, and a lowercase fragment reads like an apology
    * for the row." The lowercase half is fixed at the source (the line now reads
@@ -256,7 +284,10 @@ const styles = {
     padding: 0,
     font: 'inherit',
     fontWeight: 600,
-    color: '#51bb7b',
+    // WP-54 · ITEM 6 — LINK BLUE, NOT BRAND GREEN. A door is a link and reads
+    // as one; brand green is the product's own mark, not a destination. Read
+    // from the ratified palette so the value lives in one place.
+    color: COLOURS.link,
     cursor: 'pointer',
   },
   filed: { fontSize: 10, color: 'var(--nxai-muted-text)', marginTop: 6, lineHeight: 1.6 },
@@ -323,88 +354,87 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
   };
 
   /**
-   * One waiting or changed row. The gate and the door appear on waiting only.
+   * ONE ROW OF THE NOW LIST — a situation, an Inbox item, or the same thing
+   * seen from both stores.
    *
-   * WP-48 · THE VERDICT IS READ, NOT COMPOSED. `headline`, `ask`, `chip`,
-   * `state` and `meta` all arrive from the host's one composer, so this
-   * component holds no template, no substitution and no branch on which
-   * sentence a row deserves — the property the ratified placement argument
-   * buys. What remains here is layout: which field goes on which line, and the
-   * system's own rule that a BADGE CARRIES ONE WORD while every phrase, the
-   * parts chip and the status line included, is text on the meta line.
+   * WP-54 · ITEM 1 COLLAPSED TWO FUNCTIONS INTO THIS ONE, and the collapse is
+   * the fix rather than a tidy-up. `renderSituation` and `renderInboxRow` were
+   * two functions because position 11 §3 made a structural distinction —
+   * *"rows answerable here get buttons; rows needing the session get one door
+   * and no buttons"* — and the surface enforced it by having two shapes. **That
+   * rule was withdrawn** (item 5): a gate without its declaration is consent
+   * without context, which is the failure XD-8 exists to prevent, so no row is
+   * answered in place any more. With the buttons gone the two shapes had no
+   * difference left to carry, and keeping them apart is what let the same
+   * finding render twice.
+   *
+   * WP-52's rule still holds inside it: a ratified card's TEMPLATE owns the
+   * headline, the ask and the meta, and the derived card is supplemented with
+   * its parts and its gate because it has no ask of its own.
    */
-  private renderSituation(situation: Situation, now: Date): React.ReactElement {
-    const sessionId = promotableSessionId(situation);
-    // WP-52 · ITEM 1 — THE TEMPLATE OWNS THE CARD.
-    //
-    // The composer used to PREPEND the ratified sentence and leave the previous
-    // render standing beneath it. The owner's live build showed what that costs:
-    // card 2 stated its gate THREE TIMES — the template ask ("Waiting at
-    // cp.backup, 4 of 8"), the mono gate line ("Waiting at cp.backup — 4 of 8 in
-    // rb.bulk-plugin-update") and "Needs your evidence" — with the pre-template
-    // headline ("0 done and standing, 0 failed") sitting between them as a part.
-    // Both incident cards said "and nothing is fixing it" and then "incident
-    // open: …" saying it again.
-    //
-    // THE RULE, as the designer states it: a template is the card's HEADLINE,
-    // ASK and META — three lines, REPLACING what the row rendered before.
-    //
-    // WHY THIS IS A LAYOUT DECISION AND NOT A BRANCH ON WHICH SENTENCE A ROW
-    // DESERVES (the property WP-48's placement argument bought): a ratified card
-    // is COMPLETE — the template supplies every line the card needs, and the
-    // gate's WHERE is inside its own ask. A derived card is incomplete BY
-    // CONSTRUCTION: it has no ask at all, so the row must supplement it with the
-    // parts, the gate and what the gate needs, or J-Return's "knows THAT but not
-    // WHERE" must-not fires. The host already reports which kind this is; the
-    // surface reads that report rather than deciding it.
-    const ratified = situation.headlineTemplate !== null;
+  private renderRow(row: NowRow, now: Date): React.ReactElement {
+    const { situation, item } = row;
+    const ratified = situation !== null && situation.headlineTemplate !== null;
+    const stripe = stripeColour(row.tier);
 
     return React.createElement(
       'div',
-      { key: situation.id, style: styles.row, 'data-situation': situation.id, 'data-tier': situation.tier },
-      // XD-23: every row shows the rule that placed it — and WP-52 ratified WHICH
-      // rule. A ratified card carries its class's own `rule` ("Tier 2 · the world
-      // is untouched", tier named); a derived one carries `tierReason`, the
-      // evidence that placed it. Both arrive on ONE field, composed in the host,
-      // so this line has no branch in it.
-      React.createElement('div', { key: 'rule', style: styles.rule, 'data-rule': ratified ? 'template' : 'derived' }, situation.rule),
+      {
+        key: row.key,
+        style: stripe
+          ? { ...styles.row, borderLeft: `${styles.stripeWidth}px solid ${stripe}` }
+          : styles.row,
+        ...(situation ? { 'data-situation': situation.id, 'data-tier': situation.tier } : {}),
+        ...(item ? { 'data-inbox-row': String(item.id) } : {}),
+        // The stripe's own colour, exposed so a pin can read the ENCODING
+        // rather than a computed style string.
+        ...(stripe ? { 'data-stripe': stripe } : {}),
+      },
+
+      // XD-23: every row shows the rule that placed it — and WP-52 ratified
+      // WHICH rule. WP-54 item 2 made the tier in it the tier the row was sorted
+      // by, filled into the ratified line's own `{tier}` slot in the host.
+      ...(situation
+        ? [React.createElement(
+            'div',
+            { key: 'rule', style: styles.rule, 'data-rule': ratified ? 'template' : 'derived' },
+            situation.rule,
+          )]
+        : []),
+
       // ONE WORD, when the class has one. A row whose chip is empty renders no
-      // badge at all rather than an empty pill.
-      ...(situation.chip
+      // badge at all rather than an empty pill. WP-54 item 12 cut `Waiting` at
+      // the fixture — the designer's own template error, withdrawn by them:
+      // chip-presence was telling the user which of OUR code paths ran.
+      ...(situation?.chip
         ? [React.createElement('div', { key: 'chip', style: styles.chip, 'data-chip': situation.chip }, situation.chip)]
         : []),
-      // The verdict, composed once in the host and rendered verbatim.
+
+      // The verdict. A situation's is composed once in the host; an Inbox-only
+      // row's is the ITEM'S OWN title, which is the record the fold does not
+      // hold — never a sentence composed about it here.
       React.createElement(
         'div',
-        { key: 'headline', style: styles.statement, 'data-headline': situation.headlineTemplate ?? 'derived' },
-        situation.headline,
+        {
+          key: 'headline',
+          style: styles.statement,
+          'data-headline': situation ? (situation.headlineTemplate ?? 'derived') : 'inbox',
+        },
+        situation ? situation.headline : (item as InboxItem).title,
       ),
-      ...(situation.ask
+
+      ...(situation?.ask
         ? [React.createElement('div', { key: 'ask', style: styles.ask, 'data-ask': 'true' }, situation.ask)]
         : []),
-      // The situation's own parts, in the record's words. Never composed prose.
-      // They stay BENEATH the verdict rather than replacing it: tear 2's rule is
-      // that a correct list of parts is not a verdict about the whole, and the
-      // row now says both.
-      //
-      // WP-50 · FIELD FINDING 2 — A PART THAT IS THE HEADLINE IS NOT A PART.
-      // The owner's first live look: "the headline repeats as the first meta
-      // line on every row." On a row whose class no ratified guard selected, the
-      // composer falls back to the DERIVED sentence — which is `runSummary(row)`
-      // — and `parts[0].summary` is `runSummary(row)` too. One derivation, two
-      // slots, so the card said its own sentence twice on every run row on the
-      // real fleet. ONE COMPARISON, and it is a comparison rather than an index
-      // rule: suppressing `parts[0]` positionally would hide a distinct first
-      // part the day the headline is a template's, which is the more common
-      // case once the producers pay their debts.
-      //
-      // WP-50 · FIELD FINDING 2 kept its comparison, and WP-52 subsumes it on a
-      // ratified card: the parts do not render there at all. The filter stays
-      // because a DERIVED card still needs it — that is the card where the
-      // headline IS `runSummary(row)` and `parts[0].summary` is too.
-      ...(ratified
-        ? []
-        : situation.parts
+      ...(!situation && item?.detail
+        ? [React.createElement('div', { key: 'detail', style: styles.ask }, item.detail)]
+        : []),
+
+      // The situation's own parts, in the record's words — on a DERIVED card
+      // only. WP-50's comparison stays: on a derived run row the headline IS
+      // `runSummary(row)` and so is `parts[0].summary`.
+      ...(situation && !ratified
+        ? situation.parts
             .filter((part) => part.summary !== situation.headline)
             .map((part, i) =>
               React.createElement(
@@ -412,105 +442,129 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
                 { key: `part-${i}`, style: styles.meta, 'data-part': part.kind },
                 part.summary,
               ),
-            )),
-      // J-Return's WHERE — the gate, by checkpoint id, with its position.
-      //
-      // ON A RATIFIED CARD THE ASK ALREADY CARRIES IT: every class whose row can
-      // hold a gate says the checkpoint and the position in its own words
-      // ("Waiting at {checkpoint}, {position}"), so these two lines were the
-      // second and third statement of one fact. On a DERIVED card there is no
-      // ask, and these are the only place the WHERE appears.
-      ...(!ratified && situation.gate
+            )
+        : []),
+
+      // J-Return's WHERE — the gate, by checkpoint id, with its position. On a
+      // RATIFIED card the ask already carries it; on a derived card these are
+      // the only place it appears.
+      ...(situation && !ratified && situation.gate
         ? [
             React.createElement('div', { key: 'gate', style: styles.gate, 'data-gate': situation.gate.checkpointId }, gateLine(situation.gate)),
             React.createElement('div', { key: 'needs', style: styles.meta }, needsLine(situation.gate)),
           ]
         : []),
-      React.createElement('div', { key: 'meta', style: styles.meta }, metaLine(situation, now)),
-      ...(situation.column === 'waiting' && sessionId
-        ? [
-            React.createElement(
-              'button',
-              { key: 'door', style: styles.door, 'data-door': sessionId, onClick: this.promote(sessionId) },
-              RETURN_COPY.ROW_DOOR,
-            ),
-          ]
+
+      React.createElement(
+        'div',
+        { key: 'meta', style: styles.meta },
+        situation
+          ? metaLine(situation, now)
+          : [(item as InboxItem).scopeLabel, (item as InboxItem).source].filter(Boolean).join(SEP),
+      ),
+
+      // The Inbox item's own affordance, ON the row it duplicates. This is the
+      // whole of "contributes its affordance to that row": the evidence a card
+      // carried behind a disclosure is a fact about the finding, and it survived
+      // the collapse because the row it belongs to is now the only row.
+      ...(item?.evidence
+        ? [React.createElement(
+            'details',
+            { key: 'evidence', style: { marginTop: 6 }, 'data-evidence': String(item.id) },
+            React.createElement('summary', { style: styles.meta }, 'Evidence'),
+            React.createElement('pre', { style: { ...styles.meta, whiteSpace: 'pre-wrap' as const } }, item.evidence),
+          )]
         : []),
+
+      ...(row.door ? [this.renderDoor(row.key, row.door)] : []),
     );
+  }
+
+  /**
+   * WP-54 · ITEM 6 — THE DOOR, NAMING WHERE IT GOES, IN LINK BLUE.
+   *
+   * Three destinations and each is a different act, which is why `kind` travels
+   * with the label: a session PROMOTES (same session id, same cursor, same
+   * pending approvals), a site is where a containment decision is made with its
+   * declaration in front of it, and an agent is where an agent's own failure is
+   * answered. A door whose handler is absent renders as nothing rather than as a
+   * control that does nothing — a dead door is worse than no door.
+   *
+   * LINK BLUE, NOT BRAND GREEN (`#51bb7b`): a door is a link and reads as one.
+   * Brand green is the product's own mark, not a destination, and the colour is
+   * read from the ratified palette rather than typed here.
+   */
+  private renderDoor(key: string, door: RowDoor): React.ReactElement {
+    return React.createElement(
+      'button',
+      {
+        key: 'door',
+        style: styles.door,
+        'data-door': door.target,
+        'data-door-kind': door.kind,
+        onClick: () => this.walkThrough(door),
+      },
+      door.label,
+    );
+  }
+
+  private walkThrough(door: RowDoor): void {
+    if (door.kind === 'session') this.props.onPromote?.(door.target);
+    if (door.kind === 'site') this.props.onOpenSite?.(door.target);
+    if (door.kind === 'agent') this.props.onOpenAgent?.(door.target);
   }
 
   /**
    * The reserved slot. ONE row, always rendered, sticky so it cannot be scrolled
    * away — §4a tear 3, built rather than written down.
+   *
+   * WP-54 · ITEM 11 renamed it and quieted it, and changed NOTHING else. The
+   * heading was "Reserved · the record's own health" — our noun for a thing the
+   * user recognises as *is the platform watching my sites*. XD-23's guarantee is
+   * a SEAT, not a panel: it is still exactly one row, it still cannot grow (the
+   * contract has no field that could hold a second), and it is still sticky.
+   * When the news is good it says one quiet line and stops.
    */
   private renderReserved(reserved: ReservedRow): React.ReactElement {
     return React.createElement(
       'div',
       { style: styles.reserved, 'data-reserved': 'true' },
-      React.createElement('div', { key: 'rule', style: styles.reservedRule }, RETURN_COPY.RESERVED_HEAD),
+      React.createElement('div', { key: 'rule', style: styles.reservedRule }, RESERVED.head),
       React.createElement('div', { key: 'head', style: styles.reservedHeadline }, reserved.headline),
-      React.createElement('div', { key: 'detail', style: styles.reservedDetail }, reservedDetail(reserved)),
+      // The detail is every dark producer folded into this one row. Absent when
+      // there are none — a quiet row is one line, not one line and an empty one.
+      ...(reservedDetail(reserved)
+        ? [React.createElement('div', { key: 'detail', style: styles.reservedDetail }, reservedDetail(reserved))]
+        : []),
     );
   }
 
   /**
-   * ONE INBOX ROW — a card that collapsed onto the list, answerable in place.
+   * A DECIDED Inbox item, in the section for things that need nobody.
    *
-   * IT CARRIES BUTTONS AND NO DOOR, and `renderSituation` carries a door and no
-   * buttons. That is the whole of position 11 §3's rule — "rows answerable here
-   * get buttons; rows needing the session get one door and no buttons, so
-   * deciding and going somewhere look different before you click" — and it is
-   * enforced by the two functions being separate rather than by a flag inside
-   * one, so a future edit cannot give a door-row a button by flipping a boolean.
-   *
-   * Every string on the row is the ITEM's own: title, detail, scope label,
-   * source, evidence. Nothing here composes a sentence about them, which is why
-   * the row survives the no-prose accounting the way a fold field does.
+   * It carries ONE control and it is not a gate: Reopen reverses a DECISION,
+   * never a live change, so it is genuinely answerable where it stands. Item 5
+   * removed Approve / Not now from every row in the list above; this is not one
+   * of those rows, and the distinction is the whole of the ruling — a gate needs
+   * its declaration, and undoing a filing does not.
    */
-  private renderInboxRow(item: InboxItem): React.ReactElement {
-    const { onDecide, onReopen } = this.props;
-    const open = item.status === 'open';
-
+  private renderDecidedRow(item: InboxItem): React.ReactElement {
+    const { onReopen } = this.props;
     return React.createElement(
       'div',
       { key: `inbox-${item.id}`, style: styles.row, 'data-inbox-row': String(item.id), 'data-inbox-kind': item.kind },
       React.createElement('div', { key: 'title', style: styles.statement }, item.title),
-      ...(item.detail ? [React.createElement('div', { key: 'detail', style: styles.ask }, item.detail)] : []),
       React.createElement(
         'div',
         { key: 'meta', style: styles.meta },
-        [item.scopeLabel, item.source, item.seenCount > 1 ? `seen ${item.seenCount} times` : '']
-          .filter(Boolean)
-          .join(SEP),
+        [item.scopeLabel, item.source].filter(Boolean).join(SEP),
       ),
-      ...(item.evidence
-        ? [React.createElement(
-            'details',
-            { key: 'evidence', style: { marginTop: 6 } },
-            React.createElement('summary', { style: styles.meta }, 'Evidence'),
-            React.createElement('pre', { style: { ...styles.meta, whiteSpace: 'pre-wrap' as const } }, item.evidence),
-          )]
-        : []),
-      open
-        ? React.createElement(
-            'div',
-            { key: 'answers', style: styles.answers, 'data-answers': String(item.id) },
-            React.createElement(
-              'button',
-              { key: 'approve', 'data-answer': 'approve', onClick: () => onDecide && onDecide(item.id, NOW_COPY.APPROVE, 'done') },
-              NOW_COPY.APPROVE,
-            ),
-            React.createElement(
-              'button',
-              { key: 'not-now', 'data-answer': 'not-now', onClick: () => onDecide && onDecide(item.id, NOW_COPY.NOT_NOW, 'dismissed') },
-              NOW_COPY.NOT_NOW,
-            ),
-          )
-        : React.createElement(
-            'button',
-            { key: 'reopen', style: styles.door, 'data-answer': 'reopen', onClick: () => onReopen && onReopen(item.id) },
-            'Reopen',
-          ),
+      // WP-54 · ITEM 8 — the design system's Button, not a hand-styled one.
+      React.createElement(
+        Button,
+        { key: 'reopen', 'data-answer': 'reopen', onClick: () => onReopen && onReopen(item.id) },
+        'Reopen',
+      ),
     );
   }
 
@@ -531,22 +585,27 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
       { key: `paused-${agentId}`, style: styles.banner, 'data-paused': agentId },
       React.createElement('span', { key: 'text' }, `${agentId} paused after repeated failures`),
       React.createElement(
-        'button',
-        { key: 'resume', style: styles.door, onClick: () => onResumeAgent && onResumeAgent(agentId) },
+        Button,
+        { key: 'resume', onClick: () => onResumeAgent && onResumeAgent(agentId) },
         'Try again',
       ),
     );
   }
 
   /**
-   * The inbox's half of the needs-you list, or the read failure in its place.
+   * The Inbox's chrome — what is NOT a row of the list.
    *
    * ORDER MATTERS AND IS INHERITED: a failed read must never fall through to
    * silence. Before the collapse the tab said so with its own screen; here it
    * says so with one row inside the list, because the list has other rows in it
    * and a whole-screen failure would hide them.
+   *
+   * WP-54 · ITEM 1 — THE ITEMS THEMSELVES ARE NO LONGER RENDERED HERE. They are
+   * rows of `nowRows`, deduplicated against the situations, and this returns
+   * only the read failure, the paused-agent banners and the truncation notice.
+   * Rendering both was the defect: four findings, twice, under a badge of seven.
    */
-  private renderInboxRows(): React.ReactElement[] {
+  private renderInboxChrome(): React.ReactElement[] {
     const inbox = this.props.inbox;
     if (!inbox) return [];
     if (inbox.failed) {
@@ -555,7 +614,7 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
         { key: 'inbox-failed', style: styles.row, 'data-inbox-failed': 'true' },
         React.createElement('div', { key: 'text', style: styles.statement }, "Couldn't read the inbox."),
         ...(this.props.onRetryInbox
-          ? [React.createElement('button', { key: 'retry', style: styles.door, onClick: this.props.onRetryInbox }, 'Try again')]
+          ? [React.createElement(Button, { key: 'retry', onClick: this.props.onRetryInbox }, 'Try again')]
           : []),
       )];
     }
@@ -565,7 +624,6 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
       ...(inbox.items.length < inbox.total
         ? [React.createElement('div', { key: 'inbox-truncated', style: styles.truncated }, `Showing ${inbox.items.length} of ${inbox.total}`)]
         : []),
-      ...inbox.items.map((item) => this.renderInboxRow(item)),
     ];
   }
 
@@ -578,28 +636,47 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
       return React.createElement('div', { style: styles.empty, 'data-arrival-error': 'true' }, error ?? '');
     }
 
-    const counts = arrivalCounts(triage);
     const inbox = this.props.inbox;
+    // WP-54 · ITEM 1 — ONE LIST, BUILT ONCE, AND EVERY NUMBER ON THIS SCREEN
+    // COMES OUT OF IT. `arrivalCounts` calls `nowRows` too, so the badge on the
+    // rail counts these rows and not a different population.
+    const rows = nowRows(triage, inbox);
+    const counts = arrivalCounts(triage, inbox);
+    const away = awayHeadline(awayMs);
+    const accounting = accountingLine(counts);
+    const verdict = nowVerdict(triage, inbox);
+    const quiet = [
+      ...(triage.working ?? []),
+    ];
+    const decided = inbox && inbox.loaded && !inbox.failed ? inbox.recentlyDecided : [];
+    const nothingNeeded = quiet.length + triage.changed.length + decided.length;
 
     return React.createElement(
       'section',
       { style: styles.surface, 'data-surface': 'now' },
 
-      // The headline is about the USER's absence; the accounting line is the
-      // same counts the lists below are about to render, in one breath.
       React.createElement(
         'header',
         { key: 'header' },
-        React.createElement('h2', { style: styles.headline, 'data-away': 'true' }, awayHeadline(awayMs)),
-        React.createElement('p', { style: styles.accounting, 'data-accounting': 'true' }, accountingLine(counts)),
-        // WP-48 · the list verdict — the sentence no single row can say, and the
-        // most useful one this data produces. READ, NEVER RECOMPOSED: it is
-        // composed once in `sessionRegistry` over the very rows below it, and
-        // this list is those rows (see rider 1's measurement in `arrivalModel`
-        // for why nothing is filtered out from under it). Empty when nothing is
-        // waiting.
-        ...(triage.verdict
-          ? [React.createElement('p', { style: styles.verdict, 'data-verdict': 'true' }, triage.verdict)]
+        // WP-54 · ITEM 9 — the away line renders only when there IS an absence
+        // to report. Under an hour it is not news, and "You were away 0 hours"
+        // was ruled against once and shipped anyway.
+        ...(away
+          ? [React.createElement('h2', { key: 'away', style: styles.headline, 'data-away': 'true' }, away)]
+          : []),
+        // WP-54 · ITEM 9 — and the accounting line renders only when it has a
+        // clause. It no longer restates the verdict's own count, and it never
+        // enumerates a zero, so on a quiet morning there is no element here at
+        // all rather than an element saying nothing.
+        ...(accounting
+          ? [React.createElement('p', { key: 'accounting', style: styles.accounting, 'data-accounting': 'true' }, accounting)]
+          : []),
+        // The list verdict — the sentence no single row can say, and the most
+        // useful one this data produces. Composed by the HOST'S own composer
+        // over the rows below it (see `nowVerdict`), so the sentence and the
+        // list count the same things. Empty when nothing is waiting.
+        ...(verdict
+          ? [React.createElement('p', { key: 'verdict', style: styles.verdict, 'data-verdict': 'true' }, verdict)]
           : []),
       ),
 
@@ -612,49 +689,47 @@ export class Arrival extends React.Component<ArrivalProps, ArrivalState> {
         React.createElement(
           'div',
           { key: 'needs-you', 'data-now-list': 'needs-you' },
+          // NO BADGE HERE. WP-54 item 9: the count was on this badge, in the
+          // accounting line and in the verdict — three renderings of one number.
+          // The verdict is the one that says something; the ambient badge on the
+          // rail is the instrument (XD-23) and it counts these very rows.
           React.createElement(
             'div',
             { style: styles.columnHead },
             React.createElement('span', { key: 'label' }, RETURN_COPY.WAITING_HEAD),
-            // The badge is the needs-you count and it lives HERE and on the rail.
-            ...(counts.needsYou > 0
-              ? [React.createElement('span', { key: 'badge', style: styles.badge, 'data-badge': 'needsYou' }, String(counts.needsYou))]
-              : []),
           ),
-          ...triage.waiting.map((s) => this.renderSituation(s, now)),
-          ...this.renderInboxRows(),
+          ...this.renderInboxChrome(),
+          ...rows.map((row) => this.renderRow(row, now)),
         ),
 
-        React.createElement(
-          'div',
-          { key: 'nothing-needed', style: styles.sectionGap, 'data-now-list': 'nothing-needed' },
-          // NO BADGE. Nothing here needs the user, so nothing here escalates.
-          React.createElement('div', { style: styles.columnHead }, NOW_COPY.NOTHING_NEEDED_HEAD),
-          // WP-49a · XD-27 RIDER 1, now that the contract carries its fact.
-          // "An in-flight run needing nothing goes to Nothing-needed-of-you as
-          // ONE LINE with its door." The line is composed in the host from the
-          // ratified run noun and the fold's own status — this renders it and
-          // adds nothing, which is the packet's own "no new renderer logic
-          // beyond consumption". Empty on the real fleet today, by measurement,
-          // and the section is unchanged when it is.
-          ...(triage.working ?? []).map((w) =>
-            React.createElement(
+        // WP-54 · ITEM 13 — THE SECTION DOES NOT RENDER WHEN IT IS EMPTY.
+        //
+        // "NOTHING NEEDED OF YOU" was rendering as a heading over two sentences
+        // of our own doctrine — *"Filed before you arrived — the record was
+        // written when the run finished, not when you opened this. Nothing here
+        // is composed on demand."* That sentence exists to reassure an ARCHITECT
+        // that nothing is composed on demand; to a user it is a section with no
+        // contents and a lecture. Both sentences are deleted, and the section
+        // renders only when it holds something.
+        ...(nothingNeeded > 0
+          ? [React.createElement(
               'div',
-              { key: `working-${w.sessionId}`, style: styles.row, 'data-working': w.sessionId },
-              React.createElement('div', { style: styles.statement }, w.line),
-              React.createElement(
-                'button',
-                { style: styles.door, 'data-door': w.sessionId, onClick: this.promote(w.sessionId) },
-                RETURN_COPY.ROW_DOOR,
+              { key: 'nothing-needed', style: styles.sectionGap, 'data-now-list': 'nothing-needed' },
+              React.createElement('div', { style: styles.columnHead }, NOW_COPY.NOTHING_NEEDED_HEAD),
+              ...quiet.map((w) =>
+                React.createElement(
+                  'div',
+                  { key: `working-${w.sessionId}`, style: styles.row, 'data-working': w.sessionId },
+                  React.createElement('div', { style: styles.statement }, w.line),
+                  this.renderDoor(w.sessionId, { label: RETURN_COPY.ROW_DOOR, kind: 'session', target: w.sessionId }),
+                ),
               ),
-            ),
-          ),
-          ...triage.changed.map((s) => this.renderSituation(s, now)),
-          ...(inbox && inbox.loaded && !inbox.failed
-            ? inbox.recentlyDecided.map((item) => this.renderInboxRow(item))
-            : []),
-          React.createElement('p', { key: 'filed', style: styles.filed, 'data-filed': 'true' }, RETURN_COPY.FILED_BEFORE_YOU_ARRIVED),
-        ),
+              ...triage.changed.map((s) =>
+                this.renderRow({ key: s.id, situation: s, item: null, tier: s.tier, door: s.door }, now),
+              ),
+              ...decided.map((item) => this.renderDecidedRow(item)),
+            )]
+          : []),
       ),
 
       // T5 leaves the list. This line is where it went — no drift rows anywhere.

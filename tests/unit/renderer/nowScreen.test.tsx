@@ -120,52 +120,54 @@ describe('the collapse — one screen, and two kinds of row on it', () => {
     expect(text).toContain('security-sentinel');
   });
 
-  test('THE DISTINCTION · an answerable row has buttons and no door; a row needing the session has a door and no buttons', () => {
-    const { tree, nodes } = now({ inbox: inbox(), onDecide: () => undefined });
+  /**
+   * WP-54 · ITEM 5 REVERSED THIS PIN AND THE ONE THAT FOLLOWED IT, and both
+   * reversals are recorded here rather than the tests being deleted.
+   *
+   * They pinned position 11 §3's distinction — *rows answerable here get
+   * buttons; rows needing the session get one door and no buttons, so deciding
+   * and going somewhere look different before you click* — and they pinned it
+   * strictly, as a distinction rather than as two separate facts. The rule was
+   * ratified, built exactly as written, and wrong in the field.
+   *
+   * THE RULING, and the designer's own statement of it is stronger than the
+   * owner's: **a gate without its declaration is consent without context**,
+   * which is the failure XD-8 exists to prevent. Approving a security finding
+   * from a list row is a decision made with none of the material the decision
+   * needs; the owner's reading of the same row — *"one would not do them
+   * piecemeal without full context"* — is the same finding from the user's side.
+   * So NO row is answered in place. The row's door leads to the gate, and the
+   * gate is where the decision is made with the declaration in front of it.
+   *
+   * What survives, and is asserted below: every row has ONE door and no answer
+   * control, in both directions — which is the same shape of assertion the old
+   * pin used, applied to the rule that replaced it.
+   */
+  test('THE RULING · no row is answered in place — one door, no consent controls, on every row', () => {
+    const { tree, nodes } = now({ inbox: inbox() });
 
-    const situationRows = byAttr(nodes, 'data-situation');
-    const inboxRows = byAttr(nodes, 'data-inbox-row');
+    // SCOPED TO THE NEEDS-YOU LIST, because that is the list the ruling is
+    // about. The section below it holds rows that need nobody: a completed run
+    // is read with no interaction and no question asked (XD-26's absence list),
+    // so it has no door and asserting one there would be asserting the opposite
+    // of what that section is for.
+    const list = walk(tree).find((n) => props(n)['data-now-list'] === 'needs-you');
+    const situationRows = byAttr(walk(list), 'data-situation');
+    const inboxRows = byAttr(walk(list), 'data-inbox-row');
     expect(situationRows.length).toBeGreaterThan(0);
     expect(inboxRows.length).toBeGreaterThan(0);
 
-    // Asserted AS A DISTINCTION: no row is ever both, in either direction. Two
-    // separate "this row has buttons" / "that row has a door" assertions would
-    // both still pass on a surface that gave every row both, which is exactly
-    // the state position 11 §3 forbids.
-    for (const row of situationRows) {
+    for (const row of [...situationRows, ...inboxRows]) {
       expect(byAttr(walk(row), 'data-answer')).toHaveLength(0);
-      expect(byAttr(walk(row), 'data-door').length).toBeLessThanOrEqual(1);
-    }
-    for (const row of inboxRows) {
-      expect(byAttr(walk(row), 'data-door')).toHaveLength(0);
-      expect(byAttr(walk(row), 'data-answer').length).toBeGreaterThan(0);
+      expect(byAttr(walk(row), 'data-door')).toHaveLength(1);
     }
 
-    // And the two answers are the Inbox's own words, extracted from §3 rather
-    // than retyped here — a literal in this file would be a second place the
-    // vocabulary lives, which is the drift the generator exists to stop.
-    const answers = byAttr(inboxRows.flatMap((r) => walk(r)), 'data-answer')
-      .map((n) => textOf(n).join(''));
-    expect(answers).toEqual([NOW_COPY.APPROVE, NOW_COPY.NOT_NOW]);
-    expect(answers).toEqual(['Approve', 'Not now']);
-  });
-
-  test('Approve and Not now carry the item and the decision the retired tab sent', () => {
-    const calls: unknown[][] = [];
-    const { raw } = now({ inbox: inbox(), onDecide: (...args: unknown[]) => calls.push(args) });
-    const buttons = byAttr(raw, 'data-answer');
-
-    buttons.find((n) => props(n)['data-answer'] === 'approve').props.onClick();
-    buttons.find((n) => props(n)['data-answer'] === 'not-now').props.onClick();
-
-    // BEHAVIOUR INTACT is the packet's word, so the arguments are asserted, not
-    // just that something was called: the decision string and the status are
-    // what the store writes, and a collapse that changed them would be a
-    // migration wearing a rename.
-    expect(calls).toEqual([
-      [1, 'Approve', 'done'],
-      [1, 'Not now', 'dismissed'],
-    ]);
+    // The two words are gone from the surface entirely, not merely from these
+    // rows — a control that moved somewhere else on the same screen would pass
+    // a per-row assertion and fail the ruling.
+    const everything = nodes.map((n) => textOf(n).join('')).join(' ');
+    expect(everything).not.toContain(NOW_COPY.APPROVE);
+    expect(everything).not.toContain(NOW_COPY.NOT_NOW);
   });
 
   test('a failed inbox read is a row that says so — never silence, and never an all-clear', () => {

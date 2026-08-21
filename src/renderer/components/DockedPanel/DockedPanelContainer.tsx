@@ -1,7 +1,7 @@
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import type { TriageView } from '../../../main/intelligence-host/sessionRegistry';
-import { arrivalCounts } from '../return/arrivalModel';
+import { arrivalCounts, type NowInboxRead } from '../return/arrivalModel';
 import { openingState, type OpeningState } from './openingAsksModel';
 import { injectThemeVars } from '../../utils/theme';
 import { DockedPanel, PanelTab } from './DockedPanel';
@@ -356,7 +356,34 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.storeUnsub = nexusStore.subscribe(() => {
       const open = nexusStore.get().overlayOpen === true;
       if (open !== this.state.overlayOpen) this.setState({ overlayOpen: open });
+      this.honourNowDoor();
     });
+  }
+
+  /**
+   * WP-54 · ITEM 6 — A DOOR FROM A NOW ROW, HONOURED ON THE ROW'S OWN TARGET.
+   *
+   * An incident's ask is "contain it", which is a procedure launch requiring
+   * consent — so the row's door leads to where that decision is made, with the
+   * site it is about already in scope. Same bridge, and the same discipline, as
+   * WP-44's Govern door: the target travels the whole way, and landing "at the
+   * panel" instead of "at the site" would be the top-of-Settings failure again.
+   *
+   * A NAME THAT RESOLVES TO NOTHING SCOPES NOTHING. The panel still opens — the
+   * person asked for it — but it is not silently pinned to some other site, and
+   * it does not claim a scope the platform could not establish.
+   *
+   * Cleared whether or not it resolved: a request left in the store re-fires on
+   * every unrelated store change, which is the bug the Govern door already paid
+   * for once.
+   */
+  private honourNowDoor(): void {
+    const door = nexusStore.get().nowDoorRequest;
+    if (!door) return;
+    nexusStore.update({ nowDoorRequest: null });
+    const match = this.state.siteChoices.filter((s) => s.name === door.target)[0];
+    if (match) this.pickSite(match.id);
+    this.setState({ panelState: 'docked' });
   }
 
   // ── Site context ───────────────────────────────────────────────────────────────
@@ -580,12 +607,31 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
    * uses.
    */
   private refreshNeedsYou = (): void => {
-    this.props.electron.ipcRenderer
-      .invoke(IPC_CHANNELS.RETURN_TRIAGE)
-      .then((triage: TriageView) => {
+    // WP-54 · ITEM 1 — THE BADGE COUNTS THE ROWS THE SCREEN DRAWS, and the
+    // screen draws situations PLUS the Inbox items that match none of them. A
+    // badge served by the triage alone is a second answer to the question the
+    // list answers, free to disagree with it — which is exactly what it did:
+    // seven on the rail, twelve on the screen.
+    //
+    // TWO READS, ONE ANSWER. The inbox read is allowed to fail on its own: a
+    // failed read contributes NO ROWS (`nowRows` refuses a failed inbox) and the
+    // badge then counts the situations, which is the honest number for what can
+    // be seen. It is never turned into an empty inbox.
+    Promise.all([
+      this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.RETURN_TRIAGE),
+      this.props.electron.ipcRenderer
+        .invoke(IPC_CHANNELS.GET_INBOX)
+        .catch(() => ({ success: false })),
+    ])
+      .then(([triage, inboxResult]: [TriageView, { success?: boolean; items?: unknown }]) => {
+        const inbox: NowInboxRead = {
+          loaded: inboxResult?.success === true,
+          failed: inboxResult?.success !== true,
+          items: Array.isArray(inboxResult?.items) ? (inboxResult.items as NowInboxRead['items']) : [],
+        };
         this.setState({
-          needsYou: triage ? arrivalCounts(triage).needsYou : null,
-          opening: openingState(triage),
+          needsYou: triage ? arrivalCounts(triage, inbox).needsYou : null,
+          opening: openingState(triage, inbox),
         });
       })
       .catch(() => { this.setState({ needsYou: null, opening: null }); });
