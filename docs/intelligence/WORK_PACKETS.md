@@ -24737,3 +24737,40 @@ the incident rows' tier drift, photographed in §4.
 **ABI state on leaving: better-sqlite3 is built for SYSTEM NODE (ABI 141),
 because this session ran jest.** `npm run rebuild` is required before loading
 Local again.
+
+---
+
+## WP-54a · LOCKS RELEASED (2026-08-21)
+
+Merged at `be858e5f`, gate report at `a00607db`. **Released so the three
+siblings queued behind the four-way crossed claim can move:**
+
+- `src/main/intelligence-host/sessionRegistry.ts` — **RELEASED.** What landed
+  in it: `ConsequenceTier` widened to `1 | 2 | 3 | 4`;
+  `Situation.kind` and `SituationPart.kind` each gained `agentFailure`;
+  `contradictedByTheRecord` gained an optional third parameter (`bag`) and a
+  second arm; three new functions (`composeAgentFailureCopy`,
+  `timeoutLabel`, `situationOfAgentFailure`, `openAgentFailures`); and one
+  new query plus two new spreads inside `foldSessionRegistry`. **None of
+  WP-54's eight named functions was edited.** WP-51's claim on
+  "`foldSessionRegistry`'s incident-attachment pass (new functions only)" is
+  adjacent to but disjoint from the agent-failure pass added here — the two
+  spreads sit in the same array literal, so expect a context-line conflict
+  there and nothing semantic.
+- `src/main/agent-runtime/AgentRunner.ts` — **RELEASED.** One block appended
+  after the WP-25 incident tap. WP-57's spine will want this same chokepoint;
+  it is free.
+- `src/main/intelligence-host/agentFailureProducer.ts` — new file, no other
+  claimant. **RELEASED.**
+
+**Not touched and therefore never at risk:** `src/renderer/` (WP-54's),
+`src/intelligence/` (the core), `src/main/index.ts`, `src/main/ipc-handlers.ts`
+— the announce said an amendment would land on the base if wiring turned out
+to be needed, and none did: the producer is reached from the runner and the
+fold is reached from the existing `RETURN_TRIAGE` handler, both already wired.
+
+**Standing against this packet:** the two ruling requests in §2 of the gate
+report (the new topic; and the `episodic.*` line in `architecture.md` §4.2,
+which needs the owner's pen and not a packet's), and the five registered
+follow-ups in §6 — two of which are one-line changes that ride with WP-55's
+regeneration and are expected to go RED there rather than be forgotten.
