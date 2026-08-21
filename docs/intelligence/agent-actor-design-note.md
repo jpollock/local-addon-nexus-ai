@@ -103,6 +103,20 @@ alone arming the whole run (loses the intent boundary, holds the procedure
 across the reading majority of a run), and no standing grants at all (ends
 unattended remediation entirely).
 
+> **The arm is agent-timed, and nothing bounds it** *(architect review,
+> 2026-08-21)*. R2 rejected holding the procedure across a run's reading
+> majority — but an agent that calls `ctx.arm()` on line 1 reproduces the
+> rejected option exactly, and nothing in the contract stops it. The rejection
+> is a convention today, not a property.
+>
+> **Measure before enforcing.** `task.run.*` carries **arm-to-first-write** —
+> the interval between the arm and the first gated act under it — so the
+> distribution is in the record from phase 1 onward. Enforcement follows the
+> evidence: if shipped agents arm tightly, the convention is real and needs no
+> gate; if they arm at line 1, the bound is authored against a measured
+> distribution rather than a guessed constant. Guessing a ceiling now would
+> repeat the error ADR-17's byte ceiling had to be corrected for twice.
+
 **R3 · Fail-closed on integrity and absence now; staleness with the hub
 (candidate ADR-27).** ADR-7's staleness input **does not exist in a
 satellite-only build**: `assemble/types.ts` records that the law registry is
@@ -125,13 +139,40 @@ grant a human made at Govern** and the ledger recorded as
 review, rather than in the moment.
 
 > The loosening is real and must be stated as one. Today an agent cannot run
-> Tier 3 at all. But the substitute is strictly more governed than the chat
-> path it is compared against, where a human clicks approve on a plan they read
-> once: here the procedure was reviewed, versioned, hash-pinned and
-> sequence-enforced before the run existed. *Rejected:* report-only remediation
-> (everything else in this design still lands, but sentinel can never fix
-> anything unattended), and off-production-only (excludes the 3am compromised
-> production case that motivates the capability at all).
+> Tier 3 at all.
+>
+> **The honest comparison is two-axis, not one** *(amended at architect review,
+> 2026-08-21 — the first draft claimed "strictly more governed than the chat
+> path", which is true on one axis and false on the one that motivates
+> in-the-moment consent)*. Against the chat path this is:
+>
+> - **more reviewed** — the procedure was authored, reviewed, versioned,
+>   hash-pinned and sequence-enforced before the run existed, where a chat
+>   approval is a human clicking yes on a plan they read once; and
+> - **less contemporaneous** — **no human judges this situation as it
+>   happens.** Contemporaneous consent is not a weaker form of review that
+>   advance review supersedes; it is a different thing, and it is the thing
+>   being given up.
+>
+> So: *differently governed, more reviewed, less contemporaneous.* Any surface
+> or packet restating this rule restates all three clauses.
+>
+> *Rejected:* report-only remediation (everything else in this design still
+> lands, but sentinel can never fix anything unattended), and
+> off-production-only (excludes the 3am compromised production case that
+> motivates the capability at all).
+
+**R4 gate · an owner sitting on a real destructive path, before first
+production enablement.** Nothing with a fraction of this consequence has
+shipped on this branch without one. The sitting runs the full conjunction —
+armed strict runbook, claiming checkpoint, actor-scoped grant — against a real
+destructive operation on a real site, and judges it. Phase 5 does not complete
+without it, and no production grant is issued before it passes.
+
+**R4 wants the owner's name on it explicitly.** It is the largest loosening
+this project has made, and adoption-by-design-note is not the right instrument
+for it. Recorded here as *ruled in principle, pending explicit owner ruling*;
+the packet cites the ruling, not this note.
 
 ---
 
@@ -234,6 +275,11 @@ interface Finding {
   // …existing…
   /** When the fact was true at its source. Never "now". */
   observedAt: number;
+  /**
+   * ADR-24 spans in `title` / `description` resolve against THIS RUN's supply
+   * (manifest + tool trace). Set by the platform at fold time, never authored.
+   */
+  citation?: CitationState;
 }
 ```
 
@@ -250,6 +296,23 @@ Notes:
 - `ArmOutcome` reuses the existing refusal vocabulary rather than inventing
   one — a capability not granted, a runbook unavailable, a hash mismatch are
   already `DisarmReason` values with user-actionable text.
+- **The citation contract reaches the unattended path** *(architect review,
+  2026-08-21 — §2.1 promised citations the first draft's contract did not
+  carry)*. A sentinel finding is model-authored prose making historical and
+  stateful claims about a live site, which is exactly the population ADR-24
+  exists for. **An uncited finding on the unattended path is the WP-25 failure
+  wearing a type** — the fabricated remediation checklist was model-authored
+  prose that no record supported, and typing it as a `Finding` does not make it
+  supported.
+
+  The mechanism is the one that already exists, not a second one:
+  `supplyFromBundle` (`citation/resolve.ts:418`) derives the run's citable
+  universe from its bundle plus its tool trace, and the finding's spans resolve
+  against that. Same shared claim→record join the judge and the renderer use —
+  ADR-24 P5 is explicit that a second derivation means the judge and the user
+  are looking at two different universes. Cited-but-unresolvable stays the
+  loudest state here as it is in chat; on the unattended path it is louder
+  still, because nobody was watching when the claim was made.
 - `AgentBundleView` and `ArmOutcome` are **named here and defined in their
   packets**, not elided by accident. `AgentBundleView` is a read-only
   projection of the assembler's `ContextBundle`, narrowed to what an agent
@@ -367,6 +430,52 @@ Actor-scoping **refuses it**. That is a real restriction arriving alongside the
 fix, and it is WP-20f's shape exactly — a deny-flip, obtained structurally. It
 should be ruled the way WP-20f was ruled, not slipped in with a widening.
 
+### D.6 The migration re-issues; it does not reinterpret *(phase-3 precondition)*
+
+*Architect review, 2026-08-21.* Making `actor` absent **mean** interactive-only
+silently reinterprets every grant already in
+`intelligence_grants_materialized` — it changes what a stored record means
+without touching it. That is precisely what WP-45's P4 re-pin ruling forbids: a
+grant must never silently survive a change of meaning, and must never silently
+die of one.
+
+So the migration follows P4's pattern rather than inventing one:
+
+- Every existing grant is **re-issued as a visible `control.grant.issued`
+  event** at its new, actor-bearing shape. Nothing is reinterpreted in place.
+- The issuance carries a **new member of `GRANT_ISSUE_REASONS`** naming what
+  actually happened — an actor-scoping migration, not a human act at Govern and
+  not a mechanical re-pin. *(Count, stated both ways so the packet cannot pick
+  wrong: the array at `capabilityGrants.ts:102` holds four today, so this is
+  the **fifth array member**; `repinned` sits deliberately outside the ratified
+  three, so it is the **fourth ratified** — which is the sense the review's
+  "fourth" carries.)*
+- Idempotence comes from the record, as P4's does: once re-issued, the grant's
+  stored shape already carries the actor, so the transition cannot fire twice.
+  No new marker key — the protected `intelligence_grants_*` namespace is
+  untouched.
+
+### D.7 Cross-agent contributed tools are a security ruling *(phase-3 precondition)*
+
+*Architect review, 2026-08-21 — elevated from open question 5, which filed this
+as sequencing. It is not.* `NexusToolProvider` falls through to another agent's
+contributed tool via the dispatcher, so a call can have two agents behind it.
+Whose actor holds the grant has no safe default:
+
+- **Check the caller (A).** Then agent B's tools are reachable by anyone who
+  can drive A — B's capability surface is annexed by every agent that declares
+  one of its tool names.
+- **Check the contributor (B).** Then A escapes its own scope: a capability A
+  was never granted becomes reachable by routing through B.
+
+Both have holes, so neither may be a default, and this must be ruled before
+actor-scoping ships — an unruled default here is a hole that arrives *with* the
+mechanism meant to close one. A likely shape is the conjunction (both A and B
+must hold the grant), but that is a candidate, not a ruling, and it needs
+measuring against the shipped cross-agent calls first — `seo-insights` declares
+log-processor's `get_log_aggregates`, `fetch_log_window` and
+`analyze_*` tools, so the population is real and small enough to enumerate.
+
 ---
 
 ## 8. §E — Procedure: the plan as an instance of the runbook
@@ -417,7 +526,46 @@ An agent run is a task; a task with consequence is a **situation**.
 - What agents keep as genuinely theirs: schedule and cadence, enablement, site
   scope, run logs. Real agent-runtime concerns with no chat analogue.
 
-### 9.1 Effect on WP-54a's two ruling requests
+### 9.1 The halted armed run — the highest tier, and it has no producer
+
+*Architect review, 2026-08-21. Missing from the first draft entirely.*
+
+An agent run that dies mid-procedure with a write already landed — Local quits,
+the process crashes, the 5-minute dispatch timeout fires between checkpoints —
+is **the highest-consequence state the order describes**: the world is
+mid-change and only the user can move it. That is not a judgement call about
+severity; it is `rankSession`'s ruled T1 arm read literally
+(`sessionRegistry.ts`): *"a write has landed in scope"*, which is exactly
+`row.outcomes.writeLanded`.
+
+**Nothing produces it.** Chat survives this: sessions re-fold from the ledger
+on boot, so a chat session caught mid-procedure re-materializes with its cursor
+and its landed writes. Agents have no equivalent named anywhere — a run is not
+a session, so no row exists to rank, and the T1 arm that would fire has no
+input.
+
+The spine (§A) is what makes the fix available rather than requiring new
+machinery: once a run is a task, a run that emitted `task.run.assigned`, has
+gated acts under its correlation, and **never emitted `task.run.completed`** is
+detectable by a boot-time query over the ledger — no liveness heartbeat, no new
+storage key, no process state that dies with the process. The fold reads that
+as a situation and ranks it T1 on the existing arm.
+
+Two properties this must have, both learnable from how the chat side got them:
+
+- **The state is derived at boot from the record, never written at crash time.**
+  A crash is precisely the moment a write does not happen.
+- **An armed procedure whose run has vanished must not stay armed.** The
+  session's procedure memory clears on a turn that does not deliver (ADR-20's
+  amendment); the agent equivalent is that a re-armed capability on the next
+  scheduled run ships the whole document again rather than re-asserting a
+  procedure whose run no longer exists.
+
+This is a **phase 6 requirement**, and it is the reason phase 6 is not
+cosmetic: without it, the most consequential thing an agent can do to a fleet
+is the one thing the fleet's own consequence order cannot show.
+
+### 9.2 Effect on WP-54a's two ruling requests
 
 - **A new event topic** — dissolves. `agent.*` was never going to be a topic and
   the envelope validator (`envelope/validate.ts:19`) is right to refuse it: an
@@ -459,22 +607,27 @@ An agent run is a task; a task with consequence is a **situation**.
 
 Each phase ships alone and carries value alone, per branch discipline.
 
-1. **Spine** — actor + task frame + `task.run.*` producers + threading `task`
-   at both chokepoints. Purely additive; no behaviour change; unblocks the
-   rest. *Smallest packet, largest unblock.*
+1. **Spine** — actor + task frame + `task.run.*` producers (carrying
+   **arm-to-first-write**, R2's measurement) + threading `task` at both
+   chokepoints. Purely additive; no behaviour change; unblocks the rest.
+   *Smallest packet, largest unblock.*
 2. **Findings as producers** — generalize `recordSentinelIncidents` so every
-   agent's findings become episodic with provenance. Makes WP-54a's producer
-   the general case.
-3. **Actor-scoped grants** — **owner ruling first** (§D.5). Fixes the live
-   cross-actor bleed. Opens `tool-registry.ts`.
+   agent's findings become episodic with provenance **and citations resolved
+   against the run's supply** (§B). Makes WP-54a's producer the general case.
+3. **Actor-scoped grants** — **three preconditions, all rulings:** §D.5 (the
+   deny-flip), §D.6 (re-issue, never reinterpret), §D.7 (cross-agent
+   contributed tools). Fixes the live cross-actor bleed. Opens
+   `tool-registry.ts`.
 4. **Assembly on the agent path** — bundles, manifests, fail-closed per R3 and
    §6.1.
-5. **Procedure-governed remediation** — depends on R4 and on phase 3. Runbook
-   `tools:` authoring against the agent surface.
-6. **UX fold** — situations from agent tasks; Govern actor axis.
+5. **Procedure-governed remediation** — depends on R4, on the **R4 sitting**
+   (a real destructive path, judged, before any production enablement), and on
+   phase 3. Runbook `tools:` authoring against the agent surface.
+6. **UX fold** — situations from agent tasks, **including the halted armed run
+   (§9.1)**; Govern actor axis.
 
 Phases 1 and 2 are safe and independently valuable and can start immediately.
-Phases 3 and 5 are rulings before they are code.
+Phase 3 is three rulings before it is code; phase 5 is a ruling and a sitting.
 
 ---
 
@@ -488,10 +641,37 @@ Phases 3 and 5 are rulings before they are code.
 4. **Budget on the agent path** — the assembler takes a token budget; agents
    have a *money* budget (`DailyBudgetGuard`). Two budgets, unreconciled. Not
    urgent, but do not let them silently become one.
-5. **Contributed tools called across agents** — `NexusToolProvider` falls
-   through to another agent's tool via the dispatcher. Whose actor holds the
-   grant: the calling agent or the contributing one? Answer before phase 3.
-6. **`ConsequenceTier` vs. Tier 3** (§9.1) — live, independent of this note.
+5. *(Elevated out of this list at architect review — cross-agent contributed
+   tools are a security ruling, not sequencing. Now **§D.7**, a phase-3
+   precondition.)*
+6. **`ConsequenceTier` vs. Tier 3** (§9.2) — live, independent of this note.
 7. **Session auth on the satellite** — architecture §11 watch item 4, unchanged
    and now more load-bearing: with agents attributed properly, the human actor
    is the remaining coarse one.
+
+---
+
+## 14. Architect review — disposition (2026-08-21)
+
+Verdict: diagnosis right, four rulings sound, six findings, none fatal. Two
+settle before phase 3, one before phase 5. Every finding is applied above; this
+table is the index, not the content.
+
+| # | finding | disposition | lands in |
+|---|---|---|---|
+| 1 | R4's comparison is self-serving on one axis — "strictly more governed" is false on contemporaneity | Amended to **differently governed, more reviewed, less contemporaneous**; all three clauses travel together. R4 also gains an owner sitting on a real destructive path before first production enablement | §3 R4 · phase 5 |
+| 2 | The arm is agent-timed and nothing bounds it — arming at line 1 reproduces the option R2 rejected | **Measure before enforcing**: `task.run.*` carries arm-to-first-write from phase 1; a bound is authored against a measured distribution, never a guessed constant | §3 R2 · phase 1 |
+| 3 | A halted armed run is missing — the highest tier in the order, and chat's re-fold-on-boot has no agent equivalent | New section. Detectable from the record alone (assigned, gated acts, no completed); derived at boot, never written at crash time; T1 on `rankSession`'s existing ruled arm | §9.1 · phase 6 |
+| 4 | The grant migration reinterprets rather than re-issues — what WP-45's P4 forbids | Follows P4: every grant re-issued as a visible `control.grant.issued` at its actor-bearing shape, under a new reason-vocabulary member; idempotent from the record, no new marker key | §D.6 · phase 3 |
+| 5 | Cross-agent contributed tools is a security ruling, not sequencing — both defaults have holes | Elevated out of the open-questions list to a phase-3 precondition beside §D.5. Conjunction is a candidate, not a ruling | §D.7 · phase 3 |
+| 6 | §2.1 promised citations the contract did not carry — an uncited finding on the unattended path is the WP-25 failure wearing a type | `Finding.citation`, resolved through the existing `supplyFromBundle` join — one derivation, per ADR-24 P5 | §B · phase 2 |
+
+**Recorded from the review, worth keeping.** §A.2 is the **fifth instance of
+the collision family** seen on this branch this week — one word carrying two
+meanings, the shape `total` took at WP-48/50/52. Here it is `AgentAutonomy`
+(a ceremony preference) against `Autonomy` (an actor class). Deriving the class
+from the trigger resolves it without renaming either.
+
+**Standing, on the owner:** R4 is the largest loosening this project has made.
+It is ruled in principle and wants an explicit owner ruling with a name on it —
+not adoption by design note.
