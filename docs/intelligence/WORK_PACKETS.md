@@ -28132,3 +28132,85 @@ Every number reconciles exactly:
   worktree/primary skipped-column hazard WP-20c's merge finding documents,
   reproduced by a convenience symlink. **A reviewer comparing only the passed
   column would read +54 and see ten tests that do not exist.**
+
+---
+
+## WP-57 · GATE REPORT (FINAL) — phase 1 complete, both smokes taken (2026-08-21)
+
+**Scope delivered:** phase 1 of `agent-actor-design-note.md` in full (tasks
+1–8), plus ruling request 1's subsumption. Twelve commits on `wp-57`, cut from
+`655f6058`.
+
+### The second smoke — the blind spot the first one left
+
+The first smoke proved a running Local writes the frame; it could not prove
+`noteGatedAct`, because no real agent had made a gated call under a framed run.
+`security-sentinel` was run again under the completed code. It found **nothing**
+— and the frame flushed anyway, because ten tier-2 `wpe_site_deep_refresh`
+calls made the run real:
+
+```
+task.run.assigned   act_security_sentinel  task_01M0K7MW42A0WP6JWG69TBHWYE  security-sentinel
+task.run.completed  act_security_sentinel  task_01M0K7MW42A0WP6JWG69TBHWYE  success
+                    first_gated_act_at = 2026-08-21T22:39:13.559Z
+
+under that one correlation:
+   task.action.executed   act_security_sentinel  x10   (all wpe_site_deep_refresh)
+   task.outcome.recorded  act_security_sentinel  x10
+   task.run.assigned                             x1
+   task.run.completed                            x1
+```
+
+**Twenty-two events, one thread, one actor.** That is the packet's whole thesis
+executing in production.
+
+### The defect stopped producing — measured, not asserted
+
+| | before | after |
+|---|---|---|
+| `task.run.*` | 2 | 4 |
+| `task.action.executed` with NO correlation | 42 | **42 — unchanged** |
+| `act_agent_runtime` (the collapse) | 79 | **79 — unchanged** |
+| `act_security_sentinel` | 4 | 26 (+10 acts, +10 outcomes, +2 frame) |
+
+Ten new gated acts were performed and **not one** was uncorrelated, and **not
+one** was attributed to `act_agent_runtime`. The historical 42 and 79 remain
+exactly as they were, which is correct: the ledger is append-only and no
+history was rewritten to make a table look better.
+
+Three properties fell out of this that the unit tests could only approximate:
+
+1. **`noteGatedAct` fires live**, and a zero-finding run still becomes real on
+   the strength of its acts. That was the named blind spot; it is closed.
+2. **`first_gated_act_at` is populated** — R2's measurable half, in production,
+   from which arm-to-first-write derives once `ctx.arm()` exists.
+3. **The acts JOIN the run.** `WHERE correlation = task_01M0K7MW…` returns the
+   assembly-free but complete thread: the bracket, every act, every outcome.
+
+### Definition of done
+
+- [x] `npm run typecheck` clean
+- [x] Full suite **634 suites / 8,764 passed / 2 skipped / EXIT=0**, delta
+      reconciled to the test against a green baseline — including the
+      skipped-column move (12 → 2), whose cause is a `models/` convenience
+      symlink and **not** a code change
+- [x] Legacy suites for every touched file run explicitly
+- [x] Mutation witnesses — **20 mutations, 20 killed**, all `--no-cache`, with
+      one false SURVIVED caught and one real gap found and closed
+- [x] Sequence-gate parity proven against the real guard, 8/8, pasted
+- [x] Real-ledger exhibit (Layer 6 precedent) — PASS
+- [x] **Live smoke × 2** — the frame, and the gated act
+- [x] `WORK_PACKETS.md` updated throughout
+- [x] ABI restored to system Node; addon symlink restored to the primary
+      checkout
+
+### Owed, and NOT claimed as done
+
+- **Ruling request 2** — is a contributed-tool dispatch its own run? Only the
+  conservative half is implemented (pass the caller's task through, never
+  mint). Unruled.
+- **The inherited `written++` defect** — `recordSentinelIncidents` counts
+  attempts, not emissions. Filed for WP-25/WP-51's owner, not fixed here.
+- **Phases 2–6** of the design note. Phase 1 is the spine; the surface,
+  authority, assembly, procedure and UX halves remain, and three of them are
+  blocked on rulings (§D.5, §D.6, §D.7, R4's sitting).
