@@ -39,12 +39,14 @@ SUITES = [
     "src/main/intelligence-host/__tests__/actionProducer.test.ts",
     "src/main/intelligence-host/__tests__/procedureCursor.test.ts",
     "tests/unit/renderer/returnRailBadge.test.ts",
+    "tests/unit/renderer/nowList.test.tsx",
 ]
 
 REGISTRY = "src/main/intelligence-host/sessionRegistry.ts"
 PRODUCER = "src/main/intelligence-host/actionProducer.ts"
+MODEL = "src/renderer/components/return/arrivalModel.ts"
 
-SWEPT = [REGISTRY, PRODUCER, "src/common/constants.ts", "src/main/ipc-handlers.ts", *SUITES]
+SWEPT = [REGISTRY, PRODUCER, MODEL, "src/common/constants.ts", "src/main/ipc-handlers.ts", *SUITES]
 
 FLOOR = 0  # set from the pristine baseline
 
@@ -68,9 +70,22 @@ MUTATIONS = [
      "      const waiting = snapshot.situations.filter(\n        (s) => s.column === 'waiting' && !s.deferral && !(s.sessionId !== undefined && workingIds.has(s.sessionId)),\n      );",
      "THE DEFERRED ROW LEAVES THE LIST — a dismissal by another name, which is the ruling's own words for the thing it refused; the badge would look right and the row would be gone"),
     ("M05", REGISTRY,
-     "  const escalatingRows = escalating(waiting);\n  if (escalatingRows.length === 0) return '';",
-     "  const escalatingRows = [...waiting];\n  if (escalatingRows.length === 0) return '';",
+     "  const held = escalating(waiting);\n  const unheld = alsoWaiting.filter((row) => !row.deferred);",
+     "  const held = [...waiting];\n  const unheld = alsoWaiting.filter((row) => !row.deferred);",
      "the list verdict counts deferred rows while the badge does not — the sentence and the number above it disagree, which is the exact drift the one-composition design removes"),
+    # --- the three-way collision on one sum (ruled 2026-08-21) ---------------
+    ("M05b", REGISTRY,
+     "  const held = escalating(waiting);\n  const unheld = alsoWaiting.filter((row) => !row.deferred);",
+     "  const held = escalating(waiting);\n  const unheld: readonly UnheldRow[] = [];",
+     "WP-54's TERM IS DELETED — the resolution that looks obviously right: the verdict heads eight rows with the word 7, which is item 1 restored by taking the newer body whole"),
+    ("M05c", REGISTRY,
+     "  const unheld = alsoWaiting.filter((row) => !row.deferred);",
+     "  const unheld = alsoWaiting.filter(() => true);",
+     "a DEFERRED unheld row still increments the badge — the deferral deferring nothing, on the term this packet could not see while WP-54 held the file"),
+    ("M05d", REGISTRY,
+     "    held.filter((s) => wrote(s.written)).length + unheld.filter((r) => wrote(r.written)).length;",
+     "    held.filter((s) => wrote(s.written)).length;",
+     "WP-54b RESTORED — changedRuns decided over a SUBSET of the rows the sentence counts, failing the fixture's own guard: 'allUnwritten when EVERY waiting row has done === 0 && failed === 0'"),
 
     # --- family 2: only the user defers --------------------------------------
     ("M06", REGISTRY,
@@ -157,6 +172,27 @@ MUTATIONS = [
      "    record.taskId,\n    { supersedes: record.supersedes },\n    record.supersedes\n  );",
      "    record.taskId,\n    { supersedes: record.supersedes },\n    undefined\n  );",
      "an early end loses its causation edge to the deferral it supersedes — superseding becomes an unrelated act, and the lifecycle stops being reconstructable"),
+    # --- family 6: the ruled addition, and the renderer read ----------------
+    ("M22", PRODUCER,
+     "    if (!(OFFERABLE_WAKE_KINDS as readonly string[]).includes(wake.kind)) return undefined;",
+     "    if (false) return undefined;",
+     "THE SURFACE OFFERS A WAKE THE PLATFORM CANNOT FIRE — 'wake me when the incident is closed' recorded against a port nothing supplies, which manufactures the furniture problem this affordance exists to prevent"),
+    ("M23", PRODUCER,
+     "export const OFFERABLE_WAKE_KINDS = ['time'] as const;",
+     "export const OFFERABLE_WAKE_KINDS = ['time', 'record'] as const;",
+     "the offer list gains a kind with no producer behind it — one edit, and the guard and the picker both start promising something nothing can keep"),
+    ("M24", MODEL,
+     "  const rows = nowRows(triage, inbox);\n  const escalating = escalatingRows(rows);\n  return {\n    needsYou: escalating.length,",
+     "  const rows = nowRows(triage, inbox);\n  const escalating = escalatingRows(rows);\n  return {\n    needsYou: rows.length,",
+     "THE SHIPPED BADGE COUNTS DEFERRED ROWS — the half of the ruling this packet was held at its gate to finish, undone at the one line that finished it"),
+    ("M25", MODEL,
+     "export function rowIsDeferred(row: NowRow): boolean {\n  return !!row.situation?.deferral;",
+     "export function rowIsDeferred(row: NowRow): boolean {\n  return false;",
+     "the ONE predicate the badge, the verdict and the accounting line share answers 'nothing is ever quieted' — every consumer wrong at once, from one line"),
+    ("M26", MODEL,
+     "    needsYou: escalating.length,\n    deferred: rows.length - escalating.length,",
+     "    needsYou: escalating.length,\n    deferred: 0,",
+     "the accounting line can never state the deferral on the surface that renders it — the badge undercounts the drawn list with nothing saying by how much"),
 ]
 
 # The control: a comment-only edit to a mutated file. It MUST survive.
