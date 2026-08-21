@@ -451,6 +451,60 @@ describe('only the user defers — the fold is the authoritative gate', () => {
     expect(view.counts).toEqual({ needsYou: 1, deferred: 0 });
   });
 
+  /**
+   * WP-46's SERIES-GUARD RULE, and the battery found it: the fold's own
+   * `if (!record.reason) continue` sits BEHIND a producer that already refuses
+   * an empty reason, so no test written through `recordDeferral` can ever reach
+   * it — the mutation survived while every screen behaved correctly. The pin
+   * has to drive the inner guard directly, across the input domain the current
+   * caller cannot supply.
+   */
+  it('ignores a reasonless deferral even when one reaches the ledger — a dismissal by another name', () => {
+    const { taskId, situationId } = armWaitingRun();
+    core.emitter.emit({
+      observed_at: hoursAgo(1),
+      topic: RATIONALE_RECORDED_TOPIC,
+      schema: RATIONALE_RECORDED_SCHEMA,
+      entity: {},
+      actor: { id: 'act_local_operator', kind: 'human' },
+      source: { class: 'intent', system: DEFERRAL_SYSTEM, trust: 'elicited' },
+      correlation: taskId,
+      payload: { source: DEFERRAL_PAYLOAD_SOURCE, act: 'defer', situation: situationId, reason: '', wake: null },
+    });
+    expect(rationaleCount()).toBe(1); // the subject exists
+
+    const view = triage();
+    expect(view.waiting.find((s) => s.id === situationId)!.deferral).toBeUndefined();
+    expect(view.counts).toEqual({ needsYou: 1, deferred: 0 });
+  });
+
+  it('ignores a reasonless deferral that would otherwise SUPERSEDE a good one', () => {
+    const { taskId, situationId } = armWaitingRun();
+    const good = recordDeferral({ situationId, taskId, reason: 'a real reason' })!;
+    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+
+    // A later reasonless record must neither quiet nor UNQUIET: it is not a
+    // deferral, so it cannot overwrite the standing one either.
+    core.emitter.emit({
+      observed_at: hoursAgo(1),
+      topic: RATIONALE_RECORDED_TOPIC,
+      schema: RATIONALE_RECORDED_SCHEMA,
+      entity: {},
+      actor: { id: 'act_local_operator', kind: 'human' },
+      source: { class: 'intent', system: DEFERRAL_SYSTEM, trust: 'elicited' },
+      correlation: taskId,
+      payload: { source: DEFERRAL_PAYLOAD_SOURCE, act: 'defer', situation: situationId, reason: '   ', wake: null },
+    });
+    expect(rationaleCount()).toBe(2);
+
+    const view = triage();
+    expect(view.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(view.waiting.find((s) => s.id === situationId)!.deferral).toMatchObject({
+      eventId: good,
+      reason: 'a real reason',
+    });
+  });
+
   it('ignores a system actor too — the gate is `human`, not `not-agent`', () => {
     const { taskId, situationId } = armWaitingRun();
     core.emitter.emit({
@@ -471,12 +525,53 @@ describe('only the user defers — the fold is the authoritative gate', () => {
 // ===========================================================================
 
 describe('deferral applies to the situation, never to its parts (XD-28)', () => {
+  /**
+   * THE FIRST VERSION OF THIS TEST WAS VACUOUS, AND THE BATTERY CAUGHT IT.
+   *
+   * It read `row.parts[0]`, which for a session situation is the synthetic
+   * `kind: 'run'` part — and that part HAS NO `eventId`. So the record named
+   * the fallback string `sess_…#part0`, which is not a part id either, and the
+   * mutation that widens the lookup to part ids SURVIVED: the test was
+   * asserting that an id belonging to nothing defers nothing, which is true
+   * against the bug as well as against the fix.
+   *
+   * The honest witness needs a part carrying a REAL event id that is NOT the
+   * situation's own, so a failed outcome is emitted first to produce one.
+   * `feedback_vacuous_guard_shapes`, met in the wild: the assertion ran, the
+   * subject was absent.
+   */
   it('a record naming a PART\'s event id defers nothing — the situation goes on escalating', () => {
     const { taskId, situationId } = armWaitingRun();
+
+    // A failed act, so the situation has an OUTCOME part with its own event id.
+    const action = core.emitter.emit({
+      observed_at: hoursAgo(2),
+      topic: 'task.action.executed',
+      schema: 'action.executed/1',
+      entity: { environment: SITE },
+      actor: { id: 'act_chat_agent', kind: 'agent' },
+      source: { class: 'work', system: 'gateway:tool-call', trust: 'emitted' },
+      correlation: taskId,
+      payload: { tool: 'wp_plugin_update', tier: 2, dispatch: 'registry', access_method: 'mcp', targets: 1, targets_resolved: 1, args: {} },
+    });
+    core.emitter.emit({
+      observed_at: hoursAgo(2),
+      topic: 'task.outcome.recorded',
+      schema: 'outcome.recorded/1',
+      entity: { environment: SITE },
+      actor: { id: 'act_chat_agent', kind: 'agent' },
+      source: { class: 'work', system: 'gateway:tool-call', trust: 'emitted' },
+      correlation: taskId,
+      causation: action.id,
+      payload: { tool: 'wp_plugin_update', result: 'failure', result_scope: 'call', error: 'boom' },
+    });
+
     const row = waitingRow(situationId);
-    // A real part of a real situation, with a real id the record could name.
-    const part = row.parts[0]!;
-    expect(row.parts.length).toBeGreaterThan(0);
+    const part = row.parts.find((p) => p.kind === 'outcome' && p.eventId);
+    // THE SUBJECT EXISTS. Without this the test is the vacuous one again.
+    expect(part).toBeDefined();
+    expect(part!.eventId).toBeTruthy();
+    expect(part!.eventId).not.toBe(situationId);
 
     // Written through the raw emitter: the producer takes whatever id it is
     // given, so the refusal has to be the FOLD's, and the fold's refusal is that
@@ -492,7 +587,7 @@ describe('deferral applies to the situation, never to its parts (XD-28)', () => 
       payload: {
         source: DEFERRAL_PAYLOAD_SOURCE,
         act: 'defer',
-        situation: part.eventId ?? `${situationId}#part0`,
+        situation: part!.eventId,
         reason: 'just this one finding',
         wake: null,
       },

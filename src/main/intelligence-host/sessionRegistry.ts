@@ -2259,7 +2259,11 @@ function deferralEventOf(event: EventEnvelope): DeferralEvent | undefined {
     situation,
     eventId: event.id,
     observedAt: event.observed_at,
-    reason: str(payload.reason) ?? '',
+    // TRIMMED HERE TOO, not only at the producer. The producer refuses a
+    // whitespace-only reason, but this is the authoritative gate — a record
+    // that reaches the ledger by any other route must meet the same bar, or
+    // "a reason is recorded" is satisfied by three spaces.
+    reason: (str(payload.reason) ?? '').trim(),
     wake: wakeOf(payload.wake),
   };
 }
