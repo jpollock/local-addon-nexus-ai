@@ -62,10 +62,11 @@
       guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0 && gate === null',
       headline: '{runNoun} has waited {age} and changed nothing',
       ask: 'It never received a target list, so it cannot start. Give it one, or close it.',
-      chip: 'Waiting',
+      chip: '',
       state: 'nothing written yet',
       meta: '{runbookId}',
-      rule: 'Tier 2 · the world is untouched',
+      tier: 2,
+      rule: 'Tier {tier} · the world is untouched',
       note: 'Two rows on the current fleet are this class, on different runbooks. The runbook id leaves the headline for the meta line: it identifies the procedure and never said what happened.',
     },
     {
@@ -96,10 +97,11 @@
       guard: 'row.kind === "run" && done === 0 && failed === 0 && gate !== null',
       headline: 'A {checkpoint} step is waiting on your {awaits}',
       ask: 'Waiting at {checkpoint}, {position}. Nothing has been written yet, so stopping here costs nothing.',
-      chip: 'Waiting',
+      chip: '',
       state: 'nothing written yet',
       meta: '{runbookId}',
-      rule: 'Tier 2 · the world is untouched',
+      tier: 2,
+      rule: 'Tier {tier} · the world is untouched',
       note: 'The gate names what it needs, from PendingGate.awaits. "Nothing has been written yet" is the fact that decides how urgent this is, so it is stated rather than implied by two zeros.',
     },
     {
@@ -110,7 +112,8 @@
       chip: 'Mid-change',
       state: '',
       meta: '{runbookId}',
-      rule: 'Tier 1 · mid-change, only you can move it',
+      tier: 1,
+      rule: 'Tier {tier} · mid-change, only you can move it',
       note: 'Not on the current fleet, and the tier that matters most when it appears: a part-changed world compounding against an untouched world keeping is the whole basis of the tier 1 / tier 2 split.',
     },
     {
@@ -121,7 +124,8 @@
       chip: '',
       state: 'No run attached',
       meta: '{producer}',
-      rule: 'Tier 1 · nothing is holding it back but you',
+      tier: 1,
+      rule: 'Tier {tier} · nothing is holding it back but you',
       note: 'The finding is the incident\u2019s own subject line, so the headline states what is wrong rather than that an incident exists. Four of these are open on one site.',
     },
     {
@@ -132,7 +136,8 @@
       chip: 'Stuck',
       state: '',
       meta: '{agentId}',
-      rule: 'Tier 3 · the agent is asking, not the fleet',
+      tier: 3,
+      rule: 'Tier {tier} · the agent is asking, not the fleet',
       note: 'The one class where the subject is the platform rather than the fleet, which is why it sorts below both waiting classes however old it is.',
     },
   ];
@@ -157,10 +162,100 @@
     note: 'The packet was right to author something: the contract carries no stale count, so the alternative was a fabricated number. It authored one clause too many. Same honesty, and it stops explaining the pipeline to a customer.',
   };
 
+  /**
+   * §5 · THE DOORS. WP-54, from the owner's screen review and the designer's own.
+   *
+   * A door names WHERE IT GOES. "Open where you are needed" survived ratification and
+   * failed its first contact with a person — the owner, reading it on the live build:
+   * *"not sure what that really means."* Every door below names its destination from a
+   * fact the row already carries, so the label is derived and the reader knows what the
+   * click costs before making it.
+   *
+   * A CONTROL TAKES NO TERMINAL FULL STOP. None of these carries one, and the generator
+   * enforces the rule for every control label it extracts rather than for these five —
+   * the period that shipped on the row door was APPENDED by the extraction, so the fix
+   * belongs to the class and not to the string.
+   *
+   * `backToNow` is the way back. A door that leads out with no way back is the
+   * missing-front-door defect one screen deeper, which is what the re-entry shipped as.
+   */
+  var DOORS = {
+    runAtGate: 'Open the run at {checkpoint}',
+    run: 'Open the run',
+    incident: 'Open {target}',
+    agent: 'Open {agentId}',
+    backToNow: 'Back to Now',
+    note: 'Four row doors and one way back. The run doors split on whether the record holds a gate, because a run with no cursor has no checkpoint to name and inventing one would be the substitution defect in its politest form.',
+  };
+
+  /**
+   * §6 · THE SEVERITY STRIPE, ratified and never shipped (Q6, 2026-08-21).
+   *
+   * Three pixels on the left edge, red at tier 1, orange at tier 2, grey at tier 3, and
+   * NO STRIPE AT TIER 4 — the column that holds tier 4 already says what it is.
+   *
+   * THE GUARD, ratified with it: **the stripe encodes TIER and must never drift into a
+   * severity scale.** Now that severity is confirmed present in the incident payload the
+   * discipline matters more, not less: a coalesced headline may name its highest-SEVERITY
+   * member while the stripe encodes the highest-TIER one, and those are different facts
+   * on purpose.
+   *
+   * `link` is the door's colour. A door is a link and reads as one; brand green is the
+   * product's own mark, not a destination.
+   */
+  var COLOURS = {
+    tier1: 'rgb(221,18,67)',
+    tier2: 'rgb(255,97,25)',
+    tier3: 'rgb(198,205,208)',
+    link: 'rgb(0,107,214)',
+    note: 'The four values are the revised sheet\u2019s own constants (RED, ORANGE, the grey edge, and the anchor colour in its stylesheet), carried here so the build reads them from one place.',
+  };
+
+  /**
+   * §7 · THE RESERVED ROW, IN THE USER'S WORDS. WP-54 item 11.
+   *
+   * "RESERVED · THE RECORD'S OWN HEALTH" is our noun. A person does not have a record
+   * whose health they track; they have a platform that either is or is not watching their
+   * sites. The row's PURPOSE is untouched — XD-23's guaranteed seat, one row, unable to
+   * grow or be scrolled away — and only its name and its good-news line change.
+   *
+   * `quiet` replaces "the record is reporting — nothing dark, nothing late" for the case
+   * where there is no news. Good news gets one quiet line, not a panel.
+   */
+  var RESERVED = {
+    head: 'Watching your sites',
+    quiet: 'Everything is reporting.',
+    note: 'The heading is a question the user already asks. The quiet line is the whole of the good news, and it is deliberately the shortest sentence on the screen.',
+  };
+
+  /**
+   * §8 · THE ACCOUNTING LINE. WP-54 items 9 and 10.
+   *
+   * TWO RULES, both from the owner's review. **The count is stated once** — it was on the
+   * badge, in the accounting line and in the verdict, three renderings of one number, and
+   * the verdict is the one that says something. **A zero is never enumerated**: "0 checks
+   * dark" is contradicted two lines below by the reserved row saying nothing is dark, and
+   * a clause about nothing is a clause that should not be there.
+   *
+   * "checks dark" was jargon. `dark` is the plain sentence, and it states the count and
+   * stops: a DARK producer is one that has NEVER reported, so there is no duration to put
+   * after it, and the designer's "in 9 hours" would have to be invented. The clause is
+   * ABSENT when nothing is dark, never zeroed.
+   */
+  var ACCOUNTING = {
+    changed: '{count} changed overnight',
+    dark: '{count} checks haven\u2019t reported',
+    note: 'Each clause renders only when its own count is above zero, and neither restates the verdict.',
+  };
+
   window.NEXUS_HEADLINES = {
     runNoun: RUN_NOUN,
     templates: TEMPLATES,
     verdict: VERDICT,
     freshness: FRESHNESS,
+    doors: DOORS,
+    colours: COLOURS,
+    reserved: RESERVED,
+    accounting: ACCOUNTING,
   };
 })();

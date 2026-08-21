@@ -51,6 +51,7 @@ import {
   runForTask,
 } from '../procedureCursor';
 import { provisionalEnvironmentId } from '../provisionalEntity';
+import { RESERVED } from '../situationCopy.generated';
 import {
   contradictedByTheRecord,
   createSessionRegistry,
@@ -1137,17 +1138,42 @@ describe('the consequence order (moments-model 1.3 §4a)', () => {
     const [session] = foldSessionRegistry(deps({ runbooks: lookup(RB_BULK) })).sessions;
     expect(session.places.highest).toBeNull();
     expect(session.places.unresolved).toBe(1);
-    expect(session.places.summary).toContain('nothing on record names where');
+    // WP-54 · ITEM 4 REPLACED THE SECOND HALF OF THIS PIN, and the FIRST half is
+    // the part that mattered: the place is UNRESOLVED and nothing guesses one.
+    // That is unchanged and still asserted above.
+    //
+    // What changed is the SENTENCE. `summary` used to read "nothing on record
+    // names where the target is", which was our vocabulary about our own
+    // ignorance — and on an incident card it was flatly false, because the
+    // record does name the target and the duplicate inbox card beneath it was
+    // printing the name. The clause is deleted, not reworded: an unplaceable set
+    // has no place to report, exactly as the empty set above it has none.
+    expect(session.places.summary).toBe('');
   });
 
-  test('T5 has no channel into the fold: there is no tier 3 and no drift row anywhere', () => {
+  /**
+   * WP-54 AMENDED THIS PIN, and the amendment is narrower than the original.
+   *
+   * It used to read "there is no tier 3" and enforce that through the TYPE —
+   * `ConsequenceTier` excluded 3. WP-54 widened the type, because the designer's
+   * ratified `agent.stuck` class declares a tier 3 of its own with its own sort
+   * position, and a type that cannot hold what the ratified copy says forces the
+   * copy and the comparator apart.
+   *
+   * WHAT TEAR 3 ACTUALLY RULED IS UNTOUCHED and is what this pin now guards:
+   * staleness does not become rows. Forty-one facts past their SLO are COUNTED
+   * on the reserved row and produce no situation at all — one row, not
+   * forty-two — and the reserved row is not a `Situation`, so it can never enter
+   * the comparator whatever the type allows. The tier NUMBER was a proxy for
+   * that property; this asserts the property.
+   */
+  test('T5 has no channel into the fold: staleness is counted, never turned into rows', () => {
     waitingRun(RB_REMEDIATE, { write: true, at: 3, target: BRAVO });
     const snapshot = foldSessionRegistry(
       // 41 facts past their SLO would arrive, if anywhere, as staleness. The
       // reserved row COUNTS them; nothing turns one into a row.
       deps({ runbooks: lookup(RB_REMEDIATE), health: healthReport({ stale: 41 }) })
     );
-    expect(snapshot.situations.map((s) => s.tier)).not.toContain(3);
     expect(snapshot.reserved.staleCount).toBe(41);
     expect(snapshot.situations).toHaveLength(1); // still one row, not forty-two
   });
@@ -1169,6 +1195,10 @@ describe('the consequence order (moments-model 1.3 §4a)', () => {
       meta: '',
       rule: '',
       headlineTemplate: null,
+      // WP-54's two additions, inert here for the same reason: the comparator
+      // reads neither.
+      door: null,
+      signature: null,
       written: { done: 0, failed: 0, total: 1 },
     };
     const place = (highest: string | null) => ({
@@ -1351,7 +1381,12 @@ describe('the reserved slot — one folded row, and it cannot grow (tear 3)', ()
     // `healthReport` always plants one `countsTowardWorst: false` CAPI line.
     const snapshot = foldSessionRegistry(deps({ health: healthReport({}) }));
     expect(snapshot.reserved.dark).toEqual([]);
-    expect(snapshot.reserved.headline).toBe('the record is reporting — nothing dark, nothing late');
+    // WP-54 · ITEM 11 — the good-news line is now the ratified quiet one. The
+    // row's PURPOSE is unchanged and is what the rest of this describe pins:
+    // always present, exactly one row, cannot grow. "the record is reporting —
+    // nothing dark, nothing late" was three facts in our nouns; good news gets
+    // one quiet line.
+    expect(snapshot.reserved.headline).toBe(RESERVED.quiet);
   });
 
   test('the reserved row is rendered even when nothing is wrong — it is structure, not rank', () => {
@@ -1636,7 +1671,10 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     expect(situation.headlineTemplate).toBe('run.waiting.nothing-written');
     expect(situation.headline).toBe('A remediation run has waited 9h and changed nothing');
     expect(situation.ask).toBe('It never received a target list, so it cannot start. Give it one, or close it.');
-    expect(situation.chip).toBe('Waiting');
+    // WP-54 · ITEM 12 — the Waiting chip is CUT, withdrawn by its own author.
+    // It appeared only on the templated card, so chip-presence told the user
+    // which of our code paths ran. The state phrase below carries the fact.
+    expect(situation.chip).toBe('');
     expect(situation.state).toBe('nothing written yet');
     // The runbook id LEFT the headline and is on the meta line — the route's
     // own instruction, and the assertion that would fail if it drifted back.
@@ -1674,7 +1712,8 @@ describe('WP-48 · the ratified verdicts, driven through real emitters', () => {
     expect(situation.gate).toBeDefined();
     expect(situation.written).toEqual({ done: 0, failed: 0, total: 3 });
     expect(situation.headlineTemplate).toBe('run.waiting.mid-procedure');
-    expect(situation.chip).toBe('Waiting');
+    // WP-54 · ITEM 12 — cut at the fixture. See the class above.
+    expect(situation.chip).toBe('');
     expect(situation.state).toBe('nothing written yet');
     expect(situation.ask).toContain('Nothing has been written yet, so stopping here costs nothing.');
     // …and it is NOT the class that would have told her it cannot start.

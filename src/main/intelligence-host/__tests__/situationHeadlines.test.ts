@@ -38,8 +38,12 @@ import {
   type Situation,
 } from '../sessionRegistry';
 import {
+  ACCOUNTING,
+  COLOURS,
+  DOORS,
   FRESHNESS,
   LIST_VERDICT,
+  RESERVED,
   RUN_NOUN,
   SITUATION_COPY_SHAPE_VERSION,
   SITUATION_TEMPLATES,
@@ -325,7 +329,12 @@ describe('the copy discipline, asserted over the ratified set', () => {
       .map((t) => `${t.id}: ${JSON.stringify(t.chip)}`);
     expect(offenders).toEqual([]);
     // …and the three that have one are the three the route names.
-    expect(SITUATION_TEMPLATES.map((t) => t.chip).filter(Boolean)).toEqual(['Waiting', 'Waiting', 'Mid-change', 'Stuck']);
+    // WP-54 · ITEM 12 — `Waiting` IS CUT, on both classes that carried it, and
+    // the cut is the designer's own withdrawal: the chip appeared only on the
+    // TEMPLATED card, so its presence told the user which of our code paths
+    // ran — "the user never learns our branch names". `Mid-change` and `Stuck`
+    // survive because neither has ever rendered beside a derived twin.
+    expect(SITUATION_TEMPLATES.map((t) => t.chip).filter(Boolean)).toEqual(['Mid-change', 'Stuck']);
   });
 
   test('the runbook id is on the META line and never in a headline', () => {
@@ -447,7 +456,11 @@ describe('the generator — the tracked module is what the designer\'s file prod
     const source = fs.readFileSync(GENERATED, 'utf-8');
     expect(source).toContain('GENERATED — DO NOT EDIT');
     expect(source).toContain('npm run fixtures:situation-copy');
-    expect(SITUATION_COPY_SHAPE_VERSION).toBe(1);
+    // WP-54 bumped the SHAPE: templates now declare a `tier`, and the module
+    // carries four new blocks (`DOORS`, `COLOURS`, `RESERVED`, `ACCOUNTING`).
+    // The version is what lets a consumer tell a shape change from a content
+    // change, which is the whole reason it is emitted.
+    expect(SITUATION_COPY_SHAPE_VERSION).toBe(2);
   });
 
   /** Run the generator against a broken copy of the fixture; expect a loud death. */
@@ -512,5 +525,86 @@ describe('the generator — the tracked module is what the designer\'s file prod
     const r = refuses(() => '(function () { /* assigns no NEXUS_HEADLINES */ })();');
     expect(r.threw).toBe(true);
     expect(r.message).toContain('did not assign window.NEXUS_HEADLINES');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-54 · the four blocks the ratified fixture grew, and the class rule on them
+// ---------------------------------------------------------------------------
+
+describe('WP-54 · the doors, the stripe, the reserved row and the accounting clauses', () => {
+  /**
+   * ITEM 7 — THE PUNCTUATION APPENDER, DRIVEN DIRECTLY.
+   *
+   * The row door shipped as "Open where you are needed." while every ratified
+   * drawing of it carries no full stop, so the render was APPENDING one — which
+   * meant it was appending one to every door string. The appender turned out to
+   * be an EXTRACTION: `generate-return-copy.ts` captures the door out of a
+   * markdown sentence (`Door: *Open where you are needed.*`) and the sentence's
+   * own terminator came with it.
+   *
+   * `controlLabel` is the class fix, and it is pinned over its whole input
+   * domain rather than through the one string that exposed it — including the
+   * inputs it must LEAVE ALONE, which is where a fix of this shape usually
+   * overreaches.
+   */
+  test('controlLabel strips ONE terminal period, and nothing else', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { controlLabel } = require('../../../../scripts/control-label');
+
+    expect(controlLabel('Open where you are needed.')).toBe('Open where you are needed');
+    expect(controlLabel('Open where you are needed')).toBe('Open where you are needed');
+
+    // An ellipsis is a control's own punctuation and survives, in both spellings.
+    expect(controlLabel('Choose a site…')).toBe('Choose a site…');
+    expect(controlLabel('Choose a site...')).toBe('Choose a site...');
+    // Nothing else is trimmed: a control asking something is a different
+    // decision, and one that is a whole sentence is a defect this must surface
+    // rather than tidy away.
+    expect(controlLabel('Retry?')).toBe('Retry?');
+    expect(controlLabel('Contain it now, or say why not.')).toBe('Contain it now, or say why not');
+    expect(controlLabel('')).toBe('');
+  });
+
+  test('no control the generators emit carries a terminal period', () => {
+    for (const label of Object.values(DOORS)) expect(label).not.toMatch(/\.$/);
+  });
+
+  /**
+   * ITEM 3's guard, at the fixture: the stripe encodes TIER, and there is no
+   * tier-4 colour because tier 4 takes no stripe. A `tier4` key appearing here
+   * would be the drift the guard names, arriving as data rather than as code.
+   */
+  test('the stripe has exactly three tier colours, and a link colour beside them', () => {
+    expect(Object.keys(COLOURS).sort()).toEqual(['link', 'tier1', 'tier2', 'tier3']);
+    for (const value of Object.values(COLOURS)) expect(value).toMatch(/^rgb\(\d{1,3},\d{1,3},\d{1,3}\)$/);
+  });
+
+  /**
+   * ITEM 10 — "checks dark" in plain words, and the clause states the count and
+   * STOPS.
+   *
+   * The review asked for "3 checks haven't reported in 9 hours". The duration is
+   * not derivable and is therefore not written: a DARK producer is one that has
+   * never reported at all (`producerLine` in `health.ts` returns DARK only for
+   * `!row.lastRecordedAt`, and a producer that HAS reported is OK or STALE), so
+   * there is no last-seen moment to subtract from. Inventing one would be the
+   * fabrication this layer forbids; the honest clause is the count.
+   */
+  test('the accounting clauses take a count and nothing the record cannot supply', () => {
+    expect(ACCOUNTING.dark).toBe('{count} checks haven’t reported');
+    expect(ACCOUNTING.changed).toBe('{count} changed overnight');
+    for (const clause of Object.values(ACCOUNTING)) {
+      expect([...clause.matchAll(/\{(\w+)\}/g)].map((m) => m[1])).toEqual(['count']);
+    }
+    // The jargon is gone from the ratified set entirely, not merely unrendered.
+    expect(Object.values(ACCOUNTING).join(' ')).not.toContain('checks dark');
+  });
+
+  /** ITEM 11 — the reserved row's two strings, in the user's words. */
+  test('the reserved row names the thing the user recognises, not the structure that stores it', () => {
+    expect(RESERVED.head).toBe('Watching your sites');
+    expect(RESERVED.quiet).toBe('Everything is reporting.');
+    expect(`${RESERVED.head} ${RESERVED.quiet}`).not.toMatch(/record|reserved/i);
   });
 });

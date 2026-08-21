@@ -2145,6 +2145,16 @@ interface ReturnSurface {
    * worst possible way for this criterion to be wrong.
    */
   now: Date;
+  /**
+   * WP-54 · THE INBOX THE ARRIVAL WAS RENDERED WITH, carried for the same reason
+   * the clock is: a check that wants the surface's own count has to call the
+   * surface's own derivation with the surface's own inputs. The Now list draws
+   * situations PLUS the Inbox items that match none of them, so a check reading
+   * `arrivalCounts(triage)` alone measures a different list from the one on
+   * screen — which is item 1's defect, committed by the instrument instead of by
+   * the surface.
+   */
+  inbox: any;
   arrival: any[];
   session: any;
   reentry: any[];
@@ -2188,28 +2198,34 @@ function driveReturnSurface(fixture: EvalFixture): ReturnSurface {
    *
    * XD-27 collapsed the Inbox onto these rows, so a criterion driven against the
    * situations alone would be measuring half a screen and reporting it as the
-   * screen. The item below is the shape `InboxStore` returns; it exists so the
-   * "no interaction" criterion has to account for the *Approve* / *Not now*
-   * buttons the ruling put on the surface, rather than passing because the
-   * harness never supplied a row that has them.
+   * screen.
+   *
+   * WP-54 · WHAT THIS ITEM IS FOR NOW. It was here so the "no interaction"
+   * criterion had to account for the *Approve* / *Not now* buttons the ruling
+   * put on the surface. **Those buttons are gone** — a gate without its
+   * declaration is consent without context (XD-8), so no row is answered in
+   * place. The item stays, and its job is now the harder one: it matches NO
+   * situation this fixture's ledger produces, so it is a row the fold does not
+   * hold, and every count on the screen has to include it. That is the state
+   * that shipped wrong — the badge counted the fold, the list drew both.
    */
+  const inbox = {
+    loaded: true,
+    failed: false,
+    total: 1,
+    pausedSources: [],
+    recentlyDecided: [],
+    items: [{
+      id: 1, source: 'security-sentinel', code: 'FS-01', scope: 'name:Site A',
+      scopeLabel: 'Site A', kind: 'decide', title: 'File permissions are too open',
+      status: 'open', firstSeenAt: 1, lastSeenAt: 1, seenCount: 1,
+    }],
+  };
   const arrivalInstance = new Arrival({
     electron: { ipcRenderer: { invoke: () => Promise.resolve(triage) } },
     now,
     store,
-    inbox: {
-      loaded: true,
-      failed: false,
-      total: 1,
-      pausedSources: [],
-      recentlyDecided: [],
-      items: [{
-        id: 1, source: 'security-sentinel', code: 'FS-01', scope: 'name:Site A',
-        scopeLabel: 'Site A', kind: 'decide', title: 'File permissions are too open',
-        status: 'open', firstSeenAt: 1, lastSeenAt: 1, seenCount: 1,
-      }],
-    },
-    onDecide: () => undefined,
+    inbox,
   });
   arrivalInstance.state = { triage, loading: false, error: null, awayMs: 12 * 3_600_000 };
 
@@ -2220,6 +2236,7 @@ function driveReturnSurface(fixture: EvalFixture): ReturnSurface {
   return {
     triage,
     now,
+    inbox,
     arrival: elementsOf(arrivalInstance.render()),
     session: gatedRow ?? null,
     reentry: elementsOf(new SessionReEntry({ session: gatedRow ?? null }).render()),
@@ -2310,6 +2327,25 @@ function drawnColumn(surface: ReturnSurface, column: 'waiting' | 'changed'): str
   return withAttr(elementsOf(col), 'data-situation').map((e) => String(attr(e, 'data-situation')));
 }
 
+/**
+ * WP-54 · EVERY ROW THE NEEDS-YOU LIST DRAWS, situations and Inbox rows alike.
+ *
+ * `drawnColumn` answers "which SITUATIONS are on screen", which is the right
+ * question for the consequence order and the wrong one for a count: the list
+ * also draws Inbox items the fold does not hold, and counting only the
+ * situations is precisely how the badge came to read seven while twelve cards
+ * rendered.
+ */
+function drawnNowRows(surface: ReturnSurface): string[] {
+  const col = surface.arrival.find((e) => attr(e, 'data-now-list') === NOW_LIST.waiting);
+  const elements = elementsOf(col);
+  const situations = withAttr(elements, 'data-situation').map((e) => String(attr(e, 'data-situation')));
+  const inboxOnly = withAttr(elements, 'data-inbox-row')
+    .filter((e) => attr(e, 'data-situation') === undefined)
+    .map((e) => `inbox-${String(attr(e, 'data-inbox-row'))}`);
+  return [...situations, ...inboxOnly];
+}
+
 const UX2_DRIVEN: RegisteredCheck[] = [
   // ---- J-Return · M6 -------------------------------------------------------
   returnDriven({
@@ -2350,8 +2386,19 @@ const UX2_DRIVEN: RegisteredCheck[] = [
     holds: (s) => {
       const col = s.arrival.find((e) => attr(e, 'data-now-list') === NOW_LIST.changed);
       const rows = withAttr(elementsOf(col), 'data-situation');
+      // WP-54 · ITEM 13 — THE PROVENANCE LINE IS DELETED, so this check no
+      // longer reads it, and the reading it stood for is asserted directly
+      // instead.
+      //
+      // The line said "Filed before you arrived — the record was written when
+      // the run finished, not when you opened this. Nothing here is composed on
+      // demand." The owner's review: that sentence exists to reassure an
+      // ARCHITECT; to a user it is a section with no contents and a lecture.
+      // The PROPERTY it claimed is still true and is now measured rather than
+      // announced — every changed row is a fold field, and the surface has no
+      // path that could compose one, which is what the row-count equality below
+      // is for.
       const filed = withAttr(elementsOf(col), 'data-filed');
-      const filedText = textsOf(filed[0]).join('');
       // "PROCEDURE BESIDE RUN" IS ABOUT RUNS, and the first form of this check
       // demanded a runbook reference from EVERY changed row — including the two
       // closed incidents in this report's ledger, which are not runs under a
@@ -2369,7 +2416,7 @@ const UX2_DRIVEN: RegisteredCheck[] = [
         ok:
           rows.length === s.triage.changed.length &&
           rows.length > 0 &&
-          filed.length === 1 &&
+          filed.length === 0 &&
           finishedRuns.length > 0 &&
           namesProcedure,
         evidence: [
@@ -2378,7 +2425,9 @@ const UX2_DRIVEN: RegisteredCheck[] = [
             `${JSON.stringify(s.triage.changed.map((x: any) => x.tierReason))}`,
           'the rows that name no procedure are closed INCIDENTS, which ran under none — a filing ' +
             'that claimed a runbook for them would be the surface inventing one',
-          `the provenance line is present exactly once and is the ratified one: "${filedText}"`,
+          'the doctrine sentence that used to announce this is GONE (WP-54 item 13) — it was a ' +
+            'lecture in a section with no contents, and the property it claimed is measured here ' +
+            'instead',
           'the record exists BEFORE the arrival by construction — the fold reads recorded outcomes ' +
             'and the column composes nothing; there is no code path here that could compose one',
         ],
@@ -2533,7 +2582,19 @@ const UX2_DRIVEN: RegisteredCheck[] = [
       fromFold.add(String(s.triage.verdict));
 
       const generated = new Set<string>([
-        model.accountingLine(model.arrivalCounts(s.triage)),
+        model.accountingLine(model.arrivalCounts(s.triage, s.inbox)),
+        // WP-54 · ITEM 1 — THE LIST VERDICT IS COMPOSED, NOT CARRIED.
+        //
+        // It used to be `s.triage.verdict`, read off the fold and rendered
+        // verbatim, and it is accounted as a fold field a few lines above for
+        // exactly that reason. The Now list now draws the fold's situations PLUS
+        // any Inbox item that matches none of them, so a sentence counting only
+        // the fold's rows would head eight rows with the word "7" — and
+        // `nowVerdict` calls the HOST'S OWN `listVerdict` with the count of rows
+        // the fold does not hold. One composition, one number; and because it is
+        // now composed rather than carried, this check has to be able to CALL it,
+        // which is the same reason `metaLine` lives in the model.
+        model.nowVerdict(s.triage, s.inbox),
         model.driftLine(null),
         model.awayHeadline(12 * 3_600_000),
         model.awayHeadline(null),
@@ -2560,10 +2621,9 @@ const UX2_DRIVEN: RegisteredCheck[] = [
         evidence: [
           `${long.length} sentence-length string(s) render on the arrival, and EVERY ONE is either ` +
             'a field of the fold (a rule, a part summary, a place set, the reserved headline, and ' +
-            'since WP-48 the row\'s own verdict, ask, status and identifier plus the list verdict) ' +
-            'or the exact output of one of the SEVEN generators — accountingLine, driftLine, ' +
-            'awayHeadline, gateLine, needsLine, reservedDetail, metaLine — called here with the ' +
-            'fold\'s own values',
+            'since WP-48 the row\'s own verdict, ask, status and identifier) or the exact output ' +
+            'of one of the EIGHT generators — accountingLine, nowVerdict, driftLine, awayHeadline, ' +
+            'gateLine, needsLine, reservedDetail, metaLine — called here with the fold\'s own values',
           `unaccounted strings: ${JSON.stringify(unaccounted)}`,
           'the accounting line and the gate line are COMPOSED — counts and gate fields inside ' +
             'ratified connectives — so they are matched against the generator\'s own output rather ' +
@@ -2725,27 +2785,42 @@ const UX2_DRIVEN: RegisteredCheck[] = [
       /* eslint-disable @typescript-eslint/no-var-requires */
       const { arrivalCounts, accountingLine } = require('../../src/renderer/components/return/arrivalModel');
       /* eslint-enable @typescript-eslint/no-var-requires */
-      const counts = arrivalCounts(s.triage);
-      const rendered = textsOf(withAttr(s.arrival, 'data-accounting')[0]).join('');
-      const waitingDrawn = drawnColumn(s, 'waiting').length;
+      const counts = arrivalCounts(s.triage, s.inbox);
+      const rendered = textsOf(withAttr(s.arrival, 'data-accounting')[0] ?? null).join('');
+      const waitingDrawn = drawnNowRows(s).length;
       const changedDrawn = drawnColumn(s, 'changed').length;
       const darkDrawn = s.triage.reserved.dark.length;
-      const badge = withAttr(s.arrival, 'data-badge').map((e) => textsOf(e).join(''));
+      const verdict = textsOf(withAttr(s.arrival, 'data-verdict')[0] ?? null).join('');
+      // WP-54 · ITEM 9 GREW THIS CHECK RATHER THAN LOOSENING IT.
+      //
+      // It used to read the in-list BADGE and require it to equal the needs-you
+      // count. That badge is gone: the number was rendered three times on one
+      // screen — badge, accounting line, verdict — and the review's ruling is
+      // that the count is stated ONCE. So the criterion ("a count the user must
+      // open something to trust") is now checked against the two renderings that
+      // remain, and the accounting line no longer restates the count at all,
+      // which is why `accountingLine(counts)` is the whole assertion for it.
+      //
+      // The trust question is unchanged and is asked more sharply: the VERDICT
+      // is the one place a number appears, and it must be the length of the list
+      // rendered beneath it in the same pass.
+      const verdictCount = Number((verdict.match(/^(\d+)/) ?? [])[1] ?? NaN);
       return {
         ok:
           rendered === accountingLine(counts) &&
           counts.needsYou === waitingDrawn &&
           counts.changed === changedDrawn &&
           counts.dark === darkDrawn &&
-          (counts.needsYou === 0 || badge.join('') === String(counts.needsYou)),
+          (waitingDrawn === 0 ? verdict === '' : verdictCount === waitingDrawn),
         evidence: [
-          `the accounting line reads "${rendered}", and each of its three numbers is the LENGTH OF ` +
+          `the accounting line reads "${rendered}", and every number in it is the LENGTH OF ` +
             `A LIST RENDERED ON THE SAME SCREEN: ${waitingDrawn} waiting rows, ${changedDrawn} ` +
             `changed rows, ${darkDrawn} dark producers in the reserved row`,
           'there is nothing to open to check them — the count and the thing counted are the same ' +
             'render pass, from `arrivalCounts` over the `TriageView` the columns draw',
-          `the rail badge carries the same waiting count (${JSON.stringify(badge)}), so the ambient ` +
-            'instrument and the column cannot disagree',
+          `the verdict reads "${verdict}" and its number is the count of rows drawn beneath it ` +
+            `(${waitingDrawn}) — WP-54 states the count ONCE, so this is the only number on the ` +
+            'screen a user could be asked to trust',
         ],
       };
     },

@@ -43,6 +43,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
+import { controlLabel } from './control-label';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const FIXTURE_JS = path.join(
@@ -56,7 +57,7 @@ const OUT_FILE = path.join(
 let fixturePath = FIXTURE_JS;
 
 /** Bumped when the SHAPE changes, so a consumer can tell that from a content change. */
-const SHAPE_VERSION = 1;
+const SHAPE_VERSION = 2;
 
 /**
  * The five ratified ids, in the fixture's own order.
@@ -85,8 +86,39 @@ const RATIFIED_IDS = [
   'agent.stuck',
 ] as const;
 
-/** Every field a template must carry. A missing one is a hole, not a default. */
+/** Every STRING field a template must carry. A missing one is a hole, not a default. */
 const TEMPLATE_FIELDS = ['id', 'guard', 'headline', 'ask', 'chip', 'state', 'meta', 'rule'] as const;
+
+/**
+ * WP-54 · THE TIER IS ONE FACT, DECLARED ONCE, AND THE RULE LINE READS IT.
+ *
+ * The architect's first finding: the fixture's `incident.no-run` printed
+ * "Tier 1 · nothing is holding it back but you" while the fold ranked the same
+ * row at tier 2 — the rule LINE and the RANK were two facts from two sources,
+ * so every waiting row landed at 2, `rankSituations` fell through to `since`,
+ * and the list degenerated to age order on the owner's real fleet.
+ *
+ * The fixture now declares `tier` as a NUMBER and writes the rule line with a
+ * `{tier}` SLOT. The composer fills that slot from the tier the row was RANKED
+ * at, and the ranker reads the declared number, so the displayed tier and the
+ * sort key are the same value by construction rather than by agreement. This
+ * function is the third guard on that: a template whose rule line does not
+ * OPEN with its own tier slot is refused here, at build time, because a rule
+ * line carrying a literal "Tier 2" would silently reintroduce the divergence
+ * the slot exists to remove.
+ */
+const RULE_PREFIX = 'Tier {tier} · ';
+
+/** The slots each non-template block may carry. Unfillable braces fail the build. */
+const DOOR_SLOTS = ['checkpoint', 'target', 'agentId'] as const;
+const ACCOUNTING_SLOTS = ['count'] as const;
+
+/** Every door the fixture declares, and the one way back. */
+const DOOR_KEYS = ['runAtGate', 'run', 'incident', 'agent', 'backToNow'] as const;
+/** Every colour. `tier4` is deliberately absent: tier 4 takes no stripe. */
+const COLOUR_KEYS = ['tier1', 'tier2', 'tier3', 'link'] as const;
+const RESERVED_KEYS = ['head', 'quiet'] as const;
+const ACCOUNTING_KEYS = ['changed', 'dark'] as const;
 
 /**
  * The fixture's own slot list, from its header comment, plus `runbookId` and
@@ -99,6 +131,9 @@ const TEMPLATE_FIELDS = ['id', 'guard', 'headline', 'ask', 'chip', 'state', 'met
 const KNOWN_SLOTS = [
   'runNoun', 'done', 'failed', 'total', 'age', 'checkpoint', 'position',
   'awaits', 'target', 'finding', 'agentId', 'timeout', 'runbookId', 'producer',
+  // WP-54 · the rule line's own tier, filled from the RANKED tier. See
+  // `RULE_PREFIX` for why the number is a slot rather than literal text.
+  'tier',
 ] as const;
 
 /**
@@ -152,9 +187,15 @@ interface Template { [field: string]: string }
 interface Extracted {
   runNoun: Record<string, string>;
   templates: Template[];
+  tiers: Record<string, number>;
   verdict: { allUnwritten: string; someChanged: string };
   freshness: { now: string; then: string };
+  doors: Record<string, string>;
+  colours: Record<string, string>;
+  reserved: Record<string, string>;
+  accounting: Record<string, string>;
 }
+
 
 function extract(): Extracted {
   const h = readHeadlines();
@@ -182,6 +223,7 @@ function extract(): Extracted {
   }
 
   const templates: Template[] = [];
+  const tiers: Record<string, number> = {};
   for (const raw of rawTemplates as Array<Record<string, unknown>>) {
     const template: Template = {};
     for (const field of TEMPLATE_FIELDS) {
@@ -192,7 +234,7 @@ function extract(): Extracted {
       if (typeof value !== 'string') throw new Error(`template "${String(raw.id)}" is missing "${field}"`);
       template[field] = value;
     }
-    for (const field of ['headline', 'ask', 'meta'] as const) {
+    for (const field of ['headline', 'ask', 'meta', 'rule'] as const) {
       for (const slot of slotsIn(template[field])) {
         if (!(KNOWN_SLOTS as readonly string[]).includes(slot)) {
           throw new Error(
@@ -202,6 +244,28 @@ function extract(): Extracted {
         }
       }
     }
+
+    // WP-54 · the tier, declared as a number and OPENING its own rule line.
+    // Two refusals, and they are the same refusal read from both ends: a
+    // template with no declared tier has nothing for the ranker to read, and a
+    // rule line that does not open with `Tier {tier} · ` is a rule line free to
+    // print a tier the row was not sorted by — which is the defect measured on
+    // the owner's fleet, where four Tier-1 findings rendered below a Tier-2
+    // backup step because the number in the copy and the number in the
+    // comparator were two facts.
+    const tier = raw.tier;
+    if (typeof tier !== 'number' || !Number.isInteger(tier) || tier < 1 || tier > 4) {
+      throw new Error(
+        `template "${template.id}" declares no integer tier in 1..4 — the ranker has nothing to read`,
+      );
+    }
+    if (!template.rule.startsWith(RULE_PREFIX)) {
+      throw new Error(
+        `template "${template.id}" rule line does not open with "${RULE_PREFIX}" — ` +
+        'a literal tier in the rule line is a second source for the tier',
+      );
+    }
+    tiers[template.id] = tier;
     templates.push(template);
   }
 
@@ -230,7 +294,62 @@ function extract(): Extracted {
     then: requireString(rawFreshness as Record<string, unknown>, 'then', 'the freshness block'),
   };
 
-  return { runNoun, templates, verdict, freshness };
+  // --- WP-54's four blocks -------------------------------------------------
+  //
+  // Each is read the same way and refused the same way: the block must exist,
+  // every key it is required to carry must be a string, and any `{slot}` in it
+  // must be one the composer can fill. A block that is silently short is a hole
+  // where a sentence belongs, which is the failure this whole generator exists
+  // to make impossible.
+  const doors = readBlock(h, 'doors', DOOR_KEYS, DOOR_SLOTS);
+  // Every door is a CONTROL, so every door passes the class rule. See
+  // `controlLabel`: the period the row door shipped with was appended by an
+  // extraction, and this is the appender's counterpart on this generator.
+  for (const key of Object.keys(doors)) doors[key] = controlLabel(doors[key]);
+
+  const colours = readBlock(h, 'colours', COLOUR_KEYS, []);
+  for (const [key, value] of Object.entries(colours)) {
+    if (!/^rgb\(\d{1,3},\d{1,3},\d{1,3}\)$/.test(value)) {
+      throw new Error(`the colour "${key}" is not an rgb() triple — read "${value}"`);
+    }
+  }
+
+  const reserved = readBlock(h, 'reserved', RESERVED_KEYS, []);
+  const accounting = readBlock(h, 'accounting', ACCOUNTING_KEYS, ACCOUNTING_SLOTS);
+
+  return { runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting };
+}
+
+/**
+ * One named block of the fixture, with its keys required and its slots closed.
+ *
+ * `allowedSlots` is the CLOSED set for this block — a brace outside it is a
+ * build failure, not a rendered `{newField}`. `[]` means the block's strings
+ * take no substitution at all, which is itself an assertion worth failing on.
+ */
+function readBlock(
+  headlines: Record<string, unknown>,
+  name: string,
+  keys: readonly string[],
+  allowedSlots: readonly string[],
+): Record<string, string> {
+  const raw = headlines[name];
+  if (!raw || typeof raw !== 'object') throw new Error(`the fixture carries no ${name} block`);
+  const source = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const key of keys) {
+    const value = requireString(source, key, `the ${name} block`);
+    for (const slot of slotsIn(value)) {
+      if (!allowedSlots.includes(slot)) {
+        throw new Error(
+          `the ${name} block's "${key}" carries the unknown slot "{${slot}}" — ` +
+          'the composer has no host field to fill it from',
+        );
+      }
+    }
+    out[key] = value;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,7 +362,7 @@ function literal(value: string): string {
 }
 
 function emit(): string {
-  const { runNoun, templates, verdict, freshness } = extract();
+  const { runNoun, templates, tiers, verdict, freshness, doors, colours, reserved, accounting } = extract();
   const lines: string[] = [
     '/**',
     ' * GENERATED — DO NOT EDIT. `npm run fixtures:situation-copy`.',
@@ -307,8 +426,19 @@ function emit(): string {
     '  meta: string;',
     '  /** The tier and why, in the designer\'s words. See the composer for why the',
     '   * rendered rule line reads this on a ratified card (WP-52 item 3) and',
-    '   * `Situation.tierReason` on a derived one. */',
+    '   * `Situation.tierReason` on a derived one. The tier itself is the `{tier}`',
+    '   * SLOT, filled from the tier the row was RANKED at — see `tier` below. */',
     '  rule: string;',
+    '  /**',
+    '   * WP-54 · THE CONSEQUENCE TIER THIS CLASS RANKS AT, declared once.',
+    '   *',
+    '   * The ranker reads this and the rule line renders the ranked value into its',
+    '   * own `{tier}` slot, so the tier a card DISPLAYS is the tier it was SORTED',
+    '   * BY — not by agreement between two derivations, but because there is one',
+    '   * number. The generator refuses a template whose rule line does not open',
+    '   * with that slot, which is what stops a literal tier creeping back in.',
+    '   */',
+    '  tier: number;',
     '}',
     '',
     '/**',
@@ -326,6 +456,7 @@ function emit(): string {
   for (const template of templates) {
     lines.push('  {');
     for (const field of TEMPLATE_FIELDS) lines.push(`    ${field}: ${literal(template[field])},`);
+    lines.push(`    tier: ${tiers[template.id]},`);
     lines.push('  },');
   }
   lines.push(
@@ -351,7 +482,68 @@ function emit(): string {
     `  then: ${literal(freshness.then)},`,
     '} as const;',
     '',
+    '/**',
+    ' * WP-54 · THE DOORS. Every row has one, and every one names where it goes.',
+    ' *',
+    ' * "Open where you are needed" was ratified and failed its first contact with',
+    ' * a person. These name the destination from a fact the row already carries,',
+    ' * so a reader knows what the click costs before making it. `{slot}` braces',
+    ' * are filled by the same composer that fills a headline\'s.',
+    ' *',
+    ' * NONE CARRIES A TERMINAL FULL STOP, and that is enforced in the generator',
+    ' * for the class rather than checked for these five: the period that shipped',
+    ' * was APPENDED by an extraction, so a door added tomorrow would have taken',
+    ' * one too.',
+    ' */',
+    'export const DOORS = {',
   );
+  for (const key of DOOR_KEYS) lines.push(`  ${key}: ${literal(doors[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-54 · THE SEVERITY STRIPE\'S COLOURS, and the door\'s.',
+    ' *',
+    ' * Three pixels on a row\'s left edge: red at tier 1, orange at tier 2, grey at',
+    ' * tier 3. **There is no tier-4 colour and that is the ratified encoding** —',
+    ' * tier 4 takes no stripe, because the section it renders in already says what',
+    ' * it is. The guard that rides with the stripe: it encodes TIER and must never',
+    ' * drift into a severity scale.',
+    ' *',
+    ' * `link` is the door\'s colour. A door is a link; brand green is the product\'s',
+    ' * own mark and not a destination.',
+    ' */',
+    'export const COLOURS = {',
+  );
+  for (const key of COLOUR_KEYS) lines.push(`  ${key}: ${literal(colours[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-54 · THE RESERVED ROW, IN THE USER\'S WORDS.',
+    ' *',
+    ' * "Reserved · the record\'s own health" was our noun for a thing the user',
+    ' * recognises as "is the platform watching my sites". The row\'s purpose is',
+    ' * untouched — XD-23\'s guaranteed seat, one row, unable to grow or be',
+    ' * scrolled away — and only its name and its good-news line changed.',
+    ' */',
+    'export const RESERVED = {',
+  );
+  for (const key of RESERVED_KEYS) lines.push(`  ${key}: ${literal(reserved[key])},`);
+  lines.push(
+    '} as const;',
+    '',
+    '/**',
+    ' * WP-54 · THE ACCOUNTING CLAUSES, each rendered only when its count is real.',
+    ' *',
+    ' * The needs-you count is NOT here: it is the verdict\'s, stated once. A zero',
+    ' * is never enumerated — "0 checks dark" was contradicted two lines below by',
+    ' * the reserved row saying nothing was dark.',
+    ' */',
+    'export const ACCOUNTING = {',
+  );
+  for (const key of ACCOUNTING_KEYS) lines.push(`  ${key}: ${literal(accounting[key])},`);
+  lines.push('} as const;', '');
   return lines.join('\n');
 }
 

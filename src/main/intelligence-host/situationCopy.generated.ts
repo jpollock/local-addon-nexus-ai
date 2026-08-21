@@ -16,7 +16,7 @@
  * which is the property that makes it copy rather than logic.
  */
 
-export const SITUATION_COPY_SHAPE_VERSION = 1;
+export const SITUATION_COPY_SHAPE_VERSION = 2;
 
 /**
  * Controlled Vocabulary v1.4 — the run-noun column.
@@ -62,8 +62,19 @@ export interface SituationTemplate {
   meta: string;
   /** The tier and why, in the designer's words. See the composer for why the
    * rendered rule line reads this on a ratified card (WP-52 item 3) and
-   * `Situation.tierReason` on a derived one. */
+   * `Situation.tierReason` on a derived one. The tier itself is the `{tier}`
+   * SLOT, filled from the tier the row was RANKED at — see `tier` below. */
   rule: string;
+  /**
+   * WP-54 · THE CONSEQUENCE TIER THIS CLASS RANKS AT, declared once.
+   *
+   * The ranker reads this and the rule line renders the ranked value into its
+   * own `{tier}` slot, so the tier a card DISPLAYS is the tier it was SORTED
+   * BY — not by agreement between two derivations, but because there is one
+   * number. The generator refuses a template whose rule line does not open
+   * with that slot, which is what stops a literal tier creeping back in.
+   */
+  tier: number;
 }
 
 /**
@@ -82,20 +93,22 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0 && gate === null',
     headline: '{runNoun} has waited {age} and changed nothing',
     ask: 'It never received a target list, so it cannot start. Give it one, or close it.',
-    chip: 'Waiting',
+    chip: '',
     state: 'nothing written yet',
     meta: '{runbookId}',
-    rule: 'Tier 2 · the world is untouched',
+    rule: 'Tier {tier} · the world is untouched',
+    tier: 2,
   },
   {
     id: 'run.waiting.mid-procedure',
     guard: 'row.kind === "run" && done === 0 && failed === 0 && gate !== null',
     headline: 'A {checkpoint} step is waiting on your {awaits}',
     ask: 'Waiting at {checkpoint}, {position}. Nothing has been written yet, so stopping here costs nothing.',
-    chip: 'Waiting',
+    chip: '',
     state: 'nothing written yet',
     meta: '{runbookId}',
-    rule: 'Tier 2 · the world is untouched',
+    rule: 'Tier {tier} · the world is untouched',
+    tier: 2,
   },
   {
     id: 'run.waiting.part-changed',
@@ -105,7 +118,8 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     chip: 'Mid-change',
     state: '',
     meta: '{runbookId}',
-    rule: 'Tier 1 · mid-change, only you can move it',
+    rule: 'Tier {tier} · mid-change, only you can move it',
+    tier: 1,
   },
   {
     id: 'incident.no-run',
@@ -115,7 +129,8 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     chip: '',
     state: 'No run attached',
     meta: '{producer}',
-    rule: 'Tier 1 · nothing is holding it back but you',
+    rule: 'Tier {tier} · nothing is holding it back but you',
+    tier: 1,
   },
   {
     id: 'agent.stuck',
@@ -125,7 +140,8 @@ export const SITUATION_TEMPLATES: readonly SituationTemplate[] = [
     chip: 'Stuck',
     state: '',
     meta: '{agentId}',
-    rule: 'Tier 3 · the agent is asking, not the fleet',
+    rule: 'Tier {tier} · the agent is asking, not the fleet',
+    tier: 3,
   },
 ];
 
@@ -147,4 +163,69 @@ export const LIST_VERDICT = {
 export const FRESHNESS = {
   now: 'Freshness is not being reported yet.',
   then: 'Nothing is needed of anyone, so nothing is in this list — each one carries its own date where it lives.',
+} as const;
+
+/**
+ * WP-54 · THE DOORS. Every row has one, and every one names where it goes.
+ *
+ * "Open where you are needed" was ratified and failed its first contact with
+ * a person. These name the destination from a fact the row already carries,
+ * so a reader knows what the click costs before making it. `{slot}` braces
+ * are filled by the same composer that fills a headline's.
+ *
+ * NONE CARRIES A TERMINAL FULL STOP, and that is enforced in the generator
+ * for the class rather than checked for these five: the period that shipped
+ * was APPENDED by an extraction, so a door added tomorrow would have taken
+ * one too.
+ */
+export const DOORS = {
+  runAtGate: 'Open the run at {checkpoint}',
+  run: 'Open the run',
+  incident: 'Open {target}',
+  agent: 'Open {agentId}',
+  backToNow: 'Back to Now',
+} as const;
+
+/**
+ * WP-54 · THE SEVERITY STRIPE'S COLOURS, and the door's.
+ *
+ * Three pixels on a row's left edge: red at tier 1, orange at tier 2, grey at
+ * tier 3. **There is no tier-4 colour and that is the ratified encoding** —
+ * tier 4 takes no stripe, because the section it renders in already says what
+ * it is. The guard that rides with the stripe: it encodes TIER and must never
+ * drift into a severity scale.
+ *
+ * `link` is the door's colour. A door is a link; brand green is the product's
+ * own mark and not a destination.
+ */
+export const COLOURS = {
+  tier1: 'rgb(221,18,67)',
+  tier2: 'rgb(255,97,25)',
+  tier3: 'rgb(198,205,208)',
+  link: 'rgb(0,107,214)',
+} as const;
+
+/**
+ * WP-54 · THE RESERVED ROW, IN THE USER'S WORDS.
+ *
+ * "Reserved · the record's own health" was our noun for a thing the user
+ * recognises as "is the platform watching my sites". The row's purpose is
+ * untouched — XD-23's guaranteed seat, one row, unable to grow or be
+ * scrolled away — and only its name and its good-news line changed.
+ */
+export const RESERVED = {
+  head: 'Watching your sites',
+  quiet: 'Everything is reporting.',
+} as const;
+
+/**
+ * WP-54 · THE ACCOUNTING CLAUSES, each rendered only when its count is real.
+ *
+ * The needs-you count is NOT here: it is the verdict's, stated once. A zero
+ * is never enumerated — "0 checks dark" was contradicted two lines below by
+ * the reserved row saying nothing was dark.
+ */
+export const ACCOUNTING = {
+  changed: '{count} changed overnight',
+  dark: '{count} checks haven’t reported',
 } as const;

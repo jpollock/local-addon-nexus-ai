@@ -172,7 +172,14 @@ describe('card 1 — the row whose meta contradicted the guard that produced it'
     expect(line).not.toContain('targets');
     // It still says everything it honestly can.
     expect(line).toContain('80h');
-    expect(line).toContain('rb.bulk-plugin-update');
+    // WP-54 · ITEM 14 — THE IDENTIFIER MOVED, AND IT MOVED BECAUSE IT WAS ON
+    // THE CARD TWICE. This used to assert the runbook id on the META line; on a
+    // DERIVED card the headline is `runSummary(row)`, which names the runbook
+    // too, so both derived rows on the owner's real fleet printed
+    // `rb.bulk-plugin-update` twice each. The card still names it exactly once —
+    // which is the pin now, over the whole card rather than over one line.
+    const card = `${situation.headline} ${line}`;
+    expect(card.split('rb.bulk-plugin-update')).toHaveLength(2);
   });
 
   test('THE DOUBLE WRONG · a run with a KNOWN target set of 5 and nothing written says nothing about places either', () => {
@@ -207,16 +214,30 @@ describe('the place summary still speaks when it has members — the field is no
     expect(row.places.highest).toBe('wpe_production');
   });
 
-  test('a target nothing can place is UNRESOLVED, and still says so rather than saying nothing', () => {
-    // No `describePlace` at all: the members exist, so there IS something to
-    // report — that the record does not name where they are. An empty summary
-    // here would be the honest-absence rule applied where a fact exists.
+  /**
+   * WP-54 · ITEM 4 REVERSED THIS PIN, and the reversal is recorded rather than
+   * the pin being deleted.
+   *
+   * It read: *a target nothing can place is UNRESOLVED, and still says so rather
+   * than saying nothing* — and the sentence it asserted was "nothing on record
+   * names where the target is". The architect's second finding measured that
+   * sentence on the live build and it was FALSE: four incident cards carried it
+   * while the duplicate inbox card six inches below each of them printed
+   * `theawfulpm-test`, and the ledger's own `site.core` twin holds that name for
+   * that very entity. The platform had the name and was claiming it did not.
+   *
+   * The clause is deleted rather than reworded. `unresolved` is still counted
+   * and still on the contract — the FACT survives, and this test still asserts
+   * `total` — but a row does not narrate our ignorance of where a target lives,
+   * and the incident composer now resolves what the target is CALLED.
+   */
+  test('a target nothing can place is UNRESOLVED, and the row says nothing about it', () => {
     const t = mintTaskId();
     emitManifest({ taskId: t, observedAt: hoursAgo(5), targets: 1 });
     emitAct({ taskId: t, observedAt: hoursAgo(4), targets: [SITE_A] });
 
     const [row] = createSessionRegistry({ core, now: NOW, runbooks: lookup }).sessions();
     expect(row.places.total).toBe(1);
-    expect(row.places.summary).toBe('nothing on record names where the target is');
+    expect(row.places.summary).toBe('');
   });
 });

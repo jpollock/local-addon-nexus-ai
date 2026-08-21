@@ -27,7 +27,7 @@ import * as React from 'react';
 import { serializeTree } from './helpers/serializeTree';
 import { assertGoldenShape, buildMorning, NOW, type Morning } from './helpers/returnMorning';
 import { Arrival, ageLabel, LAST_ARRIVAL_KEY } from '../../../src/renderer/components/return/Arrival';
-import { AUTHORED, accountingLine, arrivalCounts, promotableSessionId } from '../../../src/renderer/components/return/arrivalModel';
+import { AUTHORED, accountingLine, arrivalCounts, nowVerdict, promotableSessionId } from '../../../src/renderer/components/return/arrivalModel';
 import { RETURN_COPY } from '../../../src/renderer/components/return/returnCopy.generated';
 import type { TriageView } from '../../../src/main/intelligence-host/sessionRegistry';
 
@@ -229,14 +229,35 @@ describe('WP-48 · the verdict is READ, and the badge holds one word', () => {
     }
   });
 
-  test('the list verdict is rendered from the TriageView, and an empty one draws nothing', () => {
+  /**
+   * WP-54 · ITEM 1 AMENDED THIS PIN, and the amendment is the fix rather than a
+   * loosening.
+   *
+   * It read: *the list verdict is rendered from the TriageView, and an empty one
+   * draws nothing* — the surface rendered `triage.verdict` verbatim. That was
+   * right while the list WAS the fold's waiting column, and wrong the moment the
+   * Inbox collapsed onto the same list: the fold does not hold an Inbox item, so
+   * a verdict counting only situations headed eight rows with the word "7".
+   *
+   * The sentence is still composed in ONE place — `nowVerdict` calls the host's
+   * own `listVerdict`, and the surface fills no template of its own. What
+   * changed is the SET it is composed over: the rows actually drawn.
+   */
+  test('the list verdict counts the rows drawn, and an empty list draws no verdict', () => {
     const { tree } = arrival();
     const verdict = walk(tree).find((n) => props(n)['data-verdict'] !== undefined);
     expect(verdict).toBeDefined();
+    expect(textOf(verdict).join('')).toBe(nowVerdict(triage));
+    // With no inbox in play the surface says exactly what the fold said.
     expect(textOf(verdict).join('')).toBe(triage.verdict);
-    expect(triage.verdict).not.toBe('');
 
-    const empty = arrival({ state: { triage: { ...triage, verdict: '' } } });
+    // Emptying the fold's own copy of the sentence changes nothing, because the
+    // sentence is COMPOSED rather than carried — which is the property that
+    // stops it disagreeing with the rows. Emptying the ROWS is what silences it.
+    const stillDrawn = arrival({ state: { triage: { ...triage, verdict: '' } } });
+    expect(walk(stillDrawn.tree).find((n) => props(n)['data-verdict'] !== undefined)).toBeDefined();
+
+    const empty = arrival({ state: { triage: { ...triage, waiting: [], verdict: '' } } });
     expect(walk(empty.tree).find((n) => props(n)['data-verdict'] !== undefined)).toBeUndefined();
   });
 
@@ -350,7 +371,42 @@ describe('the arrival renders the fold — row for row', () => {
     // below would hold for any morning, which is the point.
     const counts = arrivalCounts(triage);
     expect(textOf(accounting).join('')).toBe(accountingLine(counts));
-    expect(textOf(accounting).join('')).toBe('2 need you · 1 changed overnight · 3 checks dark');
+    // WP-54 · ITEMS 9 AND 10 REWROTE THIS SENTENCE, and both halves are visible
+    // in it. The needs-you count is GONE from this line — it was on the badge,
+    // here, and in the verdict, three renderings of one number — and "checks
+    // dark" is gone with it, replaced by the plain clause a person can read.
+    expect(textOf(accounting).join('')).toBe('1 changed overnight · 3 checks haven’t reported');
+    expect(textOf(accounting).join('')).not.toContain('need you');
+  });
+
+  /**
+   * WP-54 · ITEM 9 — A ZERO IS NEVER ENUMERATED, and the line is absent when it
+   * has nothing to say.
+   *
+   * "0 checks dark" was contradicted two lines below by the reserved row saying
+   * nothing was dark. A clause about nothing is a clause that should not be
+   * there, and a LINE of nothing but such clauses is an element that should not
+   * render — which is why this asserts the absence of the node, not an empty one.
+   */
+  test('a quiet morning renders no accounting line at all', () => {
+    const quiet = { ...triage, changed: [], reserved: { ...triage.reserved, dark: [] } };
+    const { nodes } = arrival({ state: { triage: quiet } });
+    expect(byAttr(nodes, 'data-accounting')).toHaveLength(0);
+  });
+
+  /**
+   * WP-54 · ITEM 9 — NO AWAY-LINE AT ALL UNDER AN HOUR.
+   *
+   * "You were away 0 hours" was ruled against once and shipped anyway. Under an
+   * hour there is no absence worth reporting, and the alternatives to silence
+   * are a false number and a sentence about nothing.
+   */
+  test('an absence under an hour is not news, and no line is drawn for it', () => {
+    const { nodes } = arrival({ state: { awayMs: 59 * 60_000 } });
+    expect(byAttr(nodes, 'data-away')).toHaveLength(0);
+
+    const anHour = arrival({ state: { awayMs: 60 * 60_000 } });
+    expect(textOf(byAttr(anHour.nodes, 'data-away')[0]).join('')).toBe('You were away 1 hours');
   });
 
   test('the first ever open states the platform\'s limit rather than an absence of zero', () => {
@@ -391,20 +447,29 @@ describe('the reserved slot, the badge, and the drift line', () => {
     expect(props(reserved[0]).style.position).toBe('sticky');
   });
 
-  test('the badge is the NEEDS-YOU count, and the section below has none', () => {
+  /**
+   * WP-54 · ITEM 9 REMOVED THE IN-LIST BADGE, and the reasoning is the same
+   * finding that removed the count from the accounting line.
+   *
+   * The number was rendered three times on one screen: on this badge, in the
+   * accounting line, and in the verdict. The verdict is the one that SAYS
+   * something, so it keeps the number. The ambient badge on the RAIL is a
+   * different instrument (XD-23 — "an instrument, not an inventory") and it
+   * survives; `returnRailBadge.test.ts` pins it, and pins it against the rows
+   * this screen draws.
+   *
+   * XD-26's absence is unchanged and is still pinned below: nothing under
+   * `Nothing needed of you` escalates, because nothing in it needs anyone.
+   */
+  test('the count is stated ONCE — no badge in the list, and none in the section below', () => {
     const { tree } = arrival();
-    const needsYou = walk(tree).find((n) => props(n)['data-now-list'] === 'needs-you');
-    const nothingNeeded = walk(tree).find((n) => props(n)['data-now-list'] === 'nothing-needed');
+    const badges = walk(tree).filter((n) => props(n)['data-badge'] !== undefined);
+    expect(badges).toHaveLength(0);
 
-    const badgesIn = (column: any) => walk(column).filter((n) => props(n)['data-badge'] === 'needsYou');
-
-    expect(badgesIn(needsYou)).toHaveLength(1);
-    expect(textOf(badgesIn(needsYou)[0]).join('')).toBe(String(triage.waiting.length));
-
-    // XD-26's absence, with teeth: nothing under `Nothing needed of you` needs
-    // anyone, so nothing in it escalates.
-    expect(badgesIn(nothingNeeded)).toHaveLength(0);
-    expect(walk(nothingNeeded).filter((n) => props(n)['data-badge'] !== undefined)).toHaveLength(0);
+    // …and the number appears exactly once in the header, in the verdict.
+    const header = walk(tree).filter((n) => props(n)['data-verdict'] !== undefined);
+    expect(header).toHaveLength(1);
+    expect(textOf(header[0]).join('')).toContain(String(triage.waiting.length));
   });
 
   test('drift renders as ONE line and NO rows — T5 leaves the list', () => {
@@ -426,13 +491,31 @@ describe('the reserved slot, the badge, and the drift line', () => {
     expect(drawn.map((n) => props(n)['data-tier'])).not.toContain(3);
   });
 
-  test('the nothing-needed section carries its provenance line — nothing composed on demand', () => {
-    const { tree } = arrival();
-    const changedColumn = walk(tree).find((n) => props(n)['data-now-list'] === 'nothing-needed');
-    const filed = walk(changedColumn).filter((n) => props(n)['data-filed'] !== undefined);
+  /**
+   * WP-54 · ITEM 13 REVERSED THIS PIN, and the reversal is the owner's finding
+   * verbatim.
+   *
+   * It read: *the nothing-needed section carries its provenance line — nothing
+   * composed on demand*, and asserted `RETURN_COPY.FILED_BEFORE_YOU_ARRIVED`.
+   * On the live build the section was EMPTY, so what rendered was a heading over
+   * two sentences of our own doctrine — *"Filed before you arrived — the record
+   * was written when the run finished, not when you opened this. Nothing here is
+   * composed on demand."* That sentence exists to reassure an ARCHITECT; to a
+   * user it is a section with no contents and a lecture.
+   *
+   * The property it was defending — nothing on this surface is composed on
+   * demand — is still true and is still pinned, by the tests above that assert
+   * every sentence comes from the fold or the generated copy. It is a property
+   * of the code, and stating it to the user was never what made it true.
+   */
+  test('the doctrine sentences are gone, and an empty section does not render', () => {
+    const { tree, nodes } = arrival();
+    expect(byAttr(nodes, 'data-filed')).toHaveLength(0);
+    expect(walk(tree).some((n) => textOf(n).join('').includes('Filed before you arrived'))).toBe(false);
 
-    expect(filed).toHaveLength(1);
-    expect(textOf(filed[0]).join('')).toBe(RETURN_COPY.FILED_BEFORE_YOU_ARRIVED);
+    const nothingToSay = { ...triage, changed: [], working: [] };
+    const empty = arrival({ state: { triage: nothingToSay } });
+    expect(walk(empty.tree).find((n) => props(n)['data-now-list'] === 'nothing-needed')).toBeUndefined();
   });
 });
 
@@ -450,12 +533,24 @@ describe('the absences — pins, not omissions', () => {
     const doors = byAttr(nodes, 'data-door');
     expect(buttons).toHaveLength(doors.length);
 
-    // One door per waiting row, and it carries the session it promotes.
-    expect(doors.map((n) => props(n)['data-door'])).toEqual(
-      triage.waiting.map((s) => s.sessionId).filter(Boolean),
+    // WP-54 · ITEM 6 — EVERY ROW HAS THE DOOR IT ACTUALLY HAS, and it NAMES
+    // WHERE IT GOES. The pin used to read "one door per waiting row, carrying
+    // the session it promotes", which was true and was also the reason an
+    // incident row had no door at all — the fold has no session to promote for
+    // an incident, so the row that most needed somewhere to go had nowhere.
+    //
+    // A door is now `{label, kind, target}` composed in the host: a run's names
+    // its checkpoint, an incident's names the site the finding is about. The
+    // label is asserted against the row's OWN door, so this cannot pass by
+    // agreeing with itself about a constant.
+    const rowDoors = doors.filter((n) => props(n)['data-door-kind'] !== undefined);
+    expect(rowDoors.map((n) => props(n)['data-door'])).toEqual(
+      triage.waiting.map((s) => s.door!.target),
     );
-    for (const door of doors) {
-      expect(textOf(door).join('')).toBe(RETURN_COPY.ROW_DOOR);
+    for (const [i, door] of rowDoors.entries()) {
+      expect(textOf(door).join('')).toBe(triage.waiting[i].door!.label);
+      // A CONTROL TAKES NO TERMINAL FULL STOP (item 7, fixed at the appender).
+      expect(textOf(door).join('')).not.toMatch(/\.$/);
     }
   });
 
@@ -485,10 +580,22 @@ describe('the absences — pins, not omissions', () => {
       column: 'waiting',
       tier: 2,
       tierReason: 'an open incident with no run linked to it — nothing has been written under a procedure',
-      places: { tokens: [], highest: null, atHighest: 0, total: 0, unresolved: 0, summary: 'no targets on record' },
+      places: { tokens: [], highest: null, atHighest: 0, total: 0, unresolved: 0, summary: '' },
       since: new Date(NOW.getTime() - 2 * 3_600_000).toISOString(),
       lastEventId: 'evt_incident_1',
       parts: [{ kind: 'incident', eventId: 'evt_incident_1', summary: 'checkout returned 500' }],
+      headline: 'checkout returned 500 on alpha-site, and nothing is fixing it',
+      ask: '',
+      chip: '',
+      state: '',
+      meta: '',
+      rule: 'Tier 2 · x',
+      headlineTemplate: null,
+      // WP-54: the door the host composes for an incident, and the identity an
+      // Inbox item is matched against.
+      door: { label: 'Open alpha-site', kind: 'site', target: 'alpha-site' },
+      signature: { producer: 'security-sentinel', fact: 'FS-01', target: 'alpha-site' },
+      written: { done: 0, failed: 0, total: null },
     });
 
     test('promotableSessionId returns null for it — an event id is not a session id', () => {
@@ -496,17 +603,69 @@ describe('the absences — pins, not omissions', () => {
       expect(promotableSessionId(triage.waiting[0])).toBe(triage.waiting[0].sessionId);
     });
 
-    test('it renders as a row, and it gets NO door — there is no session to promote', () => {
+    /**
+     * WP-54 · ITEM 6 REVERSED THIS PIN, and the reversal is the point of the
+     * item.
+     *
+     * It read: *it renders as a row, and it gets NO door — there is no session
+     * to promote*, and that was a correct reading of a contract in which a door
+     * meant one thing. The consequence on the live build was that the four rows
+     * with the highest consequence on the whole screen — open security findings
+     * with nothing fixing them — were the only rows a person could not act on.
+     *
+     * An incident's door does not promote a session. It goes to the SITE the
+     * finding is about, which is where a containment decision is made with its
+     * declaration in front of the person making it. `kind` is what keeps the
+     * two apart, and `promotableSessionId` still returns null for an incident —
+     * pinned in the test above, unchanged.
+     */
+    test('it renders as a row WITH a door — to the site, not to a session', () => {
       const withIncident = { ...triage, waiting: [...triage.waiting, incident()] };
       const { nodes } = arrival({ state: { triage: withIncident } });
 
-      // The row is drawn: an incident of one is still a situation, and dropping
-      // it would be worse than giving it a door it cannot honour.
       expect(byAttr(nodes, 'data-situation').map((n) => props(n)['data-situation'])).toContain('evt_incident_1');
-      // …and the doors are exactly the sessions', never the incident's event id.
-      const doors = byAttr(nodes, 'data-door').map((n) => props(n)['data-door']);
-      expect(doors).toEqual(triage.waiting.map((s) => s.sessionId));
-      expect(doors).not.toContain('evt_incident_1');
+
+      const doors = byAttr(nodes, 'data-door');
+      const incidentDoor = doors.filter((n) => props(n)['data-door-kind'] === 'site')[0];
+      expect(incidentDoor).toBeDefined();
+      expect(props(incidentDoor)['data-door']).toBe('alpha-site');
+      expect(textOf(incidentDoor).join('')).toBe('Open alpha-site');
+      // Never the event id: an incident's door is not a session promotion.
+      expect(doors.map((n) => props(n)['data-door'])).not.toContain('evt_incident_1');
+    });
+
+    /**
+     * WP-54 · ITEM 6 — AND A DOOR WITH NO HANDLER IS NOT DRAWN AS A CONTROL.
+     *
+     * A dead door is worse than no door: it is a control that answers a click
+     * with nothing, which reads as the platform failing rather than as the
+     * platform having nowhere to send you.
+     */
+    test('the site door calls onOpenSite with the site the finding is about', () => {
+      const opened: string[] = [];
+      const promoted: string[] = [];
+      const withIncident = { ...triage, waiting: [...triage.waiting, incident()] };
+      const { instance, nodes } = arrival({
+        state: { triage: withIncident },
+        onOpenSite: (site: string) => opened.push(site),
+        onPromote: (id: string) => promoted.push(id),
+      });
+
+      // The door the surface DREW is the one walked through, read off the tree
+      // rather than constructed here — a handler driven with a hand-built door
+      // would pass whatever the row actually rendered.
+      const drawn = byAttr(nodes, 'data-door').filter((n) => props(n)['data-door-kind'] === 'site')[0];
+      instance.walkThrough({
+        label: textOf(drawn).join(''),
+        kind: props(drawn)['data-door-kind'],
+        target: props(drawn)['data-door'],
+      });
+
+      expect(opened).toEqual(['alpha-site']);
+      // …and it is NOT a promotion. `kind` is what keeps the two destinations
+      // apart, and a site door reaching `onPromote` would hand a site name to a
+      // session lookup.
+      expect(promoted).toEqual([]);
     });
   });
 

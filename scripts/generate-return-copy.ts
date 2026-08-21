@@ -38,6 +38,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
+import { controlLabel } from './control-label';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const FIXTURE_JS = path.join(
@@ -146,7 +147,14 @@ function extract(): { values: Extracted; separator: string } {
   const changedHead = fromSheet(md, /^\*\*(Changed while you were away)\*\*/m, 'the changed column head');
 
   // --- the door, and the changed column's provenance line -------------------
-  const door = fromSheet(md, /Door: \*([^*]+)\*/, 'the waiting row door');
+  // WP-54 · ITEM 7 — THE APPENDER, AND THIS IS IT.
+  //
+  // The capture is a markdown SENTENCE ("Door: *Open where you are needed.*"),
+  // so the sentence's own terminator arrived with the label and shipped on the
+  // control. `controlLabel` is applied to EVERY control this generator extracts,
+  // not to this one line, because the same capture shape produces the same
+  // period for any door written into prose later. See `scripts/control-label.ts`.
+  const door = controlLabel(fromSheet(md, /Door: \*([^*]+)\*/, 'the waiting row door'));
   const filed = fromSheet(md, /Beneath it: "([^"]+)"/, 'the changed column provenance line');
 
   // --- the away headline: "You were away 12 hours" --------------------------
@@ -192,8 +200,8 @@ function extract(): { values: Extracted; separator: string } {
     values: {
       UNKNOWN_ARM_LEAD: String(unknownArm.lead),
       UNKNOWN_ARM_BODY: String(unknownArm.body),
-      UNKNOWN_ARM_DOOR: String(unknownArm.door),
-      UNKNOWN_ARM_OFFER: String(unknownArm.offer),
+      UNKNOWN_ARM_DOOR: controlLabel(String(unknownArm.door)),
+      UNKNOWN_ARM_OFFER: controlLabel(String(unknownArm.offer)),
 
       WAITING_HEAD: waitingHead,
       CHANGED_HEAD: changedHead,
