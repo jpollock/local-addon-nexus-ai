@@ -21356,3 +21356,51 @@ guards decline on null and the platform withholds); that is WP-48b,
 in WP-50's scope, and the triple-render collapses to
 rule-line + designer-headline + distinct-ask when it lands, with the
 dedup suppressing any part identical to the headline.
+
+---
+
+## WP-50 · LOCK ANNOUNCE (2026-08-20) — the producers pay their debts, and the strip
+
+Announced ON THE BASE (`poc/nexintelligence-ux`) before the worktree is cut, per
+the WP-20f/WP-37 rule. The architect's uncommitted primary-checkout work (WP-49
+merge acceptance, field finding 5, the XD-27 amendment, and the designer's
+revised sheet) was committed VERBATIM first in `147303d7`, with md5 and byte
+receipts pasted from the print — the standing precedent, exercised for the
+fourth time.
+
+**Verified free at the tail rather than assumed.** The last LOCK line in this
+file before this announce is WP-49's release: "**THE `src/renderer/`,
+`tests/intelligence-evals/` AND `docs/intelligence/` LOCKS ARE RELEASED.**" —
+and nothing between it and here claims a surface. WP-49's own report states
+that the `src/main/intelligence-host/` lock "which this packet never held" is
+what WP-49a needs; no packet has held it since WP-48 released it.
+
+**LOCKED SURFACES — four:**
+
+1. `src/main/intelligence-host/` (the serialized core-side lock). Files this
+   packet expects to touch, named rather than left to the directory:
+   `sessionRegistry.ts` (WP-49a's two contract additions), `chatAssembly.ts`
+   (WP-48b's manifest scope), `incidentProducer.ts` (WP-48a), and
+   `procedureArming.ts` if the arming's own carrier needs it.
+2. The producer/agent modules beside them: `src/main/comparator/armFromSelection.ts`
+   and `src/main/mcp/modules/fleet/load-procedure.ts` — the two production
+   callers of the arming queue.
+3. `src/renderer/` — for the one-line part-summary dedup (field finding 2) and
+   the XD-27-amended tab strip. **No new renderer logic beyond consumption**
+   for WP-49a, per the packet.
+4. `docs/intelligence/` — this record.
+
+**NOT LOCKED and not touched:** `src/intelligence/` (the extraction seam),
+`src/main/index.ts`, `src/main/ipc-handlers.ts`, `src/main/mcp/modules/fleet/index.ts`.
+
+**Scope:** WP-48b (the arming records its scope on every manifest), WP-48a (the
+sentinel's causal link), WP-49a (`TriageView.working` + `Situation.capability`,
+gate-held, with the two interim `{runbookId}` asks retired downstream), and the
+part-summary dedup. Escalation-grade for this packet, as stated in the launch:
+any new ledger topic, any change to coalescing rules, any rewrite of existing
+events.
+
+**The acceptance exhibit this packet owes:** a re-fold of the owner's real
+ledger, before and after, with the actual sentences printed.
+
+Worktree `.worktrees/wp-50`, branch `wp-50`, cut from `poc/nexintelligence-ux`.
