@@ -21896,3 +21896,126 @@ ruling lands.
 
 **THE `src/main/intelligence-host/`, the two arming callers, `src/renderer/` AND
 `docs/intelligence/` LOCKS REMAIN HELD** pending acceptance.
+
+---
+
+## WP-50 · RULING LANDED — the guard amendment, and what it did to the live fleet (2026-08-21)
+
+The gate ruling implemented. §8 landed here; §7 is **WP-51** and does not hold
+this merge; `ManifestScope` needed no change, being ratified as shaped.
+
+### The amendment, in the RATIFIED SOURCE
+
+```
+run.waiting.mid-procedure
+- guard: 'row.kind === "run" && done === 0 && failed === 0 && total > 0 && gate !== null'
++ guard: 'row.kind === "run" && done === 0 && failed === 0 && gate !== null'
+```
+
+Amended in `from-designer/fixtures/situation-headlines.js`, not in the composer —
+WP-48's precedent, so the guard and the code stay one rule. New receipts:
+
+```
+situation-headlines.js        8966 bytes  md5 74bcbc47d0f3e8e1e9d8b234647b388a
+situationCopy.generated.ts    6155 bytes  md5 32d81f55cfbfd3d401f81c358ed74d09
+```
+
+### THE AGREEMENT PIN CAUGHT THE CODE COPY, which is what it is for
+
+Amending the fixture alone made `situationHeadlines.test.ts` report two
+disagreements over the shared case table:
+
+```
+run.waiting.mid-procedure × "run, nothing written, empty selection, GATED": fixture says true, code says false
+run.waiting.mid-procedure × "run, nothing written, NO scope recorded, gated": fixture says true, code says false
+```
+
+`guardHolds` amended to match. Two copies of one rule in bundles that cannot
+import each other, pinned together by a shared case table — the same pattern as
+`resolveAgentCron`/`effectiveCadenceExpression` and `localDay` — working exactly
+as designed, on the first amendment that tested it.
+
+### THE ACCEPTANCE CASE, MET ON THE OWNER'S REAL LEDGER
+
+The row the ruling was about, re-folded after the amendment:
+
+```
+--- WAITING · sess_task_01M0BBHDGE8W4FJM5BJJ5DVAEF
+    template : run.waiting.mid-procedure
+    capability: cap.bulk_plugin_update
+    headline : A cp.backup step is waiting on your evidence
+    ask      : Waiting at cp.backup, 4 of 8. Nothing has been written yet, so stopping here costs nothing.
+    written  : done=0 failed=0 total=0
+    gate     : cp.backup 4 of 8 (evidence)
+```
+
+**All three run rows on the real fleet now carry ratified sentences** — class 1
+on the two gateless runs, class 2 on the gated one. The gap between the owner's
+screenshots and the designer's sheets, for the run rows, is closed.
+
+(The sheet's own head reads "A backup step is waiting on evidence from you"; the
+ratified template renders `{checkpoint}` as the checkpoint id in full. That is
+the documented divergence `gateLine` and the Govern matrix already hold to — an
+id cited in full, never softened into prose.)
+
+### The pins: two replaced, one added, one annotated as history
+
+- **REPLACED, not deleted** — "a gated run whose selection was EMPTY gets
+  neither class" and "a run whose arming carried NO scope … headlineTemplate
+  null". Both asserted the withholding the ruling removed. Each now pins class 2
+  firing, and each carries in its own comment what changed and why. A withdrawn
+  rule with its guard left standing is a test asserting the opposite of the law.
+- **ADDED** — `THE HONEST GAP STAYS HONEST · a GATELESS run with an UNKNOWN
+  target set gets no class at all`. The ruling names this case explicitly, so it
+  is pinned explicitly: dropping `total > 0` widened guard 2 to every GATED run,
+  not to every run, and this is what pins the difference.
+- **ANNOTATED AS HISTORY** — `contradictedByTheRecord`'s explanatory paragraph
+  describes a world two rulings ago. It is marked as history rather than
+  rewritten. The tripwire itself is still unreachable through the composer
+  (guard 1 carries `gate === null`) and stays permanent and directly pinned.
+
+### An adjacent receipt defect, found and fixed
+
+All three copy generators printed `${next.length} bytes` — **UTF-16 code units,
+not bytes.** The copy modules carry em dashes and `§`, so the two differ by 18 on
+`situationCopy.generated.ts` alone, and a wrong receipt has already reached this
+record: WP-48's gate report quotes `situationCopy.generated.ts 6168 bytes`, which
+was the character count. Now `Buffer.byteLength(next, 'utf-8')`; all three agree
+with `wc -c`. **"Arithmetic in one named unit" applies to the tool as well as to
+the report** — a receipt-printing tool that names the wrong unit produces a wrong
+receipt every time someone pastes it, and pastes it honestly.
+
+### The environment flipped between sessions, and the new rule caught it first try
+
+The tree was built for **Electron (ABI 146)** at the start of this session — the
+owner's `npm run rebuild`, taken on this packet's own advice. It surfaced as
+WP-20e's mask: `Cannot read properties of undefined (reading 'emitter')` across
+the entire registry suite, 40+ reds on a change that touched one guard string.
+**The CONSTRUCT-a-Database probe named the real mismatch on the first try** —
+`NODE_MODULE_VERSION 146 … requires 141` — which is the rule this packet
+contributed to the protocol two days after contributing it. `npm rebuild
+better-sqlite3` recovered it. Nothing was filed and no code was touched for it.
+
+### Battery, suite, and the receipts
+
+The battery gains **M22**: re-introducing `total > 0` into `guardHolds`. The lie
+it ships is the amendment run backwards — a true sentence goes back to being
+withheld from a real row, silently.
+
+```
+=== WP-50 BATTERY: 21 killed / 0 survived / 1 equivalent / 0 anchor-miss, of 22 ===
+PRISTINE BASELINE: 0 failed / 186 total, 0 suites failed (floor 182)
+CONTROL  SURVIVED (correct)  0 failed / 186 total
+ABI PROBE (before/after): better-sqlite3 loads — the shared node_modules matches this node
+TREE PRISTINE AFTER.
+```
+
+| | suites | tests | passed | skipped | exit |
+|---|---|---|---|---|---|
+| baseline (`c2d5066a`) | 614 | 8,475 | 8,463 | 12 | 0 |
+| WP-50 at the gate | 618 | 8,509 | 8,497 | 12 | 0 |
+| **ruling landed** | **618** | **8,511** | **8,499** | **12** | **0** |
+
+`tsc` clean; `eslint` 0 errors, 6 pre-existing warnings; all six generator
+`:check` scripts exit 0; byte sweep clean. ABI: system Node v25.9.0 / **141** —
+**the owner must `npm run rebuild` before loading Local.**
