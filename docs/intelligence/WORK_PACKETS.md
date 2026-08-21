@@ -23409,3 +23409,401 @@ Standard discipline, plus the three the launch instruction adds: every string
 this packet changes comes from the ratified fixture through a generator;
 receipts are measured in the unit they name; the mutation battery pins its ABI
 at both ends.
+
+---
+
+## WP-54 · GATE REPORT — the Now list is one list (2026-08-21)
+
+**Branch `wp-54`, worktree `.worktrees/wp-54`, cut from
+`poc/nexintelligence-ux` at `eb3682e2` (the lock announce, which sits on
+`10ad1af7` — the architect's own uncommitted record, committed verbatim under
+the WP-02 precedent immediately before it). Unpushed.**
+
+The owner's screen-by-screen review, the architect's own five and the
+designer's screen review all read the same shipped screen. **Six of the
+fourteen items are one defect wearing different coats: two derivations of one
+fact, free to disagree.** The list and the badge counted different
+populations; the rule line and the comparator named different tiers; a
+headline said the record could not name a target while the card six inches
+below printed its name. Where an item could be fixed by making the two into
+one, it was; where it could not, the residue is named below rather than
+smoothed.
+
+### 1 · THE ACCEPTANCE EXHIBIT — the owner's real data, before and after
+
+Measured against a **copy** of the live ledger (`initIntelligenceCore` opens
+for write, so it is never pointed at the owner's file) joined to the **live**
+`graph.db` inbox opened READ-ONLY. Both runs are the real fold and the real
+renderer model, not a fixture.
+
+**BEFORE** — badge **7**, **twelve** cards:
+
+```
+verdict   "7 things need you, and none of them has changed anything yet"
+accounting "7 need you · 0 changed overnight · 0 checks dark"
+reserved  "the record is reporting — nothing dark, nothing late"
+
+T2  running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+        meta  rb.bulk-plugin-update            <- the id, twice on one card
+T2  A cp.backup step is waiting on your evidence            [chip: Waiting]
+T2  File manager plugin(s) … on ent_env_2TH5EJB62XMHN2YRX5V0JTHWMA, and …
+        rule  Tier 1 · nothing is holding it back but you   <- ranked 2
+        meta  nothing on record names where the target is   <- and it does
+T2  Known backdoor plugin detected: wp-compat on ent_env_2TH5EJB…
+T2  Low-entropy plugin name(s) … on ent_env_2TH5EJB…
+T2  PHP file(s) in mu-plugins/: index.php on ent_env_2TH5EJB…
+T2  running under rb.incident-containment — 0 done and standing, 0 failed
++ five inbox cards, four of them the same four findings again
+```
+
+Every waiting row at tier 2, so `rankSituations` fell through to `since` and
+the list was in age order — **82h 66h 65h 65h 65h 65h 64h**, exactly as
+photographed, with four Tier-1 security findings below a Tier-2 backup step.
+
+**AFTER** — badge **8**, rows **8**, and `EQUAL: true`:
+
+```
+verdict    "8 things need you, and none of them has changed anything yet"
+accounting ""                       <- no clause is true, so no line renders
+reserved   "Everything is reporting."
+
+T1  File manager plugin(s) active: fileorganizer, filester on theawfulpm-test, and …
+        rule  Tier 1 · nothing is holding it back but you
+        door  Open theawfulpm-test  [site → theawfulpm-test]
+        item  #2 ABS-04                      <- the inbox copy, folded in
+T1  Known backdoor plugin detected: wp-compat on theawfulpm-test, and …   #3 ABS-05
+T1  Low-entropy plugin name(s) … on theawfulpm-test, and …                #4 ABS-07
+T1  PHP file(s) in mu-plugins/: index.php on theawfulpm-test, and …       #5 FS-01
+T2  running under rb.bulk-plugin-update — 0 done and standing, 0 failed
+        door  Open the run
+T2  A cp.backup step is waiting on your evidence
+        door  Open the run at cp.backup
+T2  running under rb.incident-containment — 0 done and standing, 0 failed
+T-  auth-probe could not finish a run        <- the row the fold cannot hold
+        door  Open auth-probe  [agent → auth-probe]
+```
+
+**THE BADGE/ROW MEASUREMENT THE PACKET ASKED FOR, on the real ledger:
+`ROWS DRAWN 8`, `BADGE 8`, `EQUAL true`.** Twelve cards became eight rows;
+five inbox items became four ridden rows and one row of its own.
+
+### 2 · WP-54a HAS NOT LANDED, AND THE DISAPPEARANCE IS NOT SHIPPED
+
+Measured at announce and again at the gate: `git branch -a | grep wp-5` shows
+`wp-50` and `wp-52` and no `wp-54a`; there is no worktree for it.
+
+The launch instruction's condition is met **without** shipping the
+disappearance, and the two halves of the instruction are reconciled rather
+than traded off. The owner's finding says *an inbox item with no matching
+situation is its own row*; the architect's says auth-probe is on screen only
+because of the duplication and will vanish when the dedup lands. Both are
+honoured: **the dedup removes the duplicate copies and keeps the orphan**, so
+`auth-probe could not finish a run` still reaches the person — as row 8 above.
+
+**WHAT IS HONESTLY WORSE FOR IT, and it is stated rather than hidden:** that
+row is **UNRANKED**. It sits at the end of the list under the ranked rows,
+because the fold does not hold it and nothing else may assign a tier to a row
+it did not derive. The moment WP-54a's producer emits `agent.stuck`, the row
+arrives as a situation, `nowRows` deduplicates the inbox card onto it, and it
+takes its ratified place in the consequence order — **with no change to this
+code and no change to the count**, which is the property `nowRows` was shaped
+to have. Pinned: `nowList.test.tsx`, "an inbox item with NO matching situation
+is its own row, and keeps its door".
+
+### 3 · ITEM 2 — ONE TIER, AND WHAT THE AGREEMENT PIN COULD NOT SEE
+
+The fix is one derivation, taken at the fixture: each class declares `tier` as
+a NUMBER and writes its rule line as `Tier {tier} · …`. The ranker reads the
+declared number; the composer fills the slot with the tier the row was RANKED
+at. The generator **refuses** a template that declares no integer tier in 1..4
+or whose rule line does not open with that slot — a literal tier in the rule
+line is a second source for the tier, and it is now a build failure.
+
+**THE BATTERY FOUND THE LIMIT OF THE AGREEMENT INSTRUMENT, and this is the
+finding worth carrying.** M01 — make `rankableTier` ignore the class entirely,
+which is the shipped defect restored — **SURVIVED** the agreement pin. It had
+to: the rule line's slot is filled from the ranked tier, so display and rank
+still agreed, and both were wrong. **Agreement is necessary and not
+sufficient.** The pin that closes it asserts the number they agree on is the
+one the ratified class DECLARES, over the real fold
+(`incidentTarget.test.ts`: "an open orphan incident ranks at the class's OWN
+tier").
+
+Also ruled here, and flagged: **`ConsequenceTier` widened `1 | 2 | 4` →
+`1 | 2 | 3 | 4`.** Tear 3 ruled the EPISTEMIC tier out of the comparator and
+that ruling is untouched — `ReservedRow` is not a `Situation`, never enters
+`rankSituations`, and has no field that could hold a second row; the pin that
+used to read "there is no tier 3" now asserts that property directly
+("staleness is counted, never turned into rows"). The designer's ratified
+`agent.stuck` class then declared a DIFFERENT tier 3 with its own sort
+position, and a type that cannot hold what the ratified copy says forces the
+copy and the comparator apart — which is the defect this packet removes. No
+producer emits that class today, so nothing on any fleet ranks at 3; what this
+buys is that WP-54a does not need a second ruling to fit.
+
+### 4 · AUTHORED COPY, HELD AT THE GATE
+
+Every string this packet changed reaches source **through a generator**, from
+`docs/intelligence/from-designer/fixtures/situation-headlines.js`. Nothing is
+typed into a component. Seven of them are **new and unratified** and are held
+here for the designer:
+
+| where | string | why it exists |
+|---|---|---|
+| `DOORS.runAtGate` | `Open the run at {checkpoint}` | the run's door, naming its destination |
+| `DOORS.run` | `Open the run` | the same, for a run with no cursor to name |
+| `DOORS.incident` | `Open {target}` | the site a finding is about |
+| `DOORS.agent` | `Open {agentId}` | where an agent's own failure is answered |
+| `DOORS.backToNow` | `Back to Now` | the way back the re-entry never had |
+| `RESERVED.head` | `Watching your sites` | replaces "Reserved · the record's own health" |
+| `RESERVED.quiet` | `Everything is reporting.` | replaces "the record is reporting — nothing dark, nothing late" |
+
+One more is a **reshaping of ratified copy rather than new**:
+`ACCOUNTING.dark` = `{count} checks haven’t reported`, replacing the ratified
+`checks dark`. `ACCOUNTING.changed` = `{count} changed overnight` carries the
+ratified phrase unchanged and only moves the count inside it.
+
+`COLOURS` are not copy: they are the revised sheet's own constants (`RED`,
+`ORANGE`, the grey edge, and the stylesheet's anchor colour), carried into the
+fixture so the build reads them from one place instead of from a hand-typed
+hex in a component.
+
+### 5 · ITEM 10 — THE ONE PLACE THE REVIEW ASKED FOR MORE THAN THE RECORD HOLDS
+
+The ruling asks for **"3 checks haven't reported in 9 hours"**. The count is
+real; **the duration is not derivable**. `producerLine` (`health.ts`) returns
+`DARK` only when `!row.lastRecordedAt` — a producer that has reported is `OK`
+or `STALE` — so a dark check has no last-seen moment to subtract from, and
+`ReservedRow.dark[]` carries no age because there is none to carry.
+
+So the clause states the count and stops: **`{count} checks haven’t
+reported`**. The jargon is gone, which was the finding; the duration is not
+invented, which is the layer's first rule. Raised here rather than closed by a
+guess — if the designer wants the duration, it needs a producer change, not a
+copy change.
+
+### 6 · THE FOURTEEN, ITEM BY ITEM
+
+| # | item | where it landed | pinned by |
+|---|---|---|---|
+| 1 | dedupe the list | `arrivalModel.nowRows` — the ONE list; `Situation.signature` (producer + fact + target, all three) composed in the host | `nowList.test.tsx` (4 rows not 8, the orphan kept, badge==rows both directions, the three facts each alone), `returnRailBadge.test.ts` |
+| 2 | one tier, one source | fixture declares `tier`; rule line is `Tier {tier} · …`; generator refuses a literal | `tierAgreement.test.ts`, `incidentTarget.test.ts` |
+| 3 | the severity stripe | `stripeColour(tier)` + a 3px left border; no stripe at tier 4 | `nowList.test.tsx` (full domain incl. tier 3; two severities, one tier, one stripe) |
+| 4 | the target resolved, the meta fallback deleted | `twinNameOf` reads the `site.core` twin; `summarisePlaces`' `!highest` clause gone | `incidentTarget.test.ts` (6), `placeSummary.test.ts` |
+| 5 | Approve / Not now removed from list rows | `renderInboxRow` merged into `renderRow`; `onDecide` removed from the surface and its wiring | `nowScreen.test.tsx` ("no row is answered in place") |
+| 6 | every row's door, naming its destination, in link blue, with a way back | `RowDoor` on the contract; `SessionReEntry.onBackToNow` | `returnArrival.test.tsx`, `nowList.test.tsx`, `sessionRegistry.test.ts` |
+| 7 | the punctuation appender, as a class | `scripts/control-label.ts`, applied in BOTH generators | `situationHeadlines.test.ts` (driven directly, including what it must leave alone) |
+| 8 | actions render as local-components' Button | `src/renderer/components/designSystem.ts` | `nowList.test.tsx` (and it asserts WHICH path resolves, so it cannot pass vacuously) |
+| 9 | the count once; no away-line under an hour | in-list badge removed; `accountingLine` drops needsYou; `awayHeadline` returns `''` under an hour | `returnArrival.test.tsx` (3) |
+| 10 | "checks dark" in plain words | `ACCOUNTING.dark`, clause absent when zero | `situationHeadlines.test.ts`, `returnArrival.test.tsx` |
+| 11 | reserved row renamed and quieted | `RESERVED.head` / `RESERVED.quiet`; `reservedHeadline`'s good-news arm | `nowList.test.tsx` (the rename AND the seat: one row, sticky) |
+| 12 | the Waiting chip cut | the ratified fixture, both classes | `situationHeadlines.test.ts`, `sessionRegistry.test.ts` |
+| 13 | the empty section, and the doctrine sentences | section renders only when it holds something; `FILED_BEFORE_YOU_ARRIVED` no longer rendered | `returnArrival.test.tsx` |
+| 14 | the identifier once, the rows still apart | `derivedCopy` drops the meta when the headline already carries it | `placeSummary.test.ts`, `nowList.test.tsx` |
+
+### 7 · WHAT ELSE MOVED, AND WHY IT HAD TO
+
+**The rail badge and the panel's opening line now read the inbox too.** They
+are the other two consumers of the count, and a badge or an opening sentence
+served by the fold alone is a second answer free to disagree with the list —
+which is item 1 committed by a different surface. `refreshNeedsYou` reads both
+channels; a failed inbox read contributes no rows and is never read as an empty
+inbox.
+
+**Three eval criteria grew** (`tests/intelligence-evals/checks.ts`):
+
+- **J-Glance `must_not[3]`** ("a count the user must open something to trust")
+  read the in-list BADGE. That badge is gone — the count is stated once — so
+  the criterion is now checked against the two renderings that remain, and it
+  is asked more sharply: the verdict's number must be the length of the list
+  rendered beneath it in the same pass.
+- **J-Return `key_step[3]`** asserted the provenance line was present exactly
+  once. Item 13 deleted that line, so the check now asserts its ABSENCE and
+  measures the property it announced instead of reading the announcement.
+- **J-Return `must_not[3]`** (no everything-since-you-left prose) accounts the
+  screen's sentences against the generators. The list verdict moved from being
+  CARRIED (`triage.verdict`) to being COMPOSED (`nowVerdict`), so it moved from
+  the fold-field set to the generator set — eight generators now, not seven.
+  The harness also carries the inbox it renders with, because a check reading
+  `arrivalCounts(triage)` alone measures a different list from the one on
+  screen: item 1's defect, committed by the instrument.
+
+**Five WP-46/48/49-era pins were REPLACED, not deleted**, each with the
+reversal recorded in place: the two-kinds-of-row distinction (item 5's ruling
+supersedes position 11 §3), the provenance line (item 13), the in-list badge
+(item 9), the incident row's absent door (item 6), and
+`places.summary`'s unresolved clause (item 4).
+
+### 8 · FINDINGS WORTH CARRYING
+
+**1 · AN AGREEMENT PIN CANNOT SEE A SHARED ERROR. (New, and it generalises.)**
+The instrument that caught WP-52's divergence — drive both derivations, assert
+they agree — cannot catch a defect that moves BOTH. Making the ranker ignore
+the ratified class left the rule line and the comparator saying the same wrong
+number, and the agreement pin passed. **An agreement pin needs a companion that
+anchors the agreed value to something outside the pair.** Here that anchor is
+the fixture's declared tier, asserted over the real fold. Same shape as the
+receipts family: internal consistency proves nothing about the unit.
+
+**2 · A MUTATION THAT CANNOT MOVE AN OBSERVABLE ANSWER IS EVIDENCE ABOUT THE
+MUTATION** (WP-24's syntactic-shadow rule, in a new costume). M09's first form
+loosened a guard in a way that was identical to the original wherever the input
+had an anchor — so its SURVIVAL said nothing about the pins. Re-aimed at the
+rule an `||` was hiding: the Inbox target matches on the SCOPE or on the LABEL,
+both branches live, neither pinned alone. `scopeLabel` is a display field whose
+real values include "12 sites" and "This agent", so a match resting on it alone
+rests on prose.
+
+**3 · A RENDER PIN THAT COMPARES A LABEL TO ITS OWN SOURCE PROVES NOTHING
+ABOUT THE LABEL.** The door pins asserted `rendered text === row.door.label` —
+true of any label the fold composes, including one that names nothing (M20
+walked through). A door that says WHERE IT GOES has to be checked against
+where, and the only independent copy of that fact is the gate. Same family as
+WP-46's guarded-builder rule: the assertion has to reach outside the thing it
+is checking.
+
+**4 · THE STATES NO FIXTURE HAS ARE WHERE MUTATIONS LIVE.** Two survivors
+(M04, M21) were both the CLOSED incident — a state the fold produces, the
+contract carries, and no test had ever built. Four facts about it had no
+witness at all.
+
+**5 · WP-34's KILL FORM, REPRODUCED EXACTLY.** The second battery run was
+killed by a 10-minute command cap mid-CONTROL, its `finally: restore()` never
+ran, and `git status` showed a plain ` M` on a file nobody had edited. The
+documented recovery worked as written. Two operational notes for the next
+packet: run a battery with `run_in_background`, because the foreground cap will
+kill it; and run it with `python3 -u`, because a killed run's BUFFERED output
+is lost entirely — the log from the interrupted run was zero bytes, so the
+tree was the only evidence of how far it had got.
+
+**6 · THE POISONED ts-jest CACHE, TENTH OCCURRENCE, DOCUMENTED SHAPE.** Two
+unrelated suites failed to parse on their own shebang
+(`tests/intelligence-evals/sitting.ts:1`) while everything else was green;
+`npx jest --clearCache` and a re-measure cleared it with no code change. Read
+the shape, never the count (WP-52's amendment).
+
+**7 · A DEFECT FOUND BY MY OWN PIN, and it is the layer's first rule.** Driving
+the incident composer over its full input domain — including an injected
+`nameOf` that THROWS, which no caller can currently supply — found that the
+resolver was called unguarded. An injected port that throws would have taken
+the whole fold down, which "everything on this seam is non-fatal by
+construction" forbids outright. Guarded at the call site, with the same
+one-line comment `derivePlaces`' describer guard carries.
+
+### 9 · RESIDUE, STATED RATHER THAN SMOOTHED
+
+**Two runs on one runbook, both gateless, both with nothing written and armed
+in the same hour, are indistinguishable — and no fact the record carries would
+tell them apart.** Item 14's two halves are both delivered on the real fleet
+(the id prints once; the two rows differ), but the general case has a floor:
+what differs between two such runs is the session id, which is an internal noun
+the user cannot read ("derived is not the same as legible"), and the start
+moment, which `ageLabel` renders at hour granularity. Grouping (XD-28) is where
+this belongs, and it is WP-55's.
+
+**The unmatched inbox row is unranked.** See §2. It is a consequence of the
+fold not holding the row, not of the ordering; WP-54a removes it.
+
+**`onDecide` is gone from the Now surface, and `NOW_COPY.APPROVE` /
+`NOT_NOW` are now generated strings nothing renders.** They remain in the
+ratified sheet (`from-designer-11` §3) and therefore in the generated module —
+deleting them would be editing ratified copy to match a later ruling, which is
+the designer's call, not this packet's. `INBOX_DECIDE` is untouched and still
+serves every surface that asks for a decision properly.
+
+### 10 · THE MUTATION BATTERY — 29/29
+
+`scripts/wp54-battery.py`, WP-43/WP-44's harness with two additions this run:
+**the ABI pinned at both ends** (WP-49 — the probe CONSTRUCTS a Database, per
+WP-50) and **a byte-level refusal on non-printing characters** (WP-30). Nine
+suites, floor 200, `--no-cache` throughout, tree verified pristine before and
+after.
+
+```
+ABI AT START: 141
+PRISTINE BASELINE: 0 failed / 203 total, 0 suites failed (floor 200)
+M01..M29  all KILLED
+CONTROL   SURVIVED (correct)  0 failed / 203 total
+ABI AT END: 141
+TREE PRISTINE AFTER, ABI UNCHANGED. 29/29 killed.
+```
+
+The two mutations that matter most are the shipped defects restored: **M01**
+(the class's tier ignored — the list back to age order) and **M14** (the badge
+counting one population while the screen draws another). Both are killed by
+pins that did not exist before this packet.
+
+**FIRST RUN: 24/29, five survivors** — each a real gap, all five closed and
+recorded in `c40f9f6c`. See finding 1 for the sharpest of them.
+
+### 11 · RECEIPTS — pasted from the commands' own output
+
+```
+$ npm test                    (final, after the battery restored the tree)
+Test Suites: 623 passed, 623 total
+Tests:       12 skipped, 8570 passed, 8582 total
+Snapshots:   8 passed, 8 total
+EXIT=0
+
+$ npm test                    (baseline, in this worktree, before any edit)
+Test Suites: 620 passed, 620 total
+Tests:       12 skipped, 8527 passed, 8539 total
+EXIT=0
+```
+
+**+3 suites, +43 tests, and the SKIPPED COLUMN IS UNCHANGED at 12** — read
+first, per the protocol: no phantom gain or loss across the worktree boundary
+hides in this delta.
+
+```
+$ npx tsc -p . --noEmit                    (clean, no output)
+$ npm run lint                             0 errors, 6 warnings — all six
+                                           pre-existing, none in a touched file
+$ npm run fixtures:situation-copy:check    src/main/intelligence-host/situationCopy.generated.ts is up to date.
+$ npm run fixtures:return-copy:check       src/renderer/components/return/returnCopy.generated.ts is up to date.
+$ npm run fixtures:opening-copy:check      src/renderer/components/DockedPanel/openingCopy.generated.ts is up to date.
+$ npm run inventory:dom-reach:check        docs/intelligence/dom-reach-inventory.json is current
+```
+
+Bytes, measured with `wc -c` (the unit named is the unit measured — WP-50/52):
+
+```
+docs/intelligence/from-designer/fixtures/situation-headlines.js   13585 bytes
+src/main/intelligence-host/situationCopy.generated.ts              9258 bytes
+src/renderer/components/return/returnCopy.generated.ts             2829 bytes
+scripts/control-label.ts                                           1838 bytes
+
+md5  61540867c3543b493a8aeb0224e100f0  situation-headlines.js
+md5  da57e3ceda89434ff31fcba700fcf561  situationCopy.generated.ts
+```
+
+```
+$ git diff --stat eb3682e2..HEAD | tail -1
+ 27 files changed, 3441 insertions(+), 410 deletions(-)
+```
+
+Non-printing-character sweep over all 26 touched files, by byte scan (WP-30):
+**NONE**. The battery re-runs that sweep and refuses over any source that
+carries one.
+
+### 12 · ABI, DECLARED
+
+**This session ran jest. `node -p process.versions.modules` = 141 (system Node
+25.9.0); the battery measured the same 141 by CONSTRUCTING a Database at both
+ends of its run.** `.nvmrc` pins 22.16.0 → ABI 127, which is what CI sees.
+**The owner must `npm run rebuild` before loading Local again.**
+
+### 13 · UNPUSHED, PROPERLY
+
+Two commits on `wp-54`, plus the two on the base that preceded the work:
+
+```
+c40f9f6c test(wp-54): five battery survivors, five pins — and one re-aimed mutation
+971c0014 feat(wp-54): the Now list is one list — group A, the fourteen
+eb3682e2 docs(wp-54): LOCK ANNOUNCE — group A, the fourteen …
+10ad1af7 docs: commit architect session's Now-screen reviews and rulings (found uncommitted in primary checkout)
+```
+
+Nothing pushed, no tag, no version bump. **HOLDING at the gate** for two
+rulings: the `ConsequenceTier` widening (§3) and the seven authored strings
+(§4).
