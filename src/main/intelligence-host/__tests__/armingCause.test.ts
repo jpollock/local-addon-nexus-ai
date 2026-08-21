@@ -331,6 +331,25 @@ describe('the fold joins a run to the incidents its arming named', () => {
     expect(parts[0].eventId).toBe(real);
   });
 
+  test('a run that answered across TWO turns keeps both — a later arming never drops an earlier one', () => {
+    const first = emitIncident('Known backdoor plugin detected: wp-compat');
+    const second = emitIncident('PHP file(s) in mu-plugins/: index.php');
+    // One session, two turns, each arming naming a different incident. The run
+    // answers both; taking only the newest turn's list would silently drop what
+    // the earlier turn recorded, and nothing on the row would say a part had gone.
+    const taskA = mintTaskId();
+    const taskB = mintTaskId();
+    emitManifest({ taskId: taskA, observedAt: hoursAgo(8), cause: manifestCauseFor([first]) });
+    emitManifest({ taskId: taskB, observedAt: hoursAgo(7), cause: manifestCauseFor([second]) });
+
+    expect(core.ledger.query({ topicPrefix: CONTEXT_ASSEMBLED_TOPIC, limit: 10 })).toHaveLength(2);
+
+    const triage = createSessionRegistry({ core, now: NOW, runbooks: noDocument }).triage();
+    expect(triage.waiting).toHaveLength(1);
+    const parts = triage.waiting[0].parts.filter((p) => p.kind === 'incident');
+    expect(parts.map((p) => p.eventId).sort()).toEqual([first, second].sort());
+  });
+
   test('an incident already correlated into its own run keeps that run — the answer never steals it', () => {
     // An abort incident belongs to the run that PRODUCED it. A later containment
     // arming naming it must not move it out of its producing run's situation:

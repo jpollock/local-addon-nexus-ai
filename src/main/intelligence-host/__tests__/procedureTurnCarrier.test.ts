@@ -337,3 +337,96 @@ describe('WP-48b · the manifest records the arming\'s scope', () => {
     expect(payload.scope).toEqual({ runnable: ['site-a', 'site-b'], from: 'selection' });
   });
 });
+
+/**
+ * WP-51 item 3 · the same wiring question, one field over.
+ *
+ * `armingCause.test.ts` pins the derivation, the format gate and the fold.
+ * This pins that a REAL `assembleForChatTurn` writes the key at all — the
+ * distinction WP-48b was created by: a carrier can be complete from end to end
+ * and still reach nothing that a ledger reads, and a derivation test passes
+ * happily against that tree.
+ */
+describe('WP-51 · the manifest records what the arming was answering', () => {
+  const INCIDENTS = ['evt_01M0BFNDD6XS21X8HTEMGY4NQV', 'evt_01M0BFNDD6XS21X8HTEMGY4NQW'];
+
+  /* eslint-disable @typescript-eslint/no-var-requires */
+  const arming = () => require('../procedureArming');
+  const grantsModule = () => require('../capabilityGrants');
+  /* eslint-enable @typescript-eslint/no-var-requires */
+
+  afterEach(() => {
+    arming().clearArmingRequests();
+    jest.restoreAllMocks();
+  });
+
+  test('an arming that names incidents puts them on the manifest', async () => {
+    arming().recordArmingRequest(CAPABILITY, new Date('2026-08-21T09:00:00.000Z'), undefined, INCIDENTS);
+
+    const t = await turn();
+    const [event] = core.ledger.query({ correlation: t!.taskId });
+    const payload = event.payload as Record<string, unknown>;
+
+    // shape #15 and the precondition: the queue is what armed this turn.
+    expect((payload.procedure as Record<string, unknown>).status).toBe('delivered');
+    expect((payload.procedure as Record<string, unknown>).armed_by).toBe('model-request');
+    expect(payload.cause).toEqual({ answers: INCIDENTS });
+  });
+
+  test('an UNARMED turn records no cause key at all — the parity floor', async () => {
+    const plain = await turn();
+    const [event] = core.ledger.query({ correlation: plain!.taskId });
+    const payload = event.payload as Record<string, unknown>;
+
+    expect(payload.procedure).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(payload, 'cause')).toBe(false);
+  });
+
+  test('an armed turn that answered NOTHING records no cause key either', async () => {
+    // The asymmetry with `scope`, on the record: an arming that selected
+    // nothing records the empty set, because that is a fact it knows. An
+    // arming that answers nothing is not answering, and there is no empty-set
+    // fact to state.
+    arming().recordArmingRequest(CAPABILITY, new Date('2026-08-21T09:00:00.000Z'));
+    const t = await turn();
+    const [event] = core.ledger.query({ correlation: t!.taskId });
+    const payload = event.payload as Record<string, unknown>;
+
+    expect((payload.procedure as Record<string, unknown>).status).toBe('delivered');
+    expect(payload.scope).toEqual({ runnable: [], from: 'no-selection' });
+    expect(Object.prototype.hasOwnProperty.call(payload, 'cause')).toBe(false);
+  });
+
+  test('a REFUSED turn records neither the scope nor the cause', async () => {
+    // A refusal is not a turn of the run — the document did not ride, so the
+    // manifest must not say a run answered anything.
+    //
+    // MEASURED WHILE WRITING THIS, and stated because it changes what the case
+    // proves: **no refusal is reachable through the ARMING QUEUE.** Both
+    // integrity refusals (`hash-mismatch` on the id and on the hash) are
+    // excluded one step earlier by `grantedRunbooks`, which re-checks both
+    // before arming, and an over-ceiling document is not returned by
+    // `byCapability` at all — so a queue-armed turn that reaches
+    // `resolveProcedure` is a delivered turn. A refusal therefore arrives only
+    // on the CALLER-SUPPLIED path, which by 20c's contract carries neither a
+    // scope nor a cause.
+    //
+    // So this pins the manifest's SHAPE on a refused turn, and the
+    // delivered-gate in `emitManifest` is a tripwire rather than a filter —
+    // the same standing WP-48's `contradictedByTheRecord` refusal has, and kept
+    // for the same reason: the day a refusal path DOES carry an arming (a late
+    // arm at the gate, say), a cause must not be recorded for it.
+    const stale = { ...grant, runbookHash: 'sha256:not-the-document' };
+    const t = await turn(armed({ grants: [stale] }));
+    const [event] = core.ledger.query({ correlation: t!.taskId });
+    const payload = event.payload as Record<string, unknown>;
+    const procedure = payload.procedure as Record<string, unknown> | null;
+
+    // The precondition IS the test: if this ever stops being a refusal, the
+    // assertions below would pass for the wrong reason.
+    expect(procedure?.status).toBe('refused');
+    expect((procedure?.refusal as Record<string, unknown>).code).toBe('hash-mismatch');
+    expect(Object.prototype.hasOwnProperty.call(payload, 'cause')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(payload, 'scope')).toBe(false);
+  });
+});
