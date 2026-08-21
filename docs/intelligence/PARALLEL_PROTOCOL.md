@@ -548,3 +548,13 @@ the record — where the internal noun has no plain equivalent, name the
 thing the user recognises, not the structure that stores it. A
 surface that is honest and incomprehensible has failed the same test
 as one that lies, one step later.
+
+## An agreement pin needs an anchor outside both derivations (WP-54)
+
+An agreement pin asserts that two derivations of one fact match. It
+cannot see an error that moves BOTH of them: WP-54's battery mutated
+the ranker into ignoring the ratified class, display and rank agreed on
+the same wrong number, and the mutant SURVIVED. Pair every agreement
+pin with a companion that anchors the agreed value to a source outside
+both — the ratified fixture, the law document, the record. Two things
+agreeing is not evidence; two things agreeing WITH A THIRD is.
