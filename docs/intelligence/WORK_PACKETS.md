@@ -27549,3 +27549,111 @@ no `task.run.*` events exist on this machine.
 
 **WP-56 IS CLOSED.** The list never forgets; it stops shouting, and it knows
 when to start again.
+
+---
+
+## WP-56 · MERGE ACCEPTED — the sum has one author now (2026-08-21, architect adjudication)
+
+**Accepted.** Merged at `239e4e32`, report at `52ead174`. Verified on the
+tree rather than on the report, and the checks I ran to break it did not.
+
+**The receipts reconcile.** `239e4e32^{tree}` = `35bbd1e5a726…`, exactly
+the branch tip named — so 629 suites / 8,710 passed / 12 skipped / 8,722
+is this commit's tree and not a neighbouring one. **The first
+`base-measure.json` is published**, labeled `"tree": "worktree"`, its
+commit `239e4e32`, its guard empty against a HEAD that has moved only in
+docs. Three statements owed; paid on the fourth.
+
+**The merged expression is implemented as ruled**, term for term:
+
+```
+held        = escalating(waiting)
+unheld      = alsoWaiting.filter(row => !row.deferred)
+needsYou    = held.length + unheld.length
+changedRuns = held.filter(wrote) + unheld.filter(wrote)
+```
+
+`alsoWaiting` is `readonly UnheldRow[]`. WP-54b is fixed here rather
+than scheduled, which is the right call — the two were one edit.
+
+### The disclosure I went looking to break, and could not
+
+`{done: 0, failed: 0}` on every unheld row looked, at first read, like a
+fact invented to fill a field — the doctrine's central prohibition, and
+the one my own ruling would have created if the term were unreachable by
+type rather than by data.
+
+**It holds.** `InboxItem` carries no outcome fields because an Inbox item
+is a FINDING, not a run; zero writes is what the thing IS, not a default
+selected to satisfy a signature. The distinction is stated at the field,
+with the consequence named — *if Inbox items ever record outcomes, one
+call site changes and this sum does not.* That is the difference between
+a default and a measurement, written where the next reader meets it.
+
+Same treatment on `deferred`, and the same verdict: no caller can set it
+true, the renderer fills it from `rowIsDeferred` — **the same predicate
+the badge uses** — so the day an Inbox card becomes deferrable the value
+arrives through one rule instead of a second one being written. That is
+the ruled input implemented and its absence stated, which is what was
+asked for `wakeFired` and is now the house style for all three.
+
+**And the exhibit's honest limit was found by the packet, not by me:**
+the composition proved through `nowRows` never reached the arithmetic,
+because no caller can defer an unheld row or give one a write. Five
+direct pins, including the both-terms case where this body says 2, the
+base's says 4 and takes the wrong arm, and the merged expression says 3.
+**That case is the one I demanded and it is the one that could not be
+driven through a caller** — driving it directly was correct, and saying
+so was better.
+
+### The re-site's own finding, which was the more dangerous one
+
+Reading `triage.counts.needsYou` into the badge would have been item 1
+inverted: WP-54 had already rebound the badge to `nowRows().length`, so
+substituting the host's number drops every Inbox orphan. **The host
+cannot own that number** — the unheld rows exist only in the renderer,
+and a host count of a list the host cannot see is the two-sources defect
+wearing the ratified contract's clothes.
+
+`TriageView.counts` unchanged from what was ratified, the two tied by a
+pinned identity — `arrivalCounts().needsYou === triage.counts.needsYou +
+<escalating unheld>` — is the correct resolution. **A contract shape can
+be right and still be the wrong number to read at a particular seam**,
+and the identity pin is how both facts stay one fact.
+
+### One hardening, one character
+
+`UnheldRow.deferred` is declared `deferred?: boolean`. The filter reads
+`!row.deferred`, so an omitted field means *escalating*.
+
+Today there is exactly one construction site and it sets the field
+explicitly, so nothing is wrong. But this is ruling (c) of this
+packet's own gate — *an optional field invites the fallback that is the
+defect it removes* — applied to a field the same packet wrote. The
+defence offered, that no caller can set it true yet, is the argument for
+REQUIRED rather than optional: the day an Inbox card becomes deferrable,
+a construction site written before that day compiles clean and reports
+escalating. Required, with an explicit `false`, makes the new site
+refuse to build until someone decides.
+
+Not a defect. **A one-character change that moves a decision from
+memory to the compiler**, which is this week's other rule.
+
+### The pwd hazard's newest shape, and it is a real one
+
+*One logical change split across two trees, because an absolute-path
+Edit and a relative-path shell edit ran in the same turn with the shell
+anchored elsewhere.* The tell was a `TS2305` on a symbol that
+demonstrably existed — the compiler reading one tree and the author
+reading another.
+
+**Printing the cwd cannot catch this**, because both commands were
+correct about their own venue; the turn was not. Registered as its own
+shape: *a turn that mixes absolute-path and relative-path writes is
+writing to two trees.* The guard is that a single logical change uses
+one addressing mode throughout, and the tell to recognise it late is an
+error about a symbol you can see with your own eyes.
+
+Clearing a stale zero-byte `index.lock` and verifying the earlier base
+commits were still ancestors before writing is the venue rule maturing
+into a pre-flight. Correct.

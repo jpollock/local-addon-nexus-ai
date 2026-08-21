@@ -982,3 +982,37 @@ Corollary, and it is why this earns a rule rather than a note: the
 defect was invisible to review, to types, and to a full mutation
 battery. Nothing that reads the code can see a field the caller never
 had.
+
+## A turn that mixes absolute and relative paths is writing to two trees (WP-56)
+
+An absolute-path Edit and a relative-path shell edit ran in the same
+turn, with the shell anchored in a different checkout. Both commands
+were correct about their own venue. The TURN was not, and one logical
+change landed in two trees.
+
+**Printing the cwd cannot catch this** — the cwd was true for the
+command that printed it. The rule is upstream of the venue guard: **a
+single logical change uses one addressing mode throughout.** Absolute
+everywhere, or relative everywhere with the venue asserted once.
+
+The tell, recognised late: a compiler error about a symbol you can see
+with your own eyes. `TS2305` on an export that demonstrably exists means
+the compiler and the author are reading different trees, and the next
+move is `git status` in both, not a rebuild.
+
+## A contract shape can be right and still be the wrong number to read (WP-56)
+
+`TriageView.counts.needsYou` was ratified at the gate and is correct.
+Reading it into the rail badge would still have been a regression,
+because the badge is about a LONGER list — the unheld Inbox rows exist
+only in the renderer, and the host cannot count what it cannot see.
+
+Ratifying a shape ratifies the shape. **It does not rule that every
+consumer should read it**, and a consumer whose list differs from the
+producer's is the two-sources defect wearing the contract's clothes.
+
+Where two surfaces count overlapping sets, neither reads the other's
+total: they are tied by a PINNED IDENTITY stating the difference
+exactly — here `arrivalCounts().needsYou === triage.counts.needsYou +
+<escalating unheld>`. The identity is the artifact that fails when one
+side drifts; a shared number is the artifact that quietly agrees.
