@@ -10,6 +10,7 @@ import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
 import { newRunId } from '../logging/runId';
 import { EventLog } from '../logging/eventLog';
+import { openAgentTask } from '../intelligence-host/agentTaskFrame';
 
 const logger = createLogger('AgentRunner');
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -73,6 +74,16 @@ export class AgentRunner {
       level: 'INFO', source: agentName, sourceKind: 'agent', runId,
       event: 'run.start', fields: { trigger, fullRun: options?.fullRun ?? false },
     });
+
+    // WP-57 · the run's frame on the ledger, opened beside the log's own
+    // bracket and for the same reason: a run that cannot be found is a run
+    // nobody can answer questions about. `trigger` is the caller's stated one,
+    // already resolved above — the frame derives ADR-7's autonomy class from
+    // it rather than reading the SDK's ceremony setting.
+    //
+    // Optional by construction: `openAgentTask` returns undefined when the
+    // intelligence core is absent, and every use below is guarded.
+    const frame = openAgentTask({ agentName, trigger, startedAt, runId });
 
     let status: AgentResult['status'] = 'success';
     let error: string | undefined;
@@ -141,7 +152,7 @@ export class AgentRunner {
       }
     }
 
-    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error, runId };
+    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error, runId, taskId: frame?.id };
 
     // Merge structured log events accumulated during the run
     if (accFindings.length > 0) result.findings = accFindings;
@@ -193,6 +204,24 @@ export class AgentRunner {
       },
       message: error,
     });
+
+    // WP-57 · close the frame BEFORE the producer taps below, because WP-51's
+    // own rule is that the act is "recorded before the findings it explains" —
+    // a reader following this correlation should find the run frame already
+    // present when the records that reference it arrive.
+    //
+    // Its OWN try, matching the two taps beside it: a fault in one record must
+    // not cost another, and none of them may cost the run.
+    try {
+      frame?.close({
+        status,
+        finishedAt: result.finishedAt,
+        findings: result.findings?.length,
+        error,
+      });
+    } catch (frameErr: any) {
+      logger.error(`run frame close failed for ${agent.name}:`, frameErr?.message);
+    }
 
     this.stateStore.recordRun(result);
 

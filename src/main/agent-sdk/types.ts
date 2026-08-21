@@ -207,6 +207,19 @@ export interface AgentResult {
   reportFile?: string;
   /** Correlation id for this run — brackets every line this run produced with run.start/run.end. */
   runId?: string;
+  /**
+   * WP-57 · this run's identity ON THE LEDGER — the `correlation` every event
+   * the run produced carries, so `WHERE correlation = <taskId>` returns the
+   * assembly, every gated act, every outcome and the findings as one thread.
+   *
+   * Deliberately NOT the same value as `runId`, and neither replaces the
+   * other: `runId` correlates LOG LINES (`grep run=<id>`, a documented
+   * workflow), this correlates EVENTS. Two records, two questions.
+   *
+   * Absent when the intelligence core was unavailable — an unframed run is
+   * honest, not an error.
+   */
+  taskId?: string;
 }
 
 // ─── Domain output types ──────────────────────────────────────────────────────
