@@ -23641,3 +23641,51 @@ not merged when this packet is otherwise ready, it says so and HOLDS.
 
 **The contract additions are gate-held: the shapes are presented verbatim
 before merge.** Standard discipline, all of it.
+
+---
+
+## THE COALESCED FIXTURE AND TWO POSITION DOCUMENTS — COMMITTED; WP-55 UNBLOCKED (2026-08-21)
+
+Committed verbatim, device-verified:
+- `fixtures/situation-headlines.js` **11,636 bytes · md5
+  `a94f091143349000c81ba2dcb6e892dc`** — supersedes the 6,588-byte
+  version. New members: `incident.coalesced` in TEMPLATES, plus
+  `GROUP`, `DEFERRED`, `VERDICT`, `HEADER`, `FRESHNESS`, `HEALTH` and
+  `DOOR_RULE`.
+- `fixtures/scenario-now-coalesced.js` **3,083 · md5
+  `5cf507324379a0ffc4e4fc0fa2f1252b`**
+- `from-designer-14-now-coalesced.md` **6,919 · md5
+  `9afca3eb7d54b6adb4f0f22f48b482d4`**
+- `from-designer-13-authoring.md` **12,509 · md5
+  `f9c09951078cdc8f788dfadaa039b671`** — CYCLE SEVEN's position,
+  delivered unasked and ahead of its blocker.
+
+**WP-55 IS UNBLOCKED.** Every string the coalesced screen needs is now
+extractable rather than transcribed: the guard
+(`row.kind === "incident" && memberCount > 1 && row.linkKind !== null`
+— note it requires the LINK, so the class cannot fire on a payload
+origin), the headline pattern with its severity fallback, the ask, the
+disclosure pair, the meta naming `linked by {linkKind}`, and the
+GROUP label with its limit line.
+
+**`DOOR_RULE` is the packet's quiet gift:** the designer promoted
+their own terminal-period finding into a fixture member — four
+properties (no terminal punctuation, names its destination, action
+blue never brand green, every row has one) that the generator can
+extract and a test can assert. **A copy RULE, not a copy STRING,
+reaching the product through the same pipeline as the sentences** —
+the first time the fixture has carried a law rather than words.
+
+**Numbering:** the designer's 13 is `authoring`; the architect's
+earlier 13 is `now-screen-revised.dc.html`. Different filenames, no
+collision on disk; noted so a future reader does not read a
+supersession that did not happen.
+
+**MY TWO FINDINGS ARE UNANSWERED — because the sheet predates them.**
+Pin 9 still reads "every row has exactly one door" while `DEFERRED`
+ships `endDoor` beside the situation's door; and the run-less-incident
+deferral gap (cycle two records a deferral ON THE RUN; a run-less
+incident has none) is untouched. Both stay open, both go back with
+this ratification, and **WP-55 must not resolve either by choosing**
+— the pin amendment is the designer's, and the incident-deferral
+record shape is WP-56's held measurement.
