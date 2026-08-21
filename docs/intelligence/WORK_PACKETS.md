@@ -27814,3 +27814,80 @@ fixtures used invalid ULIDs (`CLSE`, `CLN00` — Crockford base32 excludes
 I/L/O/U), and both were caught by a charset assertion over every `task_`
 literal rather than by reading. A fixture that fails validation makes a
 producer look broken; the check is cheap and worth copying.
+
+---
+
+## WP-57 · GATE REPORT — the agent task spine (2026-08-21)
+
+**Phase 1 of the agent-actor design note is COMPLETE**, plus ruling request 1's
+subsumption. Six commits on `wp-57`, cut from `655f6058`.
+
+### Full suite, and the delta reconciles exactly
+
+```
+BASELINE (at cut)   Test Suites: 629 passed, 629 total
+                    Tests:       12 skipped, 8710 passed, 8722 total   EXIT=0
+
+FINAL               Test Suites: 631 passed, 631 total
+                    Tests:       12 skipped, 8741 passed, 8753 total   EXIT=0
+```
+
+**+2 suites, +31 tests, skipped UNCHANGED at 12.** The skipped column is read
+per protocol (it reads both ways across the worktree/primary boundary), and it
+did not move. The +31 reconciles to the test, not approximately:
+
+| | |
+|---|---|
+| `agentTaskFrame.test.ts` (new) | +26 |
+| `AgentRunner.taskframe.test.ts` (new) | +7 |
+| `incidentProducer.test.ts` WP-51 block rewritten, 7 tests → 5 | −2 |
+| **net** | **+31** |
+
+### THE POISONED ts-jest CACHE — SIXTH OCCURRENCE, and a new form
+
+The first full run reported **2 failed suites**:
+`tests/intelligence-evals/sitting.test.ts` and `probes.test.ts` — *"Jest
+encountered an unexpected token"*, in two suites this packet never touched,
+while every targeted `--no-cache` run was green. `npx jest --clearCache` then
+re-run: **10 suites, 410 tests, all pass.**
+
+Two amendments this occurrence earns:
+
+1. **The signature is not always "exactly ONE suite".** The protocol's entry
+   says one; this was two, adjacent, in the same directory. The invariant that
+   held is the rest of it — an unedited suite failing to PARSE, reproducibly
+   with the cache and never without.
+2. **A wrapper's exit code lies in the same family as `| tail`.** The run was
+   backgrounded as `(npm test > log; echo "EXIT=$?" >> log)`, and the harness
+   reported the SUBSHELL's success (0) while the log recorded `EXIT=1`. Same
+   class as the protocol's `npm test | tail` warning, different shape: **read
+   the captured exit code out of the log, never the wrapper's.**
+
+### ABI state, disclosed
+
+Left on **system Node** — `npm test` ran, so better-sqlite3 is built for the
+shell's Node. **`npm run rebuild` is required before loading this in Local.**
+
+### Definition of done
+
+- [x] `npm run typecheck` clean
+- [x] Full suite green, delta reconciled against a green baseline
+- [x] Legacy suites for every touched file run explicitly (90 suites / 1,230
+      tests across `tests/unit/agent-runtime` + `src/main/intelligence-host`)
+- [x] Mutation witness per behavioural pin — **13/13 killed, all `--no-cache`**
+- [x] `WORK_PACKETS.md` updated; two defects recorded, one fixed one filed
+- [x] ABI state disclosed
+
+### NOT done, and owed before merge
+
+- [ ] **The live exhibit.** The DoD asks for one real agent run producing
+      `assigned → N acts → completed` under one correlation, with the
+      before/after count of uncorrelated acts. It needs `npm run rebuild`, a
+      Local restart and a real run; it is **not** produced, and the packet
+      should not merge claiming a live smoke it did not take.
+- [ ] Tasks 5–8 of the plan (`NexusToolProvider` threading + its parity proof,
+      `AgentDispatcher` actor, `ctx.task`, `agent_runs.task_id`). Phase 1's
+      spine is real; these are the remaining surface.
+
+**Ruling request 2 remains unruled** and only its conservative half is
+implemented (pass the caller's task through; never mint at dispatch).
