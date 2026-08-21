@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/palette.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/semantic.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/typography.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/layout.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/base.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/components/local/fig-assets.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/styles.css">
+<script src="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/_ds_bundle.js"></script>
+<script src="handoff/from-designer/fixtures/situation-headlines.js"></script>
+<script src="fixtures/scenario-now-coalesced.js"></script>
+<style>
+body { margin: 0; background: rgb(238,240,241); font-family: Inter, system-ui, sans-serif; }
+a { color: rgb(0,107,214); text-decoration: none; }
+a:hover { color: rgb(0,86,171); text-decoration: underline; }
+* { box-sizing: border-box; }
+</style>
+</helmet>
+
+<section style="padding: 28px 28px 80px; display: flex; flex-direction: column; gap: 24px; width: max-content;">
+
+  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 1080px;">
+    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+      <span style="font-size: 13px; font-weight: 600; color: rgb(32,32,32);">Now, coalesced</span>
+      <span style="font-size: 12px; font-weight: 500; color: rgb(60,42,120); background: rgb(245,242,255); border-radius: 9999px; padding: 3px 10px;">seven rows become four · the situation rule drawn</span>
+    </div>
+    <div style="font-size: 14px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">The photographed fleet state after both fixes, in the ratified order: dedupe, then coalesce. Eleven cards to seven was a bug; seven to four is the situation rule. Every sentence on this sheet is composed from <span style="font-family: 'Roboto Mono', monospace; font-size: 12.5px;">situation-headlines.js</span> — the templates, the group label, the deferred fields and the header rules all read from one file.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+      <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">9a</span>
+      <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">The screen</span>
+      <span style="font-size: 13px; color: rgb(115,133,140);">four rows, tier order in force, stripes shipped</span>
+    </div>
+
+    <div style="width: 1264px; height: 920px; border-radius: 16px; background: rgb(248,249,250); box-shadow: 0 0 0 1px rgb(226,230,232), 0 8px 24px rgba(0,0,0,0.06); overflow: hidden; display: flex;">
+
+      <nav style="width: 72px; flex-shrink: 0; align-self: stretch; background: rgb(255,255,255); border-right: 1px solid rgb(226,230,232); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 12px;">
+        <span style="width: 30px; height: 30px; margin-bottom: 4px; flex-shrink: 0; overflow: hidden; display: block;">
+          <span style="display: block; width: 128px; height: 128px; transform: scale(0.234375); transform-origin: top left;">
+            <x-import component-from-global-scope="LocalNextDesignSystem_d48872.LocalLogomark" shape="primary - cog" hint-size="128px,128px"></x-import>
+          </span>
+        </span>
+        <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+          <span style="width: 34px; height: 34px; border-radius: 8px; background: {{ r.bg }}; display: flex; align-items: center; justify-content: center; color: {{ r.fg }};">
+            <sc-if value="{{ r.isNexus }}" hint-placeholder-val="{{ false }}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" style="display: block;"><ellipse cx="12" cy="12" rx="10.4" ry="4.7" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.9"></ellipse><circle cx="12" cy="12" r="2.9" fill="currentColor"></circle></svg>
+            </sc-if>
+            <sc-if value="{{ r.comp }}" hint-placeholder-val="{{ true }}">
+              <x-import component-from-global-scope="{{ r.comp }}" hint-size="20px,20px"></x-import>
+            </sc-if>
+          </span>
+        </sc-for>
+      </nav>
+
+      <div style="flex: 1; min-width: 0; align-self: stretch; background: rgb(255,255,255); display: flex; flex-direction: column; overflow: hidden;">
+
+        <div style="flex-shrink: 0; padding: 20px 26px 0;">
+          <h1 style="font-family: Geist, Inter, sans-serif; font-size: 21px; line-height: 27px; font-weight: 600; letter-spacing: -0.3px; color: rgb(32,32,32); margin: 0;">Nexus AI</h1>
+        </div>
+
+        <div style="flex-shrink: 0; padding: 12px 26px 0; display: flex; align-items: stretch; border-bottom: 1px solid rgb(226,230,232);">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+            <span style="display: flex; align-items: stretch;">
+              <span style="font-size: 13.5px; font-weight: {{ t.weight }}; color: {{ t.fg }}; padding: 8px 13px 11px; box-shadow: {{ t.underline }}; cursor: pointer;">{{ t.label }}</span>
+              <sc-if value="{{ t.divider }}" hint-placeholder-val="{{ false }}">
+                <span style="width: 1px; margin: 8px 9px 12px; background: rgb(226,230,232);"></span>
+              </sc-if>
+            </span>
+          </sc-for>
+        </div>
+
+        <div style="flex: 1; min-width: 0; overflow-y: auto; padding: 14px 26px 16px; display: flex; flex-direction: column; gap: 11px;">
+
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <span style="font-size: 13.5px; line-height: 1.5; color: rgb(46,53,56);">{{ verdict }}</span>
+            <span style="font-size: 12.5px; line-height: 1.5; color: rgb(115,133,140);">{{ healthLine }}</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: rgb(115,133,140);">Waiting on you</span>
+            <x-import component-from-global-scope="LocalNextDesignSystem_d48872.Badge" size="md" color="red" stroke="{{ true }}" radius="pill" label="{{ badge }}" hint-size="22px,18px"></x-import>
+          </div>
+
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+            <div style="border-radius: 10px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); border-left: 3px solid {{ r.edge }}; padding: 13px 16px; display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ r.rule }}</span>
+              <span style="font-family: Geist, Inter, sans-serif; font-size: 16px; line-height: 1.32; font-weight: 600; color: rgb(31,36,38); text-wrap: pretty;">{{ r.headline }}</span>
+              <span style="font-size: 13px; line-height: 1.5; color: rgb(46,53,56); text-wrap: pretty;">{{ r.ask }}</span>
+
+              <sc-if value="{{ r.hasParts }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <span style="align-self: flex-start; font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;" onClick="{{ r.toggle }}">{{ r.disclosure }}</span>
+                  <sc-if value="{{ r.partsOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="display: flex; flex-direction: column; margin-left: 2px; padding-left: 13px; border-left: 1px solid rgb(226,230,232);">
+                      <sc-for list="{{ r.parts }}" as="p" hint-placeholder-count="4">
+                        <div style="padding: 7px 0; display: flex; align-items: baseline; gap: 10px;">
+                          <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.45; color: rgb(46,53,56); text-wrap: pretty;">{{ p.finding }}</span>
+                          <span style="flex-shrink: 0; font-size: 11.5px; color: rgb(115,133,140);">{{ p.age }}</span>
+                          <span style="flex-shrink: 0; font-size: 12px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">Open</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+
+              <div style="display: flex; align-items: center; gap: 11px; flex-wrap: wrap; padding-top: 1px;">
+                <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ r.meta }}</span>
+                <span style="flex: 1;"></span>
+                <span style="font-size: 12.5px; color: rgb(115,133,140); cursor: pointer;">Defer</span>
+                <span style="font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ r.door }}</span>
+              </div>
+            </div>
+          </sc-for>
+
+          <div style="padding: 11px 14px; border-radius: 9px; background: rgb(248,249,250); display: flex; flex-direction: column; gap: 3px;">
+            <span style="font-size: 12px; line-height: 1.5; color: rgb(115,133,140);">{{ freshness }}</span>
+          </div>
+        </div>
+
+        <div style="flex-shrink: 0; padding: 0 26px 20px;">
+          <div style="border-radius: 10px; background: rgb(255,255,255); box-shadow: 0 2px 2px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.08); padding: 11px 14px; display: flex; align-items: center; gap: 12px;">
+            <span style="width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(150deg, rgb(68,141,251) 10%, rgb(205,240,234) 103%);"></span>
+            <span style="font-family: Geist, Inter, sans-serif; font-size: 15px; color: rgb(115,133,140); flex: 1;">What do you need?</span>
+            <span style="width: 30px; height: 30px; border-radius: 9999px; background: rgb(0,107,214); color: rgb(255,255,255); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <x-import component-from-global-scope="LocalNextDesignSystem_d48872.ArrowsArrowUp24" hint-size="14px,16px"></x-import>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="max-width: 1264px; font-size: 12.5px; line-height: 1.6; color: rgb(115,133,140); text-wrap: pretty;">Four rows, and the order is the consequence order rather than age: the tier-1 situation leads at 65h, above three tier-2 runs at 82h, 66h and 64h. The stripe is what makes that legible without reading — red, then orange, and a screen sorted by age would show one colour band. The header states the count once; there is no away-line because the gap was under an hour, and no zero clauses.</div>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+
+    <div style="width: 620px; display: flex; flex-direction: column; gap: 11px;">
+      <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+        <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">9b</span>
+        <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">Coalesced</span>
+        <span style="font-size: 13px; color: rgb(115,133,140);">one bordered object, one verdict</span>
+      </div>
+
+      <div style="border-radius: 10px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); border-left: 3px solid rgb(221,18,67); padding: 13px 16px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ spec.rule }}</span>
+        <span style="font-family: Geist, Inter, sans-serif; font-size: 16px; line-height: 1.32; font-weight: 600; color: rgb(31,36,38); text-wrap: pretty;">{{ spec.headline }}</span>
+        <span style="font-size: 13px; line-height: 1.5; color: rgb(46,53,56); text-wrap: pretty;">{{ spec.ask }}</span>
+        <span style="align-self: flex-start; font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ spec.disclosureOpen }}</span>
+        <div style="display: flex; flex-direction: column; margin-left: 2px; padding-left: 13px; border-left: 1px solid rgb(226,230,232);">
+          <sc-for list="{{ spec.parts }}" as="p" hint-placeholder-count="4">
+            <div style="padding: 7px 0; display: flex; align-items: baseline; gap: 10px;">
+              <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.45; color: rgb(46,53,56); text-wrap: pretty;">{{ p.finding }}</span>
+              <span style="flex-shrink: 0; font-size: 11.5px; color: rgb(115,133,140);">{{ p.age }}</span>
+              <span style="flex-shrink: 0; font-size: 12px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">Open</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 11px; padding-top: 1px;">
+          <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ spec.meta }}</span>
+          <span style="flex: 1;"></span>
+          <span style="font-size: 12.5px; color: rgb(115,133,140); cursor: pointer;">Defer</span>
+          <span style="font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ spec.door }}</span>
+        </div>
+      </div>
+
+      <div style="padding: 12px 15px; border-radius: 10px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;"><strong>A part is a line, not a card.</strong> No stripe, no chip, no ask of its own — the situation owns the tier and the decision, and a part that carried those would be a row again inside a row. Each part keeps its own sentence, its own age, and a door to itself.</span>
+        <span style="font-size: 12.5px; line-height: 1.55; color: rgb(115,133,140); text-wrap: pretty;">Closed by default, because the verdict is what the arrival needs. Open in place rather than through the door, because the person checking whether a verdict is true should not have to leave the list to do it.</span>
+      </div>
+    </div>
+
+    <div style="width: 620px; display: flex; flex-direction: column; gap: 11px;">
+      <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+        <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">9c</span>
+        <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">Grouped</span>
+        <span style="font-size: 13px; color: rgb(115,133,140);">several objects under a caption that is not one</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 2px;">
+          <span style="font-size: 13px; font-weight: 600; color: rgb(31,36,38);">{{ grouped.label }}</span>
+          <span style="font-size: 11.5px; line-height: 1.45; color: rgb(115,133,140);">{{ grouped.limit }}</span>
+        </div>
+        <sc-for list="{{ grouped.rows }}" as="g" hint-placeholder-count="4">
+          <div style="border-radius: 10px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); border-left: 3px solid rgb(221,18,67); padding: 11px 14px; display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ g.rule }}</span>
+            <span style="font-family: Geist, Inter, sans-serif; font-size: 14px; line-height: 1.35; font-weight: 600; color: rgb(31,36,38); text-wrap: pretty;">{{ g.headline }}</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ g.meta }}</span>
+              <span style="flex: 1;"></span>
+              <span style="font-size: 12px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ g.door }}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="padding: 12px 15px; border-radius: 10px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;"><strong>The label is not a card.</strong> No border, no fill, no stripe, no door — which is the entire visual difference, and it reads at a glance: coalescing produces one bordered object, grouping produces several under a caption. Nothing needs to be read to tell them apart.</span>
+        <span style="font-size: 12.5px; line-height: 1.55; color: rgb(115,133,140); text-wrap: pretty;">Each row keeps its own stripe, its own age and its own door, because each is still its own situation. The label states the limit in its second line: the record does not link these. A caption that asserted a shared cause would be the laundering, drawn.</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+      <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">9d</span>
+      <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">Deferred</span>
+      <span style="font-size: 13px; color: rgb(115,133,140);">same tier, same place, out of the badge</span>
+    </div>
+
+    <div style="width: 1264px; display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+      <div style="width: 620px; border-radius: 10px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); border-left: 3px solid rgb(221,18,67); padding: 13px 16px; display: flex; flex-direction: column; gap: 6px; opacity: 0.7;">
+        <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ deferred.rule }}</span>
+        <span style="font-family: Geist, Inter, sans-serif; font-size: 16px; line-height: 1.32; font-weight: 600; color: rgb(31,36,38); text-wrap: pretty;">{{ deferred.headline }}</span>
+        <div style="display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; border-radius: 8px; background: rgb(248,249,250);">
+          <span style="font-size: 12.5px; line-height: 1.45; color: rgb(46,53,56);">{{ deferred.recorded }}</span>
+          <span style="font-size: 12px; color: rgb(115,133,140);">{{ deferred.wake }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 11px; padding-top: 1px;">
+          <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ deferred.meta }}</span>
+          <span style="flex: 1;"></span>
+          <span style="font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ deferred.endDoor }}</span>
+          <span style="font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ deferred.door }}</span>
+        </div>
+      </div>
+
+      <div style="width: 620px; padding: 13px 16px; border-radius: 10px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 8px;">
+        <sc-for list="{{ deferNotes }}" as="n" hint-placeholder-count="4">
+          <div style="display: flex; gap: 9px; align-items: flex-start;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(122,69,229); flex-shrink: 0; margin-top: 7px;"></span>
+            <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ n }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+    <div style="width: 700px; padding: 16px 18px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 11px;">
+      <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">The pins this sheet owes</span>
+      <sc-for list="{{ pins }}" as="p" hint-placeholder-count="10">
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(4,186,110); flex-shrink: 0; margin-top: 7px;"></span>
+          <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ p }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="width: 540px; padding: 16px 18px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 11px;">
+      <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">What is absent, and on purpose</span>
+      <sc-for list="{{ absences }}" as="a" hint-placeholder-count="7">
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(221,18,67); flex-shrink: 0; margin-top: 7px;"></span>
+          <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ a }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="width: 1264px; padding: 16px 18px; border-radius: 12px; background: rgb(255,251,247); box-shadow: inset 0 0 0 1px rgb(255,97,25); display: flex; flex-direction: column; gap: 9px;">
+    <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">The one thing this drawing needs and does not have</span>
+    <sc-for list="{{ needs }}" as="n" hint-placeholder-count="2">
+      <span style="font-size: 12.5px; line-height: 1.6; color: rgb(46,53,56); text-wrap: pretty;">{{ n }}</span>
+    </sc-for>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1330,&quot;height&quot;:1000}}">
+const H = window.NEXUS_HEADLINES;
+const N = window.NEXUS_NOW;
+const GREY = 'rgb(115,133,140)';
+
+const EDGE = { 1: 'rgb(221,18,67)', 2: 'rgb(255,97,25)', 3: 'rgb(198,205,208)' };
+
+const tpl = (id) => H.templates.filter((t) => t.id === id)[0];
+
+/** Substitute named slots. The only string operation on this sheet. */
+function fill(pattern, slots) {
+  let out = pattern;
+  Object.keys(slots).forEach((k) => { out = out.split('{' + k + '}').join(slots[k]); });
+  return out;
+}
+
+class Component extends DCLogic {
+  state = { open: {} };
+
+  toggle(key) {
+    this.setState((s) => {
+      const o = Object.assign({}, s.open);
+      o[key] = !o[key];
+      return { open: o };
+    });
+  }
+
+  /** One row from one template, every sentence filled from the fixture's patterns. */
+  buildRow(item, key) {
+    if (item.kind === 'incident') {
+      const t = tpl('incident.coalesced');
+      const slots = {
+        target: item.target,
+        leadFinding: item.leadFinding,
+        restCount: item.restCount,
+        memberCount: item.memberCount,
+        producer: item.producer,
+        linkKind: item.linkKind,
+      };
+      const open = !!this.state.open[key];
+      return {
+        edge: EDGE[item.tier],
+        rule: t.rule,
+        headline: fill(t.headline, slots),
+        ask: t.ask,
+        meta: fill(t.meta, slots) + ' \u00b7 ' + item.age,
+        door: fill(t.door, slots),
+        hasParts: true,
+        partsOpen: open,
+        disclosure: open ? t.disclosureOpen : fill(t.disclosure, slots),
+        toggle: () => this.toggle(key),
+        parts: item.members,
+      };
+    }
+
+    const t = item.gate ? tpl('run.waiting.mid-procedure') : tpl('run.waiting.nothing-written');
+    const slots = {
+      runNoun: H.runNoun[item.capability],
+      age: item.age === '82h' ? '82 hours' : (item.age === '64h' ? '64 hours' : item.age),
+      runbookId: item.runbookId,
+      checkpoint: item.gate ? item.gate.checkpoint : '',
+      position: item.gate ? item.gate.position : '',
+      awaits: item.gate ? item.gate.awaits : '',
+    };
+    return {
+      edge: EDGE[item.tier],
+      rule: t.rule,
+      headline: fill(t.headline, slots),
+      ask: fill(t.ask, slots),
+      meta: fill(t.meta, slots) + ' \u00b7 ' + item.age + ' \u00b7 ' + t.state,
+      door: fill(t.door, slots),
+      hasParts: false,
+      partsOpen: false,
+      disclosure: '',
+      parts: [],
+    };
+  }
+
+  renderVals() {
+    const items = [N.coalesced].concat(N.runs);
+    const rows = items.map((it, i) => this.buildRow(it, 'r' + i));
+
+    const cT = tpl('incident.coalesced');
+    const cSlots = {
+      target: N.coalesced.target,
+      leadFinding: N.coalesced.leadFinding,
+      restCount: N.coalesced.restCount,
+      memberCount: N.coalesced.memberCount,
+      producer: N.coalesced.producer,
+      linkKind: N.coalesced.linkKind,
+    };
+
+    const gT = tpl('incident.no-run');
+
+    return {
+      // Local's own rail, mounted from the bundle. The four glyph components carry their
+      // own fills and never consult currentColor, so `fg` applies only to the Nexus mark,
+      // which is inlined from assets/nexus-mark.svg and does inherit.
+      rail: [
+        { comp: 'LocalNextDesignSystem_d48872.IconDashboard3Line' },
+        { comp: 'LocalNextDesignSystem_d48872.NavigationSites24' },
+        { comp: 'LocalNextDesignSystem_d48872.DocumentTypesDocumentText' },
+        { comp: 'LocalNextDesignSystem_d48872.UtilitiesSettings24' },
+        { nexus: true, on: true },
+      ].map((r) => ({
+        isNexus: !!r.nexus,
+        comp: r.comp || '',
+        bg: r.on ? 'rgb(245,246,247)' : 'transparent',
+        fg: r.on ? 'rgb(3,155,92)' : 'rgb(115,133,140)',
+      })),
+      tabs: [
+        { label: 'Now', on: true, divider: true },
+        { label: 'Sites' },
+        { label: 'Record' },
+        { label: 'Agents' },
+        { label: 'Settings' },
+      ].map((t) => ({
+        label: t.label,
+        divider: !!t.divider,
+        weight: t.on ? '600' : '500',
+        fg: t.on ? 'rgb(31,36,38)' : GREY,
+        underline: t.on ? 'inset 0 -2px 0 rgb(14,202,212)' : 'none',
+      })),
+
+      // One statement of the count, from the verdict pattern. No away-line: the gap
+      // was under an hour, and no zero clauses anywhere.
+      verdict: fill(H.verdict.allUnwritten, { needsYou: rows.length }),
+      healthLine: fill(H.health.quiet, { checkCount: N.checkCount }),
+      badge: String(rows.length),
+      rows: rows,
+      freshness: H.freshness.now,
+
+      spec: {
+        rule: cT.rule,
+        headline: fill(cT.headline, cSlots),
+        ask: cT.ask,
+        door: fill(cT.door, cSlots),
+        disclosureOpen: cT.disclosureOpen,
+        meta: fill(cT.meta, cSlots) + ' \u00b7 ' + N.coalesced.age,
+        parts: N.coalesced.members,
+      },
+
+      grouped: {
+        label: fill(H.group.label, { memberCount: N.grouped.memberCount, target: N.grouped.target }),
+        limit: H.group.limit,
+        rows: N.grouped.rows.map((g) => ({
+          rule: gT.rule,
+          headline: fill(gT.headline, { finding: g.finding, target: N.grouped.target }),
+          meta: g.producer + ' \u00b7 ' + g.age + ' \u00b7 ' + gT.state,
+          door: fill(gT.door, { target: N.grouped.target }),
+        })),
+      },
+
+      deferred: {
+        rule: fill(H.deferred.rule, { tier: 1 }),
+        headline: fill(cT.headline, cSlots),
+        recorded: fill(H.deferred.recorded, N.deferral),
+        wake: N.deferral.wakeLabel,
+        meta: fill(cT.meta, cSlots) + ' \u00b7 ' + N.coalesced.age,
+        endDoor: H.deferred.endDoor,
+        door: fill(cT.door, cSlots),
+      },
+      deferNotes: [
+        'Tier and place unchanged \u2014 the row stays exactly where the consequence order put it, dimmed rather than moved. Leaving the list is a dismissal by another name, and cycle two refused that.',
+        'Out of the badge. The badge counts what is escalating, so a deferred situation leaves it: quieting the channel is the whole point of the act. The count above the list says so in the same breath.',
+        'Deferral applies to the situation, never to its parts. Deferring one finding while its siblings escalate would split a situation the platform has just asserted is one thing \u2014 and the disclosure would then contradict the row above it.',
+        'Three ways it ends, each recorded on the run: the wake condition fires, the user ends it early, or the situation is answered. Nothing the agent does can start or end one.',
+      ],
+
+      pins: [
+        'A fold requires a record link. A shared payload origin, a shared target and a shared timestamp are not links \u2014 the coalescer reads links and nothing else, and the row names the link it used.',
+        'The coalesced headline is derived from the members: target, the consequential member, and the count of the rest. Never one member\u2019s sentence with a parts count bolted beside it.',
+        'Where no member carries a severity field, the headline falls back to count-plus-kind-plus-target. It never guesses which finding leads.',
+        'The coalesced row takes the highest tier among its members, and its rule line is that member\u2019s rule.',
+        'A part is a line inside the card: no stripe, no chip, no ask, no gate \u2014 its own sentence, its own age, its own door. Closed by default, opening in place.',
+        'Grouping is a caption, not a card: no border, no fill, no stripe, no door, and a second line stating that the record does not link the members. Each grouped row keeps its own stripe and door.',
+        'The stripe encodes tier only \u2014 red at 1, orange at 2, grey at 3 \u2014 and must never drift into a severity scale. Rows in the changed column carry none; the column says what they are.',
+        'The count is stated once. The badge and the verdict line are one derivation; a clause whose count is zero is omitted rather than rendered as a zero.',
+        'Every row has exactly one door, and the door names its destination. An incident with no run still has a site. Door strings carry no terminal punctuation and render in action blue.',
+        'A deferred situation keeps its tier and its place, leaves the badge, and shows its reason and wake condition. Deferral applies to the situation, never to a part.',
+      ],
+      absences: [
+        'No Approve or Not now on any row. A gate without its declaration is consent without context, which is the failure XD-8 exists to prevent \u2014 the row\u2019s door leads to the gate, and the gate is where the decision is made.',
+        'No parts chip on the coalesced row. The count is already in the headline and in the disclosure; a third statement is the defect the count-once rule just removed from the header.',
+        'No severity colour, badge or score on a part. Parts differ by sentence and age; ranking them inside a situation the platform has called one thing would invite acting on a part.',
+        'No agent.stuck row on this artboard. It is a ratified class the fold cannot yet emit, and drawing it here would imply the dedup can ship without WP-54a. It cannot \u2014 auth-probe disappears from Now the day the duplicates go.',
+        'No away-line, and no zero clauses. An absence of zero is not an absence.',
+        'No panel for the health line while nothing is dark. The reserved seat is honoured by a line that cannot be scrolled away; a bordered card announcing that nothing is wrong competes with the list.',
+        'No lecture. Both explanatory sentences under the old empty section are gone, and the section does not render when it holds nothing.',
+        'No recreation of the shipped addon\u2019s rail. This specimen renders Local\u2019s own rail from the design system \u2014 logomark, four glyph components, the Nexus mark \u2014 rather than the green rail in the screenshots with its extra items and bottom cluster, which I have no source for. The list is what this sheet is about; a rail drawn from a screenshot would be the authored-vector defect wearing chrome.',
+      ],
+      needs: [
+        'Does the sentinel\u2019s finding payload carry a severity field? The headline on this sheet leads with the backdoor because a backdoor is the consequential finding of the four \u2014 and that choice is only derivable if severity is in the record. If it is not, the honest headline is the fallback: "4 security findings on theawfulpm-test." Both are drawn from the same template; which one renders is a fact about the payload, not a preference.',
+        'And the answer to your Q1 stands on the same principle: the containment run folds into this situation if and only if its arming records the incident ids it answers. Same site and an hour apart is a correlation a person reads instantly and the platform cannot assert. Four honest rows beat three where one join was inferred from a timestamp.',
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

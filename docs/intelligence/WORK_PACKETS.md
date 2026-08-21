@@ -23409,3 +23409,76 @@ Standard discipline, plus the three the launch instruction adds: every string
 this packet changes comes from the ratified fixture through a generator;
 receipts are measured in the unit they name; the mutation battery pins its ABI
 at both ends.
+
+---
+
+## THE COALESCED SHEET — RATIFIED IN SUBSTANCE; ITS OPEN QUESTION CLOSED; TWO FINDINGS BACK; ONE BLOCKER (2026-08-21)
+
+`from-designer-14-now-coalesced.dc.html` committed verbatim (34,122
+bytes, md5 `4f023073ef4b54b7a9097e8397833530`). Four artboards: the
+screen at four rows, the coalesced object, the grouped alternative,
+and the deferred row.
+
+**RATIFIED, and better than the ask in three places:**
+- **The visual distinction reads without words**, which was the
+  requirement: *"coalescing produces one bordered object, grouping
+  produces several under a caption."* The label carries no border, no
+  fill, no stripe and no door — the entire difference, visible at a
+  glance. XD-28 now has a drawing.
+- **"A part is a line, not a card"** — no stripe, no chip, no ask, no
+  gate; its own sentence, age and door; closed by default, opening IN
+  PLACE. The reasoning is the pin: *a part that carried those would be
+  a row again inside a row*, and *the person checking whether a
+  verdict is true should not have to leave the list to do it.*
+- **The designer enforced the architect's own sequencing inside their
+  artboard**: `agent.stuck` is deliberately absent because *"drawing
+  it here would imply the dedup can ship without WP-54a. It cannot."*
+  A design sheet refusing to draw a row in order to protect a merge
+  order is the loop at a level it has not reached before.
+
+**THE SHEET'S OWN OPEN QUESTION IS CLOSED — measured before it was
+asked.** The sentinel's finding payload DOES carry `severity`
+(`incidentProducer.ts:263`, from `Finding.severity`, vocabulary
+`info · low · medium · high · critical` at :96). **The strong headline
+renders** — target + consequential member + count of the rest — and
+the count-plus-kind fallback stays in the template for producers that
+carry no severity, exactly as their pin specifies. Nothing about the
+lead-finding choice is a preference; it is a fact about the payload,
+which is how they framed it.
+
+**TWO FINDINGS BACK — both internal inconsistencies in the sheet, not
+disagreements:**
+1. **Pin 9 says "every row has exactly one door"; the deferred row
+   (9d) draws TWO** — the situation's door and the end-the-deferral
+   control. Both are right; the PIN is what needs the amendment, or
+   the end-control is a control and not a door. Left unsettled, this
+   becomes a test asserting the opposite of the drawing — the exact
+   shape WP-52 spent a packet unwinding.
+2. **THE ARCHITECTURAL ONE: can a run-less incident be deferred at
+   all?** The sheet draws `Defer` on every row, and the deferred
+   specimen IS the coalesced incident. But cycle two ruled deferral a
+   SESSION ACT, *"recorded on the run (rationale family)"* — and a
+   run-less incident has no run to record it on. Either the deferral
+   gains a second record shape for incidents, or incidents are not
+   deferrable and the control does not render on them. **Ruling
+   deferred to the designer's answer plus a producer measurement;
+   WP-56 is amended to HOLD its incident path at the gate rather than
+   guess.** This is not the sheet's error — it is a gap between two
+   ratified rulings that only the drawing could expose.
+
+**THE BLOCKER, and it is only a file:** the sheet reads
+`situation-headlines.js` for `incident.coalesced`, `H.group`,
+`H.deferred`, `H.health`, `H.verdict` and `H.freshness` — **the
+updated fixture did not ride with the handoff**, nor did
+`scenario-now-coalesced.js` or the position document. Every string on
+the artboard is therefore visible only as rendered output, and the
+copy pipeline requires extraction, never transcription. **WP-55 cannot
+be prompted until the three files arrive.** Everything else in the
+Now backlog is unaffected and continues.
+
+**Not normative, recorded so no packet reads it as spec:** the sheet's
+rail is Local's own design-system rail (white, four glyphs) rather
+than the shipped green rail, deliberately — *"a rail drawn from a
+screenshot would be the authored-vector defect wearing chrome"* — and
+its tab strip omits Fleet, drawing the post-item-6 world. Both are
+honest; neither is this packet's scope.
