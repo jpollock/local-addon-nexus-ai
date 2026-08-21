@@ -24100,3 +24100,63 @@ ends of its run.
 `procedureArming.ts` + `armFromSelection.ts` + `chatAssembly.ts`'s manifest
 write, `foldSessionRegistry`'s incident-attachment pass, `ipc-handlers.ts`'s one
 pass-through, and `docs/intelligence/`.
+
+### 9 · ADDENDUM — WP-56's amended claim on `ipc-handlers.ts`, acknowledged
+
+Landed on the base at `e2e76193`, after this gate report was written, and it is
+right on both counts. This packet's announce said WP-56 "claims a DIFFERENT
+handler in it (`RETURN_*` neighbourhood), so the two are disjoint within the
+file" — accurate about the regions, and WP-56 is correct that the FILE is now
+claimed twice and that saying so on the base is what the rule is for.
+
+**The collision is additive and the resolution is to take both.** This packet's
+entire edit to that file is one argument on one existing line:
+
+```
+-  safeHandle(IPC_CHANNELS.COMPARATOR_ARM_SELECTION, (_event: any, args: any) =>
+-    armFromSelection(args?.capability, args?.selection));
++  safeHandle(IPC_CHANNELS.COMPARATOR_ARM_SELECTION, (_event: any, args: any) =>
++    armFromSelection(args?.capability, args?.selection, new Date(), args?.answers));
+```
+
+plus the three comment lines above it. WP-56 adds a new handler beside the four
+`RETURN_*` reads. Different regions, no shared line, and whichever lands first
+the other is an additive conflict resolved by taking both sides — never by
+choosing.
+
+**WP-56's second observation is confirmed from this side:** the base is
+inherited RED at 1 suite / 6 tests from `09c32d99`, and a baseline taken before
+that commit does not contain it. This packet's baseline was taken AFTER (at
+`20a01d45`), so its six are carried in both columns and its delta is measured
+through them rather than against them — §7's numbers are the ones to reconcile
+against.
+
+### 10 · THE PWD RULE FIRED, AND IT IS RECORDED RATHER THAN QUIETLY REPAIRED
+
+This addendum was first appended and committed **in the PRIMARY CHECKOUT**, not
+in this worktree, and the commit swept in 99 lines of the architect's
+uncommitted work. WP-39's incident exactly, and WP-52's sharpening of it is the
+part that matters: **the `cd` was four commands earlier, inside a command whose
+stated purpose was something else** — a state check comparing the primary and
+the worktree. The shell's cwd persisted; `pwd` was printed in that same
+compound command and read as confirmation rather than as a warning.
+
+**The tell was in the receipts and was visible before the commit ran.** The
+prefix check printed `1,412,569 -> 1,419,708` — byte figures belonging to the
+BASE's WORK_PACKETS.md, where this branch's is 1,426,134. A receipt that names
+the wrong object is a receipt that has already told you.
+
+**A SECOND VIOLATION IN THE SAME COMMAND, and it is worth more than the first:**
+that commit message carried `+1,394 (prefix holds)` — a figure computed by hand
+BEFORE the command ran, while the printed value was `+7,139`. That is a
+PRE-WRITTEN RECEIPT (WP-45's rule), and it is the reason the wrong-tree commit
+was not caught in the writing: a pasted receipt would have disagreed with the
+message on the same screen.
+
+Recovery, per the documented drill and verified rather than assumed:
+`git reset --mixed HEAD~1`; the appended block located by byte offset and
+truncated; the working tree re-measured against `HEAD` (`5,575` bytes over the
+blob, prefix holds, `git diff --stat` again exactly the architect's
+`99 insertions(+)`, no deletions and no trailing-newline artifact); `git fsck`
+clean apart from the expected dangling commit. The architect's uncommitted work
+is intact and still uncommitted, exactly as it was found.
