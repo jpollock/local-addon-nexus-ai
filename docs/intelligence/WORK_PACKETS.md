@@ -26077,3 +26077,173 @@ the record is read by whoever looks and the code is read by whoever
 must.
 
 **WP-51 IS CLOSED.** The record learned to say what it always knew.
+
+---
+
+## WP-54a · MERGE ACCEPTED — the fold learns to say an agent is stuck (2026-08-21, architect adjudication)
+
+**Verified:** merge `be858e5f`, 8 files +1,492/−16; sequencing
+confirmed by measurement not assumption (`merge-base --is-ancestor`
+says WP-54 is still on its branch, so 54a landed first as instructed).
+
+**THE MEASUREMENT DISPROVED THE PROMPT, WHICH IS WHY IT WAS ASKED
+FOR.** There is no `agent.run.failed` topic and there could never have
+been one: the envelope validator's regex admits seven type prefixes
+and `agent` is not among them, so such a topic is a hard ZodError at
+`Emitter.emit`. **`agent.stuck` was always a template id, never a
+topic.** Live census: 13 topics, 11,181 events, none about an agent
+run. The fact lives in `inbox_items` instead — `{agentId}` present and
+structured, `{timeout}` free text only.
+
+**AND THE PRODUCER DEBT IS THE FOURTH OF ITS EXACT KIND.**
+`AgentRunner.run:61` computes `timeoutMs` and line 123 interpolates it
+into prose — **the runtime knows the number at the moment of failure
+and throws it away.** Sentinel's causal link, the arming's scope, the
+arming's cause, and now the runner's timeout: four producers, one
+shape. **Named as protocol: a producer that formats a fact into a
+sentence has thrown the fact away.** Paid at the producer (the runner
+hands the number over from its own local; nothing parses it back out
+of prose), and M03 measures the alternative's cost — without the
+`status === 'timeout'` clause an errored run would render "It timed
+out after 300s", a fabricated claim about a failure that was not a
+timeout.
+
+**The exhibit is self-incriminating in exactly the right way.**
+auth-probe renders as row 8 of 8 **while being the oldest thing on the
+fleet by fourteen hours** — *"age order puts it first; tier is the
+only thing keeping it last."* That single row is the proof the tier
+ordering works, photographed. And the same exhibit photographs the
+incident rows rendering `Tier 1 · at [T2]` — the architect's finding 1
+— **left unfixed and pinned at its shipped value with a comment naming
+whose it is.** Ratified as the correct handling and named as a
+pattern: **a defect owned by another packet is pinned at its SHIPPED
+value with the owner named, so the fix announces itself by turning the
+pin red.** Silence would leave the fix unverified; a corrected pin
+would be reaching across a lock.
+
+**THE HARNESS LIED FIRST, and the catch is the best instrument finding
+of the month.** The battery captured stdout only, and jest writes its
+summary to stderr **including on success** — so the run **would have
+reported 21/21 killed** by measuring nothing at all. **The
+green-baseline guard caught it**: the control that must PASS is what
+exposed a harness that could only report perfection. Appended to the
+protocol — a scoring harness needs a control that fails when the
+harness is blind, and a mutation battery's every-mutant-killed is
+indistinguishable from a battery reading silence.
+
+**Receipts, and one reasoning worth keeping:** the six inherited
+failures were diffed **name by name** against the base and are
+identical — *"I edited that suite, so identity is the load-bearing
+receipt, not the count."* Correct, and protocol: **when a packet edits
+a suite that was already failing, the count proves nothing; the
+failing set's identity does.** Battery 20/21 with the single survivor
+named as genuinely equivalent rather than papered over, and two
+"survivors" identified as harness errors and repaired rather than
+credited.
+
+**The two escalations, ruled:**
+1. **A new topic `episodic.agent_run.failed`: STILL OPEN, owner's
+   pen** — correctly not taken by a packet. And the packet surfaced a
+   real doc-drift beside it: `architecture.md` §4.2 still calls
+   `episodic.*` *"reserved … only for imported histories"*, which
+   **died at WP-25** and has been stale since. Registered as a doc
+   correction.
+2. **Tier 3 as a rank: RESOLVED, and better than by ruling.** The
+   designer's revised fixture gives **every template an explicit
+   `tier` field**, with `agent.stuck` carrying `tier: 3`. The widening
+   therefore implements a ratified number rather than overriding a
+   ruling — **and WP-54's tier fix now has an authoritative INPUT**
+   (the fixture's own field) instead of parsing a rule line, which
+   dissolves the two-sources problem at its root rather than pinning
+   agreement between two derivations.
+
+**AND THE MERGE CONDITION ON WP-54 IS HALF-SATISFIED — verified on the
+tree just now:** guard 1 reads `… && total === 0 && gate === null` and
+guard 2 reads `… && done === 0 && failed === 0 && gate !== null`.
+**Both ruled amendments are present.** What remains owed is the
+durable half: **the mechanized ruled-content assertion in the
+`:check`**, because guards being correct today does not stop the next
+regeneration from reverting them silently — which is exactly what
+happened once already.
+
+---
+
+## WP-56 · GATE RULING — the deferral affordance (2026-08-21, architect adjudication)
+
+**The six contract shapes are RATIFIED AS PRESENTED**, read from the
+branch rather than confirmed on description. Three of them are better
+than the ask:
+
+- **(c) `TriageView.counts` REQUIRED, and the reasoning is the
+  ruling:** *"An optional count invites the `?? waiting.length`
+  fallback that is the defect it removes."* A field made optional to
+  be polite would have recreated the exact bug it exists to fix.
+  **And the invariant is the best line in the packet** —
+  `needsYou + deferred === waiting.length`, pinned: *the badge
+  undercounts the list by exactly the number the accounting line
+  states, and never by anything it does not.* That converts a
+  badge/list disagreement from a mystery into a bounded, stated fact.
+- **(f) IPC and never GraphQL, for a structural reason:** the CLI and
+  renderer hit the same endpoint with the same bearer token, so a
+  mutation the CLI merely does not call is not a boundary; an agent
+  reaches tools and GraphQL and never `ipcMain`. **That is what makes
+  cycle two's "only the user defers" architectural rather than
+  aspirational**, and it is the `TRUST_EXTERNAL_HOST_KEY` reasoning
+  applied to a new act. Ratified with credit.
+- **(a) `source.system: 'gateway:deferral'`, distinct from
+  `gateway:approval`** — so a provenance reader can tell **consent
+  from quieting** without parsing a payload. Small field, large
+  property.
+
+**ONE ADDITION, and it is the only thing the six shapes get wrong.**
+(d) discloses the missing `wakeFired` port to a reader of the
+SNAPSHOT — `wakeSource` names the absence honestly, per the
+`deadlineSource` pattern — but **it does not disclose it to the person
+choosing the wake condition.** A user who defers "until the vendor
+replies" would be offered a `record` condition that can never fire and
+told nothing. **Ruled: the surface does not offer a wake condition the
+platform cannot fire.** Until a producer supplies `wakeFired`, the
+deferred row offers `time` and unconditioned only. Routed to WP-55 and
+the designer as a pin on the deferred row's controls — the contract
+stays as presented; what changes is what the UI may render from it.
+
+**The four findings, ruled:**
+1. **The `decision`-key near-miss is the most dangerous defect this
+   packet could have shipped, and it was reasoned out rather than
+   tested out.** All four readers key on `decision`; both
+   `foldProcedureCursor` lanes are hostile — legacy overwrites a
+   standing approval (**a deferral silently revoking consent**),
+   bound pushes to `denied` and a denial is an abort. Carrying no
+   `decision` because **a deferral is not a consent decision** is the
+   honest reason AND the safe one, which is the rare case where those
+   coincide. Seven pins through all four readers: ratified.
+2. **The vacuous XD-28 pin is a NEW SHAPE (#16): indexing into a
+   heterogeneous list.** `parts[0]` is a real event for an incident
+   and the synthetic run part — carrying no `eventId` — for a session,
+   so the pin named a string belonging to nothing and was true against
+   the bug as well as the fix. Appended to the protocol.
+3. **The exhibit found what review could not, and the finding is about
+   RULINGS, not code:** "recorded on the run" was **unsatisfiable from
+   the caller's own shape** — a surface holding a `Situation` has no
+   turn id, because `taskIds` lives on `SessionRow`. A ruling can be
+   correct and unimplementable from where its caller stands, and only
+   building the thing reveals it. `runCorrelationFor` in the registry
+   is the right home.
+4. **The incident path: the measurement is ACCEPTED and the fix is
+   APPROVED as WP-56a.** An orphan incident's situation id is the
+   EVENT id, and the producer resolves an incident by writing a new
+   event — so the deferral stays with the event it named and the
+   amendment arrives undeferred. **And the identity already exists:
+   the producer's own dedup key is `(component, fact)` — it has a
+   notion of "the same incident" that the fold declined to use, and
+   invented a different one from the report instead of the subject.**
+   `incidentKey(component, fact)` is ratified as the incident
+   situation's identity. **Sequencing matters: it changes incident
+   situation ids, so WP-55 must know before it renders coalesced rows
+   — relay it as a contract note, not a surprise.**
+
+**Confirmed and correct: `arrivalModel.ts` untouched.** The badge read
+and WP-54's pin amendment remain WP-56's, **blocked rather than
+undone** — which is the distinction the hold was ruled to preserve.
+Merge when WP-54 releases; amend the announce on the base at that
+moment, not at merge.
