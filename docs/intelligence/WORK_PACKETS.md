@@ -22101,3 +22101,167 @@ TREE PRISTINE AFTER.
 `tsc` clean; `eslint` 0 errors, 6 pre-existing warnings; all six generator
 `:check` scripts exit 0; byte sweep clean. ABI: system Node v25.9.0 / **141** —
 **the owner must `npm run rebuild` before loading Local.**
+
+---
+
+## WP-50 · MERGED, LOCKS RELEASED (2026-08-21)
+
+Merge commit **07969cb8** on `poc/nexintelligence-ux`. The gate ruling was PASS
+with §8's amendment to land; it landed, was re-driven, and the merge followed.
+Receipts pasted after they printed.
+
+### 1 · The stat block
+
+```
+git diff --stat 07969cb8^1 07969cb8
+ docs/intelligence/WORK_PACKETS.md                  | 615 +++++++++++++++++++++
+ .../from-designer/fixtures/situation-headlines.js  |  25 +-
+ scripts/generate-opening-copy.ts                   |  65 ++-
+ scripts/generate-return-copy.ts                    |  10 +-
+ scripts/generate-situation-copy.ts                 |  10 +-
+ scripts/wp49-battery.py                            |  10 +
+ scripts/wp50-battery.py                            | 386 +++++++++++++
+ scripts/wp50-refold-exhibit.ts                     | 156 ++++++
+ .../__tests__/manifestScope.test.ts                | 284 ++++++++++
+ .../__tests__/procedureTurnCarrier.test.ts         |  73 +++
+ .../__tests__/sentinelCausation.test.ts            | 155 ++++++
+ .../__tests__/sessionRegistry.test.ts              | 117 +++-
+ .../__tests__/workingRuns.test.ts                  | 337 +++++++++++
+ src/main/intelligence-host/chatAssembly.ts         |  93 +++-
+ src/main/intelligence-host/sessionRegistry.ts      | 158 +++++-
+ .../intelligence-host/situationCopy.generated.ts   |   2 +-
+ .../components/DockedPanel/openingAsksModel.ts     |  78 ++-
+ .../DockedPanel/openingCopy.generated.ts           |   1 +
+ src/renderer/components/NexusOverview.tsx          |  61 +-
+ src/renderer/components/return/Arrival.tsx         |  44 +-
+ tests/unit/renderer/helpers/returnMorning.ts       |  10 +-
+ tests/unit/renderer/needsNothingOfYou.test.ts      |  18 +
+ tests/unit/renderer/nowRowDedup.test.tsx           | 161 ++++++
+ tests/unit/renderer/nowScreen.test.tsx             |  82 ++-
+ tests/unit/renderer/openingAsks.test.ts            |  70 ++-
+ tests/unit/renderer/returnRailBadge.test.ts        |   4 +
+ 26 files changed, 2905 insertions(+), 120 deletions(-)
+```
+
+### 2 · The record, rebuilt from three blobs — and the branch's append SPLIT
+
+Never hunk-edited. The new wrinkle this merge added to the standard: **the
+branch side carried TWO sections and the ruling belongs BETWEEN them.** My GATE
+REPORT was written before the ruling (the ruling reads it verbatim); RULING
+LANDED was written after it. A contiguous concatenation of the branch append
+would have put "ruling landed" before the ruling. So the branch append was split
+at its own `## WP-50 · RULING LANDED` header — found exactly once — and the
+primary's append was inserted between the halves.
+
+The four-way verification generalises to three sections without weakening, and
+arithmetic in one named unit (characters):
+
+```
+1,268,959 + 24,923 + 4,524 + 6,029 = 1,304,435   result 1,304,435   residual 0
+
+ancestor is an EXACT PREFIX of the merge : True
+GATE REPORT    exact substring exactly once : True   offset 1,268,959
+GATE RULING    exact substring exactly once : True   offset 1,293,882
+RULING LANDED  exact substring exactly once : True   offset 1,298,406
+CHRONOLOGY report < ruling < landed      : True
+LINE-ANCHORED conflict markers           : 0
+```
+
+**Loss-proof by CONTENT rather than by trusting the rebuild** (WP-48's
+instrument, which catches a silently dropped half that `--stat` cannot):
+
+```
+'## ' headers — branch 75, primary 74, merged 76
+missing from branch side : NONE
+missing from primary side: NONE
+merge-created duplicates : NONE
+```
+
+Then the fields each side moved, read directly: the architect's `GATE RULING`
+and its `registered as WP-51`; my `GATE REPORT`, `RULING LANDED`, the cp.backup
+row's new sentence and the `THE HONEST GAP STAYS HONEST` pin. All present.
+
+`PARALLEL_PROTOCOL.md` did not conflict: only the base side touched it, adding
+the two new rules — one of them this packet's own ABI-probe finding.
+
+The architect's work was committed **VERBATIM first**, in its own attributed
+commit (`d6458013`), fidelity verified by md5 against the working tree as
+measured before the commit — `d1a5dd7f0d7e1facc305f308eb29dc25` (PROTOCOL,
+26,547 → 27,357 bytes) and `4d4449a79fd6302b3c8cff698f71b82e` (WORK_PACKETS,
+1,278,505 → 1,283,067 bytes) — and both verified PURE APPENDS **by prefix check,
+not by diffstat**, because a zero-deletion diffstat is not proof of an append.
+Fifth exercise of the precedent.
+
+### 3 · Independent verification on the MERGED tree
+
+Everything below was re-measured here, not carried across from the branch.
+
+| | result |
+|---|---|
+| suite | **618 suites / 8,511 tests — 8,509 passed, 2 skipped, exit 0** |
+| mutation battery | **21 killed / 0 survived / 1 equivalent / 0 anchor-miss, of 22**; control SURVIVED (correct); tree pristine before and after; ABI pinned both ends |
+| `tsc -p . --noEmit` | clean |
+| `npm run compile` | clean |
+| `eslint src --ext .ts,.tsx` | 0 errors, 6 warnings (all pre-existing, none in a touched file) |
+| `fixtures:situation-copy:check` | exit 0 |
+| `fixtures:return-copy:check` | exit 0 |
+| `fixtures:opening-copy:check` | exit 0 |
+| `fixtures:procedures:check` | exit 0 |
+| `fixtures:citations:check` | exit 0 |
+| `inventory:dom-reach:check` | exit 0 |
+| byte sweep | 26 changed files, CLEAN |
+
+**THE SKIPPED COLUMN MOVED, IN THE DOCUMENTED DIRECTION, AND THE TOTAL DID NOT.**
+The branch measured **12 skipped** in `.worktrees/wp-50`; the merged tree
+measures **2** in the primary checkout. Total is **8,511 on both sides** — same
+total, different split, which is what says the ten moved rather than appeared.
+WP-20c's worktree↔primary embedding boundary, third recorded crossing. Read the
+skipped column first.
+
+### 4 · What the ruling settled, carried into the record
+
+- **§8 AMENDED AND LANDED.** Guard 2 is
+  `done === 0 && failed === 0 && gate !== null`. All three run rows on the
+  owner's real fleet now carry ratified sentences.
+- **New standing rule, in `PARALLEL_PROTOCOL.md`:** a guard may condition only on
+  facts its sentence's claim depends on. Gating on an unstated fact is how a true
+  sentence gets withheld, and a withheld sentence is invisible.
+- **§7 IS WP-51**, and the ruling amended its own predecessor's instruction on
+  this packet's driven proof: "you change the producer, never the coalescer" is
+  retired, because a producer-only change is structurally incapable of coalescing
+  orphans. Both parts approved — mint the scan's TaskId (a sentinel scan is an
+  ACT and belongs in the record as one; the validator is not bent, the id becomes
+  valid because the thing it names becomes real) plus one orphan-grouping rule.
+  **"Record links, never payloads" stands unamended** — the link becomes a
+  genuine record link and the payload stays unread.
+- **`ManifestScope` RATIFIED as shaped**: a type that can only describe one
+  provenance forces a lie for the other, and a lie in a provenance field is the
+  fabricated-source class.
+- **`null` is UNKNOWN, `0` is KNOWN-EMPTY** — ratified as vocabulary.
+- **WP-49's finding 1 narrowed**, credited: it was measured over the golden
+  morning, and two of seven shipped runbooks declare no checkpoints.
+- **The ABI probe constructs, it does not require** — this packet's finding, now
+  protocol, and it earned its keep the same session: the tree had flipped to
+  Electron between sessions and the probe named the mismatch first try where
+  40+ suite reds said nothing useful.
+
+### 5 · ABI, declared
+
+This session ran jest repeatedly and ran `npm rebuild better-sqlite3` once, so
+the tree is built for **system Node (this machine v25.9.0, ABI 141)** — verified
+by CONSTRUCTING a Database immediately before and after the final suite and at
+both ends of the battery. `.nvmrc` pins 22.16.0 → ABI 127, which is what CI sees.
+**The owner must `npm run rebuild` before loading Local.**
+
+### 6 · Unpushed, properly
+
+Zero remote `wp-50` refs; no upstream on `poc/nexintelligence-ux`; no tags
+touched; version still `0.5.2`.
+
+**WP-50 is CLOSED.** The producers' registered debts are paid except WP-48a,
+which is **WP-51** with both halves ruled. The gap between the owner's
+screenshots and the designer's sheets, for the run rows, is closed: every run row
+on the real fleet reads a ratified sentence.
+
+**THE `src/main/intelligence-host/`, THE TWO ARMING CALLERS, `src/renderer/` AND
+`docs/intelligence/` LOCKS ARE RELEASED.**
