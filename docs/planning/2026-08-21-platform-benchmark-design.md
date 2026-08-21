@@ -289,11 +289,17 @@ week.
 
 ## 10. Open questions
 
-1. **Can Coworker connect a site with no public DNS?** Nexus supports
-   `iw_connect_site` for Local sites, which implies push-based reporting rather
-   than the hub pulling — but that is inference, not measurement. If it cannot,
-   the three SpinupWP sites drop out of the shared substrate and CV-C-01,
-   CV-D-01 and CV-G-01 go with them.
+1. **Can Coworker connect a site with no public DNS?** Expected yes — Jeremy's
+   read, consistent with `iw_connect_site` supporting Local sites, which implies
+   the plugin pushes rather than the hub pulling. Still **unmeasured**, and it is
+   the single largest risk to the substrate: if it cannot, the three SpinupWP
+   sites leave the shared corpus and CV-C-01, CV-D-01 and CV-G-01 go with them,
+   halving the pathology coverage.
+
+   **Settle it in Stage 1.** The staged rollout in §8 already calls for one WPE
+   and one non-WPE site first; make the non-WPE one a SpinupWP site rather than
+   a Local site, so the DNS question is answered by the first two connections
+   rather than discovered at site six.
 2. **Which Claude model, and pinned how?** Comparability across runs depends on
    it, and it belongs in the run metadata alongside the adapter version.
 3. **How is the halted site handled?** CV-E-01 requires E halted. A halted site
