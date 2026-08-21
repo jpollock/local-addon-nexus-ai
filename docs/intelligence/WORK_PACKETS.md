@@ -27891,3 +27891,79 @@ shell's Node. **`npm run rebuild` is required before loading this in Local.**
 
 **Ruling request 2 remains unruled** and only its conservative half is
 implemented (pass the caller's task through; never mint at dispatch).
+
+---
+
+## WP-57 · THE EXHIBIT — real ledger, and what it does NOT prove (2026-08-21)
+
+The gate report recorded the live exhibit as owed. **MCP and the CLI cannot
+produce it**, and the reason is worth writing down rather than rediscovering:
+
+- `nexus agent run` is a GraphQL mutation (`mutation AgentRun`) — it is a
+  remote control for Local's process, not an independent runner.
+- Local loads this addon by SYMLINK from the PRIMARY checkout
+  (`~/Library/Application Support/Local/addons/local-addon-nexus-ai ->
+  …/local-addon-nexus-ai`), which is on `poc/nexintelligence-ux`. So even with
+  Local running, a triggered run executes code that does not contain the frame.
+- Local was not running at the time in any case.
+
+So the constraint is WHICH CODE IS LOADED, not how the run is triggered, and no
+tool call gets around it.
+
+**What was produced instead: a real-ledger exhibit, on WP-18's Layer 6
+precedent** — `tests/e2e-intelligence/replay/wp57-exhibit.ts`, run with
+`npx ts-node -P tsconfig.test.json tests/e2e-intelligence/replay/wp57-exhibit.ts`.
+Same safety properties as `run.ts`, copied rather than reinvented: the live
+ledger is opened `readonly: true` for exactly one `VACUUM INTO`, every write
+lands on the temp copy, and the core boots with in-memory storage so no marker
+is touched.
+
+```
+BEFORE
+  total events                    11184
+  task.run.* events               0
+  agent acts with NO correlation  58
+  incidents with NO correlation   4
+
+SCENARIO A — security-sentinel, cron, two findings, site `a11ycheck` (real)
+  task.run.assigned          actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS  autonomy=autonomous
+  episodic.incident.recorded actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS
+  episodic.incident.recorded actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS
+  task.run.completed         actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS  status=success  autonomy=autonomous
+
+SCENARIO B — auth-probe, cron, clean (the every-two-minutes case)
+  events written by a quiet successful run   0
+
+AFTER
+  total events                    11188  (+4)
+  task.run.* events               2
+```
+
+Four properties, each visible in the output rather than asserted in prose:
+
+1. **One thread.** Four events, one correlation, on a real ledger with 11,184
+   events already in it.
+2. **The bracket is in order** — `assigned` first, `completed` last. This is
+   the `close()` reordering working: `assigned` was flushed by the incident
+   producer, not by `close`.
+3. **One actor, correctly spelled** — `act_security_sentinel`, the format that
+   round-trips through `normalizeProducerId`, and the same id the incidents
+   carry. Two schemes ended, visibly.
+4. **Exactly TWO `task.run.*` events, not three.** The subsumption is real: had
+   `emitScanAct` survived, this run would have emitted `task.run.completed`
+   twice.
+5. **The quiet run wrote zero.** The laziness ruling, on the agent that
+   motivated it.
+
+### WHAT THIS DOES NOT PROVE — and it must not be cited as the smoke
+
+It does not prove that a running Local constructs `AgentRunner` with an
+intelligence core available at that point, that the scheduler path reaches this
+code, or that the Electron ABI is sound. Those need `npm run rebuild`, a Local
+restart, and a run from the UI. **The live smoke is still owed.** The exhibit
+script says the same thing in its own header, so a future reader cannot take it
+for more than it is.
+
+**The existing Layer 6 replay also passes** on this branch — 11,181 events,
+6,369 twins replayed over 388 entities, deterministic — confirming this packet
+disturbs no fold (it adds none).
