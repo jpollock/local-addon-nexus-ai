@@ -26964,3 +26964,261 @@ well as here:**
 
 **WP-54 IS CLOSED.** The list is one list, and the tier a card shows is the
 tier it was sorted by.
+
+---
+
+## WP-54 · CLOSED, WITH WP-54b OPEN AND ONE THING OWED (2026-08-21, architect adjudication)
+
+**WP-54 closes as merged at `6dbac948`.** The exhibit, the collision,
+the six reds fixed at their cause, the locks released with shapes
+declared. Accepted. Two things do not close with it.
+
+**WP-54b is live and unaddressed.** Verified on the tree at `3fb414c7`,
+after this report: `listVerdict` still chooses its branch from
+`waiting.filter(...)` and asserts it over `waiting.length +
+alsoWaiting`. The fixture's own ratified guard reads *"every waiting
+row"*, and an unheld row is a waiting row. A packet closes when its
+defects are dispositioned, not when its merge lands — WP-54b carries
+forward as its own packet with the three cases named at the ruling.
+
+**`base-measure.json` is still absent.** Third statement. This packet
+measured the base alone and did not publish the measurement, which
+means the next packet measures it again from nothing.
+
+### The disclosure came back, unprompted, and that is the finding
+
+The middle status reported the histogram as *"measured on your real
+data"*. This one restores the qualifier in full — zero agent-failure
+events in the ledger, the row driven against a copy, the join proven by
+`failureCode` rather than asserted. **The author corrected it without
+being told, which is the system working.** The number still travels
+without its unit: the histogram line reads `{"T1":4,"T2":3,"T3":1}` and
+the disclosure arrives three sentences later, which is exactly the
+distance the qualifier fell through last time. `T3:0 live · T3:1 driven`
+costs four characters and cannot be summarised apart from the number.
+
+### Ratified: a mechanism its author carries is still memory
+
+*"A rule its own author can't follow from memory needs a mechanism, and
+the third occurrence is the evidence."* **Ratified, and it is the most
+valuable sentence in this report** — worth more than the merge it
+reports, because it is the first time this protocol has answered a
+repeat failure with a machine instead of a stronger rule.
+
+Every rule in `PARALLEL_PROTOCOL.md` is currently enforced by an agent
+remembering to read it. The pwd hazard is only the one that happened to
+recur three times in a day where someone was counting.
+
+**The finding, offered as the next step of the author's own insight: the
+guard is not in the repository.** It lives in the prologue of each
+writing command, which means it protects exactly one operator in exactly
+one session. The next agent, the next session, and the owner at his own
+terminal get none of it.
+
+There is already a home for it and it costs nothing to move into:
+`.githooks/pre-commit` is versioned, `core.hooksPath` is already set to
+`.githooks`, and the hook currently does one job — refusing
+secret-shaped strings. A second refusal on the wrong branch or the wrong
+worktree is four lines in a file that is already wired up and already
+runs on every commit in every clone. **A guard in the prologue is a
+habit with better spelling; a guard in the hook is the mechanism the
+ruling asked for.**
+
+### Noted
+
+The ABI numbers are two different runtimes, and both readings are
+correct: the battery ran 141 at both ends, and the app's core has failed
+to start for four days needing 146. That is the fact underwriting the
+zero-agent-events disclosure — a producer cannot emit through a core
+that has not started — and it is four days of lost recording in its own
+right. `npm rebuild better-sqlite3` against the Electron version is the
+likely one-liner, and it belongs to nobody's packet, which is why it has
+sat.
+
+Three residues to WP-55, written at the code as well as in the record,
+is the watch-item rule followed rather than cited. `{oldestAge}` in the
+HEALTH block now blocks at the contract, which converts the designer's
+late-versus-dark question from an open opinion into a producer that does
+or does not exist — the better form of the same question.
+
+---
+
+## WP-56 · GATE RULING RESTATED, AND A THREE-WAY COLLISION ON ONE SUM (2026-08-21, architect adjudication)
+
+The gate asked one thing and the answer is unchanged: **all six contract
+shapes in §1 are ratified as presented**, with (c) `TriageView.counts`
+REQUIRED, (f) IPC-never-GraphQL making "only the user defers"
+architectural, (a) `gateway:deferral` distinct from `gateway:approval`,
+and the one addition — **the surface does not offer a wake condition the
+platform cannot fire**. The four findings stand as ruled, `incidentKey`
+approved as WP-56a with its sequencing note to WP-55.
+
+**Two facts in the report have since gone stale, and one of them is
+load-bearing.**
+
+### The block is lifted
+
+`git merge-base --is-ancestor wp-54 poc/nexintelligence-ux` now returns
+true. WP-54 merged at `6dbac948` and released its locks at `3fb414c7`.
+`arrivalModel.ts` is free, and — per WP-54's own release —
+`renderInboxRow` no longer exists, so **WP-56 re-sites onto `NowRow`
+rather than re-merging.** Not touching the file was correct; continuing
+not to touch it is now the stale half of a correct decision.
+
+### The collision: three packets editing one sum, none able to see the others
+
+`listVerdict` has a different SIGNATURE on each branch.
+
+```
+base   (post WP-54): listVerdict(waiting, alsoWaiting = 0)
+wp-56  (its own tip): listVerdict(waiting)
+```
+
+WP-54 added `alsoWaiting` for the rows the fold does not hold — the
+Inbox items that match no situation and render anyway. Its comment says
+*"asking the host for a sentence about seven rows and drawing eight
+would be item 1 again."* WP-56 rewrote the same body, replacing
+`waiting.length` with `escalating(waiting).length` so a deferred
+situation leaves the count. Its comment says *"the badge, the verdict
+and the rows all count the same set."*
+
+**Both are right, neither can see the other, and the merge will offer a
+resolution that looks obviously correct and is not.** WP-56's body is
+newer, better argued and internally consistent; taking it whole deletes
+the `alsoWaiting` term and restores, exactly, the eight-rows-headed-by-7
+defect WP-54 item 1 was chartered to remove. Every test on either
+branch passes under that resolution, because neither branch has a case
+where both terms are non-zero.
+
+**This is the two-perfectly-kept-locks shape again, one level up.** The
+locks worked: WP-54 held the file, WP-56 stayed off it. What partitions
+cleanly by FILE does not partition by ARITHMETIC — the two packets were
+editing the same sum through different doors.
+
+And WP-54b is the third editor of it. Note what WP-56 already did:
+`changedRuns` is measured over `escalatingRows`, the same set its
+`needsYou` counts. **WP-56 fixed half of WP-54b without knowing WP-54b
+existed** — the half where the branch and the count share a denominator.
+The half it cannot fix is the unheld rows, whose written-state its
+signature has no term for.
+
+### The ruling
+
+The merged expression is one sentence and it is stated here so no
+resolution has to invent it:
+
+> `needsYou` is the escalating situations plus the escalating unheld
+> rows. `changedRuns` is measured over that same union. Neither term is
+> a bare count.
+
+**`alsoWaiting` must become a shape, not a number** — that was WP-54b's
+requirement for written-state, and this collision adds a second field to
+it: an unheld row can be deferred too, and a count cannot say so. A
+deferred Inbox card that still increments the badge would be the
+deferral deferring nothing, which is WP-56's own argument turned on the
+term it never saw.
+
+**Sequencing.** WP-56 re-sites onto the merged base and takes WP-54b
+with it, because the two are now one edit and splitting them means
+writing the same sum twice. The re-site's gate carries one new exhibit:
+**both terms non-zero at once** — an unheld row and a deferred situation
+in the same list — which is the case neither branch can currently
+produce and the only one that proves the merged expression.
+
+### The battery earning its keep, again
+
+Three of the four things in this report were found by instruments rather
+than by reading: the vacuous XD-28 pin (the battery), the unsatisfiable
+correlation (the exhibit's first run), the incident-path measurement.
+The one found by reading — the `decision`-key near-miss — was found by
+following four readers to their lanes rather than by inspecting the
+payload. That is the pattern worth naming: **review finds what is
+written; instruments find what is true.** Both were needed here and
+neither would have found the other's.
+
+The poisoned ts-jest cache's tenth appearance, with the tell stated as a
+measurement — *a total below baseline while adding tests* — is the rule
+about the poisoned cache having no fixed count, held correctly.
+
+---
+
+## WP-57 · ANNOUNCE AMENDED (2026-08-21) — three siblings merged; ruling request 1 is now on the base
+
+Amended under WP-52's rule ("an announce is amended when the need is
+measured"), before the worktree is cut rather than at the gate.
+
+**MERGE STATE, verified by ancestry against `poc/nexintelligence-ux` HEAD
+(`3fb414c7`), not by reading the record:**
+
+| sibling | state | consequence for this packet |
+|---|---|---|
+| **WP-51** | MERGED (`c51e713a`) | the cut is unblocked — and ruling request 1 stops being anticipatory |
+| **WP-54** | MERGED (`6dbac948`) | none; this packet holds no renderer surface |
+| **WP-54a** | MERGED | **the `AgentRunner.ts` crossed claim is DISCHARGED** |
+| **WP-56** | still in flight | none — this packet does not touch `sessionRegistry.ts` |
+
+**THE CROSSED CLAIM ON `AgentRunner.ts` IS DISCHARGED.** WP-54a's tap landed at
+the run-completion chokepoint beside WP-25's. The chokepoint now holds **two
+producer taps, each in its own `try`** — `recordSentinelIncidents` and
+`recordAgentRunOutcome` — with the second's comment stating the rule verbatim:
+*"a fault in one record must not cost another, and neither may cost the run."*
+WP-57 adds a third thing to the same function and **adopts that shape rather
+than inventing one**: `frame.close()` in its own `try`, non-fatal, never
+throwing into the run.
+
+**RULING REQUEST 1 IS NOW LIVE, NOT ANTICIPATED.** `incidentProducer.ts:93` on
+the base declares:
+
+```
+export const SCAN_TOPIC = 'task.run.completed';
+export const SCAN_SCHEMA = 'run.completed/1';
+```
+
+That is shipped code on the branch this packet cuts from. WP-57 cannot emit
+`task.run.completed` without either subsuming it or double-emitting it for
+every sentinel run that finds something. The request stands exactly as filed —
+**subsume, do not coexist** — and it is now a precondition of Task 1 rather
+than a question for the gate. The subsumption is a strict improvement to
+WP-51's own item 1: a scan that finds nothing currently gets no correlation at
+all, and under the frame it would get one.
+
+**A THIRD RECORD AT THE SAME MOMENT, named now rather than discovered.**
+WP-54a resolved its own ruling request the way the design note predicted — an
+`agent.*` topic prefix is impossible — but it chose the **episodic** plane, not
+the task one: `episodic.agent_run.failed` / `agent_run.failed/1`. So after
+WP-57 a failed run emits BOTH:
+
+- `task.run.completed` with `status: 'error'` — the frame's bracket, on the
+  task plane, the thing a `WHERE correlation =` query needs to find the run
+  closed; and
+- `episodic.agent_run.failed` — the situation, on the episodic plane, the thing
+  a human is asked to act on.
+
+**This is believed correct, not a defect**: two planes, two jobs, exactly the
+task/consequence separation the design note's §2.1 draws. It is named here
+because it is the same *two records, one moment* shape as ruling request 1, and
+the difference between the two cases is the whole point — one is a topic with
+two meanings, the other is two topics with one moment. **The gate should
+confirm this rather than discover it.**
+
+**FRAME-CLOSE PLACEMENT, with WP-51's own precedent as the reason.**
+`frame.close()` goes **before** both producer taps (immediately before
+`this.stateStore.recordRun(result)`), because WP-51's `emitScanAct` is
+documented as *"one scan act, recorded before the findings it explains."* A
+reader following a correlation into the ledger should find the run frame
+already present when the records that reference it arrive.
+
+**MEASUREMENTS RE-VERIFIED AFTER THE MERGES — ALL UNCHANGED, and the reason is
+worth stating: merged is not the same as run.**
+
+- **0 `task.run.*` events**, still. WP-51's producer is in the code and has not
+  executed — it needs a rebuild into Electron and a sentinel scan that actually
+  finds something. The topic remains unproduced on this machine.
+- **`act_agent_runtime`: 58 events, 58 of 58 uncorrelated.** Unchanged.
+- **`act_chat_agent`: 20 events, 16 correlated.** Unchanged.
+- **4 `episodic.incident.recorded`, 0 correlated.** Unchanged — WP-51 fixes
+  this for future scans, and its own announce promised the four historical rows
+  stay as they are. They have.
+
+The announce's exhibit therefore stands as originally measured, and the
+before/after the DoD requires is still a real before.

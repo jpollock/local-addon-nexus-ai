@@ -886,3 +886,53 @@ last time the check means anything.
 
 **Run the battery in a worktree cut at the commit under test**, where
 nothing else writes. Same isolation, and the same reason, as a packet's.
+
+## A mechanism its author carries is still memory (WP-54)
+
+The pwd hazard fired three times in one day, twice after its own rule
+was written into this file, once while committing that rule to the wrong
+worktree. The packet's answer was right and is ratified: **a rule its
+own author cannot follow from memory needs a mechanism, and the third
+occurrence is the evidence.**
+
+The mechanism it built was a two-line guard in the prologue of each
+writing command — which protects one operator in one session and nobody
+else. **A guard that travels with the person is a habit with better
+spelling.** A guard in the repository is the mechanism.
+
+The test: could the next agent, starting cold on a fresh clone, violate
+this rule? If yes, the rule is still enforced by memory — somebody
+else's. `.githooks/pre-commit` is versioned and `core.hooksPath` already
+points at it, so this repository's answer to any refusal that can be
+mechanised is four lines in a file that already runs everywhere.
+
+And the general form, for every rule in this document: each one is
+currently enforced by an agent remembering to read it. That is
+acceptable for judgement and unacceptable for venue, identity and
+arithmetic — the three kinds of failure that recur, because they are the
+kinds a careful reader still commits while reading carefully.
+
+## Locks partition files; they do not partition arithmetic (WP-54 / WP-56)
+
+Both locks were kept perfectly. WP-54 held `sessionRegistry.ts` and
+edited `listVerdict` to add a term for rows the fold does not hold.
+WP-56 stayed off the file, cut from an earlier base, and rewrote the
+same function to subtract deferred rows. Neither branch has a test where
+both terms are non-zero, so **every test passes under the resolution
+that silently drops one of them.**
+
+A file lock is an exclusion on WRITES. It says nothing about two packets
+computing the same quantity, and the merge presents the newer body as
+the obvious resolution precisely when the older one carried a term the
+newer author never saw.
+
+**A packet that changes the meaning of a shared quantity — a count, a
+sum, an identity, a sort key — announces the QUANTITY, not only the
+file.** The announce names the expression before and after. Two packets
+announcing the same quantity is a sequencing decision for the architect,
+and it is cheap; discovering it at the merge is not.
+
+The tell for the resolver: **a signature that differs between the two
+branches is a contract change, and a contract change never resolves by
+choosing the better-commented body.** Write the merged expression out as
+a sentence first, then make both bodies satisfy it.
