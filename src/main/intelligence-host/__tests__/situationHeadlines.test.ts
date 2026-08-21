@@ -30,6 +30,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 
 import {
+  contradictedByTheRecord,
   fillSituationSentence,
   guardHolds,
   listVerdict,
@@ -102,7 +103,8 @@ const CASES: Array<{ name: string; input: SituationClassInput }> = [
   { name: 'incident, no run', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: null } },
   { name: 'incident, linked to a run', input: { kind: 'incident', done: 0, failed: 0, total: 1, gate: null, runId: 's1' } },
 
-  // --- agent.stuck: no producer emits one, so it is ONLY reachable here ----
+  // --- agent.stuck: WP-54a gave it a producer; these are still its ONLY
+  // --- exercise of the corners the producer cannot supply ------------------
   { name: 'agent failure', input: { kind: 'agentFailure', done: 0, failed: 0, total: 0, gate: null, runId: null } },
   { name: 'agent failure with writes', input: { kind: 'agentFailure', done: 4, failed: 1, total: 5, gate: gate(), runId: 's1' } },
 ];
@@ -215,17 +217,46 @@ describe('the guards — two copies of one rule, pinned together', () => {
     }
   });
 
-  test('agent.stuck is selectable, and nothing in this fold can produce its input', () => {
-    // The class is carried and its selector works; what it lacks is a producer.
-    // Pinning both halves means the day an agent-failure producer lands, the
-    // sentence is already correct — and until then this is the ONLY thing that
-    // reaches it, which is why the pin is here rather than in a render test.
+  test('agent.stuck is selectable, AND the fold can now produce its input', () => {
+    // WP-54a AMENDED THIS PIN, and the amendment is the finding it closes.
+    //
+    // It used to read "…and nothing in this fold can produce its input", with
+    // the note that this file was the ONLY thing reaching the class. That was
+    // true when it was written and it is the shape the architect's finding 4
+    // named: "a class the designer specified, the fold cannot emit, and the
+    // only reason it is on screen at all is the duplication defect that WP-54
+    // is about to remove." A pin that states an absence must be amended the day
+    // the absence is filled, or it becomes a test asserting the opposite of the
+    // code.
+    //
+    // The selector half is unchanged and still belongs here (WP-46: drive the
+    // builder directly). The producer half now lives in
+    // `agentStuckSituation.test.ts`, ledger-driven end to end.
     const stuck: SituationClassInput =
       { kind: 'agentFailure', done: 0, failed: 0, total: 0, gate: null, runId: null };
     expect(selectSituationTemplate(stuck, FULL_BAG)?.id).toBe('agent.stuck');
-    // `Situation.kind` has exactly two members, and neither is `agentFailure`.
-    const kinds: Array<Situation['kind']> = ['session', 'incident'];
-    expect(kinds).not.toContain('agentFailure' as never);
+    // `Situation.kind` carries `agentFailure` now — the one-word change that
+    // made the class reachable.
+    const kinds: Array<Situation['kind']> = ['session', 'incident', 'agentFailure'];
+    expect(kinds).toContain('agentFailure');
+  });
+
+  test('the ratified ask is REFUSED when the record holds no timeout, not shortened', () => {
+    // `contradictedByTheRecord`'s second arm, driven directly across the two
+    // states no other test in this file can reach: the guard holds either way
+    // and the HEADLINE is fillable either way, so `selectSituationTemplate`
+    // returns the class in both — the refusal is the only thing standing
+    // between a real row and "It timed out after ." on a run that errored.
+    const stuck: SituationClassInput =
+      { kind: 'agentFailure', done: 0, failed: 0, total: null, gate: null, runId: null };
+    const selected = selectSituationTemplate(stuck, { agentId: 'auth-probe' });
+    expect(selected?.id).toBe('agent.stuck');
+    expect(contradictedByTheRecord(selected, null, { agentId: 'auth-probe' })).toBe(true);
+    expect(contradictedByTheRecord(selected, null, { agentId: 'auth-probe', timeout: '300s' })).toBe(false);
+    // …and the first arm is untouched by the widening: a class-1 template with
+    // a gate is still contradicted, with or without a bag.
+    expect(contradictedByTheRecord(SITUATION_TEMPLATES[0], gate())).toBe(true);
+    expect(contradictedByTheRecord(SITUATION_TEMPLATES[0], null)).toBe(false);
   });
 });
 
