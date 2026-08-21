@@ -84,6 +84,24 @@ export const IPC_CHANNELS = {
   RETURN_SESSION: `${ADDON_PREFIX}:return:session`,
   RETURN_CHANGED_SINCE: `${ADDON_PREFIX}:return:changed-since`,
   RETURN_SNAPSHOT: `${ADDON_PREFIX}:return:snapshot`,
+  /**
+   * WP-56 · The deferral affordance — the only two WRITES on this surface.
+   *
+   * The four reads above are a thin bridge over one fold. These are not reads,
+   * and they are separate channels rather than one taking an action name for
+   * the reason stated above: a channel taking a method name would put a router
+   * in the bridge.
+   *
+   * **THEY ARE IPC, NEVER GRAPHQL, AND THAT IS THE ENFORCEMENT OF "ONLY THE USER
+   * DEFERS."** The CLI and the renderer hit the identical GraphQL endpoint with
+   * the identical bearer token, so a mutation the CLI merely "does not call"
+   * would not be a boundary at all — the same reasoning that keeps
+   * `TRUST_EXTERNAL_HOST_KEY` off the schema. An agent reaches tools and
+   * GraphQL; it does not reach `ipcMain`. So an agent cannot quiet its own gate,
+   * which is the self-promotion power inverted and the thing cycle two forbade.
+   */
+  RETURN_DEFER: `${ADDON_PREFIX}:return:defer`,
+  RETURN_END_DEFERRAL: `${ADDON_PREFIX}:return:end-deferral`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
   GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
   START_SITE: `${ADDON_PREFIX}:start-site`,

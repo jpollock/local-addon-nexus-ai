@@ -310,6 +310,242 @@ export function recordApprovalRationale(record: ApprovalRationaleRecord): string
 }
 
 // ---------------------------------------------------------------------------
+// WP-56 · The deferral — a session act on the run's own record
+// ---------------------------------------------------------------------------
+
+/**
+ * `source.system` for a deferral. A DISTINCT system from `gateway:approval`,
+ * deliberately: a deferral is not a consent decision, and a provenance reader
+ * that could not tell them apart would be unable to answer "did anyone actually
+ * approve this?" — which is the one question this family exists to answer.
+ *
+ * **No health SLO line is added for it, and the reasoning is `gateway:approval`'s
+ * own, verbatim in substance** (`health.ts`, the NOTE beside `gateway:tool-call`):
+ * it fires only when a human defers something, which many users will never do,
+ * so a liveness line for it would read "nothing yet" forever on a perfectly
+ * healthy machine. `unlistedProducersLine` still surfaces it as an unmonitored
+ * source once it appears — at verdict `OK`, so it can never darken the reserved
+ * row — which is the honest treatment: visible, without a liveness claim nobody
+ * can meet.
+ */
+export const DEFERRAL_SYSTEM = 'gateway:deferral';
+
+/** `payload.source` — the discriminator, mirroring the approval's own. */
+export const DEFERRAL_PAYLOAD_SOURCE = 'deferral-card';
+
+/** What a deferral record does. `defer` opens one; `end` supersedes it. */
+export type DeferralAct = 'defer' | 'end';
+
+/**
+ * WHEN A DEFERRAL WAKES — "a deferral may carry a derivable wake condition, and
+ * a woken deferral ends loudly" (cycle two, 2026-08-18).
+ *
+ * Two kinds, because the ruling names two: "a time, or a record condition (the
+ * window opening, a producer coming back)". A `record` condition names WHAT
+ * derives it and carries no value of its own — the same shape and the same
+ * discipline as `DerivedDeadline.from`, whose comment is the precedent: never
+ * author a value beside the thing that derives it.
+ *
+ * An UNCONDITIONED deferral is permitted and is represented by the ABSENCE of
+ * this, never by a `kind: 'none'`. "The item keeps its tier and place forever at
+ * low intensity, which is your never-a-dismissal rule holding."
+ */
+export type DeferralWake =
+  | { kind: 'time'; at: string }
+  | { kind: 'record'; from: string };
+
+export interface DeferralRecord {
+  /**
+   * THE SITUATION being deferred — never one of its parts.
+   *
+   * XD-28: "deferral applies to the situation, never to its parts — deferring
+   * one member while its siblings escalate would split a situation the platform
+   * just asserted is one thing." The record names a situation id and the fold
+   * matches it against situation ids alone, so a record naming a part's event id
+   * resolves to nothing and the situation goes on escalating. That is the rule
+   * enforced by what the fold can look up, rather than by a check someone has to
+   * remember to write.
+   */
+  situationId: string;
+  /**
+   * The turn's TaskId — the run this is recorded ON.
+   *
+   * Cycle two: "recorded on the run (the rationale family)". This becomes the
+   * envelope's `correlation`, which is how every other run-scoped fact in this
+   * ledger joins to its run.
+   */
+  taskId?: string;
+  /** The user's own words. Required, and never composed here. */
+  reason: string;
+  /** Absent ⇒ unconditioned, which is permitted and simply never wakes. */
+  wake?: DeferralWake | null;
+}
+
+export interface DeferralEndRecord {
+  situationId: string;
+  taskId?: string;
+  /** The deferral event this ends. Superseding, never mutating. */
+  supersedes: string;
+}
+
+/**
+ * A DEFERRAL PAYLOAD CARRIES NO `decision` KEY, AND THAT IS LOAD-BEARING RATHER
+ * THAN A STYLE CHOICE. Read this before adding one.
+ *
+ * Four readers fold `task.rationale.recorded`, and every one of them keys off
+ * `decision`:
+ *
+ *   1. `foldProcedureCursor` (`procedureCursor.ts:263`) — `if (typeof
+ *      payload.decision !== 'string') continue`.
+ *   2. `abortRecord` (`procedureStream.ts:403`) — `denied` sets the abort,
+ *      `approved` clears it.
+ *   3. `deriveCanaryPolicy` (`procedureView.ts:703`) — keys off `canary_policy`.
+ *   4. `deriveApprovals` (`sessionRegistry.ts`) — reads the cursor, so (1) covers it.
+ *
+ * MEASURED, and both branches of (1) are hostile to a deferral that carries a
+ * decision. With `decision: 'deferred'` and no `checkpoint` key, the record
+ * enters the LEGACY lane, where `legacyLatest.set(payload.tool, 'deferred')`
+ * **overwrites a standing legacy approval for that tool** — so deferring a
+ * situation would silently REVOKE consent already given. With a `checkpoint`
+ * id, it enters the BOUND lane, where any decision that is not the wanted one
+ * is pushed to `denied` — and `deriveCheckpointStates` rule 2 is that "a denial
+ * is an abort", so deferring would ABORT the run. One key, two ways to convert
+ * "not now" into "no".
+ *
+ * So the payload carries no `decision`, and it is honest for exactly the reason
+ * that makes it safe: **a deferral is not a consent decision.** It is a recorded
+ * statement about this item's urgency. Guard (1) already says "an event that
+ * records no decision is not a decision", and that guard is the one that keeps
+ * all four readers still. `deferralIsNotConsent.test.ts` drives all four with a
+ * real deferral event and pins that none of them move.
+ */
+function emitDeferralRecord(
+  act: DeferralAct,
+  situationId: string,
+  taskId: string | undefined,
+  extra: Record<string, unknown>,
+  causation?: string
+): string | undefined {
+  try {
+    const core = getIntelligenceCore();
+    if (!core) return undefined; // core optional by contract — degrade silently
+    if (!situationId) return undefined;
+
+    // ONLY THE USER DEFERS. "An agent quieting its own gate is the
+    // self-promotion power inverted" — so a non-human actor is refused HERE, at
+    // the write, as well as dropped at the fold. Two enforcements rather than
+    // one because they fail differently: this one means the record never
+    // exists, and the fold's means a record that somehow does exist can still
+    // never lower an escalation.
+    const actor = core.identity?.actor() ?? { id: 'act_local_operator', kind: 'human' as const };
+    if (actor.kind !== 'human') return undefined;
+
+    const event = core.emitter.emit({
+      // The click IS observed live: the fact ("this person deferred this now")
+      // is true at the moment the call returns. cp.observed-at's "now ONLY for
+      // genuinely live observation" case, same as the approval beside it.
+      observed_at: new Date().toISOString(),
+      topic: RATIONALE_RECORDED_TOPIC,
+      schema: RATIONALE_RECORDED_SCHEMA,
+      // A deferral is about a SITUATION, not about a site. Stamping it with the
+      // situation's places would make an entity-scoped query return a fact that
+      // is not about that entity.
+      entity: {},
+      actor,
+      // Provenance: a deferral is elicited intent, not a platform observation —
+      // the approval's own classification, for the same reason.
+      source: { class: 'intent', system: DEFERRAL_SYSTEM, trust: 'elicited' },
+      ...(taskId ? { correlation: taskId } : {}),
+      ...(causation ? { causation } : {}),
+      payload: {
+        source: DEFERRAL_PAYLOAD_SOURCE,
+        act,
+        situation: situationId,
+        ...extra,
+      },
+    });
+
+    core.scheduleFolds();
+    return event.id;
+  } catch {
+    // Non-fatal by construction, like every producer on this seam.
+    return undefined;
+  }
+}
+
+/**
+ * Record a deferral. Returns the event id, or `undefined` when nothing was
+ * recorded.
+ *
+ * REFUSES rather than degrades, on three inputs, because each degradation would
+ * be worse than the refusal:
+ *
+ *  - **No reason.** The ruling records one ("say why, so the record carries
+ *    it"); a deferral with an empty reason is a dismissal with a nicer name.
+ *  - **A malformed wake.** Dropping an unparseable condition would silently
+ *    convert a deferral the user CONDITIONED into one that never wakes —
+ *    exactly the furniture problem this affordance exists to prevent, created
+ *    by the affordance itself.
+ *  - **A non-human actor** — see `emitDeferralRecord`.
+ */
+export function recordDeferral(record: DeferralRecord): string | undefined {
+  const reason = typeof record.reason === 'string' ? record.reason.trim() : '';
+  if (!reason) return undefined;
+
+  const wake = record.wake ?? null;
+  if (wake !== null) {
+    if (wake.kind === 'time') {
+      if (typeof wake.at !== 'string' || !Number.isFinite(Date.parse(wake.at))) return undefined;
+    } else if (wake.kind === 'record') {
+      if (typeof wake.from !== 'string' || !wake.from.trim()) return undefined;
+    } else {
+      return undefined;
+    }
+  }
+
+  return emitDeferralRecord('defer', record.situationId, record.taskId, {
+    // MASKED, not withheld and not verbatim. The reason is free text a person
+    // typed into a box, and it lands in a sink whose `task.*` events are NEVER
+    // deleted (architecture §4.4) — so the value-shape layer runs on it, exactly
+    // as it runs on `error`. It is not on `FREEFORM_FIELDS` because it is body
+    // text rather than executed syntax the caller composes, which is the line
+    // that list draws (CLAUDE.md, "Withholding is the primary defense").
+    //
+    // The approval's `prompt` beside this is deliberately NOT masked, and the
+    // difference is real: `cardText` is copy the PLATFORM composed and handed to
+    // the user, so it can carry nothing the user typed. This can.
+    //
+    // The cost, stated rather than hidden: a reason that trips the masker no
+    // longer reads back as the user's exact words. That is visible ([REDACTED])
+    // rather than silent, and it is the correct trade against a credential
+    // living forever in an append-only ledger.
+    reason: maskSecretsInString(reason),
+    wake,
+  });
+}
+
+/**
+ * End a deferral early — the user's second statement, superseding the first.
+ *
+ * "Ending it early is a second statement that supersedes the first — recorded
+ * the same way, superseding never mutating" (cycle two §3). The `causation`
+ * edge to the deferral event is what makes it a supersession rather than an
+ * unrelated act, and it is the resolution pattern the incident producer already
+ * uses. Nothing the agent does can end a deferral any more than start one, which
+ * is why this refuses a non-human actor on the identical check.
+ */
+export function recordDeferralEnded(record: DeferralEndRecord): string | undefined {
+  if (!record.supersedes) return undefined;
+  return emitDeferralRecord(
+    'end',
+    record.situationId,
+    record.taskId,
+    { supersedes: record.supersedes },
+    record.supersedes
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Actors (ADR-14: actor.id + actor.via)
 // ---------------------------------------------------------------------------
 
