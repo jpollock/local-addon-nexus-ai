@@ -25361,3 +25361,209 @@ their tiers — four Tier 1, three Tier 2, one Tier 3 — because that
 ordering is the proof the two packets compose rather than merely
 compile, and tier 3 having its first real resident is the widening's
 whole justification arriving.
+
+---
+
+## WP-51 · MERGE REPORT — the badge arithmetic, row by row; the condition carried forward (2026-08-21)
+
+**Merged at `c51e713a`. Two conflicts, both resolved by taking every side.
+22/22 battery re-driven ON THE MERGED TREE. The gate's question is answered
+below with every event id printed, and the gate's condition is carried forward
+to the packet that opens the file first — which is WP-54, not this one.**
+
+### 1 · RECEIPTS
+
+```
+git diff --stat c51e713a^1 c51e713a
+
+ docs/intelligence/WORK_PACKETS.md                  | 356 ++++++++++++++
+ scripts/wp51-battery.py                            | 346 ++++++++++++++
+ scripts/wp51-coalesce-exhibit.ts                   | 277 +++++++++++
+ .../comparator/__tests__/armFromSelection.test.ts  |  34 ++
+ src/main/comparator/armFromSelection.ts            |  20 +-
+ .../__tests__/armingCause.test.ts                  | 525 +++++++++++++++++++++
+ .../__tests__/incidentProducer.test.ts             | 192 ++++++++
+ .../__tests__/procedureTurnCarrier.test.ts         |  93 ++++
+ .../__tests__/sentinelCausation.test.ts            | 236 ++++++++-
+ src/main/intelligence-host/chatAssembly.ts         |  46 +-
+ src/main/intelligence-host/incidentProducer.ts     | 103 ++++
+ src/main/intelligence-host/procedureArming.ts      |  64 ++-
+ src/main/intelligence-host/sessionRegistry.ts      | 290 +++++++++++-
+ src/main/ipc-handlers.ts                           |   5 +-
+ 14 files changed, 2577 insertions(+), 10 deletions(-)
+```
+
+### 2 · THE GATE'S QUESTION — 8 → 3, ROW BY ROW
+
+Measured on ONE ledger, not two runs of two copies: `--append-scan` produced
+the eight-row state, and `--append-containment` was then run **against that same
+copy**. The exhibit now prints each part's event id, so every line below is read
+off two printouts rather than reasoned about. (`scripts/wp51-coalesce-exhibit.ts`,
+reproducible.)
+
+| # | the eight-row state | id | becomes | on what link |
+|---|---|---|---|---|
+| 1 | SESSION · plugin update | `sess_task_01M09M7ZHVS6XM58VA9G8TWPFH` | **row 1**, unchanged | — |
+| 2 | SESSION · cp.backup | `sess_task_01M0BBHDGE8W4FJM5BJJ5DVAEF` | **row 2**, unchanged | — |
+| 3 | INCIDENT · historical | `evt_01M0BFNDD6XS21X8HTEMGY4NQV` | a PART of row 3 | `cause.answers` |
+| 4 | INCIDENT · historical | `evt_01M0BFNDD6XS21X8HTEMGY4NQW` | a PART of row 3 | `cause.answers` |
+| 5 | INCIDENT · historical | `evt_01M0BFNDD6XS21X8HTEMGY4NQX` | a PART of row 3 | `cause.answers` |
+| 6 | INCIDENT · historical | `evt_01M0BFNDD7WPMW04MSRM5B9TZ2` | a PART of row 3 | `cause.answers` |
+| 7 | SESSION · containment | `sess_task_01M0BJNBBQA1GABY2TFQ42H6B8` | **row 3**, now carrying 8 incident parts | — |
+| 8 | INCIDENT · coalesced ×4 | `task_01M0JPRKZCQT5RRS3KBNB4HCM1` | **DISSOLVES** — its four members each become parts of row 3 | `cause.answers`, per MEMBER |
+
+Row 8's four members, each named individually by the arming:
+`evt_01M0JPRKZCQT5RRS3KBNB4HCM3`, `…HCM4`, `evt_01M0JPRKZDQWHA5TNP6638ACZC`,
+`…ACZD`.
+
+**8 − 5 = 3, and the fifth row is the interesting one.** Four historical
+incident rows leave because a run named them. The coalesced row leaves for a
+different reason, and it is the one that would not have been guessable:
+**coalescing is a fold over the ORPHAN set.** An incident a run answers is no
+longer an orphan, so it leaves the group; when every member leaves, the group
+has nothing to be derived from and ceases to exist. The row did not move into
+the run — it stopped existing, and its members joined the run one at a time.
+
+**That is now pinned rather than described** (`armingCause.test.ts`, three
+cases): naming two of four SPLITS the group (the run gains two parts, the group
+re-derives over the remaining two, `memberCount: 2`); naming three leaves a
+situation of ONE carrying its own event id with `linkKind: null`, because
+nothing was folded; naming all four dissolves the row. The badge's arithmetic
+is therefore checkable at any partial claim, not only at the two endpoints.
+
+### 3 · THE CONDITION — AND THIS PACKET IS NOT THE ONE THAT OPENS THE FILE
+
+The ruling: *"the fixture is corrected to carry them, in this packet or WP-55's,
+whichever opens the file first."* **Measured at merge: WP-54 opens it first.**
+`git merge-base --is-ancestor wp-54 poc/nexintelligence-ux` says NO — WP-54 is
+unmerged, its branch is live at `c6cc37d3`, and its own announce locks
+`from-designer/fixtures/situation-headlines.js` because every string it changes
+goes through the generator. WP-51 does not open that file at all. Reaching into
+a live sibling's locked artifact to correct it would be the thing the lock
+exists to prevent, and its agreement pin runs over the very case table being
+edited.
+
+**So the correction is carried here in full, as a merge instruction, with the
+exact two lines**, addressed to WP-54 and falling to WP-55 only if WP-54 lands
+without it:
+
+```
+run.waiting.nothing-written
+- guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0'
++ guard: 'row.kind === "run" && done === 0 && failed === 0 && total === 0 && gate === null'      (WP-48)
+
+run.waiting.mid-procedure
+- guard: 'row.kind === "run" && done === 0 && failed === 0 && total > 0 && gate !== null'
++ guard: 'row.kind === "run" && done === 0 && failed === 0 && gate !== null'                      (WP-50)
+```
+
+Verified on the base at merge time: the fixture still carries the reverted
+forms. **And the mechanized half of the new protocol rule has an address:**
+`scripts/generate-situation-copy.ts` already fail-closes on `RATIFIED_IDS`; the
+ruled-content assertion belongs beside it, in `fixtures:situation-copy:check`,
+as a list of amendments that must still be present in the source it reads —
+`gate === null` on class 1, and the absence of `total` from class 2's guard.
+That is the same file WP-55 must touch to reconcile `RATIFIED_IDS` with
+`incident.coalesced`, so the two jobs are one visit.
+
+### 4 · THE TWO CONFLICTS
+
+**`sessionRegistry.ts` — WP-54a landed on the base mid-packet.** Both sides add
+to `foldSessionRegistry`, and the situations array is the three-way context
+conflict WP-54's ruling predicted: each side contributes a distinct element and
+nothing is semantic. Resolved by taking all of it — WP-54a's agent-failure query
+and rows, WP-51's grouping block and its two. `npx tsc -p . --noEmit` clean on
+the result, which is the check that matters here: WP-54's own protocol rule
+("locks partition files; they do not partition types") was written about a type
+collision between these same two packets, and a compile is what catches it.
+
+**`WORK_PACKETS.md` — rebuilt from the three blobs**, never hunk-edited, with
+the ancestor DERIVED rather than assumed and the four-way verification pasted
+from the print:
+
+```
+ancestor  20a01d45   1,409,727 bytes   an exact PREFIX of both sides
+wp-51 append            19,808
+base append             67,727
+1,409,727 + 19,808 + 67,727 = 1,497,262 ; merged is 1,497,262 ; residual 0
+each half an exact SUBSTRING of the result ; chronological order holds
+md5 30fd1aa6c63621a889f9f26ccf29be4d
+```
+
+**The ordering choice, and its one imperfection, disclosed rather than
+smoothed:** the branch's append goes first and the base's second, so the WP-51
+gate ruling ends the file directly after the report it rules on. The cost is
+that this packet's gate report now sits ABOVE WP-54a's announce and report,
+which were written earlier in wall-clock. Contiguity is not negotiable — the
+rule is concatenation from blobs, and interleaving would be hunk-editing — so
+one of the two orderings had to take the anachronism, and the ruling-last
+ordering is the one a reader is served by.
+
+**A documented false alarm, reproduced exactly.** The post-rebuild sweep used
+`b'<<<<<<<' in d` and reported markers present. There are four, all in this
+file's own PROSE about conflict markers — including line 17839, which is a prior
+packet recording *this same false alarm*. The line-anchored sweep (`^<<<<<<<`)
+over every file in the merge is clean. WP-32's rule, met from the other side: a
+pass-condition substring must not be a substring of a failure, and the record
+had already written the warning I then ignored.
+
+### 5 · THE MERGED TREE, MEASURED — AND THE COUNT RECONCILES EXACTLY
+
+The merged tree is a tree neither branch ever tested, so both instruments were
+re-driven on it.
+
+```
+FULL SUITE  (primary, merged c51e713a)   624 suites / 8,621 tests   8,613 passed   2 skipped   6 failed
+BATTERY     (primary, merged c51e713a)   22 killed / 0 survived / 0 anchor-miss, of 22
+                                         CONTROL SURVIVED (correct) · TREE PRISTINE AFTER
+                                         ABI probe identical at both ends
+```
+
+**And the arithmetic is checkable rather than asserted.** The base alone was
+measured in a scratch worktree at `9637ff92` — the merge's first parent — so
+both sides carry the same 12-skipped embedding boundary and the totals compare
+directly:
+
+```
+base alone      9637ff92 :  623 suites / 8,581 tests
+WP-51's delta            :   +1 suite  /   +40 tests   (armingCause.test.ts, and 40 new cases)
+expected merged          :  624 suites / 8,621 tests
+MEASURED merged c51e713a :  624 suites / 8,621 tests    <- exact, no residual
+```
+
+The skipped column moves 12 → 2 across the worktree/primary boundary in the
+documented direction and with the measured cause (WP-52: `models/` carries only
+the tracked `bge-small-en-v1.5` in a worktree; `all-MiniLM-L6-v2-quantized` is
+untracked and lives in the primary alone), so ten embedding tests move from
+skipped to passed. The six failures are the inherited
+`situationHeadlines.test.ts` reds — identical in count and identity on the base
+alone, on the branch, and on the merge — and they are WP-55's to reconcile.
+
+### 6 · THE RULING'S OTHER ITEMS, ACKNOWLEDGED
+
+- **WP-51a** (the fold never supersedes a resolved incident's opening event) is
+  registered. The observation is pinned in `sentinelCausation.test.ts` with its
+  measurement, so the packet that takes it starts from a fact.
+- **The heartbeat watch item.** The agent-actor note's phase 1 proposes
+  `task.run.assigned`/`completed` for EVERY run, which supersedes this packet's
+  lazy-act rule. Named in `incidentProducer.ts` at the rule it supersedes so the
+  phase-1 author meets it where the decision lives, not only in the record: a
+  swept-and-found-nothing run has content and a bare "I ran" does not, and
+  phase 1 must say which it emits.
+- **`linkKind` as a record noun** is routed to WP-55 and the designer, undecided
+  here, as ruled.
+
+### 7 · LOCKS
+
+**THE `incidentProducer.ts`, `procedureArming.ts`, `armFromSelection.ts`,
+`chatAssembly.ts`-MANIFEST-WRITE, `foldSessionRegistry`-INCIDENT-ATTACHMENT,
+`ipc-handlers.ts` AND `docs/intelligence/` LOCKS ARE RELEASED.**
+
+`ipc-handlers.ts` is named explicitly for WP-56, which claimed it after this
+packet's announce: WP-51's edit is landed and is the one line printed in §9 of
+its gate report, so WP-56's handler is now an addition to a file with no
+outstanding claim from here.
+
+**ABI STATE: this session ran jest, so `node_modules` is built for SYSTEM NODE
+(ABI 141, node v25.9.0), not Electron. `npm run rebuild` is required before
+loading the addon in Local.**
