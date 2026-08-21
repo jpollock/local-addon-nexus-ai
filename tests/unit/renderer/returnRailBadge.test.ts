@@ -62,6 +62,18 @@ function triageWith(n: number): TriageView {
     // excluded it from `waiting`, so there is nothing for this suite to read.
     working: [],
     cursor: 'evt_1',
+    // WP-56 · `TriageView.counts` — the host now derives the escalating count,
+    // and a fixture must supply it. It agrees with `waiting.length` here because
+    // NOTHING IN THIS FIXTURE IS DEFERRED, which is the only case where the two
+    // numbers are the same.
+    //
+    // **THE ASSERTION AT LINE 97 IS THE ONE THAT MOVES NEXT.** It reads
+    // `arrivalCounts(triage).needsYou`, which still computes `waiting.length`
+    // today — the renderer read has NOT landed, because `arrivalModel.ts` is
+    // inside WP-54's live lock. When WP-56's amendment takes that file,
+    // `arrivalCounts` reads `triage.counts.needsYou` instead, this fixture keeps
+    // passing unchanged, and a deferred row is what tells the two apart.
+    counts: { needsYou: n, deferred: 0 },
   };
 }
 

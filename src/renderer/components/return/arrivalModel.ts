@@ -45,6 +45,7 @@ import type {
 import {
   fillSituationSentence,
   listVerdict,
+  type UnheldRow,
   normalizeProducerId,
 } from '../../../main/intelligence-host/sessionRegistry';
 import type { InboxItem } from '../../../main/inbox/types';
@@ -121,16 +122,65 @@ export interface ArrivalCounts {
   needsYou: number;
   changed: number;
   dark: number;
+  /**
+   * WP-56 · DEFERRED BY THE USER, and still drawn in the list.
+   *
+   * XD-23's honesty guarantee: "the panel's accounting line states the deferral,
+   * so the count can never read as the whole truth — '1 needs you · 1 deferred
+   * by you'." Published beside `needsYou` because the two are only honest
+   * together; `needsYou` alone would read as the whole list.
+   *
+   * **No surface renders it yet** — the `DEFERRED` block is ratified copy WP-55
+   * has not sited. The number exists so that when the sentence lands it is read,
+   * not recomputed.
+   */
+  deferred: number;
+}
+
+/**
+ * WP-56 · IS THIS ROW QUIETED? ONE RULE, AND EVERY CONSUMER READS IT.
+ *
+ * The badge, the verdict and the accounting line all ask this question, and
+ * three copies of it is how they would start disagreeing — the failure WP-49a's
+ * rider names and WP-54's item 1 measured. Exported so a pin can drive it and so
+ * WP-55's dimmed row reads the same predicate the count did.
+ *
+ * A row with no situation — an unheld Inbox row — is not deferrable today: a
+ * deferral names a SITUATION id and the fold holds no unheld rows. It answers
+ * `false`, which is the honest answer rather than a special case.
+ */
+export function rowIsDeferred(row: NowRow): boolean {
+  return !!row.situation?.deferral;
+}
+
+/** The rows of the one list that are ESCALATING — the badge's set. */
+export function escalatingRows(rows: readonly NowRow[]): NowRow[] {
+  return rows.filter((row) => !rowIsDeferred(row));
 }
 
 export function arrivalCounts(triage: TriageView, inbox?: NowInboxRead): ArrivalCounts {
+  // WP-54 · ITEM 1 — THE BADGE COUNTS THE ROWS. It counted `waiting.length`
+  // while the surface rendered `waiting` PLUS every inbox item, deduplicated
+  // against nothing: seven on the badge, twelve on the screen. It is the length
+  // of the one list, derived by the one function that builds it.
+  //
+  // WP-56 — MINUS THE ROWS THE USER QUIETED. The badge IS escalation, so a
+  // deferred row leaves it while STAYING in the list; leaving the list is the
+  // dismissal cycle two refused.
+  //
+  // **`triage.counts.needsYou` is deliberately NOT read here, and that is not an
+  // oversight.** The host's count is the truth for the situations the host
+  // holds, and the badge is about a longer list: the unheld Inbox rows exist
+  // only in this process, and no fold can see them. Substituting the host's
+  // number would drop them — item 1's defect, inverted. The identity that ties
+  // the two together is pinned instead:
+  //
+  //     arrivalCounts().needsYou === triage.counts.needsYou + <escalating unheld>
+  const rows = nowRows(triage, inbox);
+  const escalating = escalatingRows(rows);
   return {
-    // WP-54 · ITEM 1 — THE BADGE COUNTS THE ROWS. It counted `waiting.length`
-    // while the surface rendered `waiting` PLUS every inbox item, deduplicated
-    // against nothing: seven on the badge, twelve on the screen. It is now the
-    // length of the one list, derived by the one function that builds it, so the
-    // two cannot differ — there is nothing for them to differ ABOUT.
-    needsYou: nowRows(triage, inbox).length,
+    needsYou: escalating.length,
+    deferred: rows.length - escalating.length,
     changed: triage.changed.length,
     dark: triage.reserved.dark.length,
   };
@@ -257,8 +307,31 @@ export function nowRows(triage: TriageView, inbox?: NowInboxRead): NowRow[] {
  * again, one line higher.
  */
 export function nowVerdict(triage: TriageView, inbox?: NowInboxRead): string {
-  const unheld = nowRows(triage, inbox).filter((row) => row.situation === null).length;
-  return listVerdict(triage.waiting, unheld);
+  return listVerdict(triage.waiting, unheldRows(triage, inbox));
+}
+
+/**
+ * The rows the fold does not hold, in the shape the verdict needs.
+ *
+ * A COUNT WAS NOT ENOUGH, and two rulings arriving from different directions
+ * say so: WP-54b needs each row's written-state (the branch must be decided over
+ * the rows the sentence counts, not a subset), and WP-56 needs to know whether
+ * the row is quieted (a deferred card that still incremented the badge would be
+ * the deferral deferring nothing).
+ *
+ * **`written` is zero because an Inbox item HAS no outcomes** — `InboxItem`
+ * carries `code`, `scope`, `title`, `evidence`, `severity` and no result of any
+ * kind, because it is a FINDING and not a run. That is a measured fact about
+ * the type, not a default chosen to fill the field; if Inbox items ever record
+ * outcomes, this one function changes and the sum does not.
+ *
+ * `deferred` comes from the SAME predicate the badge uses, so the two cannot
+ * drift — today it is always false, for the reason `rowIsDeferred` states.
+ */
+function unheldRows(triage: TriageView, inbox?: NowInboxRead): UnheldRow[] {
+  return nowRows(triage, inbox)
+    .filter((row) => row.situation === null)
+    .map((row) => ({ written: { done: 0, failed: 0 }, deferred: rowIsDeferred(row) }));
 }
 
 /**

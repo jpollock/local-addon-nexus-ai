@@ -83,6 +83,15 @@ function triageOf(rows: Situation[]): TriageView {
     waiting: rows, changed: [], working: [],
     reserved: { headline: 'the record is reporting', dark: [], staleCount: 0, verdict: 'ok', degraded: false } as any,
     verdict: '', cursor: 'evt_1',
+    // WP-56 · `TriageView.counts` — the host now owns the escalating count, so
+    // a fixture must supply it. DERIVED FROM `rows` rather than written as a
+    // literal, for the contract's own reason: a hand-written count is free to
+    // disagree with the list it describes, which is exactly the defect the
+    // field exists to remove. Nothing in this suite reads it.
+    counts: {
+      needsYou: rows.filter((r) => !r.deferral).length,
+      deferred: rows.filter((r) => r.deferral).length,
+    },
   };
 }
 

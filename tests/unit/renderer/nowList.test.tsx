@@ -112,6 +112,13 @@ function triageOf(waiting: Situation[]): TriageView {
     reserved: { headline: RESERVED.quiet, dark: [], staleCount: 0, verdict: 'OK', degraded: false } as any,
     verdict: '',
     cursor: 'evt_d',
+    // WP-56 · DERIVED FROM `waiting`, exactly as the host derives it, so a
+    // fixture cannot hand the surface a count its own rows contradict — which
+    // is the property the field exists to give the real contract.
+    counts: {
+      needsYou: waiting.filter((s) => !s.deferral).length,
+      deferred: waiting.filter((s) => s.deferral).length,
+    },
   };
 }
 
@@ -194,7 +201,19 @@ describe('item 1 · the list renders each thing once', () => {
     expect(own.door).toEqual({ label: 'Open auth-probe', kind: 'agent', target: 'auth-probe' });
   });
 
-  test('THE BADGE AND THE ROWS ARE ONE NUMBER, both directions', () => {
+  /**
+   * WP-56 AMENDED THIS PIN, and the amendment was owed the moment deferral
+   * existed.
+   *
+   * WP-54 wrote it as `badge === rows drawn`, both directions, which was exactly
+   * right in a world where nothing could be quieted. A deferred situation STAYS
+   * IN THE LIST and LEAVES THE BADGE — that is the cycle-two ruling, and it makes
+   * the original equality false. **A pin left standing against a later ruling is
+   * a test asserting the opposite of the law**, so it is corrected here rather
+   * than deleted: the badge equals the rows drawn MINUS the ones the user
+   * quieted, and the quieted row is still drawn.
+   */
+  test('THE BADGE AND THE ROWS ARE ONE NUMBER, both directions — minus what the user quieted', () => {
     const triage = triageOf(FINDINGS.map(incident));
 
     // Duplicates do not inflate it…
@@ -209,6 +228,78 @@ describe('item 1 · the list renders each thing once', () => {
 
     // And the sentence heading the list counts the same rows it heads.
     expect(nowVerdict(triage, withOrphan)).toContain('5 things need you');
+  });
+
+  /**
+   * THE EXHIBIT THE GATE OWED: BOTH TERMS NON-ZERO AT ONCE.
+   *
+   * `listVerdict` was edited by three packets through different doors — WP-54
+   * added the unheld term, WP-56 subtracted the deferred rows, WP-54b required
+   * the branch to be decided over the union. **Neither branch had a case where
+   * both terms were non-zero, so every test on either side passed under a
+   * resolution that silently dropped one of them.** This is that case: one
+   * unheld row and one deferred situation in the same list.
+   */
+  test('BOTH TERMS NON-ZERO — an unheld row and a deferred situation in one list', () => {
+    const deferred = {
+      ...incident(FINDINGS[0]),
+      deferral: {
+        eventId: 'evt_def_1',
+        reason: 'waiting on the vendor',
+        deferredAt: '2026-08-21T04:00:00.000Z',
+        wake: null,
+      },
+    };
+    const triage = triageOf([deferred, incident(FINDINGS[1]), incident(FINDINGS[2])]);
+    const withOrphan = fullInbox([AUTH_PROBE]);
+
+    // FOUR rows are drawn: three situations (one of them quieted) + one unheld.
+    const rows = nowRows(triage, withOrphan);
+    expect(rows).toHaveLength(4);
+    // THE QUIETED ROW IS STILL DRAWN. Leaving the list is the dismissal the
+    // ruling refused, and this is the assertion that would catch it.
+    expect(rows.some((r) => r.situation?.id === deferred.id)).toBe(true);
+
+    // THREE are escalating: the badge is the drawn rows minus the quieted one,
+    // and the unheld row is still counted.
+    const counts = arrivalCounts(triage, withOrphan);
+    expect(counts.needsYou).toBe(3);
+    expect(counts.deferred).toBe(1);
+    expect(counts.needsYou + counts.deferred).toBe(rows.length);
+
+    // AND THE SENTENCE AGREES — this is the number that would be wrong under
+    // either single-branch resolution: taking WP-56's body whole drops the
+    // unheld row and says 2; taking the base's drops the deferral and says 4.
+    expect(nowVerdict(triage, withOrphan)).toContain('3 things need you');
+  });
+
+  /**
+   * THE BRIDGE between the host's count and the renderer's, pinned in both
+   * directions so neither can drift.
+   *
+   * The host cannot see the unheld rows — they exist only in this process — so
+   * `arrivalCounts` deliberately does NOT read `triage.counts.needsYou`.
+   * Substituting it would drop every inbox orphan, which is item 1's defect
+   * inverted. What ties them together is arithmetic, and it is asserted rather
+   * than described.
+   */
+  test('renderer needsYou === host counts.needsYou + escalating unheld rows', () => {
+    const deferred = {
+      ...incident(FINDINGS[0]),
+      deferral: { eventId: 'e', reason: 'r', deferredAt: '2026-08-21T04:00:00.000Z', wake: null },
+    };
+    const triage = triageOf([deferred, incident(FINDINGS[1])]);
+    // `triageOf` derives `counts` from its own rows, the way the host does.
+    expect(triage.counts).toEqual({ needsYou: 1, deferred: 1 });
+
+    // With no inbox at all the two collapse to plain equality.
+    expect(arrivalCounts(triage).needsYou).toBe(triage.counts.needsYou);
+
+    // With one unheld row the identity holds with its second term.
+    const withOrphan = fullInbox([AUTH_PROBE]);
+    const unheld = nowRows(triage, withOrphan).filter((r) => r.situation === null).length;
+    expect(unheld).toBe(1);
+    expect(arrivalCounts(triage, withOrphan).needsYou).toBe(triage.counts.needsYou + unheld);
   });
 
   test('the match needs ALL THREE facts — any one of them alone collides in the real data', () => {

@@ -114,7 +114,12 @@ import { enrichSiteFinderPlugins, summarizeSiteFinderTwins } from './intelligenc
 import { readSiteContentStatus } from './intelligence-host/siteContentStatus';
 import { readGovernMatrix, setCapabilityGrant } from './intelligence-host/governMatrix';
 import { getIntelligenceCore } from './intelligence-host/coreRegistry';
-import { createSessionRegistry } from './intelligence-host/sessionRegistry';
+import { createSessionRegistry, runCorrelationFor } from './intelligence-host/sessionRegistry';
+import {
+  recordDeferral,
+  recordDeferralEnded,
+  type DeferralWake,
+} from './intelligence-host/actionProducer';
 import { listComparableFacts, readSiteAtPlaces } from './comparator/comparatorRead';
 import { armFromSelection, previewScope } from './comparator/armFromSelection';
 
@@ -901,6 +906,68 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.RETURN_CHANGED_SINCE, (_event: any, cursor?: string) =>
     createSessionRegistry().changedSince(typeof cursor === 'string' ? cursor : undefined));
   safeHandle(IPC_CHANNELS.RETURN_SNAPSHOT, () => createSessionRegistry().snapshot());
+
+  // WP-56 · THE TWO WRITES, and the paragraph above does not cover them.
+  //
+  // "Nothing here is audited, and that is the rule rather than an omission: all
+  // four cannot mutate" is true of the four reads and false of these — they
+  // emit. They are nonetheless NOT routed through `auditDirectOperation`, and
+  // the reason is the rule's own: that entry point exists for handlers reaching
+  // `services.localServices` directly, so as to record fleet operations that
+  // reach neither dispatch chokepoint. A deferral reaches no site, runs no tool
+  // and changes nothing about the world — it records that a person is not
+  // dealing with something yet. Its durable record is the ledger event itself,
+  // which IS one of the four audit sinks, carrying actor, `observed_at`, the
+  // reason and the run it was recorded on. A second entry in
+  // `operation-audit.log` would describe a Tier-2/3 mutating operation that did
+  // not happen.
+  //
+  // Thin, like the reads: the producer validates and refuses, and these return
+  // its answer untouched. `undefined` back means the record was refused — the
+  // surface re-reads the triage and sees the row still escalating, which is the
+  // honest outcome and needs no separate error shape.
+  // THE CORRELATION IS RESOLVED HERE, and that is not the shaping the thin-bridge
+  // rule forbids. A surface holding a `Situation` has a situation id and no turn
+  // id — `taskIds` lives on `SessionRow`, which the triage view does not hand
+  // over — so without this the deferral lands with no `correlation` and is
+  // recorded on nothing, which is not what cycle two ruled. Resolving the
+  // SUBJECT of a write is a different act from transforming the answer to a
+  // read; `runCorrelationFor` is the registry's own derivation, called, not
+  // reimplemented. A caller that already knows its turn id still wins.
+  const correlationFor = (input: { situationId: string; taskId?: unknown }): string | undefined =>
+    typeof input.taskId === 'string' && input.taskId
+      ? input.taskId
+      : runCorrelationFor(input.situationId);
+
+  safeHandle(
+    IPC_CHANNELS.RETURN_DEFER,
+    (_event: any, input: { situationId?: unknown; taskId?: unknown; reason?: unknown; wake?: unknown }) => {
+      const situationId = String(input?.situationId ?? '');
+      const taskId = correlationFor({ situationId, taskId: input?.taskId });
+      return (
+        recordDeferral({
+          situationId,
+          ...(taskId ? { taskId } : {}),
+          reason: String(input?.reason ?? ''),
+          wake: (input?.wake ?? null) as DeferralWake | null,
+        }) ?? null
+      );
+    }
+  );
+  safeHandle(
+    IPC_CHANNELS.RETURN_END_DEFERRAL,
+    (_event: any, input: { situationId?: unknown; taskId?: unknown; supersedes?: unknown }) => {
+      const situationId = String(input?.situationId ?? '');
+      const taskId = correlationFor({ situationId, taskId: input?.taskId });
+      return (
+        recordDeferralEnded({
+          situationId,
+          ...(taskId ? { taskId } : {}),
+          supersedes: String(input?.supersedes ?? ''),
+        }) ?? null
+      );
+    }
+  );
 
   safeHandle(IPC_CHANNELS.GET_FLEET_LIST, async () => {
     try {

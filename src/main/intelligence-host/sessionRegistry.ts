@@ -110,8 +110,10 @@
 import type { EventEnvelope, Ledger, Runbook, RunbookCheckpoint } from '../../intelligence';
 import {
   ACTION_EXECUTED_TOPIC,
+  DEFERRAL_PAYLOAD_SOURCE,
   OUTCOME_RECORDED_TOPIC,
   RATIONALE_RECORDED_TOPIC,
+  type DeferralWake,
 } from './actionProducer';
 import { AGENT_FAILURE_TOPIC, type AgentFailurePayload } from './agentFailureProducer';
 import { getIntelligenceCore } from './coreRegistry';
@@ -421,6 +423,55 @@ export interface SituationPart {
 }
 
 /**
+ * WP-56 · A STANDING DEFERRAL, folded from the run's own record.
+ *
+ * Cycle two's ruling, and every clause of it is a property of this shape rather
+ * than a note about it:
+ *
+ *  - **It is not a dismissal.** There is no field here that could remove a row,
+ *    change a tier or change a place — the fold attaches this and touches
+ *    nothing else, so "keeps its tier and its place, lowers escalation only" is
+ *    enforced by what the post-pass CAN reach.
+ *  - **It hangs off the SITUATION.** `SituationPart` gains no equivalent, which
+ *    is XD-28's "applies to the situation, never to its parts" enforced the way
+ *    tier 3 is enforced — by there being nowhere to put the other thing.
+ *  - **Only the user defers**, so a record whose actor is not human never
+ *    becomes one of these (`foldDeferrals`).
+ *  - **Absent means escalating.** A woken, ended or answered deferral leaves no
+ *    residue on the row: the field is simply not there, and every consumer's
+ *    question is `!situation.deferral`.
+ */
+export interface SituationDeferral {
+  /** The rationale event that recorded it. The row's receipt. */
+  eventId: string;
+  /**
+   * The user's own words, as the record holds them.
+   *
+   * Masked at the producer against the value-shape layer, so a reason that
+   * carried something credential-shaped reads back with that part redacted.
+   * Never composed, never defaulted, and never empty — the producer refuses a
+   * deferral with no reason.
+   */
+  reason: string;
+  /**
+   * ISO — `observed_at` on the deferral event, which is the moment of the click.
+   *
+   * Deliberately not `recorded_at`: "deferred by you 4h ago" is a claim about
+   * when the person decided, and conflating the two is the one thing the
+   * envelope rules forbid outright. A surface ages it with `ageLabel`, the same
+   * function the headline uses, so the row cannot disagree with itself.
+   */
+  deferredAt: string;
+  /**
+   * NULL WHEN UNCONDITIONED, and that is a permitted deferral rather than a
+   * degraded one: "an unconditioned deferral is permitted and simply never
+   * wakes — the item keeps its tier and place forever at low intensity, which
+   * is your never-a-dismissal rule holding."
+   */
+  wake: DeferralWake | null;
+}
+
+/**
  * WP-51 · the ENVELOPE fields a fold may key on. Deliberately a closed union.
  *
  * `correlation` is the only member today: a scan's TaskId, minted by the
@@ -658,6 +709,14 @@ export interface Situation {
    * `places.total`: see `SessionRow.targetSet` for the collision that cost.
    */
   written: { done: number; failed: number; total: number | null };
+  /**
+   * WP-56 · PRESENT ONLY WHILE A DEFERRAL STANDS. See `SituationDeferral`.
+   *
+   * The row is still in the list, still at its tier, still in its place. What
+   * it is out of is the badge and the verdict's count — read `TriageCounts`,
+   * never `waiting.length`, for the number that means "escalating".
+   */
+  deferral?: SituationDeferral;
 }
 
 /**
@@ -729,6 +788,61 @@ export interface WorkingRow {
   lastEventId: string;
 }
 
+/**
+ * WP-56 · THE COUNTS, DERIVED HERE BECAUSE A COUNT IS A DERIVED FACT.
+ *
+ * **This closes a latent defect that predates deferral.** `arrivalCounts()` in
+ * the renderer computed `needsYou: triage.waiting.length` — a surface
+ * re-deriving a count from a list, which is the shape WP-49a's rider already
+ * ruled against: "the badge, the verdict and the rows all count the same set —
+ * composing the two independently is how a list and the sentence about it start
+ * disagreeing." Deferral is simply the first fact that makes the disagreement
+ * visible, because it is the first thing that is IN the list and NOT in the
+ * count.
+ *
+ * So the host counts, and the surface reads. That is this contract's own rule
+ * (`arrivalModel.ts`: "THE HOST FOLDS AND THE SURFACE READS") applied to the one
+ * number it had not yet reached.
+ */
+export interface TriageCounts {
+  /**
+   * THE SITUATIONS THIS FOLD HOLDS THAT ARE CURRENTLY ESCALATING.
+   *
+   * XD-23: "the ambient badge counts situations currently escalating — an
+   * instrument, not an inventory." A deferred situation is not escalating, so it
+   * is not here; it IS in `waiting`, where the inventory lives. A badge that
+   * kept counting a deferred situation would mean the deferral deferred nothing.
+   *
+   * **This is `waiting.length` MINUS `deferred`, and it must never be re-derived
+   * as `waiting.length` by a consumer.** That is the whole reason the field
+   * exists rather than the arithmetic being left to each surface.
+   *
+   * **IT IS NOT, BY ITSELF, THE RAIL BADGE — and the correction is WP-54's.**
+   * This doc said "the rail badge, and nothing else" and that stopped being true
+   * when the Now list became one list: the screen renders these situations PLUS
+   * every Inbox item matching none of them, and those rows exist ONLY in the
+   * renderer. A surface that painted this number on the badge would drop them.
+   * The badge is `arrivalCounts().needsYou`, and the two are tied by an identity
+   * pinned in `nowList.test.tsx`:
+   *
+   *     badge  ===  counts.needsYou  +  <escalating unheld rows>
+   *
+   * With no Inbox read the second term is zero and the two are equal, which is
+   * why the wrong version of this sentence survived as long as it did.
+   */
+  needsYou: number;
+  /**
+   * DEFERRED BY THE USER, and still standing in `waiting`.
+   *
+   * XD-23's honesty guarantee: "the panel's accounting line states the deferral,
+   * so the count can never read as the whole truth — '1 needs you · 1 deferred
+   * by you'." Without this number the accounting line could state the first
+   * clause and not the second, and `needsYou` alone would read as the whole
+   * list. The two are published together because they are only honest together.
+   */
+  deferred: number;
+}
+
 /** The arrival triage: two columns of one verdict, plus the reserved slot. */
 export interface TriageView {
   waiting: Situation[];
@@ -748,6 +862,11 @@ export interface TriageView {
    * render — so it cannot contradict them. Empty when nothing is waiting.
    */
   verdict: string;
+  /**
+   * WP-56 · The numbers the columns are about, derived from the very rows the
+   * columns render. Read `counts.needsYou` for the badge, never `waiting.length`.
+   */
+  counts: TriageCounts;
   /** Hand this back to `changedSince` next time. */
   cursor: string;
 }
@@ -792,6 +911,12 @@ export interface SessionRegistrySnapshot {
   concurrencyLimit: string;
   /** Where a derivable deadline would come from. Names the absence honestly. */
   deadlineSource: string;
+  /**
+   * WP-56 · Where a `record` wake condition would be decided. Names the absence
+   * honestly, exactly as `deadlineSource` does for the other half-implemented
+   * ruled rule.
+   */
+  wakeSource: string;
 }
 
 /** The query surface. M6's IPC handlers call these; nothing else does. */
@@ -853,9 +978,36 @@ export interface SessionRegistryDeps {
     taskIds: readonly string[];
     events: readonly EventEnvelope[];
   }) => DerivedDeadline | undefined;
+  /**
+   * WP-56 · HAS A `record` WAKE CONDITION FIRED?
+   *
+   * A port for the same reason `deadlineFor` is one: cycle two ruled that a
+   * wake may be "a time, or a record condition (the window opening, a producer
+   * coming back)", and implementing only half of a ruled rule while the other
+   * half looks implemented is worse than implementing neither.
+   *
+   * **A `time` wake never reaches here** — it is derivable from the clock the
+   * fold already holds, so `foldDeferrals` decides it directly. This is asked
+   * only about `kind: 'record'`.
+   *
+   * **NOTHING SUPPLIES ONE TODAY.** No producer publishes a vocabulary of record
+   * conditions, so in production a record-conditioned deferral never wakes and
+   * behaves exactly like an unconditioned one. Stated on the snapshot
+   * (`wakeSource`) rather than left to be inferred from a port that is always
+   * absent — the same treatment, for the same reason, as `deadlineSource`.
+   *
+   * A throwing implementation costs the wake, never the row.
+   */
+  wakeFired?: (input: {
+    wake: Extract<DeferralWake, { kind: 'record' }>;
+    situation: Situation;
+    now: Date;
+  }) => boolean;
   now?: Date;
   /** How many manifests to read, newest first. */
   manifestLimit?: number;
+  /** How many rationale events to read for deferrals, newest first. */
+  deferralLimit?: number;
 }
 
 /**
@@ -897,6 +1049,22 @@ const CONCURRENCY_LIMIT_NOTE =
 const DEADLINE_SOURCE_NOTE =
   'no producer records a dry-run staleness clock or a maintenance window, so §4a\'s deadline arm ' +
   'of T1 has no input in production and T1 is reached by the write-landed arm alone';
+
+/**
+ * Deferral records read per fold, newest first.
+ *
+ * Bounded and DESC for the reason the other two scans are: a deferral that fell
+ * outside the window is one nobody is being shown a stale quieting for, whereas
+ * a missing recent one would put a situation the user just deferred straight
+ * back in the badge — which reads as the affordance not working.
+ */
+const DEFERRAL_SCAN_LIMIT = 500;
+
+const WAKE_SOURCE_NOTE =
+  'a `time` wake is derived from the fold\'s own clock and works today; a `record` wake is decided ' +
+  'by the `wakeFired` port, and NOTHING SUPPLIES ONE — no producer publishes a vocabulary of record ' +
+  'conditions — so a record-conditioned deferral never wakes in production and behaves as an ' +
+  'unconditioned one until a producer does';
 
 // ---------------------------------------------------------------------------
 // Places
@@ -1195,6 +1363,7 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     horizon: { manifestsRead: 0, limit, truncated: false, oldestManifestId: null },
     concurrencyLimit: CONCURRENCY_LIMIT_NOTE,
     deadlineSource: DEADLINE_SOURCE_NOTE,
+    wakeSource: WAKE_SOURCE_NOTE,
   };
   if (!core?.ledger) return empty;
 
@@ -1387,6 +1556,13 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     ...openAgentFailures(agentFailures).map((event) => situationOfAgentFailure(event)),
   ];
 
+  // WP-56 · the deferral post-pass. It runs AFTER the situations are composed
+  // and BEFORE they are ranked, and the order is irrelevant by construction: a
+  // deferral changes no tier and no place, so `rankSituations` returns the same
+  // order either way. Running it here rather than inside `situationOfSession`
+  // is what keeps "lowers escalation only" a property of the code's shape.
+  applyDeferrals(situations, ledger, deps, now);
+
   const cursor = maxId([
     ...split.map((row) => row.lastEventId),
     ...incidents.map((e) => e.id),
@@ -1405,6 +1581,7 @@ export function foldSessionRegistry(deps: SessionRegistryDeps = {}): SessionRegi
     horizon: { manifestsRead: manifests.length, limit, truncated, oldestManifestId },
     concurrencyLimit: CONCURRENCY_LIMIT_NOTE,
     deadlineSource: DEADLINE_SOURCE_NOTE,
+    wakeSource: WAKE_SOURCE_NOTE,
   };
 }
 
@@ -2716,30 +2893,102 @@ function openAgentFailures(events: readonly EventEnvelope[]): EventEnvelope[] {
 }
 
 /**
+ * A ROW OF THE LIST THAT THIS FOLD DOES NOT HOLD.
+ *
+ * An Inbox item matching no situation — on the owner's real fleet, `auth-probe
+ * could not finish a run`, the ratified `agent.stuck` class no producer emits
+ * yet. It renders in the Now list, so it is part of the list the verdict is
+ * about, and the caller supplies it because **only the renderer can see it**.
+ *
+ * It is a SHAPE rather than the count WP-54 first passed, for two rulings that
+ * arrived from different directions and need the same field to be a record —
+ * see each field.
+ */
+export interface UnheldRow {
+  /**
+   * WP-54b — the written-state of a row the fold does NOT hold.
+   *
+   * The base decided `changedRuns` over `waiting` while counting
+   * `waiting + alsoWaiting`, so the branch was chosen over a SUBSET of the rows
+   * the sentence counts — and the fixture's ratified guard reads "allUnwritten
+   * when EVERY waiting row has done === 0 && failed === 0". An unheld row is a
+   * waiting row. A bare count cannot answer the guard's question, which is why
+   * this is a shape.
+   *
+   * **MEASURED, and it is a fact rather than a default:** `InboxItem`
+   * (`src/main/inbox/types.ts`) carries no outcome fields at all — it is a
+   * FINDING, not a run — so every unheld row today is `{done: 0, failed: 0}`.
+   * That is what an Inbox item IS, not a value invented to fill the field. If
+   * Inbox items ever record outcomes, one call site changes and this sum does
+   * not.
+   */
+  written: { done: number; failed: number };
+  /**
+   * WP-56 — deferred by the user.
+   *
+   * The collision's own addition: an unheld row can be deferred too, and **a
+   * deferred Inbox card that still incremented the badge would be the deferral
+   * deferring nothing** — this packet's argument turned on the term it could not
+   * see while WP-54 held the file.
+   *
+   * **DISCLOSED: no caller can set this true yet.** A deferral names a SITUATION
+   * id and the fold holds no unheld rows, so `applyDeferrals` can never reach
+   * one. The renderer fills it from the SAME predicate the badge uses
+   * (`rowIsDeferred`), so the day an Inbox card becomes deferrable the value
+   * flows through one rule rather than a second one being written. Same honest
+   * treatment as `wakeFired` and `deadlineFor`: the ruled input is implemented
+   * and its absence is stated, never quietly dropped.
+   */
+  deferred?: boolean;
+}
+
+/**
  * THE LIST VERDICT — one sentence about the whole list.
  *
- * Read off the waiting rows' own `written` counts, which are the numbers their
+ * Read off the rows' own `written` counts, which are the numbers their
  * headlines were composed from, so the sentence cannot disagree with the rows
- * beneath it. Empty when nothing is waiting: a verdict about an empty list is a
- * claim about nothing.
+ * beneath it. Empty when nothing is escalating: a verdict about rows nobody is
+ * being asked to act on is a claim about nothing.
  */
-export function listVerdict(waiting: readonly Situation[], alsoWaiting = 0): string {
-  // WP-54 · ITEM 1 AND ITEM 9 — THE VERDICT COUNTS THE LIST, INCLUDING THE ROWS
-  // THIS FOLD DOES NOT HOLD.
+export function listVerdict(
+  waiting: readonly Situation[],
+  alsoWaiting: readonly UnheldRow[] = [],
+): string {
+  // THE MERGED EXPRESSION (ruled 2026-08-21, after a three-way collision on one
+  // sum). Three packets edited this arithmetic through different doors and none
+  // could see the others:
   //
-  // The Now screen renders situations PLUS any Inbox item that matches none of
-  // them, and on the owner's real fleet that is one row: `auth-probe could not
-  // finish a run`, which is the ratified `agent.stuck` class that no producer
-  // emits yet (WP-54a). A verdict counting only what this fold holds would head
-  // eight rows with the word "7".
+  //   WP-54  added `alsoWaiting` — the Now screen renders situations PLUS every
+  //          Inbox item matching none of them, and a verdict counting only what
+  //          this fold holds would head eight rows with the word "7".
+  //   WP-56  replaced `waiting.length` with the ESCALATING subset, so a deferred
+  //          situation leaves the count the badge renders.
+  //   WP-54b required the branch to be decided over the rows the sentence
+  //          counts, not a subset of them.
   //
-  // `alsoWaiting` is therefore a COUNT the caller supplies from the same list it
-  // is about to render, and this stays the ONE composition — the surface fills
-  // no template of its own. Zero by default, which is what `TriageView.verdict`
-  // passes: the fold's own sentence about the fold's own rows.
-  const needsYou = waiting.length + alsoWaiting;
+  // **Both bodies were correct and taking either whole was a silent
+  // regression** — and every test on either branch passed under either
+  // resolution, because neither branch had a case where both terms were
+  // non-zero. That case is now pinned (`bothTermsNonZero`).
+  //
+  // LOCKS PARTITION FILES; THEY DO NOT PARTITION ARITHMETIC. Both locks here
+  // were kept perfectly and the collision happened anyway.
+  //
+  // `needsYou` is the escalating situations PLUS the escalating unheld rows;
+  // `changedRuns` is measured over that same union. **Neither term is a bare
+  // count**, and that is the whole ruling: a count cannot say whether its rows
+  // are deferred, and it cannot say whether they wrote anything.
+  const held = escalating(waiting);
+  const unheld = alsoWaiting.filter((row) => !row.deferred);
+  const needsYou = held.length + unheld.length;
+  // A list of nothing but deferrals says nothing, for the reason an empty list
+  // does: a verdict about rows nobody is being asked to act on is a claim about
+  // nothing. The accounting line still states the deferrals
+  // (`TriageCounts.deferred`), so the silence is not a disappearance.
   if (needsYou === 0) return '';
-  const changedRuns = waiting.filter((s) => s.written.done > 0 || s.written.failed > 0).length;
+  const wrote = (w: { done: number; failed: number }): boolean => w.done > 0 || w.failed > 0;
+  const changedRuns =
+    held.filter((s) => wrote(s.written)).length + unheld.filter((r) => wrote(r.written)).length;
   const bag: SlotBag = { needsYou, changedRuns };
   return changedRuns === 0
     ? fillSituationSentence(LIST_VERDICT.allUnwritten, bag)
@@ -3078,6 +3327,228 @@ export function rankSituations(situations: readonly Situation[]): Situation[] {
 }
 
 // ---------------------------------------------------------------------------
+// WP-56 · Deferral — the post-pass that can only lower escalation
+// ---------------------------------------------------------------------------
+
+/** One deferral record as the ledger holds it, before supersession is resolved. */
+interface DeferralEvent {
+  act: 'defer' | 'end';
+  situation: string;
+  eventId: string;
+  observedAt: string;
+  reason: string;
+  wake: DeferralWake | null;
+}
+
+/**
+ * A rationale event that is a DEFERRAL record, or nothing.
+ *
+ * **The actor gate lives here, and it is the authoritative one.** "Only the user
+ * defers — an agent quieting its own gate is the self-promotion power inverted."
+ * The producer refuses a non-human actor too, but this is the enforcement that
+ * matters: the fold is the thing that lowers an escalation, so a record that
+ * somehow exists — written by an older build, a future caller, or a direct
+ * emitter call in a test — still cannot quiet anything. A rule enforced only at
+ * the write is a rule that holds until someone writes past it.
+ */
+function deferralEventOf(event: EventEnvelope): DeferralEvent | undefined {
+  if (event.topic !== RATIONALE_RECORDED_TOPIC) return undefined;
+  const payload = payloadOf(event);
+  if (payload.source !== DEFERRAL_PAYLOAD_SOURCE) return undefined;
+
+  const actor = event.actor as { kind?: unknown } | undefined;
+  if (actor?.kind !== 'human') return undefined;
+
+  const act = payload.act;
+  if (act !== 'defer' && act !== 'end') return undefined;
+  const situation = str(payload.situation);
+  if (!situation) return undefined;
+
+  return {
+    act,
+    situation,
+    eventId: event.id,
+    observedAt: event.observed_at,
+    // TRIMMED HERE TOO, not only at the producer. The producer refuses a
+    // whitespace-only reason, but this is the authoritative gate — a record
+    // that reaches the ledger by any other route must meet the same bar, or
+    // "a reason is recorded" is satisfied by three spaces.
+    reason: (str(payload.reason) ?? '').trim(),
+    wake: wakeOf(payload.wake),
+  };
+}
+
+/** A wake condition the record actually holds. Anything else is unconditioned. */
+function wakeOf(raw: unknown): DeferralWake | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const wake = raw as Record<string, unknown>;
+  if (wake.kind === 'time') {
+    const at = str(wake.at);
+    return at && Number.isFinite(Date.parse(at)) ? { kind: 'time', at } : null;
+  }
+  if (wake.kind === 'record') {
+    const from = str(wake.from);
+    return from ? { kind: 'record', from } : null;
+  }
+  return null;
+}
+
+/**
+ * Has this deferral's condition fired?
+ *
+ * A `time` wake is decided against the fold's own clock — derivable, and the
+ * only kind that works in production today. A `record` wake goes to the port;
+ * absent, it has not fired, which is the honest answer rather than a guess in
+ * either direction. See `WAKE_SOURCE_NOTE`.
+ */
+function wakeHasFired(
+  deferral: SituationDeferral,
+  situation: Situation,
+  deps: SessionRegistryDeps,
+  now: Date
+): boolean {
+  const wake = deferral.wake;
+  if (!wake) return false; // unconditioned: permitted, and it never wakes
+  if (wake.kind === 'time') return now.getTime() >= Date.parse(wake.at);
+  if (!deps.wakeFired) return false;
+  try {
+    return deps.wakeFired({ wake, situation, now }) === true;
+  } catch {
+    return false; // a faulty derivation costs the wake, not the row
+  }
+}
+
+/**
+ * Attach standing deferrals to the situations they name.
+ *
+ * **THIS FUNCTION CAN ONLY ADD A FIELD.** It reads `situation.column` and writes
+ * `situation.deferral`, and there is deliberately nothing else in reach: no
+ * tier, no place, no order, no removal from any list. "A deferred situation
+ * keeps its tier and its place and lowers escalation only — leaving the list is
+ * a dismissal by another name, and the ruling refused that." That is the whole
+ * ruling, enforced by the shape of the pass rather than by a reviewer noticing.
+ *
+ * **DEFERRAL APPLIES TO THE SITUATION, NEVER TO ITS PARTS** (XD-28). The lookup
+ * is `byId`, keyed by SITUATION id — so a record naming a part's event id finds
+ * nothing and is dropped, and the situation goes on escalating with every one of
+ * its members. There is no code path here that could reach `situation.parts`.
+ *
+ * **THREE RECORDED ENDS, and all three are derived rather than stored:**
+ *
+ *  1. **The wake fires** — `wakeHasFired`. The condition is on the record and
+ *     the clock is the fold's; nothing needs to write an "ended" event for a
+ *     wake, and nothing should, because then a deferral's state would depend on
+ *     a timer having run rather than on the record being read.
+ *  2. **The user ends it early** — an `act: 'end'` record, superseding. Latest
+ *     governs, so a later `defer` re-defers ("Defer again", as the sheet draws
+ *     the woken state).
+ *  3. **The situation is answered** — the row moves to the `changed` column, and
+ *     a deferral is dropped there. A completed run is not something anyone is
+ *     still being asked to quiet, and carrying the deferral across would put
+ *     "deferred by you" on a row that is finished.
+ *
+ * Latest-governs is resolved in LEDGER ORDER (ascending event id), which is the
+ * order `foldProcedureCursor` already uses for exactly this question. Ordering
+ * supersession by `observed_at` instead would let a clock skew on one click
+ * decide whether a deferral stands.
+ */
+function applyDeferrals(
+  situations: readonly Situation[],
+  ledger: LedgerLike,
+  deps: SessionRegistryDeps,
+  now: Date
+): void {
+  const byId = new Map(situations.map((s) => [s.id, s]));
+  if (byId.size === 0) return;
+
+  let events: EventEnvelope[];
+  try {
+    // Newest-first then reversed, like the manifest scan. NOTE the limit is
+    // over the WHOLE rationale family — approvals share this topic — so a
+    // ledger carrying more than `DEFERRAL_SCAN_LIMIT` recent rationale events
+    // could push an older standing deferral out of the window, and that row
+    // would return to the badge. There is no cheaper query: the discriminator
+    // is a payload field, and the ledger indexes topics. Bounded and stated.
+    events = ledger
+      .query({
+        topicPrefix: RATIONALE_RECORDED_TOPIC,
+        limit: deps.deferralLimit ?? DEFERRAL_SCAN_LIMIT,
+        order: 'desc',
+      })
+      .slice()
+      .reverse();
+  } catch {
+    return; // an unreadable ledger costs the quieting, never the list
+  }
+
+  const standing = new Map<string, SituationDeferral>();
+  for (const event of events) {
+    const record = deferralEventOf(event);
+    if (!record) continue;
+    if (!byId.has(record.situation)) continue; // names no situation — a part, or gone
+    if (record.act === 'end') {
+      standing.delete(record.situation);
+      continue;
+    }
+    if (!record.reason) continue; // a deferral with no reason is a dismissal
+    standing.set(record.situation, {
+      eventId: record.eventId,
+      reason: record.reason,
+      deferredAt: record.observedAt,
+      wake: record.wake,
+    });
+  }
+
+  for (const [situationId, deferral] of standing) {
+    const situation = byId.get(situationId);
+    if (!situation) continue;
+    if (situation.column === 'changed') continue; // end 3: answered
+    if (wakeHasFired(deferral, situation, deps, now)) continue; // end 1: woken
+    situation.deferral = deferral;
+  }
+}
+
+/** Situations currently ESCALATING — the badge's set. See `TriageCounts`. */
+function escalating(situations: readonly Situation[]): Situation[] {
+  return situations.filter((s) => !s.deferral);
+}
+
+/**
+ * WP-56 · THE TURN A DEFERRAL ON THIS SITUATION IS RECORDED ON.
+ *
+ * Cycle two places the deferral ON THE RUN, which in this ledger means the
+ * envelope's `correlation` — and **a surface holding a `Situation` cannot
+ * supply one.** `Situation` carries `sessionId` and `capability`; the turn ids
+ * live on `SessionRow.taskIds`, which the triage view does not hand over. The
+ * exhibit measured the consequence: a deferral recorded straight from a
+ * situation id landed with no correlation, joined to no run, and could not
+ * answer "what did the user defer during this run".
+ *
+ * Resolving it HERE rather than widening `Situation` keeps a turn id off the
+ * read contract, where nothing renders it and its only use would be this write.
+ *
+ * **The NEWEST turn, not the first.** The deferral is a statement about this
+ * run AT THIS MOMENT, and the moment is the turn the user is looking at. The
+ * first turn is the session's identity, which is a different question.
+ *
+ * `undefined` for an incident situation, and that is the held path rather than
+ * a failure: an orphan incident was never armed under a procedure, so there is
+ * no run for its deferral to be recorded on. See the incident-path measurement
+ * in `deferral.test.ts`.
+ */
+export function runCorrelationFor(
+  situationId: string,
+  deps: SessionRegistryDeps = {}
+): string | undefined {
+  try {
+    const row = foldSessionRegistry(deps).sessions.find((s) => s.id === situationId);
+    return row?.taskIds[row.taskIds.length - 1];
+  } catch {
+    return undefined; // a deferral with no correlation beats no deferral at all
+  }
+}
+
+// ---------------------------------------------------------------------------
 // The reserved slot — ONE row, always, whatever the counts say
 // ---------------------------------------------------------------------------
 
@@ -3190,6 +3661,15 @@ export function createSessionRegistry(deps: SessionRegistryDeps = {}): SessionRe
         // It reads the FILTERED column, so a working run cannot be counted in a
         // verdict about rows nobody is being shown.
         verdict: listVerdict(waiting),
+        // WP-56 · derived from the SAME rows the column is about to render, and
+        // from nothing else. `needsYou + deferred === waiting.length` always
+        // holds, which is what makes the pair auditable against the list: the
+        // badge undercounts the list by exactly the number the accounting line
+        // states, and never by anything it does not.
+        counts: {
+          needsYou: escalating(waiting).length,
+          deferred: waiting.length - escalating(waiting).length,
+        },
         cursor: snapshot.cursor,
       };
     },
