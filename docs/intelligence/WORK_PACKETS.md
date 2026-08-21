@@ -22844,3 +22844,167 @@ sentence set has not arrived, checked at the gate rather than
 assumed.
 
 **Merge as held.** Standard sequence on `poc/nexintelligence-ux`.
+
+---
+
+## WP-52 · MERGED, LOCKS RELEASED (2026-08-21)
+
+Merge commit **a03d501e** on `poc/nexintelligence-ux`. The gate ruling was PASS,
+cleared to merge as held — no code change was asked for and none was made after
+it. Receipts pasted after they printed.
+
+### 1 · The stat block
+
+```
+git diff --stat a03d501e^1 a03d501e
+ docs/intelligence/WORK_PACKETS.md                  | 342 +++++++++++++++++++
+ scripts/generate-situation-copy.ts                 |   3 +-
+ scripts/wp52-battery.py                            | 297 ++++++++++++++++
+ .../__tests__/placeSummary.test.ts                 | 202 ++++++++++++
+ .../__tests__/sessionRegistry.test.ts              |   1 +
+ src/main/intelligence-host/sessionRegistry.ts      |  99 +++++-
+ .../intelligence-host/situationCopy.generated.ts   |   3 +-
+ src/renderer/components/return/Arrival.tsx         |  73 ++++-
+ tests/intelligence-evals/checks.ts                 |  85 +++--
+ tests/unit/renderer/cardIsTemplate.test.tsx        | 259 +++++++++++++++++++
+ tests/unit/renderer/nowRowDedup.test.tsx           |  29 ++-
+ tests/unit/renderer/returnArrival.test.tsx         | 136 +++++++---
+ 12 files changed, 1380 insertions(+), 90 deletions(-)
+```
+
+**12 files, +1,380/−90 — the same figures the ruling reached independently.**
+
+### 2 · The record, rebuilt from three blobs — and this time the PRIMARY split
+
+Never hunk-edited. WP-50's merge split the BRANCH's append because the ruling
+belonged between its two sections; this one is the mirror. The primary side
+carried **two** sections and MY report belongs between them: the announce
+amendment was written DURING the build, at the moment the eval need was
+measured, and the ruling was written last and reads the report.
+
+```
+1,322,828 + 1,848 + 14,891 + 4,561 = 1,344,128   result 1,344,128   residual 0
+
+ancestor is an EXACT PREFIX of the merge : True
+ANNOUNCE AMENDED  exact substring exactly once : True   offset 1,322,828
+GATE REPORT       exact substring exactly once : True   offset 1,324,676
+GATE RULING       exact substring exactly once : True   offset 1,339,567
+CHRONOLOGY amendment < report < ruling   : True
+LINE-ANCHORED conflict markers           : 0
+```
+
+**THE MERGE BASE WAS RE-DERIVED RATHER THAN ASSUMED, AND THE CHECK CAUGHT AN
+OPERATOR ERROR BEFORE IT REACHED THE FILE.** The first rebuild took the AMENDED
+announce commit as the ancestor — the obvious choice, and wrong: the branch was
+cut before that amendment landed on the base, so the branch is not a superset of
+it. The prefix check refused it and the rebuild stopped. `git merge-base` named
+the true ancestor (the ORIGINAL announce, `187f51b1`) and the rebuild ran clean.
+
+That is worth recording as its own note: **the four-way verification is not only
+a proof about the output, it is a guard on the operator's own assumption about
+which blob is the ancestor.** A splice would have silently produced a file with
+the amendment duplicated or missing, and `--stat` would have shown nothing.
+
+**Loss-proof by CONTENT rather than by trusting the rebuild** (WP-48's
+instrument):
+
+```
+'## ' headers — branch 81, primary 82, merged 83
+missing from branch side : NONE
+missing from primary side: NONE
+merge-created duplicates : NONE
+```
+
+Then the fields each side moved, read directly: the architect's `GATE RULING`,
+its `Verdict: PASS. Cleared to merge as held`, and the
+`Binding at WP-48 · registration gap at WP-50 · sentence at WP-52` paragraph; my
+`LOCK ANNOUNCE AMENDED`, `GATE REPORT`, and both environment findings. All
+present.
+
+`PARALLEL_PROTOCOL.md` did not conflict: only the base side touched it, adding
+three rules — every one of them a sharpening of a rule this packet met in the
+field, which is the record doing what it is for.
+
+The architect's work was committed **VERBATIM first** in its own attributed
+commit (`fabd0194`), fidelity verified by md5 against the working tree as
+measured before the commit — `ce214aec0ae379c46a3c0fd3fe645339` (PROTOCOL,
+28,003 → 29,347 bytes) and `8a5943ec6b1312d71128d0de132b4dfa` (WORK_PACKETS,
+1,334,680 → 1,339,273 bytes) — both verified PURE APPENDS by prefix check rather
+than by diffstat. Seventh exercise of the precedent.
+
+### 3 · Independent verification on the MERGED tree
+
+Everything below was re-measured here, not carried across from the branch.
+
+| | result |
+|---|---|
+| suite | **620 suites / 8,539 tests — 8,537 passed, 2 skipped, exit 0** |
+| mutation battery | **11 killed / 0 survived / 0 anchor-miss, of 11**; control SURVIVED (correct); tree pristine before and after; ABI pinned both ends |
+| `tsc -p . --noEmit` | clean |
+| `npm run compile` | clean |
+| `eslint src --ext .ts,.tsx` | 0 errors, 6 warnings (all pre-existing, none in a touched file) |
+| `fixtures:situation-copy:check` | exit 0 |
+| `fixtures:return-copy:check` | exit 0 |
+| `fixtures:opening-copy:check` | exit 0 |
+| `fixtures:procedures:check` | exit 0 |
+| `fixtures:citations:check` | exit 0 |
+| `inventory:dom-reach:check` | exit 0 |
+| byte sweep | 12 changed files, CLEAN |
+| `situationCopy.generated.ts` | **6,212 bytes**, md5 `08756f9c9e9853119c97e913aa7dde2a` (`wc -c`) |
+
+**THE SKIPPED COLUMN MOVED, IN THE DOCUMENTED DIRECTION, AND THE TOTAL DID NOT.**
+The branch measured **12 skipped** in `.worktrees/wp-52`; the merged tree
+measures **2** in the primary checkout. Total is **8,539 on both sides**. Fourth
+recorded crossing of WP-20c's worktree↔primary embedding boundary — and the
+first with the cause MEASURED rather than cited: `models/` holds only the tracked
+`bge-small-en-v1.5` in a fresh worktree, while `all-MiniLM-L6-v2-quantized` is
+untracked and lives in the primary alone, so `tests/main/embedding-service.test.ts`
+gates ten tests in on one side and out on the other.
+
+### 4 · What the ruling settled, carried into the record
+
+- **Item 4's measurement ACCEPTED**, and the collision named for the third time:
+  **binding at WP-48 · registration gap at WP-50 · sentence at WP-52.** The
+  second-order proof settles it — a run with five armed targets and nothing
+  written also said there were none.
+- **Silence RATIFIED, with its guard.** "Silence is the strongest available form
+  of 'say unknown, not empty'" enters the record as its own sentence, and the
+  non-empty branches are pinned with two battery mutations over them so the fix
+  cannot degrade into blanket silence.
+- **The card-owning pin RATIFIED, and its exemption with it**: the replacement
+  rule binds TEMPLATED cards only, and the derived card's exemption is derived
+  from the moment's own law — a row that knows something needs you but not where
+  is the defect M6 exists to prevent — not from convenience.
+- **The three grown evals RATIFIED, two of them stricter**, and the ruling notes
+  this is the second time growing an eval has exposed a latent hole (WP-49's
+  exhaustive account was the first).
+- **The lock amendment RATIFIED AS THE STANDARD** and appended to the protocol:
+  an announce is amended when the need is discovered; one corrected at merge
+  time is a claim nobody could have acted on.
+- Two protocol sharpenings from the field: **pwd's hazard is a compound command,
+  not an hour**, and **the poisoned cache has no fixed count** — "the rule holds;
+  the count in it doesn't."
+
+### 5 · ABI, declared
+
+The tree was built for **Electron (ABI 146)** at the cut — the owner's
+`npm run rebuild` after WP-50 — and the CONSTRUCT-a-Database probe said so on the
+first command in the worktree, before a test ran. `npm test`'s `pretest` hook
+flipped it. It is now **system Node (this machine v25.9.0, ABI 141)**, verified
+by construction before the merged suite and at both ends of the merged battery.
+`.nvmrc` pins 22.16.0 → ABI 127, which is what CI sees. **The owner must
+`npm run rebuild` before loading Local.**
+
+### 6 · Unpushed, properly
+
+Zero remote `wp-52` refs; no upstream on `poc/nexintelligence-ux`; no tags
+touched; version still `0.5.2`.
+
+**WP-52 is CLOSED.** Every ratified card on the owner's real fleet is headline ·
+ask · meta with its rule upright and tier-named; card 2 states its gate once,
+the incident cards state their finding once, and card 1 asserts nothing about a
+target set the record does not know. **Item 2 remains open on the designer's
+sentence set**, which had not arrived at the gate.
+
+**THE `src/renderer/`, THE COMPOSER IN `sessionRegistry.ts`,
+`tests/intelligence-evals/` AND `docs/intelligence/` LOCKS ARE RELEASED.**
