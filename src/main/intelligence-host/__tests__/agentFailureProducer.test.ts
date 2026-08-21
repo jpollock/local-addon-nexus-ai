@@ -123,6 +123,34 @@ describe('WP-54a · what a timed-out run writes down', () => {
     expect(event.payload).not.toHaveProperty('timeout_ms');
   });
 
+  test('AN `error` RUN CARRYING A TIMEOUT STILL WRITES NO TIMEOUT — the status decides', () => {
+    // FOUND BY THE BATTERY (M03 survived): nothing drove this, and it is not a
+    // corner. `AgentRunner` passes `timeoutMs` from its own local on EVERY run,
+    // so an errored run reaches this producer with a real number in hand. The
+    // `status === 'timeout' &&` clause is the only thing between that number
+    // and a row reading "It timed out after 300s" about a run that did not
+    // time out — a plausible value earning a measured one's credit, on the one
+    // field the ratified ask says aloud.
+    recordAgentRunOutcome({
+      agentId: AGENT_ID, status: 'error', error: 'provider refused',
+      timeoutMs: TIMEOUT_MS, finishedAt: FAILED_AT,
+    }, { core });
+    const [event] = failures();
+    expect(event.payload.status).toBe('error');
+    expect(event.payload).not.toHaveProperty('timeout_ms');
+  });
+
+  test('the failure is stamped on NO entity — an agent run did not fail at a site', () => {
+    // FOUND BY THE BATTERY (M10 survived). The inbox reached the same answer
+    // independently — `scope: '*'`, `scopeLabel: 'This agent'` — and an entity
+    // borrowed from whatever the run touched last would put a platform failure
+    // on a site's record, where every entity-scoped reader would find it.
+    recordAgentRunOutcome({
+      agentId: AGENT_ID, status: 'timeout', timeoutMs: TIMEOUT_MS, finishedAt: FAILED_AT,
+    }, { core });
+    expect(failures()[0].entity).toEqual({});
+  });
+
   test('a run with no usable finish time records NOTHING rather than being stamped now', () => {
     expect(recordAgentRunOutcome({
       agentId: AGENT_ID, status: 'timeout', timeoutMs: TIMEOUT_MS, finishedAt: 0,

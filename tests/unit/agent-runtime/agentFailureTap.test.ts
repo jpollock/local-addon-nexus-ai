@@ -112,13 +112,32 @@ describe('WP-54a · the run-completion tap', () => {
     expect(String(event.payload.message)).toContain('timed out after 120ms');
   });
 
-  test('`observed_at` is the run\'s own finish time, inside the run\'s own window', async () => {
-    const before = Date.now();
-    await runner().run(STALLS);
-    const after = Date.now();
-    const at = Date.parse(failures()[0].observed_at);
-    expect(at).toBeGreaterThanOrEqual(before);
-    expect(at).toBeLessThanOrEqual(after);
+  test('`observed_at` IS `result.finishedAt`, to the millisecond', async () => {
+    // THE BATTERY CAUGHT THIS ASSERTION BEING VACUOUS. It used to check only
+    // that `observed_at` fell between a `before` and an `after` taken around
+    // the call — a window that a `Date.now()` at the TAP also falls inside, so
+    // the mutation replacing the run's own moment with the fold's SURVIVED.
+    // The window was the assertion's whole content and it could not tell the
+    // two apart. Equality can: `finishedAt` is stamped when the run ends and
+    // the tap runs strictly after it.
+    const result = await runner().run(STALLS);
+    expect(failures()[0].observed_at).toBe(new Date(result.finishedAt).toISOString());
+  });
+
+  test('an ERRORED run carries its message but not a timeout — the runner hands over both', async () => {
+    // The runner passes `timeoutMs` on every run, errored ones included, so
+    // this is the production path for the producer's status clause rather than
+    // a corner. Driven here as well as at the producer because the tap is what
+    // supplies the number that would otherwise be written.
+    const explodes: AgentDefinition = {
+      ...STALLS, run: async () => { throw new Error('provider refused'); },
+    };
+    const result = await runner().run(explodes);
+    expect(result.status).toBe('error');
+    const [event] = failures();
+    expect(event.payload.status).toBe('error');
+    expect(event.payload.message).toBe('provider refused');
+    expect(event.payload).not.toHaveProperty('timeout_ms');
   });
 
   test('a later successful run closes it — the row leaves the record\'s open set', async () => {
