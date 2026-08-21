@@ -27967,3 +27967,77 @@ for more than it is.
 **The existing Layer 6 replay also passes** on this branch — 11,181 events,
 6,369 twins replayed over 388 entities, deterministic — confirming this packet
 disturbs no fold (it adds none).
+
+---
+
+## WP-57 · THE LIVE SMOKE — TAKEN, and it passes (2026-08-21)
+
+The gate report recorded this as owed. It is now taken, in a **running Local
+loading this worktree's code**, and the debt is discharged.
+
+**How Local was pointed at the branch** (reversible, and the restore command is
+recorded): the addon symlink
+`~/Library/Application Support/Local/addons/local-addon-nexus-ai` was
+repointed from the primary checkout to `.worktrees/wp-57`, the worktree was
+compiled, `better-sqlite3` rebuilt for Electron 42.2.0 (ABI 146), and Local
+relaunched with `./dev-reload.sh`. Restore:
+
+```
+ln -sfn /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai \
+  "$HOME/Library/Application Support/Local/addons/local-addon-nexus-ai"
+```
+
+### What the live ledger says
+
+```
+task.run.assigned  {"agent":"wp57-smoke","trigger":"manual","autonomy":"interactive","run_id":"r_mt3i47wd00"}
+task.run.completed {"agent":"wp57-smoke","trigger":"manual","autonomy":"interactive","status":"error",
+                    "duration_ms":5,"error":"wp57-smoke: intentional failure for the WP-57 live smoke"}
+
+actor      act_wp57_smoke      (both)
+correlation task_01M0K5X3R17VEHR26JGA2RV931   (both — one thread)
+```
+
+**Six things proved that the real-ledger exhibit could not:**
+
+1. **A running Local constructs `AgentRunner` WITH an intelligence core**, and
+   the ledger takes the write. This was the whole wiring claim.
+2. **The Electron ABI is sound** — the frame runs under Electron, not just
+   system Node.
+3. **Both brackets, one correlation**, minted in production.
+4. **The actor names the agent** — `act_wp57_smoke`, the corrected format,
+   derived live from the agent name.
+5. **`autonomy: interactive` because `trigger: manual`.** §A.2's rule, working
+   in production: the same agent on a cron would have been `autonomous`. The
+   rule is derived from the trigger, never read from a setting.
+6. **`status: error` and the real error string**, carried from the run rather
+   than recomposed.
+
+### The laziness held, on real agents, unprompted
+
+Before the synthetic run, **three real agents ran under the new code and wrote
+NOTHING**: `auth-probe` (its own `*/2` cron, clean), `web-analytics` (manual,
+clean, 3 ms) and `security-sentinel` (manual, a full 112-second fleet sweep,
+`findings=0`). Measured: `0` `task.run.*` events attributable to any of them.
+That is the ruling working on the exact population it was written for — and it
+is why the smoke needed a synthetic agent at all.
+
+### Why a synthetic agent, and where it went
+
+Every real agent on this machine currently succeeds cleanly, and a lazy frame
+writes nothing for a clean success — so no real agent could produce the
+evidence. `wp57-smoke` was a temporary agent that **called no tool and touched
+no site**, threw on purpose, and was **deleted immediately after** (verified
+absent). Its two events remain in the ledger, which is correct: the record is
+append-only, and they are honest records of a run that really happened.
+
+**The subsumption is visible here too:** exactly **one** `task.run.assigned`
+and **one** `task.run.completed`. Had `emitScanAct` survived, the sentinel
+sweep above would have added a second `task.run.completed` of its own.
+
+### Still not proved
+
+`noteGatedAct` never fired, because `NexusToolProvider` does not call it yet —
+that is Task 5. So `first_gated_act_at` is absent from the payload above, and
+the security-sentinel sweep's ten tier-2 `wpe_site_deep_refresh` calls did NOT
+flush a bracket. Correct for today's code, and the reason Tasks 5–8 remain.
