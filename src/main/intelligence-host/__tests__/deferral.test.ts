@@ -51,6 +51,7 @@ import {
   createSessionRegistry,
   foldSessionRegistry,
   listVerdict,
+  runCorrelationFor,
   type RunbookLookup,
   type SessionRegistryDeps,
   type Situation,
@@ -411,6 +412,63 @@ describe('the fold — present in waiting, absent from counts.needsYou', () => {
 
   it('states the wake source honestly on the snapshot — the record arm has no producer', () => {
     expect(foldSessionRegistry(deps()).wakeSource).toContain('NOTHING SUPPLIES ONE');
+  });
+});
+
+// ===========================================================================
+
+/**
+ * `runCorrelationFor` — the turn a deferral is recorded ON.
+ *
+ * FOUND BY THE EXHIBIT, not by review. Driving the real ledger showed the
+ * deferral landing with NO `correlation`, because a surface holding a
+ * `Situation` has a situation id and no turn id: `taskIds` lives on
+ * `SessionRow`, which the triage view does not hand over. "Recorded on the run"
+ * was unsatisfiable from the only shape the caller has.
+ */
+describe('recorded ON THE RUN — resolving the correlation a Situation cannot supply', () => {
+  it('resolves a session situation to its NEWEST turn', () => {
+    const first = mintTaskId();
+    // Two turns of ONE run: same capability, same hash, so they fold together.
+    for (const task of [first, mintTaskId()]) {
+      core.emitter.emit({
+        observed_at: hoursAgo(task === first ? 70 : 20),
+        topic: MANIFEST_TOPIC,
+        schema: MANIFEST_SCHEMA,
+        entity: {},
+        actor: { id: 'act_chat_assembler', kind: 'system' },
+        source: { class: 'work', system: 'assembler:chat', trust: 'emitted' },
+        correlation: task,
+        payload: {
+          task,
+          procedure: { capability: RB.capability, runbook: RB.id, hash: HASH, status: 'delivered' },
+          retrieval: [],
+        },
+      });
+    }
+    const row = createSessionRegistry(deps()).sessions()[0]!;
+    expect(row.taskIds).toHaveLength(2);
+
+    // The NEWEST, not the first. The first turn is the session's IDENTITY; the
+    // deferral is a statement about the moment the user is looking at.
+    expect(runCorrelationFor(row.id, deps())).toBe(row.taskIds[1]);
+    expect(runCorrelationFor(row.id, deps())).not.toBe(row.taskIds[0]);
+  });
+
+  it('returns undefined for a situation that is no session — the held incident path', () => {
+    armWaitingRun();
+    expect(runCorrelationFor('evt_not_a_session', deps())).toBeUndefined();
+  });
+
+  it('the resolved correlation makes the record joinable back to the run', () => {
+    const { situationId } = armWaitingRun();
+    const taskId = runCorrelationFor(situationId, deps());
+    expect(typeof taskId).toBe('string');
+
+    const id = recordDeferral({ situationId, taskId, reason: 'vendor' })!;
+    // The join the correlation buys: read the run's events, find the deferral.
+    const runEventIds = core.ledger.query({ correlation: taskId!, limit: 100 }).map((e) => e.id);
+    expect(runEventIds).toContain(id);
   });
 });
 

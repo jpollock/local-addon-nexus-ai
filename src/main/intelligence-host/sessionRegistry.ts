@@ -2403,6 +2403,41 @@ function escalating(situations: readonly Situation[]): Situation[] {
   return situations.filter((s) => !s.deferral);
 }
 
+/**
+ * WP-56 · THE TURN A DEFERRAL ON THIS SITUATION IS RECORDED ON.
+ *
+ * Cycle two places the deferral ON THE RUN, which in this ledger means the
+ * envelope's `correlation` — and **a surface holding a `Situation` cannot
+ * supply one.** `Situation` carries `sessionId` and `capability`; the turn ids
+ * live on `SessionRow.taskIds`, which the triage view does not hand over. The
+ * exhibit measured the consequence: a deferral recorded straight from a
+ * situation id landed with no correlation, joined to no run, and could not
+ * answer "what did the user defer during this run".
+ *
+ * Resolving it HERE rather than widening `Situation` keeps a turn id off the
+ * read contract, where nothing renders it and its only use would be this write.
+ *
+ * **The NEWEST turn, not the first.** The deferral is a statement about this
+ * run AT THIS MOMENT, and the moment is the turn the user is looking at. The
+ * first turn is the session's identity, which is a different question.
+ *
+ * `undefined` for an incident situation, and that is the held path rather than
+ * a failure: an orphan incident was never armed under a procedure, so there is
+ * no run for its deferral to be recorded on. See the incident-path measurement
+ * in `deferral.test.ts`.
+ */
+export function runCorrelationFor(
+  situationId: string,
+  deps: SessionRegistryDeps = {}
+): string | undefined {
+  try {
+    const row = foldSessionRegistry(deps).sessions.find((s) => s.id === situationId);
+    return row?.taskIds[row.taskIds.length - 1];
+  } catch {
+    return undefined; // a deferral with no correlation beats no deferral at all
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The reserved slot — ONE row, always, whatever the counts say
 // ---------------------------------------------------------------------------

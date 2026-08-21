@@ -114,7 +114,7 @@ import { enrichSiteFinderPlugins, summarizeSiteFinderTwins } from './intelligenc
 import { readSiteContentStatus } from './intelligence-host/siteContentStatus';
 import { readGovernMatrix, setCapabilityGrant } from './intelligence-host/governMatrix';
 import { getIntelligenceCore } from './intelligence-host/coreRegistry';
-import { createSessionRegistry } from './intelligence-host/sessionRegistry';
+import { createSessionRegistry, runCorrelationFor } from './intelligence-host/sessionRegistry';
 import {
   recordDeferral,
   recordDeferralEnded,
@@ -923,24 +923,47 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // its answer untouched. `undefined` back means the record was refused — the
   // surface re-reads the triage and sees the row still escalating, which is the
   // honest outcome and needs no separate error shape.
+  // THE CORRELATION IS RESOLVED HERE, and that is not the shaping the thin-bridge
+  // rule forbids. A surface holding a `Situation` has a situation id and no turn
+  // id — `taskIds` lives on `SessionRow`, which the triage view does not hand
+  // over — so without this the deferral lands with no `correlation` and is
+  // recorded on nothing, which is not what cycle two ruled. Resolving the
+  // SUBJECT of a write is a different act from transforming the answer to a
+  // read; `runCorrelationFor` is the registry's own derivation, called, not
+  // reimplemented. A caller that already knows its turn id still wins.
+  const correlationFor = (input: { situationId: string; taskId?: unknown }): string | undefined =>
+    typeof input.taskId === 'string' && input.taskId
+      ? input.taskId
+      : runCorrelationFor(input.situationId);
+
   safeHandle(
     IPC_CHANNELS.RETURN_DEFER,
-    (_event: any, input: { situationId?: unknown; taskId?: unknown; reason?: unknown; wake?: unknown }) =>
-      recordDeferral({
-        situationId: String(input?.situationId ?? ''),
-        ...(typeof input?.taskId === 'string' ? { taskId: input.taskId } : {}),
-        reason: String(input?.reason ?? ''),
-        wake: (input?.wake ?? null) as DeferralWake | null,
-      }) ?? null
+    (_event: any, input: { situationId?: unknown; taskId?: unknown; reason?: unknown; wake?: unknown }) => {
+      const situationId = String(input?.situationId ?? '');
+      const taskId = correlationFor({ situationId, taskId: input?.taskId });
+      return (
+        recordDeferral({
+          situationId,
+          ...(taskId ? { taskId } : {}),
+          reason: String(input?.reason ?? ''),
+          wake: (input?.wake ?? null) as DeferralWake | null,
+        }) ?? null
+      );
+    }
   );
   safeHandle(
     IPC_CHANNELS.RETURN_END_DEFERRAL,
-    (_event: any, input: { situationId?: unknown; taskId?: unknown; supersedes?: unknown }) =>
-      recordDeferralEnded({
-        situationId: String(input?.situationId ?? ''),
-        ...(typeof input?.taskId === 'string' ? { taskId: input.taskId } : {}),
-        supersedes: String(input?.supersedes ?? ''),
-      }) ?? null
+    (_event: any, input: { situationId?: unknown; taskId?: unknown; supersedes?: unknown }) => {
+      const situationId = String(input?.situationId ?? '');
+      const taskId = correlationFor({ situationId, taskId: input?.taskId });
+      return (
+        recordDeferralEnded({
+          situationId,
+          ...(taskId ? { taskId } : {}),
+          supersedes: String(input?.supersedes ?? ''),
+        }) ?? null
+      );
+    }
   );
 
   safeHandle(IPC_CHANNELS.GET_FLEET_LIST, async () => {
