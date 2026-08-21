@@ -84,8 +84,14 @@ MUTATIONS = [
     ("M08", REGISTRY, "  if (total === 0) return '';",
      "  if (total === 0) return 'no targets on record';",
      "card 1's contradiction comes straight back — a KNOWN-EMPTY claim about the target set on a row whose guard declined because the set is UNKNOWN"),
+    # A BEHAVIOURAL witness, not a compile failure. The first form of this
+    # mutation (`return '';` replacing the guarded return) made every branch
+    # below it unreachable, so ts-jest refused the file and the kill was "does
+    # not compile" — honest, but weaker than an assertion, and WP-24's rule is
+    # to confirm the mutant changes EMITTED BEHAVIOUR before crediting a kill.
+    # `total >= 0` compiles, runs, and returns '' for every place set there is.
     ("M09", REGISTRY, "  if (total === 0) return '';",
-     "  return '';",
+     "  if (total >= 0) return '';",
      "the place set stops speaking even when it HAS members — 'touches production on 2 of 5' deleted, which is the fix over-applied and the field destroyed"),
     ("M10", REGISTRY,
      "  if (!highest) return `nothing on record names where ${total === 1 ? 'the target is' : `the ${total} targets are`}`;",
