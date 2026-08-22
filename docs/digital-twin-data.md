@@ -283,7 +283,8 @@ observations back into the ledger (`state.plugin.observed` /
    ever collected it. Five of eight schedules are off by default (§2.1). Check
    `wpeRefreshAutoEnabled` / `externalRefreshAutoEnabled`.
 2. **Is it a halted local site?** L1 refreshes every 24h; **L2 does not refresh
-   at all** for a halted site — `plugins`, `activeTheme`, `postCount` and
+   at all** for a halted site — though a bulk or scheduled run now starts it
+   first (§2.5) — `plugins`, `activeTheme`, `postCount` and
    `mysqlVersion` are frozen at the last time it ran. This is `data-gaps-design.html`
    G12, still open.
 3. **Is it a WPE install missing `wp_version`?** CAPI's `listInstalls` does not
@@ -294,6 +295,38 @@ observations back into the ledger (`state.plugin.observed` /
    were lost; the missing fields are written NULL, never defaulted.
 6. **Nothing reports coldness on its own.** See §6 — there is no "these facts
    have gone stale" surface, so age has to be asked for.
+
+---
+
+### 2.5 Halted local sites — bulk operations start them
+
+**Ruled 2026-08-22 by the owner.** A bulk operation that reaches a halted
+Local site **starts it, collects, and stops it again.** "Index content" on
+45 stopped sites means 45 sites started, indexed and stopped — not 45 rows
+saying *did not run*. The same holds for a scheduled run and for a
+single-site action.
+
+This is `autoStartStop`, and it is wired end to end in
+`BulkOperationManager`: `executeSingle` starts a halted site,
+`waitForDatabaseReady` gives MySQL 30 seconds, and the `finally` block
+stops **only** the sites it started. A site the user already had running
+is left running.
+
+| caller | autoStartStop |
+|---|---|
+| `OpportunisticScheduler` — scheduled local index | **on** — always has been |
+| Operations / Sites tab bulk bar | **on** (WP-68; previously sent `options: {}`) |
+| single-site index from a site's own page | **on** |
+| MCP `bulk_reindex` / `reindex_site` | **on** |
+
+**Bounded, not free.** `MAX_CONCURRENCY = 5`, so at most five sites run at
+once and each is stopped before the next takes its slot. A fleet-wide
+index is slow by design: the cost of starting a site is the floor on how
+fast this can go. That is a duration to state, never a reason to skip.
+
+**A site that fails to start is `failed`, not `did not run`.** WP-67's
+distinction survives — *did not run* means nobody attempted the work, and
+with auto-start on, a halted site is always attempted.
 
 ---
 

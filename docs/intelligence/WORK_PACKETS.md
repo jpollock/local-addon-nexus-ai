@@ -32177,3 +32177,151 @@ the first time.** `autoStartStop` exists and the dispatcher sends
 them, skip them with a reason, or offer the choice is not an engineering
 call and must not be defaulted into by whoever writes the next packet.
 **Ask the owner. Do not infer.**
+
+## WP-68 · ACCEPTED — my measurement was right and taken at the wrong time (2026-08-22, architect adjudication)
+
+**Accepted. Commit it.** Verified by me where I could: `npx jest
+tests/unit/schemas.test.ts tests/unit/ipc/bulk.test.ts` → **24 passed**,
+and `sites-tab-wiring.test.ts` → **17 passed**. Everything touching
+`better-sqlite3` I **cannot** run: the compiled module is a Mach-O binary
+and I read this tree through a Linux bridge, so it dies on `invalid ELF
+header`. **The 8,981 figure is the packet's, not mine, and I state that
+rather than implying I checked it.** Every source claim below I read
+directly.
+
+### The packet corrected my causal story, and it was load-bearing
+
+I told the owner the 10 August bulk routing broke the 18:49 run. **It did
+not.** That run went through `indexAllWpeContent` — the fleet path, which
+resolves the name from the graph and never touches `op.siteNames`.
+
+**The proof is a mechanism, not a name.** 365 extraction starts in the
+graph's exact natural `SELECT` order, 20/20 on the first twenty ids,
+dispatched **two at a time** — matching that method's `concurrency = 2`
+and not `BulkOperationManager`'s `MAX_CONCURRENCY = 5` over a
+renderer-ordered selection. Two independent signatures, order and width,
+agreeing. That is how a path is identified when both candidates produce
+the same log line.
+
+### My ninth error of one family, and a new form of it
+
+I queried `sites` and found all 365 rows carrying real install names, and
+reported the graph innocent. **A CAPI sync rewrote every one of those rows
+at 20:39 — after the failed run.** `created_at` spans 13–22 Aug;
+`updated_at` is uniform and later than the incident. I measured a table
+after its repair and reported the reading as evidence about the state
+before it.
+
+The previous eight were the wrong pattern — a grep that could not reach
+its case. **This one is the right query at the wrong time**, which is the
+same defect with the clock as its excluding dimension rather than the
+regex.
+
+**New rule: a measurement carries a timestamp or it is not a
+measurement.** Before a table is offered as evidence about an incident,
+establish that no writer touched it between the incident and the read —
+and say which writers were checked. `updated_at` was sitting in the same
+row I selected from.
+
+### My prescribed fix was insufficient and the packet said so
+
+WP-68 instructed: *"resolve the install name from the graph at the point
+of use, exactly as `indexAllWpeContent` already does."* **That is precisely
+what the failing code did.** The packet's answer is `requireWpeInstallName`
+— which refuses an empty name, a name equal to the site id, and a name
+equal to the bare install UUID, and names the repair (`wpe_sync_sites`) in
+its own error string.
+
+**New rule: resolving a value from a store is not validating it.** A
+lookup that succeeds returns whatever the store holds, including a value
+the store should never have held. Where the resolved value is about to
+become an action — a hostname, a path, a target — the check belongs
+between the lookup and the use.
+
+### D13, and how it was found
+
+`BulkOperationRequestSchema` declared `type`, `siteIds`, `options` and not
+`siteNames`. **Zod strips unknown keys rather than rejecting them**, so
+`validateInput` deleted the map on every `BULK_EXECUTE` and `execute()`
+stored `{}`. Measured against the installed Zod 3.25.76, in and out, with
+the survival answer printed.
+
+So the old `?? siteId` fallback **was never occasionally empty. It fired
+for 100% of remote sites on every Sites-tab dispatch since 10 August.**
+
+**The diagnostic method is the part worth keeping.** Two screenshots, read
+together: Local rows showing names and remote rows showing raw
+`wpe-<uuid>` ids *in the same list* is the signature of exactly one thing
+— `op.siteNames?.[siteId] ?? this.props.siteNames?.get(siteId) ?? siteId`
+with the first map empty and the second built from Local sites only. The
+packet says it would have kept guessing without the second image. **A
+rendering is an artifact of the code that produced it, and reading it
+backwards is a measurement.**
+
+### The guard is better than the one it sits beside
+
+The existing settings guard is field-by-field, so it protects the fields
+someone remembered to list. The new one is built from
+`Required<BulkOperationRequest>`: **adding a field to the interface is a
+compile error until it appears in the fixture, and the round-trip
+assertion then fails until the schema accepts it.** Verified at
+`tests/unit/schemas.test.ts:87-98` — the assertion is
+`Object.keys(out).sort()` against `Object.keys(full).sort()`, which
+catches a strip rather than a specific missing field.
+
+**New rule: prefer a guard the compiler extends for you.** A list of
+fields protects the fields on the list. A fixture derived from the type
+protects the field nobody has written yet — which is the only one that
+will be forgotten.
+
+Red proof taken correctly: removing the schema line turns the handler test
+red *with the received object showing `siteNames` gone*, while the
+"still rejects a malformed request" counterpart stays green — so the pass
+is not validation being disabled.
+
+### The auto-start ruling, and my default was wrong on the facts
+
+Not merely a bad call. **Six dispatchers already sent
+`autoStartStop: true`** — `OpportunisticScheduler`, `INDEX_SITE`,
+`INDEX_ALL_AUTO`, `SETUP_AI_ALL_AUTO`, `SYNC_GRAPH_ALL`,
+`FLEET_HEALTH_CHECK_ALL`, `FLEET_PLUGIN_UPDATE_ALL`. The Sites-tab bulk
+bar sent `{}`. **The one surface a user actually presses was the only
+index path that refused to do the work**, and my "leave it off, it is the
+owner's decision" would have nailed that inconsistency in place. I should
+have read the convention before proposing a default against it.
+
+`reindex_site` was the worst of the three fixed: it bypassed the bulk
+manager entirely, so on a halted site it printed *"Re-index Complete /
+Documents indexed: 0"* with the real failure demoted to a warning —
+**WP-67's defect alive in a tool WP-67 never touched.** Routing it through
+the same seam fixes both that and its own description's async claim.
+
+`INDEX_ALL_FLEET` left alone with a stated reason: it is the deliberate
+"running sites only" half of a pair. **An explicit opt-out should still
+report honestly rather than record a failure for work it declined** —
+correct, and it is the distinction WP-67 exists to protect.
+
+### Live proof, and what it proves
+
+`jeremypollockblog`: `state: error`, 0 docs, *"MySQL not available"*,
+halted → `state: indexed`, 2 docs / 2 chunks, **halted again**. MySQL was
+absent before and the index succeeded after, which happens only if the
+site was started; and it ends halted, which happens only if it was
+stopped. **Two facts that each require the mechanism, rather than one
+that merely permits it.**
+
+### Open, and correctly left open
+
+**What wrote the graph id into `sites.name`.** Every writer ruled out by
+inspection and listed: no `UPDATE sites SET name` anywhere; `syncInstall`
+takes the name from CAPI; `syncContent`'s piggyback can only write on the
+success path, which a zero-post run never reaches; `buildSiteNames` never
+writes. 307 IndexRegistry entries from 14 Aug carry real names, so the
+column was correct then, and no surviving artifact records it between 14
+and 22 Aug.
+
+**Ruled: this stays open and is not closed by inference.** The two
+instances found are independent of it, and both are fixed;
+`requireWpeInstallName` now refuses the bad value rather than dialling it,
+which converts an unexplained silent failure into an unexplained loud one.
+That is the correct interim state for a cause nobody can name.
