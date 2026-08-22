@@ -30763,3 +30763,82 @@ We have ruled that an absence stated with its reason is shippable and a
 blank is not. **This may need a third form — a PARTIAL stated with its
 reason** — and if it does, that is a design question for the designer
 rather than a producer for a packet.
+
+---
+
+## WP-62 · LOCK ANNOUNCE (2026-08-22) — the three stacked truncations in the remote content path
+
+Branch `wp-62`, cut from `poc/nexintelligence-ux`. One claim ships whole:
+**remote content is indexed the way local content is.**
+
+### Paths held
+
+| path | what changes |
+|---|---|
+| `src/main/content/RemoteContentExtractor.ts` | pagination, deterministic order, truncation detection, custom fields |
+| `src/main/content/ContentPipeline.ts` | `chunkPosts`/`makeDocShell`/`splitSentences` LIFTED out (private → shared module); `indexSite` calls the shared one |
+| `src/main/content/chunker.ts` | **NEW** — the lifted chunker, one copy, two callers |
+| `src/main/content/wxr-postmeta.ts` | **NEW** — bulk post-meta reader (see the measurement below) |
+| `src/main/events/WPESyncService.ts` | `syncContent` only — chunking, bounded batches, cancellation-shaped loop |
+| `src/main/events/ExternalContentIndexService.ts` | `indexOne` only — same |
+| `src/main/mcp/modules/site-context/get-index-status.ts` | carries the completeness distinction |
+| tests under `tests/unit/content/`, `tests/unit/events/`, `tests/unit/mcp/` | new + amended |
+
+### Shapes changed — declared, per the WP-54 rule
+
+- **`ExtractedContent`** (`src/common/types.ts`) gains an OPTIONAL
+  `coverage` field describing how the extraction was bounded. Optional so
+  every existing producer and reader compiles unchanged.
+- **`IndexEntry`** (`src/common/types.ts`) gains OPTIONAL completeness
+  fields. Same reason. Anything constructing a whole `IndexEntry`
+  literal is unaffected; `IndexRegistry.emptyEntry` is the only such
+  place in `src/main`.
+- **`ExtractedPost.customFields`** stops being a hardcoded `{}` on the
+  remote path. The type does not change; the VALUE does, and readers
+  that assumed it empty for remote posts will start seeing content.
+
+### Quantities changed — declared, per the WP-56 rule
+
+1. **`IndexEntry.documentCount` for a remote site changes meaning.**
+   Today, `WPESyncService.syncContent` and
+   `ExternalContentIndexService.indexOne` both write
+   `documentCount = chunkCount = embeddedDocs.length`, and with one
+   document per post that is a POST count wearing a document label. After
+   chunking they diverge, exactly as `ContentPipeline` already has them
+   diverge for local sites: `documentCount` = distinct post ids,
+   `chunkCount` = embedded chunks. **A remote site's `chunkCount` will
+   rise; its `documentCount` will not.** `get_index_status` prints both.
+2. **`ExternalContentIndexService.indexOne` returns `{ documentCount }`**
+   — same redefinition, same reason.
+3. **The extractor's log line stops calling a page a total.**
+
+### Measurements taken before the announce (cedarvalehealt, live, read-only)
+
+- 602 published posts of every type; the extractor indexes 200.
+- `--offset` paginates correctly, **but the default order is not
+  deterministic**: 200+ posts on this install share one `post_date` to
+  the second, and WP_Query's default `orderby=date` leaves ties in
+  unspecified order — so offset paging over the default sort can drop
+  and duplicate rows. Pagination pins `--orderby=ID --order=ASC`.
+- One 200-post page: **3.1 s, 545 KB**.
+- **`wp post list` cannot emit post meta at all** — `--fields=ID,meta`
+  and `--fields=ID,_wp_page_template` both return `Error: Invalid field`.
+- `wp post meta list <id>`: **2.9 s per post** measured over ten
+  sequential calls in one warm SSH session. For 602 posts that is
+  **29 minutes**; for qwerky's 30,628 it is roughly **24 hours**. Not a
+  mechanism.
+- `wp eval` and `wp db query` — the two commands that would do this in
+  one statement — are on `REMOTE_POLICY.blocked`.
+- `wp export --stdout --post__in=<200 comma-separated ids>`:
+  **5.1 s, 1.26 MB, 200 items, full `wp:postmeta` for each.** One
+  WordPress bootstrap per page. This is the only permitted bulk route
+  and is what the packet uses; the absence of custom fields is STATED
+  when it fails, never silent.
+
+### Not in scope, and named so it is not mistaken for coverage
+
+Remote posts also carry no **categories or tags** (`categories: []`,
+`tags: []`, hardcoded). WXR would supply them nearly free. They are NOT
+in this packet's claim, they do not enter the searchable text on the
+local path either, and folding them in is the mid-task scope defect. They
+are recorded here so the next reader finds a note rather than a silence.
