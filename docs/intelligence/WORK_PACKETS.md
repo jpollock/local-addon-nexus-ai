@@ -29181,3 +29181,192 @@ The rule was prose for months. Three call sites honoured it. The one written to
 be the correct shared path forgot in its first ten lines, and its docblock said
 otherwise. That was never going to be fixed by writing the rule down more
 firmly.
+
+---
+
+## WP-60 · LOCK ANNOUNCE (2026-08-21) — the source filter and its label
+
+**Worktree `.worktrees/wp-60`, branch `wp-60`, base `poc/nexintelligence-ux`
+at `8fb9e13b`.** Small packet, one production file. Declared parallel-safe
+with WP-59 by the registration; the ownership map's
+`modules/fleet/<one-tool>.ts + its test` row is the rule that makes it so.
+
+### THE QUANTITY THIS PACKET CHANGES — announced before the paths
+
+Per the WP-56 rule (*locks partition files; they do not partition
+arithmetic*). **The quantity is WHICH SITES A `source` FILTER SELECTS, and
+the three places this file computes it.** It is a set, not a count, but it
+is the same class of shared meaning: three expressions of one predicate
+that a merge cannot see disagree.
+
+| expression | before | after |
+|---|---|---|
+| the graph query (`:74–77`) | `all → every active row`, else `source = ?` | unchanged — this one was already right |
+| the registry supplement (`:87`) | `sourceFilter !== 'wpe'` — merges local index entries into `local`, `all` **and `external`** | `=== 'all' \|\| === 'local'` |
+| the header label (`:143`) | `'wpe' ? … : 'local' ? … : ''` — `external` renders as the unlabelled whole fleet | four-value table; `external` gets `(external SSH hosts only)` |
+| the freshness denominator (`:321–325`) | `'wpe' → IN ('wpe','external')`, `'local' → 'local'`, **else → every active row** | the same parameterized shape as `:74–77`, so the warning's `of N` agrees with the report's `N sites in scope` |
+
+### The origin, measured rather than reasoned
+
+`f88614ec` ("FINDING 6 (Minor): find-outdated-sites source enum now includes
+'external' so the tool can target external hosts directly") added the fourth
+value to the schema enum **and changed nothing else in the file.** The three
+branch expressions were written against three values and were never revisited.
+That is why this is one defect with three expressions and not three defects:
+they all date from the same two-line commit, and each one is the same
+question — *does this predicate know how many values `source` has?*
+
+**The fourth expression is folded in beyond the packet's two named lines**
+and is disclosed as such. Justification under the mid-task scope rule: it
+breaks the packet's own stated constraint (*`source` has four values and this
+file was written against two*) and it is wrong in a live surface — a report
+headed `(WP Engine installs only)` over 3 sites that closes with
+`ℹ️ 4 of 5 sites have never been synced` is contradicting itself on the page.
+The `IN ('wpe','external')` there was correct when it was written
+(`4519ab63`, "every non-local kind") and stopped being correct the moment
+`external` became a filter value a user could type.
+
+**`source='wpe'` cannot be written here** — `tests/unit/fleet/external-visibility.test.ts`
+forbids that literal in `modules/fleet/`, correctly. The parameterized
+`source = ?` form satisfies the guard and is the shape the file already uses
+twenty lines up, so the branch count drops from three to two rather than
+growing to four.
+
+### The pin — over the value set, not over the lines
+
+The packet's own instruction. The test enumerates **every legal
+`sourceFilter`** and asserts, for each, the selected set AND the label:
+
+- The expectation table is `Record<SiteSource | 'all', …>` — a fourth
+  `SiteSource` fails `tsc` on the test file, not at runtime and not in
+  production.
+- Its keys are asserted equal to the handler's own
+  `inputSchema.properties.source.enum` — so the schema and the table cannot
+  drift apart in either direction.
+- Membership is observed through a **unique `wp_version` per fixture site**,
+  because `formatVersionSection` names only the non-latest groups: a version
+  string is a bijection with a site where a name is not.
+- The db fake honours `WHERE source = ?`, `source IN (…)`, `is_active` and
+  `site_id IN (…)`, so the SQL under test is actually the SQL being filtered
+  by. The existing `makeDb` in this suite returns every row regardless of
+  parameters; a set assertion written against it would pass on the bug.
+
+### Locks
+
+- `src/main/mcp/modules/fleet/find-outdated-sites.ts` — HELD
+- `tests/main/find-outdated-sites.test.ts` — HELD
+- Nothing else. No `src/intelligence/`, no `src/main/index.ts`, no
+  registration edit, no `common/types.ts` (the exhaustiveness pin is a
+  `Record` over the existing exported union, which needs no export added).
+
+---
+
+## WP-60 · PACKET REPORT (2026-08-21) — one defect, three expressions, one pin
+
+- [x] **D1, the registry supplement.** `sourceFilter !== 'wpe'` →
+      `=== 'all' || === 'local'`. An `external` report no longer returns the
+      local fleet.
+- [x] **D1's label.** The ternary chain is now `SOURCE_LABELS`, a
+      `Record<SiteSource | 'all', string>`. `external` renders
+      `(external SSH hosts only)`.
+- [x] **The third expression, folded in and disclosed** (announced above):
+      the freshness denominator is parameterized on the caller's filter, so
+      `of N` and `N sites in scope` are the same N.
+- [x] Pinned over the value set: 13 new tests, one enumeration, two type-level
+      Records.
+
+### The RED run is the exhibit
+
+Before the fix, `source=external` produced this — pasted verbatim from
+`/tmp/wp60-red.log`, not paraphrased:
+
+```
+## Outdated Sites Report
+3 sites in scope
+### WordPress
+- Latest: 6.3.0 (1 site)
+- Outdated: 6.2.0 (1 site) — wp60-foxtrot-ext [external]
+- Outdated: 6.1.0 (1 site) — wp60-golf-index [local]
+> ℹ️ 6 of 6 sites have never been synced — plugin data may be missing.
+```
+
+A report the user asked to be about external SSH hosts, naming a **local**
+site, under **no** scope label, closing with a denominator counting **every**
+site in the fleet. Three defects visible in seven lines, which is what
+"written against two values" looks like on the page.
+
+### Mutation battery — 5 driven, 5 killed, `--no-cache` throughout
+
+| # | mutation | result |
+|---|---|---|
+| control | unmutated tree | GREEN (the guard that would expose a blind harness) |
+| M1 | supplement predicate back to `!== 'wpe'` | KILLED |
+| M2 | `external` label entry back to `''` | KILLED |
+| M3 | freshness back to the three-way branch | KILLED |
+| M4 | `external` removed from the schema enum | KILLED (the agreement pin) |
+| M5 | a FIFTH `SiteSource` (`'cloudways'`) | KILLED — see the correction below |
+| control | post-battery tree | GREEN |
+
+### Two corrections to this packet's own announce
+
+**1. M5 was reported SURVIVED by my harness and was not.** The battery
+asserted exit `1`; `tsc` exits `2`. The mutation was dead — `TS2741:
+Property 'cloudways' is missing` — and the instrument said otherwise.
+Same family as WP-54a's blind battery, with the sign flipped: there, a
+harness that could only report success; here, one that reported a failure
+that had not happened. **Reading the artifact is what settled it**, per the
+measurement-method rule; a scoreboard is not a receipt.
+
+**2. My announce said a fifth source "fails `tsc` on the test file". It does
+not — and the reason is worth keeping.** `tsconfig.json` **excludes
+`tests`**; `npm run typecheck` never compiles the suite. The test-side
+`Record` is enforced by **ts-jest**, which uses `tsconfig.test.json`
+(`include: ["src/**/*", "agents/**/*", "tests/**/*"]`). Measured, both legs:
+
+```
+npx tsc --noEmit           → exit 2, src/…/find-outdated-sites.ts(45,7): TS2741  ← SOURCE_LABELS
+npx jest …find-outdated…   → exit 1, tests/main/find-outdated-sites.test.ts:337: TS2741, 0 tests run
+```
+
+So the value set is pinned in **both** gates of the definition of done, but
+by two different compilers, and a pin placed only in a test file would be
+invisible to step 1. Stated precisely because "it fails typecheck" was the
+kind of claim that is right about the outcome and wrong about the mechanism.
+
+### What the guard taught, at my expense
+
+`tests/unit/fleet/external-visibility.test.ts` scans **lines**, not SQL. My
+comment explaining *why the hardcoded WPE source literal could not be
+written here* contained that literal, and the guard failed the build on the
+prose citing it. The guard was right and I reworded. **A line-scanning ban
+cannot distinguish a use from a mention** — a comment quoting the forbidden
+token is indistinguishable from the token. Worth knowing before someone
+"fixes" the guard to allow comments, which would open the obvious hole.
+
+### Receipts
+
+- **634 suites / 8,847 tests / 8,835 passed / 12 skipped**, worktree, full
+  `npm test`, exit 0.
+- Against the base's `634 / 8,834 / 8,832 / 2` **primary** (`7924c459`,
+  guard `git diff --name-only 7924c459 HEAD -- src/ tests/ scripts/` empty,
+  so the base measurement stood and was not re-run):
+  the skipped column moves 2→12, the documented ten in the documented
+  direction for a worktree; tests move +13, which is **exactly** this
+  packet's `1 + (4 × 3)`. Suites +0 — the tests joined an existing file.
+- `npm run typecheck` exit 0.
+- Files: `find-outdated-sites.ts` (+1 label table, 3 predicates),
+  `find-outdated-sites.test.ts` (+13 tests, a parameter-honouring db fake).
+  Nothing else. No `src/intelligence/`, no wiring, no `common/types.ts`.
+
+### D6 — measured, not re-litigated
+
+Not reopened here. Per the registration, its reproduction is re-run after
+WP-58, which has merged (`ec14642c`); this packet touched nothing on that
+path and makes no claim about it.
+
+### ABI
+
+`npm test` ran, so **better-sqlite3 in the shared `node_modules` is built for
+system Node, not Electron.** `npm run rebuild` is required before loading
+Local. Announced because the symlinked `node_modules` is shared with every
+other worktree on this machine.

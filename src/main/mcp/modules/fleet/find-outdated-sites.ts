@@ -33,6 +33,22 @@ interface PluginRecord {
   version: string | null;
 }
 
+/**
+ * The scope label, one entry per legal value of the `source` argument.
+ *
+ * Typed as a Record over the union rather than written as a ternary chain: a
+ * fourth `SiteSource` is then a compile error here, which is exactly what did
+ * not happen when `external` was added to the schema enum and three separate
+ * two-value expressions in this file were left behind. Kept in agreement with
+ * `inputSchema.properties.source.enum` by `tests/main/find-outdated-sites.test.ts`.
+ */
+const SOURCE_LABELS: Record<SiteSource | 'all', string> = {
+  all: '',
+  local: ' (local sites only)',
+  wpe: ' (WP Engine installs only)',
+  external: ' (external SSH hosts only)',
+};
+
 export const findOutdatedSitesHandler: McpToolHandler = {
   definition: {
     name: 'find_outdated_sites',
@@ -84,7 +100,10 @@ export const findOutdatedSitesHandler: McpToolHandler = {
     }
 
     // --- Supplement with index registry for local sites not in graph ---
-    if (sourceFilter !== 'wpe') {
+    // The registry holds LOCAL sites only, so it may supplement only the two
+    // filters that ask for local sites. `!== 'wpe'` was written when `source`
+    // had three values; it merged the local fleet into an `external` report.
+    if (sourceFilter === 'all' || sourceFilter === 'local') {
       const entries = services.indexRegistry.listAll().filter((e) => e.structure);
       for (const e of entries) {
         if (!graphSites.has(e.siteId)) {
@@ -139,8 +158,7 @@ export const findOutdatedSitesHandler: McpToolHandler = {
       return ok(`No site version data available. ${hint}`);
     }
 
-    const sourceLabel = sourceFilter === 'wpe' ? ' (WP Engine installs only)'
-      : sourceFilter === 'local' ? ' (local sites only)' : '';
+    const sourceLabel = SOURCE_LABELS[sourceFilter as SiteSource | 'all'] ?? '';
     const lines: string[] = [`## Outdated Sites Report${sourceLabel}`, `${sites.length} sites in scope`, ''];
 
     if (twinCovered > 0) {
@@ -315,16 +333,23 @@ function pluginSyncFreshnessWarning(graphService: any, sourceFilter: string): st
     const DAY_MS = 24 * 60 * 60 * 1000;
     const now = Date.now();
 
-    // Check the oldest last_sync_at across relevant sites
-    // Remote sites of every kind: WPE installs and external SSH hosts.
-    // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
-    const q = sourceFilter === 'wpe'
-      ? "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE source IN ('wpe', 'external') AND is_active=1"
-      : sourceFilter === 'local'
-      ? "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE source='local' AND is_active=1"
-      : "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE is_active=1";
+    // Check the oldest last_sync_at across the SAME sites the report is about.
+    // Parameterized on the caller's filter, exactly as the site query above is:
+    // this warning's "of N" is printed under a header that already said
+    // "N sites in scope", so any scope of its own is a contradiction on the
+    // page. It used to branch three ways over a four-value argument — 'wpe'
+    // counted WPE + external, and 'external' fell through to every site.
+    // `source = ?` is also the only form permitted here: a hardcoded WPE
+    // source literal is banned in modules/fleet by external-visibility.test.ts
+    // — which scans LINES, so it fires on a comment quoting one too.
+    const SELECT = 'SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, ' +
+      'COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites';
+    const q = sourceFilter === 'all'
+      ? `${SELECT} WHERE is_active=1`
+      : `${SELECT} WHERE source = ? AND is_active=1`;
+    const params = sourceFilter === 'all' ? [] : [sourceFilter];
 
-    const row = db.prepare(q).get() as { oldest: number | null; total: number; never_synced: number } | undefined;
+    const row = db.prepare(q).get(...params) as { oldest: number | null; total: number; never_synced: number } | undefined;
     if (!row || row.total === 0) return null;
 
     if (row.never_synced > 0) {
