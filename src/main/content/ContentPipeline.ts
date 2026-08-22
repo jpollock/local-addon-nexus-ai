@@ -3,8 +3,8 @@ import { EmbeddingService } from '../embeddings/EmbeddingService';
 import { MySQLExtractor, SiteConnectionInfo } from './MySQLExtractor';
 import { FileScanner } from './FileScanner';
 import { IndexRegistry } from './IndexRegistry';
-import { VectorDocument, IndexResult, ExtractedPost } from '../../common/types';
-import { CHUNK_MAX_WORDS } from '../../common/constants';
+import { VectorDocument, IndexResult, ExtractedPost, ExtractionCoverage } from '../../common/types';
+import { chunkPosts } from './chunker';
 import { discoverRestApi } from './extractors/RestApiScanner';
 
 export type IndexStatus =
@@ -27,6 +27,21 @@ export interface ContentPipelineDeps {
  * Orchestrates the full content pipeline:
  *   extract → chunk → embed → index
  */
+/**
+ * The local path reads the whole `wp_posts` population in one SQL statement
+ * with no LIMIT and joins `wp_postmeta` for every public custom field, so its
+ * coverage is complete by construction. Recording it explicitly is what lets
+ * `get_index_status` distinguish "complete" from "not recorded" — an entry
+ * with NO coverage predates the tracking, and its document count is a floor.
+ */
+const LOCAL_COVERAGE: ExtractionCoverage = {
+  pageSize: 0,
+  pagesFetched: 1,
+  rowsReturned: -1,
+  complete: true,
+  customFields: 'collected',
+};
+
 export class ContentPipeline {
   private deps: ContentPipelineDeps;
   private statusMap = new Map<string, IndexStatus>();
@@ -173,6 +188,7 @@ export class ContentPipeline {
           chunkCount: 0,
           durationMs: result.durationMs,
           structure,
+          coverage: { ...LOCAL_COVERAGE, rowsReturned: 0 },
           state: errors.length > 0 ? 'error' : 'indexed',
           error: errors.length > 0 ? errors.join('; ') : undefined,
         });
@@ -186,7 +202,7 @@ export class ContentPipeline {
 
       // 3. Chunk
       this.setStatus(info.siteId, { state: 'indexing', progress: 30, message: `Chunking ${posts.length} posts...` });
-      const chunks = this.chunkPosts(info.siteId, posts);
+      const chunks = chunkPosts(info.siteId, posts);
 
       // 4. Embed in batches
       this.setStatus(info.siteId, { state: 'indexing', progress: 40, message: `Generating embeddings for ${chunks.length} chunks...` });
@@ -241,6 +257,7 @@ export class ContentPipeline {
         chunkCount: embeddedDocs.length,
         durationMs,
         structure,
+        coverage: { ...LOCAL_COVERAGE, rowsReturned: posts.length },
         state: errors.length > 0 ? 'error' : 'indexed',
         error: errors.length > 0 ? errors.join('; ') : undefined,
       });
@@ -327,121 +344,13 @@ export class ContentPipeline {
   }
 
   /**
-   * Split posts into chunks suitable for embedding.
-   * Short posts become a single chunk; long posts are split at sentence
-   * boundaries around CHUNK_MAX_WORDS words.
+   * chunkPosts / makeDocShell / splitSentences used to live here as private
+   * methods. WP-62 lifted them to `./chunker` unchanged so the two remote
+   * indexing paths could use the SAME chunker rather than a copy — the remote
+   * path had no chunking at all, and a copy would have diverged on the first
+   * tuning change. `tests/unit/content/chunker-parity.test.ts` pins the local
+   * and remote callers to one document set.
    */
-  private chunkPosts(
-    siteId: string,
-    posts: ExtractedPost[],
-  ): Array<{ doc: Omit<VectorDocument, 'vector'>; textForEmbedding: string }> {
-    const chunks: Array<{ doc: Omit<VectorDocument, 'vector'>; textForEmbedding: string }> = [];
-
-    for (const post of posts) {
-      // Build searchable text: post content + ACF custom fields
-      let text = post.cleanedContent || post.title;
-
-      // Append ACF fields as structured text for semantic search
-      if (post.customFields && Object.keys(post.customFields).length > 0) {
-        const fieldLines: string[] = [];
-        for (const [key, value] of Object.entries(post.customFields)) {
-          if (value && typeof value === 'string' && value.trim()) {
-            // Format field name for readability: "trail_length" → "Trail length"
-            const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            fieldLines.push(`${label}: ${value}`);
-          }
-        }
-        if (fieldLines.length > 0) {
-          text += '\n\n' + fieldLines.join('. ') + '.';
-        }
-      }
-
-      const words = text.split(/\s+/).filter(Boolean);
-
-      if (words.length <= CHUNK_MAX_WORDS) {
-        // Single chunk
-        chunks.push({
-          doc: this.makeDocShell(siteId, post, 0, text),
-          textForEmbedding: `${post.title}. ${text}`,
-        });
-      } else {
-        // Split into chunks at sentence boundaries
-        const sentences = this.splitSentences(text);
-        let currentChunk: string[] = [];
-        let currentWordCount = 0;
-        let chunkIndex = 0;
-
-        for (const sentence of sentences) {
-          const sentenceWords = sentence.split(/\s+/).filter(Boolean).length;
-
-          if (currentWordCount + sentenceWords > CHUNK_MAX_WORDS && currentChunk.length > 0) {
-            // Emit current chunk
-            const chunkText = currentChunk.join(' ');
-            chunks.push({
-              doc: this.makeDocShell(siteId, post, chunkIndex, chunkText),
-              textForEmbedding: `${post.title}. ${chunkText}`,
-            });
-            chunkIndex++;
-            currentChunk = [];
-            currentWordCount = 0;
-          }
-
-          currentChunk.push(sentence);
-          currentWordCount += sentenceWords;
-        }
-
-        // Final chunk
-        if (currentChunk.length > 0) {
-          const chunkText = currentChunk.join(' ');
-          chunks.push({
-            doc: this.makeDocShell(siteId, post, chunkIndex, chunkText),
-            textForEmbedding: `${post.title}. ${chunkText}`,
-          });
-        }
-      }
-    }
-
-    return chunks;
-  }
-
-  private makeDocShell(
-    siteId: string,
-    post: ExtractedPost,
-    chunkIndex: number,
-    content: string,
-  ): Omit<VectorDocument, 'vector'> {
-    const id = chunkIndex === 0
-      ? `wp_${siteId}_${post.id}`
-      : `wp_${siteId}_${post.id}_chunk_${chunkIndex}`;
-
-    return {
-      id,
-      siteId,
-      title: post.title,
-      content,
-      postType: post.postType,
-      postId: post.id,
-      chunkIndex,
-      metadata: JSON.stringify({
-        excerpt: post.excerpt,
-        author: post.author,
-        date: post.date,
-        categories: post.categories,
-        tags: post.tags,
-        customFields: post.customFields ?? {},
-      }),
-      indexedAt: Date.now(),
-      post_date_gmt: '',
-      post_modified_gmt: '',
-      doc_url: '',
-    };
-  }
-
-  private splitSentences(text: string): string[] {
-    // Split on sentence-ending punctuation followed by whitespace
-    const raw = text.split(/(?<=[.!?])\s+/);
-    return raw.filter(Boolean);
-  }
 
   private setStatus(siteId: string, status: IndexStatus): void {
     this.statusMap.set(siteId, status);

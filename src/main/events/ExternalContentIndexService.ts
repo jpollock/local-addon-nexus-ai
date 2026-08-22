@@ -5,6 +5,7 @@ import type { IndexRegistry } from '../content/IndexRegistry';
 import type { SiteTransport } from '../transport/types';
 import { VectorDocument } from '../../common/types';
 import { RemoteContentExtractor } from '../content/RemoteContentExtractor';
+import { chunkPosts } from '../content/chunker';
 import { vectorSiteId } from '../vector-store/vectorSiteId';
 
 export interface ExternalContentIndexServiceOptions {
@@ -64,7 +65,6 @@ export class ExternalContentIndexService {
         return { documentCount: 0 };
       }
 
-      const documents: Array<Omit<VectorDocument, 'vector'>> = [];
       for (const post of extracted.posts) {
         await this.graphService.upsertContent({
           site_id: siteId,
@@ -76,48 +76,44 @@ export class ExternalContentIndexService {
           created_at: new Date(post.date).getTime(),
           updated_at: Date.now(),
         });
-
-        documents.push({
-          id: `wp_${siteId}_${post.id}`,
-          siteId,
-          title: post.title,
-          content: post.cleanedContent,
-          postType: post.postType,
-          postId: post.id,
-          chunkIndex: 0,
-          // NEVER 'wpe' here — this is the honesty-rule regression this class exists to prevent.
-          metadata: JSON.stringify({
-            excerpt: post.excerpt,
-            author: post.author,
-            date: post.date,
-            source: 'external',
-          }),
-          indexedAt: Date.now(),
-          post_date_gmt: '',
-          post_modified_gmt: '',
-          doc_url: '',
-        });
       }
 
+      // One chunker, shared with the local path and with WP Engine (WP-62).
+      // `source: 'external'` is NEVER 'wpe' here — this is the honesty-rule
+      // regression this class exists to prevent, and it now rides through
+      // chunkPosts' extraMetadata onto every chunk of every post.
+      const chunks = chunkPosts(siteId, extracted.posts, { source: 'external' });
+
       const embeddedDocs: VectorDocument[] = [];
-      for (let i = 0; i < documents.length; i += BATCH_SIZE) {
-        const batch = documents.slice(i, i + BATCH_SIZE);
-        const vectors = await this.embeddingService.embedBatch(batch.map(d => d.content));
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
+        const vectors = await this.embeddingService.embedBatch(batch.map(c => c.textForEmbedding));
         for (let j = 0; j < batch.length; j++) {
-          embeddedDocs.push({ ...batch[j], vector: vectors[j] });
+          embeddedDocs.push({ ...batch[j].doc, vector: vectors[j] });
         }
       }
 
       await this.vectorStore.upsert(vectorSiteId(siteId), embeddedDocs);
 
+      // documentCount = distinct posts, chunkCount = embedded chunks — the
+      // same split the local path has always had. They were both
+      // `embeddedDocs.length` while one post meant one document.
+      const uniquePostIds = new Set(embeddedDocs.map(d => d.postId));
       this.indexRegistry.update(siteId, {
         siteId, siteName: alias, state: 'indexed',
-        lastIndexed: Date.now(), documentCount: embeddedDocs.length, chunkCount: embeddedDocs.length,
+        lastIndexed: Date.now(), documentCount: uniquePostIds.size, chunkCount: embeddedDocs.length,
         durationMs: Date.now() - startTime,
+        coverage: extracted.coverage,
       });
 
-      this.logger.info(`[ExternalContentIndexService] ${alias}: indexed ${embeddedDocs.length} documents`);
-      return { documentCount: embeddedDocs.length };
+      this.logger.info(
+        `[ExternalContentIndexService] ${alias}: indexed ${uniquePostIds.size} documents `
+        + `/ ${embeddedDocs.length} chunks`
+        + (extracted.coverage && !extracted.coverage.complete
+          ? ` — INCOMPLETE (${extracted.coverage.truncatedDetail ?? extracted.coverage.truncatedReason}); this is a floor, not a total`
+          : '')
+      );
+      return { documentCount: uniquePostIds.size };
     } catch (error: any) {
       this.logger.warn(`[ExternalContentIndexService] ${alias} failed: ${error?.message ?? error}`);
       this.indexRegistry.update(siteId, { state: 'error', lastIndexed: Date.now() } as any);
