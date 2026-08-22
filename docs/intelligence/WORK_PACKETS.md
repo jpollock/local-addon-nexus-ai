@@ -31896,3 +31896,69 @@ Fifth and sixth occurrences.
 case. Coverage is recorded from now on, so the *next* sweep can be
 scoped; this one cannot. At the measured rate that is ~39 s per
 800-post install.
+
+---
+
+## WP-65 · REGISTERED — one place that says what we hold and what we cannot see (2026-08-22, architect)
+
+The owner asked plainly what data Nexus collects, when, how, why and
+with what limits. **The material exists across four files written at
+three different times, and no single one describes the system as it is.**
+
+`docs/digital-twin-data.md` (2026-04-16) already has the right shape —
+Data Stores, Update Triggers, Freshness Model, Consumers, What's Not in
+the Twin — and the wrong scope: it predates the ledger and the entity
+graph entirely. `architecture.md` §4 holds the envelope, the taxonomy
+and retention as design. `docs/architecture/data-levels.html` and
+`data-gaps-design.html` (2026-07-28, 22 KB and 37 KB) are **unread by
+the architect**, and the packet reads them before writing anything.
+
+**Update the April document; do not write a fifth.** Twice this week the
+architect proposed authoring something that already existed, and the cost
+each time was a duplicate rather than an update.
+
+### The finding that gives the packet its job
+
+The documented event types and the emitted ones **disagree in both
+directions.** Documented and apparently unemitted: the runbook events,
+the policy events, all four `control.*`, `state.instrument.summarized`,
+`task.run.assigned`, `task.run.completed`. Emitted and undocumented:
+`state.plugin.removed`, `state.theme.observed`, `state.user.observed`,
+and the sync and incident families.
+
+**And one breaks the taxonomy's own stated rule.** §4.2 says the first
+segment is always one of five types plus `task` and `control`;
+`site.status.observed` is emitted from six sites and starts with none of
+them. The packet decides which is wrong — the topic or the rule — and is
+told explicitly **not to widen the rule quietly to fit.** Same question
+put to `episodic.*`, which §4.2 reserves for imported histories while
+two live producers write into it.
+
+### The limits section is what earns the document
+
+Seven known gaps handed over as a **floor, not a list**: the 5,000-post
+ceiling; **all 313 remote index entries carrying no coverage record**, so
+each is a floor of unknown tightness; remote categories and tags absent;
+freshness unreported; no branch or commit for any working copy, git
+being optional in Local; unlinked local sites and every external host
+having no Site entity at all; and agent-failure events missing because
+the core will not start.
+
+### The check, and its three vacuous shapes named in advance
+
+A list of event types in a document goes stale silently — **which is the
+entire reason this packet exists, and a document alone does not fix it.**
+A test reads the documented set from the document and compares it against
+what `src/` emits.
+
+Three ways that check passes while proving nothing, named at the packet:
+**both sides empty** (assert non-emptiness with a floor on each);
+**comparing a list to itself** (the document must be the hand-written
+side, the scan the other); and **a scan that cannot reach the emitters**
+— answered by WP-64's own method, proving the search finds a topic known
+to exist, because *a negative result needs a positive control or it is
+not a result.*
+
+Planned-but-unbuilt topics take a declared allowance carrying its
+reason, the shape `generate-situation-copy.ts` already uses for
+deferrals that must expire.
