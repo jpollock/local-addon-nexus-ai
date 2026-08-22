@@ -30968,3 +30968,111 @@ carrying the case that would answer it — including that
 this fleet.** That last one is the vacuous-guard warning honoured
 exactly: an untested path named as untested rather than reported as
 working.
+
+---
+
+## PRODUCER #3 RE-SPECIFIED — the upstream was recorded, not missing (2026-08-22, architect)
+
+A third agent reports that Local stores the link on its own site object:
+`hostConnections[]` carrying `remoteSiteId` (a WPE **Site** UUID) and
+`remoteSiteEnv` (the environment). **Code claims verified at source;
+the fleet counts are the reporter's and unverified from here.**
+
+### This changes producer #3 entirely
+
+I ruled: *"an explicit upstream preference, separate from confidence,
+stated rather than inferred — and able to decline."* **The user already
+stated it, per site, and Local has been storing it.**
+
+`remoteSiteId + remoteSiteEnv` is not a preference and not a heuristic.
+It is **a recorded user decision with provenance** — the link the person
+made in Local's own Pull-to-Local UI. It declines naturally where it is
+absent (reported 20 of 45), and those sites honestly have no upstream,
+which is board A.
+
+**Re-specified: producer #3 READS the recorded link. It does not invent a
+preference.**
+
+### Shape #19 confirmed within hours of being named
+
+I was one turn from blessing *"pass the environment kinds in and let
+production win."* The reported distribution is **19 production and one
+staging.**
+
+That fix would have been **correct for nineteen sites and wrong for
+one**, silently, with no test failing — which is shape #19's definition,
+delivered as a live example before the ink dried. *A fix that works for
+the wrong reason.*
+
+And the same heuristic is **already written**, at
+`nexus-list-sites.ts:34`:
+
+```js
+env: conn.remoteSiteEnv || 'production',
+```
+
+**A default that invents production when the record does not say.** It
+never fires today because the field is reportedly present 20/20 — a
+vacuous branch that would become wrong the moment the field is optional
+in practice rather than in the type.
+
+### The lesson is already in this repo, paid for once
+
+`wpe-link.ts:48-56` documents the misattribution at length — "NitroPack
+Production" reported as linked to `nitropackstg`, *"silently, with no
+error, feeding wrong log/attack data into every downstream check that
+trusted this resolution"* — and closes with the sentence that matters:
+
+> **"`hostConnections` already carries `remoteSiteEnv` for exactly this
+> — it was just never read."**
+
+One packet learned this the expensive way and wrote it down. **The next
+producer must read that comment before it writes a line**, and the
+architect should have found it before specifying a preference.
+
+### Two defects confirmed at source, and one of mine
+
+**The type is wrong** (`site-data.ts:17-27`): `remoteSiteEnv?: {
+environment?: string }` declares an OBJECT where the live value is
+reportedly a plain string 20/20; `userId` and `remoteSiteId` — the two
+fields the resolver depends on — are absent from the type entirely,
+while `installId` is declared and reportedly appears in none. No runtime
+bug only because `wpe-link.ts` reads through `as any`, which means the
+first two links of its fallback chain are **dead code on real data**.
+
+**`nexus-list-sites.ts:32`** keys `localByWpeSite` on `remoteSiteId`
+alone, so two local sites sharing one Site UUID collide and one silently
+overwrites the other. Same root cause `wpe-link.ts` already fixed, one
+file over. **A fix applied at the site of its discovery and not at the
+class** — and the class is "a Site UUID is not an install".
+
+**Mine, found while verifying:** `hostConnections` is read in **seven
+places**, each repeating its own `Array.isArray(…) ? … :
+Object.values(…)` normalisation, and `site-data.ts:88` declares the
+union `Record<…> | LocalSiteHostConnection[]`. The reporter measures the
+array form 20 of 20. **A union that has never occurred, with its dead
+branch hand-carried by seven readers** — one shape, seven parsers, and
+the parse is the place a future divergence will hide.
+
+### A hypothesis to test, not a finding
+
+WP-63 measured **25 of 45** local sandboxes with no Site entity. This
+report measures **20 of 45** with a host connection. **20 + 25 = 45.**
+
+If Site entities are minted from the host connection, producers #1 and
+#3 are reading one mechanism from two ends, and a purely local site —
+case A of the lifecycle model, the most common kind — has no Site
+entity at all by construction.
+
+**Stated as a hypothesis because the two datasets have not been joined.**
+The join is one query and it should be the first thing producer #1
+runs.
+
+### Scope limit, so nobody over-claims
+
+`hostConnections` is **local copy → WP Engine only.** It says nothing
+about external SSH hosts (3 of 3 with no Site), nothing about
+environment-to-environment relationships, and nothing about code
+lineage. Producer #3 is solved for the WPE case by reading a record that
+already exists; **external hosts remain genuinely unresolved and stay
+producer #1's problem.**

@@ -1567,3 +1567,36 @@ they find the workaround.
 
 The tell is a comment explaining a compensation. It is honest, it is
 worth having, and it is a receipt for a debt rather than a payment of it.
+
+## Before inventing a signal, look for the one the user already gave (WP-63 / producer #3)
+
+The architect specified a new "upstream preference" to resolve which
+environment a working copy follows. **The user had already said, per
+site, and the host had been storing it** — `hostConnections[]` with
+`remoteSiteId` and `remoteSiteEnv`, written when they linked the site in
+the host's own UI.
+
+A recorded decision beats a derived preference on every axis: it carries
+provenance, it is right for the case the heuristic gets wrong, and **it
+declines by absence** rather than needing a decline designed for it.
+
+**The tell that a specification is about to invent a signal: it names a
+DEFAULT.** "Prefer production" is a default, and a default is what you
+write when you have not yet looked for the record. Search the host's own
+stored state, the user's own configuration, and the comments of whoever
+hit this before — in that order — and only then design a signal.
+
+## A fix applied at its discovery site is not applied to its class (WP-63)
+
+`wpe-link.ts:48-56` documents, at length, a live misattribution: a Site
+UUID used without its environment resolved to a sibling install, feeding
+wrong data into every downstream check. It was fixed there.
+
+**The same root cause is one file over**, keying a map on the same UUID
+without the same qualifier, still live.
+
+When a defect is understood well enough to write a paragraph about it,
+the paragraph is the moment to sweep for the CLASS — every reader of
+that identifier — not only to repair the reader in hand. **A comment
+that explains a defect this well and leaves a sibling unfixed is a
+finding that stopped one file short.**
