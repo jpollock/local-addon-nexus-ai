@@ -28525,3 +28525,61 @@ ADR-21's lifecycle model has a working copy and a remote environment
 **sharing a name by design** — that is what "pull it down and work on it"
 means. Six collisions today is the rare case. The IA now being drawn makes
 it the normal one.
+
+---
+
+## WP-58 · LOCK ANNOUNCE AMENDED (2026-08-21) — there are FIVE copies, and the live one is in a file the announce did not claim
+
+Amended **on the base, at the moment the need was measured** (WP-52's rule),
+not corrected retroactively in the merge report.
+
+### What the original announce got wrong
+
+It said "the duplicate `resolveSite`", singular, sitting in
+`graphql/resolver-utils.ts:46`. That is what the packet brief said and it is
+not what is in the tree. Counted with `grep`, not from the brief:
+
+| # | where | scope | case | callers |
+|---|---|---|---|---|
+| 1 | `mcp/site-resolver.ts:12` | Local store | **in**sensitive | 115, across 49 files |
+| 2 | `graphql/resolver-utils.ts:46` — **exported** | Local store | **sensitive** | `resolvers/sites.ts` only, which is dead code (`resolvers/index.ts` has zero production importers) |
+| 3 | `graphql/resolvers.ts:148` — **module-private, and the LIVE one** | Local store | **sensitive** | **46 call sites in the same file** — this is the resolver every GraphQL and CLI site lookup actually runs |
+| 4 | `resolveRemoteGraphSite` | graph, `wpe`+`external` | sensitive | the correct one; declines already |
+| 5 | `resolveAnySite` | both | mixed | the one whose docblock claimed the logic it skipped |
+
+Copies 2 and 3 are behaviourally identical and neither is the one the brief
+named. **The live duplicate was invisible to a grep for exports.**
+
+### The amendment
+
+`src/main/graphql/resolvers.ts` is **added to the lock**, for one change and
+no other: deleting its private `resolveSite` (lines 145–154) and importing the
+single shared function in its place, plus the 46 mechanical call-site renames
+that follow. No resolver logic in that file is touched. It is the largest file
+in the tree and this is the least it can be edited by while still ending with
+one function instead of three.
+
+### The disposition, and why it is a rename rather than a merge into the mcp one
+
+Copies 2 and 3 become ONE exported function, `findLocalSiteExact`, whose name
+states every way it differs from `resolveLocalSite`: **exact** (case-
+sensitive), **local** (Local store only), and no collision decline. It is not
+folded into `resolveLocalSite`, because that would make every GraphQL and CLI
+site lookup case-insensitive in a packet whose subject is something else —
+`resolveTargetArgs`'s M11 comment exists precisely because these two disagree
+about case, and re-deciding that belongs to a packet that measures it.
+
+**What this packet fixes is the hazard the packet brief named: two functions
+of the same name disagreeing about case.** After it there is one name per
+behaviour, and the name says which behaviour. The residual — that the GraphQL
+path still has no collision decline — is REGISTERED, not silently left: it is
+recorded in the gate report as the follow-on, with the reason it was not taken
+here.
+
+### Two more files join the "more than a rename" list
+
+The original announce named four call sites that run local-then-graph, where a
+Local decline must not fall through and silently answer with the remote row.
+Measured, there are **five**: `get-site-twin.ts` has the same shape and was
+missed. All five converge on `resolveAnySite` rather than each keeping its own
+copy of the policy — which is the drift that produced this packet.
