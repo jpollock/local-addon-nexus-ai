@@ -361,3 +361,123 @@ all six content types), the structured pathologies became findable:
 serialization — `specialties: a:2:{i:0;s:19:"medical dermatology";…}`,
 `locations: a:1:{i:0;s:2:"11";}`. Consumable by a model, but not by an exact-match
 assertion, and `locations` surfaces post IDs rather than slugs.
+
+---
+
+## D9 — every Local site fails to content-index when the site is not running
+
+**Found 2026-08-22, while fixing WP-67.** Filed separately because WP-67's
+scope is the *reporting* contract; this is the underlying failure it was
+concealing.
+
+**Measured.** In the 2026-08-22 18:49 UTC bulk `Index content` run over 413
+sites, 45 IndexRegistry entries were stamped `state: 'error'` — every Local
+site in the fleet, none excepted — with a single distinct error text:
+
+```
+$ node -e "…nexus-ai_index_registry.json, entries stamped 18:49:00–18:50:30Z…"
+entries total: 636 | stamped in window: 48
+by state: { error: 45, indexed: 3 }
+error texts: { 'MySQL not available — site may not be running': 45 }
+```
+
+The 3 `indexed` are the external SSH hosts (`willowcreekderm` 85 docs,
+`piedmontdermgroup` 102, `tablemesaderm` 101). No Local site produced a
+document.
+
+**Mechanism.** `ContentPipeline.indexSite` gates DB extraction on
+`mysqlExtractor.isAvailable(info)` (`src/main/content/ContentPipeline.ts:116`).
+A halted Local site has no MySQL, so it pushes
+`'MySQL not available — site may not be running'`, extracts zero posts, and
+records `state: 'error'`.
+
+`BulkOperationManager` already has the remedy and did not use it:
+`executeSingle` auto-starts a halted Local site when
+`op.options.autoStartStop === true`, waits for the DB via
+`waitForDatabaseReady`, and stops it afterwards. The Operations-tab dispatcher
+sends `options: {}` (`NexusOverview.tsx:1013`), so `autoStartStop` is
+`undefined` and no site is ever started.
+
+**Open question — this is a product decision, not only a bug.** Starting 45
+Local sites serially to index them is minutes of work and real disruption. The
+options are: (a) default `autoStartStop` on for `reindex`, (b) offer it as a
+checkbox on the bulk bar, or (c) report the halted sites as *did not run —
+site is not running* and index only what is up. **(c) is now available and is
+what WP-67 shipped the machinery for**, but WP-67 deliberately did not change
+which sites are eligible: it classifies a `state: 'error'` result as `failed`,
+because that is what the pipeline recorded. Making "halted" a *skip* rather
+than a *failure* means teaching `executeReindex` to distinguish that one error
+text, which is a behaviour change this packet had no mandate for.
+
+---
+
+## D10 — the bulk WP Engine content index sent the graph id as the install name, so all 365 SSH calls failed instantly
+
+**Found 2026-08-22, while answering WP-67's open question.** This is the
+underlying cause of the 365 no-op installs; WP-67 fixed only the reporting.
+
+**Measured.** All 365 active `wpe` installs took `syncContent`'s zero-posts
+exit, inside a single UTC minute:
+
+```
+$ grep -h "No content to index for" ~/Library/Logs/local-lightning*.log \
+    | grep -o '"timestamp":"[0-9T:-]*' | cut -c1-16 | sort | uniq -c
+ 365 2026-08-22T18:49
+
+$ grep -h "Extraction complete. Posts found" … | grep -o 'Posts found: [0-9]*' | sort | uniq -c
+ 365 Posts found: 0
+   1 Posts found: 104     ← the three external hosts
+   1 Posts found: 116
+   1 Posts found: 200
+   1 Posts found: 842
+```
+
+**The span is 3.8 seconds** — `18:49:34.813Z` to `18:49:38.628Z`, ~96 installs
+per second. A WP Engine SSH round trip is 13–30s cold. Nothing reached WP
+Engine.
+
+**Cause.** The extractor logs its `siteLabel`, which is the `installName`
+argument `syncContent` passes to `RemoteContentExtractor.extract` and to
+`new WpeSshTransport(installName)`. Every one of the 365 lines names a **graph
+id**, not an install name:
+
+```
+[RemoteContentExtractor] No posts returned for wpe-fe84d49f-c1c7-4dbf-9a9e-7511ffbd727e
+```
+
+That row's real name is `bpheadlessb667` (and `wpe-fc902466-…` is
+`andonovwoocdev`). All 365 active `wpe` rows have a non-empty `name` — measured,
+zero NULL — so the graph is not the source of the id. The bulk path is:
+
+```ts
+// BulkOperationManager.executeRemote
+const siteName = op.siteNames?.[siteId] ?? siteId;   // ← the fallback
+return ops.indexOne(siteId, siteName);
+```
+
+`siteNames` had no entry for these ids, so **the fallback handed the graph id
+to `WpeSshTransport` as an install name**. SSH to a nonexistent install fails in
+milliseconds, which is exactly the observed rate.
+
+**Not yet determined:** why `siteNames` was empty. The only `BULK_EXECUTE`
+dispatcher (`NexusOverview.tsx:1005`) builds it from `this.state.siteRows`, and
+`buildSiteRows` applies no cap and carries `name: g.name ?? g.id` for every
+`wpe` row — so on the evidence it *should* have been populated. Establishing
+whether `siteRows` was unloaded, or the selection came from a different id
+space, needs a live reproduction rather than more log reading.
+
+**Two things to fix, and they are independent:**
+
+1. **The fallback is unsafe and should be removed.** `siteId` is not a legal
+   substitute for an install name — it is a value guaranteed to fail. Failing
+   with "no display name for `<id>`" is honest; silently SSHing to a nonexistent
+   host is not. Note WP-67 makes this louder rather than fixing it: the run is
+   now reported as *did not run*, with a reason, instead of "Success".
+2. **`RemoteContentExtractor` discards the failure reason.** At
+   `src/main/content/RemoteContentExtractor.ts:224` the guard is
+   `if (!result.success || !result.stdout)` and the log says only
+   `No posts returned for <label>`. A failed WP-CLI call and a genuinely empty
+   site are collapsed into one message, and `result.stdout` — which holds the
+   SSH error — is thrown away. This is the same class of defect as WP-67, one
+   layer deeper: had it logged the failure, the 365 would have been diagnosable
+   from the log alone rather than from a timing argument.
