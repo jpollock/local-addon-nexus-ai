@@ -28356,3 +28356,81 @@ first assertion read the wrong run. Caught immediately; its own reset added.*
 
 Suite after the fix: **635 suites · 8,776 passed · 2 skipped · EXIT=0** (+2
 tests). Packet battery now **25 mutations, 25 killed**.
+
+---
+
+## WP-57 · THE WIRED-AND-RAN AUDIT (2026-08-21)
+
+After task 8's live defect, the same check was run across **everything this
+packet claims**, on two axes: *does production code call it* and *has it
+actually executed*. The second axis is the one that found the defect, and the
+one a green suite cannot answer.
+
+| deliverable | production caller | executed for real |
+|---|---|---|
+| `openAgentTask` / `close` / `didEmit` | yes | **live** |
+| `agentActorId` (frame path) | yes | **live** |
+| `noteGatedAct` → `first_gated_act_at` | yes | **live** |
+| actor on registry acts | yes | **live** (10 × `act_security_sentinel`) |
+| `attachTaskId` → `agent_runs.task_id` | yes | **live — closed by this audit** |
+| `agentActorId` (dispatcher path) | yes | **live — closed by this audit** |
+| subsumption (`correlationId` → incident) | yes | **exhibit only** — see below |
+| `ctx.task` | populated | **zero consumers**, expected: it is author-facing |
+| `supplyFromAgentRun` / `toolTrace()` | **none** | not wired, by design — its consumer is blocked |
+
+*(One false positive from my own grep: `autonomyForTrigger` looked
+caller-less because the search excluded the file that calls it. It is called
+inside `openAgentTask`.)*
+
+### Two gaps closed here, in one Local cycle
+
+**`agent_runs.task_id` now persists**, and the id names a real thread:
+
+```
+wp57-smoke2 | error | r_mt3mce9u00 | task_01M0KCNSA5D8J6ZCEBNSREFFSN
+   └─ task.run.assigned   act_wp57_smoke2
+   └─ task.run.completed  act_wp57_smoke2
+
+auth-probe  | success | r_mt3m8eiw00 | (NULL)   ← correct
+```
+
+The `auth-probe` NULLs are the **laziness rule visible in the persistence
+layer**: a clean run's frame writes nothing, so there is no id to attach.
+
+**The dispatcher actor now has a live record.** One tier-2 contributed tool
+exists (`fetch_log_window`), and `recordGatedAction` fires on both outcomes.
+Called with `confirm` omitted — the tool's own two-phase design returns a cost
+estimate and persists nothing:
+
+```
+contributed | act_log_processor | log-processor/fetch_log_window | (no task)
+```
+
+The actor is right, and **the correlation is absent, which is also right**: an
+MCP client supplies no caller task, so none was minted. That is ruling request
+2's conservative half, executing as ruled.
+
+The same query shows the before/after of the collapse in one table —
+historical `act_agent_runtime` (`wp_eval` ×25, …) beside the new
+`act_security_sentinel` ×10.
+
+### The one gap NOT closed, and why it stays open
+
+**The subsumption has never run in a live Local.** `episodic.incident.recorded`
+rows carrying a correlation: still 0. It requires security-sentinel to produce
+a finding at or above the floor, and:
+
+- the fleet is currently clean (two full sweeps, `findings=0`);
+- the four historical incidents are **durably deduped**, so re-scanning the
+  same site emits nothing;
+- producing a *new* finding means changing a real site, which is out of scope
+  for a verification step.
+
+It is covered by the **real-ledger exhibit** — real code, real entity
+resolution, a `VACUUM INTO` copy of the real ledger — which showed
+`assigned → 2 incidents → completed` on one correlation. That is strong
+evidence for the LOGIC. It is not evidence for the wiring inside Electron, and
+this record says so rather than rounding up.
+
+**Standing:** the first live sentinel finding closes this by itself. Nothing
+needs to be built; something needs to break.
