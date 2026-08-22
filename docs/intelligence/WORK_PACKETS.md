@@ -29290,3 +29290,136 @@ the documented direction; base→merged is +1 suite / +63 tests. The
 `wp-58 HEAD` diff over `src/ tests/ scripts/` shows only
 `collision-decline.test.ts`, which is `7924c459` — the amendment landing
 after the merge, disclosed in the report before I looked.
+
+---
+
+## WP-61 · LOCK ANNOUNCE (2026-08-21) — the structure store, and eight messages naming a tool that does not exist
+
+**This is the packet the fleet-tool ruling registered as WP-59.** It is
+numbered 61 because the number was taken between the ruling and the cut.
+
+### The renumber, measured rather than asserted
+
+- `5e54abf7` **16:56:49** — the architect's adjudication registers
+  *"WP-59 · the structure store and the tool surface"*.
+- `406935e9` **17:22:52** — branch `wp-59` is claimed by
+  *"assembly on the agent path"*, cut from `wp-57`. Its own commit message
+  records that the number came from grepping `WORK_PACKETS.md` on a branch
+  that had never seen the 16:56 adjudication, and proposes the amendment
+  **"the packet registry is `git branch --list 'wp-*'`, never the doc."**
+
+That amendment is right and it is only half the rule. The doc missed a branch;
+the branch missed the doc. **Neither list is the registry on its own — a number
+is free only when it is absent from BOTH**, and the two are queried in one
+breath or the collision is a matter of which one you happened to read.
+
+`wp-60` is also taken (a bare branch at the base tip, no work on it), so this
+packet is `wp-61`. Nobody's in-flight branch was renamed to make room. The
+ruling's label stays as written and this section is the join.
+
+### THE QUANTITY THIS PACKET CHANGES — announced before the paths
+
+Per the WP-56 rule (*locks partition files; they do not partition arithmetic*):
+
+**The quantity is the set of tool names appearing as remedies in user-facing
+strings, and the assertion is that it is a SUBSET of the registry's own
+`allToolNames()`.**
+
+- Before: unconstrained. Eight strings across five files name
+  `wpe_sync_sites`, which `ToolRegistry` has never carried.
+- After: a check refuses any imperative-form tool reference in a
+  `src/main/mcp/` string literal that the registry does not carry.
+
+**A sibling adding a remedy sentence that names a tool it did not register will
+now go red.** That is the point, and it is why the quantity is announced rather
+than left to the merge.
+
+### THE SHAPES THIS PACKET CHANGES
+
+Per the WP-54 rule (*declare the shapes, not only the paths*):
+
+- **`NexusServices` gains `wpeSyncService?`** — OPTIONAL, so no function
+  returning or constructing a `NexusServices` breaks. Additive by
+  construction; this is deliberately not the `SituationCopy` failure mode.
+- **The registry gains one tool name: `wpe_sync_sites`.** `ToolRegistry.register`
+  throws on a duplicate name, so a sibling registering the same string is a
+  loud failure, not a silent one.
+
+### Paths locked
+
+New:
+- `src/main/mcp/modules/wpe/sync-sites.ts` — the tool
+- `src/main/mcp/modules/wpe/sync-remedy.ts` — the extracted remedy strings
+- `src/main/mcp/modules/fleet/structure-availability.ts` — the honest decline
+- the tests for each
+
+Edited:
+- `src/main/mcp/modules/wpe/index.ts` (registration — index-lock class)
+- `src/main/mcp/modules/wpe/helpers.ts` · `fleet-versions.ts` · `detect-drift.ts`
+- `src/main/mcp/modules/content/search-content.ts` · `describe-site-fields.ts`
+- `src/main/mcp/modules/fleet/compare-sites.ts` · `fleet/detect-drift.ts`
+- `src/main/mcp/types.ts` (the optional field)
+- `src/main/index.ts` (**the integration lock** — one assignment, taken as the
+  final step, no opportunistic refactor)
+
+### D5, corrected once more — the remedy splits in two, and the ruling's own method is why
+
+The ruling says *"register `wpe_sync_sites` over the existing service methods."*
+Taking that literally would have shipped a subtler form of the same defect, and
+the search that finds it is the ruling's own: **state what the method cannot
+see.** Reading the eight strings as one complaint cannot see that they are two.
+
+Measured, string by string:
+
+| site | what is missing | the method that supplies it |
+|---|---|---|
+| `wpe/helpers.ts:42` | `last_sync_at` is stale | `syncAllWPESites` |
+| `wpe/fleet-versions.ts:75,76` | no `wpe` rows in the graph at all | `syncAllWPESites` (it DISCOVERS from CAPI) |
+| `wpe/detect-drift.ts:54,78` | graph metadata not current | `syncAllWPESites` |
+| `content/describe-site-fields.ts:44` | the site row is absent | `syncAllWPESites` |
+| `content/search-content.ts:43,107` | content is not in the vector index | `indexAllWpeContent` |
+
+`indexAllWpeContent` selects `FROM sites WHERE source='wpe' AND is_active=1`, so
+it cannot put an install into the graph that is not already there. **A single
+tool wrapping content indexing alone would have been a real tool that does not
+fix six of the eight complaints** — a name that resolves, attached to a remedy
+that does not. The registry check would have been green about it, because the
+check reads the tool surface and cannot read whether the remedy works.
+
+So the tool carries both, with the mode named: `wpe_sync_sites` syncs metadata
+by default and indexes content when asked. `indexAllWpeContent` already
+piggybacks a metadata sync on its warm ControlMaster (`WPESyncService.ts:554`),
+so `content: true` is a superset, not a fork.
+
+### The check is scoped by the CLAIM, not by the token shape
+
+A sweep for snake_case tokens inside string literals matches
+`permalink_structure`, `post_type`, `last_sync_at` — it would report a count and
+find nothing. **The claim is made by the imperative**: a string that says *run
+X* / *call X* / *use X* is asserting X exists. That is what is swept, and the
+allowlist for genuine non-tools is explicit rather than a silence.
+
+Driven in both directions: a fabricated remedy string must make the check go
+red, or it is decoration. The refusal is exported as a pure function so the
+red direction is drivable without writing a defect into the tree.
+
+### D3/D4/D2 — the construction proof holds, and the sibling holds it too
+
+`entry.structure` is initialised `null` (`IndexRegistry.ts:53`). Sole creator:
+`ContentPipeline.ts:90`, `fileScanner.scan(info.sitePath)` — a local disk walk.
+Both refresh writers (`ipc-handlers.ts:2110`, `:5422`) are guarded by
+`if (existingEntry?.structure)`, so they can only refresh what the one local
+path already made. Confirmed as the ruling states it.
+
+**Scope addition, disclosed rather than folded in silently:**
+`fleet/detect-drift.ts:76,92` carry the identical *"has no index data"* sentence
+over the identical store, reached through the identical `resolveAnySite`. The
+ruling names `compare_sites`; the defect is the message, and the message is at
+five sites across two files. Fixing one and leaving the other is the pattern
+`CLAUDE.md` already names for the `|| '8.0'` fallback — *fixing one without the
+others leaves the bug reachable from a different surface.* The decline is one
+extracted function; both tools call it. If the architect wants this back out,
+it is one import and five call sites.
+
+No remote structure extractor is built. The tools say what is true.
+
