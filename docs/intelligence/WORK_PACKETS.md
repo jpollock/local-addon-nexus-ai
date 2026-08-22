@@ -30842,3 +30842,249 @@ Remote posts also carry no **categories or tags** (`categories: []`,
 in this packet's claim, they do not enter the searchable text on the
 local path either, and folding them in is the mid-task scope defect. They
 are recorded here so the next reader finds a note rather than a silence.
+
+---
+
+## WP-62 · GATE REPORT — three truncations, one claim, and a premise of the packet's own table corrected (2026-08-22)
+
+Branch `wp-62` at `8ad74d6b`, cut from `poc/nexintelligence-ux` at
+`3e3da0a9`. **Nothing pushed. Nothing merged.**
+
+The claim shipped is one sentence: **remote content is indexed the way
+local content is.** Every test is a parity test.
+
+### The exhibit — the real extractor, two real installs, final code
+
+`scripts/wp62-exhibit.js <install>` drives `RemoteContentExtractor` over
+`WpeSshTransport` and prints BEFORE (the exact query the old code issued)
+against AFTER. Read-only: `wp post list` and `wp export --stdout`; nothing
+is written to the server and nothing is written to the local index.
+
+**cedarvalehealt** — 842 published posts:
+
+| | BEFORE | AFTER |
+|---|---|---|
+| rows read | 200 (logged `200 total`) | **842 over 5 pages** |
+| documents | 200 | **842** |
+| chunks | 200 (one per post) | **887** |
+| custom fields | none requested | **collected, 840 of 842 posts** |
+| coverage stated | nothing | **COMPLETE** |
+| wall clock | 3.2 s | **39.2 s** |
+| peak heap delta | — | **35 MB** |
+
+One long post, id 176 *"Oral Antifungal Therapy"*: **5,491 bytes / ~1,415
+tokens published; 512 tokens indexed before — 903 tokens DROPPED**, cut at
+the model's context window with nothing saying so. Now 5,490 bytes across
+2 chunks. (The one-byte difference is the `\n\n` before the field block
+collapsing into the sentence rejoin.)
+
+**qwerky** — 30,633 published posts, the ceiling case:
+
+    rows read     : 5000 over 25 pages
+    coverage      : PARTIAL — stopped at the stated 5000-post ceiling
+                    (REMOTE_MAX_POSTS) with a full page still returning
+    indexable     : 2
+    wall clock    : 241 s      heap delta: 2 MB
+
+The ceiling fired live, stated itself in the log at WARN, and rode into
+`coverage` — which is the deliverable. **Not a raised cap: the page size
+is still 200.**
+
+### A PREMISE OF THE PACKET'S OWN TABLE IS WRONG, and the exhibit is what found it
+
+The packet's table reads *qwerky (wpe) — published 30,628, indexed **2***,
+under the heading "the cap your agent found". **The cap is real and the
+attribution is not.** Measured today:
+
+- BEFORE reads **200** rows for qwerky, not 2.
+- AFTER reads **5,000** rows and still yields **2 indexable posts.**
+- 4,998 of those 5,000 are dropped by the pre-existing empty-content
+  filter (`cleanedContent.trim().length > 0`). They are published rows
+  with no extractable body.
+
+So qwerky's `documentCount: 2` was **never** the 200-row cap. Fixing the
+cap moves qwerky from 2 to 2. Both defects were real and only one of them
+was qwerky's.
+
+This matters beyond the anecdote: **`documentCount === 200` does not
+identify the affected installs, and qwerky is the proof.** See the sweep
+sizing below.
+
+### Sizing the re-index sweep — measured, and with what the method cannot see
+
+From the live registry (`nexus-ai_index_registry.json`, 2026-08-22):
+
+    index registry entries          : 636
+      remote (wpe- / ssh:)          : 313
+      remote sitting on EXACTLY 200 : 4
+      entries carrying coverage     : 0
+
+The four provably-truncated: **psbtestcdn1, testmigratejpp,
+alpineoutfitte, cedarvalehealt** (200 docs / 200 chunks each).
+
+**What that method cannot see** (WP-58's rule): `documentCount === 200`
+finds installs that hit the cap *at their last index*. It misses an
+install indexed when it was smaller and since grown; it misses qwerky,
+whose count is 2; and it says nothing about the chunking and fields
+truncations, which affect **every** remote entry regardless of size.
+
+The only sound statement is the one `get_index_status` now makes:
+**all 313 remote entries carry no coverage, so every one of their counts
+is a floor of unknown tightness.** Establishing the real set needs a
+`wp post list --format=count` per install — 313 SSH round trips,
+not run here.
+
+Cost to re-index, from the two measurements above: **~39 s per
+800-post install**, **~4 min** for one that runs to the ceiling.
+
+### The fields decision, and the measurements behind it
+
+The packet said to measure before deciding scope. Measured on
+cedarvalehealt:
+
+- `wp post list` **cannot emit meta** — `--fields=ID,meta` and
+  `--fields=ID,_wp_page_template` both return `Error: Invalid field`.
+- `wp post meta list <id>`: **2.9 s per post** (ten sequential calls in
+  one warm SSH session, 29.0 s). 602 posts = 29 minutes; 30,628 ≈ 24
+  hours. Not a mechanism.
+- `wp eval` and `wp db query` are on `REMOTE_POLICY.blocked`.
+- `wp export --stdout --post__in=<200 comma ids>`: **5.1 s, 1.26 MB, 200
+  items with full `<wp:postmeta>`.** One WordPress bootstrap per page.
+
+So fields parity was implemented, not deferred — and the fields ARE
+substantial: 840 of 842 cedarvalehealt posts carry public meta, and one
+provider row now indexes `Metro: Front Range. Address City: Denver.
+Phone: … Hours 0 Opens: 07:30.` — text a search could not previously
+match on any WP Engine or external site.
+
+`wxr-postmeta.ts` tokenizes CDATA **before** any tag matching, so post
+content containing the literal `<item>` or `<wp:postmeta>` — a post about
+WordPress exports — cannot be mis-attributed. Battery M16 drives that
+case and kills the naive-scan version.
+
+### The resource envelope, as instructed
+
+- Embed batches unchanged: **10** remote, **16** local, so
+  `embedBatch`'s three `BigInt64Array(batchSize * seqLen)` stay bounded.
+  Pinned: a 30-long-post fixture asserts `max(batch) <= 10` and that more
+  chunks than posts were embedded.
+- The whole-run arrays are bounded by **`REMOTE_MAX_POSTS = 5000`**, a
+  STATED ceiling with a truncation notice, not a quiet one. Measured
+  heap: 35 MB for 842 posts / 887 chunks, 2 MB for qwerky.
+- **A defect the exhibit found and this packet fixed:** the meta read ran
+  before the empty-content filter, so qwerky exported **5,000 ids to
+  index 2 posts** — 25 WordPress bootstraps for rows that never reach
+  the index. Reordering (behaviour-neutral; `cleanedContent` does not
+  depend on meta) took that run from **431 s to 241 s**. Pinned by a test
+  on the exported id list and by battery M23.
+
+### NOT DONE, and why — the cancellation check
+
+The packet says *"the batch loop needs the local path's cancellation
+check, which the remote path does not have."* **It still does not have
+one, deliberately.**
+
+`ContentPipeline.cancelSite` has exactly one caller: the site-deleted
+lifecycle hook, a Local concept. There is no remote equivalent —
+`externalContentIndexService` is a local `const` in `index.ts` and is not
+on `services`, so `nexusHostRemove` cannot reach it, and wiring it would
+be an integration-lock edit plus a service-surface change this packet did
+not announce. Adding `cancelSite` to both remote services with no caller
+would be decoration, which this record has a rule against.
+
+What bounds the run instead is the stated ceiling and the fixed batch
+widths. **If the owner wants real cancellation, it needs a caller, and
+that is a packet with an `index.ts` lock.**
+
+### Also observed, NOT fixed (mid-task scope rule)
+
+- **Remote posts still carry no categories or tags** (`categories: []`,
+  `tags: []`, hardcoded). WXR would supply them nearly free, since the
+  export is already fetched. They do not enter the searchable text on
+  the LOCAL path either, so this is not part of the parity claim.
+- **ACF repeater fields explode into the searchable text** — one
+  cedarvalehealt post carries 80+ `price_range_by_location_N_low/high`
+  keys. This is **parity, not a regression**: the local path indexes
+  every non-underscore postmeta key exactly the same way. Whether that
+  is good retrieval is a tuning question for a packet that owns the
+  chunker's formatter.
+- **`buildSearchableText` title-cases EVERY word**, so `trail_length`
+  renders `Trail Length`, not `Trail length` as the packet's brief
+  quoted. The lift is verbatim; the test asserts what the code does and
+  names the discrepancy.
+
+### The battery
+
+    === WP-62 BATTERY: 23 killed / 0 survived / 0 anchor-miss / 0 void, of 23 ===
+    CONTROL  SURVIVED (correct)  0 failed / 105 total
+    ABI PROBE (before/after): better-sqlite3 loads
+
+Six families: rows (4), truncation-is-stated (4), documents (4), fields
+(6), the status surface (3), the quantities (2). Run in a worktree, tree
+verified pristine at both ends, ABI pinned at both ends with the probe
+that CONSTRUCTS, byte sweep first.
+
+**The battery earned its place again.** M22 SURVIVED on the first full
+run: `documentCount = uniquePostIds.size` was pinned on the external path
+and by nothing at all on the WP Engine path, where 313 of the fleet's
+index entries live. The parity test drove `syncContent` and read only the
+vector documents it upserted, never the registry write — the one surface
+a reader sees the number on. Fixed at `368139f7`, re-run whole (never
+spliced), 23/23.
+
+### Figures
+
+    BASE (published by WP-61's merge, primary tree, commit d4a0afdb):
+      638 suites / 8894 tests / 8892 passed / 2 skipped
+      guard: `git diff --name-only d4a0afdb HEAD -- src/ tests/ scripts/`
+             was EMPTY at branch time, so the base measurement stands.
+
+    WP-62 (worktree, `npm test`, EXIT=0):
+      641 suites / 8945 tests / 8933 passed / 12 skipped   165.8 s
+
+    DELTA: +3 suites, +51 tests, +41 passed, +10 skipped.
+
+The +10 skipped is the documented worktree↔primary boundary and NOT a
+regression: `models/` carries only the tracked `bge-small-en-v1.5` in a
+fresh worktree, while `all-MiniLM-L6-v2-quantized` is untracked and lives
+in the primary alone, so ten embedding tests gate out here.
+
+**The +51 is measured, not decomposed from memory** (WP-61's fifth
+receipts failure). The four suites run together report **56 tests**; the
+base's copy of `RemoteContentExtractor.test.ts` holds **5** `it(` blocks.
+56 − 5 = 51, which reconciles with the full-suite delta independently.
+
+    tests/unit/content/RemoteContentExtractor.test.ts   21  (5 pre-existing)
+    tests/unit/content/chunker-parity.test.ts           18  (new)
+    tests/unit/content/wxr-postmeta.test.ts              8  (new)
+    tests/unit/mcp/get-index-status-coverage.test.ts     9  (new)
+
+`npx tsc -p . --noEmit` clean.
+
+### Shape #18, honoured three times
+
+The packet named it as the likely failure and it is the one thing every
+test here is built against. `chunker-parity.test.ts` opens with a
+`describe` whose only job is to assert the fixtures clear their
+boundaries — the long post exceeds `CHUNK_MAX_WORDS`, the short one does
+not, the field fixture carries fields — before anything is asserted about
+a result. The extractor suite asserts `population.length > PAGE` inline
+in every pagination test, and drives the exact-multiple case, where a
+full last page is followed by an empty one.
+
+### ABI state — DISCLOSED
+
+**This session ran `npm rebuild better-sqlite3` for system Node**
+(the `pretest` guard fired; the shared `node_modules` had been left built
+for Electron, ABI 146, and this shell's node is 25.9.0 / ABI 141).
+Per WP-55, declaring it because it changes the runtime under every other
+worktree on this machine. **`npm run rebuild` is required before loading
+the addon in Local.**
+
+### Artifacts
+
+`/tmp/wp62-ssh.sh`, `/tmp/wp62-qwerky.txt`, `/tmp/wp62-qwerky2.txt`,
+`/tmp/wp62-fullsuite.txt` were this packet's and are deleted. The exhibit
+and the battery are committed as `scripts/wp62-exhibit.js` and
+`scripts/wp62-battery.py`, because both are re-runnable against a live
+fleet and the next reader will want them.
