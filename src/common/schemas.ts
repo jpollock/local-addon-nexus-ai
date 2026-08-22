@@ -409,6 +409,22 @@ export const WpeInstallIdSchema = z.string().min(1, 'Install ID required');
 export const BulkOperationRequestSchema = z.object({
   type: z.enum(['reindex', 'plugin-update', 'start', 'stop', 'health-refresh', 'setup-ai', 'sync-graph']),
   siteIds: z.array(SiteIdSchema).min(1, 'At least one site ID required'),
+  /**
+   * id → display name. UNDECLARED UNTIL 2026-08-22, and Zod strips unknown
+   * keys by default — so `validateInput` silently deleted this on EVERY
+   * `BULK_EXECUTE` call and `execute()` stored `{}`. The renderer had built the
+   * map correctly from `siteRows` the whole time; it never survived validation.
+   *
+   * Two visible consequences. The Operations panel fell through to its
+   * Local-only `props.siteNames`, so Local rows showed names and every WP
+   * Engine and external row showed a raw `wpe-<uuid>` graph id. And
+   * `executeRemote`'s old `op.siteNames?.[siteId] ?? siteId` fallback was not
+   * occasionally empty — it fired for 100% of remote sites, every time.
+   *
+   * Same trap as `UpdateSettingsSchema`: a field absent from the schema is not
+   * a validation error, it is a silent deletion.
+   */
+  siteNames: z.record(z.string()).optional(),
   options: z.record(z.unknown()).optional(),
 });
 

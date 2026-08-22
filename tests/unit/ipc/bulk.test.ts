@@ -87,6 +87,46 @@ describe('registerBulkHandlers', () => {
     expect(channels).toContain(IPC_CHANNELS.BULK_EXECUTE);
   });
 
+  /**
+   * WP-68 follow-up. `siteNames` was absent from `BulkOperationRequestSchema`,
+   * and Zod strips unknown keys rather than rejecting them, so `validateInput`
+   * silently deleted the map on every dispatch. The Operations panel then fell
+   * back to its Local-only name map: Local rows showed names, every WP Engine
+   * and external row showed a raw `wpe-<uuid>`.
+   *
+   * Asserted at the handler, not on the schema alone — the schema is only
+   * interesting because `validateInput`'s output is what reaches `execute`.
+   */
+  it('carries siteNames through validation to the manager', async () => {
+    const ctx = createCtx();
+    registerBulkHandlers(createMockDeps(), ctx);
+    const handler = captureHandler(IPC_CHANNELS.BULK_EXECUTE);
+
+    await handler({}, {
+      type: 'reindex',
+      siteIds: ['site-1'],
+      siteNames: { 'site-1': 'cedarvalehealt' },
+      options: { autoStartStop: true },
+    });
+
+    expect(ctx.bulkOpManager.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ siteNames: { 'site-1': 'cedarvalehealt' } }),
+    );
+  });
+
+  // The counterpart: the field is carried, not smuggled past validation.
+  // Without this, deleting the schema entirely would pass the case above.
+  it('still rejects a malformed request', async () => {
+    const ctx = createCtx();
+    registerBulkHandlers(createMockDeps(), ctx);
+    const handler = captureHandler(IPC_CHANNELS.BULK_EXECUTE);
+
+    const result = await handler({}, { type: 'not-a-real-op', siteIds: ['site-1'] });
+
+    expect(result).toMatchObject({ success: false });
+    expect(ctx.bulkOpManager.execute).not.toHaveBeenCalled();
+  });
+
   it('registers BULK_STATUS handler', () => {
     registerBulkHandlers(createMockDeps(), createCtx());
     const channels = (ipcMain.handle as jest.Mock).mock.calls.map(([ch]: [string]) => ch);

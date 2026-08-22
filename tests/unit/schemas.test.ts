@@ -65,3 +65,35 @@ describe('UpdateSettingsSchema', () => {
     expect(result2.success).toBe(true);
   });
 });
+
+/**
+ * Structural guard for the silent-strip class of bug.
+ *
+ * `BulkOperationRequestSchema` omitted `siteNames`, and Zod drops unknown keys
+ * rather than rejecting them, so `validateInput` deleted the map on every
+ * dispatch — the Operations panel showed `wpe-<uuid>` where an install name
+ * belonged, and nothing failed anywhere to say so.
+ *
+ * A field-by-field test only catches fields someone remembered to test. This
+ * one is enforced by the compiler: `Required<BulkOperationRequest>` means
+ * adding a field to the interface breaks this fixture until it is listed, and
+ * the assertion then fails until the schema accepts it.
+ */
+import { BulkOperationRequestSchema, validateInput } from '../../src/common/schemas';
+import type { BulkOperationRequest } from '../../src/main/bulk/types';
+
+describe('BulkOperationRequestSchema — no field is silently stripped', () => {
+  it('round-trips every field the request interface declares', () => {
+    const full: Required<BulkOperationRequest> = {
+      type: 'reindex',
+      siteIds: ['site-1'],
+      siteNames: { 'site-1': 'cedarvalehealt' },
+      options: { autoStartStop: true, dryRun: false, provider: 'anthropic', pluginSlug: 'akismet' },
+    };
+
+    const out = validateInput(BulkOperationRequestSchema, full) as Record<string, unknown>;
+
+    expect(Object.keys(out).sort()).toEqual(Object.keys(full).sort());
+    expect(out.siteNames).toEqual({ 'site-1': 'cedarvalehealt' });
+  });
+});
