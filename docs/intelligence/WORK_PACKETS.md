@@ -31076,3 +31076,219 @@ environment-to-environment relationships, and nothing about code
 lineage. Producer #3 is solved for the WPE case by reading a record that
 already exists; **external hosts remain genuinely unresolved and stay
 producer #1's problem.**
+
+---
+
+## WP-64 · REGISTERED — verify the figures, then land them (2026-08-22, architect)
+
+Two diagrams drafted of the system **as built** —
+`https://claude.ai/code/artifact/f43f5df6-7686-44af-a432-d74f740dc608`
+— and registered for verification before they become documentation.
+
+**Figure A** — five persistent stores and an ownership boundary: four
+are Nexus's and all local; the fifth is Local's own `sites.json`, where
+the user's recorded link lives, read at mirror time and never written.
+
+**Figure B** — the entity graph. `has_environment` and
+`has_working_copy` exist; **`tracks_content` and `tracks_code`, named by
+ADR-21 as how layer membership is expressed, appear nowhere in `src/`.**
+That absence is why upstream must be INFERRED from confidence, and it
+reframes producer #3 again: not an invented preference, but **the link
+ADR-21 already named, written from the `hostConnections` record.**
+
+### The packet exists because the figures are claims
+
+Several boxes were relayed from other agents rather than read directly,
+and one number was measured hours earlier. **The receipts family's
+newest member — split-from-memory — applies to a drawing exactly as it
+applies to a count**, and a figure carries more authority per byte than
+a sentence does, which makes an unverified one worse than an unverified
+paragraph.
+
+**The architect named seven claims it is least sure of**, so the packet
+spends effort where it is worth spending: the IndexRegistry's real
+backing, the stale event count, three relayed fleet numbers, whether
+`SqliteVecStore` is the wired implementation, an inferred layer
+assignment, the simplification of three confidence arrows, and the
+100%-Site claim with its converse.
+
+### The instruction that matters most
+
+**Enumerate every store, entity type, namespace and link kind in the
+code, then subtract what the figures show, and report the remainder.**
+
+The architect's errors this run have been **scope errors, not fact
+errors** — a search excluding module-private functions, a rule stated in
+one direction, nine questions that never mentioned external hosts. **A
+figure omits by the same mechanism**, and checking the boxes that are
+drawn cannot find the box that is missing.
+
+### Two claims that carry their figures
+
+`tracks_content` / `tracks_code` absent from the whole repository — the
+argument of Figure B rests on it, so it is proven across source, tests,
+generated files, migrations and fixtures, with the search stated.
+
+`sites.json` read and never written — Figure A's boundary rests on it,
+**and an indirect write through Local's own IPC or service layer still
+makes the boundary wrong.**
+
+### Landing
+
+Corrections list first; the figures are downstream of it. Then mermaid
+into `architecture.md` under a new *"The system as built"*, placed after
+§3 because §3 describes the target and this describes the build.
+
+**Not a second architecture document** — that is the two-sources defect
+at document scale, and this project has spent a week ruling against it.
+The existing file has **one** mermaid block in 41 KB, which is the
+gap being closed rather than a licence to start over.
+
+---
+
+## WP-64 · GATE REPORT — the figures verified; the boundary failed and a third link kind was missing (2026-08-22)
+
+**Read-only for code. One documentation commit: `architecture.md` (new §3A)
+plus `docs/intelligence/wp64-figure-corrections.md`.** Nothing in `src/` was
+touched. Nothing pushed.
+
+### Disposition
+
+| packet item | state |
+|---|---|
+| corrections list, every claim with a verdict and a citation | done — 33 claims, `wp64-figure-corrections.md` |
+| figures as mermaid in `architecture.md`, new *"The system as built"*, after §3 | done — `## 3A`, three mermaid blocks, all three parse |
+| enumerate stores/types/namespaces/kinds, subtract the figures, report the remainder | done — *The remainder* section |
+| prove `tracks_content` / `tracks_code` across the whole repository | done — held, and got stronger |
+| prove `sites.json` read-never-written, incl. indirect writes | done — **failed** |
+| defects filed, not fixed | 5 filed |
+| no second architecture document | held — one file, one new section |
+
+### What changed, so the artifact can be republished from the corrected source
+
+**14 confirmed · 13 corrected · 4 struck · 1 unverifiable · 1 confirmed-but-widened.**
+
+Two changes alter what the figures argue, and both are the packet's own
+instruction paying out — the one that verifies what is *not* drawn.
+
+**1 · Figure A's ownership boundary is struck.** Nexus writes `sites.json`.
+Seven `updateSite` call sites, and **three write `hostConnections` itself** —
+`wpe-auto-pull.ts:410`, `wpe-pull.ts:157`, `wpe-pull.ts:200`, the last two
+writing twice on purpose to survive a race the comment names.
+`local-services-bridge.ts:378` is an unrestricted passthrough, so that is the
+used set, not the reachable set. `wpe_pull` is an MCP tool: an agent asking
+for a pull writes Local's own record. The half of the figcaption that
+survives is narrower and is the half that matters — **nothing reads
+`remoteSiteEnv` back.**
+
+The vacuous-guard note, because it decides how to draw it: zero of the 20
+live hostConnections carry `installId`, the field `wpe-auto-pull.ts:415`
+writes, so that path has left no trace on this fleet. **The boundary is wrong
+structurally, and a verifier who checked only the data would have confirmed
+the figure.**
+
+**2 · Figure B is missing a link kind, and it is the one that decides.**
+`content_pulled_from` — written `syncProducer.ts:203`, read
+`divergence.ts:291` as the **first** tier of `resolveUpstream`, 2 rows live.
+Upstream is not resolved by confidence alone: an observed pull outranks any
+structural link however confident. The figure's caption describes tier 2 and
+omits tier 1, which is the same omission twice.
+
+Then, in descending order of how much they change:
+
+- **`has_working_copy` is never written alone.** Every one is paired with a
+  `has_environment` on the *same* (site, env) at identical confidence and
+  evidence (`siteLinkMirror.ts:127`+`:132`, `:142`+`:143`), and `siteOf`
+  searches both kinds because of it (`entityService.ts:305-313`). **The
+  middle and right boxes of Figure B are one entity.** The architect's
+  flagged inference — "Layer 2 or 3, by link kind" — is not what the code
+  does; the working-copy set is a *subset* of the environment set, and
+  `resolveCandidates` is written as exactly that subtraction.
+- **"12 of 47 copies resolve" is struck.** Measured: **20 copies, 14 resolve
+  (2 by lineage, 12 by traversal), 6 abstain, 0 without a candidate.** "12"
+  was the traversal-only count — the same tier-1 blindness. "47" matches no
+  population I can find; every copy population is 20. **"the 6 declines are
+  every multi-environment Site" is false**: 84 Sites carry >1
+  `has_environment`, 5 decline, because only a Site with a working copy is
+  ever asked. The *finding* survives and is better supported.
+- **Three arrows are five writes across three branches.** The cited lines
+  110/127/132/142 are right; `:143` was omitted and `:132` mislabelled
+  (`1.0 user_link` drawn; 19 of 20 are `0.95 host_connection`). **No link at
+  `derivation` exists on this fleet** — the `:142`/`:143` branch has never
+  fired, so it is drawn dashed and marked structural.
+- **Four namespaces are six.** `graph.site_row` and `wpe.install_name` were
+  omitted — the two aliases the mirror exists to write, and the ones that
+  close the join its own header calls "the subtle trap."
+- **The call-site column (24/13/4/1) is unverifiable.** No method reproduces
+  all four; four candidate methods are tabulated. Replaced with a defined
+  metric printed with its definition: 13 / 13 / 1 / 1.
+- **"Zero `agent%` events, because the core has been failing to start."** The
+  count is right, **the cause is wrong** — the core wrote 3,257 events today
+  and `agent_runs` has a success the same day. The live topic is
+  `episodic.agent_run.failed`, which the `agent%` prefix excludes. A
+  search-scope error inside a claim about a search.
+- **Numbers:** 372 → **368** active wpe/external; 11,181 → **15,201** events
+  (+36% in 21h — moved off the box into a dated caption); 45 · 20
+  **confirmed**; "WPE at 100%" **confirmed, converse zero**.
+- **"NOTHING LEAVES THE MACHINE"** narrowed to *no intelligence-layer store
+  leaves the machine* — `src/cli/utils/telemetry.ts:27` POSTs to
+  `analytics.elasticapi.io`.
+
+**What held.** `tracks_content` / `tracks_code`: **zero occurrences anywhere
+outside `docs/`** — 7 hits in 5 doc files at `HEAD`, and **0 files** across
+`src tests lib dist build scripts wp-plugins law agents archive bin models
+coverage docs-site requirements`, tracked and gitignored alike, with
+`has_working_copy` (18 files, 8 under `src/`) as the reaching control. `SqliteVecStore` is the only `implements
+IVectorStore` and the only prod construction. `structure: local only` — 322
+local-shaped ids all carry one, 307 `wpe-*` and 6 `ssh:` all carry `null`,
+**zero counterexamples**. The 200-post cap, the four type defects, and the
+`wpe_site_id` sibling problem all confirmed — the last now quantified at
+**71 Site UUIDs over 168 of 365 active installs, 46%**.
+
+### The remainder — what neither figure showed
+
+Two stores (the userData key-value store as a store, and the four-writer
+audit family), two ledger tables (`twin_facts`, `fold_cursors`), the graph
+table the whole mirror reads (`site_links`), the envelope roles entirely
+(`working_copy` is stamped by **one** producer, on 2 events), the topic
+taxonomy (22 literals, 16 with rows), and **actors and grants** —
+`control.grant.issued`/`revoked` are live and neither figure has an actor on
+it. That last is the largest omission and is the natural subject of the
+proposed "C · Writes".
+
+### A measured answer to a WP-63 hypothesis
+
+WP-63 stated as a hypothesis, unjoined, that Site entities are minted from the
+host connection. The join: **local 20 of 42 active graph rows have a Site, and
+the 20 are exactly the 20 with a `site_links` row.** A purely local site has
+no Site entity by construction; external hosts have none at all (0 of 3);
+WP Engine has one for every active row (365 of 365, converse zero).
+
+### Defects filed, not fixed
+
+**D1** `IndexRegistry` never prunes — 277 of 636 entries are ids of Local
+sites that no longer exist, all carrying a `structure`; every count over
+`listAll()` is inflated by them. **D2** three writers replace
+`hostConnections` with a single-element array, discarding existing
+connections. **D3** `types/site-data.ts:24` types `remoteSiteEnv` as an
+object; live is a string in 20 of 20, so a correct-looking reader gets
+`undefined` and typechecks. **D4** `entityService.ts:1-16` says "DRAFT,
+unwired… not wired into the host yet"; `bootstrap.ts:273` constructs it and it
+has written 1,025 entities, 2,147 aliases and 416 links. **D5**
+`LocalSiteDataAccessor` declares no `updateSite`, which is one reason the
+write path was invisible to a search of the type.
+
+### Method, and its limits
+
+Fleet numbers were measured **2026-08-22 15:28Z on one machine** and are
+marked **[fleet]** in both artifacts; structural claims are unmarked. Six
+cases **could not be answered on this fleet** and are listed as such rather
+than reported as confirmed — the `derivation` branch, whether paired
+link kinds can ever diverge, multi-copy lineage, external upstream
+resolution, per-agent SQLite, and `wpe.install_name` collision across
+accounts. Each carries the case that would answer it.
+
+All three mermaid blocks in `architecture.md` parse under `mermaid@11`
+(§2's pre-existing block is one of them, so the harness is the same parser,
+not a permissive one). §11 untouched; no heading renumbered — the new section
+is `## 3A` so §4–§11 keep their numbers.

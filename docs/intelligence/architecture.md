@@ -98,6 +98,198 @@ The satellite is a **miniature of the runtime planes**, not a thin client: gates
 
 ---
 
+## 3A. The system as built
+
+§2 and §3 describe the target. This section describes what is on the disk on
+`poc/nexintelligence-ux` today, so the distance between the two is legible
+without reading both and subtracting. **There is no hub and no Postgres: the
+satellite is the whole system**, and no intelligence-layer store leaves the
+machine. (Telemetry does — `src/cli/utils/telemetry.ts:27` — which is why the
+claim is scoped to the stores rather than to the process.)
+
+Every box, edge and number below was read from source or measured; the
+verdict for each, with its citation, is in `wp64-figure-corrections.md`.
+Fleet numbers are marked **[fleet]** and were measured **2026-08-22 15:28Z on
+one machine** — they describe this data, not the system. Everything unmarked
+is structural.
+
+### 3A.1 The stores, and the boundary that is not a boundary
+
+```mermaid
+graph TB
+  subgraph LOCAL["Local's own record — Nexus reads it AND writes it"]
+    SJ["sites.json<br/>45 entries · 20 with hostConnections<br/>hostConnections[] carries remoteSiteId + remoteSiteEnv"]
+  end
+
+  subgraph SHARED["Local's userData mechanism, Nexus's data — 17 keys"]
+    IDX["nexus-ai_index_registry.json<br/>per-site index state + a _backup twin<br/>structure written on the local walk only"]
+    UD2["nexus-ai_site_metadata · _wpe_install_cache<br/>_settings · _external_site_profiles · 13 more"]
+  end
+
+  subgraph NEXUS["Nexus's own files — nexus-ai/, all on this machine"]
+    LED["ledger.db — SQLite, append-only<br/>events · entities · entity_aliases · entity_links<br/>twin_facts · fold_cursors"]
+    GR["graph.db — SQLite, 22 tables<br/>sites · site_links · content · plugins · themes · …<br/>368 active wpe+external rows"]
+    VEC["vectors.db — SqliteVecStore<br/>the only IVectorStore, wired at index.ts:234<br/>264 site corpora"]
+    LOGS["operation-audit.log · audit.log<br/>nexus-YYYY-MM-DD.log · agents/*.log<br/>four durable writers"]
+    ADB["agents/&lt;name&gt;/*.sqlite<br/>per-agent store · AgentDbManager"]
+  end
+
+  SJ -->|"Track-1 reconciliation"| GR
+  GR -->|"site_links → siteLinkMirror"| LED
+  LED -->|"folds"| LED
+  GR -->|"content → embeddings"| VEC
+  SJ -.->|"wpe_pull · wpe-auto-pull<br/>write hostConnections"| SJ
+
+  classDef gap stroke-dasharray: 4 4
+  class ADB gap
+```
+
+**Six store families, not four, and the fifth is not a store.** `IndexRegistry`
+is one *key* in Local's userData store (`nexus-ai_index_registry`,
+`src/common/constants.ts:439`) — one JSON file plus a `_backup` twin written by
+the adapter at `src/main/index.ts:182-193`, not a database. The four SQLite
+databases are the complete set of `new Database(...)` sites in non-test `src/`:
+`intelligence/ledger/ledger.ts:33`, `main/vector-store/SqliteVecStore.ts:17`,
+`main/events/GraphService.ts:162`, `main/agent-runtime/AgentDbManager.ts:20`.
+The last has **no instance on this fleet** and is drawn dashed for that reason.
+Two artifacts beside the live ones are dead and should not be mistaken for
+stores: `nexus-ai/vectors/` (the LanceDB directory) and a zero-byte
+`nexus-ai/registry.db`.
+
+**The dashed self-edge on `sites.json` is the correction that matters.**
+Nexus does not only read Local's site record. Seven call sites write it
+through `siteData.updateSite`, and **three of them write `hostConnections`
+itself** — `wpe-auto-pull.ts:410`, `wpe-pull.ts:157` and `wpe-pull.ts:200`,
+the last two deliberately writing twice to survive a race the comment names.
+`local-services-bridge.ts:378` exposes an unrestricted
+`updateSite(siteId, updates)` passthrough, so that list is what is used, not
+what is reachable. `wpe_pull` is an MCP tool: an agent asking for a pull
+writes Local's own record.
+
+What *is* true, and is the load-bearing half, is narrower: **nothing reads
+`remoteSiteEnv` back.** The person's recorded choice of environment is
+written by Local, written by Nexus, and consulted by neither when upstream is
+resolved (§3A.2). `src/main/types/site-data.ts:24` types it as
+`{ environment?: string }` where live data is a plain string in 20 of 20
+**[fleet]**, so a reader that tried would get `undefined` and typecheck clean.
+
+**Where each store is incomplete.**
+
+| store | gap | citation |
+|---|---|---|
+| `vectors.db` | remote extraction issues one `wp post list --posts_per_page=200`, with no pagination and no total-count query, so the cap is indistinguishable from the total; `customFields: {}` is hard-coded | `RemoteContentExtractor.ts:54`, `:102` |
+| index registry | `structure` is only ever written by the local filesystem walk — 322 local-shaped ids all carry one, 307 `wpe-*` and 6 `ssh:` entries all carry `null` **[fleet]** | measured, zero counterexamples |
+| index registry | 277 of 636 entries are ids of Local sites that no longer exist, all carrying a `structure` **[fleet]** — nothing prunes | measured |
+| `graph.db` | `wpe_site_id` is a *Site* UUID with sibling installs beneath it: 71 UUIDs carry more than one active install, 168 of 365 **[fleet]**. Resolving on it without an environment is ambiguous for 46% of the fleet | measured |
+| `ledger.db` | `semantic.content.changed` is structurally local-only — 2,549 of 2,550 on `source='local'` rows, **zero for `wpe` and zero for `external`** **[fleet]**, against a `state.plugin.observed` control that splits 9,251/432/31 over the same join | measured |
+| `ledger.db` | no success-side agent-run producer: `episodic.agent_run.failed` exists (`agentFailureProducer.ts:78`), its counterpart does not, while `graph.db.agent_runs` holds 116 rows **[fleet]** | measured |
+| `sites.json` | the type is wrong in four ways: `remoteSiteEnv` typed as an object, `remoteSiteId` and `userId` absent from the interface, `installId` declared and present in 0 of 20 **[fleet]** | `types/site-data.ts:17-27` |
+
+### 3A.2 Identity: two entity types, six namespaces, three link kinds
+
+ADR-21 rules that layer membership is expressed **relationally**, through link
+kinds rather than id strings. Two of the four kinds it names are written.
+`tracks_content` and `tracks_code` appear **nowhere in the repository outside
+`docs/`** — not in `src/`, `tests/`, `lib/`, `dist/`, `build/`, `scripts/`,
+`law/` or `agents/`; not written, not read, not declared, not in a migration
+or a fixture. The absence is why upstream must be inferred.
+
+```mermaid
+graph TB
+  SITE["entity · type=site<br/>site·local.site_id.logical (13 mint sites)<br/>site·wpe.site_id (1)<br/>Layer 1 — the web property"]
+
+  WPEENV["env · aliased wpe.install_id + wpe.install_name + graph.site_row<br/>production · staging · development<br/>Layer 2 — durable runtime"]
+  LOCALENV["env · local.site_id<br/>a site on this machine<br/>carries BOTH edges when it is a working copy"]
+
+  SITE -->|"has_environment · 0.95 host_connection<br/>siteLinkMirror.ts:110 — every active WPE row"| WPEENV
+  SITE -->|"has_environment · mapped evidence<br/>:127 — user 1.0 / hostConnection 0.95 / inferred 0.5"| LOCALENV
+  SITE -->|"has_working_copy · SAME evidence, always paired<br/>:132 — additive, never written alone"| LOCALENV
+  SITE -.->|"has_environment + has_working_copy · 1.0 derivation<br/>:142/:143 — install unknown to the graph · 0 rows here"| LOCALENV
+
+  LOCALENV -->|"content_pulled_from · 1.0 pull_lineage<br/>syncProducer.ts:203 · linkExclusive"| WPEENV
+
+  MISSING["tracks_content · tracks_code<br/>named by ADR-21 · zero occurrences outside docs/"]
+  MISSING -.-> LOCALENV
+
+  RES["resolveUpstream — divergence.ts:285-308<br/>1 · content_pulled_from wins outright<br/>2 · else Site traversal, strict confidence win<br/>3 · else abstain<br/>20 copies · 14 resolve · 6 abstain"]
+  LOCALENV --> RES
+
+  classDef absent stroke-dasharray: 4 4
+  class MISSING absent
+```
+
+**One env entity, two link kinds — not two entities.** `has_working_copy` is
+never written alone: every one is written in the same breath as a
+`has_environment` on the *same* (site, env) pair at identical confidence and
+evidence (`siteLinkMirror.ts:127`+`:132`, and `:142`+`:143`). `siteOf`
+searches both kinds for exactly that reason
+(`entityService.ts:305-313` — *"Both containment kinds are searched because a
+copy carries both"*). The kind therefore does not partition Layer 2 from
+Layer 3; the working-copy set is a **subset** of the environment set, and
+`resolveCandidates` (`divergence.ts:249-266`) is written as that subtraction —
+it removes `workingCopiesOf(site)` from `environmentsOf(site)` so a colleague's
+sandbox is never offered as production's upstream.
+
+**Resolution has three tiers, not one.** `content_pulled_from` is an *observed*
+pull and outranks any structural link however confident — a `user_link` says
+two things belong together, not that content came from one of them. Only when
+there is no lineage does the Site traversal run, and it resolves only on a
+strict confidence win. On a tie it abstains, which is correct: an unordered
+first-row-wins over two equally-confident environments is a coin toss whose
+losing side is a report telling someone their production install is forty
+plugins behind.
+
+**The abstention lands exactly where the nesting is needed [fleet].** Of 20
+working copies, 14 resolve — 2 by content lineage, 12 by traversal — and 6
+abstain. Every decline is a Site with two or three candidate environments all
+at `0.95 host_connection`: a genuine tie, because every environment arrived by
+the same mechanism. A Site with one environment needs no hierarchy; a Site with
+several is the only reason to draw one, and it is the set that declines. The
+fix is not to vary the confidence number — that overloads a provenance value
+with a preference and corrupts every reader that orders by it. It is to write
+the link ADR-21 already named, from the `hostConnections` record that already
+exists.
+
+**The identity surface, measured.**
+
+| | live | note |
+|---|---|---|
+| entity types | `site` 604 · `env` 421 **[fleet]** | no third type; ADR-21's third layer is a link kind and an envelope role |
+| alias namespaces | 6 — `local.site_id` 421 · `graph.site_row` 374 · `wpe.install_id` 374 · `wpe.install_name` 374 · `local.site_id.logical` 330 · `wpe.site_id` 274 **[fleet]** | all at `derivation` 1.0; the pairing-proposal path has never been confirmed into an alias here |
+| link kinds | `has_environment` 394 · `has_working_copy` 20 · `content_pulled_from` 2 **[fleet]** | `belongs_to_client` is a schema comment only (`migrations.ts:64`) |
+| `working_copy` envelope role | 2 events, both `episodic.sync.pulled` **[fleet]** | ADR-21's "producers additively stamp" is, in the tree, one producer |
+| topics | 22 literals in `src/`, 16 with rows **[fleet]** | never fired here: `episodic.incident.opened`, `episodic.sync.pushed`, `state.plugin.removed`, `state.user.observed` |
+
+The two namespaces easiest to overlook are the ones that make the joins work:
+`graph.site_row` and `wpe.install_name`. Producers derive env ids from
+`sites.id`; `FleetAssembler` addresses installs by `remote_install_id ?? id`.
+Only aliasing every WPE env under both makes a join through either land on the
+one entity whose ledger history already exists
+(`siteLinkMirror.ts:100`/`:105`/`:139`, and its header calls this "the subtle
+trap").
+
+### 3A.3 Who has a Site entity, and who does not
+
+```
+source     active rows   env entity   Site entity      [fleet]
+wpe                365          365          365   ← 100%, converse is zero
+external             3            3            0
+local               42           42           20   ← exactly the 20 with a site_links row
+```
+
+**A local site gets a Site entity if and only if it has a host connection.**
+The 20 are the same 20 across three populations: `sites.json` non-empty
+`hostConnections`, `graph.db.site_links` rows, and `has_working_copy` targets.
+WP-63 stated this as a hypothesis because the datasets had not been joined;
+the join is above. A purely local site — the most common kind — has **no Site
+entity by construction**, and an external host has none at all.
+
+This is the shape of the remaining producer work, and it is not symmetric:
+the WP Engine case is solved by reading a record that already exists, while
+external hosts remain genuinely unresolved.
+
+---
+
 ## 4. Deep dive A — Event backbone & schemas
 
 ### 4.1 The envelope
