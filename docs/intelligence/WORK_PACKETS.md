@@ -28295,3 +28295,64 @@ is proven; wiring it to findings is one small step once ruling 1 lands.
 And the other half is agent-side: for citations to bite, sentinel's specialists
 must EMIT spans, which is prompt work inside the agent. The platform can verify
 a citation it is given; it cannot invent one.
+
+---
+
+## WP-57 · A LIVE DEFECT IN TASK 8, FOUND BY THE OWNER'S QUESTION (2026-08-21)
+
+The gate report claimed phase 1 complete. The owner asked "is phase 1 done?"
+and the check that answers it — *does anything call this, and did it run for
+real?* — found `agent_runs.task_id` **NULL on every stored row**, including the
+two runs whose frames demonstrably emitted (`wp57-smoke`, and the
+security-sentinel run whose 22-event thread is in the smoke report above).
+
+**Cause, and it was introduced by this packet.** `close()` was moved after the
+producer taps — correct, because otherwise a clean scan that resolves an
+incident flushes `task.run.assigned` with no `completed`. The `didEmit()` check
+moved with it, past `this.stateStore.recordRun(result)` at line 211. The row
+was persisted 123 lines before `result.taskId` was assigned.
+
+**Why no test caught it.** Two tests, each correct, neither covering the join:
+
+- `AgentRunner.taskframe.test.ts` asserted `result.taskId` on the RETURNED
+  object, which is set by the time `run()` returns;
+- `AgentStateStore.taskid.test.ts` called `recordRun` with an id already
+  present, proving the store CAN persist it.
+
+Neither asked whether the runner actually hands it over. **The seam between two
+green tests is not covered by either of them** — worth adding to the
+vacuous-guard catalogue, because both tests look thorough in isolation.
+
+**The fix: `AgentStateStore.attachTaskId(runId, taskId)`.** A second, targeted
+write, and not laziness — the alternatives were both worse:
+
+- `recordRun` cannot move to the end: `pauseIfStuck` reads `getRunHistory` and
+  depends on the current run already being in it.
+- `close()` cannot move earlier: the half-bracket problem it was moved to fix.
+- Re-deriving "will it emit?" before `recordRun` would put the laziness rule in
+  two places, which is the disease this packet keeps finding.
+
+So the row is written when the run ends, and the correlation is attached when
+it becomes knowable. Never throws — a missing join must not cost run history.
+
+**Pinned by asserting the STORED row**, with a snapshot rather than a live
+reference: `recordRun: jest.fn((r) => persisted.push({ ...r }))`. Holding the
+reference would have let the assertion pass against the very bug, since `run()`
+mutates `result` afterwards. **M25** (revert to setting `taskId` on the result
+only) kills.
+
+*A second, smaller slip in the same edit: the new `describe` had no
+`beforeEach`, so a module-scoped array leaked rows from a sibling block and the
+first assertion read the wrong run. Caught immediately; its own reset added.*
+
+### Corrected status of phase 1
+
+| task | honest status |
+|---|---|
+| 1–2 frame · 3 brackets · 4 actor · 5 thread + `noteGatedAct` | done, **live-verified** |
+| 6 dispatcher actor | code + unit tests, **never exercised live** — every act in the ledger is `dispatch: registry`, zero `contributed` |
+| 7 `ctx.task` | populated, **zero consumers**. It exists FOR agent authors, so that is expected — but it is a building block, not a delivered capability, and the gate report should have said so |
+| 8 `agent_runs.task_id` | **was broken in production; fixed here** |
+
+Suite after the fix: **635 suites · 8,776 passed · 2 skipped · EXIT=0** (+2
+tests). Packet battery now **25 mutations, 25 killed**.

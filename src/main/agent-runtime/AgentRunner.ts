@@ -331,7 +331,18 @@ export class AgentRunner {
     // Surface the task id ONLY if the frame actually wrote. The frame is lazy:
     // a quiet successful run emits nothing, and recording its id in
     // `agent_runs` would store a correlation that names no events.
-    if (frame?.didEmit()) result.taskId = frame.id;
+    // WP-57 · the frame is lazy, so `didEmit()` is not final until `close()`
+    // above — which is AFTER `recordRun` persisted the row. Attach the join
+    // now that it is knowable. Setting it on `result` alone left every stored
+    // row NULL: found by querying the database after a live run, and pinned by
+    // `AgentRunner.taskframe.test.ts`'s stored-row assertions.
+    if (frame?.didEmit()) {
+      result.taskId = frame.id;
+      if (runId) {
+        try { this.stateStore.attachTaskId(runId, frame.id); }
+        catch (attachErr: any) { logger.error(`task id attach failed for ${agent.name}:`, attachErr?.message); }
+      }
+    }
 
     return result;
   }

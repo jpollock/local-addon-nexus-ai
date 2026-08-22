@@ -145,6 +145,28 @@ export class AgentStateStore {
     };
   }
 
+  /**
+   * WP-57 · attach the ledger correlation to an already-recorded run.
+   *
+   * A second write, and it is not laziness. The frame is LAZY, so whether it
+   * emitted is not final until it closes — and it must close AFTER the
+   * producer taps, or a clean scan that resolves an incident flushes
+   * `task.run.assigned` with no `completed`. `recordRun` cannot simply move to
+   * the end either: `pauseIfStuck` reads `getRunHistory` and depends on the
+   * current run already being in it.
+   *
+   * So the row is written when the run ends and the correlation is attached
+   * when it becomes knowable. Never throws — a missing join must not cost the
+   * run history.
+   */
+  attachTaskId(runId: string, taskId: string): void {
+    try {
+      this.db
+        .prepare('UPDATE agent_runs SET task_id = ? WHERE run_id = ?')
+        .run(taskId, runId);
+    } catch { /* the row survives without its join */ }
+  }
+
   getRunHistory(agentName: string, limit = 20): AgentRunRow[] {
     const rows = this.db
       .prepare('SELECT * FROM agent_runs WHERE agent_name = ? ORDER BY id DESC LIMIT ?')

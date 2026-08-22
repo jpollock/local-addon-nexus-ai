@@ -43,17 +43,26 @@ const resolvedProvider: ResolvedAIProvider = {
   provider: 'ollama', model: 'llama3.2', apiKey: '', useLocalGateway: false, isAvailable: false,
 };
 
+const persisted: any[] = [];
+
 function makeRunner() {
   const stateStore = {
     buildHandle: jest.fn().mockReturnValue({ get: jest.fn(), set: jest.fn(), delete: jest.fn(), scratch: {} }),
-    recordRun: jest.fn(),
+    // Capture a SNAPSHOT, not the live object: `run()` mutates `result` after
+    // this call, and holding the reference would make the assertion below pass
+    // against the very bug it exists to catch.
+    recordRun: jest.fn((r: any) => { persisted.push({ ...r }); }),
+    attachTaskId: jest.fn((runId: string, taskId: string) => {
+      const row = persisted.find((p) => p.runId === runId);
+      if (row) row.taskId = taskId;
+    }),
   };
   const toolRegistry = { call: jest.fn() };
   return new AgentRunner(stateStore as any, toolRegistry as any, {} as any, resolvedProvider);
 }
 
 describe('WP-57 · AgentRunner run frame', () => {
-  beforeEach(() => { opened.length = 0; closed.length = 0; openReturnsUndefined = false; frameDidEmit = undefined; });
+  beforeEach(() => { opened.length = 0; closed.length = 0; persisted.length = 0; openReturnsUndefined = false; frameDidEmit = undefined; });
 
   it('opens with the caller-stated trigger and closes with the run outcome', async () => {
     const agent = defineAgent({
@@ -156,5 +165,46 @@ describe('WP-57 · AgentRunner run frame', () => {
     await makeRunner().run(agent, undefined, { trigger: 'cron' });
 
     expect(closed[0].findings).toBe(2);
+  });
+});
+
+/**
+ * The seam two passing tests left open.
+ *
+ * `AgentRunner.taskframe` asserted `result.taskId` on the RETURNED object, and
+ * `AgentStateStore.taskid` called `recordRun` with an id already present. Both
+ * were correct and neither covered the join — and in between them
+ * `recordRun(result)` ran 123 lines BEFORE `result.taskId` was assigned, so
+ * every persisted row had `task_id` NULL. Found by querying the real database
+ * after a live run, not by a test.
+ */
+describe('WP-57 · the task id reaches the STORED row, not just the return value', () => {
+  // Its own reset: `persisted` is module-scoped and the sibling describe's
+  // beforeEach does not reach here. Without this the first assertion reads a
+  // row from an earlier test — green for the wrong run.
+  beforeEach(() => { opened.length = 0; closed.length = 0; persisted.length = 0; frameDidEmit = undefined; });
+
+  it('persists the task id for a run whose frame emitted', async () => {
+    const agent = defineAgent({
+      name: 'a', version: '1.0.0', triggers: [cron('* * * * *')], run: async () => undefined,
+    });
+
+    const result = await makeRunner().run(agent, undefined, { trigger: 'cron' });
+
+    expect(result.taskId).toBe('task_TEST');
+    expect(persisted).toHaveLength(1);
+    // The assertion that was missing.
+    expect(persisted[0].taskId).toBe('task_TEST');
+  });
+
+  it('persists no task id when the frame wrote nothing', async () => {
+    frameDidEmit = false;
+    const agent = defineAgent({
+      name: 'a', version: '1.0.0', triggers: [cron('* * * * *')], run: async () => undefined,
+    });
+
+    await makeRunner().run(agent, undefined, { trigger: 'cron' });
+
+    expect(persisted[0].taskId).toBeUndefined();
   });
 });
