@@ -252,7 +252,6 @@ complete one.
 
 | site | source | published posts | indexed |
 |---|---|---|---|
-| `qwerky` | wpe | 30,628 | 2 |
 | `rtstgaitoolkit` | wpe | 1,716 | 163 |
 | `cedarvalehealt` | wpe | 600 | **200** |
 | `testmigratejpp` | wpe | 588 | **200** |
@@ -261,6 +260,15 @@ complete one.
 
 Two installs sit exactly on the cap. The local extractor indexed 994 of 995, so
 this is specific to the remote path, not to indexing generally.
+
+**Correction, 2026-08-22.** An earlier version of this table led with
+`qwerky — 30,628 published / 2 indexed`. That was wrong and I should not have
+used it. Before the fix `qwerky` was reading 200 rows, not 2; after the fix it
+reads up to 5,000 and *still* indexes 2, because its other posts carry no
+extractable text and are dropped by a content filter that predates all of this.
+I took a striking number and filed it under the cap's heading without tracing
+what produced it — in a document whose only value is that every claim is
+verified. The cap was real; that row was never evidence for it.
 
 **Impact.** Semantic search, `search_across_sites` and anything reading the
 content index is silently incomplete for any WP Engine install with more than
@@ -282,3 +290,74 @@ worse than a slow one, because every downstream answer is confidently wrong.
 Note the external-host extractor was not audited for the same pattern. The three
 external sites in this fleet hold 85, 102 and 101 documents — all under 200, so
 they are complete by luck rather than by demonstration.
+
+---
+
+## D8 — `keyword` and `hybrid` search are broken for any site whose id contains a hyphen
+
+**Found 2026-08-22, after WP-62.** Blocks the structured-filter capability that
+`describe_site_fields` advertises.
+
+**`src/main/vector-store/SqliteVecStore.ts`, `searchBM25`:**
+
+```ts
+// NOTE: FTS5 virtual tables use unquoted table names in MATCH clause.
+const ftsTableName = `${p}_fts`;
+this.conn.prepare(
+  `SELECT rowid, rank FROM ${ftsTableName} WHERE ${ftsTableName} MATCH ? ORDER BY rank LIMIT ${ftsLimit}`
+)
+```
+
+The table is **created** quoted in `ensureTables` — `"${p}_fts"` — and
+**queried** unquoted here. Any hyphen in the site id therefore breaks the read
+while the write succeeds.
+
+Two symptoms, one cause:
+
+| site | id | error |
+|---|---|---|
+| `cedarvale` (local) | `oXhu--v0j` | `no such table: site_oXhu` — SQLite reads `--` as a line comment and truncates |
+| `cedarvalehealt` (wpe) | UUID `99ef6161-13f1-…` | `near "-": syntax error` — single hyphen in a bare identifier |
+
+**Reproduce:**
+```
+search_site_content(site:'cedarvale', query:'dermatology provider',
+                    postType:'provider', searchMode:'keyword')
+→ Tool error: no such table: site_oXhu
+
+same call with searchMode:'hybrid'   → same failure
+same call with no searchMode         → works (semantic path, correctly quoted)
+```
+
+**The comment's premise is wrong.** FTS5 accepts a quoted identifier in a
+`MATCH` clause. What it cannot take is a *bound parameter* for a table name —
+someone hit that and reached for the wrong remedy. `validateSiteId`
+(`/^[a-zA-Z0-9_-]+$/`) deliberately permits hyphens, so validation will not
+catch it either.
+
+**Blast radius.** Every WP Engine install (ids are UUIDs) and every Local site
+whose generated id contains a hyphen. `keyword` and `hybrid` both fail, and
+because `metadataFilters` requires `hybrid`, the entire structured-filter path
+is unreachable — including every example `describe_site_fields` prints in its
+own closing instruction.
+
+**Fix:** quote the identifier as `ensureTables` already does. `ftsLimit` is
+interpolated too; it is `Math.floor`ed so it is not injectable today, but it
+should be bound.
+
+---
+
+## Task 9 results — what the fixes unblocked
+
+With WP-62 built and the fleet re-indexed (`cedarvalehealt` 842/842 including
+all six content types), the structured pathologies became findable:
+
+- **CV-C-01** — `find_outdated_sites(source:'external')` → `6.9.7 (1 site) — willowcreekderm [external]`, correctly scoped. Found.
+- **CV-A-01** — `describe_site_fields` on the flagship lists `hours: number 7–7 (25/25)` under `location`; on `summitdermatol` the `hours` field is **absent from the schema entirely**. A stronger signal than designed for: the gap shows structurally, without inspecting a record.
+- **CV-B-01** — `search_across_sites` for the ghost returns Elian Mills, PA-C on `cedarvalehealt` (Phoenix) and `ridgelineskini` (Boulder). The cross-site contradiction is discoverable. Custom fields now return in results (`npi`, `review_date`, `review_status`), so the exact NPI is retrievable per-record.
+- **CV-D-01, CV-G-01** — blocked on D8. Both need `metadataFilters` (address/phone comparison; `review_date` range), which requires `hybrid`.
+
+**Observation:** array-valued custom fields are returned as raw PHP
+serialization — `specialties: a:2:{i:0;s:19:"medical dermatology";…}`,
+`locations: a:1:{i:0;s:2:"11";}`. Consumable by a model, but not by an exact-match
+assertion, and `locations` surfaces post IDs rather than slugs.
