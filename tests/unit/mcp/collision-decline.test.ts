@@ -344,6 +344,34 @@ describe('WP-58 · the decline is scoped to the name, not to everything', () => 
     });
   });
 
+  it('an ID or DOMAIN match survives even when the graph holds a row of that EXACT name', () => {
+    // The assertion above is satisfied by a fixture where the graph simply has
+    // no such row — which is every fixture in this file, and is why the
+    // battery's "decline on everything" mutation SURVIVED its first run. The
+    // scope rule is only exercised where the collision is actually available
+    // to be declined and is deliberately not, so this fixture builds that.
+    //
+    // The residual it also pins, honestly: a Local site whose DOMAIN equals a
+    // graph row's NAME is NOT declined. The ruling scopes the decline to name
+    // matches, and this test says so rather than leaving it to be discovered.
+    const data = localStore([
+      { id: 'myloop', name: 'someothername', path: '/Local Sites/x', domain: 'myloop.example.com' },
+    ]);
+    const g = graph([
+      { id: 'wpe-1', name: 'myloop', source: 'wpe' },
+      { id: 'ssh:h/myloop.example.com', name: 'myloop.example.com', source: 'external', account_id: 'h' },
+    ]);
+
+    // The fixture really does hold both rows — asserted before the claim.
+    expect(g.getDb().prepare("... LOWER(name) = ?").all('myloop')).toHaveLength(1);
+    expect(g.getDb().prepare("... LOWER(name) = ?").all('myloop.example.com')).toHaveLength(1);
+
+    expect(resolveLocalSite('myloop', data, g)?.name).toBe('someothername');
+    expect(resolveLocalSite('myloop.example.com', data, g)?.name).toBe('someothername');
+    expect(resolveLocalSiteResult('myloop', data, g).kind).toBe('ok');
+    expect(resolveLocalSiteResult('myloop.example.com', data, g).kind).toBe('ok');
+  });
+
   it('a non-colliding local name is unaffected', () => {
     const data = localStore([localSiteNamed('quiet-site'), localSiteNamed(name)]);
     expect(resolveLocalSite('quiet-site', data, withGraph)?.id).toBe('local-quiet-site');
