@@ -31758,3 +31758,141 @@ the addon in Local.**
 and the battery are committed as `scripts/wp62-exhibit.js` and
 `scripts/wp62-battery.py`, because both are re-runnable against a live
 fleet and the next reader will want them.
+
+---
+
+## WP-62 · MERGE REPORT — merged at `566666af`; the record's minus-six located; the next base published (2026-08-22)
+
+**Merged into `poc/nexintelligence-ux` at `566666af`. Nothing pushed.**
+
+### Receipt — `git diff --stat 566666af^1 566666af`
+
+```
+ docs/intelligence/WORK_PACKETS.md                  | 246 +++++++++++++++
+ scripts/wp62-battery.py                            | 347 +++++++++++++++++++++
+ scripts/wp62-exhibit.js                            | 138 ++++++++
+ src/common/types.ts                                |  44 +++
+ src/main/content/ContentPipeline.ts                | 143 ++-------
+ src/main/content/RemoteContentExtractor.ts         | 300 ++++++++++++++++--
+ src/main/content/chunker.ts                        | 160 ++++++++++
+ src/main/content/wxr-postmeta.ts                   | 183 +++++++++++
+ src/main/events/ExternalContentIndexService.ts     |  54 ++--
+ src/main/events/WPESyncService.ts                  |  72 ++---
+ .../mcp/modules/site-context/get-index-status.ts   |  82 ++++-
+ tests/unit/content/RemoteContentExtractor.test.ts  | 330 ++++++++++++++++++--
+ tests/unit/content/chunker-parity.test.ts          | 316 +++++++++++++++++++
+ tests/unit/content/wxr-postmeta.test.ts            | 135 ++++++++
+ tests/unit/mcp/get-index-status-coverage.test.ts   | 155 +++++++++
+ 15 files changed, 2469 insertions(+), 236 deletions(-)
+```
+
+### The conflict, and the six bytes
+
+One file conflicted: `docs/intelligence/WORK_PACKETS.md`, both halves
+appending to the same tail. Every code file was disjoint — measured with
+`git diff --name-only <ancestor> <side>` on both sides before starting,
+which is why the merge was a record merge and nothing else.
+
+Rebuilt three-blob, `ancestor + ours_tail + theirs_tail`, receipt order,
+no judgement exercised at the seam:
+
+```
+ancestor    (3e3da0a9)  1,781,700 bytes
+ours_tail   (base)         33,616 bytes   6 sections
+theirs_tail (wp-62)        11,525 bytes   1 section
+rebuilt                 1,826,841 bytes   residual 0
+```
+
+Four-way verified: ancestor an exact PREFIX of both sides (checked, not
+assumed — WP-52); each tail an exact substring **exactly once**; ours
+before theirs; arithmetic in **bytes**, `len(bytes)`, not characters.
+Anchored marker sweep `^<<<<<<<` / `^=======$` / `^>>>>>>>` — zero, and
+anchored because this record discusses markers in prose in six places.
+
+**The conflicted working file was 29 bytes larger than the rebuild, and
+the residual was LOCATED rather than driven to zero.** Three marker lines
+account for +35. The remaining **−6** is WP-58's case exactly: both tails
+open with the same `\n---\n\n` separator, diff3 matched it as common
+context and emitted it **once**, before `<<<<<<<`, leaving each side six
+bytes short. It reconciles exactly:
+
+```
+1,826,841 (rebuilt) + 35 (markers) − 6 (separator emitted once) = 1,826,870 (working)
+```
+
+**Consequence, and it is why the rule exists:** deleting the markers by
+hand — which a diff view shows as a clean resolution — would have run
+WP-64's last section straight into WP-62's gate report, with no separator
+between them. Six characters, invisible to `--stat`, and only the
+exact-substring check catches them.
+
+### Figures — merged tree, with its tree kind
+
+```
+BASE  (published by WP-61's merge, primary, d4a0afdb)
+   638 suites / 8894 tests / 8892 passed /  2 skipped
+
+WP-62 branch (WORKTREE)
+   641 suites / 8945 tests / 8933 passed / 12 skipped
+
+MERGED (PRIMARY, 566666af, `npm test`, EXIT=0, 124.0 s)
+   641 suites / 8945 tests / 8943 passed /  2 skipped
+```
+
+Base → merged: **+3 suites, +51 tests, +51 passed, skipped unchanged.**
+
+Worktree → merged: totals identical, **skipped 12 → 2 and passed +10** —
+the documented boundary in the documented direction, and its cause is
+`models/`, which carries only the tracked `bge-small-en-v1.5` in a fresh
+worktree while `all-MiniLM-L6-v2-quantized` is untracked and lives in the
+primary alone. **Named because a count without its tree kind is the
+ambiguity three packets narrated instead of asserting.**
+
+`npx tsc -p . --noEmit` clean on the merged tree. The merged tree is a
+tree neither branch had tested, which is why this run is one of the two
+that earn their place.
+
+**Suites this gate could NOT reach, by name:** the ten embedding tests
+that gate on the untracked `all-MiniLM-L6-v2-quantized` model files ran
+here and are the +10; the two that remain skipped in the primary are the
+pre-existing pair carried in the base figure. `tests/e2e*` and
+`tests/e2e-cli*` are excluded by `jest.config.js` and were not run by
+either measurement, on the branch or on the merge.
+
+### `base-measure.json` republished
+
+```json
+{ "commit": "566666af", "suites": 641, "tests": 8945, "passed": 8943,
+  "skipped": 2, "tree": "primary" }
+```
+
+The next packet's guard is
+`git diff --name-only 566666af HEAD -- src/ tests/ scripts/`: empty means
+this measurement stands; anything at all means re-measure.
+
+### Artifacts deleted by the merge that made them
+
+`/tmp/wp62-merge/{ancestor,ours,theirs,rebuilt}.md` and
+`/tmp/wp62-merged-suite.txt` are deleted. A three-blob rebuild is a tool
+for one merge; the moment the record moves it becomes a loaded file, and
+a wholesale overwrite from a stale one erases every append since while
+passing a marker sweep.
+
+`scripts/wp62-exhibit.js` and `scripts/wp62-battery.py` are **kept and
+committed** — both re-run against a live fleet, and the exhibit is what
+the ruling's own re-index sweep will need.
+
+### Architect adjudications committed verbatim first
+
+Twice this packet, and both before anything else touched those files:
+`2d7120e9` (WP-63 producer #3 + two protocol amendments) and `b7cc48ae`
+(WP-62's own gate ruling, WP-64's acceptance, four protocol amendments).
+Fifth and sixth occurrences.
+
+### Standing, carried forward from the ruling
+
+**The re-index sweep is all 313 remote entries or it is guesswork** —
+`documentCount === 200` finds four installs and misses qwerky, the worst
+case. Coverage is recorded from now on, so the *next* sweep can be
+scoped; this one cannot. At the measured rate that is ~39 s per
+800-post install.
