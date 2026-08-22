@@ -1600,3 +1600,75 @@ the paragraph is the moment to sweep for the CLASS — every reader of
 that identifier — not only to repair the reader in hand. **A comment
 that explains a defect this well and leaves a sibling unfixed is a
 finding that stopped one file short.**
+
+## Structure and data can disagree, and the data is the more convincing liar (WP-64)
+
+The architect drew an ownership boundary: Nexus reads Local's
+`sites.json` and never writes it. Seven write paths exist, three of them
+writing the exact field in question — **and zero of the twenty live
+records carry the marker those paths leave.**
+
+**A data-only check would have confirmed the false claim.** A write path
+whose output is absent from current data reads exactly like a write path
+that does not exist.
+
+**Where a claim is about what the code CAN do, the data cannot settle
+it.** Read the writers. Where a claim is about what the fleet currently
+holds, the data settles it and the code cannot. Say which kind of claim
+each number is, because the two are indistinguishable once written down.
+
+## Measure before specifying (WP-64)
+
+Six architect errors in two days, all one shape: a method that excluded
+the case it was looking for. Module-private functions. A residual rule
+written for excess only. Nine questions that never mentioned external
+hosts. A check that a remedy exists rather than works. **And a search
+for a NAME where the question was about a MECHANISM** — `tracks_content`
+was declared missing while `content_pulled_from` did its job, written by
+a live producer and read as the first tier of the resolver.
+
+The evidence that this is order and not carelessness: one producer was
+specified three times, each smaller than the last, **every shrink caused
+by a measurement that could have come first** — an invented signal, then
+a recorded fact, then the discovery that the mechanism already existed
+and only its trigger was narrow.
+
+**Where a document specifies a producer, link or store, find what plays
+its role in the code — under whatever name — before asserting it is
+absent.** A specification written before the search is a hypothesis
+wearing a ruling's clothes, and it costs the packet a rewrite each time.
+
+## A number is evidence for one mechanism (WP-62)
+
+The architect's packet cited *"30,628 published, 2 indexed"* as the
+cap's worst case. The number was true. The cap was real. **The arrow
+between them was not:** before the fix the extractor read 200 rows, and
+after it reads 5,000 and still yields 2, because 4,998 rows have no
+extractable body and are dropped by an unrelated filter that predates
+everything.
+
+Fixing the cap moved that install from 2 to 2.
+
+**A figure taken from someone else's table arrives with their claim
+attached, and the claim does not travel with the same warranty as the
+number.** Before citing a measurement as evidence for a mechanism, state
+what else could produce that value — and check the most alarming figure
+hardest, because it is the one that will be quoted.
+
+The operational half: the wrong attribution also produced a wrong
+REMEDIATION SET. `documentCount === 200` looked like it identified the
+affected installs; four sit there and the worst case does not. **A
+mechanism inferred from a number will scope its own repair by that
+number, and inherit the same error twice.**
+
+## A cancellation nothing can invoke is not a safety property (WP-62)
+
+The packet declined to add a cancellation check to the remote embed
+loop: the existing `cancelSite` has one caller, the remote service is
+not reachable from `services`, and wiring it would have needed a lock
+the packet had not announced. It said so and left it.
+
+**Correct.** A guard, a cancel, a timeout or a rollback that no caller
+can reach reads as a safety property to every future reader and is
+decoration. The honest forms are: wire it and prove the path, or leave
+it out and name what would be needed — never the method with no caller.

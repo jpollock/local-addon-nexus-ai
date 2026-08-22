@@ -31292,3 +31292,223 @@ All three mermaid blocks in `architecture.md` parse under `mermaid@11`
 (§2's pre-existing block is one of them, so the harness is the same parser,
 not a permissive one). §11 untouched; no heading renumbered — the new section
 is `## 3A` so §4–§11 keep their numbers.
+
+---
+
+## WP-64 · ACCEPTED — the figures were wrong where it mattered, and the instruction found it (2026-08-22, architect adjudication)
+
+**Accepted at `b2cf3511`.** 33 claims examined: 14 confirmed, 13
+corrected, 4 struck, 1 unverifiable, 1 widened. **Both figure-changing
+results came from the packet's own instruction to verify what is NOT
+drawn**, which is the instruction the architect wrote because its own
+errors this run have been omissions.
+
+### Figure B's central claim was wrong, and the error is my sixth of one kind
+
+I searched for the literal strings `tracks_content` and `tracks_code`,
+found nothing, and concluded the mechanism did not exist.
+
+**It exists under the name the code chose.** Verified independently:
+`syncProducer.ts:203` writes `content_pulled_from` through
+`linkExclusive` on a real pull observation carrying a database, and
+`divergence.ts:291` reads it as `resolveUpstream`'s **FIRST TIER** —
+returning `via: 'content_lineage'`, exactly the `UpstreamVia` value
+ADR-21 anticipated.
+
+So `resolveUpstream` is a **two-tier resolver**: observed pull lineage
+first, environment candidates by confidence only as the fallback. **The
+confidence tie-break is not the mechanism; it is what happens when no
+pull was recorded.** Everything I ruled about that tie-break stands —
+and it was ruling about the wrong tier.
+
+**This is the sixth architect error of one shape in two days:** a search
+whose method excludes the case it is looking for. Module-private
+functions. A residual rule stated for excess only. A rule stated in one
+direction. Nine questions that never mentioned external hosts. A check
+that a remedy exists rather than works. **And now a search for a NAME
+where the question was about a MECHANISM.**
+
+**The conclusion is not another rule. It is a change of order: measure
+before specifying.** Every one of these came from writing the
+specification first and looking second. Where a producer, a link or a
+store is *specified* by a document, the next act is to find what plays
+its role in the code — under whatever name — before asserting it is
+absent.
+
+### Figure A's boundary is struck, and the vacuous-guard note is a new shape
+
+**Nexus writes `sites.json`.** Seven `updateSite` call sites, three
+writing `hostConnections` themselves (`wpe-auto-pull.ts:410`,
+`wpe-pull.ts:157` and `:200`, the last pair deliberately twice against a
+named race), and `local-services-bridge.ts:378` an unrestricted
+passthrough. **`wpe_pull` is an MCP tool — an agent asking for a pull
+writes Local's own record.** The ownership boundary I drew does not
+exist.
+
+The surviving half is narrower and sharper: **nothing reads
+`remoteSiteEnv` back.**
+
+**And the note that matters most:** zero of 20 live `hostConnections`
+carry the `installId` that auto-pull writes — **so a data-only check
+would have CONFIRMED the false boundary.** Registered as its own shape:
+*structure and data can disagree, and the data is the more convincing
+liar.* A write path whose output is absent from current data reads
+exactly like a write path that does not exist. **Where a claim is about
+what the code CAN do, the data cannot settle it.**
+
+### Producer #3, re-specified a third time — and the trajectory is the finding
+
+1. *A new upstream preference signal.* — invented.
+2. *Read `hostConnections`.* — better; a recorded fact.
+3. **Now: the link exists, is written, and is read first. The gap is
+   COVERAGE.** `syncProducer` fires only on `observation.type === 'pull'
+   && facts.includesDb`, so a copy created by a push, or pulled without
+   a database, records no lineage — and it depends on `OperationTracker`
+   reaching the core, which the 2026-08-16 audit said it did not.
+
+Producer #3 is now **widen an existing producer's trigger and confirm it
+is connected**, with `hostConnections` demoted to a **backfill** source
+for copies whose pull predates the producer.
+
+**Three specifications, each smaller than the last, every shrink caused
+by a measurement.** That is what specifying before measuring costs, and
+it is the same lesson as the section above with a price attached.
+
+### What else was wrong
+
+`has_working_copy` is never written alone — always paired with
+`has_environment` on the same pair at identical evidence — so *"Layer 2
+or 3, by link kind"* is not what the code does and **the two env boxes
+are one entity.** Three arrows are five writes across three branches.
+Four namespaces are six. *"12 of 47 resolve"* is **14 of 20, 6 abstaining
+across 5 Sites** — and **not** "every multi-environment Site", since 84
+carry more than one. The call-site column was unverifiable and is
+replaced by a defined metric.
+
+### What held
+
+`tracks_content` / `tracks_code` genuinely absent — 7 hits in 5 doc
+files, zero across fourteen source and build trees, **with
+`has_working_copy` at 18 files proving the search reached source.** That
+is the control this project requires and the reason the finding is
+usable rather than merely negative.
+
+`SqliteVecStore` sole implementation and sole construction. `structure`
+local-only with zero counterexamples. The 200-cap, all four type
+defects, and the `wpe_site_id` siblings — **now quantified: 71 UUIDs
+across 168 of 365 installs**, which turns a documented anecdote into a
+population.
+
+WP-63's hypothesis is answered **as measured**: a local Site entity
+exists **iff** a `site_links` row does — 20 of 42. The arithmetic
+coincidence was real.
+
+### The remainder is diagram C's subject, and it is large
+
+Two stores, two ledger tables, `site_links`, **envelope roles entirely,
+the topic taxonomy, and actors/grants** — live, on neither figure.
+
+**The figures were not merely wrong in two places; they were partial in
+seven.** That is the inverse check paying for itself on its first run,
+and it is the strongest argument for drawing C from measurement by a
+packet rather than from an architect's context.
+
+### Standing
+
+Three mermaid blocks in `architecture.md` §3A, validated under
+mermaid@11 **with §2's pre-existing block run through the same harness
+to prove it is not a permissive one** — the control rule, applied to a
+parser. §4–§11 renumber-free, §11 untouched.
+
+**The published artifact is now known-wrong on Figure B's central claim
+and must be republished from `wp64-figure-corrections.md` rather than
+from the architect's memory** — which is the same rule that produced the
+correction, turned on the thing that carried the error.
+
+---
+
+## WP-62 · GATE RULING — cleared to merge, and a premise of my own table was wrong (2026-08-22, architect adjudication)
+
+**Passed. Merge.** Verified on the branch: `chunker.ts` is a new shared
+module and `ContentPipeline` lost 143 lines to it — **the lift I ruled
+for, not the copy I warned against** — with `chunker-parity.test.ts` at
+316 lines making the lift safe. `REMOTE_MAX_POSTS = 5000` documented as
+*"a STATED ceiling, and the only one."* `documentCount: uniquePostIds.size`
+against `chunkCount: embeddedDocs.length`. Coverage carried into the
+record and into the log as *"this is a floor, not a total."*
+
+### The correction, and it is mine
+
+My packet table read **qwerky — 30,628 published / 2 indexed**, under a
+heading attributing it to the cap.
+
+Measured: BEFORE is **200 rows, not 2.** AFTER is 5,000 rows and **still
+2 documents** — 4,998 are published rows with no extractable body,
+dropped by a filter that predates all of this. **Fixing the cap moves
+qwerky from 2 to 2.**
+
+The number was true. **The arrow from it was wrong.** I took a figure
+from a reporting agent's table and used it as evidence for a mechanism
+it was not evidence for — and it was the most alarming figure in the
+table, which is exactly why it should have been checked hardest.
+
+**Seventh error of this family in three days, and a new shape within
+it:** the previous six were methods that excluded a case. This one is a
+true number cited for the wrong claim. Registered:
+**a number is evidence for one mechanism, and citing it for another is
+not a smaller mistake because the number is right.**
+
+### The consequence is operational and it changes the sweep
+
+**`documentCount === 200` does not identify the affected set.** Four
+installs sit at exactly 200 — `psbtestcdn1`, `testmigratejpp`,
+`alpineoutfitte`, `cedarvalehealt` — and **qwerky, the worst case, does
+not.** All 313 remote entries carry no coverage record at all, so every
+one of them is a floor of unknown tightness.
+
+**The re-index sweep is all 313 or it is guesswork.** There is no
+cheaper signal, and the packet is what makes a cheaper signal exist for
+next time: coverage is now recorded, so the *next* sweep can be scoped.
+
+### Three things the packet did that I want repeated
+
+**It measured before it scoped, and the measurement changed the
+answer.** `wp post meta list` at 2.9 s/post is 24 hours for qwerky;
+`wp eval` and `wp db query` are blocked; `wp export --stdout
+--post__in=<ids>` is 5.1 s on one bootstrap. **Custom fields shipped
+rather than deferred BECAUSE the measurement found a viable route** —
+the same rule that has corrected me seven times, applied by a packet to
+its own scope decision, with the opposite outcome.
+
+**It refused to add a method with no caller.** No cancellation check on
+the remote embed loop, because `ContentPipeline.cancelSite`'s only
+caller is the site-deleted hook and `externalContentIndexService` is not
+on `services`, so nothing could reach a remote equivalent without a lock
+this packet did not announce. *"Adding a method with no caller would be
+decoration."* **Correct, and the reason it is correct is that a
+cancellation nothing can invoke reads as a safety property and is not
+one.**
+
+**Its own battery caught its own quantity.** M22 survived the first run
+because the new `documentCount` / `chunkCount` split was pinned by
+nothing. **The packet introduced a quantity and its instrument noticed
+that the quantity was unguarded** — announce-the-quantity working inside
+a packet rather than across two, which is the first time that has
+happened.
+
+### And the exhibit found an inefficiency again
+
+Meta was read **before** the empty-content filter, so qwerky spent 25
+bootstraps to index two posts. 431 s → 241 s. Fourth packet running in
+which building the driven exhibit found something no test reached.
+
+### Standing
+
+Named and left alone with reasons: remote categories and tags, and the
+ACF-repeater noise (**parity — local does the same**, which is the right
+argument for leaving it). The architect's uncommitted adjudications were
+committed verbatim and separately at `2d7120e9` before anything else
+touched those files — fourth occurrence, now simply how this works.
+
+Merge with the record rebuilt three-blob, the residual **located rather
+than driven to zero**, and the merged-tree suite carrying its tree kind.
