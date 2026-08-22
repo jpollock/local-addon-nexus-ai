@@ -9,6 +9,7 @@
  */
 import { McpToolHandler } from '../../types';
 import { requireCAPI, staleSyncWarning } from './helpers';
+import { WPE_SYNC_REMEDY_METADATA } from './sync-remedy';
 
 export const fleetVersionsHandler: McpToolHandler = {
   definition: {
@@ -72,8 +73,8 @@ export const fleetVersionsHandler: McpToolHandler = {
 
       if (rows.length === 0) {
         const msg = filterNames?.length
-          ? `None of the requested installs found in graph. Run wpe_sync_sites first.`
-          : `No WP Engine installs found in graph. Run wpe_sync_sites first.`;
+          ? `None of the requested installs found in graph. ${WPE_SYNC_REMEDY_METADATA}`
+          : `No WP Engine installs found in graph. ${WPE_SYNC_REMEDY_METADATA}`;
         return { content: [{ type: 'text' as const, text: msg }] };
       }
 

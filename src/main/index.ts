@@ -480,6 +480,9 @@ export default function main(context: any): void {
     operationAuditLog,
     registryStorage,
     graphService: graphService as any,
+    // WP-61: the MCP surface's only route to a WPE sync. `wpe_sync_sites` is
+    // registered over it; without this line the tool is present and inert.
+    wpeSyncService,
     eventProcessor: eventProcessor as any,
     httpEventInterface: httpEventInterface as any,
     operationTracker,

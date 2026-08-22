@@ -15,7 +15,7 @@
  * Freshness is surfaced so callers know how old each data tier is.
  */
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveLocalSiteResult } from '../../site-resolver';
+import { resolveLocalSiteResult, resolveRemoteGraphSite } from '../../site-resolver';
 import { freshnessFooter } from '../../../twin/twin-helpers';
 
 export const getSiteStructureHandler: McpToolHandler = {
@@ -28,6 +28,12 @@ export const getSiteStructureHandler: McpToolHandler = {
       'WooCommerce/ACF detection, and custom table detection. ' +
       'Basic metadata (versions, plugins, post counts) is available even for halted sites. ' +
       'DB-backed details (users, custom tables, REST API) require a prior content index. ' +
+      // WP-61 / D4: all three tiers are Local-only stores. Saying so here is
+      // what stops an agent trying this on a WP Engine install and reading the
+      // refusal as a missing site.
+      'LOCAL SITES ONLY — all three of its data tiers are keyed by Local site id or read ' +
+      'Local\'s filesystem, so a WP Engine install or external SSH host is declined; use ' +
+      'nexus_get_site_twin or get_site_health for those. ' +
       'Use before making structural changes or to give an AI agent full site context.',
     inputSchema: {
       type: 'object',
@@ -57,7 +63,30 @@ export const getSiteStructureHandler: McpToolHandler = {
         `so it can only answer for ${resolved.name}@local. For the remote one, try nexus_get_site_twin or get_site_health.`,
       );
     }
-    if (resolved.kind === 'none') return error(`Site "${args.site}" not found`);
+    if (resolved.kind === 'none') {
+      // WP-61 / D4: "not found" was the wrong answer for a name that exists —
+      // just not here. A caller who has a registered WP Engine install or SSH
+      // host in front of them reads "not found" as "the site is gone" and goes
+      // looking for a registration problem that does not exist. The graph
+      // already knows; ask it before denying the site's existence.
+      const remote = resolveRemoteGraphSite(services.graphService?.getDb?.(), args.site as string);
+      if (remote.kind === 'ok') {
+        return error(
+          `"${remote.siteName}" is ${remote.source === 'external' ? 'an external SSH host' : 'a WP Engine install'}, ` +
+          `and get_site_structure reads Local-only stores (digital twin, content index, filesystem walk). ` +
+          `The site is registered and its data is fine — this tool simply cannot reach it. ` +
+          `Use nexus_get_site_twin or get_site_health for a remote site.`,
+        );
+      }
+      if (remote.kind === 'ambiguous') {
+        return error(
+          `"${args.site}" is not a Local site, and it matches ${remote.matches.length} remote sites: ` +
+          `${remote.matches.join(', ')}. get_site_structure is Local-only in any case — ` +
+          `use nexus_get_site_twin or get_site_health for a remote site.`,
+        );
+      }
+      return error(`Site "${args.site}" not found`);
+    }
     const site = resolved.site;
 
     // ── Tier 1: Digital Twin ──────────────────────────────────────────────

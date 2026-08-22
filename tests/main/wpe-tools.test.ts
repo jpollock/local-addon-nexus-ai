@@ -129,10 +129,14 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 74 tools', () => {
+  test('registers 75 tools', () => {
     // 77 → 74: the WPE basic-auth credentials tools (wpe_set/clear/credentials_status)
     // were removed with that feature (51fb5ea1).
-    expect(registry.allToolNames()).toHaveLength(74);
+    // 74 → 75: WP-61 registered `wpe_sync_sites`, which eight error strings
+    // across five files had been naming as the remedy since before this count
+    // was written.
+    expect(registry.allToolNames()).toHaveLength(75);
+    expect(registry.allToolNames()).toContain('wpe_sync_sites');
   });
 
   describe('CAPI tool gating', () => {

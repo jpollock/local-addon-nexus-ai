@@ -2,6 +2,7 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveAnySite } from '../../site-resolver';
 import { buildFieldCatalog, formatFieldCatalog } from './field-catalog';
 import { vectorSiteId } from '../../../vector-store/vectorSiteId';
+import { WPE_SYNC_REMEDY_METADATA } from '../wpe/sync-remedy';
 
 /**
  * describe_site_fields — report the site's indexed structured fields (per post
@@ -41,7 +42,7 @@ export const describeSiteFieldsHandler: McpToolHandler = {
     // "local" without ever asking the question the decline exists for.
     const result = resolveAnySite(args.site as string, services.siteData, (services as any).graphService);
     if (result.kind === 'none') {
-      return error(`Site "${args.site}" not found. For WPE installs use the install name. Run wpe_sync_sites first if missing.`);
+      return error(`Site "${args.site}" not found. For WPE installs use the install name. ${WPE_SYNC_REMEDY_METADATA}`);
     }
     if (result.kind === 'ambiguous') {
       return error(
