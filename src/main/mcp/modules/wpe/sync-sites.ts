@@ -33,7 +33,7 @@
  * naming a tool the caller cannot see. The auth failure is explained at
  * execute time instead, where it can name `wpe_login`.
  */
-import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
+import { McpToolHandler, McpToolResult } from '../../types';
 import { WPE_SYNC_TOOL } from './sync-remedy';
 
 /**
@@ -228,6 +228,3 @@ function ok(text: string): McpToolResult {
 function error(text: string): McpToolResult {
   return { content: [{ type: 'text', text }], isError: true };
 }
-
-/** Exported for the tool's own test — the services shape it actually needs. */
-export type WpeSyncServiceLike = NonNullable<NexusServices['wpeSyncService']>;
