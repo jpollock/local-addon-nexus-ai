@@ -1427,3 +1427,62 @@ tool description offering the impossible case as its worked example.
 charter was.** Prose rots in the places prose is never driven — a
 description, a warning, an example — and a packet touching one of them
 sweeps the surface rather than the string.
+
+## A rebuild artifact is deleted by the merge that made it (WP-61)
+
+A three-blob rebuild is a tool for one merge. **The moment the record
+moves it stops being a tool and becomes a loaded file**: a wholesale
+overwrite from a stale rebuild erases every append since, while passing
+a marker sweep and a syntax check, because an overwrite leaves no
+conflict evidence at all.
+
+Measured here: one session's artifact 69,840 bytes short and two packets
+stale; the ARCHITECT's own, on the same disk, 213,041 bytes short and
+five packets stale.
+
+**Delete the artifact when the merge commits — by the packet that made
+it, in the same breath — and say in the merge report what was deleted.**
+An artifact that outlives its merge has no owner and no expiry.
+
+## A judgement about another agent's intent is a guess (WP-61)
+
+A packet found another session's stale rebuild and stopped exactly
+where its evidence did: it reported the file's SIZE and AGE, declined to
+delete a file that was not its own (the other session may be
+mid-diagnosis), and declined to write the hazard into the shared record —
+because whether anyone intends to write it back is not a thing that can
+be measured.
+
+**A guess and a measurement do not belong in the same paragraph, and a
+judgement about another agent's intent is always a guess.** Report the
+bytes. Leave the motive unstated. Tell the other session what its own
+numbers imply and let it decide.
+
+## When the single red spawns a process, probe the ABI before clearing the cache (WP-61)
+
+A shared `node_modules` rebuilt to another runtime mid-run surfaced as
+ONE failing suite, not dozens — only the child-spawning suite had not
+already loaded the binding.
+
+**That is indistinguishable from the poisoned ts-jest cache.**
+`--clearCache` "does not fix it", and the next reader goes hunting a
+defect that was never there.
+
+The poisoned cache has no fixed count; it now has an impostor whose
+count is exactly one. **Construct the binding and read its version
+before you believe either diagnosis** — and a run that spanned two ABIs
+measured nothing, so re-run it whole rather than splicing.
+
+## A guard retires the announce (WP-61)
+
+*"Any future packet adding a remedy that names a tool it didn't register
+goes red. That's the base's property now."*
+
+That is the terminal state of announce-the-quantity. **An announced
+quantity's endpoint is a MECHANISM that holds it**, after which no packet
+announces it, because none can violate it silently.
+
+The announce is scaffolding for a rule with no guard yet. When a packet
+can leave a guard behind instead, that is the better deliverable — and
+the sequencing conversation it makes unnecessary is the measure of how
+much the announce was costing.

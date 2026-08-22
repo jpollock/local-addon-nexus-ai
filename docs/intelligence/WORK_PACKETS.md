@@ -30414,3 +30414,138 @@ back and should expect this one to have flipped it away again.
 - **No remote structure extractor was built.** Whether one should be is still a
   roadmap decision with its own packet; what changed is only that the product
   now says which it is.
+
+---
+
+## WP-61 · MERGE ACCEPTED — and the architect left one of the same hazards on disk (2026-08-21, architect adjudication)
+
+**Accepted at `d4a0afdb`**, report and base measure at `fae5156a`.
+Verified: record 1,760,375 bytes / 143 headers, **zero markers under the
+anchored sweep**, working tree clean, `base-measure.json` at the merge
+commit reading 638 / 8,894 / 8,892 / 2.
+
+### The stale artifact — and the architect's, corrected
+
+The packet found another session's `/tmp/wp58-rebuilt.md`, measured it
+at 1,690,535 against a record of 1,760,375 — **69,840 bytes short, two
+packets stale** — and did three things right: established the killed
+script was read-only, verified every merged section present exactly
+once, and **stopped at what it could measure.**
+
+**I disclosed the same hazard, authored by me — and got its LOCATION
+wrong, which the owner's shell corrected within the minute.** Written at
+18:18–18:32 while resolving WP-54's record conflict:
+
+```
+/tmp/wp_rebuilt.md      1,547,334   — 213,041 bytes short of the record
+/tmp/committed_wp.md    1,537,683   — a second full-record snapshot
+/tmp/wp_1.md /wp_2.md /wp_3.md      — the three blobs of that merge
+```
+
+**Five packets old — but NOT on the machine I said they were.** They
+live in this session's sandboxed workspace (`$HOME=/sessions/rcw-…`),
+not on the owner's Mac where the packets run; `/tmp/wp58-rebuilt.md` is
+not present there at all, which is what proves the two `/tmp`s are
+different disks. The owner's `rm` found no match, and zsh's nomatch
+aborted the whole line — so nothing of his was deleted either.
+
+**The hazard is real and narrower than I stated: the only process that
+could write those bytes over the record is THIS ONE**, through the
+connected folder. Not a Mac-side accident — an architect-side one.
+Deleted at 22:5x, all twenty artifacts, verified `(none)` remaining.
+
+The correction matters more than the artifacts. **I asserted a
+filesystem location without checking which host the tool writes to** —
+the fifth time this run an architect claim has been stated true in the
+direction it was being thought about, and the second where the check was
+one command away. The rule below stands; the sentence that reported it
+did not.
+
+**Ruled: a rebuild artifact outlives the merge that needed it, and stops
+being a tool the moment the record moves.** It is deleted when the merge
+commits — by the packet that made it, in the same breath as the commit —
+or it is a loaded weapon left in a shared room. The merge report says
+what it deleted.
+
+`/tmp/wp58-rebuilt.md` on the owner's Mac is a different session's and
+stays that session's to dispose of, per the ruling below.
+
+### The discipline about the other session is the best judgement in this run
+
+Not deleting a file that is not this packet's, because another session
+may be mid-diagnosis. Not writing the hazard into the shared record,
+because **the only measurable parts are the file's size and age, and
+whether anyone intends to write it back is a guess about another
+agent.**
+
+**Ratified as the rule's strongest application yet: a guess and a
+measurement do not belong in the same paragraph — and a judgement about
+another agent's intent is always a guess.** Report the bytes; leave the
+motive unstated; tell the other session what its own numbers imply and
+let it decide. Every part of that is correct.
+
+### The ABI flip has an impostor's signature, and this is now a diagnostic rule
+
+Another session rebuilt the shared `node_modules` to Electron mid-run.
+It surfaced as **one failing suite, not dozens** — because only the
+child-spawning suite had not already loaded the binding.
+
+**That is indistinguishable from the poisoned ts-jest cache**, so
+`--clearCache` would have "not fixed it" and sent the next reader into
+the code hunting a defect that was never there.
+
+**Registered: when the single red spawns a process, probe the ABI before
+you clear the cache.** The poisoned cache has no fixed count — and it
+now has an impostor whose count is exactly one. Two of this project's
+most-repeated hazards produce the same screen; only a construct-probe
+separates them.
+
+Re-running whole rather than splicing, per WP-49's rule that a run
+measuring two ABIs measured nothing, is correct.
+
+### The sweep across a packet boundary
+
+99 distinct tool-surface claims across 191 file-sites, **all registered**
+— including WP-60's `wp_plugin_update` and `wpe_site_deep_refresh`,
+neither of them this packet's. **First time an announced quantity has
+been evaluated across a packet boundary**, and it found the neighbour's
+work compliant rather than assuming it.
+
+And `wpe_sync_sites` now appears at exactly **one** site — the extracted
+constant — where five files used to name it. That is the copy pipeline's
+own rule reaching the error strings: **one place the wording lives.**
+
+### The quantity becomes the base's property
+
+*"Any future packet adding a remedy that names a tool it didn't register
+goes red. That's the base's property now."*
+
+**That sentence is the terminal state of the announce-the-quantity rule
+and deserves naming.** An announced quantity's endpoint is a MECHANISM
+that holds it — after which no packet announces it, because none can
+violate it silently. The announce is scaffolding for a rule that has no
+guard yet; a guard retires the announce.
+
+### The +47, confirmed from a base it could not have inherited
+
+The branch measured from `50d966d5` (8,834); it merged into `b4596c44`
+(8,847) — a tree 13 tests larger. **Both deltas land on +47.**
+
+That is an anchor outside both derivations, arrived at by the accident
+of the base moving twice, and it confirms the "52 vs 47" correction from
+a direction structurally incapable of carrying the original error.
+**The sequencing hazard produced the strongest possible check on the
+receipt it threatened.**
+
+### Declared rather than assumed
+
+The battery ran on the branch (15/15) and was **not** re-run on the
+merged tree, its nine-file write set disjoint from everything the merge
+brought in — **said out loud because a battery not re-run is a coverage
+claim.** Correct, and the reason it is correct is that the claim is
+now falsifiable by a reader rather than resting on the packet's silence.
+
+D6's reproduction conditions are changed by the D4 fix — a WPE install
+now refuses immediately rather than doing anything at all — and saying
+so in the handoff is what stops the next packet re-running a
+reproduction that no longer reproduces.
