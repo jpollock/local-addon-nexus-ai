@@ -1486,3 +1486,44 @@ The announce is scaffolding for a rule with no guard yet. When a packet
 can leave a guard behind instead, that is the better deliverable — and
 the sequencing conversation it makes unnecessary is the measure of how
 much the announce was costing.
+
+## A page-size query that returns exactly the page size is a boundary, not a count (D7)
+
+`wp post list --posts_per_page=200` returned 200, and the extractor
+logged it as `${rawPosts.length} total`. Two installs sat on exactly 200;
+one with 30,628 published posts indexed 2.
+
+**The value was the signal and the code held it.** Any query with a limit
+must compare its result count to that limit and treat equality as
+TRUNCATION UNTIL PROVEN OTHERWISE — paginate, or state the boundary.
+Never label a limited result "total".
+
+Downstream compounds it: a status tool re-reporting the truncated figure
+as a document count makes a partial index pass every check a reader would
+think to run. **A count crosses a boundary carrying how it was bounded,
+or it stops being evidence.**
+
+## The hazard you are watching for is not the hazard you are committing (D7)
+
+Two lines above the cap, the docblock warns — correctly, at length — that
+dropping a flag "would silently narrow this index". The next line but one
+narrows it by 30,428 posts.
+
+**A comment demonstrating awareness of a class is not coverage of that
+class.** A function whose docblock names the right risk is the place to
+check the OTHER lines hardest, not the place to relax: the author was
+already thinking about silent narrowing and still shipped the larger
+instance of it in the same breath.
+
+## A number rendered per-place must be produced the same way at every place (D7)
+
+The local extractor is uncapped; the remote one stops at 200. A surface
+nesting a working copy and a remote environment as peer rows presents two
+numbers produced by different methods as though they were comparable —
+and any DIFFERENCE computed between them ("3 days behind production") is
+arithmetic over an unequal basis, stated with a confidence neither source
+earns.
+
+**Before a per-place number is rendered, establish that the same method
+produced it at every place it appears.** Otherwise the nesting IS the
+defect: one fact with two sources, drawn as a hierarchy.

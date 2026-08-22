@@ -30549,3 +30549,217 @@ D6's reproduction conditions are changed by the D4 fix — a WPE install
 now refuses immediately rather than doing anything at all — and saying
 so in the handoff is what stops the next packet re-running a
 reproduction that no longer reproduces.
+
+---
+
+## D7 · ADJUDICATED — the cap, and what it does to the Sites IA (2026-08-21, architect adjudication)
+
+Found by an agent **using** Nexus rather than building it, while
+exercising WP-61's newly-real `wpe_sync_sites`. Filed at `37cdf5e3`.
+**Confirmed at source, and the diagnosis is exactly right.**
+
+`RemoteContentExtractor.ts:54` issues ONE `wp post list
+--posts_per_page=200`. No `--offset`, no loop, no truncation detection.
+It is the only `--posts_per_page` in any extraction path; `MySQLExtractor`
+carries no `LIMIT`, which is why the local path indexed 994 of 995 and
+two WPE installs sit on **exactly 200**.
+
+Measured by the reporter: qwerky 30,628 published / **2 indexed**;
+cedarvalehealt 600 / 200; testmigratejpp 588 / 200.
+
+### The comment guards the small narrowing; the code performs the large one
+
+The docblock is scrupulous about exactly this hazard, two lines above the
+defect:
+
+> *"`skipThemes: false` is stated explicitly because the two flags are
+> now independent. It used to be implied… Dropping it would silently
+> narrow this index."*
+
+**And the next line but one narrows it by 30,428 posts.** A careful
+author, thinking hard about silent narrowing, in the same breath.
+Registered: **the hazard you are watching for is not the hazard you are
+committing** — a comment demonstrating awareness of a class is not
+coverage of that class, and reviewing a function whose docblock names
+the right risk is the moment to check the other lines, not to relax.
+
+### The tell was in the variable, and the code held it
+
+```
+`${siteLabel}: ${rawPosts.length} total → ${filtered.length} indexable`
+```
+
+`rawPosts.length` is at most 200 and is labelled **"total"**. The
+receipts family again — **a count labelled as a population it did not
+measure** — and the aggravation is that the value *is* the signal:
+
+**When a page-size query returns exactly the page size, that is not a
+count, it is a boundary.** The extractor had `200 === 200` in hand and
+printed it as a total. `get_index_status` then re-reported the truncated
+figure as the document count, so a partial index passes every check a
+reader would think to run.
+
+### What this does to the Site → Environment work — and it is the point
+
+The owner asked, before this arrived, whether the sync substrate is sound
+enough to build the collapsed Sites list on. **This is a direct hit, and
+it is worse than a wrong number on a row.**
+
+**A per-place count is not comparable across places.** The local
+extractor is complete; the remote one is capped. The IA renders a working
+copy and a WPE environment as **peer rows in one nested list**, and they
+are not peers — one is measured, the other is measured up to 200.
+
+**And it lands on the two-flow line specifically.** Board B reads *"3
+days behind production."* Any content-divergence figure between a local
+copy and a WPE environment compares a COMPLETE index against a TRUNCATED
+one. The screen would state that difference with confidence, and the
+difference would be mostly the cap.
+
+**Ruled into the deep-dive as its own question, ahead of freshness:
+before any per-place number is rendered, is that number produced by the
+same method at every place it appears?** A row that says 200 next to a
+row that says 995 is not a comparison, and a design that nests them is
+the two-sources defect drawn as a hierarchy.
+
+### The reporter's method
+
+Three hypotheses — CPT registration, stale symlinks, the cap — **two
+discarded on evidence and said so out loud.** `insurance_plan` surviving
+while four sibling CPTs did not is explained as row ordering rather than
+promoted to a special case, which is the harder and correct answer.
+
+And the verification of WP-58/60/61 came from **outside the build**: a
+user of the tools, not their author, confirming D1–D5 against a live
+fleet. That is the strongest acceptance this project has had, and the
+line worth keeping is about D3/D4's message — *"it states the constraint
+is architectural, says explicitly that no sync or re-index will create
+it… That's the hour I lost, pre-empted for the next person."*
+
+**Say what is true, and the honest refusal is a feature.** Ruled at the
+gate on argument; confirmed here in hours saved by a stranger.
+
+### Registered as WP-62
+
+Pagination with an offset loop; **truncation detected and stated, not
+merely avoided**; the log's "total" renamed to what it measures; and
+`get_index_status` carrying the distinction so a partial index cannot
+present as complete.
+
+**Not a raised cap.** A larger number moves the boundary and keeps the
+silence, and qwerky at 30,628 would outrun any constant chosen today.
+
+Two consequences for the packet to state rather than discover: the fix is
+cheap and the **re-index is not** — every WPE install over 200 posts
+needs re-extraction before its index means anything — and until that
+runs, `get_index_status` on those sites is reporting a number whose only
+honest form is *"at least this many."*
+
+---
+
+## WP-62 AND WP-63 · REGISTERED (2026-08-21, architect)
+
+**WP-62 · the remote extractor's silent cap.** Cut now, not blocked on
+WP-63 — customer-facing correctness with a known fix. Paginate; **detect
+and STATE truncation rather than merely avoid it**, because a loop can
+still be cut short and the next reader must tell a complete index from a
+stopped one from the record rather than from the absence of an error;
+rename the log's "total"; carry the distinction into
+`get_index_status`. **Not a raised cap** — a larger constant moves the
+boundary and keeps the silence.
+
+Pointed at the precedent already in the repo:
+`ExternalSshTransport.runWpCliBatch` warns that a timeout's partial
+stdout is *"honest but invisible"*. **The batch path solved this exact
+problem and said so; the extractor needs the same treatment and does not
+have it.**
+
+Named as the packet's likely failure: **shape #18.** A fixture under the
+page size passes identically on the bug and on the fix — the assertion
+correct, the case never built. Every test drives a population EXCEEDING
+the page size and asserts the fixture does so first. The exhibit runs
+against a real install over 200, because a fake transport never reaches
+the boundary.
+
+**WP-63 · the Sites deep-dive.** Read-only, and its charter is to
+re-test ADR-21's own claim — *"the entity graph is the substrate that
+makes it a rendering change, not a data migration"* — rather than accept
+it because it is adopted. Eight measurements, the newest outranking the
+rest: **is any per-place number comparable across places?** D7 makes
+the local extractor uncapped and the remote one bounded, and the IA
+nests them as peer rows. A difference computed between them is
+arithmetic over an unequal basis.
+
+Two instructions matter more than the list. **The architect's framing is
+not to be accepted either** — finding one of the eight is the wrong
+question is a better result than eight tidy answers. And the
+vacuous-guard warning is stated where it will bite: several questions
+are data-dependent, so *"no problem found"* on a fleet lacking the case
+is shape #15 wearing a fleet. **For every question, state what the
+available data cannot answer.**
+
+The tension neither layer has ruled is handed over unresolved on
+purpose: the tools filter by `source` and WP-60 pinned that over the
+whole value set; the IA says source is not a filter but a fact about a
+place. **Measure how deep it goes; do not resolve it.**
+
+### WP-62 REWRITTEN TO FULL SCOPE, and a third truncation found (2026-08-21, architect)
+
+The owner ruled option (a): parity, whole, rather than pagination now
+and chunking later. **Measured while writing it, there are THREE
+truncations stacked, not two.**
+
+1. **Rows** — `--posts_per_page=200`, no loop. D7.
+2. **Documents** — `WPESyncService.syncContent` carries
+   `// Simple approach: one document per post (no chunking for now)`, so
+   `cleanedContent` meets a `WordPieceTokenizer(contextWindow)` and is
+   cut at the model's window. **This is live for 100% of remote posts
+   over that length, including the ≤200 that do get indexed.**
+3. **Fields** — the remote `--fields=` list asks for **no post meta at
+   all**, while `ContentPipeline.chunkPosts` appends ACF custom fields
+   into the searchable text before chunking. The remote path indexes
+   none of it.
+
+**The third has never been reported because it produces no count to be
+wrong.** A missing row shows up as a number; a missing field shows up as
+a search that quietly returns less.
+
+**Why one packet and not three:** they answer one sentence — *is this
+site's content indexed?* — and splitting them means three packets
+editing one answer, which is the trap WP-58b and WP-59 hit. The claim
+shipped is *remote content is indexed the way local content is*, and
+every test is a PARITY test rather than three separate assertions.
+
+**The instruction that carries the most risk:** `chunkPosts` is private
+on `ContentPipeline` and must be LIFTED to a shared module, not copied.
+A copy is the one-fact-two-sources defect committed on purpose, and the
+two would diverge on the first tuning change. The parity test is what
+makes the lift safe.
+
+Shape #18 named at the packet three times over — under 200 rows, under
+the context window, and with no custom fields — because a fixture that
+clears none of those boundaries passes identically on the bug and the
+fix.
+
+And the resource envelope is stated rather than discovered:
+`embedBatch` allocates three `BigInt64Array(batchSize * seqLen)` sized
+to what it is handed; chunking multiplies document count; 30,628 posts
+may become 100k+ chunks. Nothing may hand the embedder an unbounded
+array, and the remote batch loop lacks the local path's cancellation
+check.
+
+### WP-63 GAINS QUESTION 9 — what "indexed" means over time
+
+The extract call carries no date or `since` filter: **every sync is a
+full re-extract.** With chunking that becomes hours per large site,
+against a scheduler at `index.ts:588–602`.
+
+The question is a product question wearing a data question, and it ends
+where the screen does: if *fully indexed* is a state a large site
+reaches hours after a sync begins and loses on the next content change,
+**what is the honest sentence on the row?**
+
+We have ruled that an absence stated with its reason is shippable and a
+blank is not. **This may need a third form — a PARTIAL stated with its
+reason** — and if it does, that is a design question for the designer
+rather than a producer for a packet.
