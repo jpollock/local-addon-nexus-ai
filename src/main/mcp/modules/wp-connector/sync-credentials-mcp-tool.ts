@@ -6,7 +6,7 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { requireRunning, ok, error } from '../wp-cli/preflight';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { autoSyncCredentials } from './auto-sync';
 import { STORAGE_KEYS } from '../../../../common/constants';
 
@@ -37,7 +37,7 @@ export const syncCredentialsMcpToolHandler: McpToolHandler = {
       return error('Local services or storage not available.');
     }
 
-    const site = resolveSite(args.site_id as string, services.siteData);
+    const site = resolveLocalSite(args.site_id as string, services.siteData, services.graphService);
     if (!site) {
       return error(`Site not found: "${args.site_id}"`);
     }

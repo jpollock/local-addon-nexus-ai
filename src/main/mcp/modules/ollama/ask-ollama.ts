@@ -1,7 +1,7 @@
 import * as http from 'http';
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
 import { OLLAMA_BASE_URL } from '../../../../common/constants';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { SiteStructure } from '../../../../common/types';
 
 export const askOllamaHandler: McpToolHandler = {
@@ -85,7 +85,7 @@ async function buildSiteContext(
   prompt: string,
   services: NexusServices,
 ): Promise<SiteContextResult> {
-  const site = resolveSite(siteQuery, services.siteData);
+  const site = resolveLocalSite(siteQuery, services.siteData, services.graphService);
   if (!site) {
     return { error: `Site not found: "${siteQuery}"` };
   }

@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { requireRunning, ok, error } from '../wp-cli/preflight';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 
 /**
  * Builds PHP code that executes a WordPress Ability by name.
@@ -77,7 +77,7 @@ export const runAbilityHandler: McpToolHandler = {
       return error('Ability name is required.');
     }
 
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       return error(`Site not found: "${args.site}"`);
     }

@@ -2,7 +2,7 @@
  * MCP tools for event processing and knowledge graph queries
  */
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { createLogger } from '../../../logging/Logger';
 
 const logger = createLogger('EventTools');
@@ -91,7 +91,7 @@ export const getGraphContentTool: McpToolHandler = {
       return error('Graph service not initialized');
     }
 
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       logger.warn('get_graph_content: Site not found', { site: args.site });
       return error(`Site not found: ${args.site}`);
@@ -136,7 +136,7 @@ export const listGraphContentTool: McpToolHandler = {
       return error('Graph service not initialized');
     }
 
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       logger.warn('list_graph_content: Site not found', { site: args.site });
       return error(`Site not found: ${args.site}`);
@@ -179,7 +179,7 @@ export const getGraphPluginTool: McpToolHandler = {
       return error('Graph service not initialized');
     }
 
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       return error(`Site not found: ${args.site}`);
     }
@@ -215,7 +215,7 @@ export const listGraphPluginsTool: McpToolHandler = {
       return error('Graph service not initialized');
     }
 
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       return error(`Site not found: ${args.site}`);
     }
@@ -248,7 +248,7 @@ export const getGraphStatsTool: McpToolHandler = {
     }
 
     if (args.site as string) {
-      const site = resolveSite(args.site as string, services.siteData);
+      const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
       if (!site) {
         return error(`Site not found: ${args.site}`);
       }

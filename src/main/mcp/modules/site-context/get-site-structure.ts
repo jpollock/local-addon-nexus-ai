@@ -15,7 +15,7 @@
  * Freshness is surfaced so callers know how old each data tier is.
  */
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSiteResult } from '../../site-resolver';
 import { freshnessFooter } from '../../../twin/twin-helpers';
 
 export const getSiteStructureHandler: McpToolHandler = {
@@ -42,8 +42,23 @@ export const getSiteStructureHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site "${args.site}" not found`);
+    // WP-58: all three tiers above are LOCAL — a digital twin keyed by Local
+    // site id, an IndexRegistry entry keyed the same way, and a filesystem walk
+    // of `site.path`. This tool cannot answer about a WP Engine install or an
+    // external host and never could. That is a legitimate narrowing; answering
+    // "not found" for a name that exists twice is not, because the caller then
+    // believes the site is absent when the truth is that this tool cannot
+    // reach it and the caller has not said which one it means.
+    const resolved = resolveLocalSiteResult(args.site as string, services.siteData, services.graphService);
+    if (resolved.kind === 'collision') {
+      return error(
+        `${resolved.message}\n\n` +
+        `get_site_structure reads Local-only stores (digital twin, content index, filesystem), ` +
+        `so it can only answer for ${resolved.name}@local. For the remote one, try nexus_get_site_twin or get_site_health.`,
+      );
+    }
+    if (resolved.kind === 'none') return error(`Site "${args.site}" not found`);
+    const site = resolved.site;
 
     // ── Tier 1: Digital Twin ──────────────────────────────────────────────
     const twin = services.twinService?.get(site.id) ?? null;

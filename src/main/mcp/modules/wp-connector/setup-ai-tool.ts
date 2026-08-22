@@ -6,7 +6,7 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { requireRunning, ok, error } from '../wp-cli/preflight';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { setupSiteForAI, SetupAIResult } from './setup-ai';
 import type { AIProvider } from '../../../../common/types';
 import { STORAGE_KEYS } from '../../../../common/constants';
@@ -63,7 +63,7 @@ export const setupAIToolHandler: McpToolHandler = {
     }
 
     // Resolve target site
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       return error(`Site not found: "${args.site}"`);
     }

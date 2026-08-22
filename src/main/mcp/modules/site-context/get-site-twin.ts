@@ -7,7 +7,7 @@
  * with per-field provenance.
  */
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
+import { resolveAnySite } from '../../site-resolver';
 import { freshnessFooter } from '../../../twin/twin-helpers';
 
 /**
@@ -54,29 +54,40 @@ export const getSiteTwinHandler: McpToolHandler = {
     const twinService = services.twinService;
     if (!twinService) return error('Digital twin service not available');
 
-    const site = resolveSite(args.site as string, services.siteData);
+    // WP-58: local-then-graph, with the graph reached only on a MISS, cannot
+    // see a name that means both — and under the decline the local half now
+    // returns nothing for exactly those names, so the graph half would have
+    // answered about the install as if it had been asked for. `resolveAnySite`
+    // consults both stores before answering.
+    const graphService = (services as any).graphService;
+    const raw = args.site as string;
+    let resolved = resolveAnySite(raw, services.siteData, graphService);
+
+    // A bare `ssh:<alias>` (no environment suffix) is not a parseable target,
+    // so it reaches the bare-name path as a whole string and matches nothing.
+    // This tool has always tolerated that spelling; keep the tolerance as a
+    // fallback rather than dropping it on the way past.
+    const lookup = extractLookupName(raw);
+    if (resolved.kind === 'none' && lookup !== raw) {
+      resolved = resolveAnySite(lookup, services.siteData, graphService);
+    }
+
+    if (resolved.kind === 'none') {
+      return error(`Site "${raw}" not found`);
+    }
+    if (resolved.kind === 'ambiguous') {
+      return error(
+        `"${raw}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`,
+      );
+    }
+
     let twin;
-
-    if (site) {
-      twin = twinService.get(site.id);
-      if (!twin) return error(`No twin found for site "${args.site}"`);
+    if (resolved.source === 'local') {
+      twin = twinService.get(resolved.id);
+      if (!twin) return error(`No twin found for site "${raw}"`);
     } else {
-      // Not a Local site — try WPE/external via the graph. M14: names collide
-      // across sources, so resolveRemoteGraphSite declines rather than guesses.
-      const graphService = (services as any).graphService;
       const db = graphService?.getDb?.();
-      const resolved = resolveRemoteGraphSite(db, extractLookupName(args.site as string));
-
-      if (resolved.kind === 'none') {
-        return error(`Site "${args.site}" not found`);
-      }
-      if (resolved.kind === 'ambiguous') {
-        return error(
-          `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`,
-        );
-      }
-
-      const graphSite = db.prepare('SELECT * FROM sites WHERE id = ?').get(resolved.siteId);
+      const graphSite = db.prepare('SELECT * FROM sites WHERE id = ?').get(resolved.id);
       twin = twinService.getFromGraph(graphSite, graphService);
     }
 

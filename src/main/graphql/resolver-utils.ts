@@ -41,9 +41,37 @@ export function parseTarget(target: string) {
 // ---------------------------------------------------------------------------
 
 /**
- * Find a local site by name, ID, or domain from Local's siteData store.
+ * Find a local site by EXACT name, ID, or domain from Local's siteData store.
+ *
+ * ── WP-58: the name states every way this differs from `resolveLocalSite` ───
+ * This was `resolveSite`, and so was `mcp/site-resolver.ts`'s — two exported
+ * functions of the same name, in one repo, disagreeing about case-sensitivity,
+ * with a third private copy of THIS one living in `resolvers.ts` and serving
+ * every live GraphQL and CLI site lookup. Whichever one a reader had in mind
+ * was a coin toss of its own.
+ *
+ * There is now one function per behaviour and the name says which:
+ *
+ *   - `findLocalSiteExact` (here) — Local store only, **case-SENSITIVE**, no
+ *     collision decline. Every GraphQL/CLI resolver in `resolvers.ts` and
+ *     `resolvers/sites.ts`.
+ *   - `resolveLocalSite` (`mcp/site-resolver.ts`) — Local store only,
+ *     case-INsensitive, and it REFUSES a name that also names a site in the
+ *     graph.
+ *
+ * They are not merged, deliberately. Folding this into `resolveLocalSite`
+ * would make every GraphQL and CLI site lookup case-insensitive as a side
+ * effect of a packet about something else — `resolveTargetArgs`'s M11 comment
+ * exists precisely because these two disagree about case, and re-deciding it
+ * needs a packet that measures it.
+ *
+ * **The residual is real and registered:** the GraphQL path still has no
+ * collision decline, so a bare name that means both a Local site and a WP
+ * Engine install still resolves to the copy here. `resolveTargetArgs` catches
+ * that before most CLI targets reach these resolvers; nothing catches it for a
+ * caller that reaches them directly.
  */
-export function resolveSite(identifier: string, siteData: NexusServices['siteData']): ReturnType<NexusServices['siteData']['getSites']>[string] | undefined {
+export function findLocalSiteExact(identifier: string, siteData: NexusServices['siteData']): ReturnType<NexusServices['siteData']['getSites']>[string] | undefined {
   const sites = Object.values(siteData.getSites());
   return sites.find((s) =>
     s.name === identifier ||

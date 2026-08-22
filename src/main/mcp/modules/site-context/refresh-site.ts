@@ -8,7 +8,7 @@
  * scan is less than 4 hours old (matches StartupSiteScanner behaviour).
  */
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { StartupSiteScanner } from '../../../startup/StartupSiteScanner';
 
 export const refreshSiteHandler: McpToolHandler = {
@@ -37,7 +37,7 @@ export const refreshSiteHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       return error(`Site "${args.site}" not found`);
     }

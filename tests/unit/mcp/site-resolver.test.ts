@@ -41,9 +41,37 @@ describe('resolveAnySite', () => {
     } as any;
   }
 
-  it('resolves a local site first, without touching the graph', () => {
+  /**
+   * WP-58 — THIS TEST USED TO PIN THE DEFECT.
+   *
+   * It read *"resolves a local site first, without touching the graph"* and
+   * asserted `{ kind: 'ok', source: 'local' }` for a name held by BOTH a Local
+   * site and an external host. That is the coin toss `CLAUDE.md`'s "Names
+   * collide across sources" rule forbids, written down as the expected
+   * behaviour of the function built to enforce it — which is how the docblock
+   * came to credit `resolveAnySite` with a decline it never performed.
+   *
+   * Local-first precedence is REMOVED, not documented. Both stores are
+   * consulted; a name in both declines with the forms that answer it.
+   */
+  it('declines a name held by BOTH a local site and the graph', () => {
     const siteData = makeSiteData([{ id: 'site-1', name: 'mysite', domain: 'mysite.local' }]);
-    const graphService = makeGraphService([{ id: 'ssh:mysite', name: 'mysite', source: 'external' }]);
+    const graphService = makeGraphService([
+      { id: 'ssh:hostinger/mysite', name: 'mysite', source: 'external', account_id: 'hostinger' },
+    ]);
+
+    const result = resolveAnySite('mysite', siteData, graphService);
+
+    expect(result.kind).toBe('ambiguous');
+    if (result.kind !== 'ambiguous') throw new Error('unreachable');
+    expect(result.matches).toEqual(
+      expect.arrayContaining(['mysite@local', 'ssh:hostinger/mysite']),
+    );
+  });
+
+  it('resolves a local site without touching the graph when the graph does not hold the name', () => {
+    const siteData = makeSiteData([{ id: 'site-1', name: 'mysite', domain: 'mysite.local' }]);
+    const graphService = makeGraphService([{ id: 'ssh:other', name: 'other', source: 'external' }]);
 
     const result = resolveAnySite('mysite', siteData, graphService);
 

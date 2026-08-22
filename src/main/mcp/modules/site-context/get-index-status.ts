@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
+import { resolveAnySite } from '../../site-resolver';
 
 export const getIndexStatusHandler: McpToolHandler = {
   definition: {
@@ -20,28 +20,22 @@ export const getIndexStatusHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    // Local first, then the graph for WPE installs and external SSH hosts —
-    // the same fallback (and the same collision policy) search_site_content uses.
-    let siteId: string;
-    let siteName: string;
-
-    const localSite = resolveSite(args.site as string, services.siteData);
-    if (localSite) {
-      siteId = localSite.id;
-      siteName = localSite.name;
-    } else {
-      const resolved = resolveRemoteGraphSite((services as any).graphService?.getDb?.(), args.site);
-      if (resolved.kind === 'none') {
-        return error(`Site "${args.site}" not found`);
-      }
-      if (resolved.kind === 'ambiguous') {
-        return error(
-          `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`
-        );
-      }
-      siteId = resolved.siteId;
-      siteName = resolved.siteName;
+    // WP-58: this was local-then-graph, with its own copy of the collision
+    // policy. Under the decline that is no longer safe as written — a name in
+    // BOTH stores makes the local half return nothing, and the graph half
+    // would then answer about the install as if the caller had asked for it.
+    // `resolveAnySite` consults both before answering and owns the one policy.
+    const resolved = resolveAnySite(args.site as string, services.siteData, (services as any).graphService);
+    if (resolved.kind === 'none') {
+      return error(`Site "${args.site}" not found`);
     }
+    if (resolved.kind === 'ambiguous') {
+      return error(
+        `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`
+      );
+    }
+    const siteId = resolved.id;
+    const siteName = resolved.name;
 
     const entry = services.indexRegistry.get(siteId);
     if (!entry) {

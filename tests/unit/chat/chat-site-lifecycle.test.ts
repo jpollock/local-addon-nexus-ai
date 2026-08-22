@@ -9,7 +9,7 @@ import { ChatService } from '../../../src/main/chat/ChatService';
 function makeMockServices(overrides: Record<string, any> = {}): Record<string, any> {
   return {
     siteData: {
-      // resolveSite() calls getSite(query) first (exact ID match), then getSites()
+      // resolveLocalSite() calls getSite(query) first (exact ID match), then getSites()
       getSite: jest.fn((id: string) => {
         if (id === 'site-halted') return { id: 'site-halted', name: 'Halted Site', path: '/tmp/halted' };
         if (id === 'site-running') return { id: 'site-running', name: 'Running Site', path: '/tmp/running' };

@@ -4,7 +4,7 @@ import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import { getToolSafety, requiresHumanApproval } from '../mcp/safety';
 import { maskToolResultsForProvider, UNTRUSTED_DATA_DIRECTIVE } from '../mcp/pii';
-import { resolveSite } from '../mcp/site-resolver';
+import { resolveLocalSite } from '../mcp/site-resolver';
 import type { SiteStructure } from '../../common/types';
 import { getProvider } from './providers/index';
 import type { ChatProviderConfig } from './providers/types';
@@ -621,7 +621,7 @@ export class ChatService {
     if (config.argKey === 'site') {
       const siteArg = args.site as string | undefined;
       if (!siteArg) return { startedIds: [], autoStop: config.autoStop };
-      const site = resolveSite(siteArg, this.services.siteData);
+      const site = resolveLocalSite(siteArg, this.services.siteData, this.services.graphService);
       if (site) targets.push({ id: site.id, name: site.name });
     } else {
       const ids = (args.site_ids as string[]) ?? [];
@@ -837,7 +837,7 @@ export class ChatService {
     ];
 
     if (siteId) {
-      const site = resolveSite(siteId, this.services.siteData);
+      const site = resolveLocalSite(siteId, this.services.siteData, this.services.graphService);
       if (site) {
         let structure: SiteStructure | null = null;
         const indexEntry = this.services.indexRegistry.get(site.id);
