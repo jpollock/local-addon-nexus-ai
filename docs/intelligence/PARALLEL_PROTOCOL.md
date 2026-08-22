@@ -1325,3 +1325,58 @@ And the corollary the packets have already started doing: **an
 adjudication is a claim, and a claim is checked or it is decoration.**
 Where a ruling asserts a checkable fact — an ancestry, a count, a file
 state — the packet checks it rather than taking it.
+
+## A residual is answered by locating it, not by driving it to zero (WP-60, amending WP-55 and WP-58)
+
+Third statement of this rule, and the correction is real. WP-55 said *a
+residual of zero is the proof*. WP-58 amended it to cover both
+directions. WP-60 shows that a CORRECT merge can produce a non-zero
+residual: the ux side ended `true.\n\n`, the append opened `\n---\n\n`,
+and the naive sum wants two blank lines before the separator where the
+file uses one — measured, 309 against 9. Residual −1, and −1 was right.
+
+**The rule, in full: a residual of zero is EVIDENCE, not proof. Any
+non-zero residual is a question, and the question is answered by
+locating the bytes at their offset and naming why they differ — never by
+adjusting the file until the number reads zero.**
+
+Excess is somebody's uncommitted text. A deficit is either structure the
+merge ate or a separator convention the sum does not know. Only the
+located bytes tell which, and a number driven to zero has destroyed the
+evidence that would have said.
+
+And the method: **the convention was measured, not asserted** — 309
+against 9. A formatting question settled by counting the file's own
+practice is the unit-carrying rule applied to whitespace.
+
+## A guard that cannot parse must not pretend to (WP-60)
+
+`external-visibility.test.ts` scans lines for `source = 'wpe'` and fired
+on a COMMENT quoting the pattern. That is correct behaviour.
+
+A line-scanning guard's whole value is that it cannot be argued with.
+Give it *"unless it is a comment"* and it must parse — and a guard that
+parses is one that a construction its parser does not model walks past.
+**Exempt by EXPLICIT MARKER on the line (`wpe-by-nature:`), never by
+inferred syntax**, so the justification lives at the query rather than
+in an allowlist that drifts.
+
+The comment was not innocent either: the next reader grepping that
+pattern finds it and reads it as live.
+
+## An oracle that tests the wrong condition reports a verdict anyway (WP-60)
+
+A mutation reported SURVIVED because the harness asserted exit 1 for a
+`tsc` run that exits **2**. The mutant was dead. Reading the artifact
+settled it; the scoreboard had it backwards.
+
+Not a stale receipt and not the wrong unit — **the instrument's own
+success condition was wrong, and it graded confidently.** `tsc` exits 2
+on a hard error and 1 on type errors, so a harness knowing only one of
+those scores every hard error as a survivor, which reads as *the code is
+fine* when it means *the run never got there*.
+
+**A battery's exit-code expectation is a claim about the tool it drives,
+and it is checked against that tool's documented codes or it is
+decoration.** When a survivor surprises you, read the artifact before
+you believe the scoreboard.

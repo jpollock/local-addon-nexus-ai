@@ -29728,3 +29728,104 @@ bought.
 not Electron.** `npm run rebuild` is required before loading Local. The
 `node_modules` is symlinked across every worktree, so this is the machine's
 state, not this checkout's.
+
+---
+
+## WP-60 · MERGE ACCEPTED — and the residual rule amended a second time (2026-08-21, architect adjudication)
+
+**Accepted at `b4596c44`.** Verified: `base-measure.json` overwritten to
+the merge commit with its guard empty, 634 / 8,847 / 8,845 / 2 primary
+against the base's 634 / 8,834 / 8,832 / 2, and +13 = 1 + (4×3)
+reconciling to the test.
+
+### The amendment, and it corrects me a third time
+
+The packet proposes: **a residual is answered by LOCATING it, not by
+driving it to zero.** The case is exact — the ux side ends `true.\n\n`
+and the append opens `\n---\n\n`, so the naive sum wants TWO blank lines
+before the separator where this file uses **one, 309 times against 9**.
+Residual −1, and the −1 is CORRECT. Driving it to zero would have
+introduced the deviation.
+
+**Adopted, and it is the third correction to an architect rule in three
+packets.** The first: a search whose method excluded module-private
+functions. The second: a residual rule stated for excess only. This one:
+*"a residual of zero is the proof"* — too strong, because a legitimate
+merge can and here does produce a non-zero one.
+
+**The amended rule, in full:** a residual of zero is EVIDENCE, not proof.
+Any non-zero residual is a question. **The question is answered by
+locating the bytes at their offset and naming why they differ — never by
+adjusting the file until the number reads zero.** Excess is somebody's
+uncommitted text; a deficit is either structure the merge ate (WP-58's
+minus-six) or a separator convention the naive sum does not know
+(WP-60's minus-one). Only the located bytes tell which.
+
+And the method deserves its own line: **the convention was MEASURED —
+309 against 9 — not asserted.** A formatting question settled by
+counting the file's own practice is the same discipline as a count
+carrying its unit, applied to whitespace.
+
+I will note the pattern rather than the third apology: **rules stated,
+packets drive them, rules amended.** That is the loop working. What
+would be wrong is a rule that no packet ever tested.
+
+### The defect was three expressions of one predicate, and the third was found
+
+`f88614ec` added `'external'` to the schema enum and changed nothing
+else. The RED run shows all three at once for `source=external` — no
+scope label, a `[local]` site in an external report, and a freshness
+denominator counting all six rows.
+
+**`:321` was folded in beyond the two lines the brief named, and
+disclosed as such.** Accepted, and the justification is the right test:
+it breaks the packet's own stated constraint AND contradicts itself on
+the page — *"3 sites in scope"* over *"6 of 6 sites"*. A fix that leaves
+a page self-contradictory has not fixed the page. **Scope is widened by
+the defect's own boundary, not by the brief's guess at it**, and saying
+so at the gate is what makes that legitimate rather than drift.
+
+### The guard that fired on a comment was right, and here is why
+
+`external-visibility.test.ts` scans LINES for `source = 'wpe'` in
+`modules/fleet/`, and went red on a comment quoting the pattern. The
+packet called the guard right. **It is, and the reason is worth
+stating.**
+
+A line-scanning guard's whole value is that it cannot be argued with.
+The moment it gains *"unless it is a comment"* it must parse — and a
+guard that parses is a guard that a construction its parser does not
+model will walk straight past. This one already has the correct escape:
+**explicit markers** (`CASE WHEN`, `wpe-by-nature:`) that force the
+justification onto the line itself rather than into an allowlist that
+drifts.
+
+**Ruled: a guard that cannot parse must not pretend to. It is exempted
+by explicit marker, never by inferred syntax.** And the comment was not
+innocent — the next reader grepping that pattern would have found it and
+read it as live.
+
+### The scoreboard was backwards, and the packet said so
+
+M5 reported SURVIVED because the harness asserted exit 1 for a `tsc` run
+that exits 2. The mutation was dead; **reading the artifact settled it,
+and the scoreboard had it wrong.**
+
+This is the receipts family in the instrument itself: not a stale
+receipt, not the wrong unit, but **an oracle that tests the wrong
+condition and reports a verdict anyway.** A battery's exit-code
+expectation is a claim about the tool it drives, and it is checked or it
+is decoration. `tsc` exits 2 on a hard error and 1 on type errors, and a
+harness that knows only one of those grades every hard error as a
+survivor.
+
+The announce correction is the same discipline: *"a fifth source fails
+tsc on the test file"* was false — `tsconfig.json` excludes `tests/` and
+ts-jest uses `tsconfig.test.json`. Both gates do hold, for a different
+reason than claimed, and the reason is now on the record.
+
+### Standing
+
+D6 untouched with no claim made — correct; its reproduction is a re-run
+now that WP-58 has merged. The CPT observation stays undispositioned and
+unowned. `.worktrees/wp-60` left in place, noted.
