@@ -28993,3 +28993,191 @@ collision set and drives every resolver over every name in it.**
 The rule was prose for months and three call sites honoured it. The one written
 to be correct forgot in its first ten lines. That is not a discipline problem
 and it was never going to be fixed by writing the rule down more firmly.
+
+---
+
+## WP-58 · MERGE REPORT — merged at `ec14642c`; the record's six recovered bytes; locks released (2026-08-21)
+
+Merged into `poc/nexintelligence-ux` per the gate ruling at `42109fe2`, which
+ordered WP-58 ahead of WP-57. **Every figure below is pasted from the command
+that printed it.**
+
+### The stat block (protocol: an integration report without one is incomplete)
+
+`git diff --stat ec14642c^1 ec14642c`:
+
+```
+ 63 files changed, 1891 insertions(+), 332 deletions(-)
+```
+
+By area — 49 of the 63 are the mechanical rename sweep:
+
+```
+  13 src/main/mcp/modules/site-management
+   7 src/main/mcp/modules/wp-connector
+   6 src/main/mcp/modules/site-context
+   5 src/main/mcp/modules/wpe
+   3 src/main/mcp/modules/wp-cli
+   3 src/main/mcp/modules/db-scanner
+   2 tests/unit/mcp
+   2 tests/main
+```
+
+### THE RECORD MERGE — and the residual was not zero
+
+Rebuilt from the three blobs, receipt order, never hunk-edited. Stage 1 was
+**verified equal to `git merge-base`** (`08240c76`) rather than assumed — WP-52's
+rule, and the one place a rebuild silently goes wrong.
+
+```
+ancestor 1664843 + ours_tail 8874 (2 headers) + theirs_tail 16818 (1)
+       = 1690535 BYTES     rebuilt 1690535     residual 0
+'## ' headers  129 + 2 + 1 = 132     rebuilt 132
+anchored marker sweep:  ^<<<<<<< 0   ^=======$ 0   ^>>>>>>> 0   ^||||||| 0
+```
+
+Four-way, run again on the INSTALLED file: ancestor an exact PREFIX of the
+result; each half an exact substring exactly once; receipt order
+`1664843 / 1664843 / 1673717`; arithmetic in one named unit with residual 0.
+
+**The residual was measured before anything was discarded, and it was SIX BYTES
+SHORT.** The working file minus its three markers came to 1690529 against a
+rebuild of 1690535. Located exactly rather than shrugged at:
+
+```
+common prefix : 1673717 bytes
+REBUILT unique window [1673717:1673723] = b'\n---\n\n'
+WORKING unique window [1673717:1673717] = b''
+context before: b'...and the residual measured before anything is\ndiscarded.\n'
+context after : b'## WP-58 \xc2\xb7 GATE REPORT \xe2\x80\x94 the collision decline\n'
+```
+
+The missing six bytes are the `---` separator between the architect's GATE
+RULING and this packet's GATE REPORT. Both appends open with a blank line and
+that rule, so diff3 matched them as common context and emitted the pair once
+instead of twice.
+
+**This is WP-43's finding reproduced byte-for-byte, in the packet that quoted
+it.** It is also the answer to why the three-blob rebuild is the standard rather
+than one resolution style among several: the hunk-level resolution here was
+*almost* right, the diff view showed nothing wrong, and the loss was six
+characters of structure that no test, no lint and no reader would have caught.
+The substring check caught it because the substring check is the only
+instrument that can.
+
+Verified on the installed file: both halves' unique `## ` headers present
+**exactly once** each, and `\n---\n\n` present before BOTH the ruling and the
+report.
+
+### The code merged is the code that was measured
+
+```
+git diff --stat wp-58 -- src/ tests/ scripts/     (empty)
+```
+
+The merged working tree is byte-identical to `wp-58` over `src/`, `tests/` and
+`scripts/`, so the tree that merged is the tree that was measured (634/8,834)
+and battered (16/16). The base had moved two commits since the cut and both
+were docs — checked at merge time, not only at cut time.
+
+### Numbers — the merged tree, in the primary
+
+| | suites | tests | passed | skipped | tree |
+|---|---|---|---|---|---|
+| base `3f2ae945` | 633 | 8,771 | 8,769 | 2 | primary |
+| wp-58 branch `acf2b42f` | 634 | 8,834 | 8,822 | 12 | worktree |
+| **merged `ec14642c`** | **634** | **8,834** | **8,832** | **2** | **primary** |
+| **`7924c459` (published)** | **634** | **8,834** | **8,832** | **2** | **primary** |
+
+`EXIT 0`, captured before any pipe. `npx tsc -p . --noEmit` clean.
+
+**The two deltas both reconcile, and neither is waved through.** Branch →
+merged: identical suites and totals, `skipped 12 → 2` and `passed 8,822 →
+8,832` — the documented worktree/primary boundary, in the documented direction,
+and the ten are `embedding-service.test.ts`'s cases gated on the untracked
+`all-MiniLM-L6-v2-quantized`. Base → merged: `+1` suite, `+63` tests, `+63`
+passed, skipped unchanged — 62 from `collision-decline.test.ts` and 1 from
+`site-resolver.test.ts`, where the test that pinned the defect became two.
+
+`base-measure.json` is published at `7924c459` rather than at the merge, because
+a test file changed after the merge commit and the guard
+(`git diff --name-only <measured> HEAD -- src/ tests/ scripts/`) must come back
+empty for the figure to stand.
+
+### Decision 1 executed — and the pin driven both ways
+
+`CLAUDE.md:471` gains `thelocalshed`, and `PINNED_FLOOR` gains it in the SAME
+commit (`7924c459`), because the two are a two-way agreement pin with neither
+derived from the other.
+
+**Verified in both directions rather than asserted.** With the constant reverted
+to five the anchor goes red — `✕ the floor is exactly the set CLAUDE.md
+records` — and green again on restore. A refusal that only ever passes is not a
+refusal.
+
+The suite count did not move (62 in that file, 8,834 overall) because
+`thelocalshed` was already in the driven set here via live discovery and the
+floor is a union term. **On a machine with no fleet the same commit moves the
+driven set 5 → 6** — worth stating, since it means the figure is fleet-dependent
+in a way the count alone does not show.
+
+`CLAUDE.md` now also carries WHY the list is a floor and the command to
+re-measure it, so the next reader is not invited to trust the prose.
+
+### LOCKS RELEASED, WITH THE SHAPES DECLARED
+
+**Files released:** `src/main/mcp/site-resolver.ts`,
+`src/main/graphql/resolver-utils.ts`, `src/main/graphql/resolvers.ts`,
+`src/main/graphql/resolvers/sites.ts`, `src/main/transport/resolveTargetArgs.ts`,
+the 49-file rename sweep, and the five converged tools
+(`get-index-status.ts`, `search-content.ts`, `describe-site-fields.ts`,
+`get-site-twin.ts`, `get-site-structure.ts`).
+
+**Shapes now on the base — a sibling holding a function that returns or consumes
+one of these should read this line, because a lock announce naming paths would
+not have shown it:**
+
+- `resolveSite` (mcp) **no longer exists**. `resolveLocalSite(query, siteData,
+  graphService)` replaces it, and the third parameter is **required** — a
+  two-argument call is a compile error, which is the mechanism.
+- `resolveLocalSiteResult` returns `LocalSiteResult` = `ok | none | collision`,
+  the collision arm carrying `site`, `name`, `matches`, `message`.
+- `resolveSite` (`graphql/resolver-utils.ts`) is renamed `findLocalSiteExact`;
+  `resolvers.ts`'s module-private copy is deleted.
+- `RemoteGraphSiteResult` and `AnySiteResult` are unchanged in shape;
+  `AnySiteResult`'s `ambiguous` arm is now reachable for the cross-source case.
+- New export `GraphHandle` from `src/main/mcp/site-resolver.ts`.
+
+**WP-57's overlap, as the ruling measured it:** `actionProducer.ts`, where WP-58
+changed two lines (an import and one call site). A two-line rebase, and the
+required third parameter means it cannot land past this unnoticed — the compiler
+is the guard.
+
+### Registered residuals — carried forward, not closed
+
+1. **The GraphQL path has no collision decline.** `findLocalSiteExact` is
+   Local-only and case-sensitive by design; `resolveTargetArgs` catches the
+   collision before most CLI targets reach those resolvers, and nothing catches
+   it for a caller that reaches them directly.
+2. **51 call sites still print their own "not found" for a collision.** The
+   packet's own ruling (117 call sites are not converted in one packet).
+   `resolveLocalSiteResult` makes converting one a one-line change and
+   `get_site_structure` is the worked example.
+3. **A Local site whose DOMAIN equals a graph row's NAME is not declined** — the
+   ruling scopes the decline to name matches. Pinned in the open by the test the
+   battery's survivor produced, rather than left to be discovered.
+4. **`syncProducer.ts` has a sixth private `resolveSite`** — a different concept
+   (an entity id in the intelligence layer). Untouched, named so the next grep
+   is not a surprise.
+
+### What the packet is claiming, one more time
+
+Not that six names now resolve correctly — that is the fix, and a fix is what
+the next drift erases. **That a new call site cannot narrow its scope silently,
+because the narrowed resolver will not compile without the graph handle, and
+because a test measures the live collision set rather than reading a list.**
+
+The rule was prose for months. Three call sites honoured it. The one written to
+be the correct shared path forgot in its first ten lines, and its docblock said
+otherwise. That was never going to be fixed by writing the rule down more
+firmly.
