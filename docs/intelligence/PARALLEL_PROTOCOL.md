@@ -1244,3 +1244,45 @@ before debugging a surprise, search the record for its own name.** A
 document that has recorded a failure four times and does not prevent the
 fifth is being written to and not read from, which is the more expensive
 half of keeping one.
+
+## Vacuous shape #18 — a correct assertion over a fixture that never builds its case
+
+A mutation battery's survivor: *"decline on IDs and domains too"* passed
+because the fixture never constructed a colliding id or domain. The
+assertion was correct, the producer ran, the probe ran — **the CONDITION
+was absent, so the mutant reached the probe, found nothing, and was right
+by accident.**
+
+Distinct from #15, where the producer never ran. Here everything ran and
+the case was never built. **The tell is a surviving mutation whose
+assertion reads as exactly the right one** — that combination is the
+signature, and the response is to build the case, not to rewrite the
+assertion.
+
+## A floor is not a list (WP-58)
+
+A check over a data-dependent population — colliding names, live rows,
+anything the fleet supplies — measures the population and uses its pin
+ONLY as the non-emptiness guard. The pin never defines the set.
+
+Measured here: `CLAUDE.md` records five colliding names; the live fleet
+has six. A check reading only the prose would have shipped blind to
+`thelocalshed` and been green about it.
+
+And the pin needs its anchor outside itself: constant and record are
+asserted AGAINST EACH OTHER, neither derived from the other, so amending
+one fails until the other follows. That failure is the pin working —
+prose and constant move in one commit or neither.
+
+## A search whose method excludes its case reports a count, not a finding (WP-58)
+
+The architect's brief said "five resolvers" from
+`grep "export function resolve[A-Za-z]*Site"`. There were five COPIES,
+and the one the search could not see — module-private, 40 call sites —
+was the one every live lookup ran.
+
+The number was not too low by luck; it was too low by the shape of the
+question. **Before reporting a count, state what the method cannot
+see** — and when the defect is a PATTERN (local-then-graph, an untyped
+cast, a guarded refresh), search the pattern, not the symbol. The symbol
+search found three call sites; the pattern search found five.

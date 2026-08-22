@@ -28583,3 +28583,119 @@ Local decline must not fall through and silently answer with the remote row.
 Measured, there are **five**: `get-site-twin.ts` has the same shape and was
 missed. All five converge on `resolveAnySite` rather than each keeping its own
 copy of the policy — which is the drift that produced this packet.
+
+---
+
+## WP-58 · GATE RULING — the collision decline; cleared to merge FIRST (2026-08-21, architect adjudication)
+
+**Passed. Merge now, ahead of WP-57.** Verified on the branch rather
+than on the report.
+
+### The architect's brief was wrong in its method, and the packet caught it
+
+I wrote that there were five resolvers and named two duplicates. There
+were **five copies**, and the one I missed was the one every live
+GraphQL/CLI lookup actually ran — module-private in `resolvers.ts:148`,
+40 call sites.
+
+**My search could not have found it.** I ran
+`grep "export function resolve[A-Za-z]*Site"`, which by construction
+excludes a module-private function. That is my own vacuous-guard family
+turned on the architect: **a search whose method excludes the case it is
+looking for**, reported as a count. The number was not too low by luck;
+it was too low by the shape of the question.
+
+Same lesson in the call-site enumeration: I listed three `resolveAnySite`
+callers by symbol; the packet found **five** that ran local-then-graph
+and would have become newly wrong, including `get-site-twin.ts`. **A
+pattern search beats a symbol search when the defect is a pattern.**
+
+### The mechanism is stronger than the one I specified
+
+I asked for a decline. The packet made the graph handle a **REQUIRED
+THIRD PARAMETER** on `resolveLocalSite`, so a call site that forgets the
+collision check is a compile error rather than a silent Local answer
+across 59 sites. Verified at `site-resolver.ts:160-164` — no `?`, no
+default.
+
+That also makes the merge order safe in both directions: nothing can
+land a new caller past this without the compiler saying so.
+
+`resolveLocalSiteResult` returning a distinct `kind: 'collision'` with
+the disambiguating forms — rather than the thin wrapper's `null` — is
+what let the exhibit fix `get_site_structure`. Correct shape.
+
+### The floor held and the measurement is what found the sixth
+
+**`thelocalshed` is not in `CLAUDE.md:471`.** The floor of five passed;
+the LIVE MEASUREMENT found six. A mechanism reading only the prose would
+have shipped blind to the sixth name and been green about it.
+
+**Ruled, and general: a floor is not a list.** The floor exists to stop
+the driven set going vacuous; it never defines the set. Any check over a
+data-dependent population measures the population and uses the pin only
+as its non-emptiness guard — and the two are checked against each other,
+never derived one from the other. `collision-decline.test.ts` does
+exactly this: `PINNED_FLOOR` as the constant, `CLAUDE.md` parsed as the
+anchor, each asserted against the other, neither the sole source. That
+is the agreement-pin rule satisfied properly.
+
+### Vacuous shape #18 — a correct assertion over a fixture that never builds its case
+
+The battery's survivor: the mutation *"decline on IDs and domains too"*
+passed because the fixture never constructed a colliding id or domain.
+The assertion was correct. The producer ran. The probe ran. **The
+CONDITION was absent, so the mutant reached the probe, found nothing,
+and was right by accident.**
+
+This is distinct from shape #15 — there the producer never ran; here
+everything ran and the case was never built. Registered as **#18: an
+assertion may be correct and its fixture still never construct the case
+it asserts about.** The tell is a mutation that survives while its
+assertion reads as exactly the right one.
+
+Closing it in the open, with the residual stated rather than fixed — **a
+Local site whose DOMAIN equals a graph row's NAME is not declined** — is
+the right disposal. A known gap named at the code beats a silent one.
+
+### The exhibit, again, found what no test could
+
+`get_site_structure` would have said *"Site "goldenecomm" not found"*
+about a site that exists twice. **The rename alone left it claiming
+absence** — the most confident possible wrong answer, produced by a fix.
+It now states the collision and says it is Local-only.
+
+WP-56's rule, third occurrence: *a ruling states what must be true; only
+an exhibit shows whether the caller can say it.* Three packets running,
+and the exhibit has found something no test could reach in every one.
+
+### Receipts
+
+634 suites / 8,834 / 8,822 passed / 12 skipped (worktree) against a base
+of 633 / 8,771 / 8,769 / 2 (primary). The delta reconciles: +63 total =
+62 new + 1 split; +53 passed and +10 skipped, the ten being
+`embedding-service.test.ts`'s primary-only cases **declared by name**,
+which is the rule from WP-55's merge honoured on its first opportunity.
+Tenth poisoned-cache occurrence disclosed with its tell.
+
+### The two decisions
+
+**1 · `CLAUDE.md:471` gains `thelocalshed` — approved.** The anchor test
+failing until `PINNED_FLOOR` gains the same name is **the pin working,
+not a defect**: it is a two-way agreement pin, so prose and constant move
+in ONE commit or neither. Amend both together.
+
+**2 · Merge sequencing: WP-58 goes first.** Measured rather than
+preferred. WP-56 is already merged (`239e4e32`); WP-57 is not, and the
+overlap with it is exactly one code file — `actionProducer.ts`, where
+WP-58's change is **two lines** (an import and one call site at :660)
+against WP-57's +16/-3 elsewhere in the file.
+
+Forward order costs WP-57 a two-line rebase. The reverse costs WP-58 a
+re-run of its 63-file signature sweep against a moved base. And the
+required third parameter means WP-57 cannot land past this unnoticed —
+the compiler is the guard.
+
+Merge with the receipts block, the record rebuilt three-blob and
+verified four ways, and the residual measured before anything is
+discarded.
