@@ -469,14 +469,37 @@ WPE install. `site_url` carries a real scheme (273 of 331 WPE rows: 240 https,
 penalty**: unknown is not insecure.
 
 **Names collide across sources.** `goldenecomm`, `jpp0413p`, `myloop`,
-`psbtest2` and `testjppstg` each exist as both a `wpe` install and a Local
-site. Any name-keyed query must constrain by `source`, and a bare-name lookup
-that cannot disambiguate must decline rather than pick — see
+`psbtest2`, `testjppstg` and `thelocalshed` each exist as both a `wpe` install
+and a Local site. Any name-keyed query must constrain by `source`, and a
+bare-name lookup that cannot disambiguate must decline rather than pick — see
 `resolveTargetArgs`, which throws with the three disambiguated forms;
 `wp_core_version`'s cached fallback, which returns nothing when a name matches
 more than one row; and `search_site_content` / `describe_site_fields`, which
 list the matches and refuse. An unordered `... AND name=? LIMIT 1` is not a
 lookup, it is a coin toss.
+
+**This list is a FLOOR, not the set** (WP-58). It went five names for months
+while the fleet had six — `thelocalshed` was added 2026-08-21, measured, not
+remembered. Two things follow. First, **`resolveLocalSite` enforces the rule
+mechanically**: its graph handle is a required third parameter, so a call site
+that narrows its scope to Local-only is a compile error rather than a silent
+wrong answer. Second, `tests/unit/mcp/collision-decline.test.ts` **measures the
+live collision set** (every name in both `sites.json` and the graph's active
+`wpe`/`external` rows) and drives every resolver over it, using the six names
+above only as its non-emptiness guard — a check that read this paragraph alone
+would have shipped blind to the sixth name and been green about it. The names
+here and that file's `PINNED_FLOOR` are asserted against each other, neither
+derived from the other, **so amending one fails until the other follows: prose
+and constant move in one commit or neither.** Re-measure rather than copy:
+
+```bash
+node -e "const D=require('better-sqlite3'),os=require('os'),fs=require('fs');
+const s=JSON.parse(fs.readFileSync(os.homedir()+'/Library/Application Support/Local/sites.json','utf8'));
+const L=new Set(Object.values(s).map(x=>String(x.name||'').toLowerCase()));
+const db=new D(os.homedir()+'/Library/Application Support/Local/nexus-ai/graph.db',{readonly:true});
+console.log(db.prepare(\"SELECT DISTINCT name FROM sites WHERE source IN ('wpe','external') AND is_active=1\")
+  .all().map(r=>String(r.name).toLowerCase()).filter(n=>L.has(n)).sort());"
+```
 
 **`nexus host remove` soft-deletes.** It sets `is_active = 0` and resets
 `domain` back to the alias; there is no per-site delete in `GraphService`, and

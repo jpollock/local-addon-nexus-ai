@@ -46,11 +46,18 @@ import { resolveTargetArgs } from '../../../src/main/transport/resolveTargetArgs
 // ---------------------------------------------------------------------------
 
 /**
- * The five names `CLAUDE.md:471` names. Pinned here so the driven set is never
- * empty; checked against `CLAUDE.md` itself below so this array cannot quietly
- * stop being what the record says.
+ * The names `CLAUDE.md`'s "Names collide across sources" paragraph records.
+ * Pinned here so the driven set is never empty; checked against `CLAUDE.md`
+ * itself below so this array cannot quietly stop being what the record says.
+ *
+ * A FLOOR, NOT THE SET. It stood at five for months while the fleet had six.
+ * `thelocalshed` was added 2026-08-21 because the LIVE MEASUREMENT below found
+ * it and the prose had not — which is the argument for measuring a
+ * data-dependent population rather than listing it. The two are asserted
+ * against each other, neither derived from the other, so amending one fails
+ * until the other follows: prose and constant move in one commit or neither.
  */
-const PINNED_FLOOR = ['goldenecomm', 'jpp0413p', 'myloop', 'psbtest2', 'testjppstg'];
+const PINNED_FLOOR = ['goldenecomm', 'jpp0413p', 'myloop', 'psbtest2', 'testjppstg', 'thelocalshed'];
 
 const CLAUDE_MD = path.resolve(__dirname, '../../../CLAUDE.md');
 
