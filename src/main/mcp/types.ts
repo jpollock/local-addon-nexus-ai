@@ -97,6 +97,43 @@ export interface McpToolHandler {
 // ---------------------------------------------------------------------------
 
 /**
+ * The WP Engine sync surface MCP tools reach.
+ *
+ * Structural rather than the concrete `WPESyncService` on purpose: the class
+ * takes a dozen constructor dependencies (CAPI bridge, embedding service,
+ * vector store, extractor…), and a tool test that needs four methods should
+ * not have to build all of them. `WPESyncService` satisfies this by shape, so
+ * `src/main/index.ts` assigns it directly with no adapter.
+ *
+ * WP-61: added so `wpe_sync_sites` can exist. Eight error strings named that
+ * tool as the remedy while the registry carried no such name, and the reason
+ * it carried none is that the service reaching it was never on this interface.
+ */
+export interface WpeSyncAccessor {
+  /** Fleet metadata sync. DISCOVERS installs from CAPI, so it is the only path
+   *  that can fix "no WP Engine installs found in graph". Skips installs synced
+   *  within `staleThresholdHours` (default 8). */
+  syncAllWPESites(
+    limit?: number,
+    staleThresholdHours?: number,
+    accountFilter?: string[] | null,
+  ): Promise<{
+    success: boolean;
+    synced: number;
+    skipped: number;
+    failed: number;
+    errors: Array<{ installId: string; error: string }>;
+  }>;
+  /** One install's metadata, by CAPI install id — not by name. Ignores staleness. */
+  syncSingleSite(installId: string): Promise<void>;
+  /** Fleet content index. Reads the graph's existing `wpe` rows; cannot add one. */
+  indexAllWpeContent(): Promise<{ indexed: number; errors: number }>;
+  /** One install's content index. Throws on missing dependencies where the
+   *  fleet-wide version warns and returns zero. */
+  indexOneWpeContent(siteId: string, installName: string): Promise<void>;
+}
+
+/**
  * Services available to all MCP tool handlers.
  * Injected during module registration.
  */
@@ -118,6 +155,9 @@ export interface NexusServices {
   registryStorage?: RegistryStorage;
   /** Knowledge graph service. Optional for backward compat. */
   graphService?: any;
+  /** WP Engine sync service — backs `wpe_sync_sites`. Optional: absent in tests
+   *  and on a build where WPE integration failed to start. */
+  wpeSyncService?: WpeSyncAccessor;
   /** Event processor. Optional for backward compat. */
   eventProcessor?: any;
   /** Fleet assembler. Optional for backward compat. */

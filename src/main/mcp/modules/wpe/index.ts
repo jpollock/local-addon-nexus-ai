@@ -70,6 +70,7 @@ import { environmentDiffHandler } from './environment-diff';
 import { portfolioOverviewHandler } from './portfolio-overview';
 import { addUserToAccountsHandler } from './add-user-to-accounts';
 import { deepRefreshHandler } from './deep-refresh';
+import { syncSitesHandler } from './sync-sites';
 
 /**
  * WPE integration module — tools for WP Engine account/install management
@@ -158,4 +159,7 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(portfolioOverviewHandler);
   registry.register(addUserToAccountsHandler);
   registry.register(deepRefreshHandler);
+  // WP-61: eight error strings named this tool as the remedy while the
+  // registry carried no such name. An agent has no Operations tab button.
+  registry.register(syncSitesHandler);
 }

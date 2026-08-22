@@ -1,4 +1,5 @@
 import { McpToolResult, NexusServices } from '../../types';
+import { WPE_SYNC_REMEDY_METADATA } from './sync-remedy';
 
 export function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
@@ -32,14 +33,23 @@ export async function staleSyncWarning(services: NexusServices): Promise<string>
     if (!row?.latest) return '';
 
     const registryStorage = (services as any).registryStorage;
-    const settings = registryStorage?.get?.('nexus_settings') as { wpeSyncIntervalHours?: number } | null;
+    const settings = registryStorage?.get?.('nexus_settings') as
+      { wpeSyncIntervalHours?: number; wpeSyncAutoEnabled?: boolean } | null;
     const thresholdHours = settings?.wpeSyncIntervalHours ?? 8;
 
     const ageMs = Date.now() - row.latest;
     const ageHours = Math.round(ageMs / 3600000);
 
     if (ageMs > thresholdHours * 3600000) {
-      return `\n\n> ⚠️ WPE sync data is ${ageHours}h old (threshold: ${thresholdHours}h). Run \`wpe_sync_sites\` or wait for the next auto-sync for fresh data.`;
+      // "or wait for the next auto-sync" was unconditional and is FALSE by
+      // default: `wpeSyncAutoEnabled` is opt-in (`src/common/types.ts:377`),
+      // so on a stock install nothing is scheduled and waiting never helps.
+      // Same defect class as naming an unregistered tool — a remedy sentence
+      // is a claim, and this one was a claim about the user's own settings.
+      const autoNote = settings?.wpeSyncAutoEnabled
+        ? ' Or wait for the next scheduled sync.'
+        : ' Automatic WPE sync is off (enable `wpeSyncAutoEnabled` in Settings to schedule it).';
+      return `\n\n> ⚠️ WPE sync data is ${ageHours}h old (threshold: ${thresholdHours}h). ${WPE_SYNC_REMEDY_METADATA}${autoNote}`;
     }
     return '';
   } catch {

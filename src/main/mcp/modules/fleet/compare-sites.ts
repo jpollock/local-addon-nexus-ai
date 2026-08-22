@@ -2,6 +2,7 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveAnySite } from '../../site-resolver';
 import { SiteStructure } from '../../../../common/types';
 import { fleetFreshnessWarning, HOUR_MS, DAY_MS } from '../../../twin/twin-helpers';
+import { structureUnavailableMessage } from './structure-availability';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
 import { provisionalEnvironmentId } from '../../../intelligence-host/provisionalEntity';
 import type { TwinFact } from '../../../../intelligence';
@@ -32,8 +33,22 @@ export const compareSitesHandler: McpToolHandler = {
   definition: {
     name: 'compare_sites',
     description:
-      'Side-by-side comparison of two indexed sites — shared and unique plugins, version differences, WordPress/PHP version, and theme differences. Use to synchronize environments (e.g. confirm local matches WPE production), identify configuration drift, or plan migrations. Both sites must be indexed — run reindex_site if data is stale. Reports when each side was last observed, and warns when the two sides differ in age by more than the freshness SLO (comparing fresh data against stale data is this tool\'s chief footgun).' +
-      'theme differences, user counts, and content volume. Works even when sites are stopped.',
+      'Side-by-side comparison of two LOCAL sites — shared and unique plugins, version ' +
+      'differences, WordPress/PHP versions, theme differences, user counts and content volume. ' +
+      'Works even when the sites are stopped. ' +
+      // WP-61: the previous text offered "confirm local matches WPE production"
+      // as the worked example of what this tool is for. It has never been able
+      // to do that: the record it compares is written only by Local's
+      // filesystem scan, so a WP Engine install or external host has none and
+      // always declines. Saying so here is the difference between a caller who
+      // picks the right tool and one who debugs a store that is fine.
+      'Local sites only. The structural record this tool compares is produced by Local\'s ' +
+      'filesystem scan, so WP Engine installs and external SSH hosts have none and are ' +
+      'declined — for local-vs-WPE drift use wpe_detect_drift instead. ' +
+      'A site that has never been scanned is declined too; run reindex_site on it first. ' +
+      'Reports when each side was last observed, and warns when the two sides differ in age ' +
+      'by more than the freshness SLO (comparing fresh data against stale data is this ' +
+      'tool\'s chief footgun).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -67,11 +82,19 @@ export const compareSitesHandler: McpToolHandler = {
     }
     const siteB = { id: resolvedB.id, name: resolvedB.name };
 
+    // WP-61: these two used to say "has no index data" for every source, which
+    // named a store that is fine and implied a fix that does not exist for a
+    // remote site. The resolver already knows which source answered, so the
+    // decline can say the true reason instead of the convenient one.
     const entryA = services.indexRegistry.get(siteA.id);
-    if (!entryA?.structure) return error(`Site "${siteA.name}" has no index data.`);
+    if (!entryA?.structure) {
+      return error(structureUnavailableMessage(siteA.name, resolvedA.source, 'compare_sites'));
+    }
 
     const entryB = services.indexRegistry.get(siteB.id);
-    if (!entryB?.structure) return error(`Site "${siteB.name}" has no index data.`);
+    if (!entryB?.structure) {
+      return error(structureUnavailableMessage(siteB.name, resolvedB.source, 'compare_sites'));
+    }
 
     const nameA = entryA.siteName || siteA.name;
     const nameB = entryB.siteName || siteB.name;

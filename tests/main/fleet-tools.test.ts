@@ -482,7 +482,13 @@ describe('compare_sites', () => {
     expect(getText(result)).toContain('not found');
   });
 
-  test('errors on site without index data', async () => {
+  // WP-61 (D2): renamed from 'errors on site without index data'. The old
+  // title and its assertion both named the content index, which is not the
+  // store being checked — `entry.structure` is. `get_index_status` will report
+  // the same site as indexed, and chasing that contradiction is what the
+  // reporter lost an hour to. Site B here is LOCAL, so the message it must now
+  // produce is the one with a remedy that actually works.
+  test('errors on a local site with no site-structure record, naming the right store', async () => {
     const sites: Record<string, LocalSiteInfo> = {
       'site-a': { id: 'site-a', name: 'Site A', path: '/a' },
       'site-b': { id: 'site-b', name: 'Site B', path: '/b' },
@@ -508,7 +514,10 @@ describe('compare_sites', () => {
     }, services);
 
     expect(result.isError).toBe(true);
-    expect(getText(result)).toContain('no index data');
+    expect(getText(result)).toContain('site-structure data');
+    expect(getText(result)).toContain('reindex_site');
+    // The sentence this replaced, pinned as absent so it cannot come back.
+    expect(getText(result)).not.toContain('no index data');
   });
 });
 

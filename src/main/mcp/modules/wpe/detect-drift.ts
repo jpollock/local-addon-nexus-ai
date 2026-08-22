@@ -13,6 +13,7 @@
  */
 import { McpToolHandler } from '../../types';
 import { requireLocalServices } from './helpers';
+import { WPE_SYNC_REMEDY_METADATA } from './sync-remedy';
 import { compareVersions } from '../fleet/version-utils';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
 import { provisionalEnvironmentId } from '../../../intelligence-host/provisionalEntity';
@@ -51,7 +52,7 @@ export const detectDriftHandler: McpToolHandler = {
       'Detect configuration drift between local development sites and their linked WP Engine production environments. Compares plugin versions, WP core version, and PHP version between the local copy and the live install. Use before pushing local changes to production to identify unexpected differences. Shows which environment is ahead for each dimension.' +
       'Shows WP version drift and plugin differences (version mismatches, plugins only on one side). ' +
       'Reads from the local graph — no live API calls required. ' +
-      'Run wpe_sync_sites first to ensure WPE data is current.',
+      `${WPE_SYNC_REMEDY_METADATA} first, so the WPE side is current.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -75,7 +76,11 @@ export const detectDriftHandler: McpToolHandler = {
     const graphService = (services as any).graphService;
     const db = graphService?.getDb?.();
     if (!db) {
-      return { content: [{ type: 'text' as const, text: 'Graph database not available. Run wpe_sync_sites first.' }] };
+      // NOT a sync remedy. The graph is opened at addon startup; a sync writes
+      // to it and cannot create it, so "run the sync first" pointed at a fix
+      // that could never work here. Eighth of the eight strings, and the only
+      // one whose remedy was wrong even after the tool became real.
+      return { content: [{ type: 'text' as const, text: 'Graph database not available — the Nexus AI knowledge graph did not open. Restart Local and check the Nexus AI log; no sync can run until it does.' }] };
     }
 
     // Get all local sites with their WPE linkage

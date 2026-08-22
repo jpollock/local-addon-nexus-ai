@@ -2,6 +2,7 @@ import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
 import { resolveAnySite } from '../../site-resolver';
 import { indexFreshnessWarning } from '../../../twin/twin-helpers';
 import { vectorSiteId } from '../../../vector-store/vectorSiteId';
+import { WPE_SYNC_REMEDY_CONTENT, WPE_SYNC_REMEDY_METADATA } from '../wpe/sync-remedy';
 import type { MetadataFilter } from '../../../../common/types';
 
 export function formatCustomFields(metadataJson: string): string {
@@ -40,7 +41,7 @@ export const searchContentHandler: McpToolHandler = {
       'The site must be indexed — run reindex_site if results are missing or stale. ' +
       'For searching across all sites simultaneously, use search_across_sites. ' +
       'Works for both local sites (by name/domain) and WPE installs (by install name, e.g. "localwpe"). ' +
-      'WPE install content is indexed by wpe_sync_sites — run that first if results are missing. ' +
+      `WPE install content is not indexed by reindex_site, which is local-only. ${WPE_SYNC_REMEDY_CONTENT} ` +
       'Returns ranked results with titles, excerpts, relevance scores, and customFields (when indexed). ' +
       'For attribute/constraint questions (e.g. "easy", "under $20", "in <region>", a range or category), ' +
       'first call describe_site_fields to see the site\'s structured fields, then search here with ' +
@@ -104,7 +105,9 @@ export const searchContentHandler: McpToolHandler = {
     const resolved = resolveAnySite(args.site as string, services.siteData, (services as any).graphService);
 
     if (resolved.kind === 'none') {
-      return error(`Site "${args.site}" not found. For WPE installs, use the install name (e.g. "testjpp1"). Run wpe_sync_sites first if the install is missing.`);
+      // "Not found" here means no ROW, which is a metadata problem — the
+      // content remedy cannot help a site the graph has never heard of.
+      return error(`Site "${args.site}" not found. For WPE installs, use the install name (e.g. "testjpp1"). ${WPE_SYNC_REMEDY_METADATA}`);
     }
     if (resolved.kind === 'ambiguous') {
       return error(

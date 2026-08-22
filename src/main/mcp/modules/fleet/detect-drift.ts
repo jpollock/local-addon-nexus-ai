@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveAnySite } from '../../site-resolver';
 import { IndexEntry } from '../../../../common/types';
+import { structureUnavailableMessage } from './structure-availability';
 import { fleetFreshnessWarning, HOUR_MS, DAY_MS } from '../../../twin/twin-helpers';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
 import { provisionalEnvironmentId } from '../../../intelligence-host/provisionalEntity';
@@ -42,9 +43,16 @@ export const detectDriftHandler: McpToolHandler = {
   definition: {
     name: 'detect_drift',
     description:
-      'Compare a baseline site against other indexed sites to detect configuration drift — plugin version differences, missing or extra plugins, WordPress/PHP version mismatches. Use to ensure multiple sites (e.g. a network of similar sites) stay in sync. For local-vs-WPE drift detection, use wpe_detect_drift instead. Also reports changes the intelligence ledger recorded over time (a different axis from the cross-site comparison) and reconciles the two detectors, flagging divergences neither one explains.' +
-      'Reports plugin version mismatches, missing/extra plugins, and WordPress/PHP version differences. ' +
-      'Works even when sites are stopped.',
+      'Compare a baseline LOCAL site against other local sites to detect configuration drift — ' +
+      'plugin version differences, missing or extra plugins, WordPress/PHP version mismatches. ' +
+      'Use to keep a network of similar sites in sync. Works even when sites are stopped. ' +
+      // WP-61: same limitation as compare_sites and the same reason — the
+      // structural record is written only by Local's filesystem scan.
+      'Local sites only: WP Engine installs and external SSH hosts have no structural record ' +
+      'and are declined. For local-vs-WPE drift use wpe_detect_drift instead. ' +
+      'Also reports changes the intelligence ledger recorded over time (a different axis from ' +
+      'the cross-site comparison) and reconciles the two detectors, flagging divergences ' +
+      'neither one explains.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -71,9 +79,13 @@ export const detectDriftHandler: McpToolHandler = {
     }
     const baselineSite = { id: resolvedBaseline.id, name: resolvedBaseline.name };
 
+    // WP-61: see `structure-availability.ts`. "has no index data" named the
+    // wrong store and implied a fix that does not exist for a remote site.
     const baselineEntry = services.indexRegistry.get(baselineSite.id);
     if (!baselineEntry?.structure) {
-      return error(`Baseline site "${baselineSite.name}" has no index data.`);
+      return error(structureUnavailableMessage(
+        baselineSite.name, resolvedBaseline.source, 'detect_drift', 'Baseline site',
+      ));
     }
 
     // Determine comparison targets
@@ -89,7 +101,11 @@ export const detectDriftHandler: McpToolHandler = {
           return error(`"${name}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`);
         }
         const entry = services.indexRegistry.get(resolved.id);
-        if (!entry?.structure) return error(`Comparison site "${resolved.name}" has no index data.`);
+        if (!entry?.structure) {
+          return error(structureUnavailableMessage(
+            resolved.name, resolved.source, 'detect_drift', 'Comparison site',
+          ));
+        }
         targets.push(entry);
       }
     } else {
