@@ -28434,3 +28434,94 @@ this record says so rather than rounding up.
 
 **Standing:** the first live sentinel finding closes this by itself. Nothing
 needs to be built; something needs to break.
+
+---
+
+## WP-59 · LOCK ANNOUNCE (2026-08-21) — assembly on the agent path
+
+**Branch `wp-59`, worktree `.worktrees/wp-59`, cut from `wp-57` at `77d98e27`
+— NOT from `poc/nexintelligence-ux`, and that is deliberate.** Phase 4 needs
+phase 1's frame: the actor, the autonomy class and the task id an assembly
+request requires are all minted by `openAgentTask`. If WP-57 changes at its
+gate, this rebases.
+
+**Governing document:
+[`agent-actor-design-note.md`](agent-actor-design-note.md) §C and §12 phase 4.**
+Unblocked because **R3 is already ruled** — fail-closed on integrity and
+absence now, staleness with the hub.
+
+### Scope
+
+1. **A host seam, `agentAssembly.ts`** — the agent-path sibling of
+   `chatAssembly.ts`. Builds an `AssembleRequest` from a run and calls the same
+   `assemble()`.
+2. **`AgentRunner` assembles before `agent.run()`**, from the frame's actor and
+   task.
+3. **`ctx.context`** — a read-only projection of the bundle for the agent.
+4. **A `task.context.assembled` manifest per run.**
+5. **Fail-closed per R3 and §6.1**, and the distinction is the packet's sharpest
+   line: a **refusal bundle binds** (missing/unloadable policy set, or a hash
+   mismatch under the grant → the run proceeds read-only and records why); an
+   **assembler fault degrades** (throw, unreadable store, absent core → the run
+   proceeds exactly as today). Collapsing these turns fail-closed into
+   fail-open-on-exception.
+
+### MEASURED AT ANNOUNCE
+
+- **36 `task.context.assembled` manifests exist. All 36 are
+  `act_chat_assembler` / `chat.docked-panel`. ZERO are from an agent.** The
+  question "what did the agent know when it acted" has no stored answer for the
+  actors that act unattended — which is §1.1's whole argument.
+
+### LOCKED
+
+| surface | why |
+|---|---|
+| `src/main/intelligence-host/agentAssembly.ts` — **NEW** | the seam |
+| `src/main/agent-runtime/AgentRunner.ts` — the assembly call only | item 2 |
+| `src/main/agent-runtime/buildAgentContext.ts` — `ctx.context` | item 3 |
+| `src/main/agent-sdk/types.ts` — `AgentContext.context` | the SDK surface |
+| `docs/intelligence/` | this record |
+
+**NOT LOCKED:** `src/intelligence/` (the core — the assembler is USED, not
+changed; no new topic, no envelope field), `chatAssembly.ts` (untouched — a
+second caller of one assembler is the design, not a fork), `src/renderer/`,
+`sessionRegistry.ts`.
+
+### THREE RULING REQUESTS, raised at announce
+
+1. **What is an agent run's `intent`?** Chat passes the user's message. An
+   agent has no utterance. Candidates: the manifest `description`, or a derived
+   `"<trigger> run of <agent>"`. It lands in the manifest and may reach prose,
+   so it is not an internal detail.
+2. **What are the `targets`?** The run's site scope — but `auth-probe` is
+   `siteScoped: false` and has none. An empty-target assembly is legitimate;
+   what it does to ADR-22's routing table needs stating rather than
+   discovering.
+3. **Does the bundle's PROSE reach the agent's model at all?** The assembler
+   renders a turn block for a chat model; an agent hand-rolls its prompt in
+   `AgentAIClient`. Options: the agent receives only structured parts and the
+   prose is manifest-only; or `AgentAIClient` prepends the ambient block. **The
+   second changes every agent's prompt** and is the larger decision.
+
+### A NEAR-MISS, RECORDED BECAUSE THE RULE IT YIELDS IS WORTH MORE
+
+This packet was very nearly cut as **WP-58**, which is an ACTIVE packet with
+three commits and uncommitted work. The number was chosen by grepping
+`## WP-` headings in `WORK_PACKETS.md` **on this branch** — and WP-58's own
+announce is committed on `wp-58`, so the base's copy does not contain it.
+
+`git worktree add` refused (the branch existed), which is the only reason
+nothing was lost. Residue, all undone or harmless: a stray nested `models/models`
+symlink (removed), a rebuild of that worktree's gitignored `lib/`, and a `cp`
+of two env files **verified byte-identical to the primary's**, so a no-op.
+Their `site-resolver.ts` change was never touched.
+
+**PROPOSED PROTOCOL AMENDMENT (owner's to accept):** *the packet registry is
+`git branch --list 'wp-*'`, never `WORK_PACKETS.md`.* The doc is per-branch and
+therefore always behind by every packet announced since your base was cut. The
+existing "a dormant branch may have already shipped" rule (WP-22) points at the
+branch list for the same reason; this is its sibling — **a branch list may
+already hold a number your doc has never heard of.**
+
+Standard discipline, all of it.
