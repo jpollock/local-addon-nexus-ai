@@ -29829,3 +29829,281 @@ reason than claimed, and the reason is now on the record.
 D6 untouched with no claim made — correct; its reproduction is a re-run
 now that WP-58 has merged. The CPT observation stays undispositioned and
 unowned. `.worktrees/wp-60` left in place, noted.
+
+---
+
+## WP-61 · GATE REPORT — the tool that did not exist, and the store that could not have the data (2026-08-21)
+
+**Branch `wp-61` at `abb834bd`, cut from `50d966d5`.** Every figure below is
+pasted from the command that printed it. One of them is a correction to a
+figure in my own commit message — see *The receipt I got wrong*, which is the
+most useful thing in this report.
+
+### Disposition
+
+| ruling item | state |
+|---|---|
+| D5 · register `wpe_sync_sites` | done — and CORRECTED again, see below |
+| D5 · correct all eight strings, extracted not retyped | done (8/8) |
+| D5 · a check that no error string names an unregistered tool | done, driven both directions |
+| D3/D4 · say what is true; no remote extractor | done |
+| D2 · `compare-sites.ts:71,74` wording | done |
+| tool descriptions stop implying cross-source support | done (`compare_sites`, `detect_drift`, `get_site_structure`) |
+
+### D5 corrected a second time — by the ruling's own method
+
+The ruling says register the tool *"over the existing service methods."* Taken
+literally that ships a subtler form of the same defect, and the search that
+finds it is the one the record ratified this morning: **state what the method
+cannot see.** Reading the eight strings as ONE complaint cannot see that they
+are two.
+
+| site | what is actually missing | the method that supplies it |
+|---|---|---|
+| `wpe/helpers.ts:42` | `last_sync_at` is stale | `syncAllWPESites` |
+| `wpe/fleet-versions.ts:75,76` | no `wpe` rows in the graph AT ALL | `syncAllWPESites` — it discovers from CAPI |
+| `wpe/detect-drift.ts:54` | graph metadata not current | `syncAllWPESites` |
+| `content/describe-site-fields.ts:44` | the site row is absent | `syncAllWPESites` |
+| `content/search-content.ts:43,107` | content not in the vector index | `indexAllWpeContent` |
+| `wpe/detect-drift.ts:78` | **nothing a sync can fix** | — |
+
+`indexAllWpeContent` selects `FROM sites WHERE source='wpe' AND is_active=1`.
+It cannot add a row it selects on. **A tool wrapping it alone would have been a
+real, resolving, succeeding tool name attached to a remedy that does not work
+for six of the eight — and the registry check would have been GREEN about it,**
+because a registry can confirm that a name resolves and cannot confirm that a
+remedy helps. So the tool carries both modes and `content: true` names the one
+that is not the default.
+
+**The eighth string was wrong even after the tool became real.** *"Graph
+database not available. Run `wpe_sync_sites` first."* The graph is opened at
+addon startup; a sync writes to it and cannot create it. That one got no remedy
+at all — it now says what the condition is and that no sync can precede it.
+
+### The check, and what it is scoped by
+
+`tests/unit/mcp/tool-remedy-references.test.ts`. Every string literal under
+`src/main/mcp` — via the TypeScript parser, so comments and identifiers are
+excluded *structurally* rather than by a regex that hopes — swept for
+IMPERATIVE tool references (`run X`, `call X`, `use X`, `try X`) and checked
+against `ToolRegistry.allToolNames()` over all 19 registration entry points.
+
+**Scoped by the CLAIM, not the token shape.** A snake_case sweep matches
+`permalink_structure`, `post_type`, `last_sync_at`; it reports a count, not a
+finding. What makes a string a claim about the tool surface is the imperative.
+
+Measured on the PRE-FIX tree, the sweep reported exactly one unregistered
+token:
+
+```
+SWEPT 99 UNKNOWN 10
+  UNKNOWN wpe_sync_sites  <- modules/content/describe-site-fields.ts,
+    modules/content/search-content.ts, modules/wpe/detect-drift.ts,
+    modules/wpe/fleet-versions.ts, modules/wpe/helpers.ts
+```
+
+(The other nine were `search_tools` — real, registered late by a factory the
+first probe had not wired in — and the eight parameter names below.)
+
+**The eight allowlisted tokens are parameters, not tools**, each with its
+reason in `NOT_A_TOOL`: `database_only`, `install_id`, `install_name`,
+`json_extract`, `month_offset`, `site_name`, `skip_plugins`, `skip_themes`.
+Two guards stop that list becoming a place to hide a failure — **no entry may
+also be a registered tool** (which would silence the check for that tool for
+ever), and **every entry must still appear in the sweep** (so a deleted
+sentence takes its exception with it). WP-55's rule: a guard whose exit
+condition is a list needs a check on the list.
+
+Non-emptiness is asserted as a FLOOR, not a population (WP-58): `> 50` distinct
+tokens plus four pinned names, so a sweep that silently stopped parsing string
+literals fails rather than passing on a handful of incidental hits.
+
+### D3/D4 — the construction proof, and one thing the ruling did not name
+
+Confirmed exactly as ruled. `entry.structure` is `null` at
+`IndexRegistry.ts:53`; sole creator `ContentPipeline.ts:90`
+(`fileScanner.scan(info.sitePath)`); both refresh writers guarded by
+`if (existingEntry?.structure)`. The routes are conditioned on the thing only
+a local disk can produce.
+
+`structure-availability.ts` declines with the reason that is true, keyed on the
+source `resolveAnySite` already returns. A local site still gets a remedy that
+works (`reindex_site`); a remote one is told the data **cannot** exist and that
+its content index and graph records are unaffected — which is the specific
+misdirection D2 cost an hour to, since `get_index_status` reports the same site
+as indexed with 102 documents.
+
+**Scope addition, announced before the work and repeated here:**
+`fleet/detect-drift.ts` carried the same sentence at three more call sites over
+the same store through the same resolver. Five call sites, one extracted
+function. One import and five call sites to revert if the architect wants it
+out.
+
+**D4 got a fix the ruling folded in but did not spell out.**
+`get_site_structure` answered `Site "x" not found` for a registered WP Engine
+install. It now asks the graph before denying the site exists. **And the other
+direction is driven**: a name in neither store still returns exactly
+`Site "no-such-site" not found`, because a decline that swallows genuine
+absence has traded one wrong answer for another.
+
+### Two claims found while fixing the claims
+
+1. **The stale warning promised a schedule that is switched off.** *"Run
+   `wpe_sync_sites` or wait for the next auto-sync"* was unconditional.
+   `wpeSyncAutoEnabled` is opt-in and defaults **false** (`common/types.ts:377`,
+   and `CLAUDE.md` says so too). On a stock install nothing is scheduled and
+   waiting never helps. Same defect class as naming an unregistered tool, one
+   layer over: the sentence was a claim about the reader's own settings. Now
+   conditional on the setting it was asserting, driven in both directions plus
+   the absent-settings case, which is the population it was worst for.
+2. **`compare_sites`'s description offered the impossible case as its worked
+   example** — *"confirm local matches WPE production."* Not a wording slip: it
+   is what the tool says it is FOR, and it has never been able to do it.
+
+### Mutation battery — 15 killed, 0 survived, 0 anchor-miss
+
+Run in this worktree at the commit under test, tree verified pristine before
+and after, ABI pinned at both ends, every invocation `--no-cache`, and a
+green-baseline control that must PASS so a harness that can only report
+perfection is exposed.
+
+```
+venue /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.worktrees/wp-61 @ wp-61   ABI at start: 141
+
+=== GREEN BASELINE (must PASS — this is what exposes a blind harness) ===
+  GREEN BASELINE: pass
+
+=== MUTATIONS ===
+1 tool name renamed, sentences left behind           killed
+2 content remedy drops 'content: true'               killed
+3 tool not registered (the original D5 shape)        killed
+4 a new string names a nonexistent tool              killed
+5 collision decline widened (coin toss returns)      killed
+6 syncSingleSite given the name, not the id          killed
+7 content+install falls through to fleet index       killed
+8 zero-indexed reported as success                   killed
+9 remote site given the local remedy                 killed
+10 external offered wpe_detect_drift                 killed
+11 compare_sites reverts to 'has no index data'      killed
+12 detect_drift comparison reverts                   killed
+13 get_site_structure re-denies a remote site        killed
+14 auto-sync promised unconditionally                killed
+15 a recommended tool that is not registered         killed
+
+=== WP-61 BATTERY: 15 killed / 0 survived / 0 anchor-miss, of 15 ===
+ABI at end: 141
+tree pristine after the battery.
+```
+
+Mutation 3 is the original defect reconstructed — the tool present in the tree
+and absent from the registry — and mutation 4 is a fresh string naming a tool
+that does not exist. Both die at the sweep.
+
+### Test figures
+
+```
+BASE   50d966d5, scratch worktree:  634 suites / 8834 tests / 8822 passed / 12 skipped   EXIT=0
+WP-61  abb834bd, worktree:          638 suites / 8881 tests / 8869 passed / 12 skipped   EXIT=0
+```
+
+- **Suites +4** — exactly the four new files.
+- **Tests +47**, passed +47, **skipped unchanged at 12**.
+- The published `base-measure.json` for `7924c459` read *634 / 8834 / 8832 / 2,
+  primary*. My scratch-worktree run of the same tree read *634 / 8834 / 8822 /
+  12*. **Totals identical, skipped 2→12, passed 8832→8822** — the documented
+  ten, in the documented direction. The published figure was right, and this is
+  the first time the boundary has been measured on both sides of one commit
+  rather than inferred across two.
+
+Two legacy pins moved, both because they asserted the sentence this packet
+removes:
+
+- `tests/main/wpe-tools.test.ts` — WPE tool count 74 → 75, plus a
+  `toContain('wpe_sync_sites')` so the number carries its reason.
+- `tests/main/fleet-tools.test.ts` — `compare_sites › errors on site without
+  index data`. **Its title named the wrong store too**, so it was renamed
+  rather than patched, and it now pins the removed sentence as ABSENT.
+  My grep for suites covering touched files searched the file BASENAME
+  (`compare-sites`) and this suite is `fleet-tools.test.ts`; it surfaced in the
+  full run, not in the targeted one. Worth knowing: a basename search does not
+  find the suite that tests your file from a module barrel.
+
+Suites covering touched files, run at BOTH commits with arguments splatted
+explicitly: **254 passed / 254 total, 8 suites, identical on both sides.**
+
+### The receipt I got wrong
+
+`fd100288`'s message says *"52 new across four suites."* **It is 47.**
+
+```
+tool-remedy-references   9
+wpe-sync-sites          17
+structure-availability  13
+remote-site-honesty      8   <- I wrote 13
+                        --
+                        47
+```
+
+Every line above is pasted from `npx jest <file> --no-cache`, one suite at a
+time. The wrong number came from the one suite I never measured alone: it ran
+alongside `tests/main/wpe-tools.test.ts`, the summary said `49 passed`, and I
+split that pair from memory.
+
+It was caught by the delta refusing to reconcile — +47 measured against +52
+asserted — and the five-test gap sent me to cut a scratch worktree at the base
+and re-measure. **The reconciliation found my error, not the tree's.**
+
+**Proposed amendment (WP-50's receipts family gains a fourth member):**
+pre-written, stale, wrong-unit, and now **decomposed-from-a-combined-run.** A
+combined figure can be perfectly genuine while the split of it is invented, and
+the split is what gets written down. *A receipt certifies the number the
+command printed, not any number derived from it.* Corrected in `abb834bd`
+rather than by amending history, so the error and its catch both stay citable.
+
+### The venue guard refused a real commit — first live catch
+
+`.githooks/commit-msg` is not what caught it; a `[ "$(pwd)" = … ] || exit 1`
+prologue was. My shell cwd had drifted to the primary **four commands earlier**,
+inside a compound command whose purpose was reading a sibling's `git log` —
+WP-52's form of the hazard, exactly. `git add -A && git commit` would have run
+in the primary, and the primary at that moment held **WP-60's staged
+`find-outdated-sites.ts` and its test**. The guard refused; I re-anchored and
+committed in the right tree.
+
+WP-54's rule earning its keep on the first packet after it was written: **a
+check that only prints is a log; a check that can refuse is a guard.**
+
+### Two observations for the architect, neither a request
+
+1. **The base moved twice under this packet.** `wp-61` is cut from `50d966d5`;
+   the base is now `ba75a11b` (WP-60 merged, with its own `base-measure.json`
+   at `b4596c44`). My files are disjoint from WP-60's — it holds
+   `find-outdated-sites.ts` and its test; I hold none of that. **But the
+   announced QUANTITY crosses that line**: my sweep runs over the merged tree,
+   so any imperative tool reference WP-60 added is checked at merge time and
+   not before. That is the quantity working as announced, and it is the one
+   thing in this packet that cannot be verified until the merge.
+2. **WP-60's work was staged in the PRIMARY checkout**, not in a worktree —
+   observed as `M src/main/mcp/modules/fleet/find-outdated-sites.ts` staged on
+   `poc/nexintelligence-ux` while `.worktrees/wp-60` did not exist. It merged
+   fine. Recording it because the primary is where the architect writes the
+   record, and a battery or a `git add -A` from either side races the other;
+   this packet's own near-miss above is the same collision from the opposite
+   direction. **UNVERIFIED HYPOTHESIS:** that those files were staged rather
+   than committed suggests a merge finished into the primary working tree
+   rather than onto a branch. I did not investigate and I did not touch them.
+
+### ABI state, disclosed
+
+Left built for **system Node, ABI 141** (`node v25.9.0`), verified by
+CONSTRUCTING a `better-sqlite3` Database rather than requiring the module
+(WP-50). `npm run rebuild` is required before loading this in Local. This
+packet rebuilt no native module itself; `npm test`'s `pretest` hook is the only
+thing that touched the shared `node_modules`.
+
+### Requested
+
+Clearance to merge, and a ruling on the two amendments proposed above (the
+receipts family's fourth member, and the both-lists rule for packet numbers
+recorded in the lock announce).
+
