@@ -411,7 +411,38 @@ text, which is a behaviour change this packet had no mandate for.
 
 ---
 
-## D10 — the bulk WP Engine content index sent the graph id as the install name, so all 365 SSH calls failed instantly
+## D10 — the WP Engine content index sent the graph id as the install name, so all 365 SSH calls failed instantly
+
+> **CORRECTED 2026-08-22, during WP-68.** This entry originally blamed the
+> *bulk* path (`op.siteNames?.[siteId] ?? siteId`). That attribution is wrong.
+> The 18:49 run was `indexAllWpeContent` — the FLEET path — which resolves the
+> name from the graph and never touches `op.siteNames`. Proof: the log holds
+> 365 extraction starts in the graph's exact natural `SELECT` order (20/20 on
+> the first 20 ids) dispatched two at a time, matching that method's
+> `concurrency = 2`, not `BulkOperationManager`'s `MAX_CONCURRENCY = 5` over a
+> renderer-ordered selection.
+>
+> So the bad name came out of the graph's own `name` column, not out of the UI.
+> Corroborating: all 365 rows carry `updated_at = 2026-08-22T20:39Z` — a CAPI
+> sync that ran AFTER the incident — while `created_at` spans 13–22 Aug. Every
+> row's name was (re)written after the failed run, and the fleet-wide table
+> the packet reasoned from was read after that repair.
+>
+> **The consequence for the fix is material:** "resolve the name from the graph
+> at the point of use" would NOT have prevented this, because that is exactly
+> what the failing code did. The name resolved from the graph must also be
+> *validated* — see `requireWpeInstallName`, which refuses an empty name and
+> one equal to the site id or the bare install UUID. The `?? siteId` fallback
+> was a second, independent instance of the same mistake and is also gone.
+>
+> **Still unexplained: what wrote the id into `sites.name`.** Ruled out by
+> inspection — no `UPDATE sites SET name`, anywhere; `syncInstall` takes the
+> name from CAPI; `syncContent`'s piggyback can only write a bad name on the
+> success path, which a zero-post run never reaches; `buildSiteNames` never
+> writes to the graph at all. 307 IndexRegistry entries written 14 Aug all
+> carry real install names, so the column was correct then. No artifact
+> surviving today records the value between 14 and 22 Aug.
+
 
 **Found 2026-08-22, while answering WP-67's open question.** This is the
 underlying cause of the 365 no-op installs; WP-67 fixed only the reporting.
@@ -459,7 +490,16 @@ return ops.indexOne(siteId, siteName);
 to `WpeSshTransport` as an install name**. SSH to a nonexistent install fails in
 milliseconds, which is exactly the observed rate.
 
-**Not yet determined:** why `siteNames` was empty. The only `BULK_EXECUTE`
+**ANSWERED 2026-08-22 (see D13): `siteNames` never reached the manager at
+all.** It was absent from `BulkOperationRequestSchema`, and Zod strips unknown
+keys, so `validateInput` deleted it on every `BULK_EXECUTE`. The renderer built
+the map correctly the whole time. That means the `?? siteId` fallback was not
+*occasionally* empty — it fired for **100% of remote sites on every Sites-tab
+dispatch**. (It is not the cause of the 18:49 incident, which came through
+`indexAllWpeContent` and the graph's own `name` column; these are two
+independent instances of the same mistake.)
+
+**Original note, kept for the record:** why `siteNames` was empty. The only `BULK_EXECUTE`
 dispatcher (`NexusOverview.tsx:1005`) builds it from `this.state.siteRows`, and
 `buildSiteRows` applies no cap and carries `name: g.name ?? g.id` for every
 `wpe` row — so on the evidence it *should* have been populated. Establishing
@@ -481,3 +521,105 @@ space, needs a live reproduction rather than more log reading.
    SSH error — is thrown away. This is the same class of defect as WP-67, one
    layer deeper: had it logged the failure, the 365 would have been diagnosable
    from the log alone rather than from a timing argument.
+
+---
+
+## D11 — a WP Engine metadata sync writes the site row, then fails on `users.username`
+
+**Found 2026-08-22, in the WP-68 exhibit.** Pre-existing; unrelated to WP-68's
+change, and now visible because the outcome is reported honestly.
+
+```
+$ wpe_sync_sites { install_name: "acfsupport" }
+Metadata sync failed for "acfsupport": NOT NULL constraint failed: users.username
+[wall-clock: 56.7s]
+
+before last_sync_at: 2026-08-22 18:08:30
+after  last_sync_at: 2026-08-22 21:22:05     ← the site row WAS written
+```
+
+`syncInstall` upserts the site row, then plugins, then users. A user row with a
+NULL `username` aborts the whole call, so the operation reports failure after
+having already committed the site and plugin writes. It is a partial write
+reported as a total failure — the mirror image of WP-67's total success
+reported over partial work.
+
+Also seen in the wild before this: four occurrences in
+`~/Library/Logs/local-lightning*.log` reading
+`[WPESyncService] Failed to re-sync <uuid>: NOT NULL constraint failed: users.username`,
+at `GraphService.upsertUser` (`src/main/events/GraphService.ts:845`).
+
+**Two things to decide, and they are separate:** whether a WP Engine user with
+no username is legal (if so, `upsertUser` should skip or synthesise, not
+reject), and whether `syncInstall` should be transactional or should report
+per-section outcomes the way the content path now does.
+
+---
+
+## D12 — "reached but nothing to index" does not say what was actually found
+
+**Found 2026-08-22, in the WP-68 exhibit.** The narrower survivor of D10's
+second defect.
+
+WP-68 made *reached-with-nothing* distinguishable from *never reached*: the
+first is now a `skipped` outcome and the second throws and is reported as
+`failed`. That was the blocking part, and it is fixed. What remains is the
+reason string's precision:
+
+```
+$ wpe_sync_sites { install_name: "acfsupport", content: true }
+**acfsupport** was reached but nothing was indexed — No content returned by
+the extractor. No content rows were written.
+[wall-clock: 29.4s]
+```
+
+The log says something more useful, and only the log says it:
+
+```
+[RemoteContentExtractor] acfsupport: 6 rows read over 1 page(s) → 6 indexable (page:6)
+[RemoteContentExtractor] Extracted 0 posts with content from acfsupport
+```
+
+Six pages were read; all had empty content. "No content returned by the
+extractor" implies zero rows came back, which is not what happened. The
+extractor already has both numbers — rows read and posts with content — and
+`ExtractedContent` could carry them into the outcome's reason so the tool can
+say "6 posts read, none with indexable content" instead.
+
+
+---
+
+## D13 — `siteNames` was stripped by its own validation schema on every bulk dispatch
+
+**Found 2026-08-22, from a screenshot of pending rows reading `wpe-3055da28-…`
+instead of install names.** This is the answer to D10's open residual.
+
+`BulkOperationRequestSchema` (`src/common/schemas.ts:409`) declared `type`,
+`siteIds` and `options`. It did **not** declare `siteNames`. Zod objects strip
+unknown keys by default rather than rejecting them, so
+`validateInput(BulkOperationRequestSchema, request)` silently deleted the map
+before `bulkOpManager.execute` ever saw it, and `execute()` stored `{}`.
+
+Measured against the installed Zod (3.25.76):
+
+```
+in : {"type":"reindex","siteIds":["wpe-abc"],"siteNames":{"wpe-abc":"cedarvalehealt"},"options":{...}}
+out: {"type":"reindex","siteIds":["wpe-abc"],"options":{...}}
+siteNames survived? false
+```
+
+**The symptom names the cause.** `BulkOperationsPanel` renders a row as
+`op.siteNames?.[siteId] ?? this.props.siteNames?.get(siteId) ?? siteId`, and
+that second map is built from `this.state.sites` — **Local sites only**. With
+`op.siteNames` empty, Local rows still resolved through the fallback and every
+WP Engine and external row fell through to the raw graph id. Local names
+present, remote ids raw, in the same list, is exactly that fallback chain.
+
+**Same trap as `UpdateSettingsSchema`**, already documented in this repo: a
+field absent from a schema is not a validation error, it is a silent deletion.
+The existing guard (`tests/unit/common/schemas-settings.test.ts`) is
+field-by-field, so it only catches fields someone remembered to test.
+`tests/unit/schemas.test.ts` now carries a structural one for this request
+type: a `Required<BulkOperationRequest>` fixture makes adding an interface
+field a compile error until it is listed, and the round-trip assertion then
+fails until the schema accepts it.
