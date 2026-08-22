@@ -32059,3 +32059,121 @@ mutation at line 1 instead of inside the table.** Re-anchored with an
 assert on match count; both then killed. That is WP-60's lesson —
 *when a survivor surprises you, read the artifact before you believe the
 scoreboard* — applied by the packet to its own harness.
+
+## WP-67 · ACCEPTED — the seam is honest; the reason it now gives is not yet (2026-08-22, architect adjudication)
+
+**Accepted. Commit it.** I verified independently rather than reading the
+report: `npx jest tests/unit/bulk/ tests/unit/mcp/wpe-sync-sites.test.ts
+tests/unit/renderer/BulkOperationsPanel.test.tsx` → **7 suites, 83 tests,
+all green**, run by me on the working tree. The 644-suite / 8,963-passing
+figure is the packet's, not mine.
+
+### What the packet got right that I did not ask for
+
+**The open question was answered from the log and all three of my
+candidate paths were wrong but one.** I named `:452`, `:467`, and
+"never reached `syncContent`." The log says `:467`, 365 times in one UTC
+minute, with **zero** `:452` lines. I wrote that a residual is answered
+by locating it rather than by driving it to zero; the packet located it
+and then kept pulling, which is how D10 exists.
+
+**D10 is the real defect and I had not seen it.** The span is 3.8 seconds
+for 365 installs — ~96 per second against a service whose cold SSH
+round trip is 13–30 seconds. Every log line names a graph id where an
+install name belongs. `executeRemote`'s `op.siteNames?.[siteId] ?? siteId`
+handed `wpe-fe84d49f-…` to `WpeSshTransport` for an install actually
+called `bpheadlessb667`. **Nothing has ever reached WP Engine through the
+bulk path.**
+
+And D10 **states its own residual instead of closing it**: *"Not yet
+determined: why `siteNames` was empty"* — with `buildSiteRows` measured
+as uncapped and carrying `name: g.name ?? g.id`, so the evidence says it
+should have been populated. I re-read that myself at
+`NexusOverview.tsx:1008` and `fleet/siteRows.ts:119` and reach the same
+place. **A residual named with the measurement that fails to explain it
+is a finding.** A guess about `siteRows` being unloaded would not be.
+
+**Case 2 is built from the real `ContentPipeline` and the real
+`IndexRegistry`,** and asserts both sides in one block:
+
+```ts
+expect(indexRegistry.get(LOCAL_ID)!.state).toBe('error');
+expect(status.siteResults[LOCAL_ID].status).toBe('failed');
+```
+
+That pair is the defect made visible. The packet required "not a
+hand-written `{errors: […]}`" and got the real class.
+
+**Three sites fixed that the packet did not name** —
+`indexAllWpeContent`'s per-resolved-promise counter, `wpe_sync_sites`'
+unconditional "✅ Indexed content", and the external adapter's
+zero-document host. The packet said "one seam, not three" about the
+contract; the packet did not know there were three more counters. Scoped
+correctly: same defect, same shape, same commit.
+
+**M9 was verified as equivalent rather than patched around.** Iterating
+`siteResults` versus `siteIds` diverges only on a result for an id
+outside the selection, which the manager cannot construct — and `pending`
+is derived from `siteIds.length` either way, so the outputs are
+identical. Proven with a divergence table. **A survivor investigated and
+declared equivalent is a stronger result than ten kills**, and the
+current form is the safer of the two regardless.
+
+### The finding that keeps WP-67 from closing the WP Engine path
+
+**An honest-shaped message can carry a dishonest reason, and this one
+does.** Run the fixed code against the fleet today and it reports, for
+365 installs:
+
+> *Did not run — No content returned by the extractor*
+
+Structurally correct. **Factually false.** The extractor returned nothing
+because it SSH'd to a hostname that does not exist. Those installs are
+not empty. We have replaced a green lie with an amber one, and an amber
+lie is harder to catch precisely because it looks like the honest form we
+just built.
+
+The packet found the cause of this itself — D10's second defect,
+`RemoteContentExtractor` collapsing "WP-CLI failed" and "site is empty"
+into one message and discarding `result.stdout`. **Filing it was right;
+the consequence needs stating.** So:
+
+**Ruled: WP-67 closes the reporting contract. It does not close honest
+reporting for WP Engine.** The three-state contract fixes the *category*
+a run is filed under. It cannot fix the *reason* printed inside the
+category, and a wrong reason inside a right category is the same class of
+defect one level down. The WPE path stays open until D10's second defect
+lands.
+
+**New rule, and it is the general form:** *a contract that classifies
+outcomes does not validate their reasons.* Every state that carries a
+user-facing sentence needs the sentence checked at its source, not only
+the state.
+
+### The two judgements asked for
+
+**The operation-level badge — deferral accepted, and the fix is probably
+smaller than feared.** Reusing `completed_with_errors` for skips would be
+wrong, and a new operation status does ripple past this packet's scope.
+Both correct. But "Completed" in success colour above "0 succeeded · 365
+did not run" is this packet's own defect one level up: **a status word
+that summarizes a run must not be greener than the run.** The counts
+beneath now carry the truth, which makes it much less severe than the
+413 — and it may be a colour rule rather than a new status, which costs
+almost nothing. **Try the colour first; escalate to a status only if that
+fails.** Registered as the next packet's first item, not as "someday."
+
+**`npm run rebuild` before loading in Local** — noted, and it corrects me:
+I told the owner this week that the rebuild problem was probably not real
+because the MCP tools answered. Both are true. The tools run outside
+Electron; the app does not.
+
+### D9 is a product question and should be asked as one
+
+45 Local sites erroring with *MySQL not available — site may not be
+running* is, on the evidence, **correct behaviour reported correctly for
+the first time.** `autoStartStop` exists and the dispatcher sends
+`options: {}`. Whether "Index content" on 45 stopped sites should start
+them, skip them with a reason, or offer the choice is not an engineering
+call and must not be defaulted into by whoever writes the next packet.
+**Ask the owner. Do not infer.**
