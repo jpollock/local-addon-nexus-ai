@@ -30227,3 +30227,190 @@ tree only at merge time, because the base moved twice. Run it there and
 carry its result in the report.
 
 D6 and the CPT observation remain as they were.
+
+---
+
+## WP-61 · MERGE REPORT — merged at `d4a0afdb`; the sweep run where it could not be run before; an ABI flip that voided a measurement (2026-08-21)
+
+Cleared at the GATE RULING (`b781feed`). **Every figure below is pasted from
+the command that printed it.**
+
+### Receipt — `git diff --stat d4a0afdb^1 d4a0afdb`
+
+```
+ src/main/index.ts                                  |   3 +
+ .../mcp/modules/content/describe-site-fields.ts    |   3 +-
+ src/main/mcp/modules/content/search-content.ts     |   7 +-
+ src/main/mcp/modules/fleet/compare-sites.ts        |  31 ++-
+ src/main/mcp/modules/fleet/detect-drift.ts         |  26 +-
+ .../mcp/modules/fleet/structure-availability.ts    |  90 +++++++
+ .../mcp/modules/site-context/get-site-structure.ts |  33 ++-
+ src/main/mcp/modules/wpe/detect-drift.ts           |   9 +-
+ src/main/mcp/modules/wpe/fleet-versions.ts         |   5 +-
+ src/main/mcp/modules/wpe/helpers.ts                |  14 +-
+ src/main/mcp/modules/wpe/index.ts                  |   4 +
+ src/main/mcp/modules/wpe/sync-remedy.ts            |  60 +++++
+ src/main/mcp/modules/wpe/sync-sites.ts             | 230 +++++++++++++++++
+ src/main/mcp/types.ts                              |  40 +++
+ tests/main/fleet-tools.test.ts                     |  13 +-
+ tests/main/wpe-tools.test.ts                       |   8 +-
+ tests/unit/mcp/remote-site-honesty.test.ts         | 144 +++++++++++
+ tests/unit/mcp/structure-availability.test.ts      | 237 ++++++++++++++++++
+ tests/unit/mcp/tool-remedy-references.test.ts      | 277 +++++++++++++++++++++
+ tests/unit/mcp/wpe-sync-sites.test.ts              | 252 +++++++++++++++++++
+ 20 files changed, 1462 insertions(+), 24 deletions(-)
+```
+
+**No conflict, and none was possible.** This packet appended its announce and
+its gate report directly to the base rather than to its branch, so
+`WORK_PACKETS.md` is untouched on `wp-61`; the record's usual tail collision
+had nothing to collide with. File overlap with WP-60, measured with `comm -12`
+over the two `git diff --name-only` sets against the merge base: **empty.**
+Anchored marker sweep over `src`, `tests` and `docs/intelligence/*.md`: none.
+
+### The ruling's condition, discharged
+
+*"The sweep runs over the merged tree only at merge time, because the base
+moved twice. Run it there and carry its result in the report."*
+
+Run at `d4a0afdb`:
+
+```
+Test Suites: 1 passed, 1 total
+Tests:       9 passed, 9 total
+```
+
+And what it actually measured there, because a colour is not a result:
+
+```
+merged tree: 99 distinct tool-surface claims across 191 file-sites
+claims in find-outdated-sites.ts (WP-60's file): wp_plugin_update, wpe_site_deep_refresh
+wpe_sync_sites still claimed anywhere? modules/wpe/sync-remedy.ts
+```
+
+Three things follow. **WP-60's file contributes two claims and both are
+registered** — the first time the announced quantity has been evaluated across
+a packet boundary, which was the only part of this packet that could not be
+verified before the merge. **`wpe_sync_sites` now appears at exactly one site**,
+`sync-remedy.ts`, where the ruling's *extracted, never retyped* lands: the five
+files that used to name it now import the sentence. And the corpus is
+unchanged at 99 distinct claims, so the merge neither added an unregistered
+name nor silently shrank the set the instrument reads.
+
+### An ABI flip voided the first merged-tree measurement
+
+The first full run on the merged tree reported **1 failed**:
+`tests/intelligence-evals/runCli.test.ts` — a suite this packet does not touch,
+in a subsystem it does not touch, whose spawned child produced empty stdout.
+
+It failed **alone** as well, so WP-42's load rule did not explain it. Running
+the child by hand named it:
+
+```
+eval runner crashed: Error: intelligence core failed to initialise in
+/var/folders/.../nexus-eval-Cgq7y8 — nothing can be evaluated
+```
+
+Which is WP-33b's mask exactly. The unmasking probe — CONSTRUCT a Database,
+per WP-50, never `require` alone:
+
+```
+Error: The module '.../better-sqlite3/build/Release/better_sqlite3.node'
+was compiled against a different Node.js version using
+NODE_MODULE_VERSION 146. This version of Node.js requires
+NODE_MODULE_VERSION 141.
+```
+
+**146 is Electron.** Another session on this machine ran `npm run rebuild`
+against the shared `node_modules` while the suite was running — WP-55's *shared
+node_modules is a shared mutable resource*, and WP-20d's mid-session flip.
+
+Per WP-49 the run measured two ABIs and therefore measured nothing, so it was
+**re-run whole rather than spliced**, and the re-run is the figure below.
+`npm test`'s own `pretest` hook performed the recovery rebuild.
+
+Worth recording for the next reader: **the flip presented as ONE failing suite,
+not as dozens.** WP-33b's occurrence surfaced across many; this one surfaced in
+the single suite that spawns a child process, because every other consumer had
+already loaded the binding before the flip. A single unrelated red is the
+poisoned-cache signature, and this is a second cause with the same shape — so
+the cache move (`--clearCache`) would have "not fixed it" and pointed the
+reader at the code. **Probe the ABI before the cache when the one red spawns a
+process.**
+
+### Test figures
+
+```
+PRE-MERGE BASE  b4596c44, primary (published by WP-60):
+                634 suites / 8847 tests / 8845 passed / 2 skipped
+
+MERGED          d4a0afdb, primary, re-run whole after the flip:
+                638 suites / 8894 tests / 8892 passed / 2 skipped   EXIT=0
+```
+
+Guard on the published base, per the base-measure rule:
+`git diff --name-only b4596c44 b781feed -- src/ tests/ scripts/` → **empty**,
+so WP-60's figure stands for the tree this merged into. (Only docs commits sit
+between them: WP-60's merge report, and the three verbatim architect commits
+this packet made.)
+
+**Delta: +4 suites, +47 tests, +47 passed, skipped unchanged at 2.**
+
+`npx tsc -p . --noEmit` clean on the merged tree.
+
+**The +47 reconciles against a base this packet never measured against.** The
+branch was measured from `50d966d5` (634 / 8834) and merged into `b4596c44`
+(634 / 8847) — a tree 13 tests larger, from WP-60. Both deltas are +47 and +4.
+That is the corrected figure confirmed a second time, independently, and it is
+the answer to *"52 new tests"* arriving from a direction that could not have
+inherited the error.
+
+New base published: `docs/intelligence/base-measure.json` → `d4a0afdb`,
+638 / 8894 / 8892 / 2, primary.
+
+### What did NOT get re-run, declared by name
+
+The mutation battery was run on the branch at `abb834bd` (15 killed / 0
+survived / 0 anchor-miss) and **was not re-run on the merged tree.** Its write
+set — `sync-remedy.ts`, `sync-sites.ts`, `wpe/index.ts`, `helpers.ts`,
+`fleet-versions.ts`, `structure-availability.ts`, `compare-sites.ts`,
+`fleet/detect-drift.ts`, `get-site-structure.ts` — is disjoint from everything
+the merge brought in, and the merge introduced no change to any of those files
+(the diffstat above is `^1`-relative and shows the branch's own work only). A
+re-run would re-measure the same nine files against the same fifteen anchors.
+Stated rather than assumed, because a battery not re-run is a coverage claim
+and coverage claims get named.
+
+### Locks released
+
+`src/main/mcp/modules/wpe/**`, `src/main/mcp/modules/content/{search-content,
+describe-site-fields}.ts`, `src/main/mcp/modules/fleet/{compare-sites,
+detect-drift,structure-availability}.ts`,
+`src/main/mcp/modules/site-context/get-site-structure.ts`,
+`src/main/mcp/types.ts`, and the integration lock on `src/main/index.ts` (one
+assignment, as announced).
+
+**The quantity stays claimed by the instrument, not by this packet.** Any
+future packet adding a remedy sentence that names a tool it did not register
+goes red in `tests/unit/mcp/tool-remedy-references.test.ts`. That is now the
+base's property, not WP-61's.
+
+### ABI state, disclosed
+
+Left built for **system Node, ABI 141**, verified by CONSTRUCTING a
+`better-sqlite3` Database at the end of the run. **`npm run rebuild` is
+required before loading this in Local** — and note that another session flipped
+it to Electron 146 mid-run today, so whoever needs Electron may have to flip it
+back and should expect this one to have flipped it away again.
+
+### Standing after the merge
+
+- **D6 remains open**, as the ruling left it. WP-58 removed the wrong-answer
+  half; whether `get_site_structure` ever hung for twenty minutes on a WPE
+  install is unreproduced, and this packet's D4 fix now makes that call refuse
+  immediately instead of doing anything at all — which changes the reproduction
+  conditions and should be noted by whoever picks D6 up.
+- **The CPT observation (O1)** is untouched.
+- **No remote structure extractor was built.** Whether one should be is still a
+  roadmap decision with its own packet; what changed is only that the product
+  now says which it is.
