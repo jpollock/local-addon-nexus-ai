@@ -252,7 +252,30 @@ describe('PARITY — the same posts produce the same document set on every path'
 describe('the quantities the announce declared', () => {
   const posts = [longPost(1), longPost(2)];
 
-  it('documentCount counts POSTS and chunkCount counts CHUNKS, on the remote paths too', async () => {
+  it('WP ENGINE: documentCount counts POSTS and chunkCount counts CHUNKS', async () => {
+    // Found by the WP-62 battery: M21 pinned this on the external path and
+    // M22 SURVIVED on the WP Engine one, where 313 of the fleet's index
+    // entries live. The parity test drove syncContent but only read the
+    // vector documents, never the registry write.
+    const updates: any[] = [];
+    const service = new WPESyncService({
+      graphService: { upsertContent: async () => 1, getDb: () => null } as any,
+      embeddingService: { embedBatch: embedStub() } as any,
+      vectorStore: { upsert: async () => {} } as any,
+      indexRegistry: { update: (_id: string, p: any) => updates.push(p), get: () => null } as any,
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+    } as any);
+    (service as any).remoteContentExtractor = {
+      extract: async () => ({ posts, siteInfo: { name: 's', url: '', wpVersion: '' }, extractedAt: 0 }),
+    };
+    await (service as any).syncContent('wpe-1', 'theinstall');
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0].documentCount).toBe(posts.length);
+    expect(updates[0].chunkCount).toBeGreaterThan(posts.length);
+  });
+
+  it('EXTERNAL: documentCount counts POSTS and chunkCount counts CHUNKS', async () => {
     const updates: any[] = [];
     const service = new ExternalContentIndexService({
       graphService: { upsertContent: async () => 1 } as any,
@@ -269,5 +292,25 @@ describe('the quantities the announce declared', () => {
     expect(updates[0].documentCount).toBe(2);
     expect(updates[0].chunkCount).toBeGreaterThan(2); // they are no longer the same number
     expect(result.documentCount).toBe(2);
+  });
+
+  it('carries the extraction coverage into the index entry, so the status tool can read it', async () => {
+    const coverage = {
+      pageSize: 200, pagesFetched: 25, rowsReturned: 5000, complete: false,
+      truncatedReason: 'max-posts' as const, truncatedDetail: 'ceiling', customFields: 'collected' as const,
+    };
+    const updates: any[] = [];
+    const service = new ExternalContentIndexService({
+      graphService: { upsertContent: async () => 1 } as any,
+      embeddingService: { embedBatch: embedStub() } as any,
+      vectorStore: { upsert: async () => {} } as any,
+      indexRegistry: { update: (_id: string, p: any) => updates.push(p) } as any,
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+    (service as any).extractor = {
+      extract: async () => ({ posts, siteInfo: { name: 's', url: '', wpVersion: '' }, extractedAt: 0, coverage }),
+    };
+    await service.indexOne({} as any, 's', 's');
+    expect(updates[0].coverage).toEqual(coverage);
   });
 });
