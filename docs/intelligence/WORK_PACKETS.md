@@ -30842,3 +30842,129 @@ Remote posts also carry no **categories or tags** (`categories: []`,
 in this packet's claim, they do not enter the searchable text on the
 local path either, and folding them in is the mid-task scope defect. They
 are recorded here so the next reader finds a note rather than a silence.
+
+---
+
+## WP-63 · READINESS ACCEPTED — three of my framings refuted, and one fix corrected (2026-08-22, architect adjudication)
+
+**Accepted.** `docs/intelligence/sites-ia-readiness.md`, 667 lines,
+read-only, one untracked file, nothing committed. **Verdict adopted:
+item 6 is a rendering change plus four named producers and one product
+ruling. No data migration. No missing JOIN.**
+
+`entities.siteOf()` (`entityService.ts:307`) is the join, it exists, and
+it resolves 374 of 374 WPE environments. ADR-21's claim survives its
+re-test — **which is worth stating plainly, because it was five days and
+six packets old and nobody had checked.**
+
+### The instruction that paid
+
+I told the packet not to accept my framing, and that finding one of the
+nine was the wrong question would beat nine tidy answers. **Three came
+back refuted.**
+
+**Q1's bet lost, and the hole is where I never looked.** WPE-only sites
+have Site entities at 100% — `siteLinkMirror` mints them from
+`wpe.site_id` with no local site required. The hole is at **Layer 3**:
+25 of 45 local sandboxes and **3 of 3 external hosts** have no Site and
+are silently dropped by `buildSiteAtPlaces`.
+
+**My nine questions never mentioned external hosts once** — and neither
+did the three boards I drew, which have a WP Engine environment and a
+working copy and no third host. The framing error was in the drawing
+before it was in the questions.
+
+**Q8's example is refuted and a worse one is live.** `contentDivergence`
+never reads a document count; `siteContentStatus.ts:42` already rules
+it — *"Time, never items."* **The 200-cap cannot poison "3 days
+behind."** What is genuinely incomparable is `semantic.content.changed`:
+2,550 events across 5 places, **all local copies, structurally zero
+WPE** — and the drift was MEASURED, two readings 40 minutes apart, the
+busiest local copy 1,281 → 2,542 while every WPE environment stayed
+flat. **A measurement, not an inference, and a better finding than the
+one I asked for.**
+
+**Q5 is the wrong question for this screen.** `SitesTab` resolves by id
+end-to-end; no resolver is on the path, so Q4's decline never fires
+there. The 47-of-52 "not found" phrasings are real, pre-existing, and
+ranked elsewhere.
+
+### The sharpest finding — and the fix it proposes is wrong
+
+Reproduced over all 47 working copies: **12 resolve, 6 decline, and all
+6 are the 2-and-3-environment Sites.** Structural, and provable from two
+lines: `siteLinkMirror.ts:110` writes every `has_environment` at a flat
+`0.95`, and `divergence.ts:304` requires a **strict** win —
+`candidates[0].confidence > candidates[1].confidence`. Ties always
+decline.
+
+**The only case the nested IA exists for is precisely where upstream
+resolution declines**, because a one-environment Site needs no nesting.
+
+**But the tie-break is not broken, and this is where I part from the
+report.** Read the comment it implements (`divergence.ts:301-303`):
+
+> *"This IS the site_links precedence the mirror encodes: user_link 1.0
+> > host_connection 0.95 > name_heuristic 0.5."*
+
+Confidence encodes **how a link was established**, and the tie-break
+resolves **link provenance**. When three environments of one Site all
+came from the same source, they tie — **correctly** — and the decline
+says something true: *these links are equally well-established; I cannot
+tell you which environment this copy follows.*
+
+**The system has one signal and needs two.** It has never had the
+second, and the flat 0.95 is what made the absence visible.
+
+**Ruled: do NOT vary confidence to encode environment preference.**
+Passing `describeEnvironmentsFor` in and letting production win produces
+correct answers today by a mechanism that will mislead later — it
+overloads a provenance number with a ranking, it corrupts `siteOf`'s own
+`ORDER BY l.confidence DESC LIMIT 1`, and it makes a link's confidence a
+claim about what a PERSON meant rather than about what the RECORD holds.
+**That is inventing a fact in the one place this project has been most
+careful not to.**
+
+The producer is an **explicit upstream preference**, separate from
+confidence, stated rather than inferred — **and able to decline.** A
+Site with two staging environments and no production still has no
+natural upstream, and must still say so. A preference that always
+answers has replaced one silent wrong answer with another.
+
+**Registered as its own vacuous shape: a fix that works for the wrong
+reason.** It passes every test that exists, and the test that would
+catch it is the one nobody writes — because the outputs are right.
+
+### The Site-role split
+
+12,617 of 13,450 site-role events (94%) name a Site entity with **zero**
+environments, while the nesting graph hangs off a different one.
+benfischer+stg+dev: mirror Site with 3 environments and 7 events; three
+producer Sites with 0 environments and 123 events.
+
+**Known and worked around at `chatAssembly.ts:571`, not hidden** — which
+is the honest state and also the expensive one. **A workaround at the
+consumer is a debt that compounds once per consumer**, and the Sites
+screen would be the next one to pay it. Reconciliation belongs in the
+producers, which is where the verdict puts it.
+
+### Accepted as the shape of the work
+
+Four producers — `siteLinkMirror` coverage for external hosts, a
+Site-role reconciliation for the three high-volume producers, an
+environment-kind tie-break in `resolveUpstream` (as ruled above, NOT via
+confidence), and per-place-count parity (WP-62) — plus one product
+ruling on the partial-index sentence.
+
+**The partial-index sentence goes to the designer**, with `{oldestAge}`
+and `{linkKind}`. We have ruled that an absence stated with its reason
+is shippable and a blank is not; a **partial** stated with its reason is
+the third form, and whether it exists is a design decision rather than a
+producer.
+
+Eight defects filed and none fixed; nine "cannot answer" entries each
+carrying the case that would answer it — including that
+`linkExclusive`'s two-different-upstreams path **has never occurred on
+this fleet.** That last one is the vacuous-guard warning honoured
+exactly: an untested path named as untested rather than reported as
+working.

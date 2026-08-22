@@ -1527,3 +1527,43 @@ earns.
 **Before a per-place number is rendered, establish that the same method
 produced it at every place it appears.** Otherwise the nesting IS the
 defect: one fact with two sources, drawn as a hierarchy.
+
+## Vacuous shape #19 — a fix that works for the wrong reason
+
+`resolveUpstream` declines on every multi-environment Site because
+`siteLinkMirror` writes each `has_environment` at a flat 0.95 and the
+tie-break needs a strict win. The proposed fix: pass environment kinds in
+and let production win.
+
+**It would produce correct answers, and it would be wrong.** Confidence
+encodes HOW A LINK WAS ESTABLISHED — `user_link 1.0 > host_connection
+0.95 > name_heuristic 0.5`, stated in the code that reads it. Using it to
+rank which environment a person MEANS overloads a provenance number with
+a preference, corrupts every other reader that orders by it, and makes a
+link's confidence a claim about intent rather than about the record.
+
+**The shape: a change that passes every test that exists, because the
+outputs are right and the mechanism is not.** The test that would catch
+it is the one nobody writes. The tell is a fix that reuses an existing
+number for a new meaning rather than adding a signal — **ask what that
+number is a claim ABOUT, and whether the new use is the same claim.**
+
+And the corollary, which is why the decline was not a defect: **a system
+that abstains because it genuinely lacks a criterion is working.** One
+signal was being asked to answer two questions; the flat value is what
+made the missing second one visible.
+
+## A workaround at the consumer is a debt that compounds per consumer (WP-63)
+
+94% of site-role events name a Site entity with zero environments while
+the nesting graph hangs off a different one. It is known, and worked
+around at `chatAssembly.ts:571` — **honestly, and expensively.**
+
+Every new consumer of that graph pays the same cost again and must
+discover it first. **Where two producers disagree about an identity, the
+reconciliation belongs in the producers**; a consumer-side fix is a
+correct local answer that guarantees the next reader gets it wrong until
+they find the workaround.
+
+The tell is a comment explaining a compensation. It is honest, it is
+worth having, and it is a receipt for a debt rather than a payment of it.
