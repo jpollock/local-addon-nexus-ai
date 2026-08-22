@@ -12,6 +12,7 @@
 import { GraphService } from './GraphService';
 import { Site } from './types';
 import { RemoteContentExtractor } from '../content/RemoteContentExtractor';
+import { chunkPosts } from '../content/chunker';
 import { WpeSshTransport } from '../transport/WpeSshTransport';
 import { EmbeddingService } from '../embeddings/EmbeddingService';
 import type { IVectorStore } from '../vector-store/IVectorStore';
@@ -466,10 +467,6 @@ export class WPESyncService {
         return;
       }
 
-      // Prepare documents for embedding
-      this.logger.info(`[WPESyncService] Preparing ${extracted.posts.length} documents for embedding...`);
-      const documents: Array<Omit<VectorDocument, 'vector'>> = [];
-
       for (const post of extracted.posts) {
         // Store post metadata in graph
         await this.graphService.upsertContent({
@@ -482,42 +479,35 @@ export class WPESyncService {
           created_at: new Date(post.date).getTime(),
           updated_at: Date.now(),
         });
-
-        // Create document for vector indexing
-        // Simple approach: one document per post (no chunking for now)
-        documents.push({
-          id: `wp_${siteId}_${post.id}`,
-          siteId,
-          title: post.title,
-          content: post.cleanedContent,
-          postType: post.postType,
-          postId: post.id,
-          chunkIndex: 0,
-          metadata: JSON.stringify({
-            excerpt: post.excerpt,
-            author: post.author,
-            date: post.date,
-            source: 'wpe',
-          }),
-          indexedAt: Date.now(),
-          post_date_gmt: '',
-          post_modified_gmt: '',
-          doc_url: '',
-        });
       }
 
-      this.logger.info(`[WPESyncService] Prepared ${documents.length} documents from ${extracted.posts.length} posts`);
+      // Chunk exactly the way the local path chunks (WP-62). This used to be
+      // `// Simple approach: one document per post (no chunking for now)`,
+      // which handed each post's whole cleanedContent to a
+      // WordPieceTokenizer(contextWindow) — so every remote post longer than
+      // the model's window was silently cut off at the tokenizer, INCLUDING
+      // the ones that did get indexed. Partially present is worse than
+      // absent: it still returns results.
+      const chunks = chunkPosts(siteId, extracted.posts, { source: 'wpe' });
+      this.logger.info(
+        `[WPESyncService] Prepared ${chunks.length} chunks from ${extracted.posts.length} posts`
+      );
 
       // Embed documents in batches
-      this.logger.info(`[WPESyncService] Generating embeddings for ${documents.length} documents...`);
+      this.logger.info(`[WPESyncService] Generating embeddings for ${chunks.length} chunks...`);
       const batchSize = 10;
       const embeddedDocs: VectorDocument[] = [];
 
-      for (let i = 0; i < documents.length; i += batchSize) {
-        const batch = documents.slice(i, i + batchSize);
-        const texts = batch.map(d => d.content);
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        // The embedding text carries the post title in front of the chunk, so
+        // a chunk from the middle of a long post still embeds near its
+        // subject. `embedBatch` allocates three BigInt64Array(batchSize *
+        // seqLen), so the slice width is what bounds that allocation — never
+        // hand it the whole array.
+        const texts = batch.map(c => c.textForEmbedding);
 
-        this.logger.info(`[WPESyncService] Embedding batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(documents.length / batchSize)}...`);
+        this.logger.info(`[WPESyncService] Embedding batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)}...`);
 
         // Generate embeddings
         const vectors = await this.embeddingService.embedBatch(texts);
@@ -525,7 +515,7 @@ export class WPESyncService {
         // Combine with documents
         for (let j = 0; j < batch.length; j++) {
           embeddedDocs.push({
-            ...batch[j],
+            ...batch[j].doc,
             vector: vectors[j],
           });
         }
@@ -537,19 +527,31 @@ export class WPESyncService {
       await this.vectorStore.upsert(siteId, embeddedDocs);
 
       // Update IndexRegistry so the UI shows Searchable (L3) for this WPE install
+      // documentCount and chunkCount now MEAN different things, as they
+      // already do on the local path: distinct posts vs embedded chunks.
+      // Before chunking they were both `embeddedDocs.length`, i.e. a post
+      // count wearing a document label.
+      const uniquePostIds = new Set(embeddedDocs.map(d => d.postId));
       if (this.indexRegistry) {
         this.indexRegistry.update(siteId, {
           siteId,
           siteName: installName,
           state: 'indexed',
           lastIndexed: Date.now(),
-          documentCount: embeddedDocs.length,
+          documentCount: uniquePostIds.size,
           chunkCount: embeddedDocs.length,
           durationMs: Date.now() - startTime,
+          coverage: extracted.coverage,
         });
       }
 
-      this.logger.info(`[WPESyncService] Content sync completed for ${installName}: ${embeddedDocs.length} documents indexed`);
+      this.logger.info(
+        `[WPESyncService] Content sync completed for ${installName}: `
+        + `${uniquePostIds.size} documents / ${embeddedDocs.length} chunks indexed`
+        + (extracted.coverage && !extracted.coverage.complete
+          ? ` — INCOMPLETE (${extracted.coverage.truncatedDetail ?? extracted.coverage.truncatedReason}); this is a floor, not a total`
+          : '')
+      );
 
       // Piggyback metadata sync while the SSH ControlMaster is still warm.
       // extract() above opened the SSH connection; ControlPersist keeps it alive

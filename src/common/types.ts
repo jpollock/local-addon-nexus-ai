@@ -131,6 +131,41 @@ export interface ExtractedPost {
   customFields: Record<string, string>;
 }
 
+/**
+ * How an extraction was BOUNDED — so a reader can tell a complete index from a
+ * stopped one from the record, rather than from the absence of an error.
+ *
+ * The remote extractor used to issue one `--posts_per_page=200` query and log
+ * the result as "total". Two live installs sat on exactly 200 and one with
+ * 30,628 published posts indexed 2; nothing anywhere said so. A count that
+ * crosses a boundary without carrying how it was bounded stops being evidence.
+ */
+export interface ExtractionCoverage {
+  /** Rows requested per page. */
+  pageSize: number;
+  /** Pages actually fetched. */
+  pagesFetched: number;
+  /** Raw rows returned across all pages, BEFORE post-type filtering. */
+  rowsReturned: number;
+  /**
+   * True only when a page came back SHORTER than `pageSize` — i.e. the
+   * extractor read past the end and saw it. A full last page is a boundary,
+   * never a total, so completeness is never inferred from equality.
+   */
+  complete: boolean;
+  /** Present iff `complete` is false. */
+  truncatedReason?: 'max-posts' | 'page-failed';
+  /** Free text naming what stopped it, for the log and for `get_index_status`. */
+  truncatedDetail?: string;
+  /**
+   * Whether public post meta (the local path's ACF custom fields) was
+   * collected. `unavailable` is STATED rather than silently empty — a missing
+   * field produces no count to be wrong, which is why nobody reported it.
+   */
+  customFields: 'collected' | 'unavailable' | 'not-attempted';
+  customFieldsDetail?: string;
+}
+
 export interface ExtractedContent {
   posts: ExtractedPost[];
   siteInfo: {
@@ -139,6 +174,8 @@ export interface ExtractedContent {
     wpVersion: string;
   };
   extractedAt: number;
+  /** Absent on extractors that read the whole population in one statement. */
+  coverage?: ExtractionCoverage;
   customTables?: CustomTableInfo[];
   warnings?: string[];
   activeThemeSlug?: string;
@@ -225,6 +262,13 @@ export interface IndexEntry {
   structure: SiteStructure | null;
   state: 'indexed' | 'indexing' | 'error' | 'stale';
   error?: string;
+  /**
+   * How the extraction behind this entry was bounded. ABSENT means the entry
+   * predates coverage tracking, which is not the same as complete: every WPE
+   * install indexed before WP-62 holds at most 200 posts and cannot say so.
+   * `get_index_status` reads absence as "not recorded", never as "complete".
+   */
+  coverage?: ExtractionCoverage;
 }
 
 // ---------------------------------------------------------------------------
