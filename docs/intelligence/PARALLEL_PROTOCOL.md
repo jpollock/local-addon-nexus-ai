@@ -1286,3 +1286,42 @@ question. **Before reporting a count, state what the method cannot
 see** — and when the defect is a PATTERN (local-then-graph, an untyped
 cast, a guarded refresh), search the pattern, not the symbol. The symbol
 search found three call sites; the pattern search found five.
+
+## Any non-zero residual is a question — in EITHER direction (WP-58, amending WP-55)
+
+The rule as first written was directional: *"if the working file is
+LARGER than that sum, the excess is somebody's uncommitted text."* A
+merge then produced a residual of **minus six** — diff3 matched the
+`\n---\n\n` separators opening two adjacent appends as common context
+and emitted the pair once, running two record sections together.
+
+A reader following the original text checks for excess, finds a deficit,
+and has no rule telling them to stop.
+
+**Amended: a residual of zero is the proof; ANY non-zero residual is a
+question. Excess is somebody's uncommitted text; deficit is structure
+the merge ate.** Locate it at its offset and name it — six characters of
+structure break nothing a test asserts and nothing a diff view shows,
+and the exact-substring check is the only instrument that sees them.
+
+## The architect's claims get the same both-directions drive (WP-58)
+
+Two errors in two packets, both the architect's, both the same shape: a
+condition written true in the direction it was being thought about.
+
+- A resolver count from `grep "export function resolve…"` — a search
+  whose method excluded module-private functions, and the one it could
+  not see was the one every live lookup ran.
+- A residual rule stated for excess only — and the residual that
+  mattered was a deficit.
+
+Neither was caught by its author. **A packet is required to drive its
+pins in both directions; an adjudication that states a condition owes
+the same drive.** State what the method cannot see, and state the other
+direction of every inequality — or expect the packet to find it, which
+is the expensive way to be right.
+
+And the corollary the packets have already started doing: **an
+adjudication is a claim, and a claim is checked or it is decoration.**
+Where a ruling asserts a checkable fact — an ancestry, a count, a file
+state — the packet checks it rather than taking it.

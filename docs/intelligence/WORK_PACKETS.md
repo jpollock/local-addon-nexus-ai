@@ -29181,3 +29181,112 @@ The rule was prose for months. Three call sites honoured it. The one written to
 be the correct shared path forgot in its first ten lines, and its docblock said
 otherwise. That was never going to be fixed by writing the rule down more
 firmly.
+
+---
+
+## WP-58 · MERGE ACCEPTED — and the residual that was not zero (2026-08-21, architect adjudication)
+
+**Accepted at `ec14642c`.** Verified on the tree: `base-measure.json` at
+`7924c459` with its guard empty against HEAD, the seam at offset 1673717
+carrying its separator, and `CLAUDE.md:472` now naming six with :482
+recording that the sixth was measured rather than remembered.
+
+### The minus-six, and the rule of mine it broke
+
+The working file was **6 bytes SHORT** of the rebuild. Located rather
+than shrugged at: `b'\n---\n\n'` at offset 1673717 — the separator
+between my GATE RULING and the packet's GATE REPORT. Both appends open
+with a blank line and that rule, so diff3 matched the two runs as common
+context and emitted the pair **once**, running two sections together
+with no separator between them.
+
+**My rule, written this morning, would have let a reader skip that
+check.** I wrote:
+
+> *A residual of zero is the proof; a positive residual is a question,
+> not a rounding.*
+
+And, in the resolver's tell: *"if the working file is LARGER than that
+sum, the excess is somebody's uncommitted text."* **Both statements are
+directional, and this residual was negative.** A reader following my
+text literally checks for excess, finds a deficit, and has no rule
+telling them to stop.
+
+**Amended, and the amendment is the general form: a residual of zero is
+the proof; ANY non-zero residual is a question, in either direction.**
+Excess is somebody's uncommitted text; deficit is structure the merge
+ate.
+
+**This is my second error of the same shape in two packets.** WP-58's
+gate caught the first — a search whose method excluded module-private
+functions, reported as a count. This one is a rule whose statement
+excluded one of its two directions. **Both are conditions written true
+in the direction I happened to be thinking about**, and both were caught
+downstream rather than by me. Recorded as a pattern, not as two
+incidents: *the architect's own claims need the same both-directions
+drive the packets are required to give theirs.*
+
+And the loss it caught is exactly the kind the doctrine cares about: six
+characters of structure, invisible in a diff view, breaking nothing any
+test asserts and nothing any reader would notice until the record's
+sections silently stopped being separable. **The substring check is the
+only instrument that could see it** — which is why the four-way standard
+requires it and does not accept the diffstat.
+
+### The verifications that were not asked for
+
+**The appends were proven pure from HUNK HEADERS, not from a
+zero-deletion diffstat.** `@@ -1246,0 +1247,42 @@` and
+`@@ -28585,0 +28586,116 @@`. A diffstat can read zero deletions while
+content moved; the hunk header cannot. That distinction is the packet's
+own, and it is right.
+
+**The one fact my ruling asserted that could be falsified was
+falsified.** WP-56's ancestry at `239e4e32`, checked rather than taken.
+**An adjudication is a claim, and a claim is checked or it is
+decoration** — the rule this project applies to producers, applied to
+the architect, by the packet. Correct, and I want more of it.
+
+**The pin was driven both directions, and its honest note kept.** The
+count did not move here because `thelocalshed` was already in the driven
+set via live discovery; the same commit moves it 5→6 on a machine with
+no fleet. **Saying so is the receipts rule holding where a count alone
+would have read as "nothing happened."**
+
+### The four residuals — two of them are not footnotes
+
+Registered rather than closed, correctly. But two are the rest of the
+defect and should be scheduled, not filed:
+
+**The GraphQL path still has no decline.** `findLocalSiteExact` is exact
+and Local-only, so the CLI lookups that ran the module-private copy now
+run a correct function that still answers about a Local site when the
+user meant the install. **Same defect, different surface, 40 call sites.**
+The mcp path is fixed; the other half of the product is not.
+
+**51 call sites still say "not found" for a collision.** The exhibit
+fixed `get_site_structure` because someone drove it; the other 51 still
+claim absence about a site that exists twice — which this packet itself
+named as the most confident possible wrong answer. **The rename is done,
+so WP-58b's original scope is absorbed; what remains is threading
+`LocalSiteResult`'s `collision` arm to the callers that currently lie.**
+
+The other two — a Local domain matching a graph name, and
+`syncProducer.ts`'s unrelated private `resolveSite` — are genuine
+footnotes and stay registered.
+
+**Registered: WP-58b · the callers that still claim absence, and the
+GraphQL decline.** Not urgent in the way WP-58 was — the wrong ANSWER is
+gone, and what remains is a wrong SENTENCE about the right refusal — but
+it is the difference between a product that declines and one that
+declines in one of its two front doors.
+
+### Receipts
+
+634 / 8,834 / 8,832 / 2 primary at the merge, against 633 / 8,771 /
+8,769 / 2 primary at the base. Both deltas reconcile and both are
+stated in their own tree kind: branch→merged is the documented ten in
+the documented direction; base→merged is +1 suite / +63 tests. The
+`wp-58 HEAD` diff over `src/ tests/ scripts/` shows only
+`collision-decline.test.ts`, which is `7924c459` — the amendment landing
+after the merge, disclosed in the report before I looked.
