@@ -28525,3 +28525,34 @@ branch list for the same reason; this is its sibling — **a branch list may
 already hold a number your doc has never heard of.**
 
 Standard discipline, all of it.
+
+---
+
+## WP-59 · BASELINE (2026-08-21)
+
+```
+Test Suites: 635 passed, 635 total
+Tests:       12 skipped, 8766 passed, 8778 total
+EXIT=0
+```
+
+**The skipped column is 12 here and was 2 in `wp-57`, and the difference is
+NOT a regression — it is the documented hazard, reproduced as a controlled
+experiment.**
+
+| worktree | `models/` contains | skipped | passed |
+|---|---|---|---|
+| `wp-57` | `all-MiniLM-L6-v2-quantized` **and** `bge-small-en-v1.5` | 2 | 8,776 |
+| `wp-59` | `bge-small-en-v1.5` only | 12 | 8,766 |
+
+**Same total (8,778), different split, exactly ten tests.** In `wp-57` a
+`models/` symlink to the primary was made deliberately (to avoid a 150 MB
+download before the live smoke), so both embedding model files were present and
+the ten embedding tests RAN. Here the symlink did not take — `models/` already
+existed, holding the one model the build downloads — so those ten `describe.skip`
+instead.
+
+This is WP-20c's merge finding turned from an explanation into a measurement:
+*read the skipped column first; a passed-column delta of ten across a worktree
+boundary is this, not a regression.* Any WP-59 delta is measured against
+**8,766 passed / 12 skipped**, not against `wp-57`'s numbers.
