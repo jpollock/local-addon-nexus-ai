@@ -129,9 +129,11 @@ export interface WpeSyncAccessor {
   syncSingleSite(installId: string): Promise<void>;
   /** Fleet content index. Reads the graph's existing `wpe` rows; cannot add one. */
   indexAllWpeContent(): Promise<{ indexed: number; skipped: number; errors: number }>;
-  /** One install's content index. Throws on missing dependencies where the
-   *  fleet-wide version warns and returns zero. */
-  indexOneWpeContent(siteId: string, installName: string): Promise<SiteOpOutcome>;
+  /** One install's content index, and the function ALL THREE scopes end at —
+   *  `indexAllWpeContent` loops over it rather than duplicating the work.
+   *  Takes the graph id only: the install name is resolved from the graph
+   *  inside, and a missing or id-shaped name is an error, not a fallback. */
+  indexOneWpeContent(siteId: string): Promise<SiteOpOutcome>;
 }
 
 /**

@@ -116,6 +116,20 @@ describe('bulk dispatch', () => {
     expect(call![1].siteIds).toEqual(['L1']);
   });
 
+  test('asks for halted Local sites to be started, indexed and stopped again', async () => {
+    // WP-68. A bulk operation that reaches a halted Local site STARTS it. This
+    // dispatcher sent `options: {}`, so the one surface a user actually presses
+    // was the only reindex path that refused: 45 stopped sites produced 45 rows
+    // reading "Did not run — <name> is not running", 1–3ms each, while
+    // INDEX_SITE, OpportunisticScheduler, INDEX_ALL_AUTO, SETUP_AI_ALL_AUTO,
+    // SYNC_GRAPH_ALL, FLEET_HEALTH_CHECK_ALL and FLEET_PLUGIN_UPDATE_ALL all
+    // already sent `autoStartStop: true`.
+    const { shell, invoke } = bulkShell();
+    await shell.handleSiteBulk('reindex', ['L1']);
+    const call = invoke.mock.calls.find(c => c[0] === IPC_CHANNELS.BULK_EXECUTE);
+    expect(call![1].options).toEqual({ autoStartStop: true });
+  });
+
   test('carries the names of the selected sites, and only those', async () => {
     const { shell, invoke } = bulkShell();
     await shell.handleSiteBulk('sync-graph', ['ssh:hostinger/shop']);

@@ -637,9 +637,12 @@ export class WPESyncService {
     const db = this.graphService.getDb();
     if (!db) return { indexed: 0, skipped: 0, errors: 0 };
 
+    // Ids only. The name is resolved per install by `requireWpeInstallName`,
+    // the single lookup both scopes share — selecting it here as well would
+    // recreate the two-sources-of-truth split this packet removes.
     const installs = db.prepare(
-      "SELECT id, name FROM sites WHERE source = 'wpe' AND is_active = 1"
-    ).all() as Array<{ id: string; name: string }>;
+      "SELECT id FROM sites WHERE source = 'wpe' AND is_active = 1"
+    ).all() as Array<{ id: string }>;
 
     if (installs.length === 0) {
       this.logger.info('[WPESyncService] indexAllWpeContent: no active WPE installs found');
@@ -655,35 +658,15 @@ export class WPESyncService {
     for (let i = 0; i < installs.length; i += concurrency) {
       const batch = installs.slice(i, i + concurrency);
       await Promise.all(batch.map(async (install) => {
-        const startTime = Date.now();
-        this.emitIndexProgress?.(install.id, {
-          state: 'indexing', progress: Math.round((indexed / installs.length) * 100),
-          message: `Indexing ${install.name} via SSH…`,
-        });
+        // "All" is the selection of every install, not a second code path.
+        // This loop and the bulk manager now end at the same function, so a
+        // fix to one cannot leave the other behind — which is how the two
+        // diverged for twelve days.
         try {
-          const outcome = await this.syncContent(install.id, install.name, startTime);
-          if (outcome.state === 'indexed') {
-            indexed++;
-            this.emitIndexProgress?.(install.id, {
-              state: 'indexed', progress: 100, message: 'Indexed',
-              documentCount: this.indexRegistry?.get(install.id)?.documentCount ?? 0,
-            });
-          } else if (outcome.state === 'skipped') {
-            // Counted separately, never as `indexed`. This loop is the
-            // fleet-wide twin of the bulk defect: it incremented `indexed` for
-            // every resolved promise, so the same 365 no-ops read as successes
-            // here too.
-            skipped++;
-            this.emitIndexProgress?.(install.id, {
-              state: 'idle', progress: 100, message: `Not indexed — ${outcome.reason}`,
-            });
-          } else {
-            errors++;
-            this.emitIndexProgress?.(install.id, { state: 'error', progress: 0, message: 'Indexing failed' });
-          }
+          const outcome = await this.indexOneWpeContent(install.id);
+          if (outcome.ran) indexed++; else skipped++;
         } catch {
           errors++;
-          this.emitIndexProgress?.(install.id, { state: 'error', progress: 0, message: 'Indexing failed' });
         }
       }));
     }
@@ -713,17 +696,94 @@ export class WPESyncService {
    * the whole feature is unconfigured, which is the honest reading for a site
    * the user explicitly selected. Everything else comes from the outcome.
    */
-  async indexOneWpeContent(siteId: string, installName: string): Promise<SiteOpOutcome> {
+  async indexOneWpeContent(siteId: string): Promise<SiteOpOutcome> {
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
       throw new Error(
         'WP Engine content indexing is unavailable — SSH key or embedding service not configured.',
       );
     }
 
-    const outcome = await this.syncContent(siteId, installName);
-    if (outcome.state === 'failed') throw new Error(outcome.error);
-    if (outcome.state === 'skipped') return { ran: false, reason: outcome.reason };
+    const installName = this.requireWpeInstallName(siteId);
+    const startTime = Date.now();
+    this.emitIndexProgress?.(siteId, {
+      state: 'indexing', progress: 0, message: `Indexing ${installName} via SSH…`,
+    });
+
+    let outcome: ContentSyncOutcome;
+    try {
+      outcome = await this.syncContent(siteId, installName, startTime);
+    } catch (err: any) {
+      this.emitIndexProgress?.(siteId, { state: 'error', progress: 0, message: 'Indexing failed' });
+      throw err;
+    }
+
+    if (outcome.state === 'failed') {
+      this.emitIndexProgress?.(siteId, { state: 'error', progress: 0, message: 'Indexing failed' });
+      throw new Error(outcome.error);
+    }
+    if (outcome.state === 'skipped') {
+      this.emitIndexProgress?.(siteId, {
+        state: 'idle', progress: 100, message: `Not indexed — ${outcome.reason}`,
+      });
+      return { ran: false, reason: outcome.reason };
+    }
+    this.emitIndexProgress?.(siteId, {
+      state: 'indexed', progress: 100, message: 'Indexed',
+      documentCount: this.indexRegistry?.get(siteId)?.documentCount ?? 0,
+    });
     return { ran: true };
+  }
+
+  /**
+   * The install name for a graph id, or an error. Never a fallback.
+   *
+   * **This is the check that would have caught the 2026-08-22 incident, and
+   * removing the UI's `?? siteId` fallback alone would not have.** All 365
+   * installs that day were dispatched by `indexAllWpeContent`, which already
+   * resolved the name FROM THE GRAPH — proven from the log: 365 extraction
+   * starts in the graph's exact natural SELECT order, two at a time, matching
+   * this class's `concurrency = 2` and not the bulk manager's 5. The name it
+   * read was the site id, so every SSH went to a host that does not exist and
+   * failed in milliseconds.
+   *
+   * So a name coming from the graph is not automatically trustworthy. Three
+   * values are refused:
+   *
+   * - **missing row** — nothing to index, and guessing is what caused this;
+   * - **empty name** — `''` would SSH to an empty host string;
+   * - **name equal to the site id, or to the id with the `wpe-` prefix
+   *   stripped** — a legal WP Engine install name is `[a-z0-9-]`, at most 20
+   *   characters (`create-install.ts` rejects 21+), so a 36-character UUID or
+   *   a 40-character `wpe-`-prefixed id cannot be one. This is the observed
+   *   failure, and it is now a refusal with a reason instead of a silent
+   *   connection to nowhere.
+   *
+   * `siteId` is not a degraded substitute for an install name. It is a value
+   * known to fail.
+   */
+  private requireWpeInstallName(siteId: string): string {
+    const db = this.graphService.getDb();
+    if (!db) throw new Error(`Cannot index ${siteId}: the site graph is not available.`);
+
+    const row = db.prepare(
+      "SELECT name FROM sites WHERE id = ? AND source = 'wpe' AND is_active = 1",
+    ).get(siteId) as { name: string | null } | undefined;
+
+    if (!row) {
+      throw new Error(`Cannot index ${siteId}: no active WP Engine install with that id in the graph.`);
+    }
+
+    const name = (row.name ?? '').trim();
+    if (!name) {
+      throw new Error(`Cannot index ${siteId}: no install name in the graph.`);
+    }
+    if (name === siteId || name === siteId.replace(/^wpe-/, '')) {
+      throw new Error(
+        `Cannot index ${siteId}: the graph holds the site id as its install name, which is not a ` +
+        `reachable WP Engine host. Run a metadata sync (wpe_sync_sites) to repopulate names.`,
+      );
+    }
+    return name;
   }
 
   /**

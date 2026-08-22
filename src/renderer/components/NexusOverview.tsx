@@ -1005,11 +1005,26 @@ renderTabBar(): React.ReactNode {
       const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_EXECUTE, {
         type,
         siteIds,
+        // DISPLAY ONLY. The manager labels rows and errors with this and never
+        // passes it to a transport — the remote adapters take the graph id and
+        // resolve the install name themselves. Do not reintroduce a name
+        // parameter on the strength of this map being here.
         siteNames: this.state.siteRows.reduce((acc: Record<string, string>, r) => {
           if (siteIds.indexOf(r.id) !== -1) acc[r.id] = r.name;
           return acc;
         }, {}),
-        options: {},
+        // A bulk operation that reaches a halted Local site STARTS it, collects,
+        // and stops it again. "Index content" over 45 stopped sites means 45
+        // sites started, indexed and stopped — not 45 rows saying did not run.
+        //
+        // This was the odd one out: `INDEX_SITE`, `OpportunisticScheduler`,
+        // `INDEX_ALL_AUTO`, `SETUP_AI_ALL_AUTO`, `SYNC_GRAPH_ALL`,
+        // `FLEET_HEALTH_CHECK_ALL` and `FLEET_PLUGIN_UPDATE_ALL` all send
+        // `autoStartStop: true`. The Sites-tab bulk bar sent `{}`, so the one
+        // surface a user actually presses was the only one that refused to do
+        // the work. `executeSingle` starts the site, waits for MySQL, and stops
+        // it again in its `finally` — and only for sites it started itself.
+        options: { autoStartStop: true },
       });
       if (result?.success && result.opId) {
         // `success` here means the manager accepted the job, NOT that it finished — it

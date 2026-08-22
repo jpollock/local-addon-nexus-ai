@@ -1,13 +1,11 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveLocalSite } from '../../site-resolver';
-import { SiteConnectionInfo } from '../../../content/MySQLExtractor';
 
 export const reindexSiteHandler: McpToolHandler = {
   definition: {
     name: 'reindex_site',
     description:
-      'Trigger a complete re-index for a site — drops existing index data and rebuilds from the current content. Use after major content migrations, large plugin changes, or when search results are outdated. The site must be running for indexing to work (reads directly from the database). ASYNC: indexing runs in the background. Check progress with get_index_status.' +
-      'The site must be running for content extraction to work.',
+      'Trigger a complete re-index for a site — drops existing index data and rebuilds from the current content. Use after major content migrations, large plugin changes, or when search results are outdated. A halted site is started, indexed, and stopped again automatically. ASYNC: indexing runs in the background and this returns an operation id immediately — check progress with get_index_status.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -26,27 +24,39 @@ export const reindexSiteHandler: McpToolHandler = {
       return error(`Site "${args.site}" not found`);
     }
 
-    const info: SiteConnectionInfo = {
-      siteId: site.id,
-      siteName: site.name,
-      sitePath: site.path,
-    };
+    // Route through BulkOperationManager — the single centralized indexing
+    // path, and the same one `INDEX_SITE` uses. It auto-starts a halted site,
+    // waits for MySQL, stops it again, and records succeeded / failed /
+    // did-not-run honestly.
+    //
+    // The direct `contentPipeline.reindexSite` call this replaces did neither:
+    // it never started the site, and it printed "## Re-index Complete" with
+    // "Documents indexed: 0" and the real failure demoted to "**Warnings:**"
+    // — the same overstatement WP-67 removed from the bulk seam, still live on
+    // this surface.
+    const bulkOpManager = services.bulkOpManager;
+    if (!bulkOpManager) {
+      return error(
+        `Cannot re-index "${site.name}": bulk operations are not available in this process.`,
+      );
+    }
 
     try {
-      const result = await services.contentPipeline.reindexSite(info);
+      const opId = await bulkOpManager.execute({
+        type: 'reindex',
+        siteIds: [site.id],
+        siteNames: { [site.id]: site.name },
+        options: { autoStartStop: true },
+      });
 
-      const lines = [
-        `## Re-index Complete: ${site.name}`,
-        `**Documents indexed:** ${result.documentsIndexed}`,
-        `**Chunks indexed:** ${result.chunksIndexed}`,
-        `**Duration:** ${result.durationMs}ms`,
-      ];
-
-      if (result.errors.length > 0) {
-        lines.push(`**Warnings:** ${result.errors.join('; ')}`);
-      }
-
-      return ok(lines.join('\n'));
+      return ok(
+        `Re-index started for **${site.name}**.\n` +
+        `Operation ID: ${opId}\n` +
+        (site.status && site.status !== 'running'
+          ? 'The site is not running — it will be started, indexed, and stopped again.\n'
+          : '') +
+        'Runs in the background; check get_index_status for the result.',
+      );
     } catch (err) {
       return error(`Re-indexing failed for "${site.name}": ${(err as Error).message}`);
     }

@@ -3234,8 +3234,8 @@ Answer:`,
     wpeOps: deps.wpeSyncService
       ? {
           syncSingleSite: (installId: string) => deps.wpeSyncService!.syncSingleSite(installId),
-          indexOne: (siteId: string, installName: string) =>
-            deps.wpeSyncService!.indexOneWpeContent(siteId, installName),
+          // Graph id only — the install name is resolved inside, from the graph.
+          indexOne: (siteId: string) => deps.wpeSyncService!.indexOneWpeContent(siteId),
         }
       : undefined,
     externalOps: createExternalBulkOps(deps.nexusServices, localLogger),

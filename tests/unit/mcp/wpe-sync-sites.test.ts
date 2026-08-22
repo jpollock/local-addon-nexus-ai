@@ -203,11 +203,15 @@ describe('wpe_sync_sites — content mode (the two messages about the search ind
     expect(textOf(r)).toContain('2 install(s) indexed');
   });
 
-  test('content: true for one install indexes exactly that install, by graph id AND name', async () => {
+  // WP-68: resolved by graph id ALONE. The name is no longer a parameter —
+  // passing one is what let a caller supply a value the transport could not
+  // reach, so the assertion pins the argument count as well as the id.
+  test('content: true for one install indexes exactly that install, by graph id and nothing else', async () => {
     const h = makeHarness({ rows: [ROW_A] });
     await syncSitesHandler.execute({ install_name: 'alpha-prod', content: true }, h.services);
 
-    expect(h.sync.indexOneWpeContent).toHaveBeenCalledWith('wpe-uuid-a', 'alpha-prod');
+    expect(h.sync.indexOneWpeContent).toHaveBeenCalledWith('wpe-uuid-a');
+    expect(h.sync.indexOneWpeContent.mock.calls[0]).toHaveLength(1);
     expect(h.sync.indexAllWpeContent).not.toHaveBeenCalled();
   });
 

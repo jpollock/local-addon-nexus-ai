@@ -290,3 +290,96 @@ describe('BulkOperationsPanel', () => {
     expect(instance.formatTime(Date.now() - 7200000)).toBe('2h ago');
   });
 });
+
+/**
+ * A site that is CURRENTLY BEING WORKED ON is not a failure.
+ *
+ * Seen live 2026-08-22 on a one-site run: the summary read
+ * "0 succeeded, 0 failed, 0 did not run, 1 pending" while the row beneath it
+ * said **Failed**, in failure red. Both halves were wrong about the same site
+ * in the same frame.
+ *
+ * Cause: the row list filters out only `'pending'`, so a `'running'` entry
+ * renders, and the label's last branch is `result.error || 'Failed'` — a
+ * running row has no error, so it printed the word "Failed". `toneFor` fell
+ * through to the failure colour for the same reason.
+ */
+function flatten(node: any, out: string[] = []): string[] {
+  if (node == null || node === false) return out;
+  if (typeof node === 'string' || typeof node === 'number') { out.push(String(node)); return out; }
+  if (Array.isArray(node)) { node.forEach(n => flatten(n, out)); return out; }
+  if (node.props) flatten(node.props.children, out);
+  return out;
+}
+
+describe('BulkOperationsPanel — a running site reads as running', () => {
+  const runningOp: any = {
+    id: 'op-run', type: 'reindex', siteIds: ['wpe-1'],
+    siteNames: { 'wpe-1': 'dbrains' },
+    status: 'running',
+    progress: { completed: 0, total: 1, errors: [], skipped: [] },
+    siteResults: { 'wpe-1': { status: 'running', startedAt: Date.now() - 1000 } },
+    createdAt: Date.now() - 2000, completedAt: null,
+  };
+
+  test('the row says running, never Failed', () => {
+    const panel = new BulkOperationsPanel({ electron: createMockElectron([]) });
+    const text = flatten(panel.renderExpandedResults(runningOp)).join(' | ');
+
+    expect(text).toMatch(/running/i);
+    expect(text).not.toMatch(/Failed/);
+    expect(text).toContain('dbrains');
+  });
+
+  // The colour said "failure" even once the words stopped doing so: `toneFor`
+  // falls back to the failure tone for any status it does not know.
+  test('the row is not painted in the failure colour', () => {
+    const panel = new BulkOperationsPanel({ electron: createMockElectron([]) });
+    const styles: string[] = [];
+    const walk = (n: any): void => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(walk); return; }
+      if (n.props?.style?.color) styles.push(String(n.props.style.color));
+      if (n.props?.style?.backgroundColor) styles.push(String(n.props.style.backgroundColor));
+      walk(n.props?.children);
+    };
+    walk(panel.renderExpandedResults(runningOp));
+
+    expect(styles.some(c => c.toLowerCase().startsWith('#ef4444'))).toBe(false);
+  });
+
+  test('the summary counts it as running — not as failed, and not as pending', () => {
+    const panel = new BulkOperationsPanel({ electron: createMockElectron([]) });
+
+    expect(panel.getResultsSummary(runningOp)).toEqual({
+      succeeded: 0, failed: 0, skipped: 0, running: 1, pending: 0, total: 1,
+    });
+  });
+
+  // The line, not just the numbers behind it. Asserting the summary object
+  // alone left the rendered sentence free to omit the count entirely — which
+  // is the half the user actually reads.
+  test('the rendered summary line names the running count', () => {
+    const panel = new BulkOperationsPanel({ electron: createMockElectron([]) });
+    const text = flatten(panel.renderExpandedResults(runningOp)).join(' | ');
+
+    expect(text).toContain('1 running');
+    expect(text).toContain('0 failed');
+  });
+
+  // The counterpart: a genuinely failed site must still read as failed, or
+  // "never say Failed" would pass the case above.
+  test('a genuinely failed site still says Failed, with its reason', () => {
+    const failedOp = {
+      ...runningOp,
+      siteResults: {
+        'wpe-1': { status: 'failed', startedAt: 1, completedAt: 2, error: 'SSH connection refused' },
+      },
+    };
+    const panel = new BulkOperationsPanel({ electron: createMockElectron([]) });
+    const text = flatten(panel.renderExpandedResults(failedOp)).join(' | ');
+
+    expect(text).toContain('SSH connection refused');
+    expect(panel.getResultsSummary(failedOp)).toMatchObject({ failed: 1, running: 0 });
+  });
+});

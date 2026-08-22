@@ -42,6 +42,10 @@ function createMockServices(indexRegistry: IndexRegistry): NexusServices {
     embeddingService: {
       embed: jest.fn().mockResolvedValue(makeFakeVector()),
     } as any,
+    // WP-68: reindex_site routes through the centralized bulk path so a halted
+    // site is started, indexed and stopped again — the same contract every
+    // other reindex dispatcher uses.
+    bulkOpManager: { execute: jest.fn().mockReturnValue('op-abc') } as any,
     contentPipeline: {
       reindexSite: jest.fn().mockResolvedValue({
         siteId: 'site1',
@@ -233,15 +237,35 @@ describe('MCP Tool Handlers', () => {
   });
 
   describe('reindex_site', () => {
-    test('triggers reindexing', async () => {
+    test('dispatches through the bulk path with auto-start, not the pipeline directly', async () => {
       const result = await registry.call(
         'reindex_site',
         { site: 'My Blog' },
         services,
       );
-      expect(result.content[0].text).toContain('5');
-      expect(result.content[0].text).toContain('8');
-      expect(services.contentPipeline.reindexSite).toHaveBeenCalled();
+
+      expect((services as any).bulkOpManager.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'reindex',
+          options: { autoStartStop: true },
+        }),
+      );
+      expect(result.content[0].text).toContain('op-abc');
+      // The direct call is what never started the site, and what reported
+      // "## Re-index Complete / Documents indexed: 0" for a halted one.
+      expect(services.contentPipeline.reindexSite).not.toHaveBeenCalled();
+    });
+
+    // The counterpart: without this, "always refuse" passes the case above.
+    test('an unknown site is refused before anything is dispatched', async () => {
+      const result = await registry.call(
+        'reindex_site',
+        { site: 'no-such-site-anywhere' },
+        services,
+      );
+
+      expect(result.content[0].text).toMatch(/not found/i);
+      expect((services as any).bulkOpManager.execute).not.toHaveBeenCalled();
     });
   });
 });

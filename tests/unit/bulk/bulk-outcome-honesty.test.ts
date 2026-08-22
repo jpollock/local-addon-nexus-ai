@@ -159,6 +159,7 @@ describe('WP-67 — a bulk result reports what was observed', () => {
       succeeded: 1,
       failed: 1,
       skipped: 1,
+      running: 0,
       pending: 0,
       total: 3,
     });
@@ -176,7 +177,7 @@ describe('WP-67 — a bulk result reports what was observed', () => {
       siteResults: { a: { status: 'completed' } },
     });
 
-    expect(summary).toEqual({ succeeded: 1, failed: 0, skipped: 0, pending: 2, total: 3 });
+    expect(summary).toEqual({ succeeded: 1, failed: 0, skipped: 0, running: 0, pending: 2, total: 3 });
   });
 
   // The headline arithmetic, in miniature: the shape that printed "413 succeeded".
@@ -198,6 +199,84 @@ describe('WP-67 — a bulk result reports what was observed', () => {
 });
 
 /**
+ * WP-68 / D9 — what a halted Local site does under each setting.
+ *
+ * Measured 2026-08-22: all 45 Local sites recorded
+ * `MySQL not available — site may not be running`. WP-67 correctly stopped
+ * calling that a success; calling it a failure is the opposite overstatement.
+ *
+ * **Every dispatcher sends `autoStartStop: true`** — a bulk operation that
+ * reaches a halted Local site starts it, collects, and stops it again. The
+ * skip path below is the explicit opt-out (`INDEX_ALL_FLEET`, which is the
+ * deliberate "running sites only" variant), not the default; it exists so
+ * that a caller which chooses not to start sites still reports honestly
+ * rather than recording a failure for work it declined to do.
+ */
+describe('WP-68 — a halted Local site is started by default, and reports honestly when it is not', () => {
+  const HALTED = 'Ck3bTFmxY';
+
+  function managerWith(status: string, indexSite = jest.fn(async () => ({ errors: [] }))) {
+    const started: string[] = [];
+    const deps: any = {
+      contentPipeline: { indexSite },
+      siteDataBridge: {
+        resolveSiteObject: (id: string) => ({ id, name: 'thelocalshed', path: '/tmp/s', services: { mysql: { port: 3306 } } }),
+        getSiteStatus: () => status,
+        startSite: jest.fn(async (id: string) => { started.push(id); }),
+        stopSite: jest.fn(async () => undefined),
+        wpCliRun: jest.fn(async () => ({ stdout: 'ready', success: true })),
+        getPlugins: jest.fn(async () => []), getThemes: jest.fn(async () => []),
+        getWpVersion: jest.fn(async () => '6.5'), getOption: jest.fn(async () => null),
+      },
+      healthCalculator: { calculateScore: jest.fn() },
+      onProgress: jest.fn(),
+    };
+    return { manager: new BulkOperationManager(deps), deps, started };
+  }
+
+  test('halted with autoStartStop OFF: did not run, named, and nothing is indexed', async () => {
+    const indexSite = jest.fn(async () => ({ errors: [] }));
+    const { manager } = managerWith('halted', indexSite);
+
+    const id = manager.execute({ type: 'reindex', siteIds: [HALTED], options: { autoStartStop: false } });
+    await manager.waitForCompletion(id);
+    const result = manager.getStatus(id)!.siteResults[HALTED];
+
+    expect(result.status).toBe('skipped');
+    expect(result.skipReason).toBe('thelocalshed is not running');
+    expect(indexSite).not.toHaveBeenCalled();
+  });
+
+  // The counterpart. Without it, "always skip" passes the case above and the
+  // whole operation would quietly stop working.
+  test('running with autoStartStop OFF: indexes and reports succeeded', async () => {
+    const indexSite = jest.fn(async () => ({ errors: [] }));
+    const { manager } = managerWith('running', indexSite);
+
+    const id = manager.execute({ type: 'reindex', siteIds: [HALTED], options: { autoStartStop: false } });
+    await manager.waitForCompletion(id);
+
+    expect(manager.getStatus(id)!.siteResults[HALTED].status).toBe('completed');
+    expect(indexSite).toHaveBeenCalled();
+  });
+
+  // THE DEFAULT PATH. Every dispatcher sends `autoStartStop: true`, so this is
+  // what pressing "Index content" over 45 stopped sites does: 45 sites started,
+  // indexed and stopped — not 45 rows saying did not run.
+  test('halted with autoStartStop ON (the default): the site is started and indexed', async () => {
+    const indexSite = jest.fn(async () => ({ errors: [] }));
+    const { manager, started } = managerWith('halted', indexSite);
+
+    const id = manager.execute({ type: 'reindex', siteIds: [HALTED], options: { autoStartStop: true } });
+    await manager.waitForCompletion(id);
+
+    expect(started).toEqual([HALTED]);
+    expect(manager.getStatus(id)!.siteResults[HALTED].status).toBe('completed');
+    expect(indexSite).toHaveBeenCalled();
+  }, 15000);
+});
+
+/**
  * The cases above drive the bulk seam with a stubbed WP Engine adapter. These
  * drive the REAL `WPESyncService`, because the translation from `syncContent`'s
  * three exits into an outcome is itself production code — and it is the exact
@@ -206,7 +285,9 @@ describe('WP-67 — a bulk result reports what was observed', () => {
 describe('WP-67 — WPESyncService.indexOneWpeContent reports each of syncContent\'s exits', () => {
   function makeService(extract: () => Promise<any>) {
     const graphService: any = {
-      getDb: () => ({ prepare: () => ({ get: () => undefined }) }),
+      // WP-68: the name now comes from the graph, so the fake has to hold one.
+      // `wpe-1` resolving to `acmeprod` is what `requireWpeInstallName` reads.
+      getDb: () => ({ prepare: () => ({ get: () => ({ name: 'acmeprod' }) }) }),
       upsertContent: jest.fn().mockResolvedValue(undefined),
       upsertSite: jest.fn().mockResolvedValue(undefined),
     };
@@ -228,7 +309,7 @@ describe('WP-67 — WPESyncService.indexOneWpeContent reports each of syncConten
   test('zero posts extracted is did-not-run, with a reason', async () => {
     const service = makeService(async () => ({ posts: [] }));
 
-    const outcome = await service.indexOneWpeContent('wpe-1', 'acmeprod');
+    const outcome = await service.indexOneWpeContent('wpe-1');
 
     expect(outcome.ran).toBe(false);
     expect(outcome).toHaveProperty('reason');
@@ -244,7 +325,7 @@ describe('WP-67 — WPESyncService.indexOneWpeContent reports each of syncConten
       }],
     }));
 
-    const outcome = await service.indexOneWpeContent('wpe-1', 'acmeprod');
+    const outcome = await service.indexOneWpeContent('wpe-1');
 
     expect(outcome.ran).toBe(true);
   });
@@ -254,6 +335,6 @@ describe('WP-67 — WPESyncService.indexOneWpeContent reports each of syncConten
   test('an extractor failure throws rather than resolving', async () => {
     const service = makeService(async () => { throw new Error('SSH connection refused'); });
 
-    await expect(service.indexOneWpeContent('wpe-1', 'acmeprod')).rejects.toThrow('SSH connection refused');
+    await expect(service.indexOneWpeContent('wpe-1')).rejects.toThrow('SSH connection refused');
   });
 });

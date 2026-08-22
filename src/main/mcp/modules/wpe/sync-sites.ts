@@ -135,7 +135,7 @@ export const syncSitesHandler: McpToolHandler = {
         }
         let outcome;
         try {
-          outcome = await sync.indexOneWpeContent(row.id, row.name);
+          outcome = await sync.indexOneWpeContent(row.id);
         } catch (err: any) {
           return error(`Content indexing failed for "${row.name}": ${err?.message ?? String(err)}`);
         }

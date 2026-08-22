@@ -380,9 +380,14 @@ describe('bulk-reindex', () => {
     const text = getText(result);
     expect(text).toContain('op-123');
     expect(text).toContain('2 site(s)');
+    // `autoStartStop: true` is the contract, not an incidental option: a bulk
+    // operation that reaches a halted Local site starts it, indexes it, and
+    // stops it again. Sending no options made this the one reindex dispatcher
+    // that reported "did not run" for work it could have done.
     expect(services.bulkOpManager!.execute).toHaveBeenCalledWith({
       type: 'reindex',
       siteIds: ['s1', 's2'],
+      options: { autoStartStop: true },
     });
   });
 });

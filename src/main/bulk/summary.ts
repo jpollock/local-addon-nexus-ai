@@ -21,6 +21,13 @@ export interface BulkOperationSummary {
   failed: number;
   /** Work did not run, with a reason. Never folded into either of the above. */
   skipped: number;
+  /**
+   * Being worked on right now. Counted separately because folding it into
+   * `pending` describes a site under active work as "not yet reached" — and
+   * during a fleet run this number is the live concurrency, which is the one
+   * thing a watching user actually wants.
+   */
+  running: number;
   /** Not yet reached — includes sites with no result recorded at all. */
   pending: number;
   total: number;
@@ -36,6 +43,7 @@ export function summarizeBulkOperation(op: SummarizableOperation): BulkOperation
   let succeeded = 0;
   let failed = 0;
   let skipped = 0;
+  let running = 0;
 
   // Iterate the selection, not the results map: a site with no entry has not
   // been reached, and counting only what the map happens to hold would let a
@@ -45,7 +53,8 @@ export function summarizeBulkOperation(op: SummarizableOperation): BulkOperation
       case 'completed': succeeded++; break;
       case 'failed': failed++; break;
       case 'skipped': skipped++; break;
-      default: break; // pending | running | absent
+      case 'running': running++; break;
+      default: break; // pending | absent
     }
   }
 
@@ -53,7 +62,8 @@ export function summarizeBulkOperation(op: SummarizableOperation): BulkOperation
     succeeded,
     failed,
     skipped,
-    pending: op.siteIds.length - succeeded - failed - skipped,
+    running,
+    pending: op.siteIds.length - succeeded - failed - skipped - running,
     total: op.siteIds.length,
   };
 }

@@ -40,6 +40,27 @@ function findById(db: any, siteId: string): ExternalRow | null {
 }
 
 /**
+ * The row, or an error naming the id. Never a fallback.
+ *
+ * The caller used to pass a display name in purely so this message could use
+ * it; that parameter is gone, because the WP Engine sibling proved a name
+ * threaded through the UI for "display" is one refactor away from reaching a
+ * transport. The id is what the caller holds and what identifies the row.
+ *
+ * A blank `name` is refused here for the same reason its WP Engine
+ * counterpart is: `indexOne` and `collectExternalHostData` both label their
+ * work with it, and the id is not a substitute.
+ */
+function requireRow(db: any, siteId: string): ExternalRow {
+  const row = findById(db, siteId);
+  if (!row) throw new Error(`"${siteId}" is not a registered external site.`);
+  if (!String(row.name ?? '').trim()) {
+    throw new Error(`Cannot reach "${siteId}": no site name in the graph.`);
+  }
+  return row;
+}
+
+/**
  * A site id IS the target, minus the environment suffix:
  * `ssh:<alias>/<site>` + `@<env>`, or `ssh:<alias>` + `@<env>` for the bare
  * single-site form. Both are legal target syntax, so this needs no
@@ -63,10 +84,9 @@ async function openTransport(services: any, row: ExternalRow): Promise<any> {
 
 export function createExternalBulkOps(services: any, logger: any) {
   return {
-    async refreshSite(siteId: string, siteName: string): Promise<void> {
+    async refreshSite(siteId: string): Promise<void> {
       const db = services.graphService?.getDb?.();
-      const row = findById(db, siteId);
-      if (!row) throw new Error(`"${siteName}" is not a registered external site.`);
+      const row = requireRow(db, siteId);
 
       const transport = await openTransport(services, row);
       const data = await collectExternalHostData(transport, logger);
@@ -75,10 +95,9 @@ export function createExternalBulkOps(services: any, logger: any) {
       await writeExternalHostData(services.graphService, row.id, row.name, data, Date.now(), logger);
     },
 
-    async indexSite(siteId: string, siteName: string): Promise<SiteOpOutcome> {
+    async indexSite(siteId: string): Promise<SiteOpOutcome> {
       const db = services.graphService?.getDb?.();
-      const row = findById(db, siteId);
-      if (!row) throw new Error(`"${siteName}" is not a registered external site.`);
+      const row = requireRow(db, siteId);
 
       const transport = await openTransport(services, row);
       const indexService = new ExternalContentIndexService({

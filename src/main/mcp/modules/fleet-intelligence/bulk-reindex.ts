@@ -36,6 +36,13 @@ export const bulkReindexHandler: McpToolHandler = {
     const opId = await bulkOpManager.execute({
       type: 'reindex',
       siteIds,
+      // A halted Local site is started, indexed, and stopped again — the same
+      // contract every other reindex dispatcher uses (`INDEX_SITE`,
+      // `INDEX_ALL_AUTO`, `OpportunisticScheduler`). Sending no options made
+      // this the one path that reported "did not run" for work it could have
+      // done. Remote ids are unaffected: `executeSingle` gates auto-start on
+      // the site being Local.
+      options: { autoStartStop: true },
     });
 
     return ok(

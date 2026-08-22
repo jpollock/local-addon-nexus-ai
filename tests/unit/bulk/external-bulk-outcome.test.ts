@@ -28,8 +28,8 @@ import { createExternalBulkOps } from '../../../src/main/bulk/externalBulkOps';
 
 const SITE_ID = 'ssh:hostinger-test/palegreen-capybara-114180';
 
-function makeOps() {
-  const row = { id: SITE_ID, name: 'palegreen-capybara-114180', environment: 'production' };
+function makeOps(name: string | null = 'palegreen-capybara-114180') {
+  const row = { id: SITE_ID, name, environment: 'production' };
   const services: any = {
     graphService: { getDb: () => ({ prepare: () => ({ get: () => row, run: jest.fn() }) }) },
   };
@@ -43,7 +43,7 @@ describe('WP-67 — external host index reports what it observed', () => {
   test('a host that indexed documents is reported as having run', async () => {
     indexOne.mockResolvedValue({ documentCount: 85 });
 
-    const outcome = await makeOps().indexSite(SITE_ID, 'palegreen-capybara-114180');
+    const outcome = await makeOps().indexSite(SITE_ID);
 
     expect(outcome).toEqual({ ran: true });
   });
@@ -51,9 +51,28 @@ describe('WP-67 — external host index reports what it observed', () => {
   test('a host reached with zero documents is did-not-run, not a success', async () => {
     indexOne.mockResolvedValue({ documentCount: 0 });
 
-    const outcome = await makeOps().indexSite(SITE_ID, 'palegreen-capybara-114180');
+    const outcome = await makeOps().indexSite(SITE_ID);
 
     expect(outcome.ran).toBe(false);
     expect(outcome).toHaveProperty('reason');
+  });
+
+  /**
+   * WP-68. The sibling of the WP Engine name check. `indexOne` labels its work
+   * with the row's name, and the id is not a substitute for it — the same
+   * reasoning that made an id-as-name reach `WpeSshTransport`.
+   */
+  test('a row with no name is refused, and the index service is never reached', async () => {
+    indexOne.mockResolvedValue({ documentCount: 5 });
+
+    await expect(makeOps(null).indexSite(SITE_ID)).rejects.toThrow('no site name in the graph');
+    expect(indexOne).not.toHaveBeenCalled();
+  });
+
+  test('a row with a blank name is refused too', async () => {
+    indexOne.mockResolvedValue({ documentCount: 5 });
+
+    await expect(makeOps('   ').indexSite(SITE_ID)).rejects.toThrow('no site name in the graph');
+    expect(indexOne).not.toHaveBeenCalled();
   });
 });

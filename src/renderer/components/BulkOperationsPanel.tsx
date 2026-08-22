@@ -193,6 +193,9 @@ const resultListStyle: React.CSSProperties = {
 const RESULT_TONE: Record<string, { fg: string; bg: string }> = {
   completed: { fg: '#22c55e', bg: '#22c55e10' },
   skipped: { fg: '#a16207', bg: '#f59e0b10' },
+  // In flight, not a verdict. Without an entry here `toneFor` fell through to
+  // the failure colour and painted every working site red.
+  running: { fg: '#3b82f6', bg: '#3b82f610' },
   failed: { fg: '#ef4444', bg: '#ef444410' },
 };
 const toneFor = (status: string) => RESULT_TONE[status] ?? RESULT_TONE.failed;
@@ -394,7 +397,7 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
     // "Did not run" is named, not folded into either of the other two. A run
     // where nothing happened must not read as a run where everything worked.
     const summaryLine = `Results: ${summary.succeeded} succeeded, ${summary.failed} failed, `
-      + `${summary.skipped} did not run, ${summary.pending} pending`;
+      + `${summary.skipped} did not run, ${summary.running} running, ${summary.pending} pending`;
 
     return React.createElement(
       'div',
@@ -415,11 +418,16 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
                 { style: resultMessageStyle(result.status) },
                 // "Skipped — SSH key not configured" is a shippable sentence.
                 // "Success" is not, and it is what this said for 410 of 413.
+                // A site being worked on is not a verdict. The final branch
+                // used to catch 'running' too, so a working site printed the
+                // word "Failed" while the summary line said 0 failed.
                 result.status === 'completed'
                   ? 'Success'
                   : result.status === 'skipped'
                     ? `Did not run — ${result.skipReason || 'reason not recorded'}`
-                    : (result.error || 'Failed'),
+                    : result.status === 'running'
+                      ? 'Running…'
+                      : (result.error || 'Failed'),
               ),
               result.completedAt && result.startedAt
                 ? React.createElement('span', { style: resultDurationStyle }, this.formatDuration(result.completedAt - result.startedAt))

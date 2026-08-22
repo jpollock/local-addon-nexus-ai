@@ -59,19 +59,24 @@ export interface BulkOpDeps {
     /** Metadata refresh. Takes the CAPI install id, not the `wpe-` graph id. */
     syncSingleSite(installId: string): Promise<void>;
     /**
-     * Content index for one install. Takes the graph id.
+     * Content index for one install. Takes the graph id and NOTHING ELSE.
      *
-     * Returns an outcome rather than void, and that is deliberate: an indexer
-     * can complete having done nothing, and a `Promise<void>` gives it no way
-     * to say so. Declaring it required makes a new index adapter that has not
-     * decided a compile error rather than a silent "succeeded".
+     * The name is deliberately not a parameter. Threading one through the UI
+     * is what let a graph id reach `WpeSshTransport` as an install name; the
+     * adapter resolves it from the graph, which is the only place it is
+     * authoritative, and refuses rather than guessing.
+     *
+     * Returns an outcome rather than void, and that is deliberate too: an
+     * indexer can complete having done nothing, and a `Promise<void>` gives it
+     * no way to say so. Declaring it required makes a new index adapter that
+     * has not decided a compile error rather than a silent "succeeded".
      */
-    indexOne(siteId: string, installName: string): Promise<SiteOpOutcome>;
+    indexOne(siteId: string): Promise<SiteOpOutcome>;
   };
-  /** External SSH adapters. Both take the `ssh:<alias>/<site>` graph id. */
+  /** External SSH adapters. Both take the `ssh:<alias>/<site>` graph id, and only that. */
   externalOps?: {
-    refreshSite(siteId: string, siteName: string): Promise<void>;
-    indexSite(siteId: string, siteName: string): Promise<SiteOpOutcome>;
+    refreshSite(siteId: string): Promise<void>;
+    indexSite(siteId: string): Promise<SiteOpOutcome>;
   };
 }
 
@@ -364,32 +369,54 @@ export class BulkOperationManager {
       );
     }
 
-    const siteName = op.siteNames?.[siteId] ?? siteId;
+    // Display only. `op.siteNames` is a renderer-supplied map for labelling a
+    // row or an error, and it must never reach a transport again: when it had
+    // no entry the old `?? siteId` fallback handed a graph id to
+    // `WpeSshTransport` as an install name. Every adapter below now takes the
+    // graph id alone and resolves the name itself, at the point of use.
+    const label = op.siteNames?.[siteId] ?? siteId;
 
     if (source === 'wpe') {
       const ops = this.deps.wpeOps;
-      if (!ops) throw new Error(`WP Engine sync is not available in this process — cannot ${op.type} ${siteName}.`);
+      if (!ops) throw new Error(`WP Engine sync is not available in this process — cannot ${op.type} ${label}.`);
       if (op.type === 'sync-graph') {
         // syncSingleSite calls capiGetInstall, which does not know the `wpe-` form.
         await ops.syncSingleSite(wpeInstallIdOf(siteId));
         return { ran: true };
       }
-      return ops.indexOne(siteId, siteName);
+      return ops.indexOne(siteId);
     }
 
     const ops = this.deps.externalOps;
-    if (!ops) throw new Error(`External host access is not available in this process — cannot ${op.type} ${siteName}.`);
+    if (!ops) throw new Error(`External host access is not available in this process — cannot ${op.type} ${label}.`);
     if (op.type === 'sync-graph') {
-      await ops.refreshSite(siteId, siteName);
+      await ops.refreshSite(siteId);
       return { ran: true };
     }
-    return ops.indexSite(siteId, siteName);
+    return ops.indexSite(siteId);
   }
 
   private async executeReindex(siteId: string, options?: Record<string, any>): Promise<SiteOpOutcome> {
     const site = this.deps.siteDataBridge.resolveSiteObject(siteId);
     if (!site) {
       throw new Error(`Site not found: ${siteId}`);
+    }
+
+    // D9. A halted Local site has no MySQL, so `ContentPipeline` records
+    // `state: 'error'` with "MySQL not available — site may not be running"
+    // and indexes nothing. That is a site that DID NOT RUN, not one that
+    // failed — measured 2026-08-22: all 45 Local sites, one identical error.
+    //
+    // Gated on the site's status rather than on that error string: matching
+    // prose from another module is brittle, and the status is the actual fact.
+    //
+    // `autoStartStop` is the one line to flip. It is wired end to end —
+    // `executeSingle` already starts a halted site, waits for the database and
+    // stops it afterwards — and it is deliberately left OFF by default.
+    // Starting 45 sites because someone pressed a button is the owner's
+    // decision, not this function's.
+    if (!options?.autoStartStop && this.deps.siteDataBridge.getSiteStatus(siteId) !== 'running') {
+      return { ran: false, reason: `${site.name ?? siteId} is not running` };
     }
 
     // If auto-started, wait for database to be ready
