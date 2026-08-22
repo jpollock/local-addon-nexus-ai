@@ -218,3 +218,67 @@ Validating a purpose-built 8-site demo fleet with planted, documented defects
 confirm each planted defect is discoverable through a real Nexus tool. Three of
 seven are; the rest are blocked on the above rather than on the fixture — the
 data is present and verified on the sites themselves.
+
+---
+
+## D7 — Remote content extraction is hard-capped at 200 posts, silently
+
+**Added 2026-08-22, after D1–D5 were fixed.** This supersedes O1 below, whose
+hypothesis was wrong.
+
+**`src/main/content/RemoteContentExtractor.ts:44-56`**
+
+```ts
+const result = await transport.runWpCli([
+  'post', 'list',
+  '--post_type=any',
+  '--post_status=publish',
+  '--fields=…',
+  '--posts_per_page=200',      // ← hard cap
+  '--format=json',
+], { skipPlugins: false, skipThemes: false });
+```
+
+One call. No pagination, no `--offset` loop, no second page, and **no warning
+when the result is truncated**. The method's doc comment says "Extract all
+published content from a remote site in a single SSH call" — it cannot; it
+extracts at most 200.
+
+The log line reinforces the illusion: `${rawPosts.length} total → ${filtered.length} indexable`.
+`rawPosts.length` is already capped at 200, so a truncated index reports as a
+complete one.
+
+**Measured across the live fleet:**
+
+| site | source | published posts | indexed |
+|---|---|---|---|
+| `qwerky` | wpe | 30,628 | 2 |
+| `rtstgaitoolkit` | wpe | 1,716 | 163 |
+| `cedarvalehealt` | wpe | 600 | **200** |
+| `testmigratejpp` | wpe | 588 | **200** |
+| `poc4doble` | wpe | 544 | 185 |
+| `meridian` | **local** | 995 | **994** |
+
+Two installs sit exactly on the cap. The local extractor indexed 994 of 995, so
+this is specific to the remote path, not to indexing generally.
+
+**Impact.** Semantic search, `search_across_sites` and anything reading the
+content index is silently incomplete for any WP Engine install with more than
+200 published posts. There is no signal to the user that the index is partial —
+`get_index_status` reports the truncated count as the document total.
+
+**This also corrects O1.** The four missing CPTs on `cedarvalehealt` were not
+missing because they were unregistered at index time. I re-ran
+`wpe_sync_sites --content` with the seeder plugin active and the CPTs
+registered, and the breakdown was unchanged at 170 `post` + 30 `insurance_plan`.
+They fall outside the first 200 rows the extractor requests. `insurance_plan`
+survived because of row ordering, not because of a type-discovery quirk.
+
+**Fix shape.** Paginate with `--offset` until a short page returns, or raise the
+cap and emit an explicit truncation warning when it is hit. Whichever is chosen,
+**the truncation must be visible** — a partial index that reports as complete is
+worse than a slow one, because every downstream answer is confidently wrong.
+
+Note the external-host extractor was not audited for the same pattern. The three
+external sites in this fleet hold 85, 102 and 101 documents — all under 200, so
+they are complete by luck rather than by demonstration.
