@@ -312,6 +312,30 @@ ${e.meta.map(([k, v]) => `    <wp:postmeta><wp:meta_key>${k}</wp:meta_key><wp:me
     expect(result.coverage!.customFields).toBe('unavailable');
   });
 
+  it('does NOT pay for meta on posts that the empty-content filter discards', async () => {
+    // Measured on qwerky: 5,000 rows survive the post-type filter and TWO
+    // survive the empty-content filter. Reading meta before that filter cost
+    // 25 export calls — a WordPress bootstrap each — for posts that never
+    // reach the index.
+    const population = [
+      { ...row(1), post_content: '<p>real</p>' },
+      { ...row(2), post_content: '' },
+      { ...row(3), post_content: '' },
+      { ...row(4), post_content: '<p>also real</p>' },
+    ];
+    const empties = population.filter(p => p.post_content === '').length;
+    expect(empties).toBeGreaterThan(0); // the case is built
+
+    const exported: number[][] = [];
+    const { transport } = pagingTransport(population, {
+      wxr: (ids) => { exported.push(ids); return { success: true, stdout: wxrFor(ids.map(id => ({ id, meta: [['k', 'v']] }))) }; },
+    });
+    const result = await new RemoteContentExtractor({ logger: silentLogger() }).extract(transport, 'myhost');
+
+    expect(result.posts.map(p => p.id)).toEqual([1, 4]);
+    expect(exported).toEqual([[1, 4]]);
+  });
+
   it('does not let a thrown export abort the extraction', async () => {
     const { transport } = pagingTransport([row(1)], {
       wxr: () => { throw new Error('SSH closed'); },

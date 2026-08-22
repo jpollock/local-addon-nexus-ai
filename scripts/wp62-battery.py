@@ -118,9 +118,9 @@ MUTATIONS = [
      "  if (false && post.customFields && Object.keys(post.customFields).length > 0) {",
      "CUSTOM FIELDS LEAVE THE SEARCHABLE TEXT — on the LOCAL path too, silently. The third truncation restored and generalised, and it produces no count to be wrong"),
     ("M14", EXTRACTOR,
-     "            customFields: customFields.get(Number(postData.ID)) ?? {},",
-     "            customFields: {},",
-     "the meta is fetched, parsed, paid for over SSH — and thrown away at the last line. The expensive part still happens, which is why this shape survives review"),
+     "      for (const post of posts) {\n        post.customFields = customFields.get(post.id) ?? {};\n      }",
+     "",
+     "the meta is fetched, parsed, paid for over SSH — and never attached. The expensive part still happens, which is why this shape survives review"),
     ("M15", WXR,
      "  return key.length > 0 && !key.startsWith('_');",
      "  return key.length > 0;",
@@ -133,6 +133,11 @@ MUTATIONS = [
      "        coverage.customFields = 'unavailable';\n        coverage.customFieldsDetail = `wp export failed:",
      "        coverage.customFields = 'collected';\n        coverage.customFieldsDetail = `wp export failed:",
      "A FAILED META READ REPORTS SUCCESS — 'this site has no custom fields' and 'we could not read them' become the same answer, which is the silence the whole third truncation was made of"),
+
+    ("M23", EXTRACTOR,
+     "      const customFields = await this.fetchCustomFields(\n        transport, siteLabel, posts.map(p => p.id), coverage,\n      );",
+     "      const customFields = await this.fetchCustomFields(\n        transport, siteLabel, filtered.map((p: any) => Number(p.ID)), coverage,\n      );",
+     "META IS PAID FOR ON POSTS THAT ARE THEN DISCARDED — one WordPress bootstrap per page of ids for rows the empty-content filter drops. Measured on qwerky: 5,000 ids exported to index 2 posts"),
 
     # --- family 5: the status surface ----------------------------------------
     ("M18", STATUS,

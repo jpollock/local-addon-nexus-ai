@@ -124,10 +124,15 @@ export class RemoteContentExtractor {
         );
       }
 
-      const customFields = await this.fetchCustomFields(
-        transport, siteLabel, filtered.map((p: any) => Number(p.ID)), coverage,
-      );
-
+      // Build the posts BEFORE reading meta, and drop the empty ones first.
+      //
+      // The meta read is a WordPress bootstrap per page of ids, so fetching it
+      // for posts that are about to be discarded is pure round trips. Measured
+      // on qwerky: 5,000 rows survive the post-type filter and TWO survive the
+      // empty-content filter, so meta was being fetched for 4,998 posts that
+      // never reach the index — 25 export calls, and the bulk of a 431-second
+      // run. Ordering the filters this way is behaviour-neutral:
+      // `cleanedContent` does not depend on custom fields.
       const posts: ExtractedPost[] = filtered
         .map((postData: any) => {
           const cleanContent = postData.post_content
@@ -145,10 +150,17 @@ export class RemoteContentExtractor {
             date: postData.post_date || new Date().toISOString(),
             categories: [],
             tags: [],
-            customFields: customFields.get(Number(postData.ID)) ?? {},
+            customFields: {},
           } as ExtractedPost;
         })
         .filter((p: ExtractedPost) => p.cleanedContent.trim().length > 0);
+
+      const customFields = await this.fetchCustomFields(
+        transport, siteLabel, posts.map(p => p.id), coverage,
+      );
+      for (const post of posts) {
+        post.customFields = customFields.get(post.id) ?? {};
+      }
 
       this.logger.info(`[RemoteContentExtractor] Extracted ${posts.length} posts with content from ${siteLabel}`);
 
