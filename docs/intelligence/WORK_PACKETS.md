@@ -31962,3 +31962,100 @@ not a result.*
 Planned-but-unbuilt topics take a declared allowance carrying its
 reason, the shape `generate-situation-copy.ts` already uses for
 deferrals that must expire.
+
+---
+
+## WP-65 · ACCEPTED — and my measurement was wrong in both directions at once (2026-08-22, architect adjudication)
+
+**Accepted. Commit it.** Verified the three corrections at source.
+
+### The correction, and it is worse than a miscount
+
+I reported `site.status.observed` as *"emitted from six sites,"* built a
+finding on it — a live topic breaking the taxonomy's own stated rule —
+and told the packet not to widen the rule to fit.
+
+**It is emitted from zero.** The six occurrences are one renderer fixture
+(`scopeModel.ts:157`), four test fixtures, and a comment at
+`comparatorRead.ts:82` that says in as many words *"names a producer that
+has never existed."* **My grep counted a comment describing the absence
+as evidence of the presence.** The rule was never violated and the topic
+is not a topic.
+
+And the same grep failed the other way. `control.grant.issued`,
+`control.grant.revoked` and `task.run.completed` are all emitted — via
+`GRANT_ISSUED_TOPIC`, `GRANT_REVOKED_TOPIC`, `SCAN_TOPIC` — and my
+pattern only matched `topic: '<literal>'`, so a topic passed as a
+constant was invisible to it. I listed them as documented-never-emitted.
+Meanwhile `semantic.content.indexed`, which genuinely is not emitted,
+was missing from that list, and `episodic.agent_run.failed` was missing
+from the other one.
+
+**One method, false positives and false negatives simultaneously.**
+
+### The part that matters more than the miscount
+
+**The rule against exactly this already existed, and I wrote it.**
+
+WP-61 scoped its tool-surface sweep *by claim rather than token shape*,
+because a snake_case sweep matches `permalink_structure` and reports a
+count instead of a finding. I ratified that two days ago and put it in
+this document. **Then I ran a token-shape sweep for topics.**
+
+This is the eighth error of one family in three days, and it is the first
+where the correcting rule was already written, by this project, in this
+file, by me. **Which is the argument the whole week has been making: a
+rule is a thing its author forgets and a mechanism is a thing that goes
+red.** The packet's answer was to build the mechanism, and that is the
+right answer to my error rather than a ninth rule about it.
+
+### Three judgements I want on the record
+
+**The two July documents: link, do not absorb.** `data-levels.html` is
+the best per-level when/how material in the repo, with three stale rows
+named. `data-gaps-design.html` is **a proposal, not a description** —
+*"read for rationale; never as a statement of behaviour."* That
+distinction is the useful one and it is now stated where the next reader
+meets it.
+
+**`episodic.*`: stale reservation, not misused namespace** — four live
+producers use it correctly and `agentFailureProducer.ts:24` argues its
+own case. **Filed as an action on `architecture.md` §4.2 rather than
+silently corrected**, which is the right scope call.
+
+**Source and ledger answer different questions.** The ledger holds three
+`task.run.assigned` rows no source file emits, written by a WP-57 smoke
+script — so a ledger-anchored check would call that topic live while a
+source-anchored one calls it dead. **Both are correct about different
+questions**, and a document that says "what we collect" must say which
+one it means. Registered.
+
+### The document
+
+Seven stores cited from `architecture.md` §3A rather than re-derived.
+Three trigger kinds with all eight collection schedules **and their
+defaults — five of eight are off by default**, which §2.4 makes the first
+answer to *"why does this site's data look old."* That single line is
+worth more to a reader than anything else in the file.
+
+LIMITS gained real measurements beyond my floor: **313 remote index
+entries with `structure: null` and no coverage record, out of 636 total**;
+no site-halted record anywhere; the `task.run.assigned` orphans; run-id
+reaching one of three audit writers.
+
+### The check
+
+Both precedents, one per side — WP-61's TypeScript-parser sweep for
+source, WP-58's hand-written-list-parsed-back for the document —
+**because a regex would have counted `comparatorRead.ts`'s docblock as
+eight producers, which is precisely the mistake being corrected.**
+
+Ten mutations, all killed, including the three vacuous shapes named at
+the packet: both sides empty, list compared to itself, scan that cannot
+reach the emitters.
+
+**And two first read as SURVIVED because a shell-quoting bug put the
+mutation at line 1 instead of inside the table.** Re-anchored with an
+assert on match count; both then killed. That is WP-60's lesson —
+*when a survivor surprises you, read the artifact before you believe the
+scoreboard* — applied by the packet to its own harness.
