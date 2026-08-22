@@ -29611,3 +29611,120 @@ path and makes no claim about it.
 system Node, not Electron.** `npm run rebuild` is required before loading
 Local. Announced because the symlinked `node_modules` is shared with every
 other worktree on this machine.
+
+---
+
+## WP-60 · MERGE REPORT (2026-08-21) — accepted, and the minus-six recurred
+
+**Merged at `b4596c44`** into `poc/nexintelligence-ux`. Locks released:
+`src/main/mcp/modules/fleet/find-outdated-sites.ts` and its test are free.
+
+```
+ docs/intelligence/WORK_PACKETS.md                 | 188 ++++++++++++++++++++
+ src/main/mcp/modules/fleet/find-outdated-sites.ts |  51 ++++--
+ tests/main/find-outdated-sites.test.ts            | 203 ++++++++++++++++++++++
+ 3 files changed, 429 insertions(+), 13 deletions(-)
+```
+
+### The merged tree, measured
+
+**634 suites / 8,847 tests / 8,845 passed / 2 skipped, primary, exit 0.**
+`npm run typecheck` exit 0. Against the base's `634 / 8,834 / 8,832 / 2`
+primary: **+13 tests, +13 passed, suites and skipped unchanged.** Thirteen is
+exactly `1 + (4 × 3)` — the enumeration test plus three assertions over four
+filter values. Nothing else moved.
+
+The base measurement was **read, not re-run**, per the base-measure rule:
+`7924c459`, guard `git diff --name-only 7924c459 HEAD -- src/ tests/ scripts/`
+empty at the cut. The two runs that earned their place — the merged tree and
+the battery — both ran.
+
+`base-measure.json` is overwritten to `b4596c44` with the figures above.
+
+### The conflict: WP-58's minus-six, recurring on schedule
+
+Both sides were pure appends at the same offset, proven from **hunk headers**
+rather than a diffstat: `@@ -29183,0 +29184,242 @@` (ux, carrying WP-61's
+announce and the architect's WP-58 acceptance) and `@@ -29183,0 +29184,189 @@`
+(wp-60). Both open `\n---\n\n`, so diff3 matched the pair as common context
+and emitted it **once** — the identical mechanism WP-58 documented, in the
+identical file, one day later. It is not a one-off; it is what this file does
+whenever two packets append between merges.
+
+Both sections kept, separator restored by hand.
+
+**Four-way residual: −1 byte. Located, not shrugged at.** The ux side ends
+`true.\n\n`; this branch's append opens `\n---\n\n`. Summing the two deltas
+therefore predicts **two** blank lines before the `---`. Measured against the
+file's own convention:
+
+```
+one-blank boundaries: 309
+two-blank boundaries:   9
+```
+
+The resolution takes the 309 form, so the file is one newline shorter than the
+arithmetic ideal. **The residual is a question and this is its answer** — a
+deliberate conformance to the document's dominant shape, not structure the
+merge ate. The 6 bytes the merge *did* eat were re-inserted; 5 of the 6, with
+the sixth already present as the ux side's trailing blank.
+
+### An amendment the rule earns
+
+WP-58 amended the residual rule to *both directions*. This merge suggests one
+more clause, because a reader who finds −1 and stops at "deficit is structure
+the merge ate" would re-insert a blank line the file does not want:
+
+> **A residual is answered by locating it, not by driving it to zero.** Zero
+> is the proof only when both sides' bytes are independently correct. Where
+> the two appends overlap in structure — a shared separator, a shared trailing
+> blank — the correct merged file is *smaller* than the sum, and forcing the
+> sum back reintroduces the duplication the merge removed. Name the offset,
+> name the bytes, say which convention decided it.
+
+### What this packet found that outlived it
+
+**A line-scanning ban cannot distinguish a use from a mention.**
+`external-visibility.test.ts` forbids a hardcoded WPE source literal anywhere
+in `modules/fleet/`. The comment written to explain *why that literal could
+not be used here* contained it, and the build went red on the prose. The guard
+was right; the comment was reworded. Recorded because the tempting "fix" —
+exempting comments — is exactly the hole the guard exists to close.
+
+**A battery's expected exit code is part of the instrument.** M5 was reported
+`SURVIVED` because the harness asserted exit `1` for a `tsc` run that exits
+`2`. The mutation was dead. Reading the artifact settled it; the scoreboard
+had it backwards. Same family as WP-54a's blind battery with the sign flipped
+— an instrument that reports a failure that did not happen is as useless as
+one that cannot report failure at all.
+
+**`npm run typecheck` does not compile `tests/`.** `tsconfig.json` excludes
+it; ts-jest uses `tsconfig.test.json`, which includes it. So a type-level pin
+in a test file is enforced by step 2 of the definition of done and is
+**invisible to step 1**. This packet's announce got that wrong and the report
+corrects it. Both gates hold here only because the `Record` over the value set
+exists on **both** sides — `SOURCE_LABELS` in production and `EXPECTATIONS` in
+the test:
+
+```
+npx tsc --noEmit  → exit 2, src/…/find-outdated-sites.ts(45,7): TS2741
+npx jest …        → exit 1, tests/main/find-outdated-sites.test.ts:337: TS2741
+```
+
+A packet placing an exhaustiveness pin should know which compiler it just
+bought.
+
+### Not in scope, still open
+
+- **D6** — untouched here; its reproduction is a re-run after WP-58, which has
+  merged. No claim made either way.
+- **The CPT observation** — `location`/`provider`/`treatment`/`condition`
+  indexing at 0 while `insurance_plan` came through at 30 — remains
+  undispositioned and belongs to the type-discovery path.
+
+### ABI
+
+`npm test` ran in this checkout. **better-sqlite3 is built for system Node,
+not Electron.** `npm run rebuild` is required before loading Local. The
+`node_modules` is symlinked across every worktree, so this is the machine's
+state, not this checkout's.
