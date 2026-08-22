@@ -23,6 +23,21 @@ import { IndexRegistry } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
+import type { SiteOpOutcome } from '../bulk/types';
+
+/**
+ * What a content sync actually did.
+ *
+ * `syncContent` used to return `void` on three different exits — missing
+ * dependencies, zero posts extracted, and any caught error — which made
+ * "indexed", "nothing to do" and "it broke" indistinguishable to every caller.
+ * On 2026-08-22 that reported 365 installs as successfully indexed when the
+ * extractor had returned no posts for any of them.
+ */
+export type ContentSyncOutcome =
+  | { state: 'indexed'; documents: number; chunks: number }
+  | { state: 'skipped'; reason: string }
+  | { state: 'failed'; error: string };
 
 export interface WPESyncProgress {
   total: number;
@@ -448,10 +463,10 @@ export class WPESyncService {
    * Sync content for a WPE install (Phase 2)
    * Extracts posts/pages and indexes them for semantic search
    */
-  private async syncContent(siteId: string, installName: string, startTime = Date.now()): Promise<void> {
+  private async syncContent(siteId: string, installName: string, startTime = Date.now()): Promise<ContentSyncOutcome> {
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
       this.logger.warn(`[WPESyncService] Content sync skipped - missing dependencies`);
-      return;
+      return { state: 'skipped', reason: 'SSH key or embedding service not configured' };
     }
 
     try {
@@ -464,7 +479,10 @@ export class WPESyncService {
 
       if (!extracted.posts || extracted.posts.length === 0) {
         this.logger.info(`[WPESyncService] No content to index for ${installName}`);
-        return;
+        // This is the exit all 365 installs took on 2026-08-22, and it wrote
+        // nothing in either direction — no registry stamp, no error. An
+        // absence stated with its reason is reportable; a blank is not.
+        return { state: 'skipped', reason: 'No content returned by the extractor' };
       }
 
       for (const post of extracted.posts) {
@@ -586,6 +604,8 @@ export class WPESyncService {
         // Metadata sync failure is non-fatal — content is already indexed
         this.logger.warn(`[WPESyncService] Metadata piggyback failed for ${installName}: ${metaErr?.message}`);
       }
+
+      return { state: 'indexed', documents: uniquePostIds.size, chunks: embeddedDocs.length };
     } catch (error: any) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
@@ -593,7 +613,12 @@ export class WPESyncService {
       if (this.indexRegistry) {
         this.indexRegistry.update(siteId, { state: 'error', lastIndexed: Date.now() } as any);
       }
-      // Don't throw - content sync is optional, metadata sync succeeded
+      // Still does not throw — but it no longer resolves indistinguishably from
+      // success either. The old comment here ("content sync is optional,
+      // metadata sync succeeded") described a metadata caller that no longer
+      // exists: both remaining callers ARE content-index callers, and each now
+      // decides for itself what to do with a failure.
+      return { state: 'failed', error: errorMsg };
     }
   }
 
@@ -603,14 +628,14 @@ export class WPESyncService {
    * plugins, users) at no extra SSH cold-start cost.
    * Used by the Operations tab "Index content" button for WPE sites.
    */
-  async indexAllWpeContent(): Promise<{ indexed: number; errors: number }> {
+  async indexAllWpeContent(): Promise<{ indexed: number; skipped: number; errors: number }> {
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
       this.logger.warn('[WPESyncService] indexAllWpeContent: missing dependencies (SSH key or embedding service not configured)');
-      return { indexed: 0, errors: 0 };
+      return { indexed: 0, skipped: 0, errors: 0 };
     }
 
     const db = this.graphService.getDb();
-    if (!db) return { indexed: 0, errors: 0 };
+    if (!db) return { indexed: 0, skipped: 0, errors: 0 };
 
     const installs = db.prepare(
       "SELECT id, name FROM sites WHERE source = 'wpe' AND is_active = 1"
@@ -618,10 +643,11 @@ export class WPESyncService {
 
     if (installs.length === 0) {
       this.logger.info('[WPESyncService] indexAllWpeContent: no active WPE installs found');
-      return { indexed: 0, errors: 0 };
+      return { indexed: 0, skipped: 0, errors: 0 };
     }
 
     let indexed = 0;
+    let skipped = 0;
     let errors = 0;
 
     // Process up to 2 concurrently, emitting INDEX_PROGRESS per install
@@ -635,12 +661,26 @@ export class WPESyncService {
           message: `Indexing ${install.name} via SSH…`,
         });
         try {
-          await this.syncContent(install.id, install.name, startTime);
-          indexed++;
-          this.emitIndexProgress?.(install.id, {
-            state: 'indexed', progress: 100, message: 'Indexed',
-            documentCount: this.indexRegistry?.get(install.id)?.documentCount ?? 0,
-          });
+          const outcome = await this.syncContent(install.id, install.name, startTime);
+          if (outcome.state === 'indexed') {
+            indexed++;
+            this.emitIndexProgress?.(install.id, {
+              state: 'indexed', progress: 100, message: 'Indexed',
+              documentCount: this.indexRegistry?.get(install.id)?.documentCount ?? 0,
+            });
+          } else if (outcome.state === 'skipped') {
+            // Counted separately, never as `indexed`. This loop is the
+            // fleet-wide twin of the bulk defect: it incremented `indexed` for
+            // every resolved promise, so the same 365 no-ops read as successes
+            // here too.
+            skipped++;
+            this.emitIndexProgress?.(install.id, {
+              state: 'idle', progress: 100, message: `Not indexed — ${outcome.reason}`,
+            });
+          } else {
+            errors++;
+            this.emitIndexProgress?.(install.id, { state: 'error', progress: 0, message: 'Indexing failed' });
+          }
         } catch {
           errors++;
           this.emitIndexProgress?.(install.id, { state: 'error', progress: 0, message: 'Indexing failed' });
@@ -648,8 +688,10 @@ export class WPESyncService {
       }));
     }
 
-    this.logger.info(`[WPESyncService] indexAllWpeContent complete: ${indexed} indexed, ${errors} errors`);
-    return { indexed, errors };
+    this.logger.info(
+      `[WPESyncService] indexAllWpeContent complete: ${indexed} indexed, ${skipped} not indexed, ${errors} errors`,
+    );
+    return { indexed, skipped, errors };
   }
 
   /**
@@ -661,14 +703,27 @@ export class WPESyncService {
    * and returning zero: the caller is BulkOperationManager, which records a
    * per-site error, and a silent no-op there would report "indexed" for a site
    * nothing ran against.
+   *
+   * WP-67: that reasoning was right and the guard was one level too shallow.
+   * It re-checked the three dependencies and threw, then called `syncContent`,
+   * which re-checked the same three and swallowed every OTHER failure — so the
+   * entry condition was guarded and the body ate the rest. The dependency check
+   * below is now redundant with `syncContent`'s own `skipped` outcome and is
+   * kept only because it produces a throw (a failure) rather than a skip when
+   * the whole feature is unconfigured, which is the honest reading for a site
+   * the user explicitly selected. Everything else comes from the outcome.
    */
-  async indexOneWpeContent(siteId: string, installName: string): Promise<void> {
+  async indexOneWpeContent(siteId: string, installName: string): Promise<SiteOpOutcome> {
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
       throw new Error(
         'WP Engine content indexing is unavailable — SSH key or embedding service not configured.',
       );
     }
-    await this.syncContent(siteId, installName);
+
+    const outcome = await this.syncContent(siteId, installName);
+    if (outcome.state === 'failed') throw new Error(outcome.error);
+    if (outcome.state === 'skipped') return { ran: false, reason: outcome.reason };
+    return { ran: true };
   }
 
   /**

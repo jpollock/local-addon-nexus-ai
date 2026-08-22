@@ -13,7 +13,7 @@ function createMockOperations(): BulkOperationStatus[] {
       type: 'reindex',
       siteIds: ['site-1', 'site-2', 'site-3'],
       status: 'running',
-      progress: { completed: 1, total: 3, errors: [] },
+      progress: { completed: 1, total: 3, errors: [], skipped: [] },
       siteResults: {
         'site-1': { status: 'completed', startedAt: Date.now() - 5000, completedAt: Date.now() - 3800 },
         'site-2': { status: 'running', startedAt: Date.now() - 2000 },
@@ -27,7 +27,7 @@ function createMockOperations(): BulkOperationStatus[] {
       type: 'plugin-update',
       siteIds: ['site-1', 'site-2'],
       status: 'completed',
-      progress: { completed: 2, total: 2, errors: [] },
+      progress: { completed: 2, total: 2, errors: [], skipped: [] },
       siteResults: {
         'site-1': { status: 'completed', startedAt: Date.now() - 10000, completedAt: Date.now() - 9200 },
         'site-2': { status: 'completed', startedAt: Date.now() - 9000, completedAt: Date.now() - 8050 },
@@ -40,7 +40,7 @@ function createMockOperations(): BulkOperationStatus[] {
       type: 'health-refresh',
       siteIds: ['site-4'],
       status: 'failed',
-      progress: { completed: 1, total: 1, errors: ['Site not running'] },
+      progress: { completed: 1, total: 1, errors: ['Site not running'], skipped: [] },
       siteResults: {
         'site-4': { status: 'failed', startedAt: Date.now() - 30000, completedAt: Date.now() - 25000, error: 'Site not running' },
       },
@@ -52,7 +52,7 @@ function createMockOperations(): BulkOperationStatus[] {
       type: 'start',
       siteIds: ['site-5', 'site-6'],
       status: 'cancelled',
-      progress: { completed: 1, total: 2, errors: [] },
+      progress: { completed: 1, total: 2, errors: [], skipped: [] },
       siteResults: {
         'site-5': { status: 'completed', startedAt: Date.now() - 45000, completedAt: Date.now() - 44500 },
         'site-6': { status: 'pending', startedAt: 0 },

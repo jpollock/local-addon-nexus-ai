@@ -1,4 +1,5 @@
 import type { IVectorStore } from '../vector-store/IVectorStore';
+import type { SiteOpOutcome } from '../bulk/types';
 import { EmbeddingService } from '../embeddings/EmbeddingService';
 import { ContentPipeline } from '../content/ContentPipeline';
 import { IndexRegistry } from '../content/IndexRegistry';
@@ -127,10 +128,10 @@ export interface WpeSyncAccessor {
   /** One install's metadata, by CAPI install id — not by name. Ignores staleness. */
   syncSingleSite(installId: string): Promise<void>;
   /** Fleet content index. Reads the graph's existing `wpe` rows; cannot add one. */
-  indexAllWpeContent(): Promise<{ indexed: number; errors: number }>;
+  indexAllWpeContent(): Promise<{ indexed: number; skipped: number; errors: number }>;
   /** One install's content index. Throws on missing dependencies where the
    *  fleet-wide version warns and returns zero. */
-  indexOneWpeContent(siteId: string, installName: string): Promise<void>;
+  indexOneWpeContent(siteId: string, installName: string): Promise<SiteOpOutcome>;
 }
 
 /**

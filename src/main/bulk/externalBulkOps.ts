@@ -12,6 +12,7 @@ import { collectExternalHostData } from '../startup/collectExternalHostData';
 import { writeExternalHostData } from '../startup/writeExternalHostData';
 import { ExternalContentIndexService } from '../events/ExternalContentIndexService';
 import { ensureContentIndexedAtColumn } from '../startup/ExternalContentIndexScheduler';
+import type { SiteOpOutcome } from './types';
 
 interface ExternalRow {
   id: string;
@@ -74,7 +75,7 @@ export function createExternalBulkOps(services: any, logger: any) {
       await writeExternalHostData(services.graphService, row.id, row.name, data, Date.now(), logger);
     },
 
-    async indexSite(siteId: string, siteName: string): Promise<void> {
+    async indexSite(siteId: string, siteName: string): Promise<SiteOpOutcome> {
       const db = services.graphService?.getDb?.();
       const row = findById(db, siteId);
       if (!row) throw new Error(`"${siteName}" is not a registered external site.`);
@@ -87,17 +88,29 @@ export function createExternalBulkOps(services: any, logger: any) {
         indexRegistry: services.indexRegistry,
         logger,
       });
-      await indexService.indexOne(transport, row.id, row.name);
+      const { documentCount } = await indexService.indexOne(transport, row.id, row.name);
 
       // Stamp the staleness column the scheduler reads, so a host indexed here
       // is not redundantly re-indexed on the next cycle. The scheduler is
       // opt-in and may never have run in this process, so the column is
       // ensured rather than assumed.
+      //
+      // Stamped for a zero-document host too: the host WAS reached and asked,
+      // so the next cycle would learn nothing new by asking again. The stamp
+      // records contact, which is a separate question from whether there was
+      // anything to index.
       try {
         if (ensureContentIndexedAtColumn(db, logger)) {
           db.prepare('UPDATE sites SET content_indexed_at = ? WHERE id = ?').run(Date.now(), row.id);
         }
       } catch { /* best-effort staleness stamp, matches the scheduler's tolerance */ }
+
+      // `indexOne` marks a zero-post host 'indexed' and returns a count of
+      // zero — the same shape as WP Engine's zero-post exit, and the same
+      // reason it must not be reported as a success.
+      return documentCount === 0
+        ? { ran: false, reason: 'No content returned by the extractor' }
+        : { ran: true };
     },
   };
 }

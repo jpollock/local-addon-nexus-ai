@@ -871,12 +871,16 @@ export interface BulkOperationStatus {
   siteIds: string[];
   siteNames?: Record<string, string>;
   status: 'running' | 'completed' | 'completed_with_errors' | 'cancelled' | 'failed';
-  progress: { completed: number; total: number; errors: string[] };
+  progress: { completed: number; total: number; errors: string[]; skipped: string[] };
   siteResults: Record<string, {
-    status: 'pending' | 'running' | 'completed' | 'failed';
+    // `skipped` is a first-class outcome: the work did not run, and that is
+    // neither a success nor a failure. See src/main/bulk/types.ts (WP-67).
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
     startedAt: number;
     completedAt?: number;
     error?: string;
+    /** Present only on `skipped` — why the work did not run. */
+    skipReason?: string;
   }>;
   createdAt: number;
   completedAt: number | null;

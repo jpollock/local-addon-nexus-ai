@@ -133,28 +133,45 @@ export const syncSitesHandler: McpToolHandler = {
             `installs from the WP Engine API and creates their rows — then retry with content: true.`,
           );
         }
+        let outcome;
         try {
-          await sync.indexOneWpeContent(row.id, row.name);
+          outcome = await sync.indexOneWpeContent(row.id, row.name);
         } catch (err: any) {
           return error(`Content indexing failed for "${row.name}": ${err?.message ?? String(err)}`);
+        }
+        // An indexer can complete having done nothing. Reporting that as a
+        // green tick is the same defect the Operations tab had — an agent
+        // reading "✅ Indexed content" will not go looking for the zero rows.
+        if (!outcome.ran) {
+          return ok(
+            `**${row.name}** was reached but nothing was indexed — ${outcome.reason}. ` +
+            `No content rows were written.`,
+          );
         }
         return ok(`✅ Indexed content for **${row.name}** (metadata refreshed on the same SSH session).`);
       }
 
       const result = await sync.indexAllWpeContent();
-      // indexAllWpeContent returns {0,0} both for "nothing to do" and for
+      // indexAllWpeContent returns all-zero both for "nothing to do" and for
       // "dependencies missing" — it warns to the log and returns rather than
       // throwing. A bare "0 indexed" would read as success, so the zero case
       // names both reachable causes instead of picking one.
-      if (result.indexed === 0 && result.errors === 0) {
+      // Truthiness, not `=== 0`: an absent count must not fall through to the
+      // success message. That is the same failure mode as the defect above —
+      // missing information reading as a clean result.
+      if (!result.indexed && !result.skipped && !result.errors) {
         return ok(
           'No WP Engine content was indexed. Either there are no active WP Engine installs in ' +
           'the graph (run this tool without content: true first, which discovers them), or the ' +
           'SSH key / embedding service is not configured. The Nexus AI log names which.',
         );
       }
+      // `skipped` is reported alongside, never folded into `indexed`. On
+      // 2026-08-22 all 365 installs took the skip path and the fleet-wide
+      // counter called every one of them indexed.
       return ok(
         `✅ WP Engine content index complete — ${result.indexed} install(s) indexed` +
+        `${result.skipped > 0 ? `, ${result.skipped} reached but had no content to index` : ''}` +
         `${result.errors > 0 ? `, ${result.errors} failed (see the Nexus AI log)` : ''}.`,
       );
     }

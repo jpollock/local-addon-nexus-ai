@@ -8,6 +8,7 @@ import type {
   BulkOperationRequest,
   BulkOperationStatus,
   SiteOpResult,
+  SiteOpOutcome,
   BulkOpType,
 } from './types';
 import { auditDirectOperation, type AuditCapableServices } from '../audit/auditDirectOperation';
@@ -57,13 +58,20 @@ export interface BulkOpDeps {
   wpeOps?: {
     /** Metadata refresh. Takes the CAPI install id, not the `wpe-` graph id. */
     syncSingleSite(installId: string): Promise<void>;
-    /** Content index for one install. Takes the graph id. */
-    indexOne(siteId: string, installName: string): Promise<void>;
+    /**
+     * Content index for one install. Takes the graph id.
+     *
+     * Returns an outcome rather than void, and that is deliberate: an indexer
+     * can complete having done nothing, and a `Promise<void>` gives it no way
+     * to say so. Declaring it required makes a new index adapter that has not
+     * decided a compile error rather than a silent "succeeded".
+     */
+    indexOne(siteId: string, installName: string): Promise<SiteOpOutcome>;
   };
   /** External SSH adapters. Both take the `ssh:<alias>/<site>` graph id. */
   externalOps?: {
     refreshSite(siteId: string, siteName: string): Promise<void>;
-    indexSite(siteId: string, siteName: string): Promise<void>;
+    indexSite(siteId: string, siteName: string): Promise<SiteOpOutcome>;
   };
 }
 
@@ -101,7 +109,7 @@ export class BulkOperationManager {
       siteNames: request.siteNames ?? {},
       options: request.options ?? {},
       status: 'running',
-      progress: { completed: 0, total: request.siteIds.length, errors: [] },
+      progress: { completed: 0, total: request.siteIds.length, errors: [], skipped: [] },
       results: new Map(),
       createdAt: Date.now(),
       completedAt: null,
@@ -256,8 +264,26 @@ export class BulkOperationManager {
         }
       }
 
-      await this.executeByType(op, siteId);
-      result.status = 'completed';
+      // Throwing is the failure channel; the returned outcome says whether the
+      // work actually ran. Treating "did not throw" as "succeeded" is what
+      // reported 413 successes for three sites' worth of work.
+      const outcome = await this.executeByType(op, siteId);
+      // An adapter that returns nothing has not said whether the work ran.
+      // TypeScript requires an outcome, so this is only reachable from an
+      // untyped or out-of-tree adapter — and the one thing we must not do is
+      // assume success, which is the whole defect. Fail loudly instead.
+      if (!outcome || typeof outcome.ran !== 'boolean') {
+        throw new Error(
+          `'${op.type}' returned no outcome for ${siteId}, so it cannot be confirmed to have run.`,
+        );
+      }
+      if (outcome.ran) {
+        result.status = 'completed';
+      } else {
+        result.status = 'skipped';
+        result.skipReason = outcome.reason;
+        op.progress.skipped.push(siteId);
+      }
       result.completedAt = Date.now();
     } catch (err: any) {
       result.status = 'failed';
@@ -280,7 +306,16 @@ export class BulkOperationManager {
     this.deps.onProgress(op.id, this.getStatus(op.id)!);
   }
 
-  private async executeByType(op: BulkOperation, siteId: string): Promise<void> {
+  /**
+   * The one seam that decides the word "Success".
+   *
+   * Contract: THROW means the work ran and failed. Returning `{ran: false}`
+   * means it did not run, and must carry a reason a user can act on. Every
+   * implementation obeys this one rule — the disagreement between three
+   * implementations, each returning normally on failure, is the defect this
+   * replaces.
+   */
+  private async executeByType(op: BulkOperation, siteId: string): Promise<SiteOpOutcome> {
     const source = siteSourceOf(siteId);
     if (source !== 'local') {
       return this.executeRemote(op, siteId, source);
@@ -290,17 +325,23 @@ export class BulkOperationManager {
       case 'reindex':
         return this.executeReindex(siteId, op.options);
       case 'plugin-update':
-        return this.executePluginUpdate(siteId, op.options.pluginSlug, op.options);
+        await this.executePluginUpdate(siteId, op.options.pluginSlug, op.options);
+        return { ran: true };
       case 'start':
-        return this.deps.siteDataBridge.startSite(siteId);
+        await this.deps.siteDataBridge.startSite(siteId);
+        return { ran: true };
       case 'stop':
-        return this.deps.siteDataBridge.stopSite(siteId);
+        await this.deps.siteDataBridge.stopSite(siteId);
+        return { ran: true };
       case 'health-refresh':
-        return this.executeHealthRefresh(siteId);
+        await this.executeHealthRefresh(siteId);
+        return { ran: true };
       case 'setup-ai':
-        return this.executeSetupAI(siteId, op.options);
+        await this.executeSetupAI(siteId, op.options);
+        return { ran: true };
       case 'sync-graph':
-        return this.executeGraphSync(siteId, op.options);
+        await this.executeGraphSync(siteId, op.options);
+        return { ran: true };
       default:
         throw new Error(`Unknown operation type: ${op.type}`);
     }
@@ -315,7 +356,7 @@ export class BulkOperationManager {
    * a message that reads like the site is missing rather than like the
    * operation was pointed at the wrong backend.
    */
-  private async executeRemote(op: BulkOperation, siteId: string, source: SiteSource): Promise<void> {
+  private async executeRemote(op: BulkOperation, siteId: string, source: SiteSource): Promise<SiteOpOutcome> {
     if (REMOTE_SUPPORTED.indexOf(op.type) === -1) {
       throw new Error(
         `'${op.type}' is not supported for ${source} sites — it is a Local-only operation. ` +
@@ -328,20 +369,24 @@ export class BulkOperationManager {
     if (source === 'wpe') {
       const ops = this.deps.wpeOps;
       if (!ops) throw new Error(`WP Engine sync is not available in this process — cannot ${op.type} ${siteName}.`);
-      // syncSingleSite calls capiGetInstall, which does not know the `wpe-` form.
-      return op.type === 'sync-graph'
-        ? ops.syncSingleSite(wpeInstallIdOf(siteId))
-        : ops.indexOne(siteId, siteName);
+      if (op.type === 'sync-graph') {
+        // syncSingleSite calls capiGetInstall, which does not know the `wpe-` form.
+        await ops.syncSingleSite(wpeInstallIdOf(siteId));
+        return { ran: true };
+      }
+      return ops.indexOne(siteId, siteName);
     }
 
     const ops = this.deps.externalOps;
     if (!ops) throw new Error(`External host access is not available in this process — cannot ${op.type} ${siteName}.`);
-    return op.type === 'sync-graph'
-      ? ops.refreshSite(siteId, siteName)
-      : ops.indexSite(siteId, siteName);
+    if (op.type === 'sync-graph') {
+      await ops.refreshSite(siteId, siteName);
+      return { ran: true };
+    }
+    return ops.indexSite(siteId, siteName);
   }
 
-  private async executeReindex(siteId: string, options?: Record<string, any>): Promise<void> {
+  private async executeReindex(siteId: string, options?: Record<string, any>): Promise<SiteOpOutcome> {
     const site = this.deps.siteDataBridge.resolveSiteObject(siteId);
     if (!site) {
       throw new Error(`Site not found: ${siteId}`);
@@ -364,6 +409,15 @@ export class BulkOperationManager {
       mysqlDatabase: 'local',
       sitePath: site.path,
     });
+
+    // `indexSite` reports failure by RETURNING it: it writes `state: 'error'`
+    // into the IndexRegistry and resolves normally. Reading only the throw
+    // meant the registry and the panel wrote both words about the same site in
+    // the same second — 45 of them, measured. Mirror what the registry
+    // recorded; a site the pipeline calls errored is not a success here.
+    if (indexResult?.errors?.length) {
+      throw new Error(indexResult.errors.join('; '));
+    }
 
     // Refresh metadata cache after indexing — same as lifecycle hook does on siteStarted.
     // postCount is metadata, not a content-index concern — collect it here alongside other fields.
@@ -422,6 +476,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType]);`,
         // Non-fatal — index succeeded, metadata refresh best-effort
       }
     }
+
+    return { ran: true };
   }
 
   private async executePluginUpdate(siteId: string, pluginSlug?: string, options?: Record<string, any>): Promise<void> {

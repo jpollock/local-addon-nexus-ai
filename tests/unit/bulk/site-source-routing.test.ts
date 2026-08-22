@@ -60,11 +60,13 @@ function makeManager(over: any = {}) {
     onProgress: jest.fn(),
     wpeOps: {
       syncSingleSite: jest.fn(async (installId: string) => { calls.push(`wpe:sync:${installId}`); }),
-      indexOne: jest.fn(async (siteId: string) => { calls.push(`wpe:index:${siteId}`); }),
+      // Returns an outcome, not void: WP-67 made `ran` the thing that decides
+      // the word "Success", and these fakes do perform their work.
+      indexOne: jest.fn(async (siteId: string) => { calls.push(`wpe:index:${siteId}`); return { ran: true as const }; }),
     },
     externalOps: {
       refreshSite: jest.fn(async (siteId: string) => { calls.push(`ext:refresh:${siteId}`); }),
-      indexSite: jest.fn(async (siteId: string) => { calls.push(`ext:index:${siteId}`); }),
+      indexSite: jest.fn(async (siteId: string) => { calls.push(`ext:index:${siteId}`); return { ran: true as const }; }),
     },
     ...over,
   };

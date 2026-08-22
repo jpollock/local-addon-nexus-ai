@@ -29,7 +29,7 @@ function makeHarness(opts: {
   capiAvailable?: boolean;
   capiInstalls?: Array<{ id: string; name: string }>;
   syncAllResult?: unknown;
-  indexAllResult?: { indexed: number; errors: number };
+  indexAllResult?: { indexed: number; skipped: number; errors: number };
 } = {}): Harness {
   const {
     rows = [],
@@ -37,14 +37,16 @@ function makeHarness(opts: {
     capiAvailable = true,
     capiInstalls = [],
     syncAllResult = { success: true, synced: 3, skipped: 1, failed: 0, errors: [] },
-    indexAllResult = { indexed: 2, errors: 0 },
+    indexAllResult = { indexed: 2, skipped: 0, errors: 0 },
   } = opts;
 
   const sync = {
     syncAllWPESites: jest.fn(async () => syncAllResult),
     syncSingleSite: jest.fn(async () => undefined),
     indexAllWpeContent: jest.fn(async () => indexAllResult),
-    indexOneWpeContent: jest.fn(async () => undefined),
+    // WP-67: an outcome, not void — `ran` is what decides whether the tool
+    // reports a green tick or says the install was reached and had nothing.
+    indexOneWpeContent: jest.fn(async () => ({ ran: true as const })),
   };
 
   const capiGetInstalls = jest.fn(async () => capiInstalls);
@@ -225,7 +227,7 @@ describe('wpe_sync_sites — content mode (the two messages about the search ind
     // indexAllWpeContent returns {0,0} for "no installs" AND for "no SSH key /
     // no embedding service" — it warns to the log and returns. A bare success
     // line here is the silent-failure shape.
-    const h = makeHarness({ indexAllResult: { indexed: 0, errors: 0 } });
+    const h = makeHarness({ indexAllResult: { indexed: 0, skipped: 0, errors: 0 } });
     const r = await syncSitesHandler.execute({ content: true }, h.services);
 
     expect(textOf(r)).toContain('no active WP Engine installs');
@@ -233,7 +235,7 @@ describe('wpe_sync_sites — content mode (the two messages about the search ind
   });
 
   test('per-install failures are counted in the summary, not hidden', async () => {
-    const h = makeHarness({ indexAllResult: { indexed: 5, errors: 2 } });
+    const h = makeHarness({ indexAllResult: { indexed: 5, skipped: 0, errors: 2 } });
     const r = await syncSitesHandler.execute({ content: true }, h.services);
 
     expect(textOf(r)).toContain('5 install(s) indexed');

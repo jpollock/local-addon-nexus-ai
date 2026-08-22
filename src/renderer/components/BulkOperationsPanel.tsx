@@ -19,6 +19,7 @@ import type { BulkOperationStatus } from '../../common/types';
 // Typing the map by BulkOpType makes it exhaustive: a new job type fails the build here
 // rather than silently rendering its raw identifier to a user.
 import type { BulkOpType } from '../../main/bulk/types';
+import { summarizeBulkOperation, type BulkOperationSummary } from '../../main/bulk/summary';
 
 /**
  * Job class names are implementation identifiers. A user who pressed "Refresh metadata"
@@ -121,6 +122,7 @@ const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   failed: { bg: '#ef4444', text: '#ffffff' },
   cancelled: { bg: '#6b7280', text: '#ffffff' },
   pending: { bg: '#f59e0b', text: '#ffffff' },
+  skipped: { bg: '#a16207', text: '#ffffff' },
 };
 
 const badgeStyle = (state: string): React.CSSProperties => {
@@ -183,13 +185,25 @@ const resultListStyle: React.CSSProperties = {
   gap: '6px',
 };
 
-const resultItemStyle = (success: boolean): React.CSSProperties => ({
+/**
+ * Three visual states, because there are three outcomes. A boolean here
+ * painted every "did not run" row in failure red, which is the opposite
+ * mistake to the one that painted them green — both misreport.
+ */
+const RESULT_TONE: Record<string, { fg: string; bg: string }> = {
+  completed: { fg: '#22c55e', bg: '#22c55e10' },
+  skipped: { fg: '#a16207', bg: '#f59e0b10' },
+  failed: { fg: '#ef4444', bg: '#ef444410' },
+};
+const toneFor = (status: string) => RESULT_TONE[status] ?? RESULT_TONE.failed;
+
+const resultItemStyle = (status: string): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '6px 10px',
   borderRadius: '4px',
-  backgroundColor: success ? '#22c55e10' : '#ef444410',
+  backgroundColor: toneFor(status).bg,
   fontSize: '12px',
 });
 
@@ -203,9 +217,9 @@ const resultSiteIdStyle: React.CSSProperties = {
   minWidth: 0,
 };
 
-const resultMessageStyle = (success: boolean): React.CSSProperties => ({
+const resultMessageStyle = (status: string): React.CSSProperties => ({
   fontSize: '11px',
-  color: success ? '#22c55e' : '#ef4444',
+  color: toneFor(status).fg,
   flexShrink: 0,
   marginLeft: '8px',
 });
@@ -350,11 +364,13 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
     return `${secs}s`;
   }
 
-  getResultsSummary(op: BulkOperationStatus): { succeeded: number; failed: number; total: number } {
-    const entries = Object.values(op.siteResults);
-    const succeeded = entries.filter((r: any) => r.status === 'completed').length;
-    const failed = entries.filter((r: any) => r.status === 'failed').length;
-    return { succeeded, failed, total: op.siteIds.length };
+  /**
+   * Derived, never independently computed. This used to count 'completed'
+   * entries itself, which is how the panel printed "413 succeeded" for a run
+   * in which three sites did the work.
+   */
+  getResultsSummary(op: BulkOperationStatus): BulkOperationSummary {
+    return summarizeBulkOperation(op);
   }
 
   renderBadge(state: string): React.ReactNode {
@@ -375,14 +391,15 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
     const pendingSiteIds = op.siteIds.filter(id => !nonPendingIds.has(id));
     const summary = this.getResultsSummary(op);
 
+    // "Did not run" is named, not folded into either of the other two. A run
+    // where nothing happened must not read as a run where everything worked.
+    const summaryLine = `Results: ${summary.succeeded} succeeded, ${summary.failed} failed, `
+      + `${summary.skipped} did not run, ${summary.pending} pending`;
+
     return React.createElement(
       'div',
       { style: expandedSectionStyle },
-      React.createElement(
-        'div',
-        { style: resultsSummaryStyle },
-        `Results: ${summary.succeeded} succeeded, ${summary.failed} failed, ${pendingSiteIds.length} pending`,
-      ),
+      React.createElement('div', { style: resultsSummaryStyle }, summaryLine),
       React.createElement(
         'div',
         { style: resultListStyle },
@@ -391,12 +408,18 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
           .map(([siteId, result]: [string, any]) =>
             React.createElement(
               'div',
-              { key: siteId, style: resultItemStyle(result.status === 'completed') },
+              { key: siteId, style: resultItemStyle(result.status) },
               React.createElement('span', { style: resultSiteIdStyle }, op.siteNames?.[siteId] ?? this.props.siteNames?.get(siteId) ?? siteId),
               React.createElement(
                 'span',
-                { style: resultMessageStyle(result.status === 'completed') },
-                result.status === 'completed' ? 'Success' : (result.error || 'Failed'),
+                { style: resultMessageStyle(result.status) },
+                // "Skipped — SSH key not configured" is a shippable sentence.
+                // "Success" is not, and it is what this said for 410 of 413.
+                result.status === 'completed'
+                  ? 'Success'
+                  : result.status === 'skipped'
+                    ? `Did not run — ${result.skipReason || 'reason not recorded'}`
+                    : (result.error || 'Failed'),
               ),
               result.completedAt && result.startedAt
                 ? React.createElement('span', { style: resultDurationStyle }, this.formatDuration(result.completedAt - result.startedAt))

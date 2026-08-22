@@ -23,18 +23,34 @@ export interface BulkOperation {
   siteNames?: Record<string, string>;
   options: Record<string, any>;
   status: 'running' | 'completed' | 'completed_with_errors' | 'cancelled' | 'failed';
-  progress: { completed: number; total: number; errors: string[] };
+  progress: { completed: number; total: number; errors: string[]; skipped: string[] };
   results: Map<string, SiteOpResult>;
   createdAt: number;
   completedAt: number | null;
   abortController: AbortController;
 }
 
+/**
+ * What `executeByType` observed. Throwing is the failure channel; returning
+ * says whether the work actually ran.
+ *
+ * WP-67: `executeSingle` used to decide success by whether `executeByType`
+ * threw, and every implementation beneath it returned normally when it had
+ * done nothing — so 365 WP Engine installs that extracted zero posts were
+ * reported as "succeeded". "Did not run" is a first-class outcome and must
+ * carry the reason that makes it a shippable sentence.
+ */
+export type SiteOpOutcome =
+  | { ran: true }
+  | { ran: false; reason: string };
+
 export interface SiteOpResult {
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   startedAt: number;
   completedAt?: number;
   error?: string;
+  /** Present only on `skipped` — why the work did not run. */
+  skipReason?: string;
 }
 
 export interface BulkOperationStatus {
@@ -43,7 +59,7 @@ export interface BulkOperationStatus {
   siteIds: string[];
   siteNames?: Record<string, string>;
   status: 'running' | 'completed' | 'completed_with_errors' | 'cancelled' | 'failed';
-  progress: { completed: number; total: number; errors: string[] };
+  progress: { completed: number; total: number; errors: string[]; skipped: string[] };
   siteResults: Record<string, SiteOpResult>;
   createdAt: number;
   completedAt: number | null;
