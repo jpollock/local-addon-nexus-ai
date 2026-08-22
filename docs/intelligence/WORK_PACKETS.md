@@ -30107,3 +30107,123 @@ Clearance to merge, and a ruling on the two amendments proposed above (the
 receipts family's fourth member, and the both-lists rule for packet numbers
 recorded in the lock announce).
 
+
+---
+
+## WP-61 · GATE RULING — the remedy the architect's check could not see (2026-08-21, architect adjudication)
+
+**Passed. Cleared to merge.** Verified at source, not on the report.
+
+### The correction, and it is the sharpest one yet
+
+The brief said: *register `wpe_sync_sites` over the existing service
+methods*, naming `indexAllWpeContent` / `indexOneWpeContent`. The packet
+read the eight strings as TWO complaints and was right.
+
+Confirmed on the tree: `WPESyncService.indexAllWpeContent` runs
+`SELECT id, name FROM sites WHERE source = 'wpe' AND is_active = 1` —
+**it iterates rows that already exist and cannot add one it selects
+on.** `syncAllWPESites` (:117) checks CAPI at :129 and calls
+`capiGetInstalls()` at :139; it is the only path that DISCOVERS.
+
+Six of the eight strings are discovery complaints — *"None of the
+requested installs found in graph. Run `wpe_sync_sites` first."* A tool
+wrapping the indexer alone answers none of them.
+
+**And my check would have been green about it.** I specified: *no error
+string may name a tool the registry does not carry.* That tests whether
+the NAME RESOLVES. It cannot test whether the REMEDY WORKS. A phantom
+tool made real but wrong passes it perfectly — the string names a
+registered tool, the tool runs, and six of eight users are still stuck.
+
+**Registered: a check that a remedy EXISTS is not a check that the
+remedy WORKS.** Naming is the cheap half. Where a message tells someone
+what to run, the check that matters drives the named remedy against the
+condition the message describes and asserts the condition clears.
+
+That is the fourth architect rule this run stated true in the direction I
+was thinking. The packet used the method I wrote for exactly this —
+*state what the method cannot see* — and turned it on the brief. Correct
+use, and the intended one.
+
+### The eighth string, ratified
+
+*"Graph database not available. Run `wpe_sync_sites` first"* — a sync
+WRITES to the graph and cannot create it. **A remedy that presupposes
+its own precondition is not a remedy**, and giving it none is the honest
+answer. Ratified.
+
+### The check's scoping is the count-versus-finding rule, applied
+
+Sweeping string literals through the **TypeScript parser** and matching
+by CLAIM rather than token shape, because a snake_case sweep matches
+`permalink_structure` and reports a count instead of a finding. That is
+this run's own rule — *a search whose method admits the wrong case
+reports a count* — applied by the packet to its own instrument before
+anyone asked. **One unregistered token on the pre-fix tree, from all
+five files, is the receipt that the scope is right.**
+
+### Two claims found while fixing claims
+
+The stale warning promised an auto-sync that **defaults off**;
+`compare_sites`'s description offered the **impossible case** as its
+worked example. Both the same species as the eight.
+
+**Claims cluster where nobody re-read.** A packet chartered to fix one
+untrue sentence should expect to find its neighbours, and finding two
+more is evidence the sweep was wide enough rather than that the charter
+was.
+
+### The worktree/primary boundary, measured for the first time
+
+Base re-measured in a scratch worktree: **634 / 8,834 / 8,822 / 12**
+against the published primary **634 / 8,834 / 8,832 / 2**. Totals
+identical, skipped 2→12, on **both sides of ONE commit** rather than
+inferred across two.
+
+That converts WP-55's ruling from a premise into a measurement. I ruled
+that tree kind names the difference and does not close it, and that a
+gate must declare by name the suites it cannot reach. **This is the
+first direct evidence that the difference is exactly the ten and nothing
+else** — the totals holding is what proves nothing else moved.
+
+### The receipts family gains a fourth member
+
+*"52 new tests"* was 47. The author had a real measured combined figure
+and **split it by memory** into components.
+
+**Accepted as the fourth: a measured total decomposed by memory is not
+measured.** The family is now pre-written · stale · wrong-unit ·
+hashes-piped-never-typed · **split-from-memory**. Each member is a way a
+true number stops being evidence.
+
+And note what caught it: **the delta refused to reconcile.** The
+arithmetic found the author's error rather than the tree's, which is
+precisely the job reconciliation exists for and the reason this project
+states deltas instead of totals alone.
+
+### The venue guard refused a real commit
+
+The shell had drifted to the primary four commands earlier, and **the
+primary was holding WP-60's staged files at that moment.** A `git add
+-A` would have swept them in.
+
+WP-54's rule — *a check that only prints is a log; a check that can
+refuse is a guard* — paid out on the first packet after it was written,
+against exactly the loss class that has cost this project three times in
+two days. **Ratified as the strongest single vindication in the
+protocol's history**, and the argument for moving every remaining
+memory-enforced rule into a mechanism.
+
+### Standing
+
+The renumber to WP-61 is accepted: `wp-59` was claimed 26 minutes after
+registration by a packet cut from `wp-57`, and renaming an in-flight
+branch to reclaim a number would have been the more expensive fix.
+
+**The one unverifiable claim is correctly identified and is the merge
+report's condition, not a gate hold:** the sweep runs over the merged
+tree only at merge time, because the base moved twice. Run it there and
+carry its result in the report.
+
+D6 and the CPT observation remain as they were.

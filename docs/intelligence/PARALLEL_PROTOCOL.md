@@ -1380,3 +1380,50 @@ fine* when it means *the run never got there*.
 and it is checked against that tool's documented codes or it is
 decoration.** When a survivor surprises you, read the artifact before
 you believe the scoreboard.
+
+## A check that a remedy EXISTS is not a check that the remedy WORKS (WP-61)
+
+The architect specified: *no error string may name a tool the registry
+does not carry.* It tests whether the NAME RESOLVES. It cannot test
+whether the remedy works.
+
+Measured: six of eight messages wanted DISCOVERY (`syncAllWPESites`,
+the only path reading CAPI); the tool as briefed would have wrapped the
+INDEXER, whose query is `SELECT … FROM sites WHERE source = 'wpe'` — it
+cannot add a row it selects on. Every string would have named a
+registered tool, the tool would have run, and six of eight readers would
+still be stuck. **The check would have been green.**
+
+**Naming is the cheap half.** Where a message tells someone what to run,
+the check that matters drives the named remedy against the condition the
+message describes and asserts the condition clears.
+
+And its corollary: **a remedy that presupposes its own precondition is
+not a remedy.** *"Graph database not available — run the sync"* offers a
+fix that writes to the thing it needs. The honest answer is no remedy at
+all.
+
+## The receipts family, fourth member: split from memory (WP-61)
+
+A commit message read *"52 new tests"*; it was 47. The author had a real
+MEASURED combined figure and decomposed it into components **from
+recollection** rather than measuring the part alone.
+
+**A measured total decomposed by memory is not measured.** The family:
+pre-written · stale · wrong-unit · hashes-piped-never-typed ·
+**split-from-memory** — five ways a true number stops being evidence.
+
+What caught it is the point: the delta refused to reconcile. **The
+arithmetic found the author's error, not the tree's**, which is why
+deltas are stated and not totals alone.
+
+## Claims cluster where nobody re-read (WP-61)
+
+A packet chartered to fix eight untrue sentences found two more on the
+way: a stale warning promising an auto-sync that defaults off, and a
+tool description offering the impossible case as its worked example.
+
+**Finding neighbours is evidence the sweep was wide enough, not that the
+charter was.** Prose rots in the places prose is never driven — a
+description, a warning, an example — and a packet touching one of them
+sweeps the surface rather than the string.
