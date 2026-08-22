@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { requireRunning, ok, error } from '../wp-cli/preflight';
 import {
   detectHubPlugin,
@@ -28,7 +28,7 @@ export const iwGetConnectionStatusHandler: McpToolHandler = {
 
   async execute(args, services): Promise<McpToolResult> {
     const { localServices, registryStorage } = services;
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) return error(`Site not found: ${args.site}`);
 
     const status = await getConnectionStatus(site.id, localServices!);
@@ -70,7 +70,7 @@ export const iwConnectSiteHandler: McpToolHandler = {
 
   async execute(args, services): Promise<McpToolResult> {
     const { localServices } = services;
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) return error(`Site not found: ${args.site}`);
 
     const runCheck = requireRunning(site, services);
@@ -119,7 +119,7 @@ export const iwDisconnectSiteHandler: McpToolHandler = {
 
   async execute(args, services): Promise<McpToolResult> {
     const { localServices, registryStorage } = services;
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) return error(`Site not found: ${args.site}`);
 
     clearIwBinding(site.id, registryStorage!);

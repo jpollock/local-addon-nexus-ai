@@ -8,7 +8,7 @@
 import { createSiteResolvers } from '../../../src/main/graphql/resolvers/sites';
 import { createTwinResolvers } from '../../../src/main/graphql/resolvers/twin';
 import { createWpCliResolvers } from '../../../src/main/graphql/resolvers/wp-cli';
-import { parseTarget, resolveSite } from '../../../src/main/graphql/resolver-utils';
+import { parseTarget, findLocalSiteExact } from '../../../src/main/graphql/resolver-utils';
 import type { NexusServices } from '../../../src/main/types/nexus-services';
 
 // ---------------------------------------------------------------------------
@@ -85,27 +85,27 @@ describe('parseTarget', () => {
 });
 
 // ---------------------------------------------------------------------------
-// resolveSite helper tests
+// findLocalSiteExact helper tests
 // ---------------------------------------------------------------------------
 
-describe('resolveSite', () => {
+describe('findLocalSiteExact', () => {
   test('finds site by name', () => {
     const site = makeSite('test-site');
     const siteData = { getSites: () => ({ 'id-test-site': site }), getSite: () => null };
-    const result = resolveSite('test-site', siteData);
+    const result = findLocalSiteExact('test-site', siteData);
     expect(result?.name).toBe('test-site');
   });
 
   test('returns undefined for unknown site', () => {
     const siteData = { getSites: () => ({}), getSite: () => null };
-    const result = resolveSite('unknown', siteData);
+    const result = findLocalSiteExact('unknown', siteData);
     expect(result).toBeUndefined();
   });
 
   test('finds site by id', () => {
     const site = makeSite('test-site', 'abc123');
     const siteData = { getSites: () => ({ abc123: site }), getSite: () => null };
-    const result = resolveSite('abc123', siteData);
+    const result = findLocalSiteExact('abc123', siteData);
     expect(result?.id).toBe('abc123');
   });
 });

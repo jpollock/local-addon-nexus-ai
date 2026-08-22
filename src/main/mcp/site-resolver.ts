@@ -2,35 +2,168 @@ import { SiteDataAccessor, LocalSiteInfo } from './types';
 import { parseTarget } from '../../common/target';
 
 /**
- * Resolves a user-provided site reference (name, ID, or domain) to a site.
- *
- * Resolution order:
- *   1. Exact site ID match
- *   2. Exact name match (case-insensitive)
- *   3. Domain match (case-insensitive)
+ * A graph handle, as every caller already has one: `services.graphService`.
+ * Typed structurally so this module keeps its single import of `./types` and
+ * does not reach into the GraphService class.
  */
-export function resolveSite(
-  query: string,
-  siteData: SiteDataAccessor,
-): LocalSiteInfo | null {
+export type GraphHandle = { getDb?: () => any } | undefined;
+
+/**
+ * Outcome of a Local-store lookup that has ALSO checked whether the name means
+ * something else somewhere in the fleet.
+ *
+ * `collision` carries the Local site it refused, so a caller with a better
+ * message of its own (`resolveTargetArgs` has one, naming the install) does not
+ * have to run the lookup again to write it.
+ */
+export type LocalSiteResult =
+  | { kind: 'ok'; site: LocalSiteInfo }
+  | { kind: 'none' }
+  | { kind: 'collision'; site: LocalSiteInfo; name: string; matches: string[]; message: string };
+
+/** How a Local site was matched. Only a NAME match can collide across sources. */
+type LocalMatch = { site: LocalSiteInfo; by: 'id' | 'name' | 'domain' };
+
+function matchLocal(query: string, siteData: SiteDataAccessor): LocalMatch | null {
   if (!query) return null;
 
   // 1. Exact ID match
   const byId = siteData.getSite(query);
-  if (byId) return byId;
+  if (byId) return { site: byId, by: 'id' };
 
   const sites = Object.values(siteData.getSites());
   const q = query.toLowerCase();
 
   // 2. Exact name match
   const byName = sites.find((s) => s.name.toLowerCase() === q);
-  if (byName) return byName;
+  if (byName) return { site: byName, by: 'name' };
 
   // 3. Domain match
   const byDomain = sites.find((s) => s.domain?.toLowerCase() === q);
-  if (byDomain) return byDomain;
+  if (byDomain) return { site: byDomain, by: 'domain' };
 
   return null;
+}
+
+/**
+ * Rows in the graph whose name could be what the caller typed.
+ *
+ * DELIBERATELY case-INSENSITIVE, and deliberately different from
+ * `resolveRemoteGraphSite`'s exact `name = ?`. The two ask different questions
+ * and the right answer differs:
+ *
+ *   - A RESOLVER asks "which row is this?" and must be exact, or it starts
+ *     answering about rows the caller did not name.
+ *   - This PROBE asks "could this string mean something else?" and must be
+ *     generous, or a Local site called `MyLoop` beside the install `myloop`
+ *     resolves silently to the copy — the coin toss, one casing away.
+ *
+ * `resolveTargetArgs` set this precedent (`LOWER(name)=?`) before this module
+ * existed; it is followed here rather than re-decided.
+ */
+function graphRowsNamed(db: any, name: string): Array<{ id: string; name: string; source: string; account_id: string }> {
+  if (!db || !name) return [];
+  try {
+    return (db.prepare(
+      "SELECT id, name, source, account_id FROM sites WHERE source IN ('wpe','external') AND is_active = 1 AND LOWER(name) = ?",
+    ).all(name.toLowerCase()) ?? []) as Array<{ id: string; name: string; source: string; account_id: string }>;
+  } catch {
+    // A graph we cannot read is not evidence of a collision. Never throw from
+    // a resolver — every caller here predates this check.
+    return [];
+  }
+}
+
+/** The disambiguated form that addresses one graph row unambiguously. */
+function remoteTargetForm(row: { name: string; source: string; account_id?: string }): string {
+  return row.source === 'external'
+    ? `ssh:${row.account_id}/${row.name}`
+    : `wpe:<account>/${row.name}`;
+}
+
+/** True when the caller has already said which source it means. */
+function isLocalPinned(query: string): boolean {
+  return typeof query === 'string' && query.endsWith('@local');
+}
+
+/**
+ * Resolve a user-provided reference (name, ID, or domain) against **Local's
+ * site store**, refusing a name that also names a site elsewhere in the fleet.
+ *
+ * ── Why the name says `Local`, and why the graph handle is required ─────────
+ * This was `resolveSite`, and it matched Local sites only — with no source
+ * constraint and no decline — across 115 call sites. Against one of the names
+ * that exists in both stores (`CLAUDE.md`, "Names collide across sources"; six
+ * on the owner's fleet as of 2026-08-21) it silently answered "local": the
+ * caller asked about a production install and got a copy.
+ *
+ * **A resolver may narrow its scope; it may not narrow its scope silently and
+ * then answer as if it had searched everything.** The name now states the
+ * scope, and the third parameter is REQUIRED so a new call site cannot narrow
+ * it back by forgetting — a compile error is the only form of this rule that
+ * does not depend on somebody remembering to read CLAUDE.md.
+ *
+ * The decline is scoped to NAME matches. An id is not a name and a domain is
+ * not a name; declining on those would refuse an unambiguous question, and
+ * most of the 115 call sites pass a Local site id.
+ *
+ * A caller that means the Local copy says so: `<name>@local` resolves here
+ * without the check, because the caller has already answered the question the
+ * decline would ask.
+ */
+export function resolveLocalSiteResult(
+  query: string,
+  siteData: SiteDataAccessor,
+  graphService: GraphHandle,
+): LocalSiteResult {
+  if (!query) return { kind: 'none' };
+
+  const pinned = isLocalPinned(query);
+  const bare = pinned ? query.slice(0, -'@local'.length) : query;
+
+  const match = matchLocal(bare, siteData);
+  if (!match) return { kind: 'none' };
+  if (pinned || match.by !== 'name') return { kind: 'ok', site: match.site };
+
+  const rows = graphRowsNamed(graphService?.getDb?.(), bare);
+  if (rows.length === 0) return { kind: 'ok', site: match.site };
+
+  // The site's OWN name, not the caller's spelling — the disambiguated forms
+  // are meant to be copied back in, and a form that echoes a casing the store
+  // does not use fails one step later.
+  const localForm = `${match.site.name}@local`;
+  const matches = [localForm, ...rows.map(remoteTargetForm)];
+  const remoteKinds = rows.some((r) => r.source === 'external')
+    ? rows.some((r) => r.source === 'wpe')
+      ? 'a WP Engine install and an external SSH host'
+      : 'an external SSH host'
+    : 'a WP Engine install';
+
+  return {
+    kind: 'collision',
+    site: match.site,
+    name: match.site.name,
+    matches,
+    message:
+      `Ambiguous site "${bare}" — it names both a Local site and ${remoteKinds}. ` +
+      `Specify which one you mean:\n` +
+      matches.map((m) => `  ${m}`).join('\n'),
+  };
+}
+
+/**
+ * `resolveLocalSiteResult` for the 115 call sites that only need the site.
+ * A collision returns null — the reason is available from the result form
+ * above, and a caller that wants to say it should use that instead of
+ * inventing a "not found".
+ */
+export function resolveLocalSite(
+  query: string,
+  siteData: SiteDataAccessor,
+  graphService: GraphHandle,
+): LocalSiteInfo | null {
+  const result = resolveLocalSiteResult(query, siteData, graphService);
+  return result.kind === 'ok' ? result.site : null;
 }
 
 /**
@@ -179,8 +312,9 @@ export function queryQualifiedTarget(
 
 /**
  * Outcome of resolving a bare name against ALL three fleet sources
- * (local, wpe, external) in one call. Local is checked first, then the
- * graph, using resolveRemoteGraphSite's collision-decline logic.
+ * (local, wpe, external) in one call. BOTH stores are consulted before an
+ * answer is given; a name present in both declines with the disambiguated
+ * forms.
  */
 export type AnySiteResult =
   | { kind: 'ok'; id: string; name: string; source: 'local' | 'wpe' | 'external' }
@@ -188,10 +322,24 @@ export type AnySiteResult =
   | { kind: 'ambiguous'; matches: string[] };
 
 /**
- * Resolve a bare name/ID/domain against Local's own site store first, then
- * fall back to the graph for WPE and external hosts via resolveRemoteGraphSite.
- * Use this in any MCP tool that currently calls resolveSite() alone and needs
- * WPE/external support too.
+ * Resolve a bare name/ID/domain against every fleet source — Local's own site
+ * store and the graph's WPE and external rows — and decline when it matches
+ * more than one.
+ *
+ * ── WP-58: local-first precedence was REMOVED, not documented ───────────────
+ * This function was written to be the correct shared path and its docblock
+ * credited it with `resolveRemoteGraphSite`'s collision-decline logic. That was
+ * true for two WPE installs colliding with each other and FALSE for the
+ * cross-source case the rule exists for: `resolveSite` was called first and
+ * returned immediately, so the graph was only ever reached on a MISS. Against
+ * one of the six names on the owner's fleet that exist in both stores, this
+ * answered "local" — confidently, with no signal that a question had been
+ * asked and not answered.
+ *
+ * Declining is cheap for the caller precisely because this function already
+ * supports the qualified forms (`wpe:<account>/<install>@<env>`,
+ * `ssh:<alias>/<site>@<env>`, `<name>@local`), which is why declining is the
+ * ruled behaviour rather than a hardship.
  */
 export function resolveAnySite(
   query: string,
@@ -222,17 +370,24 @@ export function resolveAnySite(
     return { kind: 'none' };
   }
 
-  // `<name>@local` should resolve like the bare name it wraps.
-  try {
-    const parsed = parseTarget(query);
-    if (parsed.type === 'local' && parsed.siteName) query = parsed.siteName;
-  } catch {
-    // Unparseable — leave `query` exactly as given.
+  // `<name>@local` is a qualified target too: the caller has already said which
+  // source it means, so it resolves against Local alone and never declines.
+  if (isLocalPinned(query)) {
+    const pinned = resolveLocalSiteResult(query, siteData, graphService);
+    return pinned.kind === 'ok'
+      ? { kind: 'ok', id: pinned.site.id, name: pinned.site.name, source: 'local' }
+      : { kind: 'none' };
   }
 
-  const local = resolveSite(query, siteData);
-  if (local) {
-    return { kind: 'ok', id: local.id, name: local.name, source: 'local' };
+  // Both stores, before any answer. `resolveLocalSiteResult` owns the one
+  // collision policy — duplicating the probe here is how the two copies of
+  // this rule drifted in the first place.
+  const local = resolveLocalSiteResult(query, siteData, graphService);
+  if (local.kind === 'collision') {
+    return { kind: 'ambiguous', matches: local.matches };
+  }
+  if (local.kind === 'ok') {
+    return { kind: 'ok', id: local.site.id, name: local.site.name, source: 'local' };
   }
 
   const db = graphService?.getDb?.();

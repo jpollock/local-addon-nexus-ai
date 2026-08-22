@@ -45,7 +45,7 @@
  */
 import { getToolSafety } from '../mcp/safety';
 import { maskSecretsInString, redactParams } from '../mcp/audit';
-import { resolveSite } from '../mcp/site-resolver';
+import { resolveLocalSite } from '../mcp/site-resolver';
 import type { NexusServices } from '../mcp/types';
 import type { IntelligenceCore } from './bootstrap';
 import { getIntelligenceCore } from './coreRegistry';
@@ -657,7 +657,7 @@ export function entityRefsFor(
   services: NexusServices | undefined
 ): Record<string, string> | undefined {
   try {
-    const local = services?.siteData ? resolveSite(value, services.siteData) : null;
+    const local = services?.siteData ? resolveLocalSite(value, services.siteData, services.graphService) : null;
     if (local) {
       return {
         environment: environmentEntityId(core.entities, local.id),

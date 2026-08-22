@@ -33,7 +33,7 @@ import { auditDirectOperation } from '../audit/auditDirectOperation';
 import type { NexusServices } from '../types/nexus-services';
 import type { LocalSite, LocalSiteDataAccessor } from '../types/site-data';
 import pLimit from 'p-limit';
-import { withQueue, parseTarget } from './resolver-utils';
+import { withQueue, parseTarget, findLocalSiteExact } from './resolver-utils';
 import { collectFleetCounts } from '../fleet/collectFleetCounts';
 import { probeExternalHost } from '../external/probeExternalHost';
 import type { ProbeReport } from '../external/probeExternalHost';
@@ -142,17 +142,12 @@ function buildWpeSiteDetails(graphSite: any, twin: any, twinAge: string | null):
   };
 }
 
-/**
- * Resolve site by name, ID, or domain
- */
-function resolveSite(identifier: string, siteData: LocalSiteDataAccessor): LocalSite | undefined {
-  const sites = Object.values(siteData.getSites());
-  return sites.find((s) =>
-    s.name === identifier ||
-    s.id === identifier ||
-    s.domain === identifier
-  );
-}
+// WP-58: this file's own private `resolveSite` lived here — a byte-for-byte
+// third copy of `resolver-utils.ts`'s, and the one every live GraphQL and CLI
+// site lookup actually ran. It is deleted in favour of the single exported
+// `findLocalSiteExact`, whose docblock states how it differs from
+// `resolveLocalSite` and why the two are not merged. Being module-private is
+// what kept this copy out of an export-name search for the duplicate.
 
 /** Flatten a ProbeReport into the GraphQL shape (resolved.* becomes three scalars). */
 function toHostReport(r: ProbeReport) {
@@ -784,7 +779,7 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: 'Local services not available' };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (site) {
             // Found in Local — assemble from local siteData + twin
@@ -876,7 +871,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -892,7 +887,7 @@ export function createResolvers(context: ResolverContext) {
           }
 
           // Check if new name already exists
-          const existingSite = resolveSite(input.newName, services.siteData);
+          const existingSite = findLocalSiteExact(input.newName, services.siteData);
           if (existingSite) {
             return {
               success: false,
@@ -940,7 +935,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -956,7 +951,7 @@ export function createResolvers(context: ResolverContext) {
           }
 
           // Check if new name already exists
-          const existingSite = resolveSite(input.newName, services.siteData);
+          const existingSite = findLocalSiteExact(input.newName, services.siteData);
           if (existingSite && existingSite.id !== site.id) {
             return {
               success: false,
@@ -992,7 +987,7 @@ export function createResolvers(context: ResolverContext) {
 
           // Accept both 'mysite@local' (from UI/MCP) and 'mysite' (from CLI after stripping @local)
           const siteName = (input.target as string).replace(/@local$/, '');
-          const site = resolveSite(siteName, services.siteData);
+          const site = findLocalSiteExact(siteName, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1063,7 +1058,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1105,7 +1100,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1146,7 +1141,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1184,7 +1179,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1251,7 +1246,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1318,7 +1313,7 @@ export function createResolvers(context: ResolverContext) {
         if (parsed.type !== 'local') {
           return { success: false, error: 'Only local sites can be started. Pull this site to local first.' };
         }
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site not found: ${parsed.siteName}` };
         }
@@ -1345,7 +1340,7 @@ export function createResolvers(context: ResolverContext) {
         if (parsed.type !== 'local') {
           return { success: false, error: 'Only local sites can be stopped. WPE sites are always running.' };
         }
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site not found: ${parsed.siteName}` };
         }
@@ -1377,7 +1372,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1418,7 +1413,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -1997,7 +1992,7 @@ export function createResolvers(context: ResolverContext) {
             throw new Error('WPE target must use wpe:account/install@env syntax');
           }
 
-          const site = resolveSite(localParsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(localParsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -2102,7 +2097,7 @@ export function createResolvers(context: ResolverContext) {
             throw new Error('WPE target must use wpe:account/install@env syntax');
           }
 
-          const site = resolveSite(localParsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(localParsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -2521,7 +2516,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(localParsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(localParsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -2565,7 +2560,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -2617,7 +2612,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return {
               success: false,
@@ -2823,7 +2818,7 @@ export function createResolvers(context: ResolverContext) {
           if ('site' in targetArgs) {
             // Local site — all five factors apply
             const siteName = targetArgs.site as string;
-            const site = resolveSite(siteName, services.siteData);
+            const site = findLocalSiteExact(siteName, services.siteData);
             if (!site) {
               return {
                 success: false,
@@ -3228,7 +3223,7 @@ export function createResolvers(context: ResolverContext) {
           // Parse site targets to get site IDs
           const siteIds = sites.map(target => {
             const parsed = parseTarget(target);
-            const site = resolveSite(parsed.siteName!, services.siteData);
+            const site = findLocalSiteExact(parsed.siteName!, services.siteData);
             return site?.id;
           }).filter((id): id is string => !!id);
 
@@ -3268,7 +3263,7 @@ export function createResolvers(context: ResolverContext) {
           // Parse site targets to get site IDs
           const siteIds = sites.map(target => {
             const parsed = parseTarget(target);
-            const site = resolveSite(parsed.siteName!, services.siteData);
+            const site = findLocalSiteExact(parsed.siteName!, services.siteData);
             return site?.id;
           }).filter((id): id is string => !!id);
 
@@ -3335,7 +3330,7 @@ export function createResolvers(context: ResolverContext) {
           const reindexPromises = targets.map((target) => limit(async () => {
             try {
               const parsed = parseTarget(target);
-              const site = resolveSite(parsed.siteName!, services.siteData);
+              const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
               if (!site) {
                 return {
@@ -3396,7 +3391,7 @@ export function createResolvers(context: ResolverContext) {
           const updatePromises = targets.map((target: string) => limit(async () => {
             try {
               const parsed = parseTarget(target);
-              const site = resolveSite(parsed.siteName!, services.siteData);
+              const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
               if (!site) {
                 return {
@@ -3496,7 +3491,7 @@ export function createResolvers(context: ResolverContext) {
           const healthPromises = targets.map((target) => limit(async () => {
             try {
               const parsed = parseTarget(target);
-              const site = resolveSite(parsed.siteName!, services.siteData);
+              const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
               if (!site) {
                 return {
@@ -3616,7 +3611,7 @@ export function createResolvers(context: ResolverContext) {
           let siteId: string;
 
           if (parsed.type === 'local') {
-            const site = resolveSite(parsed.siteName!, services.siteData);
+            const site = findLocalSiteExact(parsed.siteName!, services.siteData);
             if (!site) {
               return {
                 success: false,
@@ -3786,7 +3781,7 @@ export function createResolvers(context: ResolverContext) {
       nexusContentStructure: async (_parent: ResolverParent, { target, depth }: { target: string; depth?: number }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return {
@@ -3855,7 +3850,7 @@ export function createResolvers(context: ResolverContext) {
           let siteId: string;
 
           if (parsed.type === 'local') {
-            const site = resolveSite(parsed.siteName!, services.siteData);
+            const site = findLocalSiteExact(parsed.siteName!, services.siteData);
             if (!site) {
               return {
                 success: false,
@@ -3954,7 +3949,7 @@ export function createResolvers(context: ResolverContext) {
         return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return {
@@ -4041,7 +4036,7 @@ export function createResolvers(context: ResolverContext) {
         return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return {
@@ -4109,7 +4104,7 @@ export function createResolvers(context: ResolverContext) {
       nexusAiSyncCredentials: async (_parent: ResolverParent, { target }: { target: string }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return { success: false, error: `Site not found: ${parsed.siteName}` };
@@ -4143,7 +4138,7 @@ export function createResolvers(context: ResolverContext) {
       nexusAiAbilities: async (_parent: ResolverParent, { target }: { target: string }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return {
@@ -4231,7 +4226,7 @@ export function createResolvers(context: ResolverContext) {
         return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return {
@@ -4325,7 +4320,7 @@ export function createResolvers(context: ResolverContext) {
       nexusAiStatus: async (_parent: ResolverParent, { target }: { target: string }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return {
@@ -4387,7 +4382,7 @@ export function createResolvers(context: ResolverContext) {
       nexusAiGetSiteConfig: (_parent: ResolverParent, { target }: { target: string }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) return { success: false, error: `Site not found: ${parsed.siteName}` };
 
           const siteConfigs = (services.registryStorage?.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
@@ -4404,7 +4399,7 @@ export function createResolvers(context: ResolverContext) {
       nexusAiSwitchProvider: async (_parent: ResolverParent, { target, provider }: { target: string; provider: string }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) return { success: false, error: `Site not found: ${parsed.siteName}` };
 
           if (!services.localServices || !services.registryStorage) {
@@ -4433,7 +4428,7 @@ export function createResolvers(context: ResolverContext) {
         return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
           if (!site) {
             return {
@@ -4606,7 +4601,7 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: 'Database scanner only supports local sites', scan: null };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return { success: false, error: `Site not found: ${parsed.siteName}`, scan: null };
           }
@@ -4660,7 +4655,7 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: 'Database cleaner only supports local sites', result: null };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          const site = findLocalSiteExact(parsed.siteName!, services.siteData);
           if (!site) {
             return { success: false, error: `Site not found: ${parsed.siteName}`, result: null };
           }

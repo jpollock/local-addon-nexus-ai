@@ -1,6 +1,6 @@
 import { McpToolResult, NexusServices, LocalSiteInfo } from '../../types';
 import { WpCliResult, WpeInstallInfo } from '../../local-services-bridge';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { error } from './preflight';
 import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 import { STORAGE_KEYS } from '../../../../common/constants';
@@ -109,7 +109,7 @@ export async function resolveTarget(
     // or a direct WPE install name. Try local site first — unless the caller
     // already established it is an install, in which case a local site that
     // happens to share the name must not hijack the target.
-    const site = installNameIsExplicit ? null : resolveSite(installName, services.siteData);
+    const site = installNameIsExplicit ? null : resolveLocalSite(installName, services.siteData, services.graphService);
     if (site) {
       const installInfo = await services.localServices.resolveWpeInstall(site.id);
       if (installInfo) {
@@ -155,7 +155,7 @@ export async function resolveTarget(
   }
 
   if (siteQuery) {
-    const site = resolveSite(siteQuery, services.siteData);
+    const site = resolveLocalSite(siteQuery, services.siteData, services.graphService);
     if (!site) {
       return error(`Site "${siteQuery}" not found.`);
     }

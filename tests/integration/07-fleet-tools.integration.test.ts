@@ -6,7 +6,7 @@ describe('Fleet Tools (real IndexRegistry data)', () => {
   let harness: TestHarness;
 
   beforeAll(async () => {
-    // compare_sites uses resolveSite() against siteData, so we need sites there
+    // compare_sites uses resolveAnySite() against siteData and the graph, so we need sites there
     const siteData = createSiteData({
       'site-1': {
         id: 'site-1',

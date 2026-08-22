@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { requireRunning, ok, error } from '../wp-cli/preflight';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 
 /**
  * PHP snippet that discovers all registered WordPress Abilities.
@@ -128,7 +128,7 @@ export const listAbilitiesHandler: McpToolHandler = {
       return error('Local services not available.');
     }
 
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) {
       return error(`Site not found: "${args.site}"`);
     }

@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { ok, error } from '../wp-cli/preflight';
 import { readIwBinding } from './hub-connect';
 import { getApiKey } from '../../../security/KeyVault';
@@ -8,7 +8,7 @@ import { STORAGE_KEYS } from '../../../../common/constants';
 
 /**
  * Resolve an IW binding by local site name/ID OR WPE install name.
- * Local sites are resolved via resolveSite; WPE installs are keyed
+ * Local sites are resolved via resolveLocalSite; WPE installs are keyed
  * by install name in IW_SITE_BINDINGS (populated by wpe_site_deep_refresh).
  */
 function resolveIwBinding(
@@ -17,7 +17,7 @@ function resolveIwBinding(
 ): { binding: IwSiteBinding | null; label: string } {
   const registryStorage = services.registryStorage;
   // Try local site first
-  const localSite = resolveSite(siteArg, services.siteData);
+  const localSite = resolveLocalSite(siteArg, services.siteData, services.graphService);
   if (localSite) {
     return { binding: readIwBinding(localSite.id, registryStorage!), label: localSite.name };
   }

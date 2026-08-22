@@ -28699,3 +28699,297 @@ the compiler is the guard.
 Merge with the receipts block, the record rebuilt three-blob and
 verified four ways, and the residual measured before anything is
 discarded.
+
+---
+
+## WP-58 · GATE REPORT — the collision decline
+
+Branch `wp-58`, cut at `08240c76`. Base `poc/nexintelligence-ux` at
+`b3f5246c` (docs only since the cut; `git diff --name-only 3f2ae945 HEAD --
+src/ tests/ scripts/` empty, so the published base measure stands).
+
+**Every figure below is pasted from the command that printed it.**
+
+### 1 · The collision set, measured on the owner's fleet
+
+Measured before a line of code was written, and again by the exhibit after:
+
+```
+Local sites: 45   active wpe/external rows: 372
+Colliding names (6): goldenecomm, jpp0413p, myloop, psbtest2, testjppstg, thelocalshed
+```
+
+**`CLAUDE.md:471` names five. There are six.** `thelocalshed` is not in the
+record — which is the whole argument of this packet in one word: a list is a
+photograph, and this one aged.
+
+**The floor assertion, and how it can fail.** `PINNED_FLOOR` is the five
+`CLAUDE.md` names. The driven set is `drivenCollisionSet(PINNED_FLOOR,
+discovered)` — the UNION, never the discovery. Three instruments, and each has
+an input that makes it refuse:
+
+| instrument | refuses when |
+|---|---|
+| `the floor is exactly the set CLAUDE.md records` | `CLAUDE.md`'s own sentence and this constant drift apart, in either direction |
+| `with no fleet to read, the driven set is STILL the floor` | someone "simplifies" the union to `live.names` — and it fails on a machine where every other assertion in the file still passes, which is the only place that mistake gets made |
+| `the fixture really is a collision` (per name) | the fixture stops holding the name in both stores, i.e. the decline being asserted was never available to be made |
+
+Plus a per-name **CONTROL that must PASS**: the same name resolves locally when
+the graph does not hold it. Without it, a decline caused by a typo in the
+fixture reads exactly like a decline caused by the collision.
+
+**Shape #15 is not merely avoided here, it is the file's organising principle**
+— and the battery found it anyway, one level down. See §5.
+
+### 2 · Before and after, both resolvers
+
+| resolver | before | after |
+|---|---|---|
+| `resolveSite` → **`resolveLocalSite`** | `local(n)`. Local store only, no source constraint, no decline. **59 call sites in 50 files** | `local(n)` **unless** matched BY NAME and `graph(n)` is non-empty ⇒ `null` + a stated reason via `resolveLocalSiteResult`. Takes a **required** third parameter |
+| `resolveAnySite` | `local(n) ?? graph(n)` — local short-circuits, so the graph and its decline are reached only on a MISS | `local(n) ⊕ graph(n)` — both consulted; both present ⇒ `ambiguous` with the disambiguated forms |
+
+**A count correction.** The brief said "117 call sites across 54 files" for
+`resolveSite`. Measured on the base: the mcp resolver has **59** call sites in
+**50** files, and the GraphQL copies have **55** more. 114, in two populations
+that needed different treatment — which is why the number mattered.
+
+Scoped to NAME matches, deliberately: an id is not a name and a domain is not a
+name, and most call sites pass a Local site id. `<name>@local` resolves without
+the check, because the caller has already answered the question the decline
+would ask.
+
+**The probe is case-INsensitive where the resolvers are exact, and the two now
+say why in the source.** A resolver asks *"which row is this?"* and must be
+exact. The probe asks *"could this string mean something else?"* and must be
+generous, or a Local `MyLoop` beside the install `myloop` resolves silently to
+the copy — the coin toss, one casing away. WPE install names are lowercase by
+WP Engine's rules and Local names are whatever a human typed, so this is the
+ORDINARY shape of the collision, not an exotic one.
+
+### 3 · The duplicate — five copies, disposed
+
+The brief named one duplicate. `grep` found a third, and it was the live one:
+
+| # | where | scope | case | callers |
+|---|---|---|---|---|
+| 1 | `mcp/site-resolver.ts` | Local | **in**sensitive | 59 / 50 files |
+| 2 | `graphql/resolver-utils.ts` — exported | Local | **sensitive** | `resolvers/sites.ts` (dead code) |
+| 3 | `graphql/resolvers.ts:148` — **module-private, LIVE** | Local | **sensitive** | 40 in its own file |
+| 4 | `resolveRemoteGraphSite` | graph | sensitive | already correct |
+| 5 | `resolveAnySite` | both | mixed | the one whose docblock claimed what it skipped |
+
+**Copy 3 is deleted. Copies 2 and 3 become one exported `findLocalSiteExact`** —
+a name that states every way it differs: **exact**, **local**, no decline. Its
+docblock carries the comparison table and the reason the two are NOT merged:
+folding it into `resolveLocalSite` would make every GraphQL and CLI site lookup
+case-insensitive as a side effect of a packet about something else.
+`resolveTargetArgs`'s M11 comment exists *because* these two disagree about
+case; re-deciding that needs a packet that measures it.
+
+`syncProducer.ts` has a sixth private `resolveSite` — a genuinely different
+concept (it resolves an entity id in the intelligence layer, taking a core and
+returning a string). Left alone, named here so the next grep is not a surprise.
+
+**Registered residual, not silently left:** the GraphQL path still has no
+collision decline. `resolveTargetArgs` catches it before most CLI targets reach
+those resolvers; nothing catches it for a caller that reaches them directly.
+
+**Second registered residual:** the 51 remaining `resolveLocalSite` call sites
+still print their own "not found" for a collision. That is the packet's own
+ruling (117 call sites are not converted in one packet) and it is a worse
+message than the truth. `resolveLocalSiteResult` makes converting one a
+one-line change; `get_site_structure` is the worked example.
+
+### 4 · The exhibit — a real colliding name, through two real handlers
+
+`scripts/wp58-collision-exhibit.ts`, read-only by construction (`readFileSync`
+and `{ readonly: true }`), driving the handlers' own `execute()` over the
+owner's real fleet. Pasted:
+
+```
+Local sites: 45   active wpe/external rows: 372
+Colliding names (6): goldenecomm, jpp0413p, myloop, psbtest2, testjppstg, thelocalshed
+
+Driving "goldenecomm" through two real handlers.
+
+────────────────────────────────────────────────────────────────────────────
+get_site_structure({ site: "goldenecomm" })
+────────────────────────────────────────────────────────────────────────────
+isError: true
+Ambiguous site "goldenecomm" — it names both a Local site and a WP Engine install. Specify which one you mean:
+  goldenecomm@local
+  wpe:<account>/goldenecomm
+
+get_site_structure reads Local-only stores (digital twin, content index, filesystem), so it can only answer for goldenecomm@local. For the remote one, try nexus_get_site_twin or get_site_health.
+
+────────────────────────────────────────────────────────────────────────────
+compare_sites({ site_a: "goldenecomm", site_b: "goldenecomm" })
+────────────────────────────────────────────────────────────────────────────
+isError: true
+"goldenecomm" matches 2 sites across sources — specify which one: goldenecomm@local, wpe:<account>/goldenecomm
+
+────────────────────────────────────────────────────────────────────────────
+get_site_structure({ site: "goldenecomm@local" })  — the caller says which one
+────────────────────────────────────────────────────────────────────────────
+isError: true
+No cached data and filesystem scan failed: RESOLUTION SUCCEEDED — the @local pin was accepted and the tool reached Tier 3 (filesystem), which this read-only exhibit does not run.
+```
+
+The third case is the one that matters as much as the first two: **a decline is
+only cheap if the caller can answer it.** Reaching Tier 3 is what acceptance
+looks like from the caller's side.
+
+**What building the exhibit found, per WP-56's rule.** `get_site_structure`
+would have answered `Site "goldenecomm" not found` — the rename alone left it
+saying *absent* about a site that exists twice. All three of its tiers are
+Local (a twin keyed by Local site id, an IndexRegistry entry keyed the same
+way, a filesystem walk of `site.path`), so narrowing is legitimate and the
+narrowing was never the defect. Answering as if it had searched everything was.
+That is the packet's one-line ruling meeting its first real caller, and no test
+in the file would have caught it, because no test drove the handler.
+
+### 5 · The battery — 16 mutations, and the one that survived
+
+`scripts/wp58-battery.py`, WP-56's harness reused: `--no-cache` throughout,
+byte sweep first, tree pristine before and after, ABI pinned at both ends with
+WP-50's constructing probe, count-floored, both summary lines parsed.
+
+**First run: 14 killed / 1 survived / 1 anchor-miss.**
+
+- **M13 was ANCHOR-MISS, not a survivor** — the anchor was written against the
+  code before a small extraction. Re-anchored on two lines.
+- **M05 SURVIVED, and it was a real hole.** The mutation makes the resolver
+  decline on IDs and DOMAINS too. The test that should have caught it —
+  *"a Local site ID still resolves, collision or not"* — passed against the
+  mutant, because **every graph fixture in the file lacked a row named after
+  the Local site's id or domain**, so the mutant reached the probe, found
+  nothing, and answered correctly by accident.
+
+  The assertion was right. Its fixture never built the condition. That is the
+  vacuous-guard family reached from a new direction: not a green over an absent
+  subject (#15) nor a green over the wrong member of a list (#16), but a green
+  over a collision the fixture could not supply. **The tell was the same as
+  always — a survivor whose mutation sits inside a function the tests visibly
+  "cover".**
+
+  The new case builds it: a Local site whose id is `myloop` and whose domain is
+  `myloop.example.com`, beside a WPE install named `myloop` and an external site
+  named `myloop.example.com`. It asserts the graph holds both rows *before*
+  asserting the resolution, and it pins the residual in the open — **a Local
+  site whose DOMAIN equals a graph row's NAME is NOT declined**, because the
+  ruling scopes the decline to name matches.
+
+**Second run, after both fixes — pasted:**
+
+```
+=== WP-58 BATTERY: 16 killed / 0 survived / 0 anchor-miss, of 16 ===
+TREE PRISTINE AFTER.
+CONTROL  SURVIVED (correct)  0 failed / 251 total
+ABI PROBE (after): better-sqlite3 loads — the shared node_modules matches this node
+```
+
+The three mutations worth naming, because each recreates a real pre-fix shape
+rather than a syntactic shadow of one:
+
+- **M02** — `rows` forced empty: `resolveSite` exactly as it stood, Local-only,
+  across 59 call sites.
+- **M03** — local-first precedence restored in `resolveAnySite`: the defect its
+  own docblock denied, inherited by `compare_sites`, `detect_drift` and
+  `get_all_site_documents`.
+- **M15** — the parity backstop deleted: a refusal `resolveTargetArgs` has
+  always made becomes conditional on the shared probe succeeding. **Fail-OPEN,
+  on the one call site that already got this right.**
+
+### 6 · The five call sites that would have become newly wrong
+
+A fix that introduces a defect is not a fix. Five tools ran local-then-graph
+and would have fallen through to the REMOTE row on exactly the names the local
+half now refuses — a different wrong answer, from the same string. All five
+converge on `resolveAnySite` rather than each keeping a copy of the policy,
+which is the drift that produced this packet: `get_index_status`,
+`search_site_content`, `describe_site_fields`, `nexus_get_site_twin`, and
+`resolveTargetArgs` (which keeps its richer install-naming message).
+
+The original announce named four. The fifth, `get-site-twin.ts`, was found by
+measuring rather than by reading the brief, and the announce was amended on the
+base at that moment.
+
+`resolveTargetArgs` also gains a **parity backstop**: its pre-WP-58 gate is
+retained verbatim in effect, because the shared probe swallows a read failure
+and dropping the old gate would have been fail-open. It fixes that gate's own
+bug in passing — it fired for `mysite@local`, refusing a target whose entire
+point is that the caller already said which source they meant.
+
+### 7 · Numbers, and the suites this gate could NOT reach
+
+| | suites | tests | passed | skipped | tree |
+|---|---|---|---|---|---|
+| base `3f2ae945` (published) | 633 | 8,771 | 8,769 | 2 | primary |
+| **wp-58 `acf2b42f`** | **634** | **8,834** | **8,822** | **12** | **worktree** |
+
+`npx tsc -p . --noEmit` clean. `npx eslint` clean over every touched resolver
+and the new suite. Exit code captured before any pipe: `EXIT 0`.
+
+**The skipped column reconciles, and its cause is named rather than cited.**
+Worktree 12 vs primary 2 is the documented ten, and the ten are
+`tests/main/embedding-service.test.ts` — gated on `all-MiniLM-L6-v2-quantized`,
+which is untracked and exists only in the primary (`models/` here holds the
+tracked `bge-small-en-v1.5` alone). **The suites this gate could not reach, BY
+NAME:** those ten, plus the two unconditional skips that are skipped in both
+trees — `tests/unit/safety/BackupGateHandlers.test.ts:126` and
+`tests/unit/events/http-interface.test.ts:392`.
+
+**The test delta reconciles exactly:** +1 suite, +63 tests. 62 are
+`collision-decline.test.ts`; the 63rd is `site-resolver.test.ts`, where one
+test became two — see §8.
+
+### 8 · A test that pinned the defect as correct behaviour
+
+`tests/unit/mcp/site-resolver.test.ts`'s first case read **"resolves a local
+site first, without touching the graph"** and asserted `{ kind: 'ok', source:
+'local' }` for a name held by BOTH a Local site and an external host. The coin
+toss the rule forbids, written down as the expected behaviour of the function
+built to enforce it — in the same file, thirty lines below a docblock crediting
+that function with the decline.
+
+It is now two tests: the decline, and the case it was actually protecting (a
+local site resolving when the graph does not hold the name).
+
+### 9 · The poisoned cache, tenth occurrence
+
+The first full run reported `2 failed, 632 passed` with **0 failed tests** —
+both suites failing to PARSE, on `tests/intelligence-evals/sitting.ts`'s own
+shebang, in a file this packet never touched. `npx jest --clearCache`, re-run,
+`634 passed`. WP-52's amendment held: read the shape, never the count. The
+battery was unaffected — it runs `--no-cache` by rule.
+
+### 10 · Environment disclosure
+
+**This session ran jest, so `better-sqlite3` in the SHARED `node_modules` is
+built for system Node (ABI 141 on this machine, measured; `.nvmrc` pins CI to
+22.16.0 → 127).** `npm run rebuild` is required before loading Local again. No
+native module was rebuilt during this packet, so no sibling packet's runtime
+was moved.
+
+### 11 · What this packet did not do
+
+- **`CLAUDE.md:471` still lists five names.** It needs a sixth
+  (`thelocalshed`) and it is owner-approval territory. Note the consequence,
+  because it is deliberate: the anchor test parses that sentence, so amending
+  the record fails `the floor is exactly the set CLAUDE.md records` until
+  `PINNED_FLOOR` is amended with it. **That is the pin working, and the fix is
+  one line** — but it should not arrive as a surprise.
+- The GraphQL path has no collision decline (§3).
+- 51 call sites still say "not found" for a collision (§3).
+- `syncProducer.ts`'s unrelated private `resolveSite` is untouched (§3).
+
+### 12 · What the packet is really claiming
+
+Not that the six names now resolve correctly — that is the fix. **That a new
+call site cannot narrow its scope silently, because the narrowed resolver will
+not compile without the graph handle, and because a test enumerates the live
+collision set and drives every resolver over every name in it.**
+
+The rule was prose for months and three call sites honoured it. The one written
+to be correct forgot in its first ten lines. That is not a discipline problem
+and it was never going to be fixed by writing the rule down more firmly.

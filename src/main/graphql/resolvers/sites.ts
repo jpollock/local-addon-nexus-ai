@@ -7,7 +7,7 @@
 import type { NexusServices } from '../../types/nexus-services';
 import {
   parseTarget,
-  resolveSite,
+  findLocalSiteExact,
   resolveWpeGraphSite,
   buildWpeSiteDetails,
   formatTwinAge,
@@ -257,7 +257,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Local services not available' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
 
         if (site) {
           const status = services.localServices!.getSiteStatus(site.id);
@@ -341,7 +341,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites can be cloned. Use target format: mysite@local' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Source site "${parsed.siteName}" not found` };
         }
@@ -350,7 +350,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'New site name is required' };
         }
 
-        const existingSite = resolveSite(input.newName, services.siteData);
+        const existingSite = findLocalSiteExact(input.newName, services.siteData);
         if (existingSite) {
           return { success: false, error: `Site "${input.newName}" already exists` };
         }
@@ -382,7 +382,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites can be renamed. Use target format: mysite@local' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site "${parsed.siteName}" not found` };
         }
@@ -391,7 +391,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'New site name is required' };
         }
 
-        const existingSite = resolveSite(input.newName, services.siteData);
+        const existingSite = findLocalSiteExact(input.newName, services.siteData);
         if (existingSite && existingSite.id !== site.id) {
           return { success: false, error: `Site "${input.newName}" already exists` };
         }
@@ -415,7 +415,7 @@ export function createSiteResolvers(services: NexusServices) {
         }
 
         const siteName = (input.target as string).replace(/@local$/, '');
-        const site = resolveSite(siteName, services.siteData);
+        const site = findLocalSiteExact(siteName, services.siteData);
         if (!site) {
           return { success: false, error: `Site "${siteName}" not found` };
         }
@@ -464,7 +464,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites support logs. Use target format: mysite@local' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site "${parsed.siteName}" not found` };
         }
@@ -494,7 +494,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites support PHP configuration. Use target format: mysite@local' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site "${parsed.siteName}" not found` };
         }
@@ -522,7 +522,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites support SSL trust. Use target format: mysite@local' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site "${parsed.siteName}" not found` };
         }
@@ -549,7 +549,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites support Xdebug. Use target format: mysite@local' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site "${parsed.siteName}" not found` };
         }
@@ -600,7 +600,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites can be saved as blueprints. Use target format: mysite@local' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site "${parsed.siteName}" not found` };
         }
@@ -647,7 +647,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites can be started. Pull this site to local first.' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site not found: ${parsed.siteName}` };
         }
@@ -675,7 +675,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites can be stopped. WPE sites are always running.' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site not found: ${parsed.siteName}` };
         }
@@ -703,7 +703,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'Only local sites can be restarted. WPE sites are always running.' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site not found: ${parsed.siteName}` };
         }
@@ -731,7 +731,7 @@ export function createSiteResolvers(services: NexusServices) {
           return { success: false, error: 'WPE sites cannot be deleted via CLI. Use WPE Portal or CAPI.' };
         }
 
-        const site = resolveSite(parsed.siteName!, services.siteData);
+        const site = findLocalSiteExact(parsed.siteName!, services.siteData);
         if (!site) {
           return { success: false, error: `Site not found: ${parsed.siteName}` };
         }

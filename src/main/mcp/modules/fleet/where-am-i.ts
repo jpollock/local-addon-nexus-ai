@@ -20,7 +20,7 @@
  * a durable audit line every time somebody asked where they were standing.
  */
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { getIntelligenceCore } from '../../../intelligence-host/coreRegistry';
 import { siteStatus } from '../../../intelligence-host/siteStatus';
 import { describeEnvironmentsFor } from '../../../intelligence-host/taskFrame';
@@ -57,7 +57,7 @@ export const whereAmIHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) return error(`Site "${args.site}" not found`);
 
     const core = getIntelligenceCore();

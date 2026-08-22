@@ -46,7 +46,7 @@ import { forgetProcedureStream, notifyProcedureState } from './procedureStream';
 import { environmentEntityId, siteEntityId } from './provisionalEntity';
 import { buildTaskFrame, describeEnvironmentsFor } from './taskFrame';
 import { wrapUntrusted } from '../mcp/pii';
-import { resolveSite } from '../mcp/site-resolver';
+import { resolveLocalSite } from '../mcp/site-resolver';
 import type { NexusServices } from '../mcp/types';
 
 /** ADR-19 refinement: the anchor surface is the Docked Panel specifically. */
@@ -538,7 +538,7 @@ function withCursor(
 function resolveTargets(req: ChatAssemblyRequest): ResolvedTargets {
   if (!req.siteId) return { targets: [] };
   try {
-    const site = resolveSite(req.siteId, req.services.siteData);
+    const site = resolveLocalSite(req.siteId, req.services.siteData, req.services.graphService);
     if (!site) return { targets: [] };
     const core = getIntelligenceCore();
     const copy: EntityRef = {

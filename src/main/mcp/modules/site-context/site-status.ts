@@ -5,7 +5,7 @@
  * Used by other tools before answering questions to surface data quality.
  */
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 
 export const siteStatusHandler: McpToolHandler = {
   definition: {
@@ -28,7 +28,7 @@ export const siteStatusHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) return error(`Site "${args.site}" not found`);
 
     const metadataCache = services.metadataCache;

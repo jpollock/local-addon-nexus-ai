@@ -1,5 +1,5 @@
 import { parseTarget } from '../../common/target';
-import { resolveSite } from '../mcp/site-resolver';
+import { resolveLocalSiteResult } from '../mcp/site-resolver';
 import type { NexusServices } from '../mcp/types';
 
 /**
@@ -44,7 +44,12 @@ export function resolveTargetArgs(
   }
 
   const name = parsed.siteName!;
-  const localSite = resolveSite(name, services.siteData);
+  // WP-58: `target`, not `name` — the `@local` suffix is the caller SAYING
+  // which source it means, and `parsed.siteName` has already stripped it.
+  // `resolveLocalSiteResult` reads the pin and skips the decline for it, which
+  // is what makes the refusal below actionable rather than a dead end.
+  const localResult = resolveLocalSiteResult(target, services.siteData, services.graphService);
+  const localSite = localResult.kind === 'none' ? null : localResult.site;
 
   let wpeInstallName: string | undefined;
   try {
@@ -58,25 +63,54 @@ export function resolveTargetArgs(
     // A lookup failure must not throw here.
   }
 
-  // If the bare name matches both a Local site AND an active WPE install,
+  // If the bare name matches both a Local site AND something in the graph,
   // refuse it — the user must disambiguate with @ naming.
-  if (localSite && wpeInstallName) {
-    throw new Error(
+  //
+  // WP-58: the gate is now `localResult.kind === 'collision'`, not
+  // `localSite && wpeInstallName`. The old pair covered a Local/WPE clash and
+  // silently answered "local" for a Local/EXTERNAL one — the same hole, one
+  // source over. The WPE-specific message is kept where it applies, because it
+  // names the install and that is more useful than the generic form.
+  const wpeAmbiguity = () =>
+    new Error(
       `Ambiguous target "${name}" — it matches both a Local site and the WP Engine install "${wpeInstallName}". Specify which one you mean:\n` +
       `  ${name}@local\n` +
       `  wpe:<account>/${wpeInstallName}@production\n` +
       `  ssh:${wpeInstallName}@production`
     );
+
+  if (localResult.kind === 'collision') {
+    // The WPE-specific message where it applies: it names the install, which
+    // is more useful than the generic form.
+    throw wpeInstallName ? wpeAmbiguity() : new Error(localResult.message);
   }
 
-  // M11: return the site's OWN name, not the caller's spelling. `resolveSite`
-  // here matches case-insensitively (and on id/domain), but resolvers.ts's
-  // `resolveSite` re-resolves case-sensitively on name/id/domain — so echoing
-  // back `MySite` for a site named `mysite` produced a "Site not found" a step
-  // later. Returning the canonical name closes the mismatch at the source.
+  // PARITY BACKSTOP — the pre-WP-58 gate, kept verbatim in effect.
+  //
+  // The shared probe and this function's own WPE lookup are two independent
+  // queries against the same database, and they can disagree: the probe
+  // swallows a read failure and reports "no collision", which would turn a
+  // refusal this function has always made into a silent run against the copy.
+  // Deleting the old gate in favour of the new one would have been a fail-OPEN
+  // change on the one path that already got this right.
+  //
+  // `localPinned` is the one thing the old gate was missing: it fired for
+  // `mysite@local` too, refusing a target whose whole point is that the caller
+  // already said which source they meant.
+  const localPinned = target.endsWith('@local');
+  if (!localPinned && localSite && wpeInstallName) throw wpeAmbiguity();
+
+  // M11: return the site's OWN name, not the caller's spelling.
+  // `resolveLocalSiteResult` here matches case-insensitively (and on
+  // id/domain), but the GraphQL path's `findLocalSiteExact` re-resolves
+  // case-SENSITIVELY on name/id/domain — so echoing back `MySite` for a site
+  // named `mysite` produced a "Site not found" a step later. Returning the
+  // canonical name closes the mismatch at the source. (WP-58 renamed both
+  // functions so this sentence can name which is which; it did not merge
+  // them, and this comment is the reason it did not.)
   if (localSite) return { site: localSite.name };
 
-  // Reached only after resolveSite came back empty, so re-running the local
+  // Reached only after the local lookup came back empty, so re-running the local
   // lookup downstream cannot change the answer — but the flag keeps the
   // mapper's contract single: it never emits an ambiguous install_name.
   if (wpeInstallName) return { install_name: wpeInstallName, install_name_explicit: true };

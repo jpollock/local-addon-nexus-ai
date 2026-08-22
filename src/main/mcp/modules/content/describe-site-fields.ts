@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
+import { resolveAnySite } from '../../site-resolver';
 import { buildFieldCatalog, formatFieldCatalog } from './field-catalog';
 import { vectorSiteId } from '../../../vector-store/vectorSiteId';
 
@@ -33,30 +33,23 @@ export const describeSiteFieldsHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    // Resolve site: local first, then WPE install (mirror search_site_content).
-    let siteId: string;
-    let siteName: string;
-    const localSite = resolveSite(args.site as string, services.siteData);
-    if (localSite) {
-      siteId = localSite.id;
-      siteName = localSite.name;
-    } else {
-      // M14: names collide across sources; an unordered `LIMIT 1` picks an
-      // arbitrary row. Decline rather than guess (as core_version does).
-      const graphService = (services as any).graphService;
-      const db = graphService?.getDb?.();
-      const result = resolveRemoteGraphSite(db, args.site);
-      if (result.kind === 'none') {
-        return error(`Site "${args.site}" not found. For WPE installs use the install name. Run wpe_sync_sites first if missing.`);
-      }
-      if (result.kind === 'ambiguous') {
-        return error(
-          `"${args.site}" matches ${result.matches.length} sites across sources — specify which one: ${result.matches.join(', ')}`,
-        );
-      }
-      siteId = result.siteId;
-      siteName = result.siteName;
+    // Resolve site across every source (mirrors search_site_content).
+    //
+    // M14: names collide across sources; an unordered `LIMIT 1` picks an
+    // arbitrary row. Decline rather than guess. WP-58: local-first meant the
+    // graph was reached only on a MISS, so a name in both stores answered
+    // "local" without ever asking the question the decline exists for.
+    const result = resolveAnySite(args.site as string, services.siteData, (services as any).graphService);
+    if (result.kind === 'none') {
+      return error(`Site "${args.site}" not found. For WPE installs use the install name. Run wpe_sync_sites first if missing.`);
     }
+    if (result.kind === 'ambiguous') {
+      return error(
+        `"${args.site}" matches ${result.matches.length} sites across sources — specify which one: ${result.matches.join(', ')}`,
+      );
+    }
+    const siteId = result.id;
+    const siteName = result.name;
 
     // vectorSiteId: external ids are `ssh:<alias>`; the vector store's
     // table-name validation rejects colons. No-op for local/WPE ids.

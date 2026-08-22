@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
-import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
+import { resolveAnySite } from '../../site-resolver';
 import { indexFreshnessWarning } from '../../../twin/twin-helpers';
 import { vectorSiteId } from '../../../vector-store/vectorSiteId';
 import type { MetadataFilter } from '../../../../common/types';
@@ -92,33 +92,27 @@ export const searchContentHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    // Try local site first, then resolve WPE install name → wpe-{uuid}
-    let siteId: string;
-    let siteName: string;
+    // M14: names collide across sources, so an unordered `LIMIT 1` returns
+    // whichever row SQLite happens to reach first. Decline rather than guess.
+    //
+    // WP-58: this used to run local-first and only reach the graph on a MISS,
+    // so the M14 decline covered two WPE installs colliding with each other
+    // and NOT the local-vs-remote case the rule exists for. `resolveAnySite`
+    // consults both stores before answering and owns the one policy — it also
+    // accepts the qualified forms (`wpe:…@env`, `ssh:…@env`) this tool
+    // previously rejected, which is what makes the decline actionable.
+    const resolved = resolveAnySite(args.site as string, services.siteData, (services as any).graphService);
 
-    const localSite = resolveSite(args.site as string, services.siteData);
-    if (localSite) {
-      siteId = localSite.id;
-      siteName = localSite.name;
-    } else {
-      // Try to find as WPE install or external host in graph DB.
-      // M14: names collide across sources, so an unordered `LIMIT 1` returns
-      // whichever row SQLite happens to reach first. Decline rather than guess —
-      // the same treatment core_version already applies.
-      const graphService = (services as any).graphService;
-      const resolved = resolveRemoteGraphSite(graphService?.getDb?.(), args.site);
-
-      if (resolved.kind === 'none') {
-        return error(`Site "${args.site}" not found. For WPE installs, use the install name (e.g. "testjpp1"). Run wpe_sync_sites first if the install is missing.`);
-      }
-      if (resolved.kind === 'ambiguous') {
-        return error(
-          `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`
-        );
-      }
-      siteId = resolved.siteId;
-      siteName = resolved.siteName;
+    if (resolved.kind === 'none') {
+      return error(`Site "${args.site}" not found. For WPE installs, use the install name (e.g. "testjpp1"). Run wpe_sync_sites first if the install is missing.`);
     }
+    if (resolved.kind === 'ambiguous') {
+      return error(
+        `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`
+      );
+    }
+    const siteId = resolved.id;
+    const siteName = resolved.name;
 
     const indexEntry = services.indexRegistry.get(siteId);
     if (!indexEntry || indexEntry.state === 'error') {

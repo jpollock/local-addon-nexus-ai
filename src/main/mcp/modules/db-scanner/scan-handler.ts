@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { error } from '../wp-cli/preflight';
 import { withSiteRunning } from '../with-site-running';
 import { scanDatabase } from './db-scanner';
@@ -23,7 +23,7 @@ export const scanDatabaseHealthHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) return error(`Site "${args.site}" not found.`);
 
     return withSiteRunning(site.id, services, async () => {

@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveLocalSite } from '../../site-resolver';
 import { ok, error as err } from './preflight';
 import { withSiteRunning } from '../with-site-running';
 import * as fs from 'fs';
@@ -45,7 +45,7 @@ export const importDatabaseHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
+    const site = resolveLocalSite(args.site as string, services.siteData, services.graphService);
     if (!site) return err(`Site "${args.site}" not found.`);
 
     const sqlPath = args.sqlPath as string;
