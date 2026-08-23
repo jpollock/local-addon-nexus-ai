@@ -713,3 +713,54 @@ matched on its own wording rather than its `**` prefix so a genuine message
 starting with `**` survives. This reverses a deliberate earlier decision to
 keep the banner "as context"; context that is always present carries no
 information and displaces context that does.
+
+---
+
+## D15 — 73 installs on one WP Engine account have no SSH endpoint, and are not indexable
+
+**Found 2026-08-23. Corrects an assumption I stated as fact the same evening.**
+
+73 of 365 active `wpe` rows return **NXDOMAIN** for
+`<name>.ssh.wpengine.net`, verified twice including against an external
+resolver. I assumed they were installs deleted at WP Engine whose graph rows
+were never retired, and built `reconcileMissingInstalls` on that basis.
+
+**That assumption was wrong, and the reconciliation itself disproved it.** On
+its first live run it deactivated **zero**, because CAPI still lists all 365.
+`jpmeautoscale` is a live production install on PHP 8.5, synced today — it
+simply has no SSH host.
+
+The real pattern is exact:
+
+| account | installs | resolve? |
+|---|---|---|
+| `1706440b-b146-4b97-a5f6-134bbaf6f1a4` | **73** | none |
+| all other accounts | 292 | yes |
+
+Every one of the 73 belongs to that single account, and that account has
+exactly 73 installs. Not one of them resolves. Corroborated independently: 290
+of 365 rows carry a `wp_version` (i.e. SSH worked at least once), and
+365 − 290 = 75 ≈ the same set.
+
+So this is a WP Engine **provisioning or entitlement** fact about one account,
+not a Nexus defect and not stale data. Nothing in the addon can fix it.
+
+**What should change is that it is rediscovered as ~73 failures on every
+sweep.** The honest handling is to establish it once and report it as a stated
+absence rather than a per-run error — the same ruling already applied to
+copy: an absence stated with its reason ships, a blank does not. Candidate
+approaches, none implemented:
+
+- probe SSH reachability per account once and record it, then report those
+  installs as *not SSH-reachable* rather than attempting and failing;
+- or surface it as a single fleet-level line ("73 installs on account X have
+  no SSH endpoint — content indexing is unavailable for them").
+
+**Do not extend `reconcileMissingInstalls` to cover them.** A missing DNS
+record is not a missing install, and retiring a live install because we cannot
+reach it would delete real fleet from the user's view. CAPI membership is the
+only signal that method uses, deliberately.
+
+**Still unknown:** why that account has no SSH endpoints — plan level, a
+provisioning state, or an entitlement on this user's access. That is a question
+for WP Engine, not something determinable from here.

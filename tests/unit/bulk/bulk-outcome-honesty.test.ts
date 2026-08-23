@@ -400,3 +400,43 @@ describe('WP-67 — WPESyncService.indexOneWpeContent reports each of syncConten
     await expect(service.indexOneWpeContent('wpe-1')).rejects.toThrow('SSH connection refused');
   });
 });
+
+/**
+ * Concurrency must stay BELOW WP Engine's cap, not sit on it.
+ *
+ * WPE allows five concurrent SSH connections per user, account-wide, shared
+ * with the schedulers, agent runs and the CLI. At MAX_CONCURRENCY 5 a fleet
+ * sweep consumed the whole account quota by itself, so anything else running
+ * alongside was refused — and so was the sweep, if anything else got in first.
+ *
+ * The assertion is the invariant (headroom below 5), not the literal, so
+ * tuning 3 down further stays green and tuning it back to the cap does not.
+ */
+describe('WP-68 — bulk concurrency leaves headroom under the WPE connection cap', () => {
+  const WPE_CONNECTION_CAP = 5;
+
+  test('never runs more sites at once than the cap allows room for', async () => {
+    let inFlight = 0;
+    let peak = 0;
+
+    const { manager } = makeManager({
+      contentPipeline: {
+        indexSite: async () => {
+          inFlight++;
+          peak = Math.max(peak, inFlight);
+          await new Promise(r => setTimeout(r, 15));
+          inFlight--;
+          return { errors: [] };
+        },
+      },
+    });
+
+    const ids = Array.from({ length: 12 }, (_, i) => `local${i}`);
+    const id = manager.execute({ type: 'reindex', siteIds: ids, options: { autoStartStop: false } });
+    await manager.waitForCompletion(id);
+
+    expect(peak).toBeGreaterThan(1);              // still parallel, not serialised
+    expect(peak).toBeLessThan(WPE_CONNECTION_CAP); // and not sitting on the cap
+    expect(summarizeBulkOperation(manager.getStatus(id)!).succeeded).toBe(12);
+  });
+});

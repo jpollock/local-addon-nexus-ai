@@ -53,6 +53,8 @@ export interface WPESyncResult {
   synced: number;
   skipped: number;
   failed: number;
+  /** Rows retired because CAPI no longer lists the install. See reconcileMissingInstalls. */
+  deactivated: number;
   errors: Array<{ installId: string; error: string }>;
 }
 
@@ -137,6 +139,7 @@ export class WPESyncService {
       synced: 0,
       skipped: 0,
       failed: 0,
+      deactivated: 0,
       errors: [],
     };
 
@@ -165,6 +168,14 @@ export class WPESyncService {
       }
 
       this.logger.info(`[WPESyncService] Found ${installs.length} WPE installs`);
+
+      // Retire rows for installs that no longer exist, using the FULL CAPI
+      // list — captured here, before the account, permission and staleness
+      // filters below. Any of those would make in-scope-only look like
+      // "everything else was deleted".
+      result.deactivated = this.reconcileMissingInstalls(
+        new Set(installs.map((i: any) => i.id).filter(Boolean)),
+      );
 
       // Apply account filter — null/undefined means all accounts
       if (accountFilter && accountFilter.length > 0) {
@@ -458,6 +469,91 @@ export class WPESyncService {
     // This ensures content indexing never runs on app startup or during metadata sync.
   }
 
+
+  /**
+   * Deactivate graph rows for installs CAPI no longer lists.
+   *
+   * Nothing here ever retired a row: every writer upserts and none reconcile,
+   * so a deleted install stays `is_active = 1` indefinitely and fails on every
+   * sweep forever.
+   *
+   * NOTE ON WHAT PROMPTED THIS, because the first reading was wrong: 73 of 365
+   * active rows had no SSH host (NXDOMAIN), and they were assumed to be
+   * deleted installs. They are not. CAPI still lists all 365, this method
+   * correctly deactivated ZERO on its first live run, and the 73 turned out to
+   * be one entire account with no SSH endpoint provisioned (see D15). So this
+   * does not address them, and must not be extended to — absence of a DNS
+   * record is not absence of an install, and retiring a live install because
+   * we cannot SSH to it would delete real fleet from the user's view.
+   * CAPI membership is the only signal used here, deliberately.
+   *
+   * CAPI's install list is the authority on existence, so the risk runs the
+   * other way: a truncated or empty response would retire a live fleet. Every
+   * branch below is therefore a refusal, and each is a hard stop rather than a
+   * heuristic — leaving 73 dead rows in place is a far cheaper mistake than
+   * deactivating 365 good ones.
+   *
+   * @param capiInstallIds every install id CAPI returned, BEFORE any account,
+   *   permission or staleness filtering. A filtered list would read as
+   *   "missing" for everything out of scope.
+   * @returns how many rows were deactivated.
+   */
+  private reconcileMissingInstalls(capiInstallIds: Set<string>): number {
+    const db = this.graphService.getDb();
+    if (!db) return 0;
+
+    // An empty list is indistinguishable from a failed fetch that resolved.
+    if (capiInstallIds.size === 0) {
+      this.logger.warn(
+        '[WPESyncService] Reconciliation skipped: CAPI returned no installs, which cannot be '
+        + 'told apart from a failed fetch. No rows deactivated.',
+      );
+      return 0;
+    }
+
+    let rows: Array<{ id: string; name: string; remote_install_id: string | null }>;
+    try {
+      rows = db.prepare(
+        "SELECT id, name, remote_install_id FROM sites WHERE source='wpe' AND is_active=1",
+      ).all() as any[];
+    } catch (err: any) {
+      this.logger.warn(`[WPESyncService] Reconciliation skipped: ${err?.message}`);
+      return 0;
+    }
+
+    // A row with no install id cannot be matched against CAPI, so its absence
+    // from the list proves nothing. Never judged.
+    const missing = rows.filter(r => r.remote_install_id && !capiInstallIds.has(r.remote_install_id));
+    if (missing.length === 0) return 0;
+
+    // A shrinking fleet is gradual; half of it vanishing at once is a bad
+    // response. Refuse loudly rather than act on it.
+    if (missing.length > rows.length / 2) {
+      this.logger.warn(
+        `[WPESyncService] Reconciliation REFUSED: ${missing.length} of ${rows.length} active installs `
+        + `are absent from a CAPI list of ${capiInstallIds.size}. That is the shape of a truncated `
+        + 'response, not a shrinking fleet. No rows deactivated.',
+      );
+      return 0;
+    }
+
+    try {
+      const stmt = db.prepare('UPDATE sites SET is_active = 0 WHERE id = ?');
+      const tx = db.transaction((ids: string[]) => { for (const id of ids) stmt.run(id); });
+      tx(missing.map(r => r.id));
+    } catch (err: any) {
+      this.logger.warn(`[WPESyncService] Reconciliation write failed: ${err?.message}`);
+      return 0;
+    }
+
+    // Named, not just counted: a row disappearing from the fleet view is the
+    // kind of thing someone needs to be able to trace back to a decision.
+    this.logger.info(
+      `[WPESyncService] Deactivated ${missing.length} install(s) CAPI no longer lists: `
+      + missing.map(r => r.name).join(', '),
+    );
+    return missing.length;
+  }
 
   /**
    * Sync content for a WPE install (Phase 2)

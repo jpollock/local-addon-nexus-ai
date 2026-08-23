@@ -90,7 +90,23 @@ export interface BulkOpDeps {
  */
 const REMOTE_SUPPORTED: BulkOpType[] = ['sync-graph', 'reindex'];
 
-const MAX_CONCURRENCY = 5; // Increased from 3 for better performance (50 sites: ~10 min vs ~17 min)
+/**
+ * Five was exactly WP Engine's cap and therefore had no headroom.
+ *
+ * WPE allows five concurrent SSH connections PER USER, account-wide — shared
+ * by this manager, the schedulers, agent runs and the CLI. At 5 a fleet sweep
+ * consumed the entire account quota on its own, so any scheduled refresh or
+ * agent firing alongside it was refused, and so was the sweep the moment
+ * anything else got in first. Three leaves two connections for everything
+ * else on the machine.
+ *
+ * The 5 was chosen for local-site throughput ("50 sites: ~10 min vs ~17 min")
+ * before remote sources routed through here at all, and that reasoning never
+ * accounted for a per-account server-side limit. Local sites are slower for
+ * it; correctness on the remote path is worth more than the difference, and a
+ * per-source limit is the better answer if the local cost ever bites.
+ */
+const MAX_CONCURRENCY = 3;
 const MAX_HISTORY = 20;
 /** Maximum individual site results retained per operation to cap memory usage. */
 const MAX_SITE_RESULTS = 500;
