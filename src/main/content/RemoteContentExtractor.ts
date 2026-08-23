@@ -124,43 +124,55 @@ export class RemoteContentExtractor {
         );
       }
 
-      // Build the posts BEFORE reading meta, and drop the empty ones first.
+      // D17 REVERSAL of a WP-62 perf choice: meta is fetched BEFORE the
+      // empty-content drop, and a post with empty `post_content` but non-empty
+      // public meta is CONTENT.
       //
-      // The meta read is a WordPress bootstrap per page of ids, so fetching it
-      // for posts that are about to be discarded is pure round trips. Measured
-      // on qwerky: 5,000 rows survive the post-type filter and TWO survive the
-      // empty-content filter, so meta was being fetched for 4,998 posts that
-      // never reach the index — 25 export calls, and the bulk of a 431-second
-      // run. Ordering the filters this way is behaviour-neutral:
-      // `cleanedContent` does not depend on custom fields.
-      const posts: ExtractedPost[] = filtered
-        .map((postData: any) => {
-          const cleanContent = postData.post_content
-            ? cleanWordPressContent(postData.post_content)
-            : '';
-          return {
-            id: Number(postData.ID),
-            title: postData.post_title || '',
-            content: postData.post_content || '',
-            cleanedContent: cleanContent,
-            excerpt: postData.post_excerpt || '',
-            postType: postData.post_type || 'post',
-            postStatus: postData.post_status || 'publish',
-            author: postData.post_author ? String(postData.post_author) : '0',
-            date: postData.post_date || new Date().toISOString(),
-            categories: [],
-            tags: [],
-            customFields: {},
-          } as ExtractedPost;
-        })
-        .filter((p: ExtractedPost) => p.cleanedContent.trim().length > 0);
+      // WP-62 ordered the filters the other way to save the meta round trips
+      // for about-to-be-dropped posts — measured on qwerky, 4,998 of 5,000
+      // rows, the bulk of a 431-second run. That perf win was a coverage bug
+      // wearing a stopwatch: qwerky is a page-builder/ACF-first install whose
+      // every meaningful word lives in postmeta, so the drop discarded the
+      // posts AND the fields together — 2 documents from 5,000 rows, while
+      // `coverage.customFields` said "collected" (true only of the two
+      // survivors). For ordinary sites nearly every row has content, so the
+      // meta fetch covered ~all ids anyway and this order costs nothing; the
+      // qwerky-shaped site pays the round trips it used to skip, which is the
+      // point — those posts ARE its content.
+      const candidates: ExtractedPost[] = filtered.map((postData: any) => {
+        const cleanContent = postData.post_content
+          ? cleanWordPressContent(postData.post_content)
+          : '';
+        return {
+          id: Number(postData.ID),
+          title: postData.post_title || '',
+          content: postData.post_content || '',
+          cleanedContent: cleanContent,
+          excerpt: postData.post_excerpt || '',
+          postType: postData.post_type || 'post',
+          postStatus: postData.post_status || 'publish',
+          author: postData.post_author ? String(postData.post_author) : '0',
+          date: postData.post_date || new Date().toISOString(),
+          categories: [],
+          tags: [],
+          customFields: {},
+        } as ExtractedPost;
+      });
 
       const customFields = await this.fetchCustomFields(
-        transport, siteLabel, posts.map(p => p.id), coverage,
+        transport, siteLabel, candidates.map(p => p.id), coverage,
       );
-      for (const post of posts) {
+      for (const post of candidates) {
         post.customFields = customFields.get(post.id) ?? {};
       }
+
+      // A post is indexable if EITHER half of its searchable text exists —
+      // body or fields (`buildSearchableText` renders both). Empty on both
+      // counts stays dropped, or every nav stub in the fleet becomes an empty
+      // document.
+      const posts = candidates.filter(
+        (p) => p.cleanedContent.trim().length > 0 || Object.keys(p.customFields).length > 0,
+      );
 
       this.logger.info(`[RemoteContentExtractor] Extracted ${posts.length} posts with content from ${siteLabel}`);
 

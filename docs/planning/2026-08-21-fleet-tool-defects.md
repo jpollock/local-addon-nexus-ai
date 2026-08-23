@@ -801,7 +801,7 @@ silence about ContentPipeline as meaningless, not as idleness.
 
 ---
 
-## D17 — an ACF-first site loses its content AND its fields: empty post_content drops the post before meta is read
+## D17 — FIXED 2026-08-23 — an ACF-first site lost its content AND its fields: empty post_content dropped the post before meta was read
 
 **Found 2026-08-23, answering "what % of posts are we getting?" against the
 sweep's ledger.** Median site: 100% of rows read become documents; mean 90%;
@@ -825,7 +825,7 @@ true only of the two survivors.
 Rare in this fleet (2 of 60 successful sites below 50%: qwerky 2/5000,
 qwerkystg 1/4), catastrophic where it hits.
 
-**Candidate fix, not implemented:** fetch meta for a PAGE of ids before the
+**Fix (implemented same day):** exactly this — fetch meta for a PAGE of ids before the
 empty-content drop, and treat a post with empty content but non-empty public
 meta as indexable (meta text becomes the document body). Preserves the WP-62
 perf win for the common case iff the meta fetch stays page-batched; the
@@ -834,7 +834,7 @@ is the point — those posts are the content.
 
 ---
 
-## D18 — L2's post_count_by_type for WPE installs misses custom post types
+## D18 — FIXED 2026-08-23 — L2's post_count_by_type for WPE installs missed custom post types
 
 **Found the same way.** graph.db for `cedarvalehealt` says
 `post_count_by_type = {"post": 600}` while the content index genuinely holds
@@ -845,5 +845,9 @@ reason — the denominator undercounts, not the index overcounting.
 The L3 side is correct; the L2 count is wrong. Effect: any surface using
 post_count as "how much content does this install have" (fleet views, the
 coverage math in this register's own D17 analysis) understates CPT-heavy
-sites. Locate the WPE L2 post-count query (`syncInstall`'s stats write) and
-widen it to all publish-status types, matching what L3 actually indexes.
+sites. Fixed same day: the query lived in `WpeRefreshScheduler` (not syncInstall) —
+`--post_type=post` hardcoded in both the by-type call and the total. Now
+discovers registered types with `wp post-type list` (wp eval is blocked on
+the WPE gateway), excludes the same machinery set the L3 extractor filters,
+and counts each publish-status type; the total is the sum. Live values land
+on each install's next scheduled refresh (8h cycle).

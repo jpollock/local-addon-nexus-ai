@@ -2,6 +2,7 @@ import {
   RemoteContentExtractor, REMOTE_PAGE_SIZE, REMOTE_MAX_POSTS,
 } from '../../../src/main/content/RemoteContentExtractor';
 import type { SiteTransport, RunOpts, WpCliResult } from '../../../src/main/transport/types';
+import { buildSearchableText } from '../../../src/main/content/chunker';
 
 function makeTransport(runWpCli: (args: string[], opts?: RunOpts) => Promise<WpCliResult>): SiteTransport {
   return {
@@ -312,28 +313,34 @@ ${e.meta.map(([k, v]) => `    <wp:postmeta><wp:meta_key>${k}</wp:meta_key><wp:me
     expect(result.coverage!.customFields).toBe('unavailable');
   });
 
-  it('does NOT pay for meta on posts that the empty-content filter discards', async () => {
-    // Measured on qwerky: 5,000 rows survive the post-type filter and TWO
-    // survive the empty-content filter. Reading meta before that filter cost
-    // 25 export calls — a WordPress bootstrap each — for posts that never
-    // reach the index.
+  // REVERSED 2026-08-23 (D17). This used to pin the OPPOSITE — "does NOT pay
+  // for meta on posts that the empty-content filter discards", the WP-62 perf
+  // choice. That choice was a coverage bug wearing a stopwatch: qwerky is an
+  // ACF-first install whose every meaningful word lives in postmeta, so
+  // dropping empty-content posts before the meta read discarded the posts AND
+  // their fields — 2 documents from 5,000 rows, with coverage.customFields
+  // reading "collected". The round trips are the price of those posts' entire
+  // content; empties whose meta is ALSO empty are still dropped afterwards.
+  it('pays for meta on empty-content posts, and keeps the ones whose meta has content', async () => {
     const population = [
       { ...row(1), post_content: '<p>real</p>' },
       { ...row(2), post_content: '' },
       { ...row(3), post_content: '' },
       { ...row(4), post_content: '<p>also real</p>' },
     ];
-    const empties = population.filter(p => p.post_content === '').length;
-    expect(empties).toBeGreaterThan(0); // the case is built
 
     const exported: number[][] = [];
     const { transport } = pagingTransport(population, {
-      wxr: (ids) => { exported.push(ids); return { success: true, stdout: wxrFor(ids.map(id => ({ id, meta: [['k', 'v']] }))) }; },
+      // Meta exists for post 2 only; post 3 is empty on both counts.
+      wxr: (ids) => {
+        exported.push(ids);
+        return { success: true, stdout: wxrFor(ids.filter(id => id === 2).map(id => ({ id, meta: [['k', 'v']] }))) };
+      },
     });
     const result = await new RemoteContentExtractor({ logger: silentLogger() }).extract(transport, 'myhost');
 
-    expect(result.posts.map(p => p.id)).toEqual([1, 4]);
-    expect(exported).toEqual([[1, 4]]);
+    expect(exported).toEqual([[1, 2, 3, 4]]); // every candidate gets its one chance
+    expect(result.posts.map(p => p.id)).toEqual([1, 2, 4]); // 3 stays dropped
   });
 
   it('does not let a thrown export abort the extraction', async () => {
@@ -409,4 +416,55 @@ describe('RemoteContentExtractor — a failed read says why', () => {
     expect(out.coverage?.complete).toBe(true);
     expect(out.coverage?.truncatedReason).toBeUndefined();
   });
+});
+
+/**
+ * D17 — an ACF-first site must not lose its posts AND its fields together.
+ *
+ * Measured on qwerky: 5,000 rows read, `customFields: "collected"`, TWO
+ * documents indexed. The empty-`post_content` drop ran BEFORE the meta fetch
+ * (a WP-62 perf choice), so a page-builder site whose every meaningful word
+ * lives in postmeta lost the post and its ACF data in one motion — and the
+ * coverage record claimed fields were collected, true only of the survivors.
+ */
+describe('RemoteContentExtractor.extract — D17: empty content with meta is still content', () => {
+  const wxrFor = (entries: Array<{ id: number; meta: Array<[string, string]> }>) => `<?xml version="1.0"?>
+<rss><channel>
+${entries.map(e => `  <item>
+    <wp:post_id>${e.id}</wp:post_id>
+${e.meta.map(([k, v]) => `    <wp:postmeta><wp:meta_key>${k}</wp:meta_key><wp:meta_value><![CDATA[${v}]]></wp:meta_value></wp:postmeta>`).join('\n')}
+  </item>`).join('\n')}
+</channel></rss>`;
+
+  const emptyRow = (id: number) => ({ ...row(id), post_content: '' });
+
+  it('keeps a post whose content is empty but whose public meta is not', async () => {
+    const { transport } = pagingTransport([emptyRow(1), row(2)], {
+      wxr: () => ({
+        success: true,
+        stdout: wxrFor([{ id: 1, meta: [['hero_heading', 'Ship faster'], ['cta_label', 'Start now']] }]),
+      }),
+    });
+
+    const result = await new RemoteContentExtractor({ logger: silentLogger() }).extract(transport, 'qwerkylike');
+
+    const kept = result.posts.find(p => p.id === 1);
+    expect(kept).toBeDefined();
+    expect(kept!.customFields).toEqual({ hero_heading: 'Ship faster', cta_label: 'Start now' });
+    // And the chunker renders it searchable even with no body text.
+    expect(buildSearchableText(kept!)).toContain('Hero Heading: Ship faster');
+  });
+
+  // The counterpart: truly empty stays dropped, or every nav stub and
+  // placeholder in the fleet becomes an empty document.
+  it('still drops a post with empty content AND no public meta', async () => {
+    const { transport } = pagingTransport([emptyRow(1), row(2)], {
+      wxr: () => ({ success: true, stdout: wxrFor([]) }),
+    });
+
+    const result = await new RemoteContentExtractor({ logger: silentLogger() }).extract(transport, 'myhost');
+
+    expect(result.posts.map(p => p.id)).toEqual([2]);
+  });
+
 });

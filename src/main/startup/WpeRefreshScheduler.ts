@@ -20,6 +20,7 @@
  */
 
 import type { GraphService } from '../events/GraphService';
+import { EXCLUDED_POST_TYPES } from '../../common/constants';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { AgentEventBus } from '../agent-event-bus/AgentEventBus';
 import { makeSingleFlight } from './singleFlight';
@@ -343,7 +344,7 @@ export class WpeRefreshScheduler {
       adminEmailResult,
       postCountResult,
       stylesheetResult,
-      postCountByTypeResult,   // post list --post_type=post --format=count
+      postTypesResult,         // post-type list --field=name (D18)
       lastPostAtResult,        // post list --orderby=modified --posts-per-page=1 --format=json
       userCountResult,         // user list --format=count
       userCountByRoleResult,   // user list --role=administrator --format=count
@@ -370,9 +371,13 @@ export class WpeRefreshScheduler {
       this.localServices
         .remoteWpCliRun(installName, ['option', 'get', 'stylesheet'])
         .catch(() => ({ success: false, stdout: null })),
-      // postCountByType: post count (wp eval blocked on WPE SSH gateway — use native subcommands)
+      // D18: discover the registered post types so the counts below cover
+      // custom types too (wp eval is blocked on the WPE SSH gateway — native
+      // subcommands only). The old call here counted --post_type=post alone,
+      // which is how cedarvalehealt carried post_count_by_type {"post":600}
+      // while its index held 842 documents across seven types.
       this.localServices
-        .remoteWpCliRun(installName, ['post', 'list', '--post_type=post', '--post_status=publish', '--format=count'])
+        .remoteWpCliRun(installName, ['post-type', 'list', '--field=name'])
         .catch(() => ({ success: false, stdout: null })),
       // lastPostAt: most recently modified published post
       this.localServices
@@ -436,12 +441,39 @@ export class WpeRefreshScheduler {
       return isNaN(n) ? null : n;
     };
 
-    // postCountByType: post and page counts as separate calls, combined into JSON
-    const postTypePostCount = parseCount(postCountByTypeResult);   // post type
-    const postCountFromType = postTypePostCount;                    // used as total below
-    const postCountByType: Record<string, number> | undefined = postTypePostCount !== null
-      ? { post: postTypePostCount }
-      : undefined;
+    // D18: count every registered content type. The exclusion set is the same
+    // one the L3 extractor filters against, so this denominator and the index
+    // finally count the same population. Capped defensively — a site that
+    // registers 60 CPTs gets its 25 largest-odds types, not a 60-call storm.
+    let postCountByType: Record<string, number> | undefined;
+    let postCountFromType: number | null = null;
+    if (postTypesResult.success && postTypesResult.stdout?.trim()) {
+      const excluded = new Set<string>(EXCLUDED_POST_TYPES);
+      const types = postTypesResult.stdout
+        .split('\n')
+        .map((t: string) => t.trim())
+        .filter((t: string) => t && !excluded.has(t))
+        .slice(0, 25);
+      const typeCounts = await Promise.all(types.map(async (t: string) => {
+        const r = await this.localServices
+          .remoteWpCliRun(installName, ['post', 'list', `--post_type=${t}`, '--post_status=publish', '--format=count'])
+          .catch(() => ({ success: false, stdout: null as string | null }));
+        return [t, parseCount(r)] as const;
+      }));
+      const byType: Record<string, number> = {};
+      let total = 0;
+      let any = false;
+      for (const [t, n] of typeCounts) {
+        if (n === null) continue;
+        any = true;
+        total += n;
+        if (n > 0) byType[t] = n;
+      }
+      if (any) {
+        postCountFromType = total;
+        postCountByType = byType;
+      }
+    }
 
     // lastPostAt: from wp post list --orderby=modified --posts-per-page=1 --format=json
     let lastPostAt: number | null = null;

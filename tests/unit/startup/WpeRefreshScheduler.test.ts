@@ -132,3 +132,67 @@ it('skips refresh and emits nothing when SSH is not available', async () => {
 
   expect(publishMock).not.toHaveBeenCalled();
 });
+
+/**
+ * D18 — post_count_by_type listed only 'post' while the L3 index held seven
+ * types (cedarvalehealt: 842 documents vs post_count 600). Both the by-type
+ * map AND the total undercounted, because both queries defaulted to
+ * --post_type=post. wp eval is blocked on the WPE gateway, so the fix is
+ * native subcommands: discover types with `wp post-type list`, count each
+ * publish-status type, skip the machinery types the extractor also excludes.
+ */
+it('D18: counts every registered post type, not just post', async () => {
+  const siteRow = {
+    id: 'site-cpt', name: 'cedarlike', remote_install_id: 'rid-cpt',
+    environment: 'production', ssh_last_sync_at: null,
+  };
+  const updates: Array<{ sql: string; args: unknown[] }> = [];
+  const db = {
+    exec: jest.fn(),
+    prepare: jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('pragma_table_info')) return { get: jest.fn().mockReturnValue({ c: 1 }) };
+      if (sql.includes('SELECT') && sql.includes('FROM sites')) return { all: jest.fn().mockReturnValue([siteRow]) };
+      return { run: jest.fn((...args: unknown[]) => { updates.push({ sql, args }); }), all: jest.fn().mockReturnValue([]), get: jest.fn() };
+    }),
+  } as any;
+
+  const counts: Record<string, number> = { post: 600, page: 2, provider: 60, condition: 80 };
+  const queriedTypes: string[] = [];
+  const localServices = {
+    isSSHKeyAvailable: jest.fn().mockReturnValue(true),
+    remoteWpCliRun: jest.fn().mockImplementation(async (_i: string, args: string[]) => {
+      if (args[0] === 'post-type' && args[1] === 'list') {
+        // Registered types include machinery the index excludes.
+        return { success: true, stdout: 'post\npage\nprovider\ncondition\nattachment\nrevision\nwp_font_face\n' };
+      }
+      const typeArg = args.find(a => a.startsWith('--post_type='));
+      if (args[0] === 'post' && args[1] === 'list' && args.includes('--format=count') && typeArg) {
+        const t = typeArg.split('=')[1];
+        queriedTypes.push(t);
+        return { success: true, stdout: String(counts[t] ?? 0) };
+      }
+      return { success: false, stdout: null };
+    }),
+  } as any;
+
+  const scheduler = new WpeRefreshScheduler({
+    graphService: makeMockGraphService(db),
+    localServices,
+    logger: defaultLogger,
+    intervalMs: 3600_000,
+  } as any);
+  await (scheduler as any).refreshInstall('cedarlike', 'site-cpt');
+
+  // Machinery types are never even queried — same exclusion set as the index.
+  expect(queriedTypes).not.toContain('attachment');
+  expect(queriedTypes).not.toContain('revision');
+  expect(queriedTypes).not.toContain('wp_font_face');
+  expect(queriedTypes.sort()).toEqual(['condition', 'page', 'post', 'provider']);
+
+  const update = updates.find(u => u.sql.includes('post_count_by_type'));
+  expect(update).toBeDefined();
+  const flat = update!.args.flat() as unknown[];
+  expect(flat).toContain(742); // 600+2+60+80 — the true total
+  const byTypeJson = flat.find(a => typeof a === 'string' && (a as string).includes('provider')) as string;
+  expect(JSON.parse(byTypeJson)).toEqual({ post: 600, page: 2, provider: 60, condition: 80 });
+});
