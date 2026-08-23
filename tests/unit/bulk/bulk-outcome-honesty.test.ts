@@ -440,3 +440,65 @@ describe('WP-68 — bulk concurrency leaves headroom under the WPE connection ca
     expect(summarizeBulkOperation(manager.getStatus(id)!).succeeded).toBe(12);
   });
 });
+
+/**
+ * Display names are resolved at the chokepoint, not trusted to callers.
+ *
+ * Seen live 2026-08-23: a bulk_reindex dispatched over MCP (ids only) rendered
+ * five raw `wpe-<uuid>`s in the Operations panel — the D13 schema fix carries
+ * names when a caller supplies them, but the MCP tool never did, and neither
+ * does any caller that doesn't happen to hold Local's store. The graph is the
+ * authority for remote names (WP-68); `execute()` fills the gaps itself so
+ * every dispatcher — UI, IPC, MCP — shows names without each one re-learning
+ * the lookup.
+ */
+describe('WP-68 — execute() resolves missing site names at the chokepoint', () => {
+  test('wpe and local ids get names; a caller-supplied name is not overwritten', async () => {
+    const { manager } = makeManager({
+      siteDataBridge: {
+        resolveSiteObject: (id: string) =>
+          id === LOCAL_ID ? { id, name: 'jeremypollockblog', path: '/tmp/s', services: {} } : null,
+        getSiteStatus: () => 'running',
+        startSite: jest.fn(), stopSite: jest.fn(),
+        wpCliRun: jest.fn(async () => ({ stdout: '', success: true })),
+        getPlugins: jest.fn(async () => []), getThemes: jest.fn(async () => []),
+        getWpVersion: jest.fn(async () => '6.5'), getOption: jest.fn(async () => null),
+      },
+      graphService: {
+        upsertSite: jest.fn(), upsertPlugin: jest.fn(), deletePlugins: jest.fn(), updateSiteSettings: jest.fn(),
+        getDb: () => ({
+          prepare: (sql: string) => ({
+            get: (id: string) => (id === WPE_ID && sql.includes('FROM sites') ? { name: 'dbrains' } : undefined),
+          }),
+        }),
+      },
+      wpeOps: { syncSingleSite: jest.fn(), indexOne: jest.fn(async () => ({ ran: true as const })) },
+    });
+
+    const id = manager.execute({
+      type: 'reindex',
+      siteIds: [LOCAL_ID, WPE_ID],
+      siteNames: { [LOCAL_ID]: 'A Name The Caller Chose' },
+    });
+    await manager.waitForCompletion(id);
+    const names = manager.getStatus(id)!.siteNames!;
+
+    expect(names[LOCAL_ID]).toBe('A Name The Caller Chose'); // caller wins
+    expect(names[WPE_ID]).toBe('dbrains');                    // graph fills the gap
+  });
+
+  test('an unresolvable id stays unnamed rather than failing the dispatch', async () => {
+    const { manager } = makeManager({
+      graphService: {
+        upsertSite: jest.fn(), upsertPlugin: jest.fn(), deletePlugins: jest.fn(), updateSiteSettings: jest.fn(),
+        getDb: () => { throw new Error('graph down'); },
+      },
+      wpeOps: { syncSingleSite: jest.fn(), indexOne: jest.fn(async () => ({ ran: true as const })) },
+    });
+
+    const id = manager.execute({ type: 'reindex', siteIds: [WPE_ID] });
+    await manager.waitForCompletion(id);
+
+    expect(manager.getStatus(id)!.siteResults[WPE_ID].status).toBe('completed');
+  });
+});

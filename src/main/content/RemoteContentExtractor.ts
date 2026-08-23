@@ -64,6 +64,41 @@ export interface RemoteContentExtractorOptions {
   maxPosts?: number;
 }
 
+/**
+ * Parse WP-CLI JSON output, tolerating leading noise (D19).
+ *
+ * WordPress prints PHP notices to stdout AHEAD of WP-CLI's JSON when a site's
+ * own config misbehaves — measured on bettersnrstg1/bettersearcstg, whose
+ * staging config double-defines DISABLE_WP_CRON and thereby made every page
+ * "unparseable" and both sites permanently unindexable. The JSON itself is
+ * intact, so recovery anchors on each candidate `[` from the left and accepts
+ * the FIRST position from which the remainder parses as an array — prose
+ * brackets in the notice text fail the parse and are skipped over. Output
+ * with no parseable JSON array anywhere is still a failed page; leniency must
+ * not turn garbage into an empty site.
+ */
+function parseJsonArrayLenient(stdout: string): unknown[] | undefined {
+  const attempt = (text: string): unknown[] | undefined => {
+    try {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const direct = attempt(stdout);
+  if (direct !== undefined) return direct;
+
+  let from = stdout.indexOf('[');
+  while (from !== -1) {
+    const recovered = attempt(stdout.slice(from).trim());
+    if (recovered !== undefined) return recovered;
+    from = stdout.indexOf('[', from + 1);
+  }
+  return undefined;
+}
+
 export class RemoteContentExtractor {
   private logger: any;
   private pageSize: number;
@@ -256,18 +291,10 @@ export class RemoteContentExtractor {
         break;
       }
 
-      let page: any;
-      try {
-        page = JSON.parse(result.stdout);
-      } catch (err: any) {
+      const page = parseJsonArrayLenient(result.stdout);
+      if (page === undefined) {
         truncatedReason = 'page-failed';
         truncatedDetail = `page ${pagesFetched + 1} (offset ${offset}) returned unparseable JSON`;
-        break;
-      }
-
-      if (!Array.isArray(page)) {
-        truncatedReason = 'page-failed';
-        truncatedDetail = `page ${pagesFetched + 1} (offset ${offset}) was not a JSON array`;
         break;
       }
 

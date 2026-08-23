@@ -129,7 +129,12 @@ export class BulkOperationManager {
       id: this.generateId(),
       type: request.type,
       siteIds: [...request.siteIds],
-      siteNames: request.siteNames ?? {},
+      // Display names are a chokepoint concern, not a caller contract. A
+      // caller-supplied name wins; the gaps are filled here from Local's store
+      // and the graph — measured 2026-08-23, an MCP bulk_reindex (ids only)
+      // rendered five raw wpe-<uuid>s in the Operations panel because only the
+      // renderer dispatcher happened to send names.
+      siteNames: this.resolveSiteNames(request.siteIds, request.siteNames),
       options: request.options ?? {},
       status: 'running',
       progress: { completed: 0, total: request.siteIds.length, errors: [], skipped: [] },
@@ -160,6 +165,37 @@ export class BulkOperationManager {
     }
 
     return op.id;
+  }
+
+  /**
+   * Names for the panel: caller-supplied first, then Local's store for local
+   * ids, then the graph for wpe/external rows. Best-effort and non-fatal — a
+   * missing name renders as the id, which is exactly the failure this exists
+   * to make rare, but it must never fail a dispatch.
+   */
+  private resolveSiteNames(
+    siteIds: string[],
+    supplied?: Record<string, string>,
+  ): Record<string, string> {
+    const names: Record<string, string> = { ...(supplied ?? {}) };
+    for (const siteId of siteIds) {
+      if (names[siteId]) continue;
+      try {
+        if (siteSourceOf(siteId) === 'local') {
+          const site = this.deps.siteDataBridge.resolveSiteObject(siteId);
+          if (site?.name) names[siteId] = site.name;
+          continue;
+        }
+        const db = (this.deps.graphService as { getDb?(): unknown } | undefined)?.getDb?.() as
+          | { prepare(sql: string): { get(id: string): { name?: string } | undefined } }
+          | undefined;
+        const row = db?.prepare('SELECT name FROM sites WHERE id = ? AND is_active = 1').get(siteId);
+        if (row?.name) names[siteId] = row.name;
+      } catch {
+        /* a name lookup must never fail the dispatch */
+      }
+    }
+    return names;
   }
 
   private async executeWithConcurrency(op: BulkOperation): Promise<void> {

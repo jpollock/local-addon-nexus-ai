@@ -834,6 +834,15 @@ is the point — those posts are the content.
 
 ---
 
+> **CORRECTION, same day, after live verification:** qwerky is NOT an
+> ACF-first site. Probed over SSH: its 4,998 empty-content posts are seeded
+> test data ("Post 21575"…) carrying no public meta at all (only the private
+> `_encloseme` key). With D17 live, its re-index still yields 2 documents —
+> and that is the TRUE answer, now provable rather than assumed. The fix's
+> mechanism stands for genuine ACF/page-builder sites (empty body, real
+> fields); the exemplar that motivated it was misdiagnosed. The verification
+> case for D17 is therefore a real ACF site with field-only posts, not qwerky.
+
 ## D18 — FIXED 2026-08-23 — L2's post_count_by_type for WPE installs missed custom post types
 
 **Found the same way.** graph.db for `cedarvalehealt` says
@@ -851,3 +860,34 @@ discovers registered types with `wp post-type list` (wp eval is blocked on
 the WPE gateway), excludes the same machinery set the L3 extractor filters,
 and counts each publish-status type; the total is the sum. Live values land
 on each install's next scheduled refresh (8h cycle).
+
+
+---
+
+## D19 — FIXED 2026-08-23 — a PHP notice ahead of the JSON made two sites permanently unindexable
+
+**Found by the sweep's failure list; root-caused over SSH.** `bettersnrstg1`
+and `bettersearcstg` failed every index with "page 1 returned unparseable
+JSON". The actual page-1 output:
+
+```
+Notice: Constant DISABLE_WP_CRON already defined in /nas/content/live/bettersnrstg1/config/environments/staging.php on line 9
+[{"ID":12,"post_title":"Let's Talk", ...   ← intact JSON
+```
+
+The sites' own staging config double-defines a constant; WordPress prints the
+notice to stdout ahead of WP-CLI's JSON; `JSON.parse` gives up at byte 0. The
+fix (`parseJsonArrayLenient`) retries from each candidate `[` and accepts the
+first position from which the remainder parses as an array — prose brackets in
+notice text fail the parse and are skipped; output with no JSON anywhere is
+still a failed page. Mutation battery 3/3.
+
+Same disease, unfixed elsewhere: `acfprod`'s Deprecated-notice pollution on
+`syncInstall`'s plugin/user parses, and `WpeRefreshScheduler`'s `parseInt` on
+`--format=count` output would both still choke on a leading notice. The helper
+is extractor-local today; lifting it to the transport layer is the general
+cure if more sites surface.
+
+**Verification bookkeeping from the same 5-site run:** `andonovwoocstg`'s
+sweep failure was transient — re-indexed clean (27 docs). `qwerky` /
+`qwerkystg` see the D17 correction above.

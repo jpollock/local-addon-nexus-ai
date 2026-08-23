@@ -468,3 +468,65 @@ ${e.meta.map(([k, v]) => `    <wp:postmeta><wp:meta_key>${k}</wp:meta_key><wp:me
   });
 
 });
+
+/**
+ * D19 — a PHP notice before the JSON is noise, not a failed page.
+ *
+ * Measured on bettersnrstg1 (and bettersearcstg, same agency staging config):
+ * `Notice: Constant DISABLE_WP_CRON already defined in .../staging.php` prints
+ * ahead of perfectly valid JSON on every WP-CLI call, so page 1 was reported
+ * "unparseable" and the site indexed nothing — on every sweep, forever. The
+ * JSON is intact; only the parser's patience was missing.
+ */
+describe('RemoteContentExtractor.extract — D19: notice-polluted JSON still parses', () => {
+  it('parses a page whose JSON is preceded by PHP notices', async () => {
+    const noisy = (rows: any[]) =>
+      `\nNotice: Constant DISABLE_WP_CRON already defined in /nas/config/staging.php on line 9\n${JSON.stringify(rows)}`;
+    const calls: string[][] = [];
+    const transport = {
+      kind: 'external-ssh', siteRef: { kind: 'external', alias: 't' },
+      runWpCli: async (args: string[]) => {
+        calls.push(args);
+        if (args[0] === 'export') return { success: true, stdout: '<?xml version="1.0"?><rss></rss>' };
+        return { success: true, stdout: noisy([row(1), row(2)]) };
+      },
+    } as any;
+
+    const result = await new RemoteContentExtractor({ logger: silentLogger() }).extract(transport, 'noisyhost');
+
+    expect(result.posts.map(p => p.id)).toEqual([1, 2]);
+    expect(result.coverage!.complete).toBe(true);
+    expect(result.coverage!.truncatedReason).toBeUndefined();
+  });
+
+  // The counterpart: genuinely unparseable output must still be a failed page
+  // — leniency must not turn garbage into an empty site.
+  it('output with no JSON anywhere is still page-failed', async () => {
+    const transport = {
+      kind: 'external-ssh', siteRef: { kind: 'external', alias: 't' },
+      runWpCli: async () => ({ success: true, stdout: 'Fatal error: something broke entirely' }),
+    } as any;
+
+    const result = await new RemoteContentExtractor({ logger: silentLogger() }).extract(transport, 'brokenhost');
+
+    expect(result.posts).toEqual([]);
+    expect(result.coverage!.truncatedReason).toBe('page-failed');
+  });
+
+  it('a notice containing a bracket does not fool the recovery', async () => {
+    // The recovery must anchor on the JSON payload, not the first bracket-ish
+    // character in prose.
+    const stdout = `Warning: array [deprecated] usage in plugin\n${JSON.stringify([row(7)])}`;
+    const transport = {
+      kind: 'external-ssh', siteRef: { kind: 'external', alias: 't' },
+      runWpCli: async (args: string[]) =>
+        args[0] === 'export'
+          ? { success: true, stdout: '<?xml version="1.0"?><rss></rss>' }
+          : { success: true, stdout },
+    } as any;
+
+    const result = await new RemoteContentExtractor({ logger: silentLogger() }).extract(transport, 'trickyhost');
+
+    expect(result.posts.map(p => p.id)).toEqual([7]);
+  });
+});

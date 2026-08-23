@@ -118,3 +118,42 @@ producer lives host-side); non-fatal everywhere; tests beside code for
 - Trigger defaulting silently to a wrong value — absent trigger is `'adhoc'`
   only at genuinely ad-hoc entries; schedulers must pass `'scheduled'`
   explicitly, pinned per caller.
+
+
+## Phase 5 (owner-requested 2026-08-23): index modes — full vs changed-since-last
+
+Two modes, threaded like `trigger`:
+
+- **full** — what exists today: drop nothing implicitly, read the whole
+  population, re-embed everything. Stays the semantics of an explicit
+  "reindex" and of recovery from a suspect index.
+- **incremental** — read only posts modified since the last successful run,
+  upsert those, touch nothing else. The watermark is the max `post_modified_gmt`
+  OBSERVED in the previous run (server-side time, stored per site in the
+  IndexRegistry entry) — never the local clock, which skews, and never
+  `lastIndexed`, which is when WE ran, not when content changed
+  ("synced-at is not changed-at", the spine's own rule).
+
+Mechanics per source:
+- Remote (WPE/external): `wp post list --orderby=modified --order=DESC` paged,
+  stop at the first row older than the watermark. No new WP-CLI capability
+  needed. Meta fetched for the changed set only.
+- Local: `WHERE post_modified_gmt > ?` in MySQLExtractor — trivial.
+- Vector store: delete-then-upsert the changed posts' chunks only
+  (per-post chunk delete already exists for upsert paths; verify per store).
+
+Deletions are the honest hard part: an incremental run cannot see a deleted
+post. Two-tier answer: a cheap ID sweep (`--fields=ID`, paged) diffed against
+the content table on every incremental run, or a scheduled full run (e.g.
+weekly) reconciling everything. Pick after measuring the ID-sweep cost on the
+30k-post install.
+
+Why it pays: embedding dominates run cost (meridian: 13,059 chunks, 7.9 min;
+the whale windows in the 2026-08-23 sweep). A quiet fleet's incremental sweep
+is minutes, not hours. The ledger records `mode` alongside `trigger`, and
+`changed`/`unchanged` counts land in the payload — so the speedup is
+measurable, not asserted.
+
+Defaults to settle at implementation (owner input welcome): scheduled runs
+incremental, explicit "Index content" full-or-incremental per a checkbox,
+`reindex` (drop + rebuild) always full.
