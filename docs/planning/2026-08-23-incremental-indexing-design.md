@@ -44,10 +44,14 @@ Rules, each of which has already bitten this codebase in another form:
 - **Server-side time only.** The watermark is the max `post_modified_gmt` seen
   in the rows actually read — never our clock (skew), never `lastIndexed`
   ("synced-at is not changed-at", the spine's rule).
-- **Only a fully-successful run advances it.** A failed page, a truncated
-  read (`coverage.complete === false` for reasons other than the deliberate
-  cap), or a thrown run leaves the watermark alone — advancing it past unread
-  changes is silent data loss with a clean-looking ledger.
+- **Only a run that REACHED THE PREVIOUS BOUNDARY advances it.** A failed
+  page or a thrown run leaves the watermark alone — and so does an
+  incremental run that hits the `REMOTE_MAX_POSTS` cap before paging back to
+  the old watermark: with 5,000+ changes in the window, advancing to the max
+  observed would skip changes #5,001+ FOREVER (they are older than the new
+  watermark and will never rank as changed again). Boundary-not-reached ⇒ no
+  advance ⇒ the next run re-covers the window. Advancing past unread changes
+  is silent data loss with a clean-looking ledger.
 - **`reindex`'s drop clears it.** After a drop the store is empty; the next
   run MUST be full regardless of requested mode (the code enforces this, not
   the caller's memory).
@@ -96,12 +100,16 @@ content — within the changed population.
 An incremental run cannot see a deleted post. Two candidate mechanisms,
 **decided by measurement, not preference** (owner Q3 picks the cadence):
 
-- **A. ID sweep per incremental run:** one `wp post list --field=ID` call
-  (WP_Query `fields => 'ids'` is memory-light server-side, but this MUST be
-  measured on the 30k-post install before being trusted — the full-object
-  query is exactly what OOMs, and WP-CLI's flag plumbing needs verifying).
-  Diff against the graph `content` table's post ids for the site; deletions
-  cascade to all three stores (§5).
+- **A. ID sweep per incremental run, diffed BOTH WAYS:** one
+  `wp post list --field=ID` call (WP_Query `fields => 'ids'` is memory-light
+  server-side, but this MUST be measured on the 30k-post install before being
+  trusted — the full-object query is exactly what OOMs, and WP-CLI's flag
+  plumbing needs verifying). Indexed-minus-live = deletions (cascade to all
+  three stores, §5). **Live-minus-indexed = additions the watermark cannot
+  see** — imports and migrations preserve historical `post_modified` dates,
+  so freshly-imported posts rank OLDER than the watermark and would otherwise
+  wait for a full run. The two-way diff closes that hole per run, which is a
+  materially stronger argument for A than deletion handling alone.
 - **B. Scheduled full run** (e.g. weekly) reconciles everything; incremental
   runs simply don't handle deletions. Cheaper per run, staler tombstones —
   a deleted-but-still-searchable post can persist up to the full-run cadence.
@@ -156,13 +164,40 @@ changed/deleted counts — this is what makes the speedup a measurement
 - **C (UI):** the Index button and panel copy (§9), last, after B has a week
   of ledger history to point at.
 
-## 8. Known blind spot — meta-only edits (decision required, owner Q4)
+## 8. Known blind spots — the complete miss taxonomy (decision required, owner Q4)
 
-WordPress does not timestamp postmeta. An edit through the post editor bumps
-`post_modified` (ACF field groups save with the post — covered). A
-**programmatic** `update_field()` / direct meta write does NOT bump it —
-invisible to the watermark, and postmeta has no timestamp to watermark on.
-This is exactly the D17 content class, so it must be a stated decision:
+Enumerated in full (2026-08-23 owner question); each case names its remedy.
+
+**A. Invisible edits — the timestamp never moves.** Missed until the next
+full run:
+1. Programmatic meta-only writes (`update_field()` / `update_post_meta()`
+   without a post save — postmeta has no timestamps). Editor saves, including
+   ACF field groups on the edit screen, DO bump `post_modified` and are caught.
+2. Direct SQL content rewrites — sharpest instance: **Nexus's own
+   `wp_search_replace`** rewrites `post_content` via SQL and bumps nothing.
+   Mitigation worth taking: that tool (and any future SQL-writing tool)
+   should invalidate the target site's watermark on success, so the next
+   incremental run goes full. Cheap, local, closes our own blind spot.
+3. Taxonomy-only changes (`wp_set_object_terms` without a save). Minor —
+   remote extraction does not index term lists today.
+
+**B. Removal-shaped changes — invisible to a "what changed" query,** handled
+by reconciliation (§4):
+4. Deletions.
+5. **Unpublish** (publish → draft/trash): the timestamp bumps, but the row
+   leaves the `post_status=publish` result set instead of appearing in it —
+   functionally a deletion, easy to mis-file as "covered".
+6. A post type deactivated/unregistered — same disappearance.
+7. Date-preserving imports (additions ranked older than the watermark) —
+   closed by §4A's two-way diff; open under §4B until the next full run.
+
+**C. Operational edges:**
+8. A capped incremental window — closed by §2's boundary rule.
+9. A site whose clock lies: `post_modified_gmt` is the site's own stamp; a
+   skewed server can date an edit before the watermark. Rare; bounded only by
+   the next edit or full run. Not worth machinery; worth this sentence.
+
+The core stated decision (Q4) concerns bucket A:
 
 - **Recommended: accept + bound it.** Incremental misses programmatic
   meta-only edits until the next full run; the scheduled full cadence (Q3)
