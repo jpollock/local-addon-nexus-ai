@@ -764,3 +764,37 @@ only signal that method uses, deliberately.
 **Still unknown:** why that account has no SSH endpoints — plan level, a
 provisioning state, or an entitlement on this user's access. That is a question
 for WP Engine, not something determinable from here.
+
+---
+
+## D16 — a bulk sweep double-indexes every halted local site it starts
+
+**Found 2026-08-23 by the pipeline ledger, on its first day.** During the
+413-site sweep, the ledger recorded **35 local sites with BOTH an `adhoc` L3
+run and a `lifecycle` L3 run** (37 adhoc + 42 lifecycle in the sweep window).
+
+Mechanism: the bulk worker auto-starts a halted site (the owner's D9 ruling),
+which fires the `siteStarted` lifecycle hook — whose auto-index then runs a
+full L2 scan + L3 index of its own, concurrently with the bulk worker's
+`indexSite` for the same site. Every halted local site in a sweep is indexed
+twice, and embedding is the dominant cost (ONNX MatMul was holding ~6.6 cores;
+`meridian` alone was 13,059 chunks in 7.9 minutes). A sweep over halted local
+sites therefore does roughly **2× the embedding work**, which is why the local
+phase runs CPU-saturated.
+
+Neither run is wrong individually — both are real, honestly recorded runs, and
+that is exactly how the ledger exposed the duplication (`trigger` distinguishes
+them; no log line does, see below). The fix belongs in phase 3/4 of the
+2026-08-23 plan: either the lifecycle hook skips auto-index when the start was
+bulk-initiated (the bulk worker is about to index anyway), or the bulk worker
+defers to the lifecycle index instead of running its own. The first is likely
+right — the bulk path reports outcomes into the operation the user is watching;
+the lifecycle index reports nowhere.
+
+**Related observation, worth its own line:** `ContentPipeline` writes no log
+lines at all, so a bulk-run local site is INVISIBLE in the verbose log while it
+indexes — the "Indexed <name>" lines come only from the lifecycle hook. During
+the sweep this produced six minutes of apparent silence that looked exactly
+like a stall (and earlier today, a false "zero local indexing" conclusion). The
+ledger is now the authoritative activity record for these runs; treat log
+silence about ContentPipeline as meaningless, not as idleness.
