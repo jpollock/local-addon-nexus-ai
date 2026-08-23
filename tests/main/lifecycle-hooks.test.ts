@@ -76,7 +76,7 @@ describe('registerLifecycleHooks', () => {
       siteId: 'site1',
       siteName: 'My Site',
       sitePath: '/tmp/site',
-    });
+    }, 'lifecycle');
     expect(logger.info).toHaveBeenCalled();
   });
 

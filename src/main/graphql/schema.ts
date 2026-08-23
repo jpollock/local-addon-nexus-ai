@@ -964,6 +964,9 @@ export const typeDefs = gql`
     "Fleet health summary"
     nexusFleetHealth: NexusFleetHealthResult!
 
+    "Data-pipeline status: L2/L3 coverage, failures with reasons, 24h run history (plan 2026-08-23)"
+    nexusPipelineStatus: NexusPipelineStatusResult!
+
     "Individual site health"
     nexusFleetSiteHealth(target: String!): NexusFleetSiteHealthResult!
 
@@ -1103,6 +1106,13 @@ export const typeDefs = gql`
     sitesWithPluginData: Int!
     "Number of sites that have theme data in the graph DB"
     sitesWithThemeData: Int!
+  }
+
+  type NexusPipelineStatusResult {
+    success: Boolean!
+    error: String
+    "JSON-encoded PipelineStatusReport (sources, failures, history24h)"
+    report: String
   }
 
   type NexusFleetHealthResult {

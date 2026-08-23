@@ -48,6 +48,7 @@ import {
 import { createWpCliResolvers } from './resolvers/wp-cli';
 import { resolveTransport } from '../transport';
 import { collectExternalHostData } from '../startup/collectExternalHostData';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 import { writeExternalHostData } from '../startup/writeExternalHostData';
 import { ExternalContentIndexService } from '../events/ExternalContentIndexService';
 import { vectorSiteId } from '../vector-store/vectorSiteId';
@@ -2645,6 +2646,50 @@ export function createResolvers(context: ResolverContext) {
       // ========================================================================
       // Fleet Intelligence Resolvers
       // ========================================================================
+
+      /**
+       * The data-pipeline status read (plan 2026-08-23). Read-only over the
+       * intelligence ledger; the site population comes from the authoritative
+       * stores (Local's own store for local, graph.db for remote — the fleet
+       * counting rules), never from the ledger itself.
+       *
+       * A dark core is its own answer, not an empty report — collapsing them
+       * would put a false all-clear in front of exactly the person checking
+       * whether observability works (the siteContentStatus doctrine).
+       */
+      nexusPipelineStatus: async () => {
+        try {
+          const { getIntelligenceCore } = await import('../intelligence-host/coreRegistry');
+          const { buildPipelineStatusReport } = await import('../intelligence-host/pipelineStatus');
+          const core = getIntelligenceCore();
+          if (!core) {
+            return {
+              success: false,
+              error: 'Intelligence core is not running — pipeline runs are not being recorded. Run nexus_intelligence_health for why.',
+              report: null,
+            };
+          }
+
+          const sites: Array<{ name: string; ref: any }> = [];
+          for (const s of Object.values(services.siteData?.getSites?.() ?? {}) as any[]) {
+            if (s?.id) sites.push({ name: s.name ?? s.id, ref: { kind: 'local', localSiteId: s.id } });
+          }
+          const db = (services.graphService as any)?.getDb?.();
+          if (db) {
+            const rows = db.prepare(
+              "SELECT id, name, source FROM sites WHERE source IN ('wpe','external') AND is_active = 1",
+            ).all() as Array<{ id: string; name: string | null; source: 'wpe' | 'external' }>;
+            for (const r of rows) {
+              sites.push({ name: r.name ?? r.id, ref: { kind: r.source, graphRowId: r.id } });
+            }
+          }
+
+          const report = buildPipelineStatusReport(core, sites);
+          return { success: true, error: null, report: JSON.stringify(report) };
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error), report: null };
+        }
+      },
 
       nexusFleetHealth: async () => {
         return withQueue(async () => {
@@ -5967,21 +6012,32 @@ export function createResolvers(context: ResolverContext) {
             }
 
             const results = await Promise.all(rows.map(async (row: any) => {
+              const runStartedAt = Date.now();
+              const record = (outcome: 'ok' | 'skip' | 'fail', reason?: string) =>
+                recordPipelineRun({
+                  layer: 'l2', trigger: 'adhoc', outcome,
+                  ...(reason !== undefined ? { reason } : {}),
+                  startedAt: runStartedAt, finishedAt: Date.now(),
+                  site: { kind: 'external', graphRowId: row.id },
+                });
               try {
                 const target = `ssh:${alias}/${row.name}@${row.environment ?? 'production'}`;
                 const transport = await resolveTransport({ ssh_target: target }, services, 'wpcli_read');
                 if ('content' in transport) {
                   const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Could not reach host';
+                  record('skip', msg);
                   return { site: row.name, success: false, error: msg, wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null };
                 }
                 const data = await collectExternalHostData(transport as any, console);
                 await writeExternalHostData(services.graphService as any, row.id, row.name, data, Date.now(), console);
+                record('ok');
                 return {
                   site: row.name, success: true, error: null,
                   wpVersion: data.wpVersion ?? null, phpVersion: data.phpVersion ?? null,
                   pluginCount: data.plugins?.length ?? null, themeCount: data.themes?.length ?? null,
                 };
               } catch (e: any) {
+                record('fail', e?.message ?? String(e));
                 return { site: row.name, success: false, error: e?.message ?? String(e), wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null };
               }
             }));

@@ -24,6 +24,8 @@ import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
 import type { SiteOpOutcome } from '../bulk/types';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
+import type { PipelineTrigger } from '../../intelligence';
 
 /**
  * What a content sync actually did.
@@ -132,7 +134,12 @@ export class WPESyncService {
    * Sync all WPE sites from CAPI
    * @param limit - Optional limit on number of sites to sync (for testing)
    */
-  async syncAllWPESites(limit?: number, staleThresholdHours?: number, accountFilter?: string[] | null): Promise<WPESyncResult> {
+  async syncAllWPESites(
+    limit?: number,
+    staleThresholdHours?: number,
+    accountFilter?: string[] | null,
+    trigger: PipelineTrigger = 'adhoc',
+  ): Promise<WPESyncResult> {
     this.abortRequested = false;
     const result: WPESyncResult = {
       success: true,
@@ -295,7 +302,7 @@ export class WPESyncService {
           this.logger.info(`[WPESyncService] Syncing ${i + 1}/${installsToSync.length}: ${install.install_name}`);
 
           try {
-            await this.syncInstall(install);
+            await this.syncInstall(install, trigger);
             completed++;
             result.synced++;
             this.logger.info(`[WPESyncService] ✓ Synced ${install.install_name} (${completed}/${installsToSync.length} complete)`);
@@ -358,7 +365,28 @@ export class WPESyncService {
   /**
    * Sync a single WPE install
    */
-  async syncInstall(install: WPEInstallData): Promise<void> {
+  async syncInstall(install: WPEInstallData, trigger: PipelineTrigger = 'adhoc'): Promise<void> {
+    const startedAt = Date.now();
+    try {
+      await this.syncInstallInner(install);
+      // Recorded AFTER the outcome — the recorder records, the run runs.
+      recordPipelineRun({
+        layer: 'l2', trigger, outcome: 'ok',
+        startedAt, finishedAt: Date.now(),
+        site: { kind: 'wpe', graphRowId: `wpe-${install.install_id}` },
+      });
+    } catch (err: any) {
+      recordPipelineRun({
+        layer: 'l2', trigger, outcome: 'fail',
+        reason: err?.message ?? String(err),
+        startedAt, finishedAt: Date.now(),
+        site: { kind: 'wpe', graphRowId: `wpe-${install.install_id}` },
+      });
+      throw err;
+    }
+  }
+
+  private async syncInstallInner(install: WPEInstallData): Promise<void> {
     const now = Date.now();
     const siteId = `wpe-${install.install_id}`;
 
@@ -559,7 +587,7 @@ export class WPESyncService {
    * Sync content for a WPE install (Phase 2)
    * Extracts posts/pages and indexes them for semantic search
    */
-  private async syncContent(siteId: string, installName: string, startTime = Date.now()): Promise<ContentSyncOutcome> {
+  private async syncContent(siteId: string, installName: string, startTime = Date.now(), trigger: PipelineTrigger = 'adhoc'): Promise<ContentSyncOutcome> {
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
       this.logger.warn(`[WPESyncService] Content sync skipped - missing dependencies`);
       return { state: 'skipped', reason: 'SSH key or embedding service not configured' };
@@ -719,7 +747,7 @@ export class WPESyncService {
               account_id: row.account_id ?? undefined,
             };
             this.logger.info(`[WPESyncService] Piggybacking metadata sync for ${installName} (SSH ControlMaster warm)`);
-            await this.syncInstall(installData);
+            await this.syncInstall(installData, trigger);
           }
         }
       } catch (metaErr: any) {
@@ -763,7 +791,7 @@ export class WPESyncService {
    * plugins, users) at no extra SSH cold-start cost.
    * Used by the Operations tab "Index content" button for WPE sites.
    */
-  async indexAllWpeContent(): Promise<{ indexed: number; skipped: number; errors: number }> {
+  async indexAllWpeContent(trigger: PipelineTrigger = 'adhoc'): Promise<{ indexed: number; skipped: number; errors: number }> {
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
       this.logger.warn('[WPESyncService] indexAllWpeContent: missing dependencies (SSH key or embedding service not configured)');
       return { indexed: 0, skipped: 0, errors: 0 };
@@ -798,7 +826,7 @@ export class WPESyncService {
         // fix to one cannot leave the other behind — which is how the two
         // diverged for twelve days.
         try {
-          const outcome = await this.indexOneWpeContent(install.id);
+          const outcome = await this.indexOneWpeContent(install.id, trigger);
           if (outcome.ran) indexed++; else skipped++;
         } catch {
           errors++;
@@ -831,41 +859,65 @@ export class WPESyncService {
    * the whole feature is unconfigured, which is the honest reading for a site
    * the user explicitly selected. Everything else comes from the outcome.
    */
-  async indexOneWpeContent(siteId: string): Promise<SiteOpOutcome> {
+  async indexOneWpeContent(siteId: string, trigger: PipelineTrigger = 'adhoc'): Promise<SiteOpOutcome> {
+    // The pipeline record mirrors WP-67's three outcomes exactly, emitted at
+    // each exit AFTER the outcome is decided. This method is the chokepoint
+    // all three scopes end at, so instrumenting it once covers the fleet
+    // sweep, the bulk selection and the single-site action — and the inner
+    // `syncContent` piggyback records its own L2 run on the same trigger.
+    const startTime = Date.now();
+    const record = (outcome: 'ok' | 'skip' | 'fail', reason?: string) =>
+      recordPipelineRun({
+        layer: 'l3', trigger, outcome,
+        ...(reason !== undefined ? { reason } : {}),
+        startedAt: startTime, finishedAt: Date.now(),
+        site: { kind: 'wpe', graphRowId: siteId },
+      });
+
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
+      record('fail', 'SSH key or embedding service not configured');
       throw new Error(
         'WP Engine content indexing is unavailable — SSH key or embedding service not configured.',
       );
     }
 
-    const installName = this.requireWpeInstallName(siteId);
-    const startTime = Date.now();
+    let installName: string;
+    try {
+      installName = this.requireWpeInstallName(siteId);
+    } catch (err: any) {
+      record('fail', err?.message ?? String(err));
+      throw err;
+    }
     this.emitIndexProgress?.(siteId, {
       state: 'indexing', progress: 0, message: `Indexing ${installName} via SSH…`,
     });
 
     let outcome: ContentSyncOutcome;
     try {
-      outcome = await this.syncContent(siteId, installName, startTime);
+      outcome = await this.syncContent(siteId, installName, startTime, trigger);
     } catch (err: any) {
       this.emitIndexProgress?.(siteId, { state: 'error', progress: 0, message: 'Indexing failed' });
+      record('fail', err?.message ?? String(err));
       throw err;
     }
 
     if (outcome.state === 'failed') {
       this.emitIndexProgress?.(siteId, { state: 'error', progress: 0, message: 'Indexing failed' });
+      record('fail', outcome.error);
       throw new Error(outcome.error);
     }
     if (outcome.state === 'skipped') {
       this.emitIndexProgress?.(siteId, {
         state: 'idle', progress: 100, message: `Not indexed — ${outcome.reason}`,
       });
+      record('skip', outcome.reason);
       return { ran: false, reason: outcome.reason };
     }
     this.emitIndexProgress?.(siteId, {
       state: 'indexed', progress: 100, message: 'Indexed',
       documentCount: this.indexRegistry?.get(siteId)?.documentCount ?? 0,
     });
+    record('ok');
     return { ran: true };
   }
 

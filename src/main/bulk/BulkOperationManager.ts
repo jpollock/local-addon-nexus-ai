@@ -13,9 +13,11 @@ import type {
 } from './types';
 import { auditDirectOperation, type AuditCapableServices } from '../audit/auditDirectOperation';
 import { siteSourceOf, wpeInstallIdOf, type SiteSource } from './siteSource';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
+import type { PipelineTrigger } from '../../intelligence';
 
 export interface BulkOpDeps {
-  contentPipeline: { indexSite(info: any): Promise<any> };
+  contentPipeline: { indexSite(info: any, trigger?: PipelineTrigger): Promise<any> };
   siteDataBridge: {
     resolveSiteObject(siteId: string): any;
     getSiteStatus(siteId: string): string;
@@ -418,6 +420,8 @@ export class BulkOperationManager {
       throw new Error(`Site not found: ${siteId}`);
     }
 
+    const trigger: PipelineTrigger = (options?.trigger as PipelineTrigger) ?? 'adhoc';
+
     // D9. A halted Local site has no MySQL, so `ContentPipeline` records
     // `state: 'error'` with "MySQL not available — site may not be running"
     // and indexes nothing. That is a site that DID NOT RUN, not one that
@@ -432,6 +436,15 @@ export class BulkOperationManager {
     // Starting 45 sites because someone pressed a button is the owner's
     // decision, not this function's.
     if (!options?.autoStartStop && this.deps.siteDataBridge.getSiteStatus(siteId) !== 'running') {
+      // The one exit that never reaches ContentPipeline — recorded here or
+      // recorded nowhere. A skip is a run whose outcome is "did not run".
+      const now = Date.now();
+      recordPipelineRun({
+        layer: 'l3', trigger, outcome: 'skip',
+        reason: `${site.name ?? siteId} is not running`,
+        startedAt: now, finishedAt: now,
+        site: { kind: 'local', localSiteId: siteId },
+      });
       return { ran: false, reason: `${site.name ?? siteId} is not running` };
     }
 
@@ -451,7 +464,7 @@ export class BulkOperationManager {
       mysqlPassword: 'root',
       mysqlDatabase: 'local',
       sitePath: site.path,
-    });
+    }, trigger);
 
     // `indexSite` reports failure by RETURNING it: it writes `state: 'error'`
     // into the IndexRegistry and resolves normally. Reading only the throw
@@ -624,6 +637,27 @@ echo json_encode(['total'=>$total,'byType'=>$byType]);`,
   }
 
   private async executeGraphSync(siteId: string, options?: Record<string, any>): Promise<void> {
+    const l2StartedAt = Date.now();
+    const l2Trigger: PipelineTrigger = (options?.trigger as PipelineTrigger) ?? 'adhoc';
+    try {
+      await this.executeGraphSyncInner(siteId, options);
+      recordPipelineRun({
+        layer: 'l2', trigger: l2Trigger, outcome: 'ok',
+        startedAt: l2StartedAt, finishedAt: Date.now(),
+        site: { kind: 'local', localSiteId: siteId },
+      });
+    } catch (err: any) {
+      recordPipelineRun({
+        layer: 'l2', trigger: l2Trigger, outcome: 'fail',
+        reason: err?.message ?? String(err),
+        startedAt: l2StartedAt, finishedAt: Date.now(),
+        site: { kind: 'local', localSiteId: siteId },
+      });
+      throw err;
+    }
+  }
+
+  private async executeGraphSyncInner(siteId: string, options?: Record<string, any>): Promise<void> {
     if (!this.deps.graphService) {
       throw new Error('GraphService not available');
     }

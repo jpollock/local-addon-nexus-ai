@@ -1,4 +1,5 @@
 import { ContentPipeline } from './ContentPipeline';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 import { IndexRegistry, RegistryStorage } from './IndexRegistry';
 import { SiteConnectionInfo } from './MySQLExtractor';
 import { IPC_CHANNELS, STORAGE_KEYS } from '../../common/constants';
@@ -207,6 +208,7 @@ export function registerLifecycleHooks(
     // All fetches run in parallel since the site is already running.
     const metadataRefreshPromise = (async () => {
       if (metadataCache && localServices) {
+        const l2StartedAt = Date.now();
         try {
           const [
             wpVersion, plugins, themes,
@@ -455,8 +457,23 @@ echo json_encode($out);`,
               } catch { /* non-fatal */ }
             }
           }
+          // The lifecycle hook is one of local L2's two implementations (the
+          // other is executeGraphSync — a known duplication, phase 3 of the
+          // 2026-08-23 plan unifies them). Both record, so the ledger sees
+          // every L2 run whichever path performed it.
+          recordPipelineRun({
+            layer: 'l2', trigger: 'lifecycle', outcome: 'ok',
+            startedAt: l2StartedAt, finishedAt: Date.now(),
+            site: { kind: 'local', localSiteId: site.id },
+          });
         } catch (err) {
           logger.error(`[NexusAI] Metadata refresh failed for ${site.name}:`, err);
+          recordPipelineRun({
+            layer: 'l2', trigger: 'lifecycle', outcome: 'fail',
+            reason: (err as Error)?.message ?? String(err),
+            startedAt: l2StartedAt, finishedAt: Date.now(),
+            site: { kind: 'local', localSiteId: site.id },
+          });
         }
       }
     })();
@@ -468,7 +485,7 @@ echo json_encode($out);`,
     };
 
     try {
-      const result = await pipeline.indexSite(info);
+      const result = await pipeline.indexSite(info, 'lifecycle');
       logger.info(
         `[NexusAI] Indexed ${site.name}: ${result.documentsIndexed} docs, ${result.chunksIndexed} chunks in ${result.durationMs}ms`,
       );

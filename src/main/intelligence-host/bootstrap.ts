@@ -17,6 +17,7 @@ import {
   TwinStore,
   catchUp,
   createStateTwinFold,
+  createPipelineStatusFold,
   Fold,
   IdentityPort,
   ulid,
@@ -248,13 +249,20 @@ export function initIntelligenceCore(options: {
       });
     });
 
+    // Pipeline observability (plan 2026-08-23): task.run.completed
+    // (pipeline.run/1) -> pipeline:<layer> facts. No dependencies — it neither
+    // emits nor resolves entities — so it sits beside stateFold rather than
+    // closing over anything.
+    const pipelineFold: Fold = createPipelineStatusFold();
+    const allFolds: Fold[] = [stateFold, pipelineFold];
+
     let foldTimer: ReturnType<typeof setTimeout> | undefined;
     const scheduleFolds = () => {
       if (foldTimer) return;
       foldTimer = setTimeout(() => {
         foldTimer = undefined;
         try {
-          catchUp(ledger, stateFold);
+          for (const fold of allFolds) catchUp(ledger, fold);
         } catch (err) {
           // Interpolated, not varargs: Local's JSON logger drops extra
           // arguments, which turned these lines into "[Intelligence] fold
@@ -306,7 +314,7 @@ export function initIntelligenceCore(options: {
       ledger,
       emitter,
       twins: new TwinStore(ledger),
-      folds: [stateFold],
+      folds: allFolds,
       entities,
       law,
       identity,
@@ -315,7 +323,7 @@ export function initIntelligenceCore(options: {
       close: () => {
         if (foldTimer) clearTimeout(foldTimer);
         try {
-          catchUp(ledger, stateFold); // final drain
+          for (const fold of allFolds) catchUp(ledger, fold); // final drain
         } catch {
           /* best effort */
         }

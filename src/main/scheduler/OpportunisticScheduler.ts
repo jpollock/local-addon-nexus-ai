@@ -76,7 +76,10 @@ export class OpportunisticScheduler {
       type: 'reindex',
       siteIds,
       siteNames: deps.buildSiteNames(siteIds),
-      options: { autoStartStop: true },
+      // trigger: the ledger's provenance for these runs. Schedulers say so
+      // EXPLICITLY (plan 2026-08-23) — 'scheduled' by default is forbidden,
+      // 'adhoc' by silent fallback is the failure mode.
+      options: { autoStartStop: true, trigger: 'scheduled' },
     });
     // Duration not recorded: BulkOperationManager.execute() dispatches work
     // fire-and-forget and returns immediately with an operation id. The actual

@@ -25,6 +25,15 @@ export {
 } from './folds/pluginTwinFold';
 export { createStateTwinFold } from './folds/stateTwinFold';
 export {
+  createPipelineStatusFold,
+  PIPELINE_RUN_SCHEMA,
+  PipelineRunPayload,
+  PipelineLayer,
+  PipelineOutcome,
+  PipelineTrigger,
+  PipelineSiteKind,
+} from './folds/pipelineStatusFold';
+export {
   EntityService,
   EstablishedBy,
   AliasRecord,

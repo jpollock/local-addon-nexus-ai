@@ -48,7 +48,9 @@ describe('ExternalContentIndexScheduler', () => {
     const s = new ExternalContentIndexScheduler({ graphService: g as any, services: {} as any, indexService: indexService as any, logger });
     const r = await s.runCycleNow();
     expect(r.scanned).toBe(1);
-    expect(indexService.indexOne).toHaveBeenCalledWith(expect.anything(), 'ssh:hostinger-test/new', 'new');
+    // 'scheduled' asserted explicitly — a silent fallback to 'adhoc' would make
+    // every scheduler run read as a human action in the pipeline ledger.
+    expect(indexService.indexOne).toHaveBeenCalledWith(expect.anything(), 'ssh:hostinger-test/new', 'new', 'scheduled');
   });
 
   it('counts a permission refusal as skipped, not failed', async () => {

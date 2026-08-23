@@ -30,6 +30,16 @@ function derive26(namespace: string, value: string): string {
   return out;
 }
 
+/**
+ * Deterministic entity id for any (type, namespace, value) — the same pair
+ * `ensure()` hashes, so registry-up and registry-down produce identical ids.
+ * Exported for producers whose namespace has no dedicated helper below
+ * (pipelineRunProducer's `graph.site_row` was the first).
+ */
+export function provisionalEntityId(type: string, namespace: string, value: string): string {
+  return `ent_${type}_${derive26(namespace, value)}`;
+}
+
 /** Deterministic environment entity id for a Local site id. */
 export function provisionalEnvironmentId(localSiteId: string): string {
   return `ent_env_${derive26('local.site_id', localSiteId)}`;

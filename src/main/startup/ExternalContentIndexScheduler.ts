@@ -167,7 +167,7 @@ export class ExternalContentIndexScheduler {
           return;
         }
 
-        await this.indexService.indexOne(transport as SiteTransport, row.id, row.name);
+        await this.indexService.indexOne(transport as SiteTransport, row.id, row.name, 'scheduled');
         try {
           db.prepare('UPDATE sites SET content_indexed_at = ? WHERE id = ?').run(Date.now(), row.id);
         } catch { /* best-effort staleness stamp */ }

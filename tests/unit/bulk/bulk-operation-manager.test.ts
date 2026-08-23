@@ -250,7 +250,7 @@ describe('BulkOperationManager', () => {
       mysqlPassword: 'root',
       mysqlDatabase: 'local',
       sitePath: '/path/to/my-site',
-    });
+    }, 'adhoc');
   });
 
   // 11. Plugin update executor calls wpCliRun, throws on failure

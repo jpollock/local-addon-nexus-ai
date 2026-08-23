@@ -3,6 +3,7 @@ import pLimit from 'p-limit';
 import { resolveTransport } from '../transport';
 import { collectExternalHostData, type BatchRunner } from './collectExternalHostData';
 import { writeExternalHostData, type GraphWriter } from './writeExternalHostData';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 import { makeSingleFlight } from './singleFlight';
 
 export interface ExternalRefreshSchedulerOptions {
@@ -127,6 +128,7 @@ export class ExternalRefreshScheduler {
 
     const limit = pLimit(CONCURRENCY);
     await Promise.all(due.map((row) => limit(async () => {
+      const runStartedAt = Date.now();
       try {
         const target = `ssh:${row.account_id}/${row.name}@${row.environment ?? 'production'}`;
         const transport = await resolveTransport({ ssh_target: target }, this.services, 'wpcli_read');
@@ -134,17 +136,33 @@ export class ExternalRefreshScheduler {
         // A `content` key means refused or unresolvable. A permission refusal is
         // a skip, not a failure — the user configured it that way on purpose.
         if (transport && typeof transport === 'object' && 'content' in transport) {
-          this.logger.info(`[ExternalRefreshScheduler] ${row.name}: skipped (${
-            (transport as any).content?.[0]?.text ?? 'not resolvable'})`);
+          const why = (transport as any).content?.[0]?.text ?? 'not resolvable';
+          this.logger.info(`[ExternalRefreshScheduler] ${row.name}: skipped (${why})`);
+          recordPipelineRun({
+            layer: 'l2', trigger: 'scheduled', outcome: 'skip', reason: why,
+            startedAt: runStartedAt, finishedAt: Date.now(),
+            site: { kind: 'external', graphRowId: row.id },
+          });
           result.skipped++;
           return;
         }
 
         const data = await collectExternalHostData(transport as unknown as BatchRunner, this.logger);
         await writeExternalHostData(this.graphService, row.id, row.name, data, Date.now(), this.logger);
+        recordPipelineRun({
+          layer: 'l2', trigger: 'scheduled', outcome: 'ok',
+          startedAt: runStartedAt, finishedAt: Date.now(),
+          site: { kind: 'external', graphRowId: row.id },
+        });
         result.scanned++;
       } catch (err: any) {
         this.logger.warn(`[ExternalRefreshScheduler] ${row.name} failed:`, err?.message ?? err);
+        recordPipelineRun({
+          layer: 'l2', trigger: 'scheduled', outcome: 'fail',
+          reason: err?.message ?? String(err),
+          startedAt: runStartedAt, finishedAt: Date.now(),
+          site: { kind: 'external', graphRowId: row.id },
+        });
         result.failed++;
       }
     })));

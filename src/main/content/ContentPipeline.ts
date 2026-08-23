@@ -6,6 +6,8 @@ import { IndexRegistry } from './IndexRegistry';
 import { VectorDocument, IndexResult, ExtractedPost, ExtractionCoverage } from '../../common/types';
 import { chunkPosts } from './chunker';
 import { discoverRestApi } from './extractors/RestApiScanner';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
+import type { PipelineTrigger } from '../../intelligence';
 
 export type IndexStatus =
   | { state: 'idle' }
@@ -83,7 +85,43 @@ export class ContentPipeline {
     };
   }
 
-  async indexSite(info: SiteConnectionInfo): Promise<IndexResult> {
+  /**
+   * Index one local site, recording the run in the intelligence ledger
+   * (plan 2026-08-23). This wrapper is the local-L3 pipeline chokepoint: every
+   * caller — the bulk manager, the lifecycle hook, the resolvers — lands here,
+   * so one record covers them all. The record is derived from the REAL
+   * IndexResult after the fact (WP-67's rule: the registry and the report must
+   * never disagree about the same run), and recording never throws.
+   */
+  async indexSite(info: SiteConnectionInfo, trigger: PipelineTrigger = 'adhoc'): Promise<IndexResult> {
+    const startedAt = Date.now();
+    try {
+      const result = await this.indexSiteInner(info);
+      const cancelled = result.errors.length === 1 && result.errors[0] === 'Indexing cancelled';
+      recordPipelineRun({
+        layer: 'l3', trigger,
+        outcome: cancelled ? 'skip' : result.errors.length > 0 ? 'fail' : 'ok',
+        ...(cancelled
+          ? { reason: 'cancelled' }
+          : result.errors.length > 0
+            ? { reason: result.errors.join('; ') }
+            : {}),
+        startedAt, finishedAt: Date.now(),
+        site: { kind: 'local', localSiteId: info.siteId },
+      });
+      return result;
+    } catch (err: any) {
+      recordPipelineRun({
+        layer: 'l3', trigger, outcome: 'fail',
+        reason: err?.message ?? String(err),
+        startedAt, finishedAt: Date.now(),
+        site: { kind: 'local', localSiteId: info.siteId },
+      });
+      throw err;
+    }
+  }
+
+  private async indexSiteInner(info: SiteConnectionInfo): Promise<IndexResult> {
     // Add to active set at start
     this.activeSites.add(info.siteId);
 
@@ -281,10 +319,21 @@ export class ContentPipeline {
     }
   }
 
-  async reindexSite(info: SiteConnectionInfo): Promise<IndexResult> {
-    // Drop existing data, then re-index
-    await this.deps.vectorStore.dropSite(info.siteId);
-    return this.indexSite(info);
+  async reindexSite(info: SiteConnectionInfo, trigger: PipelineTrigger = 'adhoc'): Promise<IndexResult> {
+    // Drop existing data, then re-index. The drop is part of the run: a throw
+    // here is a failed run and is recorded as one, not silently untracked.
+    try {
+      await this.deps.vectorStore.dropSite(info.siteId);
+    } catch (err: any) {
+      recordPipelineRun({
+        layer: 'l3', trigger, outcome: 'fail',
+        reason: `dropSite: ${err?.message ?? String(err)}`,
+        startedAt: Date.now(), finishedAt: Date.now(),
+        site: { kind: 'local', localSiteId: info.siteId },
+      });
+      throw err;
+    }
+    return this.indexSite(info, trigger);
   }
 
   /**

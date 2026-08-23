@@ -7,6 +7,8 @@ import { VectorDocument } from '../../common/types';
 import { RemoteContentExtractor } from '../content/RemoteContentExtractor';
 import { chunkPosts } from '../content/chunker';
 import { vectorSiteId } from '../vector-store/vectorSiteId';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
+import type { PipelineTrigger } from '../../intelligence';
 
 export interface ExternalContentIndexServiceOptions {
   graphService: GraphService;
@@ -51,8 +53,20 @@ export class ExternalContentIndexService {
    * state='error' and returns { documentCount: 0 }, matching this codebase's
    * convention that content indexing is optional and must not look like a crash.
    */
-  async indexOne(transport: SiteTransport, siteId: string, alias: string): Promise<{ documentCount: number }> {
+  async indexOne(
+    transport: SiteTransport,
+    siteId: string,
+    alias: string,
+    trigger: PipelineTrigger = 'adhoc',
+  ): Promise<{ documentCount: number }> {
     const startTime = Date.now();
+    const record = (outcome: 'ok' | 'skip' | 'fail', reason?: string) =>
+      recordPipelineRun({
+        layer: 'l3', trigger, outcome,
+        ...(reason !== undefined ? { reason } : {}),
+        startedAt: startTime, finishedAt: Date.now(),
+        site: { kind: 'external', graphRowId: siteId },
+      });
     try {
       const extracted = await this.extractor.extract(transport, alias);
 
@@ -62,6 +76,7 @@ export class ExternalContentIndexService {
           lastIndexed: Date.now(), documentCount: 0, chunkCount: 0,
           durationMs: Date.now() - startTime,
         });
+        record('skip', 'no published posts');
         return { documentCount: 0 };
       }
 
@@ -113,11 +128,21 @@ export class ExternalContentIndexService {
           ? ` — INCOMPLETE (${extracted.coverage.truncatedDetail ?? extracted.coverage.truncatedReason}); this is a floor, not a total`
           : '')
       );
+      record('ok');
       return { documentCount: uniquePostIds.size };
     } catch (error: any) {
       this.logger.warn(`[ExternalContentIndexService] ${alias} failed: ${error?.message ?? error}`);
       this.indexRegistry.update(siteId, { state: 'error', lastIndexed: Date.now() } as any);
-      return { documentCount: 0 };
+      record('fail', error?.message ?? String(error));
+      // RETHROWN as of the 2026-08-23 observability packet. This catch used to
+      // swallow the failure and return {documentCount: 0} — the same shape as
+      // an empty site, which is WP-67's fabrication one layer down: callers
+      // reported "no content returned" for hosts that were never read, and
+      // indexAllExternalContent counted the failure as indexed++. Every caller
+      // already handles a throw (scheduler failed++, fleet loop errors++,
+      // nexusHostIndex success:false, bulk manager 'failed'), so the swallow
+      // protected nothing and misled everything.
+      throw error;
     }
   }
 

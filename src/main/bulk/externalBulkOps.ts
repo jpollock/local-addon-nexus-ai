@@ -13,6 +13,7 @@ import { writeExternalHostData } from '../startup/writeExternalHostData';
 import { ExternalContentIndexService } from '../events/ExternalContentIndexService';
 import { ensureContentIndexedAtColumn } from '../startup/ExternalContentIndexScheduler';
 import type { SiteOpOutcome } from './types';
+import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 
 interface ExternalRow {
   id: string;
@@ -85,14 +86,30 @@ async function openTransport(services: any, row: ExternalRow): Promise<any> {
 export function createExternalBulkOps(services: any, logger: any) {
   return {
     async refreshSite(siteId: string): Promise<void> {
-      const db = services.graphService?.getDb?.();
-      const row = requireRow(db, siteId);
+      const startedAt = Date.now();
+      try {
+        const db = services.graphService?.getDb?.();
+        const row = requireRow(db, siteId);
 
-      const transport = await openTransport(services, row);
-      const data = await collectExternalHostData(transport, logger);
-      // writeExternalHostData writes NULL for anything that did not parse and
-      // leaves prior data alone on failure — never a fabricated default.
-      await writeExternalHostData(services.graphService, row.id, row.name, data, Date.now(), logger);
+        const transport = await openTransport(services, row);
+        const data = await collectExternalHostData(transport, logger);
+        // writeExternalHostData writes NULL for anything that did not parse and
+        // leaves prior data alone on failure — never a fabricated default.
+        await writeExternalHostData(services.graphService, row.id, row.name, data, Date.now(), logger);
+        recordPipelineRun({
+          layer: 'l2', trigger: 'adhoc', outcome: 'ok',
+          startedAt, finishedAt: Date.now(),
+          site: { kind: 'external', graphRowId: siteId },
+        });
+      } catch (err: any) {
+        recordPipelineRun({
+          layer: 'l2', trigger: 'adhoc', outcome: 'fail',
+          reason: err?.message ?? String(err),
+          startedAt, finishedAt: Date.now(),
+          site: { kind: 'external', graphRowId: siteId },
+        });
+        throw err;
+      }
     },
 
     async indexSite(siteId: string): Promise<SiteOpOutcome> {

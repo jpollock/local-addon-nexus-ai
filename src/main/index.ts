@@ -602,7 +602,7 @@ export default function main(context: any): void {
       try {
         if (!wpeSyncService) return;
         localLogger.info(`[NexusAI] WPE content index scheduler running (every ${hours}h)`);
-        try { await wpeSyncService.indexAllWpeContent(); } catch (e: any) {
+        try { await wpeSyncService.indexAllWpeContent('scheduled'); } catch (e: any) {
           localLogger.warn('[NexusAI] WPE content index scheduler failed:', e?.message);
         }
       } finally {
@@ -1193,7 +1193,7 @@ export default function main(context: any): void {
           // Signal sync started so UI shows active state immediately
           emitNexusState({ wpeSyncProgress: { active: true, current: 0, total: 0, currentSite: '', phase: 'metadata' } });
           try {
-            const result = await wpeSyncService.syncAllWPESites(undefined, hours);
+            const result = await wpeSyncService.syncAllWPESites(undefined, hours, null, 'scheduled');
             localLogger.info(
               `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
             );

@@ -97,14 +97,23 @@ describe('ExternalContentIndexService.indexOne', () => {
     expect(deps._registryUpdates[0].partial.documentCount).toBe(0);
   });
 
-  it('marks the registry state=error and does not throw when extraction fails', async () => {
+  // REVERSED 2026-08-23 (pipeline-observability packet). This used to pin
+  // "does not throw when extraction fails" — the swallow returned
+  // {documentCount: 0}, the same shape as an empty site, so callers reported
+  // "no content returned" for hosts that were never read, and
+  // indexAllExternalContent counted the failure as indexed++. WP-67's
+  // fabrication, one layer down. Every caller already handles a throw
+  // (scheduler failed++, fleet loop errors++, nexusHostIndex success:false,
+  // bulk manager 'failed'), so the swallow protected nothing.
+  it('marks the registry state=error and RETHROWS when extraction fails', async () => {
     const deps = makeDeps();
     const service = new ExternalContentIndexService(deps as any);
     const throwingTransport = {
       ...makeTransport([]),
       runWpCli: async () => { throw new Error('SSH connection refused'); },
     };
-    await expect(service.indexOne(throwingTransport as any, 'ssh:myhost', 'myhost')).resolves.toEqual({ documentCount: 0 });
+    await expect(service.indexOne(throwingTransport as any, 'ssh:myhost', 'myhost'))
+      .rejects.toThrow('SSH connection refused');
     expect(deps._registryUpdates[0].partial.state).toBe('error');
   });
 
