@@ -798,3 +798,52 @@ the sweep this produced six minutes of apparent silence that looked exactly
 like a stall (and earlier today, a false "zero local indexing" conclusion). The
 ledger is now the authoritative activity record for these runs; treat log
 silence about ContentPipeline as meaningless, not as idleness.
+
+---
+
+## D17 — an ACF-first site loses its content AND its fields: empty post_content drops the post before meta is read
+
+**Found 2026-08-23, answering "what % of posts are we getting?" against the
+sweep's ledger.** Median site: 100% of rows read become documents; mean 90%;
+custom fields collected on 57/60; CPTs captured (cedarvalehealt: 7 types, 842
+docs). The exception defines the defect:
+
+```
+qwerky   coverage: 25 pages, 5000 rows read (max-posts cap, honestly recorded),
+         customFields: "collected"  →  2 documents indexed
+```
+
+`RemoteContentExtractor` drops posts whose cleaned `post_content` is empty
+BEFORE fetching post meta — a deliberate WP-62 performance choice (the code
+comment cites qwerky itself: fetching meta for 4,998 about-to-be-dropped posts
+was the bulk of a 431-second run). Correct as a perf call, wrong as a coverage
+rule for the page-builder/ACF-flexible-content pattern, where `post_content`
+is empty BY DESIGN and every meaningful word lives in postmeta. Such a site
+loses the post and its fields together; `customFields: "collected"` is then
+true only of the two survivors.
+
+Rare in this fleet (2 of 60 successful sites below 50%: qwerky 2/5000,
+qwerkystg 1/4), catastrophic where it hits.
+
+**Candidate fix, not implemented:** fetch meta for a PAGE of ids before the
+empty-content drop, and treat a post with empty content but non-empty public
+meta as indexable (meta text becomes the document body). Preserves the WP-62
+perf win for the common case iff the meta fetch stays page-batched; the
+qwerky-shaped worst case pays the meta round trips it currently saves, which
+is the point — those posts are the content.
+
+---
+
+## D18 — L2's post_count_by_type for WPE installs misses custom post types
+
+**Found the same way.** graph.db for `cedarvalehealt` says
+`post_count_by_type = {"post": 600}` while the content index genuinely holds
+842 documents across 7 types (condition, provider, treatment, insurance_plan,
+location, page). Several sweep sites showed docs > post_count for the same
+reason — the denominator undercounts, not the index overcounting.
+
+The L3 side is correct; the L2 count is wrong. Effect: any surface using
+post_count as "how much content does this install have" (fleet views, the
+coverage math in this register's own D17 analysis) understates CPT-heavy
+sites. Locate the WPE L2 post-count query (`syncInstall`'s stats write) and
+widen it to all publish-status types, matching what L3 actually indexes.
