@@ -469,11 +469,15 @@ export class WPESyncService {
       return { state: 'skipped', reason: 'SSH key or embedding service not configured' };
     }
 
+    // Declared outside the try so the `finally` can release the connection on
+    // every exit — success, skip, and failure alike.
+    let wpeTransport: WpeSshTransport | undefined;
+
     try {
       this.logger.info(`[WPESyncService] Starting content extraction for ${installName}...`);
 
       // Extract content via remote WP-CLI
-      const wpeTransport = new WpeSshTransport(installName);
+      wpeTransport = new WpeSshTransport(installName);
       const extracted = await this.remoteContentExtractor.extract(wpeTransport, installName);
       this.logger.info(`[WPESyncService] Extraction complete. Posts found: ${extracted.posts?.length || 0}`);
 
@@ -641,6 +645,19 @@ export class WPESyncService {
       // exists: both remaining callers ARE content-index callers, and each now
       // decides for itself what to do with a failure.
       return { state: 'failed', error: errorMsg };
+    } finally {
+      // Hand the SSH connection back. WP Engine allows five concurrent
+      // connections PER USER account-wide, and ControlPersist keeps each
+      // install's master alive for ten minutes after its last command — so a
+      // sweep over hundreds of installs, each visited once, exhausts the quota
+      // with connections it will never reuse. Measured 2026-08-23: 82 live
+      // sockets against a limit of 5, after which every remaining install was
+      // refused at authentication in under 100ms.
+      //
+      // In the `finally` rather than the success path because a failed read
+      // holds a connection just as firmly, and a run that leaks one per
+      // failure burns the quota fastest exactly when it is already going wrong.
+      await wpeTransport?.closeMaster();
     }
   }
 

@@ -65,9 +65,31 @@ export interface RemoteFailure {
   timeoutMs: number;
 }
 
+/**
+ * OpenSSH's post-quantum advisory, printed to stderr on EVERY WP Engine
+ * connection — three lines, ~230 characters, arriving BEFORE the real error.
+ *
+ * It is dropped because it is unconditional noise that displaces signal: any
+ * caller truncating the reason truncates away the part that matters. Measured
+ * 2026-08-23, the fleet run logged `... — output: ** WARNING: connection is
+ * not using a post-quantum key exchange algorithm. ** This session may be
+ * vulnerable to ... ** The server m` — cut off mid-banner, with the actual
+ * cause ("The concurrent connection limit of 5 connections per user has been
+ * reached") never reaching the log at all.
+ *
+ * Matched on the advisory's own wording rather than on the `**` prefix, so a
+ * genuine message that happens to start with `**` still survives.
+ */
+const SSH_PQ_ADVISORY = /^\*\*.*(post-quantum|store now, decrypt later|openssh\.com\/pq)/i;
+
 /** Squash multi-line output into one readable line, dropping blank runs. */
 function oneLine(text: string, limit = 400): string {
-  const flat = text.split('\n').map(l => l.trim()).filter(Boolean).join(' ');
+  const flat = text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .filter(l => !SSH_PQ_ADVISORY.test(l))
+    .join(' ');
   return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
 }
 

@@ -4,7 +4,7 @@ import type {
   DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
 } from './types';
 import {
-  buildWpCliCommand, buildWpeSshArgs, escapeShellArg, WPE_SSH_TIMEOUT_MS,
+  buildWpCliCommand, buildWpeSshArgs, buildWpeSshExitArgs, escapeShellArg, WPE_SSH_TIMEOUT_MS,
 } from './ssh-args';
 import { describeRemoteFailure } from '../mcp/utils/remoteFailure';
 
@@ -66,6 +66,38 @@ export class WpeSshTransport implements SiteTransport {
       }),
       success: false,
     };
+  }
+
+  /**
+   * Hand the multiplexed connection back.
+   *
+   * WP Engine allows FIVE concurrent SSH connections PER USER, account-wide,
+   * and `ControlPersist` keeps each install's master alive for ten minutes
+   * after its last command. That is a good trade for an agent hitting one
+   * install repeatedly, and a bad one for a sweep that visits each install
+   * exactly once: the masters accumulate, cross the account limit, and every
+   * further install is refused at authentication in under 100ms. Measured
+   * 2026-08-23 — 82 live sockets against a limit of 5, with the server saying
+   * so verbatim.
+   *
+   * Best-effort and never throws. A socket that has already aged out makes
+   * `ssh -O exit` exit non-zero, which is not a failure of the caller's work;
+   * and failing to release a connection must never turn a completed index
+   * into a reported error.
+   */
+  async closeMaster(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      try {
+        const proc = spawn('ssh', buildWpeSshExitArgs(this.installName), {
+          stdio: ['ignore', 'ignore', 'ignore'],
+          timeout: 10_000,
+        });
+        proc.on('close', () => resolve());
+        proc.on('error', () => resolve());
+      } catch {
+        resolve();
+      }
+    });
   }
 
   async deleteRemoteFile(absolutePath: string): Promise<DeleteResult> {

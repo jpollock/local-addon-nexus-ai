@@ -32,8 +32,19 @@ describe('describeRemoteFailure', () => {
       code: null, signal: 'SIGTERM', stderr: PQ_WARNING, elapsedMs: 35074, timeoutMs: 35000,
     });
     expect(msg.startsWith('Timed out after 35s')).toBe(true);
-    // The warning is kept as context — it is real output, just not the reason.
-    expect(msg).toContain('post-quantum');
+    // REVERSED 2026-08-23. This used to assert the warning was KEPT as
+    // context — "real output, just not the reason" — which was reasonable
+    // when the only concern was mislabelling. It is no longer tenable: the
+    // advisory is unconditional (every WP Engine connection prints it, on
+    // success and failure alike), it is ~230 characters, and it arrives
+    // BEFORE the real error. On the fleet run that day it consumed the
+    // caller's whole 200-char budget and hid "The concurrent connection limit
+    // of 5 connections per user has been reached" — the actual cause, which
+    // had to be recovered by reproducing the command by hand.
+    //
+    // Context that is always present carries no information and displaces
+    // context that does. It is dropped.
+    expect(msg).not.toContain('post-quantum');
   });
 
   it('leads with the exit code, then the output, for an ordinary failure', () => {
@@ -83,5 +94,58 @@ describe('describeRemoteFailure', () => {
   it('never returns an empty string', () => {
     expect(describeRemoteFailure({ code: 0, signal: null, stderr: '', elapsedMs: 1, timeoutMs: 35000 }).length)
       .toBeGreaterThan(0);
+  });
+});
+
+/**
+ * OpenSSH's post-quantum advisory is three lines of stderr on EVERY WP Engine
+ * connection, and it arrives BEFORE the real error. Callers that truncate the
+ * reason therefore truncate away the only part that matters.
+ *
+ * Measured 2026-08-23: the fleet run logged
+ * "the first page failed: Command exited with code 1 — output: ** WARNING:
+ *  connection is not using a post-quantum key exchange algorithm. ** This
+ *  session may be vulnerable to ... ** The server m"
+ * — cut off mid-banner. The actual message, recovered only by reproducing the
+ * command by hand, was "The concurrent connection limit of 5 connections per
+ * user has been reached."
+ */
+describe('describeRemoteFailure — the OpenSSH advisory does not crowd out the error', () => {
+  const BANNER = [
+    '** WARNING: connection is not using a post-quantum key exchange algorithm.',
+    '** This session may be vulnerable to "store now, decrypt later" attacks.',
+    '** The server may need to be upgraded. See https://openssh.com/pq.html',
+  ].join('\n');
+
+  test('the real error leads, with the banner dropped', () => {
+    const out = describeRemoteFailure({
+      code: 1, signal: null, elapsedMs: 700, timeoutMs: 120000,
+      stderr: `${BANNER}\nThe concurrent connection limit of 5 connections per user has been reached.`,
+    });
+
+    expect(out).toContain('concurrent connection limit of 5');
+    expect(out).not.toContain('post-quantum');
+    expect(out).not.toContain('store now');
+  });
+
+  // The counterpart: dropping too much is the opposite failure. Anything that
+  // is not this specific advisory must survive, including other `**` lines.
+  test('a non-advisory message is kept, including one that starts with **', () => {
+    const out = describeRemoteFailure({
+      code: 1, signal: null, elapsedMs: 10, timeoutMs: 120000,
+      stderr: '** IMPORTANT: disk quota exceeded\nError: could not write',
+    });
+
+    expect(out).toContain('disk quota exceeded');
+    expect(out).toContain('could not write');
+  });
+
+  test('a banner with no other output still reports the exit code', () => {
+    const out = describeRemoteFailure({
+      code: 255, signal: null, elapsedMs: 40, timeoutMs: 120000, stderr: BANNER,
+    });
+
+    expect(out).toContain('255');
+    expect(out).not.toContain('post-quantum');
   });
 });

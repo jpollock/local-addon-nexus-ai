@@ -34,6 +34,15 @@ export function escapeShellArg(arg: string): string {
 }
 
 /**
+ * The multiplexed control socket, shared by the session builder and the
+ * builder that closes it. `%C` hashes localhost/host/port/user, so both must
+ * present the same value or `-O exit` addresses a socket that does not exist
+ * and the connection stays open.
+ */
+export const WPE_CONTROL_PATH = '/tmp/ssh-nexus-%C';
+
+
+/**
  * An SSH host alias that is safe to place in ssh's argv.
  *
  * Deliberately narrower than what ssh itself accepts. `Host` patterns may in
@@ -135,13 +144,42 @@ export function buildWpeSshArgs(
     '-o', 'ServerAliveCountMax=120',
     '-o', 'StrictHostKeyChecking=accept-new',
     '-o', 'ControlMaster=auto',
-    '-o', 'ControlPath=/tmp/ssh-nexus-%C',
+    '-o', `ControlPath=${WPE_CONTROL_PATH}`,
     // 30s here was shorter than every agent cadence, so the socket was always cold and every
     // scheduled call paid the 13–30s WP Engine cold start. See SSH_CONTROL_PERSIST.
     '-o', `ControlPersist=${SSH_CONTROL_PERSIST}`,
     '-i', keyPath,
     `local+ssh+${installName}@${installName}.ssh.wpengine.net`,
     remoteCommand,
+  ];
+}
+
+/**
+ * Close the multiplexed master for one install.
+ *
+ * WP Engine allows FIVE concurrent SSH connections PER USER, account-wide.
+ * `ControlPersist` holds each install's master open for ten minutes after its
+ * last command, so a fleet sweep — which visits every install exactly once —
+ * accumulates masters it will never reuse until the account quota is gone and
+ * every further connection is refused at authentication. Measured 2026-08-23:
+ * 82 live sockets against a limit of 5, and the server saying so verbatim.
+ *
+ * ControlPersist still earns its keep where it was introduced: an agent on a
+ * short cadence hitting the SAME install. This exists so a one-pass caller can
+ * hand the connection back when it is done, rather than the setting being
+ * tuned down and that case paying the 13-30s cold start again.
+ */
+export function buildWpeSshExitArgs(
+  installName: string,
+  keyPath: string = wpeSshKeyPath(),
+): string[] {
+  return [
+    '-F', '/dev/null',
+    '-o', 'IdentitiesOnly=yes',
+    '-o', `ControlPath=${WPE_CONTROL_PATH}`,
+    '-i', keyPath,
+    '-O', 'exit',
+    `local+ssh+${installName}@${installName}.ssh.wpengine.net`,
   ];
 }
 

@@ -13,10 +13,15 @@
  * `indexOneWpeContent`, so if one of them can be handed an id, all of them can.
  */
 const transportTargets: string[] = [];
+const closed: string[] = [];
 jest.mock('../../../src/main/transport/WpeSshTransport', () => ({
   WpeSshTransport: jest.fn().mockImplementation((installName: string) => {
     transportTargets.push(installName);
-    return { siteRef: { kind: 'wpe', installName }, runWpCli: jest.fn() };
+    return {
+      siteRef: { kind: 'wpe', installName },
+      runWpCli: jest.fn(),
+      closeMaster: jest.fn(async () => { closed.push(installName); }),
+    };
   }),
 }));
 
@@ -44,7 +49,15 @@ function makeGraph(rows: Array<{ id: string; name: string | null }>) {
   return db;
 }
 
-function makeService(rows: Array<{ id: string; name: string | null }>) {
+function makeService(
+  rows: Array<{ id: string; name: string | null }>,
+  extract: () => Promise<any> = async () => ({
+    posts: [{
+      id: 1, postType: 'post', title: 'Hello', postStatus: 'publish',
+      author: '1', date: '2026-01-01T00:00:00Z', cleanedContent: 'body text', excerpt: '',
+    }],
+  }),
+) {
   const db = makeGraph(rows);
   const graphService: any = {
     getDb: () => db,
@@ -54,14 +67,7 @@ function makeService(rows: Array<{ id: string; name: string | null }>) {
   const service = new WPESyncService({
     graphService,
     localServices: { remoteWpCliRun: jest.fn().mockResolvedValue({ stdout: '', success: true }) } as any,
-    remoteContentExtractor: {
-      extract: jest.fn(async () => ({
-        posts: [{
-          id: 1, postType: 'post', title: 'Hello', postStatus: 'publish',
-          author: '1', date: '2026-01-01T00:00:00Z', cleanedContent: 'body text', excerpt: '',
-        }],
-      })),
-    } as any,
+    remoteContentExtractor: { extract: jest.fn(extract) } as any,
     embeddingService: { embedBatch: jest.fn(async (xs: any[]) => xs.map(() => [0.1, 0.2])) } as any,
     vectorStore: { upsert: jest.fn().mockResolvedValue(undefined) } as any,
     indexRegistry: new IndexRegistry({ get: () => undefined, set: () => undefined } as any),
@@ -102,7 +108,7 @@ async function runBulk(manager: BulkOperationManager, siteIds: string[]) {
   return manager.getStatus(id)!;
 }
 
-beforeEach(() => { transportTargets.length = 0; });
+beforeEach(() => { transportTargets.length = 0; closed.length = 0; });
 
 describe('WP-68 — the install name reaches the transport, for all three scopes', () => {
   test('scope: all sites', async () => {
@@ -182,5 +188,42 @@ describe('WP-68 — an unusable install name is refused, never substituted', () 
     expect(status.siteResults[ID_A].status).toBe('failed');
     expect(status.siteResults[ID_A].error).toContain('install name');
     expect(transportTargets).toEqual([]);
+  });
+});
+
+/**
+ * WP Engine allows FIVE concurrent SSH connections PER USER, account-wide, and
+ * `ControlPersist` is ten minutes. A sweep visits each install once, so every
+ * master it leaves open is quota it will never reuse. Measured 2026-08-23: 82
+ * live sockets against a limit of 5, after which every further install was
+ * refused at authentication in under 100ms.
+ */
+describe('WP-68 — a content sync hands its connection back', () => {
+  test('the master is closed after a successful index', async () => {
+    const { service } = makeService([{ id: ID_A, name: NAME_A }]);
+
+    await service.indexOneWpeContent(ID_A);
+
+    expect(closed).toEqual([NAME_A]);
+  });
+
+  test('the master is closed even when the read fails', async () => {
+    const { service } = makeService([{ id: ID_A, name: NAME_A }], async () => {
+      throw new Error('SSH connection refused');
+    });
+
+    await expect(service.indexOneWpeContent(ID_A)).rejects.toThrow();
+
+    // A failure is exactly when the socket must not be left behind: a sweep
+    // that leaks one per failure exhausts the quota fastest at its worst moment.
+    expect(closed).toEqual([NAME_A]);
+  });
+
+  test('one connection is closed per install across a fleet sweep', async () => {
+    const { service } = makeService([{ id: ID_A, name: NAME_A }, { id: ID_B, name: NAME_B }]);
+
+    await service.indexAllWpeContent();
+
+    expect(closed.sort()).toEqual([NAME_A, NAME_B].sort());
   });
 });

@@ -651,3 +651,65 @@ field-by-field, so it only catches fields someone remembered to test.
 type: a `Required<BulkOperationRequest>` fixture makes adding an interface
 field a compile error until it is listed, and the round-trip assertion then
 fails until the schema accepts it.
+
+
+---
+
+## D14 — FIXED 2026-08-23 — the fleet sweep exhausted WP Engine's 5-connection limit with sockets it never reused
+
+**Found by D12's own fix**, on the first degraded run after it shipped. The log
+named the cause where two previous investigations could only infer it.
+
+WP Engine allows **five concurrent SSH connections per user, account-wide** —
+not per install. The server says so verbatim:
+
+```
+The concurrent connection limit of 5 connections per user has been reached.
+If you are using ControlPersist, check your ControlPath and delete any
+persisting connections that are no longer needed.
+```
+
+Two settings collide with that:
+
+| setting | value | effect on a sweep |
+|---|---|---|
+| `BulkOperationManager.MAX_CONCURRENCY` | 5 | exactly the cap, zero headroom |
+| `SSH_CONTROL_PERSIST` | 10 minutes | each install's master stays open long after its command |
+
+A sweep visits every install **once**, so at ~20s per site × 5 workers it opens
+12–20 masters inside every persist window and reuses none of them. **Measured:
+82 live sockets against a limit of 5.** Past that point every remaining install
+is refused at authentication in under 100ms — which is why both runs were clean
+for ~10 minutes and then collapsed, and why individual re-runs always succeeded.
+
+The 2026-08-22 run and the 2026-08-23 run show the same curve:
+
+| minute | OK | FAIL |
+|---|---|---|
+| 01:05–01:11 | 17 | 0 |
+| 01:12–01:14 | 20 | 5 |
+| 01:15–01:20 | 44 | 65 |
+
+**Fix.** `WpeSshTransport.closeMaster()` runs `ssh -O exit` against the same
+ControlPath, and `syncContent` calls it in a `finally` so the connection is
+returned on success, skip and failure alike — a run that leaks one per failure
+burns the quota fastest exactly when it is already going wrong. `ControlPersist`
+is unchanged: it earns its keep for an agent hitting one install on a short
+cadence, which is the case it was introduced for. Only the one-pass caller now
+hands its connection back.
+
+Verified live: eight installs indexed back-to-back, held sockets **flat at 1**
+(that one belonging to a manual diagnostic, not the addon) and zero ssh
+processes; `ssh -O check` reports no socket for any install the addon touched.
+All eight were installs that had failed in the run.
+
+**Also fixed here:** OpenSSH's post-quantum advisory — three lines, ~230
+characters, printed on EVERY WP Engine connection before the real error — was
+consuming the whole 200-character reason budget, so the logged line read
+`... output: ** WARNING: connection is not using a post-quantum key exchange
+algorithm. ** This session may be vulnerable to ... ** The server m`. The
+actual cause had to be recovered by hand. `oneLine` now drops the advisory,
+matched on its own wording rather than its `**` prefix so a genuine message
+starting with `**` survives. This reverses a deliberate earlier decision to
+keep the banner "as context"; context that is always present carries no
+information and displaces context that does.
