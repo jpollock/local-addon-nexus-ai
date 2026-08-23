@@ -26,6 +26,7 @@ import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation
 import type { SiteOpOutcome } from '../bulk/types';
 import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 import type { PipelineTrigger } from '../../intelligence';
+import { refreshSshGatewayStatus, sshGatewayUnavailableReason } from '../transport/wpeGatewayStatus';
 
 /**
  * What a content sync actually did.
@@ -81,6 +82,8 @@ export interface WPESyncServiceOptions {
   indexRegistry?: IndexRegistry;
   /** Optional IPC emitter — used to broadcast INDEX_PROGRESS to the renderer. */
   emitIndexProgress?: (siteId: string, data: { state: string; progress: number; message: string; documentCount?: number }) => void;
+  /** Test seam for the D15 gateway probe — defaults to real DNS. */
+  dnsResolve?: (hostname: string) => Promise<unknown>;
   /** Optional progress callback — broadcasts per-site WPE sync progress to NexusStateManager. */
   onSyncProgress?: (progress: { active: boolean; current: number; total: number; currentSite: string; phase: 'capi' | 'metadata' | 'content' } | null) => void;
 }
@@ -95,6 +98,7 @@ export class WPESyncService {
   private registryStorage?: RegistryStorage;
   private indexRegistry?: IndexRegistry;
   private emitIndexProgress?: (siteId: string, data: { state: string; progress: number; message: string; documentCount?: number }) => void;
+  private dnsResolve?: (hostname: string) => Promise<unknown>;
   private onSyncProgress?: (progress: { active: boolean; current: number; total: number; currentSite: string; phase: 'capi' | 'metadata' | 'content' } | null) => void;
   private currentProgress: WPESyncProgress | null = null;
   private abortRequested = false;
@@ -121,6 +125,7 @@ export class WPESyncService {
     this.indexRegistry = options.indexRegistry ?? (options.registryStorage ? new IndexRegistry(options.registryStorage) : undefined);
     this.emitIndexProgress = options.emitIndexProgress;
     this.onSyncProgress = options.onSyncProgress;
+    this.dnsResolve = options.dnsResolve;
   }
 
   /**
@@ -182,6 +187,19 @@ export class WPESyncService {
       // "everything else was deleted".
       result.deactivated = this.reconcileMissingInstalls(
         new Set(installs.map((i: any) => i.id).filter(Boolean)),
+      );
+
+      // D15: establish per-account SSH gateway availability — one DNS probe
+      // per account, cached with a recheck interval. From the FULL list, so
+      // an account outside any filter still gets its verdict.
+      const oneInstallPerAccount = new Map<string, string>();
+      for (const i of installs) {
+        const acct = i?.account?.id;
+        if (acct && i?.name && !oneInstallPerAccount.has(acct)) oneInstallPerAccount.set(acct, i.name);
+      }
+      await refreshSshGatewayStatus(
+        this.graphService.getDb() as never, oneInstallPerAccount, this.logger,
+        ...(this.dnsResolve ? [this.dnsResolve] : []),
       );
 
       // Apply account filter — null/undefined means all accounts
@@ -888,6 +906,18 @@ export class WPESyncService {
       record('fail', err?.message ?? String(err));
       throw err;
     }
+
+    // D15: an install on an account with no SSH gateway is a stated absence,
+    // not a failure — probing it anyway would re-learn NXDOMAIN 73 times per
+    // sweep. Only a CONFIRMED absence suppresses work; unknown proceeds.
+    const gatewayReason = this.sshGatewayReasonFor(siteId);
+    if (gatewayReason) {
+      this.emitIndexProgress?.(siteId, {
+        state: 'idle', progress: 100, message: `Not indexed — ${gatewayReason}`,
+      });
+      record('skip', gatewayReason);
+      return { ran: false, reason: gatewayReason };
+    }
     this.emitIndexProgress?.(siteId, {
       state: 'indexing', progress: 0, message: `Indexing ${installName} via SSH…`,
     });
@@ -919,6 +949,20 @@ export class WPESyncService {
     });
     record('ok');
     return { ran: true };
+  }
+
+  /** D15: the account-level stated absence for a site, or null to proceed. */
+  private sshGatewayReasonFor(siteId: string): string | null {
+    try {
+      const db = this.graphService.getDb();
+      if (!db) return null;
+      const row = db.prepare('SELECT account_id FROM sites WHERE id = ?').get(siteId) as
+        | { account_id?: string | null }
+        | undefined;
+      return sshGatewayUnavailableReason(db as never, row?.account_id);
+    } catch {
+      return null; // unknown is never a reason to refuse work
+    }
   }
 
   /**

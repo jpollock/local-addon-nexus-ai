@@ -36,21 +36,25 @@ const ID_B = 'wpe-9564d013-757d-4b18-8aa0-93bdd5fb9d99';
 const NAME_B = 'sprntndntchmbr';
 
 /** A real SQLite `sites` table — the lookup under test is a real query. */
-function makeGraph(rows: Array<{ id: string; name: string | null }>) {
+function makeGraph(rows: Array<{ id: string; name: string | null; accountId?: string }>) {
   const db = new Database(':memory:');
   db.exec(`CREATE TABLE sites (
     id TEXT PRIMARY KEY, name TEXT, source TEXT, is_active INTEGER,
     php_version TEXT, domain TEXT, account_id TEXT, remote_install_id TEXT, environment TEXT
   )`);
+  db.exec(`CREATE TABLE wpe_accounts (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, nickname TEXT,
+    ssh_gateway TEXT, ssh_gateway_checked_at INTEGER
+  )`);
   const ins = db.prepare(
-    "INSERT INTO sites (id,name,source,is_active,domain,environment) VALUES (?,?,'wpe',1,'x.wpengine.com','production')",
+    "INSERT INTO sites (id,name,source,is_active,domain,environment,account_id) VALUES (?,?,'wpe',1,'x.wpengine.com','production',?)",
   );
-  for (const r of rows) ins.run(r.id, r.name);
+  for (const r of rows) ins.run(r.id, r.name, r.accountId ?? null);
   return db;
 }
 
 function makeService(
-  rows: Array<{ id: string; name: string | null }>,
+  rows: Array<{ id: string; name: string | null; accountId?: string }>,
   extract: () => Promise<any> = async () => ({
     posts: [{
       id: 1, postType: 'post', title: 'Hello', postStatus: 'publish',
@@ -225,5 +229,68 @@ describe('WP-68 — a content sync hands its connection back', () => {
     await service.indexAllWpeContent();
 
     expect(closed.sort()).toEqual([NAME_A, NAME_B].sort());
+  });
+});
+
+/**
+ * D15 — an install on a gateway-less account is a stated absence, not an
+ * attempted-and-failed SSH connection. The AutoscaleAlpha account's 73
+ * installs re-learned NXDOMAIN on every sweep before this.
+ */
+describe('D15 — a confirmed-absent SSH gateway is a skip, and nothing is dialled', () => {
+  test('skip with the account named; no transport constructed', async () => {
+    const { service, graphService } = makeService([{ id: ID_A, name: NAME_A, accountId: 'acct-auto' }]);
+    graphService.getDb().prepare(
+      "INSERT INTO wpe_accounts VALUES ('acct-auto','esm5z2bl7u8vqk','AutoscaleAlpha','unavailable',999)",
+    ).run();
+
+    const outcome = await service.indexOneWpeContent(ID_A);
+
+    expect(outcome.ran).toBe(false);
+    expect((outcome as { reason?: string }).reason).toContain('AutoscaleAlpha');
+    expect((outcome as { reason?: string }).reason).toMatch(/no SSH gateway/i);
+    expect(transportTargets).toEqual([]); // stated, not probed
+  });
+
+  // The counterpart: an UNKNOWN gateway status must not suppress work — only
+  // a confirmed absence does, or a fresh install never gets its first try.
+  test('an account with no verdict proceeds normally', async () => {
+    const { service } = makeService([{ id: ID_A, name: NAME_A, accountId: 'acct-new' }]);
+
+    const outcome = await service.indexOneWpeContent(ID_A);
+
+    expect(outcome).toEqual({ ran: true });
+    expect(transportTargets).toEqual([NAME_A]);
+  });
+
+  test('syncAllWPESites probes one install per account and records the verdict', async () => {
+    const { service, graphService } = makeService([{ id: ID_A, name: NAME_A, accountId: 'acct-auto' }]);
+    const db = graphService.getDb();
+    db.prepare("INSERT INTO wpe_accounts VALUES ('acct-auto','esm5z2bl7u8vqk','AutoscaleAlpha',NULL,NULL)").run();
+
+    const probed: string[] = [];
+    const svc = new WPESyncService({
+      graphService,
+      localServices: {
+        isCAPIAvailable: () => true,
+        capiGetInstalls: async () => [
+          { id: 'u1', name: 'jpmeautoscale', environment: 'production', account: { id: 'acct-auto' } },
+          { id: 'u2', name: 'cnryws84as1', environment: 'production', account: { id: 'acct-auto' } },
+        ],
+        capiGetAccounts: async () => [],
+        remoteWpCliRun: jest.fn().mockResolvedValue({ stdout: '', success: true }),
+      } as never,
+      logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+      dnsResolve: async (host: string) => {
+        probed.push(host);
+        throw Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' });
+      },
+    });
+
+    await svc.syncAllWPESites(undefined, 100000);
+
+    expect(probed).toEqual(['jpmeautoscale.ssh.wpengine.net']); // ONE probe per account
+    const row = db.prepare("SELECT ssh_gateway FROM wpe_accounts WHERE id='acct-auto'").get() as { ssh_gateway: string };
+    expect(row.ssh_gateway).toBe('unavailable');
   });
 });

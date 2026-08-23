@@ -20,6 +20,7 @@
  */
 
 import type { GraphService } from '../events/GraphService';
+import { accountsWithoutSshGateway } from '../transport/wpeGatewayStatus';
 import { EXCLUDED_POST_TYPES } from '../../common/constants';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { AgentEventBus } from '../agent-event-bus/AgentEventBus';
@@ -230,6 +231,23 @@ export class WpeRefreshScheduler {
     } catch (err: any) {
       this.logger.error('[WpeRefreshScheduler] Failed to query WPE sites:', err.message);
       return result;
+    }
+
+    // D15: accounts with a CONFIRMED-absent SSH gateway are stated once, not
+    // failed per install. One line names the accounts; the installs are
+    // counted as skipped rather than attempted.
+    const gatewayless = accountsWithoutSshGateway(this.graphService.getDb() as never);
+    if (gatewayless.size > 0) {
+      const before = sites.length;
+      sites = sites.filter((st) => !(st.account_id && gatewayless.has(st.account_id)));
+      const excluded = before - sites.length;
+      if (excluded > 0) {
+        result.skipped += excluded;
+        this.logger.info(
+          `[WpeRefreshScheduler] ${excluded} install(s) skipped — no SSH gateway on `
+          + `account(s): ${[...gatewayless.values()].join(', ')} (D15)`,
+        );
+      }
     }
 
     // Apply account filter if set

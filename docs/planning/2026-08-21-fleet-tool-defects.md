@@ -716,7 +716,28 @@ information and displaces context that does.
 
 ---
 
-## D15 — 73 installs on one WP Engine account have no SSH endpoint, and are not indexable
+## D15 — HANDLED 2026-08-23 — 73 installs on one WP Engine account have no SSH endpoint
+
+> **Identified and handled the same day.** The account is `esm5z2bl7u8vqk`
+> ("AutoscaleAlpha") — an Autoscale alpha testing account, and the Autoscale
+> platform evidently does not provision the classic per-install SSH gateway.
+> The open product question (does Autoscale have or plan any WP-CLI access
+> path?) sits with the owner; nothing addon-side can answer it.
+>
+> **The stated-absence handling shipped** (`wpeGatewayStatus.ts`): one DNS
+> probe per account during the CAPI sync, verdict cached on `wpe_accounts`
+> with a 24h recheck; only a definitive NXDOMAIN/ENODATA marks an account
+> unavailable (a resolver hiccup changes nothing), and a gateway provisioned
+> later is noticed within a day. Consumers: `indexOneWpeContent` returns a
+> skip naming the account ("no SSH gateway on account \"AutoscaleAlpha\"…"),
+> so the panel shows *did not run* with the reason and the pipeline ledger
+> records `skip`; `WpeRefreshScheduler` excludes the installs with ONE log
+> line naming the account instead of 73 attempts. Unknown status never
+> suppresses work — a fresh install always gets its first try. Mutation
+> battery 6/6.
+
+### Original entry
+
 
 **Found 2026-08-23. Corrects an assumption I stated as fact the same evening.**
 

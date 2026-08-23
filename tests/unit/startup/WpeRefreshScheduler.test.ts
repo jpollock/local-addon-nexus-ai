@@ -196,3 +196,47 @@ it('D18: counts every registered post type, not just post', async () => {
   const byTypeJson = flat.find(a => typeof a === 'string' && (a as string).includes('provider')) as string;
   expect(JSON.parse(byTypeJson)).toEqual({ post: 600, page: 2, provider: 60, condition: 80 });
 });
+
+/**
+ * D15 — installs on a confirmed gateway-less account are stated once and
+ * skipped, not attempted 73 times per cycle.
+ */
+it('D15: skips installs on accounts with no SSH gateway, counted and named once', async () => {
+  const rows = [
+    { id: 's-1', name: 'jpmeautoscale', remote_install_id: 'r1', ssh_last_sync_at: null, account_id: 'acct-auto', environment: 'production' },
+    { id: 's-2', name: 'cedarvalehealt', remote_install_id: 'r2', ssh_last_sync_at: null, account_id: 'acct-ok', environment: 'production' },
+  ];
+  const db = {
+    exec: jest.fn(),
+    prepare: jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('pragma_table_info')) return { get: jest.fn().mockReturnValue({ c: 1 }) };
+      if (sql.includes("ssh_gateway = 'unavailable'")) {
+        return { all: jest.fn().mockReturnValue([{ id: 'acct-auto', name: 'esm5z2bl7u8vqk', nickname: 'AutoscaleAlpha' }]) };
+      }
+      if (sql.includes('SELECT') && sql.includes('FROM sites')) return { all: jest.fn().mockReturnValue(rows) };
+      return { run: jest.fn(), all: jest.fn().mockReturnValue([]), get: jest.fn() };
+    }),
+  } as any;
+  const attempted: string[] = [];
+  const localServices = {
+    isSSHKeyAvailable: jest.fn().mockReturnValue(true),
+    remoteWpCliRun: jest.fn().mockImplementation(async (installName: string) => {
+      attempted.push(installName);
+      return { success: false, stdout: null };
+    }),
+  } as any;
+
+  const scheduler = new WpeRefreshScheduler({
+    graphService: makeMockGraphService(db),
+    localServices,
+    logger: defaultLogger,
+    intervalMs: 3600_000,
+  } as any);
+  const result = await (scheduler as any).runNow();
+
+  expect(attempted).not.toContain('jpmeautoscale'); // never dialled
+  expect(result.skipped).toBeGreaterThanOrEqual(1);
+  const said = defaultLogger.info.mock.calls.flat().join(' ');
+  expect(said).toContain('AutoscaleAlpha');
+  expect(said).toMatch(/no SSH gateway/i);
+});
