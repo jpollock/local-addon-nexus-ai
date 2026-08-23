@@ -223,11 +223,19 @@ export class RemoteContentExtractor {
 
       if (!result.success || !result.stdout) {
         if (pagesFetched === 0) {
-          this.logger.warn(`[RemoteContentExtractor] No posts returned for ${siteLabel}`);
           // Nothing was read at all. That is not an empty site — it is an
           // unread one, and the two must not look alike downstream.
           truncatedReason = 'page-failed';
           truncatedDetail = `the first page failed: ${String(result.stdout ?? '').slice(0, 200) || 'no output'}`;
+          // The reason goes IN the line. `WpeSshTransport` composes it with
+          // `describeRemoteFailure` and hands it back as `result.stdout`; this
+          // used to log the bare words "No posts returned" and drop it. On
+          // 2026-08-22 that made 106 failed reads across reachable installs —
+          // one holding 215 published posts — indistinguishable in the log
+          // from an empty site, and the run undiagnosable after the fact.
+          this.logger.warn(
+            `[RemoteContentExtractor] Could not read posts from ${siteLabel} — ${truncatedDetail}`,
+          );
           break;
         }
         truncatedReason = 'page-failed';

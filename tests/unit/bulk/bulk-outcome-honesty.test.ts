@@ -330,6 +330,68 @@ describe('WP-67 — WPESyncService.indexOneWpeContent reports each of syncConten
     expect(outcome.ran).toBe(true);
   });
 
+  /**
+   * D12. A read that FAILED is not a site with nothing in it.
+   *
+   * On 2026-08-22 this distinction was the whole difference between
+   * "Did not run — No content returned by the extractor" and the truth, which
+   * was that 106 reachable installs holding up to 215 posts each had their
+   * reads fail. `coverage.truncatedReason === 'page-failed'` is how the
+   * extractor already says so; nothing read it.
+   */
+  test('a page-failed read throws with the transport reason, and is not a skip', async () => {
+    const service = makeService(async () => ({
+      posts: [],
+      coverage: {
+        pageSize: 200, pagesFetched: 0, rowsReturned: 0, complete: false,
+        truncatedReason: 'page-failed',
+        truncatedDetail: 'the first page failed: ssh: Connection refused',
+        customFields: 'not-attempted',
+      },
+    }));
+
+    await expect(service.indexOneWpeContent('wpe-1')).rejects.toThrow('Connection refused');
+  });
+
+  // The counterpart: a site that really is empty stays a skip, or "always
+  // throw on zero posts" would pass the case above and every empty install
+  // would start reporting as broken.
+  test('a genuinely empty site is still did-not-run, not a failure', async () => {
+    const service = makeService(async () => ({
+      posts: [],
+      coverage: {
+        pageSize: 200, pagesFetched: 1, rowsReturned: 0, complete: true,
+        customFields: 'collected',
+      },
+    }));
+
+    const outcome = await service.indexOneWpeContent('wpe-1');
+
+    expect(outcome.ran).toBe(false);
+    expect((outcome as any).reason).not.toMatch(/refused|failed/i);
+  });
+
+  /**
+   * The other half of D12. `acfsupport` read six pages and indexed none of
+   * them; the log knew that and the reason string said "No content returned
+   * by the extractor", which implies nothing came back at all.
+   */
+  test('rows read but nothing indexable says so, with the count', async () => {
+    const service = makeService(async () => ({
+      posts: [],
+      coverage: {
+        pageSize: 200, pagesFetched: 1, rowsReturned: 6, complete: true,
+        customFields: 'collected',
+      },
+    }));
+
+    const outcome = await service.indexOneWpeContent('wpe-1');
+
+    expect(outcome.ran).toBe(false);
+    expect((outcome as any).reason).toContain('6');
+    expect((outcome as any).reason).toMatch(/indexable/i);
+  });
+
   // The third exit: a genuine error. `syncContent` catches it and must not
   // resolve indistinguishably from either of the two above.
   test('an extractor failure throws rather than resolving', async () => {

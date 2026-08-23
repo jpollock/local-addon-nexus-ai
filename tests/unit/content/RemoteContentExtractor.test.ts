@@ -351,3 +351,62 @@ describe('RemoteContentExtractor — the stated ceiling is stated', () => {
     expect(REMOTE_MAX_POSTS).toBeGreaterThan(REMOTE_PAGE_SIZE);
   });
 });
+
+/**
+ * D12 — a failed read and an empty site must not look alike.
+ *
+ * Measured 2026-08-22 on a 413-site run: 106 installs were reported as
+ * "Did not run — No content returned by the extractor". Six sampled installs
+ * held 215, 50, 44, 6, 2 and 2 published posts and were reachable over SSH
+ * minutes later; one re-indexed successfully through the addon's own path in
+ * 17.4s. The sites were not empty — the reads failed.
+ *
+ * `WpeSshTransport` builds a precise reason via `describeRemoteFailure` and
+ * returns it in `result.stdout`. `fetchAllPages` already captures it into
+ * `coverage.truncatedDetail`. Nothing logged it and nothing read it, so the
+ * one piece of evidence needed to diagnose the run was generated and thrown
+ * away.
+ */
+describe('RemoteContentExtractor — a failed read says why', () => {
+  test('the first-page failure is logged with the transport reason, not just "no posts"', async () => {
+    const warns: string[] = [];
+    const logger = { info: () => {}, warn: (m: string) => warns.push(m), error: () => {} };
+    const extractor = new RemoteContentExtractor({ logger } as any);
+
+    const transport = makeTransport(async () => ({
+      stdout: 'ssh: connect to host x.ssh.wpengine.net port 22: Connection refused',
+      success: false,
+    }));
+
+    await extractor.extract(transport, 'acflikebutton');
+
+    const line = warns.join(' | ');
+    expect(line).toContain('Connection refused');
+    expect(line).toContain('acflikebutton');
+  });
+
+  test('a failed read is marked page-failed, so callers can tell it from an empty site', async () => {
+    const extractor = new RemoteContentExtractor({ logger: silentLogger() } as any);
+    const transport = makeTransport(async () => ({ stdout: 'ssh: Connection refused', success: false }));
+
+    const out = await extractor.extract(transport, 'acflikebutton');
+
+    expect(out.posts).toEqual([]);
+    expect(out.coverage?.complete).toBe(false);
+    expect(out.coverage?.truncatedReason).toBe('page-failed');
+    expect(out.coverage?.truncatedDetail).toContain('Connection refused');
+  });
+
+  // The counterpart. Without it, "always report page-failed" passes both cases
+  // above and a genuinely empty site would be reported as broken.
+  test('a genuinely empty site is complete, with no failure reason', async () => {
+    const extractor = new RemoteContentExtractor({ logger: silentLogger() } as any);
+    const transport = makeTransport(async () => ({ stdout: '[]', success: true }));
+
+    const out = await extractor.extract(transport, 'emptysite');
+
+    expect(out.posts).toEqual([]);
+    expect(out.coverage?.complete).toBe(true);
+    expect(out.coverage?.truncatedReason).toBeUndefined();
+  });
+});

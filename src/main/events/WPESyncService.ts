@@ -478,11 +478,33 @@ export class WPESyncService {
       this.logger.info(`[WPESyncService] Extraction complete. Posts found: ${extracted.posts?.length || 0}`);
 
       if (!extracted.posts || extracted.posts.length === 0) {
+        const coverage = extracted.coverage;
+
+        // D12. Zero posts has two completely different causes and they were
+        // collapsed into one word. `page-failed` means the READ failed — the
+        // site may be full of content we could not reach. Measured
+        // 2026-08-22: 106 installs reported "No content returned by the
+        // extractor" while holding up to 215 published posts each, reachable
+        // over SSH the whole time. That is a failure, and it must be reported
+        // as one so it lands in the failed count with a reason a user can act
+        // on, not in the did-not-run bucket that reads as "nothing to do".
+        if (coverage && coverage.truncatedReason === 'page-failed') {
+          const why = coverage.truncatedDetail ?? 'the read failed';
+          this.logger.error(`[WPESyncService] Could not read content from ${installName}: ${why}`);
+          return { state: 'failed', error: `Could not read content from ${installName}: ${why}` };
+        }
+
         this.logger.info(`[WPESyncService] No content to index for ${installName}`);
-        // This is the exit all 365 installs took on 2026-08-22, and it wrote
-        // nothing in either direction — no registry stamp, no error. An
-        // absence stated with its reason is reportable; a blank is not.
-        return { state: 'skipped', reason: 'No content returned by the extractor' };
+        // A genuinely empty site. Say which kind of empty: nothing published
+        // at all, versus rows read whose content was not indexable — the log
+        // could already tell those apart and the reason string could not.
+        const rowsRead = coverage?.rowsReturned ?? 0;
+        return {
+          state: 'skipped',
+          reason: rowsRead > 0
+            ? `${rowsRead} post(s) read, none with indexable content`
+            : 'no published posts',
+        };
       }
 
       for (const post of extracted.posts) {

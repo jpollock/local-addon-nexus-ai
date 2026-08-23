@@ -556,7 +556,35 @@ per-section outcomes the way the content path now does.
 
 ---
 
-## D12 — "reached but nothing to index" does not say what was actually found
+## D12 — FIXED 2026-08-22 — "reached but nothing to index" did not say what was actually found
+
+> **FIXED.** A failed read is now reported as a FAILURE carrying the transport's
+> own reason, and a genuinely empty site as a skip carrying the row count.
+> Verified live:
+>
+> ```
+> jpmeautoscale -> Content indexing failed for "jpmeautoscale": Could not read
+>                  content from jpmeautoscale: the first page failed: Command
+>                  exited with code 255 — output: ssh: Could not resolve
+>                  hostname jpmeautoscale.ssh.wpengine.net
+> acfsupport    -> was reached but nothing was indexed — 6 post(s) read, none
+>                  with indexable content
+> ```
+>
+> **This was worse than originally filed.** On the 2026-08-22 413-site run, 106
+> installs reported "Did not run — No content returned by the extractor". Six
+> sampled installs held **215, 50, 44, 6, 2 and 2** published posts, were
+> reachable over SSH minutes later, and all six succeeded in a parallel probe;
+> `acflikebutton` then re-indexed through the addon in 17.4s. The sites were not
+> empty — the reads failed, and the message asserted the opposite.
+>
+> `coverage.truncatedReason === "page-failed"` already recorded the difference
+> and `coverage.truncatedDetail` already held the transport's message from
+> `describeRemoteFailure`. Neither was logged and neither was read at the
+> decision point, so the evidence was generated and discarded on every failure.
+
+### Original entry
+
 
 **Found 2026-08-22, in the WP-68 exhibit.** The narrower survivor of D10's
 second defect.
