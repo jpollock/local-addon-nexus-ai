@@ -224,6 +224,38 @@ export class WPESyncService {
         this.logger.warn('[WPESyncService] Could not fetch accounts:', err.message);
       }
 
+      // D21: fetch and store CAPI Site names — the property grain the fleet
+      // groups installs on (sites.wpe_site_id joins wpe_sites.id). Installs
+      // carry only the Site UUID; the portal display name lives only on the
+      // Site object. Non-fatal like the accounts fetch above, and pruning is
+      // gated on a non-empty successful fetch so a CAPI fault never empties
+      // the table (the reconcileMissingInstalls rule).
+      try {
+        const rawSites = await this.localServices.capiGetSites() as any;
+        const capiSites: any[] = Array.isArray(rawSites) ? rawSites : (rawSites?.results ?? []);
+        let storedSites = 0;
+        for (const s of capiSites) {
+          if (!s?.id) continue;
+          await this.graphService.upsertWpeSite({
+            id: s.id,
+            name: s.name ?? null,               // NULL when CAPI omits it — never fabricated
+            account_id: s.account?.id ?? null,
+          });
+          storedSites++;
+        }
+        if (storedSites > 0) {
+          const pruned = this.graphService.pruneWpeSites(
+            capiSites.map((s: any) => s?.id).filter(Boolean),
+          );
+          if (pruned > 0) {
+            this.logger.info(`[WPESyncService] Removed ${pruned} wpe_sites row(s) CAPI no longer lists`);
+          }
+        }
+        this.logger.info(`[WPESyncService] Stored ${storedSites} WPE site names`);
+      } catch (err: any) {
+        this.logger.warn('[WPESyncService] Could not fetch WPE sites (names unchanged):', err.message);
+      }
+
       // Map to WPEInstallData
       // CAPI returns snake_case fields (php_version, primary_domain). Normalise both
       // cases defensively in case Local's CAPI SDK changes its normalisation.

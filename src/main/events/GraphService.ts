@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS wpe_accounts (
   nickname TEXT
 );
 
+CREATE TABLE IF NOT EXISTS wpe_sites (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  account_id TEXT,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sites (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -258,6 +265,18 @@ export class GraphService {
       this.logger.info('[GraphService] Creating wpe_accounts table...');
       this.db.exec('CREATE TABLE IF NOT EXISTS wpe_accounts (id TEXT PRIMARY KEY, name TEXT NOT NULL, nickname TEXT)');
       this.logger.info('[GraphService] ✓ wpe_accounts table created');
+    }
+
+    // Migration: create wpe_sites table if missing (D21 — the CAPI Site is the
+    // property grain the fleet groups installs on; sites.wpe_site_id joins here.
+    // name is nullable on purpose: NULL when CAPI omits it, never fabricated.)
+    const hasWpeSitesTable = this.db
+      .prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='wpe_sites'")
+      .get() as { c: number };
+    if (!hasWpeSitesTable.c) {
+      this.logger.info('[GraphService] Creating wpe_sites table...');
+      this.db.exec('CREATE TABLE IF NOT EXISTS wpe_sites (id TEXT PRIMARY KEY, name TEXT, account_id TEXT, updated_at INTEGER NOT NULL)');
+      this.logger.info('[GraphService] ✓ wpe_sites table created');
     }
 
     // Migration: add SSH-enriched WPE site fields if missing
@@ -485,6 +504,44 @@ export class GraphService {
   async getAccounts(): Promise<Array<{ id: string; name: string; nickname: string | null }>> {
     if (!this.db) throw new Error('Database not initialized');
     return this.db.prepare('SELECT id, name, nickname FROM wpe_accounts ORDER BY name').all() as any[];
+  }
+
+  /**
+   * D21 — the CAPI Site (the property: prod/staging/dev grouped under one
+   * portal name). `name` is stored as given, NULL when CAPI omits it — never
+   * fabricated, and never overwritten by a NULL (a later partial payload must
+   * not erase a name we already hold).
+   */
+  async upsertWpeSite(site: { id: string; name?: string | null; account_id?: string | null }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    this.db.prepare(`
+      INSERT INTO wpe_sites (id, name, account_id, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = COALESCE(excluded.name, name),
+        account_id = COALESCE(excluded.account_id, account_id),
+        updated_at = excluded.updated_at
+    `).run(site.id, site.name ?? null, site.account_id ?? null, Date.now());
+  }
+
+  async getWpeSites(): Promise<Array<{ id: string; name: string | null; account_id: string | null }>> {
+    if (!this.db) throw new Error('Database not initialized');
+    return this.db.prepare('SELECT id, name, account_id FROM wpe_sites ORDER BY name').all() as any[];
+  }
+
+  /**
+   * Remove wpe_sites rows CAPI no longer lists. The CALLER must guard against
+   * an empty or failed fetch — pruning against an empty list would delete the
+   * whole table on a transient CAPI fault (the reconcileMissingInstalls rule).
+   * Returns the number of rows removed.
+   */
+  pruneWpeSites(keepIds: string[]): number {
+    if (!this.db || keepIds.length === 0) return 0;
+    const placeholders = keepIds.map(() => '?').join(',');
+    const result = this.db.prepare(
+      `DELETE FROM wpe_sites WHERE id NOT IN (${placeholders})`,
+    ).run(...keepIds);
+    return result.changes;
   }
 
   async getSite(id: string): Promise<Site | null> {
