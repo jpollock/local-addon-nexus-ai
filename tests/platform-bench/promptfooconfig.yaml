@@ -1,14 +1,16 @@
 # Platform Benchmark — Nexus vs Coworker vs WordPress
 # Spec: docs/planning/2026-08-21-platform-benchmark-design.md
 #
-# Three MCP surfaces, one model, identical prompts.
+# Two MCP surfaces, one model, identical prompts.
+# WordPress column deferred — core abilities (site-info, user-info, env-info)
+# do not reach content. Will revisit with custom ability implementation.
 # Repeat: 3 (raise to 5 before publishing any numbers).
 #
 # Run:
 #   npx promptfoo eval -c tests/platform-bench/promptfooconfig.yaml --no-cache
 #   npx promptfoo view
 
-description: "Platform benchmark — Nexus vs Coworker vs WordPress (Cedar & Vale substrate)"
+description: "Platform benchmark — Nexus vs Coworker (Cedar & Vale substrate)"
 
 evaluateOptions:
   maxConcurrency: 1   # providers call external services; sequential avoids rate limits
@@ -20,9 +22,6 @@ providers:
 
   - id: file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/coworker.js
     label: Coworker
-
-  - id: file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/wordpress.js
-    label: WordPress
 
 # ── Substrate constants ────────────────────────────────────────────────────────
 # Sites in scope. Update if the fleet changes.
