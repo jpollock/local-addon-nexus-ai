@@ -507,6 +507,14 @@ export interface SituationSignature {
   fact: string;
   /** What the finding is on, resolved to its name where the record has one. */
   target: string;
+  /**
+   * The RECORD LINK to what the finding is on — the event's own entity id,
+   * stamped verbatim. The round-7 ruling: per-site needs-you joins on entity
+   * id ONLY; a shared name is a field, not a record link. Absent when the
+   * record carries none — such a situation is counted in the header's stated
+   * remainder, never guessed onto a site.
+   */
+  entityId?: string;
 }
 
 /**
@@ -875,7 +883,11 @@ export interface TriageCounts {
    * clause and not the second, and `needsYou` alone would read as the whole
    * list. The two are published together because they are only honest together.
    */
-  deferred: number;
+  deferred: number;  /**
+   * Phase 3 · the per-site reading of `needsYou`, from the same rows — see
+   * `needsYouBreakdown`. `perSite.situations === needsYou` always holds.
+   */
+  perSite: NeedsYouBreakdown;
 }
 
 /** The arrival triage: two columns of one verdict, plus the reserved slot. */
@@ -2743,9 +2755,15 @@ function composeIncidentCopy(
   //
   // WP-55 · A SET OF ONE. A situation of one is still a situation, and its
   // identity is still a set — the same reading `memberCount: 1` already carries.
+  const incidentEntity =
+    (incident.entity as { environment?: string; site?: string } | undefined)?.environment ??
+    (incident.entity as { site?: string } | undefined)?.site;
   const signatures: readonly SituationSignature[] =
     producer && fact && target
-      ? [{ producer: normalizeProducerId(producer), fact, target }]
+      ? [{
+          producer: normalizeProducerId(producer), fact, target,
+          ...(incidentEntity ? { entityId: incidentEntity } : {}),
+        }]
       : [];
 
   // An orphan is BY CONSTRUCTION a situation with no run: it reached this
@@ -3584,8 +3602,11 @@ function memberSignature(member: IncidentSubject, target: string | undefined): S
   const payload = payloadOf(member.current);
   const producer = (member.current.actor as { id?: string } | undefined)?.id;
   const fact = str(payload.fact);
+  const entity =
+    (member.current.entity as { environment?: string; site?: string } | undefined)?.environment ??
+    (member.current.entity as { site?: string } | undefined)?.site;
   return producer && fact && target
-    ? { producer: normalizeProducerId(producer), fact, target }
+    ? { producer: normalizeProducerId(producer), fact, target, ...(entity ? { entityId: entity } : {}) }
     : null;
 }
 
@@ -3895,6 +3916,42 @@ function escalating(situations: readonly Situation[]): Situation[] {
 }
 
 /**
+ * Round-7 (Phase 3) · the per-site needs-you breakdown, from the SAME rows
+ * `counts.needsYou` is derived from — one derivation, so the column and the
+ * badge cannot disagree. The three ruled answers, as code:
+ *  - the join is the signature's `entityId`, never its target name;
+ *  - a multi-site situation counts in EVERY entity it touches, and
+ *    `situations` states the situation count, not the row sum;
+ *  - a situation with no entity anywhere lands in `unattributed`, stated in
+ *    the header — never guessed onto a site.
+ */
+export interface NeedsYouBreakdown {
+  byEntity: Array<{ entityId: string; count: number; tier: ConsequenceTier }>;
+  unattributed: number;
+  situations: number;
+}
+
+export function needsYouBreakdown(needing: readonly Situation[]): NeedsYouBreakdown {
+  const byEntity = new Map<string, { count: number; tier: ConsequenceTier }>();
+  let unattributed = 0;
+  for (const s of needing) {
+    const entities = [...new Set(s.signatures.map((sig) => sig.entityId).filter((e): e is string => !!e))];
+    if (entities.length === 0) { unattributed++; continue; }
+    for (const e of entities) {
+      const cur = byEntity.get(e) ?? { count: 0, tier: s.tier };
+      cur.count++;
+      if (s.tier > cur.tier) cur.tier = s.tier;
+      byEntity.set(e, cur);
+    }
+  }
+  return {
+    byEntity: [...byEntity.entries()].map(([entityId, v]) => ({ entityId, ...v })),
+    unattributed,
+    situations: needing.length,
+  };
+}
+
+/**
  * WP-56 · THE TURN A DEFERRAL ON THIS SITUATION IS RECORDED ON.
  *
  * Cycle two places the deferral ON THE RUN, which in this ledger means the
@@ -4055,6 +4112,8 @@ export function createSessionRegistry(deps: SessionRegistryDeps = {}): SessionRe
         counts: {
           needsYou: escalating(waiting).length,
           deferred: waiting.length - escalating(waiting).length,
+          // Phase 3 — same rows, one more reading of them.
+          perSite: needsYouBreakdown(escalating(waiting)),
         },
         cursor: snapshot.cursor,
       };

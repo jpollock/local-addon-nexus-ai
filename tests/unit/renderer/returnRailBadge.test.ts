@@ -78,7 +78,8 @@ function triageWith(n: number): TriageView {
     // inside WP-54's live lock. When WP-56's amendment takes that file,
     // `arrivalCounts` reads `triage.counts.needsYou` instead, this fixture keeps
     // passing unchanged, and a deferred row is what tells the two apart.
-    counts: { needsYou: n, deferred: 0 },
+    counts: {
+      perSite: { byEntity: [], unattributed: 0, situations: 0 }, needsYou: n, deferred: 0 },
   };
 }
 

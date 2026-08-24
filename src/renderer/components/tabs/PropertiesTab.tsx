@@ -42,6 +42,8 @@ interface PropertiesTabProps {
   job?: BulkJobView | null;
   onCancelJob?: () => void;
   onDismissJob?: () => void;
+  /** Door into the Now panel for the unattributed remainder. */
+  onOpenNow?: () => void;
 }
 
 interface PropertiesTabState {
@@ -91,11 +93,25 @@ const SORT_LABELS: Record<SortBy, string> = {
  * the Site cell only. Widths are the sheet's: Site 300 / Where 290 /
  * Knows 160 / Checked flex.
  */
-const GRID = '22px 300px 290px 160px minmax(150px, 1fr)';
+const GRID = '22px 300px 290px 160px minmax(150px, 1fr) 110px';
 const gridRow: React.CSSProperties = { display: 'grid', gridTemplateColumns: GRID, gap: 12, alignItems: 'flex-start' };
 const ellipsis: React.CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
 const mono: React.CSSProperties = { fontFamily: 'monospace', fontSize: 11, color: 'var(--nxai-card-sub)' };
+
+/** Phase 3: count + tier dot. A backed zero is a quiet dash; null renders nothing. */
+function needsYouCell(v: { count: number; tier: number } | null | undefined): React.ReactNode {
+  if (v == null) return h('span', null, '');
+  if (v.count === 0) return h('span', { style: { color: 'var(--nxai-card-sub)' } }, '—');
+  return h('span', { style: { fontSize: 12, fontWeight: 600, color: 'var(--nxai-card-text)' } },
+    h('span', {
+      style: {
+        display: 'inline-block', width: 8, height: 8, borderRadius: 4, marginRight: 6,
+        background: v.tier >= 3 ? 'var(--nxai-danger-text)' : 'var(--nxai-warn)',
+      },
+    }),
+    String(v.count));
+}
 
 /**
  * The failure detail, WITHOUT the short form the Checked cell already
@@ -484,6 +500,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         : h('span', {
             style: pl.checked.state === 'fail' ? { color: 'var(--nxai-danger-text)' } : undefined,
           }, checkedText(pl.checked, false, true)),
+      needsYouCell(pl.needsYou),
     );
     // The detail is a SUB-ROW beneath the grid, inset to the Site cell — it
     // never crosses a track, and it never repeats the cell's short form.
@@ -546,6 +563,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
               color: p.oldest.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)',
             },
           }, checkedText(p.oldest, multi && p.oldest.state !== 'fail' && p.oldest.state !== 'never', true)),
+      needsYouCell(p.needsYou),
     );
 
     return h('div', {
@@ -603,7 +621,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       inView.push({ p, outside: !inFilter });
     }
     const rank = (p: PropertyView): number =>
-      p.oldest.state === 'fail' ? 0 : p.rungs.includes('nothing') ? 1 : 2;
+      p.oldest.state === 'fail' || (p.needsYou?.count ?? 0) > 0 ? 0 : p.rungs.includes('nothing') ? 1 : 2;
     const checkedKey = (p: PropertyView): string => p.oldest.finishedAt ?? '';
     // The from-line resolves to the filter that produced the set (sheet 18).
     const fromParts: string[] = [];
@@ -669,8 +687,20 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       ),
       h('div', { style: { padding: '0 12px 2px', color: 'var(--nxai-card-sub)', fontSize: 13 } },
         `${header.total} properties · ${header.placesTotal} places · ${header.onThisMachine} live on your machine`),
-      h('div', { style: { padding: '0 12px 10px', color: 'var(--nxai-card-sub)', fontSize: 11 } },
-        'Per-site “needs you” counts arrive when situations can be tied to a site; until then the list order carries it.'),
+      header.needsYou
+        ? h('div', { style: { padding: '0 12px 10px', color: 'var(--nxai-card-sub)', fontSize: 11 } },
+            `${header.needsYou.situations} situation${header.needsYou.situations === 1 ? '' : 's'} need${header.needsYou.situations === 1 ? 's' : ''} you` +
+            (header.needsYou.unattributed > 0
+              ? ` · ${header.needsYou.unattributed} not tied to a site`
+              : ''),
+            header.needsYou.unattributed > 0 && this.props.onOpenNow
+              ? h('a', {
+                  style: { cursor: 'pointer', color: 'var(--nxai-accent)', marginLeft: 6 },
+                  onClick: this.props.onOpenNow,
+                }, 'Open Now')
+              : null)
+        : h('div', { style: { padding: '0 12px 10px', color: 'var(--nxai-card-sub)', fontSize: 11 } },
+            'Per-site “needs you” counts arrive when situations can be tied to a site; until then the list order carries it.'),
       ...header.ceilings.map((v) =>
         h('div', { key: `ceil-${v.accountId}`, style: notice },
           v.statement, ' ',
@@ -742,6 +772,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           headCell('Where it lives', null),
           headCell('What Nexus knows', null),
           headCell('Checked', 'checked'),
+          headCell('Needs you', null),
         ),
         inView.length === 0
           ? h('div', { style: { padding: 16, color: 'var(--nxai-card-sub)', fontSize: 13 } },

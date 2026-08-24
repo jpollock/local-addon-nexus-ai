@@ -594,3 +594,34 @@ describe('sheet 18 — bulk indexing', () => {
     expect(t2).toContain('Dismiss');
   });
 });
+
+describe('phase 3 — the Needs you column', () => {
+  test('the column head exists, counts carry a tier dot, and a backed zero is a quiet dash', () => {
+    const p1 = property({ needsYou: { count: 2, tier: 3 }, places: [place({ needsYou: { count: 2, tier: 3 } })] });
+    const p2 = property({ key: 'wpe:p2', name: 'quiet', needsYou: { count: 0, tier: 0 },
+      places: [place({ rowId: 'wpe-2', needsYou: { count: 0, tier: 0 } })] });
+    const t = rendered(collapse([p1, p2], { needsYou: { situations: 2, unattributed: 0 } }));
+    expect(t).toContain('Needs you');                          // the head
+    expect(t).toContain('nxai-danger-text');                   // the tier-3 dot
+    expect(t).toContain('—');                                  // the backed zero
+  });
+
+  test('the header states the situation count and the remainder with its door', () => {
+    const onOpenNow = jest.fn();
+    const p = property({ needsYou: { count: 1, tier: 2 }, places: [place({ needsYou: { count: 1, tier: 2 } })] });
+    const i: any = new (PropertiesTab as any)(props(
+      collapse([p], { needsYou: { situations: 3, unattributed: 2 } }), { onOpenNow }));
+    const t = JSON.stringify(serializeTree(i.render()));
+    expect(t).toContain('3 situations need you');
+    expect(t).toContain('2 not tied to a site');
+    expect(t).toContain('Open Now');
+    expect(t).not.toContain('arrive when situations can be tied');   // the stated absence retired
+  });
+
+  test('a property needing you joins the first band of the consequence order', () => {
+    const needy = property({ key: 'wpe:n', name: 'zzz-needy', needsYou: { count: 1, tier: 2 } });
+    const fine = property({ key: 'wpe:a', name: 'aaa-fine', needsYou: { count: 0, tier: 0 } });
+    const t = rendered(collapse([fine, needy], { needsYou: { situations: 1, unattributed: 0 } }));
+    expect(t.indexOf('zzz-needy')).toBeLessThan(t.indexOf('aaa-fine'));
+  });
+});

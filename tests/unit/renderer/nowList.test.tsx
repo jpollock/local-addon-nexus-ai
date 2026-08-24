@@ -153,6 +153,7 @@ function triageOf(waiting: Situation[]): TriageView {
     // fixture cannot hand the surface a count its own rows contradict — which
     // is the property the field exists to give the real contract.
     counts: {
+      perSite: { byEntity: [], unattributed: 0, situations: 0 },
       needsYou: waiting.filter((s) => !s.deferral).length,
       deferred: waiting.filter((s) => s.deferral).length,
     },
@@ -369,7 +370,7 @@ describe('item 1 · the list renders each thing once', () => {
     };
     const triage = triageOf([deferred, incident(FINDINGS[1])]);
     // `triageOf` derives `counts` from its own rows, the way the host does.
-    expect(triage.counts).toEqual({ needsYou: 1, deferred: 1 });
+    expect(triage.counts).toMatchObject({ needsYou: 1, deferred: 1 });
 
     // With no inbox at all the two collapse to plain equality.
     expect(arrivalCounts(triage).needsYou).toBe(triage.counts.needsYou);

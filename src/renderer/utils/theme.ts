@@ -78,6 +78,7 @@ export function injectThemeVars(): void {
       --nxai-track-bg: #e8ebec;      /* SegmentedControl's recessed ground */
       --nxai-action: #2271b1;        /* selection is action blue, not brand teal */
       --nxai-action-text: #ffffff;
+      --nxai-warn: #b45309;          /* tier-2 dot — attention, not failure */
       --nxai-score-fill: ${UI_COLORS.WPE_BRAND};
       --nxai-warn-text: #d97706;
       --nxai-status-neutral: #9ca3af;

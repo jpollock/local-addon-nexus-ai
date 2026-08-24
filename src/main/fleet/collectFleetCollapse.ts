@@ -35,6 +35,8 @@ export interface CollectFleetCollapseDeps {
   contentStatus?: Map<string, { state: string; sourceName?: string; behindSeconds?: number }>;
   /** The intelligence core, for pipeline twins. Null → every place reads `never`. */
   core: CoreLike | null;
+  /** Phase 3: the registry's per-site needs-you reading (entity-id keyed). */
+  needsYouPerSite?: { byEntity: Array<{ entityId: string; count: number; tier: number }>; unattributed: number; situations: number };
 }
 
 const NEVER: CheckedView = { state: 'never', finishedAt: null, reason: null };
@@ -88,6 +90,14 @@ export async function collectFleetCollapseFromServices(s: {
     core = (getIntelligenceCore() ?? null) as CoreLike | null;
   } catch { /* core down → every place reads never */ }
 
+  // Phase 3: one triage read; the counts are derived from the same rows the
+  // Now panel renders, so the column and the badge cannot disagree.
+  let needsYouPerSite: CollectFleetCollapseDeps['needsYouPerSite'];
+  try {
+    const { createSessionRegistry } = await import('../intelligence-host/sessionRegistry');
+    needsYouPerSite = createSessionRegistry().triage().counts.perSite;
+  } catch { /* registry unavailable → the header keeps its stated absence */ }
+
   return collectFleetCollapse({
     localSites: Object.values(s.siteData?.getSites?.() ?? {}) as Array<Record<string, any>>,
     statuses: s.statuses,
@@ -98,6 +108,7 @@ export async function collectFleetCollapseFromServices(s: {
     siteLinks,
     contentStatus,
     core,
+    needsYouPerSite,
   });
 }
 
@@ -179,21 +190,46 @@ export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetColla
 
   // Pipeline twins: latest of l2/l3 per place. Core down → everything `never`.
   const checked = new Map<string, { l2?: CheckedView; l3?: CheckedView }>();
+  const entityToRow = new Map<string, string>();
   if (deps.core) {
     try {
       for (const g of graphRows) {
         const kind = g.source === 'external' ? ('external' as const) : ('wpe' as const);
         const envId = pipelineEntityId(deps.core as never, { kind, graphRowId: g.id });
+        entityToRow.set(envId, g.id);
         checked.set(g.id, twinChecked(deps.core, envId));
       }
       for (const s of deps.localSites) {
         if (!s?.id) continue;
         const envId = pipelineEntityId(deps.core as never, { kind: 'local', localSiteId: s.id });
+        entityToRow.set(envId, s.id);
         checked.set(s.id, twinChecked(deps.core, envId));
       }
     } catch {
       /* a twin-read fault must not blank the fleet */
     }
+  }
+
+  // Phase 3: entity-id → row translation, the SAME resolution the producers
+  // stamp with. An entity no row claims stays in the stated remainder — a
+  // situation is never guessed onto a site (the round-7 ruling).
+  let needsYou: Map<string, { count: number; tier: number }> | undefined;
+  let needsYouMeta: { situations: number; unattributed: number } | undefined;
+  if (deps.needsYouPerSite) {
+    needsYou = new Map();
+    let unmatched = 0;
+    for (const e of deps.needsYouPerSite.byEntity) {
+      const rowId = entityToRow.get(e.entityId);
+      if (!rowId) { unmatched++; continue; }
+      const cur = needsYou.get(rowId) ?? { count: 0, tier: 0 };
+      cur.count += e.count;
+      if (e.tier > cur.tier) cur.tier = e.tier;
+      needsYou.set(rowId, cur);
+    }
+    needsYouMeta = {
+      situations: deps.needsYouPerSite.situations,
+      unattributed: deps.needsYouPerSite.unattributed + unmatched,
+    };
   }
 
   // Place-screen facts: plugin rows per site (graph), indexed docs (registry).
@@ -241,6 +277,8 @@ export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetColla
     pluginCounts,
     docCounts,
     contentStatus: deps.contentStatus,
+    needsYou,
+    needsYouMeta,
     localPaths: new Map(
       deps.localSites
         .filter((s) => s?.id && s?.path)

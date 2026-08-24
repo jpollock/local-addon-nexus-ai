@@ -1302,6 +1302,7 @@ renderTabBar(): React.ReactNode {
               job: this.state.bulkJob,
               onCancelJob: this.cancelBulkJob,
               onDismissJob: this.dismissBulkJob,
+              onOpenNow: () => this.setState({ activeTab: 'now' }),
             })
           : React.createElement(SitesTab, {
         loaded: this.state.siteRowsLoaded,

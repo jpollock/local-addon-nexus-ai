@@ -311,3 +311,27 @@ describe('round-6 model rulings', () => {
     expect(header.neverLookedInside).toBe(1);
   });
 });
+
+describe('phase 3 — needs-you through the model', () => {
+  test('a backed zero is zero; no reading at all is null; the property sums its places', () => {
+    const input = base({
+      graphRows: [
+        wpeRow('wpe-1', 'a', { wpe_site_id: 'p1' }),
+        wpeRow('wpe-2', 'astg', { wpe_site_id: 'p1', environment: 'staging' }),
+      ],
+      wpeSites: [{ id: 'p1', name: 'A', account_id: 'acct-1' }],
+      needsYou: new Map([['wpe-1', { count: 2, tier: 3 }]]),
+      needsYouMeta: { situations: 2, unattributed: 1 },
+    });
+    const { properties, header } = buildFleetCollapse(input);
+    const [prod, stg] = properties[0].places;
+    expect(prod.needsYou).toEqual({ count: 2, tier: 3 });
+    expect(stg.needsYou).toEqual({ count: 0, tier: 0 });      // backed zero
+    expect(properties[0].needsYou).toEqual({ count: 2, tier: 3 });
+    expect(header.needsYou).toEqual({ situations: 2, unattributed: 1 });
+
+    const noReading = buildFleetCollapse(base({ graphRows: [wpeRow('wpe-1', 'a', { wpe_site_id: 'p1' })], wpeSites: [{ id: 'p1', name: 'A', account_id: 'acct-1' }] }));
+    expect(noReading.properties[0].places[0].needsYou).toBeNull();
+    expect(noReading.header.needsYou).toBeNull();
+  });
+});

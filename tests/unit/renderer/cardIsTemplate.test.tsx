@@ -89,6 +89,7 @@ function triageOf(rows: Situation[]): TriageView {
     // disagree with the list it describes, which is exactly the defect the
     // field exists to remove. Nothing in this suite reads it.
     counts: {
+      perSite: { byEntity: [], unattributed: 0, situations: 0 },
       needsYou: rows.filter((r) => !r.deferral).length,
       deferred: rows.filter((r) => r.deferral).length,
     },

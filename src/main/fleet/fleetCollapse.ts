@@ -72,6 +72,12 @@ export interface PlaceView {
   phpVersion: string | null;
   pluginCount: number | null;
   docCount: number | null;
+  /**
+   * Phase 3: situations needing a person, joined on entity id. NULL means the
+   * registry reading was unavailable (stated absence in the header); a zero
+   * is a BACKED zero — nothing needs you here.
+   */
+  needsYou: { count: number; tier: number } | null;
 }
 
 export interface PropertyView {
@@ -106,6 +112,8 @@ export interface PropertyView {
    * the common case and is a sentence with a reason, never an empty list.
    */
   lineage: string[];
+  /** Sum of the places' counts, max of their tiers — the sheets' derivation. */
+  needsYou: { count: number; tier: number } | null;
 }
 
 /**
@@ -135,6 +143,12 @@ export interface FleetCollapse {
     onThisMachine: number;
     /** Account-level ceilings, one verdict each. */
     ceilings: CeilingVerdict[];
+    /**
+     * Phase 3: the situation count (never the row sum — a multi-site
+     * situation counts once here) and the stated remainder. NULL = the
+     * registry reading was unavailable.
+     */
+    needsYou: { situations: number; unattributed: number } | null;
   };
 }
 
@@ -167,6 +181,9 @@ export interface FleetCollapseInput extends Omit<SiteRowsInput, 'graphRows'> {
   contentStatus?: Map<string, { state: string; sourceName?: string; behindSeconds?: number }>;
   /** localSiteId → filesystem path (a copy's address). */
   localPaths?: Map<string, string>;
+  /** Phase 3: rowId → needs-you, already entity-joined by the collector. */
+  needsYou?: Map<string, { count: number; tier: number }>;
+  needsYouMeta?: { situations: number; unattributed: number };
 }
 
 const RUNG_ORDER: KnowledgeRung[] = ['nothing', 'basic', 'detailed', 'searchable'];
@@ -251,7 +268,21 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       phpVersion: row.phpVersion,
       pluginCount: input.pluginCounts?.get(row.id) ?? null,
       docCount: input.docCounts?.get(row.id) ?? null,
+      needsYou: input.needsYouMeta
+        ? input.needsYou?.get(row.id) ?? { count: 0, tier: 0 }
+        : null,
     };
+  }
+
+  function propertyNeedsYou(places: PlaceView[]): { count: number; tier: number } | null {
+    if (!input.needsYouMeta) return null;
+    let count = 0; let tier = 0;
+    for (const pl of places) {
+      if (!pl.needsYou) continue;
+      count += pl.needsYou.count;
+      if (pl.needsYou.tier > tier) tier = pl.needsYou.tier;
+    }
+    return { count, tier };
   }
 
   /**
@@ -356,6 +387,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       oldest: rollupChecked(places),
       collision: false, // filled after all origins exist
       lineage: lineageOf('wpe', places, copyLocalIds),
+      needsYou: propertyNeedsYou(places),
     });
   }
 
@@ -378,6 +410,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       oldest: rollupChecked(places),
       collision: false,
       lineage: lineageOf('local', places, []),
+      needsYou: propertyNeedsYou(places),
     });
   }
 
@@ -398,6 +431,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       oldest: rollupChecked(places),
       collision: false,
       lineage: lineageOf('external', places, []),
+      needsYou: propertyNeedsYou(places),
     });
   }
 
@@ -459,6 +493,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       neverLookedInside: allPlaces.filter((pl) => pl.knowledge === 'nothing' && pl.ceiling === null).length,
       onThisMachine: properties.filter((p) => p.origin === 'local' || p.hasCopy).length,
       ceilings: [...ceilingsByAccount.values()].sort((a, b) => b.placeCount - a.placeCount),
+      needsYou: input.needsYouMeta ?? null,
     },
   };
 }

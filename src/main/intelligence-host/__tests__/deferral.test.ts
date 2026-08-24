@@ -328,7 +328,7 @@ describe('the record — what a deferral writes, and what it must never write', 
     expect(
       typeof recordDeferral({ situationId: b.situationId, taskId: b.taskId, reason: 'until I come back' })
     ).toBe('string');
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 2 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 2 });
   });
 
   it('the offer list is the ONE list both the guard and the picker read', () => {
@@ -361,7 +361,7 @@ describe('the fold — present in waiting, absent from counts.needsYou', () => {
 
     const before = triage();
     expect(before.waiting.map((s) => s.id)).toContain(situationId);
-    expect(before.counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(before.counts).toMatchObject({ needsYou: 1, deferred: 0 });
 
     expect(typeof recordDeferral({ situationId, taskId, reason: 'vendor is looking at it' })).toBe('string');
 
@@ -371,7 +371,7 @@ describe('the fold — present in waiting, absent from counts.needsYou', () => {
     expect(after.waiting).toHaveLength(before.waiting.length);
     // ABSENT FROM counts.needsYou. The badge is escalation; a badge that kept
     // counting it would mean the deferral deferred nothing.
-    expect(after.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(after.counts).toMatchObject({ needsYou: 0, deferred: 1 });
     expect(after.waiting.find((s) => s.id === situationId)!.deferral).toMatchObject({
       reason: 'vendor is looking at it',
       wake: null,
@@ -417,7 +417,7 @@ describe('the fold — present in waiting, absent from counts.needsYou', () => {
     recordDeferral({ situationId: c.situationId, taskId: c.taskId, reason: 'three' });
 
     const view = triage();
-    expect(view.counts).toEqual({ needsYou: 1, deferred: 2 });
+    expect(view.counts).toMatchObject({ needsYou: 1, deferred: 2 });
     expect(view.counts.needsYou + view.counts.deferred).toBe(view.waiting.length);
     expect(view.waiting.map((s) => s.id)).toEqual(expect.arrayContaining([a.situationId, b.situationId, c.situationId]));
   });
@@ -544,7 +544,7 @@ describe('only the user defers — the fold is the authoritative gate', () => {
 
     const view = triage();
     expect(view.waiting.find((s) => s.id === situationId)!.deferral).toBeUndefined();
-    expect(view.counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(view.counts).toMatchObject({ needsYou: 1, deferred: 0 });
   });
 
   /**
@@ -571,13 +571,13 @@ describe('only the user defers — the fold is the authoritative gate', () => {
 
     const view = triage();
     expect(view.waiting.find((s) => s.id === situationId)!.deferral).toBeUndefined();
-    expect(view.counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(view.counts).toMatchObject({ needsYou: 1, deferred: 0 });
   });
 
   it('ignores a reasonless deferral that would otherwise SUPERSEDE a good one', () => {
     const { taskId, situationId } = armWaitingRun();
     const good = recordDeferral({ situationId, taskId, reason: 'a real reason' })!;
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     // A later reasonless record must neither quiet nor UNQUIET: it is not a
     // deferral, so it cannot overwrite the standing one either.
@@ -594,7 +594,7 @@ describe('only the user defers — the fold is the authoritative gate', () => {
     expect(rationaleCount()).toBe(2);
 
     const view = triage();
-    expect(view.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(view.counts).toMatchObject({ needsYou: 0, deferred: 1 });
     expect(view.waiting.find((s) => s.id === situationId)!.deferral).toMatchObject({
       eventId: good,
       reason: 'a real reason',
@@ -614,7 +614,7 @@ describe('only the user defers — the fold is the authoritative gate', () => {
       payload: { source: DEFERRAL_PAYLOAD_SOURCE, act: 'defer', situation: situationId, reason: 'quiet', wake: null },
     });
     expect(rationaleCount()).toBe(1);
-    expect(triage().counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(triage().counts).toMatchObject({ needsYou: 1, deferred: 0 });
   });
 });
 
@@ -692,7 +692,7 @@ describe('deferral applies to the situation, never to its parts (XD-28)', () => 
 
     const view = triage();
     expect(view.waiting.find((s) => s.id === situationId)!.deferral).toBeUndefined();
-    expect(view.counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(view.counts).toMatchObject({ needsYou: 1, deferred: 0 });
   });
 
   it('deferring the situation leaves every part exactly as it was — no part carries a deferral', () => {
@@ -720,11 +720,11 @@ describe('three recorded ends, and each returns full escalation', () => {
     ).toBe('string');
 
     // Before the condition fires: quiet.
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     // After: loud again, from the SAME record — nothing was written to wake it.
     const woken = triage({ now: new Date(NOW.getTime() + 3 * 3_600_000) });
-    expect(woken.counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(woken.counts).toMatchObject({ needsYou: 1, deferred: 0 });
     expect(woken.waiting.find((s) => s.id === situationId)!.deferral).toBeUndefined();
   });
 
@@ -734,9 +734,9 @@ describe('three recorded ends, and each returns full escalation', () => {
     recordDeferral({ situationId, taskId, reason: 'monday', wake: { kind: 'time', at } });
 
     const atBoundary = triage({ now: new Date(Date.parse(at)) });
-    expect(atBoundary.counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(atBoundary.counts).toMatchObject({ needsYou: 1, deferred: 0 });
     const justBefore = triage({ now: new Date(Date.parse(at) - 1) });
-    expect(justBefore.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(justBefore.counts).toMatchObject({ needsYou: 0, deferred: 1 });
   });
 
   /**
@@ -775,10 +775,10 @@ describe('three recorded ends, and each returns full escalation', () => {
     expect(rationaleCount()).toBe(1); // the subject exists
 
     // No port: it has NOT fired. Honest, not a guess in either direction.
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     // A port that says no.
-    expect(triage({ wakeFired: () => false }).counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage({ wakeFired: () => false }).counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     // A port that says yes, and is asked about the right condition.
     const seen: string[] = [];
@@ -789,7 +789,7 @@ describe('three recorded ends, and each returns full escalation', () => {
       },
     });
     expect(seen).toEqual(['containment-finished']);
-    expect(fired.counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(fired.counts).toMatchObject({ needsYou: 1, deferred: 0 });
   });
 
   it('a throwing wake port costs the wake, not the row', () => {
@@ -802,7 +802,7 @@ describe('three recorded ends, and each returns full escalation', () => {
       },
     });
     expect(view.waiting.map((s) => s.id)).toContain(situationId);
-    expect(view.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(view.counts).toMatchObject({ needsYou: 0, deferred: 1 });
   });
 
   it('an UNCONDITIONED deferral never wakes — permitted, and it is not a dismissal', () => {
@@ -811,7 +811,7 @@ describe('three recorded ends, and each returns full escalation', () => {
 
     const farFuture = triage({ now: new Date(NOW.getTime() + 365 * 24 * 3_600_000), wakeFired: () => true });
     // Still deferred a year later, and STILL IN THE LIST at its own tier.
-    expect(farFuture.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(farFuture.counts).toMatchObject({ needsYou: 0, deferred: 1 });
     expect(farFuture.waiting.map((s) => s.id)).toContain(situationId);
     expect(farFuture.waiting.find((s) => s.id === situationId)!.tier).toBe(2);
   });
@@ -819,7 +819,7 @@ describe('three recorded ends, and each returns full escalation', () => {
   it('END 2 — the user ends it early, superseding rather than mutating', () => {
     const { taskId, situationId } = armWaitingRun();
     const deferralId = recordDeferral({ situationId, taskId, reason: 'vendor' })!;
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     const endId = recordDeferralEnded({ situationId, taskId, supersedes: deferralId });
     expect(typeof endId).toBe('string');
@@ -831,7 +831,7 @@ describe('three recorded ends, and each returns full escalation', () => {
     expect(end.causation).toBe(deferralId);
     expect(end.payload).toMatchObject({ act: 'end', situation: situationId, supersedes: deferralId });
 
-    expect(triage().counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(triage().counts).toMatchObject({ needsYou: 1, deferred: 0 });
   });
 
   it('refuses an end that supersedes nothing, and writes nothing', () => {
@@ -845,13 +845,13 @@ describe('three recorded ends, and each returns full escalation', () => {
     const { taskId, situationId } = armWaitingRun();
     const first = recordDeferral({ situationId, taskId, reason: 'first' })!;
     recordDeferralEnded({ situationId, taskId, supersedes: first });
-    expect(triage().counts).toEqual({ needsYou: 1, deferred: 0 });
+    expect(triage().counts).toMatchObject({ needsYou: 1, deferred: 0 });
 
     const second = recordDeferral({ situationId, taskId, reason: 'second, with feeling' });
     expect(typeof second).toBe('string');
 
     const view = triage();
-    expect(view.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(view.counts).toMatchObject({ needsYou: 0, deferred: 1 });
     // The STANDING deferral is the latest one, not the first.
     expect(view.waiting.find((s) => s.id === situationId)!.deferral).toMatchObject({
       eventId: second,
@@ -862,7 +862,7 @@ describe('three recorded ends, and each returns full escalation', () => {
   it('END 3 — a situation that is answered carries no deferral into the changed column', () => {
     const { taskId, situationId } = armWaitingRun();
     recordDeferral({ situationId, taskId, reason: 'not yet' });
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     // Answer it: attest both checkpoints, which moves the row to `changed`.
     core.emitter.emit({
@@ -972,7 +972,7 @@ describe('MEASURED AND HELD — what an incident-scoped deferral would need', ()
 
     const after = triage();
     expect(after.waiting.find((s) => s.id === subjectId('backdoor:wp-compat'))!.deferral).toBeDefined();
-    expect(after.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(after.counts).toMatchObject({ needsYou: 0, deferred: 1 });
   });
 
   it('FINDING 2 — the record carries NO correlation, so it joins to no run', () => {
@@ -1011,7 +1011,7 @@ describe('MEASURED AND HELD — what an incident-scoped deferral would need', ()
     expect(subject).not.toBe(openId);
 
     recordDeferral({ situationId: subject, reason: 'client is rebuilding' });
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     // The producer's resolution: a NEW event, same component and fact.
     const resolvedId = emitOrphanIncident('backdoor:wp-compat', true);
@@ -1040,7 +1040,7 @@ describe('MEASURED AND HELD — what an incident-scoped deferral would need', ()
     const reopened = triage();
     expect(reopened.waiting.filter((s) => s.kind === 'incident').map((s) => s.id)).toEqual([subject]);
     expect(reopened.waiting.find((s) => s.id === subject)!.deferral).toBeDefined();
-    expect(reopened.counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(reopened.counts).toMatchObject({ needsYou: 0, deferred: 1 });
   });
 });
 
@@ -1050,7 +1050,7 @@ describe('non-fatal by construction', () => {
   it('an unreadable ledger costs the quieting, never the list', () => {
     const { taskId, situationId } = armWaitingRun();
     recordDeferral({ situationId, taskId, reason: 'vendor' });
-    expect(triage().counts).toEqual({ needsYou: 0, deferred: 1 });
+    expect(triage().counts).toMatchObject({ needsYou: 0, deferred: 1 });
 
     const realQuery = core.ledger.query.bind(core.ledger);
     (core.ledger as { query: unknown }).query = (opts: { topicPrefix?: string }) => {
@@ -1062,7 +1062,7 @@ describe('non-fatal by construction', () => {
       // The row survives, loud. Degrading toward "escalating" is the safe
       // direction: a fault must never silently quiet something.
       expect(view.waiting.map((s) => s.id)).toContain(situationId);
-      expect(view.counts).toEqual({ needsYou: 1, deferred: 0 });
+      expect(view.counts).toMatchObject({ needsYou: 1, deferred: 0 });
     } finally {
       (core.ledger as { query: unknown }).query = realQuery;
     }

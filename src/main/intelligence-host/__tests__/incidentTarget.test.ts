@@ -148,7 +148,7 @@ describe('the incident headline names the site', () => {
     // WP-55 · A SET OF ONE. The field became a set so a coalesced row can hold
     // one identity per member; a situation of one still holds exactly one, and
     // the identity itself is unchanged.
-    expect(row.signatures).toEqual([{
+    expect(row.signatures).toMatchObject([{
       producer: 'security-sentinel',
       fact: 'ABS-05',
       target: 'theawfulpm-test',
