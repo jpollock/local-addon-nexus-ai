@@ -1,0 +1,784 @@
+<title>Sites at Real Scale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground:#f7f9f8; --surface:#ffffff; --surface2:#f0f4f2;
+    --ink:#1c2420; --muted:#64716a; --faint:#8b968f;
+    --line:#e3e8e5; --line2:#d3dbd6;
+    --accent:#2f9e63; --accent-ink:#1d6b43; --accent-soft:#e4f3ea;
+    --warn:#b57d1f; --warn-soft:#faf3e3;
+    --crit:#c04b3d; --crit-soft:#f9ebe8;
+    --note-bg:#fdf8ec; --note-edge:#e0cf9a; --note-ink:#6b5a24;
+    --chip-nothing:#eceff0; --chip-nothing-ink:#5b676c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#131816; --surface:#1b211e; --surface2:#222926;
+      --ink:#e6ebe8; --muted:#9aa8a0; --faint:#71807a;
+      --line:#2a322e; --line2:#38423d;
+      --accent:#58c98b; --accent-ink:#7ed8a6; --accent-soft:#1e3329;
+      --warn:#d9a344; --warn-soft:#332a17;
+      --crit:#e0705f; --crit-soft:#38201c;
+      --note-bg:#282417; --note-edge:#57511f; --note-ink:#d8c98a;
+      --chip-nothing:#262d2b; --chip-nothing-ink:#93a09a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#131816; --surface:#1b211e; --surface2:#222926;
+    --ink:#e6ebe8; --muted:#9aa8a0; --faint:#71807a;
+    --line:#2a322e; --line2:#38423d;
+    --accent:#58c98b; --accent-ink:#7ed8a6; --accent-soft:#1e3329;
+    --warn:#d9a344; --warn-soft:#332a17;
+    --crit:#e0705f; --crit-soft:#38201c;
+    --note-bg:#282417; --note-edge:#57511f; --note-ink:#d8c98a;
+    --chip-nothing:#262d2b; --chip-nothing-ink:#93a09a;
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font:15px/1.5 "Public Sans", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono { font-family:"Spline Sans Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+
+  .frame { max-width:1060px; margin:0 auto; padding:0 24px 80px; }
+
+  /* masthead */
+  .masthead {
+    display:flex; align-items:center; gap:16px; padding:18px 0 14px;
+    border-bottom:1px solid var(--line); margin-bottom:22px;
+  }
+  .masthead h1 { font-size:16px; font-weight:700; margin:0; letter-spacing:-.01em; }
+  .masthead .sub { color:var(--muted); font-size:13px; }
+  .spacer { flex:1; }
+  .toggle-notes {
+    font:12px/1 "Public Sans", sans-serif; font-weight:600; letter-spacing:.04em;
+    border:1px solid var(--note-edge); background:var(--note-bg); color:var(--note-ink);
+    padding:7px 12px; border-radius:4px; cursor:pointer;
+  }
+  .toggle-notes:focus-visible, .row:focus-visible, .place-row:focus-visible,
+  .chipbtn:focus-visible, .back:focus-visible, .place-card:focus-visible, .doorlink:focus-visible
+  { outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* rationale notes */
+  .note {
+    display:none; background:var(--note-bg); border-left:3px solid var(--note-edge);
+    color:var(--note-ink); font-size:13px; line-height:1.55;
+    padding:10px 14px; border-radius:0 4px 4px 0; margin:10px 0;
+  }
+  .note b { font-weight:600; }
+  body.notes .note { display:block; }
+
+  /* fleet header */
+  .fleet-head { margin-bottom:6px; }
+  .fleet-head h2 { font-size:22px; font-weight:700; margin:0 0 2px; letter-spacing:-.015em; text-wrap:balance; }
+  .fleet-head .countline { color:var(--muted); font-size:14px; }
+  .callouts { display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 4px; }
+  .callout {
+    display:flex; align-items:baseline; gap:8px; padding:10px 14px;
+    background:var(--surface); border:1px solid var(--line); border-radius:6px; font-size:13.5px;
+  }
+  .callout .big { font-size:19px; font-weight:700; }
+  .callout.warn { border-color:var(--warn); }
+  .callout.warn .big { color:var(--warn); }
+  .callout a, .doorlink { color:var(--accent-ink); font-weight:600; text-decoration:none; border-bottom:1px solid var(--accent); cursor:pointer; }
+  .callout .aside { color:var(--faint); font-size:12.5px; }
+
+  /* source segments — where sites live is a partition, not a predicate */
+  .segbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:18px 0 0; }
+  .seg { display:inline-flex; background:var(--surface); border:1px solid var(--line2); border-radius:8px; overflow:hidden; }
+  .segbtn {
+    font:14px/1 "Public Sans", sans-serif; font-weight:600; color:var(--muted);
+    background:none; border:0; border-right:1px solid var(--line); cursor:pointer;
+    padding:10px 16px; display:flex; align-items:baseline; gap:7px;
+  }
+  .segbtn:last-child { border-right:0; }
+  .segbtn .n { font-family:"Spline Sans Mono", monospace; font-size:12px; font-weight:500; color:var(--faint); }
+  .segbtn[aria-pressed="true"] { background:var(--ink); color:var(--ground); }
+  .segbtn[aria-pressed="true"] .n { color:var(--ground); opacity:.7; }
+  .segbtn:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  .seglabel { font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); }
+
+  /* filters */
+  .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 12px; }
+  .chipbtn {
+    font:13px/1 "Public Sans", sans-serif; font-weight:500;
+    border:1px solid var(--line2); background:var(--surface); color:var(--ink);
+    padding:7px 12px; border-radius:99px; cursor:pointer;
+  }
+  .chipbtn[aria-pressed="true"] { background:var(--ink); color:var(--ground); border-color:var(--ink); }
+  .search {
+    flex:1; min-width:180px; max-width:300px; margin-left:auto;
+    font:13.5px "Public Sans", sans-serif; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line2); border-radius:6px; padding:8px 12px;
+  }
+  .search::placeholder { color:var(--faint); }
+
+  /* list */
+  .listhead, .row-grid {
+    display:grid; grid-template-columns: 24px 1.6fr 1.1fr 130px 150px 110px;
+    gap:12px; align-items:center;
+  }
+  .listhead {
+    font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--faint); padding:8px 14px; border-bottom:1px solid var(--line);
+  }
+  .list { background:var(--surface); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .row { border:0; width:100%; text-align:left; background:none; color:inherit; font:inherit;
+    padding:11px 14px; border-bottom:1px solid var(--line); cursor:pointer; display:block; }
+  .row:hover { background:var(--surface2); }
+  .row:last-child { border-bottom:0; }
+  .prop-name { font-weight:600; font-size:14.5px; }
+  .prop-sub { color:var(--faint); font-size:12px; margin-top:1px; }
+  .place-line { color:var(--muted); font-size:13px; }
+  .caret { color:var(--faint); font-size:12px; width:24px; transition:transform .12s; }
+  .open > .row-grid .caret { transform:rotate(90deg); }
+  .checked { color:var(--muted); font-size:12.5px; }
+  .checked.fail { color:var(--crit); }
+
+  .rung {
+    display:inline-block; font:11.5px/1 "Spline Sans Mono", monospace; font-weight:500;
+    padding:4px 8px; border-radius:4px; white-space:nowrap;
+  }
+  .rung.searchable { background:var(--accent-soft); color:var(--accent-ink); }
+  .rung.detailed { background:var(--surface2); color:var(--muted); border:1px solid var(--line2); }
+  .rung.basic { background:var(--surface2); color:var(--faint); border:1px dashed var(--line2); }
+  .rung.nothing { background:var(--chip-nothing); color:var(--chip-nothing-ink); border:1px dashed var(--line2); }
+  .rung.mixed { background:var(--surface2); color:var(--muted); border:1px solid var(--line2); }
+
+  .needs { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; }
+  .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .dot.t2 { background:var(--warn); }
+  .dot.t3 { background:var(--crit); }
+  .needs .none { color:var(--faint); font-weight:400; }
+
+  /* expanded places */
+  .places { display:none; background:var(--surface2); border-bottom:1px solid var(--line); }
+  .open .places { display:block; }
+  .place-row {
+    display:grid; grid-template-columns: 24px 1.6fr 1.1fr 130px 150px 110px; gap:12px;
+    width:100%; text-align:left; background:none; border:0; color:inherit; font:inherit;
+    padding:9px 14px; cursor:pointer; align-items:center; border-top:1px dashed var(--line);
+  }
+  .place-row:hover { background:var(--surface); }
+  .place-kind { font-size:13.5px; font-weight:500; padding-left:22px; position:relative; }
+  .place-kind::before { content:"└"; position:absolute; left:4px; color:var(--faint); }
+  .place-where { color:var(--muted); font-size:12.5px; }
+  .place-note { color:var(--muted); font-size:12px; grid-column: 2 / -1; padding-left:22px; }
+  .tail { padding:14px; color:var(--faint); font-size:13px; border-top:1px solid var(--line); }
+
+  /* detail views */
+  .back { background:none; border:0; color:var(--accent-ink); font:600 13px "Public Sans", sans-serif;
+    cursor:pointer; padding:0; margin-bottom:14px; }
+  .detail h2 { font-size:24px; font-weight:700; margin:0 0 2px; letter-spacing:-.015em; }
+  .detail .where { color:var(--muted); font-size:14px; margin-bottom:18px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:12px; margin:14px 0; }
+  .place-card {
+    text-align:left; font:inherit; color:inherit; cursor:pointer;
+    background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px 16px;
+  }
+  .place-card:hover { border-color:var(--line2); background:var(--surface2); }
+  .place-card .kind { font-weight:700; font-size:14.5px; }
+  .place-card .addr { color:var(--muted); font-size:12.5px; margin:2px 0 10px; }
+  .place-card .meta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+  .section { margin:26px 0; }
+  .section h3 { font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 10px; }
+  .prose { max-width:64ch; font-size:14.5px; }
+  .prose p { margin:0 0 8px; }
+  .absent { color:var(--muted); font-style:normal; }
+  .absent::before { content:"— "; color:var(--faint); }
+
+  table.facts { border-collapse:collapse; width:100%; max-width:680px; font-size:14px; }
+  table.facts td { padding:9px 14px 9px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.facts td:first-child { color:var(--muted); width:130px; }
+  table.facts .age { color:var(--faint); font-size:12px; }
+  .state-pill { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:99px; margin-left:8px; }
+  .state-pill.behind { background:var(--warn-soft); color:var(--warn); }
+  .state-pill.current { background:var(--accent-soft); color:var(--accent-ink); }
+
+  .proc { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:13px 16px; margin-bottom:10px; max-width:680px; }
+  .proc .plabel { font-weight:600; font-size:14.5px; }
+  .proc .rb { font-family:"Spline Sans Mono", monospace; font-size:12px; color:var(--faint); margin-left:8px; }
+  .proc .pnote { color:var(--muted); font-size:13px; margin-top:4px; }
+  .proc.barred { border-style:dashed; }
+  .proc.barred .plabel { color:var(--muted); }
+
+  .hist { border-left:2px solid var(--line2); padding-left:16px; max-width:680px; }
+  .hist .h-item { margin-bottom:12px; font-size:14px; }
+  .hist .h-when { color:var(--faint); font-size:12px; }
+
+  .hidden { display:none; }
+  @media (prefers-reduced-motion: reduce) { .caret { transition:none; } }
+  @media (max-width: 760px) {
+    .listhead { display:none; }
+    .row-grid, .place-row { grid-template-columns: 20px 1fr; gap:4px 10px; }
+    .row-grid > *, .place-row > * { grid-column:2; }
+    .row-grid > .caret, .place-row > .caret { grid-column:1; }
+  }
+</style>
+
+<div class="frame">
+  <div class="masthead">
+    <h1>Nexus AI · Sites</h1>
+    <span class="sub">rough mock · drawn at the fleet's measured scale</span>
+    <div class="spacer"></div>
+    <button class="toggle-notes" id="notesBtn" aria-pressed="true">Rationale: on</button>
+  </div>
+
+  <!-- ============ VIEW 1 · FLEET ============ -->
+  <div id="view-fleet">
+    <div class="fleet-head">
+      <h2>Your sites</h2>
+      <div class="countline" id="countline"></div>
+    </div>
+
+    <div class="note"><b>Why these numbers:</b> every figure on this screen is derived from the row data at render time — the house rule that killed the “413 succeeded” bug. The fleet is generated to the measured proportions of the real one: 296 properties, 84 with more than one place (28%), 53 places never looked inside, 73 places on an account with no SSH gateway.</div>
+
+    <div class="callouts">
+      <div class="callout warn">
+        <span class="big mono" id="nothingCount"></span>
+        <span>places Nexus has never looked inside</span>
+        <a id="ctaNothing">Show them</a>
+      </div>
+      <div class="callout">
+        <span class="big mono" id="needsCount"></span>
+        <span>need you</span>
+        <span class="aside" id="needsAside"></span>
+      </div>
+      <div class="callout">
+        <span class="big mono" id="copyCount"></span>
+        <span>live on this machine — local sites and copies</span>
+      </div>
+    </div>
+
+    <div class="note"><b>Why “never looked inside” leads:</b> the code’s own knowledge ladder calls the <i>nothing</i> rung “the most actionable one,” and the designers’ fixture dropped it. It is the strongest call-to-action this list can make, so it gets the only warning-colored slot in the header. <b>Why the aside on “need you”:</b> some situations can’t name a site (the registry allows a null target), so per-site badges can never silently claim to sum to the global one — the remainder is stated, not hidden.</div>
+
+    <div class="segbar" role="group" aria-label="Where sites live">
+      <span class="seglabel">Where</span>
+      <div class="seg">
+        <button class="segbtn" data-s="all" aria-pressed="true">Everywhere <span class="n" id="segNAll"></span></button>
+        <button class="segbtn" data-s="machine" aria-pressed="false">This machine <span class="n" id="segNMachine"></span></button>
+        <button class="segbtn" data-s="wpe" aria-pressed="false">WP Engine <span class="n" id="segNWpe"></span></button>
+        <button class="segbtn" data-s="external" aria-pressed="false">External <span class="n" id="segNExt"></span></button>
+      </div>
+    </div>
+
+    <div class="note"><b>Why “where” is its own control:</b> the segment partitions on <b>origin</b> — every property originates in exactly one of these, so the counts sum to the total. The state filters below are predicates and compose with the segment (“WP Engine · Needs you”, “WP Engine · Has a copy here”). <b>Corrected from v2</b>, per the designer’s pushback: v2 defined “This machine” as origin-plus-copies, which double-counted 20 WP Engine properties while this note claimed “exactly once.” Presence-on-this-machine is a predicate, not an origin — it lives in the “Has a copy here” chip, and Local’s sidebar-shaped view of your machine is the composition “Everywhere · Has a copy here,” whose count is stated in the header card.</div>
+
+    <div class="filters" role="group" aria-label="State filters">
+      <button class="chipbtn" data-f="all" aria-pressed="true">All</button>
+      <button class="chipbtn" data-f="needs" aria-pressed="false">Needs you</button>
+      <button class="chipbtn" data-f="nothing" aria-pressed="false">Never looked inside</button>
+      <button class="chipbtn" data-f="copy" aria-pressed="false">Has a copy here</button>
+      <input class="search" id="search" placeholder="Search all 296 — filters never hide a search hit" aria-label="Search sites">
+    </div>
+
+    <div class="note"><b>Why search spans everything:</b> a site missing from a filtered view must be explained, never absent — the log-processor Sites-tab ruling, reused. Searching while a filter is active searches the whole fleet and labels rows that fall outside the filter.</div>
+
+    <div class="listhead" aria-hidden="true">
+      <span></span><span>Property</span><span>Places</span><span>Knows</span><span>Checked</span><span>Needs you</span>
+    </div>
+    <div class="list" id="list" role="list"></div>
+
+    <div class="note" style="margin-top:14px"><b>Why most rows have no caret:</b> 74% of real properties are a single place. A caret on a row with nothing under it is a lie the user pays for with a click — single-place rows put the place inline and go straight to it. The expansion affordance appears only where there is something to expand. <b>And the roll-up says what it is:</b> a multi-place row’s age reads <i>oldest 12h</i> — the set minimum, labelled — because an unlabelled date claims a freshness no single place has. (v2 silently showed the <i>newest</i> place’s age, which was worse than unlabelled: it claimed a freshness only the best-checked place had.)</div>
+  </div>
+
+  <!-- ============ VIEW 2 · PROPERTY ============ -->
+  <div id="view-site" class="detail hidden">
+    <button class="back" data-go="fleet">← All sites</button>
+    <h2 id="siteName"></h2>
+    <div class="where" id="siteWhere"></div>
+    <div class="note"><b>What this screen is:</b> the property — the logical thing that exists in more than one place. Nothing executes here; every card is a door to a place, and the lineage below is stated only where a recorded link exists. In the real ledger today: 20 copy links, 2 content-pull links, out of ~296 properties — so <b>stated absence is this screen’s common case</b>, and it is written as a fact with a reason, never as an empty div.</div>
+    <div class="cards" id="siteCards"></div>
+    <div class="section">
+      <h3>Lineage</h3>
+      <div class="prose" id="siteLineage"></div>
+    </div>
+    <div class="section">
+      <h3>Recent activity</h3>
+      <div class="prose" id="siteHistory"></div>
+      <div class="note"><b>Why activity lives per place:</b> in the current substrate, 93.8% of episodic events hang off an entity family with no environment links (the documented Site split). A property-level thread assembled from places is honest; a property-level thread read from the Site entity would be dark. The screen says which one it is doing.</div>
+    </div>
+  </div>
+
+  <!-- ============ VIEW 3 · PLACE ============ -->
+  <div id="view-env" class="detail hidden">
+    <button class="back" id="envBack">← Back</button>
+    <h2 id="envName"></h2>
+    <div class="where" id="envWhere"></div>
+    <p class="prose" id="envVerdict" style="font-size:16px; font-weight:600; margin:0 0 4px;"></p>
+    <p class="prose" style="color:var(--muted); font-size:13.5px;">Read at a distance, through gates. Nothing on this screen edits anything.</p>
+
+    <div class="section">
+      <h3>What Nexus knows</h3>
+      <table class="facts" id="envFacts"></table>
+      <div class="note"><b>Why every fact carries its own age:</b> the ages come from one substrate — the pipeline twins (<span class="mono">pipeline:l2</span> / <span class="mono">pipeline:l3</span> facts and the 24-hour ledger history) — not per-surface staleness math. A failed check shows the transport’s own reason. An absent fact states why it is absent; unknown is never rendered as fine.</div>
+    </div>
+
+    <div class="section">
+      <h3>How deeply</h3>
+      <div class="prose" id="envDepth"></div>
+    </div>
+
+    <div class="section">
+      <h3>What has been done here</h3>
+      <div class="hist" id="envHist"></div>
+    </div>
+
+    <div class="section">
+      <h3>What can be done from here</h3>
+      <div id="envProcs"></div>
+      <div class="note"><b>Why procedures, not buttons:</b> every action names the runbook that would run and the authority it needs. A barred procedure stays visible with the reason and a door to the grant — the SentinelExecutor rule that a refusal must name the exact permission to change, drawn as UI.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- deterministic fleet at measured proportions ---------- */
+  /* imul-based PRNG — the naive LCG (s*1103515245) overflows 2^53 before its
+     mask, so its low bits collapse and the sequence can freeze. The proportions
+     are this artifact's whole argument; they must come from a working generator. */
+  function prng(seed) {
+    var s = seed >>> 0;
+    return function () {
+      s = (s + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var rnd = prng(20260823);
+  var A = ["cedar","willow","harbor","alpine","juniper","summit","raven","copper","marsh","brook","fern","gable","larch","onyx","quill","sable","tarn","vale","wren","yarrow"];
+  var B = ["field","works","press","studio","health","supply","goods","labs","house","forge","craft","media","grove","trade","atlas","north","cove","row","yard","mill"];
+  var C = ["","co","hq","shop","org"];
+
+  function mkName() {
+    var n = A[Math.floor(rnd()*A.length)] + B[Math.floor(rnd()*B.length)] + C[Math.floor(rnd()*C.length)];
+    return n.slice(0, 18);
+  }
+
+  var RUNGS = { searchable:"Searchable", detailed:"Detailed", basic:"Basic", nothing:"Nothing yet" };
+
+  function place(kind, where, rung, checkedH, opts) {
+    return Object.assign({ kind:kind, where:where, rung:rung, checkedH:checkedH }, opts || {});
+  }
+
+  /* hand-authored hero rows — every interesting real state, guaranteed above the fold */
+  var HERO = [
+    { name:"benfischer", src:"wpe", account:"Fischer Digital", copy:true, needs:{count:1,tier:2},
+      places:[
+        place("live site","WP Engine · benfischer","searchable",2),
+        place("staging","WP Engine · benfischer1stg","detailed",9, {needs:{count:1,tier:2}, note:"A cp.backup step is waiting on your evidence"}),
+        place("development","WP Engine · benfischerdev","detailed",9),
+        place("your copy","this machine · Local","searchable",0, {copy:true})
+      ],
+      lineage:[
+        "Your copy was pulled from <b>staging</b> 11 days ago — content on your machine is a snapshot of staging as of Aug 12.",
+        "Code moves through git; Nexus has no record of a deploy to any place here and says so rather than guessing."
+      ],
+      history:[ "Updated 3 plugins on the live site — 4 days ago, rb.bulk-plugin-update, finished.",
+                "Pulled a copy from staging — 11 days ago, rb.wpe-pull, finished." ] },
+
+    { name:"qwerky", src:"wpe", account:"Pollock Sandbox", copy:true, needs:{count:1,tier:3},
+      places:[
+        place("live site","WP Engine · qwerky","searchable",3, {needs:{count:1,tier:3}, note:"security-sentinel: a file changed outside a deploy — waiting on your review"}),
+        place("staging","WP Engine · qwerkystg","searchable",3),
+        place("your copy","this machine · Local","searchable",1, {copy:true})
+      ],
+      lineage:[
+        "A copy of this site exists on your machine.",
+        "No recorded pull links your copy’s content to any place here — as far as Nexus can see, they are unrelated. If your copy did come from one of these places, pulling again will record the link."
+      ],
+      history:[ "security-sentinel raised a finding on the live site — 6 hours ago, waiting on you." ] },
+
+    { name:"jpmeautoscale", src:"wpe", account:"AutoscaleAlpha",
+      places:[ place("live site","WP Engine · jpmeautoscale","basic",4,
+        { note:"This account has no SSH gateway (WP Engine Autoscale) — Nexus can read versions from the platform but cannot look inside content." }) ] },
+
+    { name:"dbrains", src:"wpe", account:"Pollock Sandbox",
+      places:[ place("live site","WP Engine · dbrains","searchable",2) ] },
+
+    { name:"thelocalshed", src:"wpe", account:"Pollock Sandbox", collision:true,
+      places:[ place("live site","WP Engine · thelocalshed","detailed",7) ] },
+
+    { name:"thelocalshed", src:"local", account:null, copy:true, collision:true,
+      places:[ place("local site","this machine · Local — not linked to the WP Engine property of the same name","searchable",0, {copy:true}) ] },
+
+    { name:"willowcreekderm", src:"external", account:"ssh:willowcreekderm",
+      places:[ place("production","your server · over SSH","searchable",26) ] },
+
+    { name:"andonovwoocstg", src:"wpe", account:"Pollock Sandbox",
+      places:[ place("staging","WP Engine · andonovwoocstg","detailed",0,
+        { fail:"check failed 3h ago — ssh: connection refused" }) ] },
+
+    { name:"gardenrowsupply", src:"wpe", account:"Fischer Digital",
+      places:[ place("live site","WP Engine · gardenrowsupply","nothing",null) ] }
+  ];
+
+  /* Filler to the real shape: 296 total, 84 multi-place, 53 nothing-rung, 55
+     Autoscale singles, 24 local-only, 3 external. The quotas are a shuffled
+     DECK, not probability bands — bands drain unevenly and can end the loop
+     with a quota unfilled, which quietly falsifies the proportions this
+     artifact exists to show. A deck lands every quota exactly. */
+  var FLEET = HERO.slice();
+  var seen = {}; HERO.forEach(function (h) { seen[h.name + h.src] = 1; });
+  var deck = [];
+  function deal(kind, n) { for (var k = 0; k < n; k++) deck.push(kind); }
+  deal("ext", 3 - 1); deal("local", 24 - 1); deal("multi", 84 - 3);
+  deal("nothing", 53 - 1); deal("auto", 55 - 1);
+  deal("plain", (296 - HERO.length) - deck.length);
+  for (var d = deck.length - 1; d > 0; d--) {           /* Fisher–Yates on the seeded PRNG */
+    var swap = Math.floor(rnd() * (d + 1));
+    var tmp = deck[d]; deck[d] = deck[swap]; deck[swap] = tmp;
+  }
+
+  deck.forEach(function (kind) {
+    var nm = mkName(), tries = 0;
+    while (seen[nm + "wpe"] && seen[nm + "local"] && tries++ < 50) nm = mkName();
+    if (seen[nm + "wpe"]) nm = (nm + Math.floor(rnd() * 90 + 10)).slice(0, 18);
+    var row;
+    if (kind === "ext") {
+      row = { name:nm, src:"external", account:"ssh:" + nm,
+        places:[ place("production","your server · over SSH","detailed", Math.ceil(rnd()*30)) ] };
+    } else if (kind === "local") {
+      row = { name:nm, src:"local", account:null, copy:true,
+        places:[ place("local site","this machine · Local","searchable",0,{copy:true}) ] };
+    } else if (kind === "multi") {
+      var ps = [ place("live site","WP Engine · " + nm, "searchable", Math.ceil(rnd()*12)),
+                 place("staging","WP Engine · " + nm.slice(0,10) + "stg", rnd()<.5?"detailed":"searchable", Math.ceil(rnd()*12)) ];
+      if (rnd() < 0.31) ps.push(place("development","WP Engine · " + nm.slice(0,10) + "dev","detailed", Math.ceil(rnd()*24)));
+      var hasCopy = false;
+      if (rnd() < 0.2) { hasCopy = true; ps.push(place("your copy","this machine · Local","searchable",0,{copy:true})); }
+      row = { name:nm, src:"wpe", account:"Fischer Digital", copy:hasCopy, places:ps,
+        lineage: hasCopy
+          ? ["A copy of this site exists on your machine.",
+             "No recorded pull links your copy’s content to any place here — as far as Nexus can see, they are unrelated."]
+          : null };
+    } else if (kind === "nothing") {
+      row = { name:nm, src:"wpe", account:"Fischer Digital",
+        places:[ place("live site","WP Engine · " + nm, "nothing", null) ] };
+    } else if (kind === "auto") {
+      row = { name:nm, src:"wpe", account:"AutoscaleAlpha",
+        places:[ place("live site","WP Engine · " + nm, "basic", Math.ceil(rnd()*8),
+          { note:"This account has no SSH gateway (WP Engine Autoscale) — versions only, no content." }) ] };
+    } else {
+      row = { name:nm, src:"wpe", account:"Pollock Sandbox",
+        places:[ place("live site","WP Engine · " + nm, rnd()<.85?"searchable":"detailed", Math.ceil(rnd()*12)) ] };
+    }
+    seen[nm + row.src] = 1; FLEET.push(row);
+  });
+
+  var UNATTRIBUTED_NEEDS = 1;
+
+  /* ---------- derived counts (never independently computed) ---------- */
+  function allPlaces(f) { return f.reduce(function (a, s) { return a.concat(s.places); }, []); }
+  var places = allPlaces(FLEET);
+  var nothingN = places.filter(function (p) { return p.rung === "nothing"; }).length;
+  var needsAttr = FLEET.reduce(function (a, s) { return a + (s.needs ? s.needs.count : 0); }, 0);
+  var copyN = FLEET.filter(function (s) { return s.copy; }).length;
+  var multiN = FLEET.filter(function (s) { return s.places.length > 1; }).length;
+
+  document.getElementById("countline").textContent =
+    FLEET.length + " properties · " + places.length + " places · " + multiN + " properties have more than one place";
+  document.getElementById("nothingCount").textContent = nothingN;
+  document.getElementById("needsCount").textContent = needsAttr + UNATTRIBUTED_NEEDS;
+  document.getElementById("needsAside").textContent = needsAttr + " tied to a site · " + UNATTRIBUTED_NEEDS + " not tied to any";
+  document.getElementById("copyCount").textContent = copyN;
+
+  /* ---------- rendering ---------- */
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]; }); };
+  function rungChip(rung) { return '<span class="rung ' + rung + '">' + RUNGS[rung] + "</span>"; }
+  function checkedTxt(p) {
+    if (p.fail) return '<span class="checked fail">' + esc(p.fail) + "</span>";
+    if (p.rung === "nothing" || p.checkedH == null) return '<span class="checked">never checked</span>';
+    if (p.checkedH === 0) return '<span class="checked mono">on this machine</span>';
+    return '<span class="checked mono">checked ' + p.checkedH + "h ago</span>";
+  }
+  function needsCell(n) {
+    if (!n || !n.count) return '<span class="needs"><span class="none">—</span></span>';
+    return '<span class="needs"><span class="dot t' + n.tier + '"></span>' + n.count + "</span>";
+  }
+  function siteRungSummary(s) {
+    if (s.places.length === 1) return rungChip(s.places[0].rung);
+    var set = {}; s.places.forEach(function (p) { set[p.rung] = 1; });
+    var kinds = Object.keys(set);
+    if (kinds.length === 1) return rungChip(kinds[0]);
+    return '<span class="rung mixed">' + s.places.map(function (p) { return RUNGS[p.rung]; }).join(" / ") + "</span>";
+  }
+  function placeLine(s) {
+    if (s.places.length === 1) {
+      var p = s.places[0];
+      return esc(p.kind) + ' <span style="color:var(--faint)">· ' + esc(p.where.split("·")[0].trim()) + "</span>";
+    }
+    return s.places.length + " places" + (s.copy ? " incl. your copy" : "");
+  }
+
+  var listEl = document.getElementById("list");
+  var activeFilter = "all", activeSource = "all", query = "";
+
+  function matchSource(s) {
+    if (activeSource === "machine") return s.src === "local";   /* origin, not presence — a partition */
+    if (activeSource === "wpe") return s.src === "wpe";
+    if (activeSource === "external") return s.src === "external";
+    return true;
+  }
+  function matchFilter(s) {
+    if (activeFilter === "needs") return !!(s.needs && s.needs.count);
+    if (activeFilter === "nothing") return s.places.some(function (p) { return p.rung === "nothing"; });
+    if (activeFilter === "copy") return !!s.copy;
+    return true;
+  }
+
+  /* segment counts — derived from the same rows, never independently computed */
+  document.getElementById("segNAll").textContent = FLEET.length;
+  document.getElementById("segNMachine").textContent =
+    FLEET.filter(function (s) { return s.src === "local"; }).length;
+  document.getElementById("segNWpe").textContent =
+    FLEET.filter(function (s) { return s.src === "wpe"; }).length;
+  document.getElementById("segNExt").textContent =
+    FLEET.filter(function (s) { return s.src === "external"; }).length;
+
+  function render() {
+    var frag = [], shown = 0, offFilter = 0;
+    FLEET.forEach(function (s, i) {
+      var hitsQ = !query || s.name.indexOf(query) >= 0;
+      if (!hitsQ) return;
+      var inF = matchFilter(s) && matchSource(s);
+      if (!inF && !query) return;           /* filters hide only when not searching */
+      if (!inF) offFilter++;
+      shown++;
+      var multi = s.places.length > 1;
+      /* The roll-up is the SET MINIMUM — the oldest place — and it says so.
+         An unlabelled age on a multi-place row claims a freshness no single
+         place has (and taking the newest, as v1 did, claimed one only the
+         best-checked place had). */
+      var checked;
+      if (!multi) checked = checkedTxt(s.places[0]);
+      else {
+        var failP = null, neverP = false, oldest = null;
+        s.places.forEach(function (p) {
+          if (p.fail && !failP) failP = p;
+          if (p.checkedH == null && p.rung === "nothing") neverP = true;
+          if (p.checkedH != null && (oldest == null || p.checkedH > oldest)) oldest = p.checkedH;
+        });
+        if (failP) checked = checkedTxt(failP);
+        else if (neverP) checked = '<span class="checked">oldest: never checked</span>';
+        else checked = '<span class="checked mono">oldest ' + (oldest === 0 ? "live" : oldest + "h ago") + "</span>";
+      }
+      var sub = [];
+      if (s.src === "external") sub.push("external · " + esc(s.account));
+      else if (s.account) sub.push(esc(s.account));
+      if (s.collision && s.src === "local") sub.push("shares a name with a WP Engine property — kept separate");
+      if (!inF) sub.push("outside the current filter — shown because it matches your search");
+      frag.push(
+        '<div class="rowwrap' + (multi ? " expandable" : "") + '" data-i="' + i + '" role="listitem">',
+        '<button class="row" data-i="' + i + '" data-multi="' + multi + '"><span class="row-grid">',
+        '<span class="caret">' + (multi ? "▸" : "") + "</span>",
+        '<span><span class="prop-name">' + esc(s.name) + "</span>" +
+          (sub.length ? '<div class="prop-sub">' + sub.join(" · ") + "</div>" : "") + "</span>",
+        '<span class="place-line">' + placeLine(s) + "</span>",
+        "<span>" + siteRungSummary(s) + "</span>",
+        "<span>" + checked + "</span>",
+        "<span>" + needsCell(s.needs) + "</span>",
+        "</span></button>"
+      );
+      if (multi) {
+        frag.push('<div class="places">');
+        s.places.forEach(function (p, j) {
+          frag.push(
+            '<button class="place-row" data-i="' + i + '" data-j="' + j + '">',
+            "<span></span>",
+            '<span class="place-kind">' + esc(p.kind) + "</span>",
+            '<span class="place-where">' + esc(p.where) + "</span>",
+            "<span>" + rungChip(p.rung) + "</span>",
+            "<span>" + checkedTxt(p) + "</span>",
+            "<span>" + needsCell(p.needs) + "</span>",
+            (p.note ? '<span class="place-note">' + esc(p.note) + "</span>" : ""),
+            "</button>"
+          );
+        });
+        frag.push("</div>");
+      }
+      frag.push("</div>");
+    });
+    if (!shown) frag.push('<div class="tail">Nothing matches. The search covers every property regardless of filter, so if it isn’t here, Nexus has no row for it.</div>');
+    else frag.push('<div class="tail">' + shown + " of " + FLEET.length + " properties shown" +
+      (offFilter ? " · " + offFilter + " outside the filter, included by your search" : "") +
+      " · no pagination — the list is one scroll</div>");
+    listEl.innerHTML = frag.join("");
+  }
+
+  /* ---------- navigation ---------- */
+  var views = { fleet:document.getElementById("view-fleet"), site:document.getElementById("view-site"), env:document.getElementById("view-env") };
+  var current = { site:null, from:"fleet" };
+  function go(v) { Object.keys(views).forEach(function (k) { views[k].classList.toggle("hidden", k !== v); }); window.scrollTo(0, 0); }
+
+  function openSite(s) {
+    current.site = s;
+    document.getElementById("siteName").textContent = s.name;
+    document.getElementById("siteWhere").textContent =
+      s.src === "external" ? "External host · reached through your SSH config"
+      : s.src === "local" ? "A site on this machine"
+      : (s.account || "WP Engine") + " · " + s.places.length + (s.places.length === 1 ? " place" : " places");
+    document.getElementById("siteCards").innerHTML = s.places.map(function (p, j) {
+      return '<button class="place-card" data-j="' + j + '">' +
+        '<div class="kind">' + esc(p.kind) + "</div>" +
+        '<div class="addr">' + esc(p.where) + "</div>" +
+        '<div class="meta">' + rungChip(p.rung) + checkedTxt(p) + (p.needs && p.needs.count ? needsCell(p.needs) : "") + "</div>" +
+        "</button>";
+    }).join("");
+    var lin = s.lineage
+      ? s.lineage.map(function (l) { return "<p>" + l + "</p>"; }).join("")
+      : '<p class="absent">No copy of this site exists on your machine, and no place here has a recorded relationship to any other. Each place stands alone until a pull or deploy is observed.</p>';
+    document.getElementById("siteLineage").innerHTML = lin;
+    document.getElementById("siteHistory").innerHTML = s.history
+      ? s.history.map(function (h) { return "<p>" + esc(h) + "</p>"; }).join("") +
+        '<p class="absent" style="font-size:12.5px">Assembled from each place’s own record.</p>'
+      : '<p class="absent">Nothing has been done to any place here through Nexus yet.</p>';
+    go("site");
+  }
+
+  function openEnv(s, p, from) {
+    current.site = s; current.from = from;
+    document.getElementById("envBack").textContent = from === "site" ? "← " + s.name : "← All sites";
+    document.getElementById("envName").textContent = s.name + " — " + p.kind;
+    document.getElementById("envWhere").textContent = p.where;
+
+    var auto = /Autoscale/.test(p.note || "");
+    var facts = [];
+    if (p.rung === "nothing") {
+      document.getElementById("envVerdict").textContent = "Nexus has never looked inside this place";
+      facts.push(["Everything", '<span class="absent">No check has ever run here. One sync fills this table.</span>', ""]);
+    } else {
+      document.getElementById("envVerdict").textContent =
+        p.needs && p.needs.count ? "Something here is waiting on you"
+        : p.fail ? "The last check could not reach this place"
+        : "Nothing is wrong here as far as Nexus can see";
+      facts.push(["WordPress", "6.8.1", pAge(p)], ["PHP", "8.2.18", pAge(p)]);
+      if (auto) {
+        facts.push(["Plugins", '<span class="absent">Cannot be read — this account has no SSH gateway (WP Engine Autoscale). Versions above come from the platform API.</span>', ""]);
+        facts.push(["Content", '<span class="absent">Same reason. If WP Engine exposes another read path for Autoscale, this row is where it lands.</span>', ""]);
+      } else {
+        facts.push(["Plugins", '24 active · 2 behind newest<span class="state-pill behind">behind</span>', pAge(p)]);
+        facts.push(["Theme", "twentytwentyfive 1.2", pAge(p)]);
+        if (p.rung === "searchable") facts.push(["Content", '412 documents indexed<span class="state-pill current">searchable</span>', pAge(p)]);
+      }
+      if (p.fail) facts.push(["Last check", '<span style="color:var(--crit)">' + esc(p.fail) + "</span> · previous data kept, shown with its age", ""]);
+      facts.push(["Uptime", '<span class="absent">No producer watches uptime — Nexus reads what the account exposes, and uptime is not among it.</span>', ""]);
+    }
+    document.getElementById("envFacts").innerHTML = facts.map(function (f) {
+      return "<tr><td>" + f[0] + "</td><td>" + f[1] + (f[2] ? ' <span class="age mono">' + f[2] + "</span>" : "") + "</td></tr>";
+    }).join("");
+
+    var depth = {
+      searchable: "<p><b>Searchable.</b> Nexus has indexed the content here — it can answer about pages, posts and fields, not just versions.</p>",
+      detailed: "<p><b>Detailed.</b> Versions and configuration, not content. Ask about a page here and Nexus will say it cannot see it — running a content index raises this place to Searchable.</p>",
+      basic: auto
+        ? "<p><b>Basic — and it cannot go higher from here.</b> Reading deeper needs SSH, and this account (WP Engine Autoscale) has no SSH gateway. This is a property of the account, not a failure to retry.</p>"
+        : "<p><b>Basic.</b> Nexus knows this place exists and little else.</p>",
+      nothing: "<p><b>Nothing yet.</b> This place has never been scanned. It is one sync away from Basic and one index away from Searchable.</p>"
+    };
+    document.getElementById("envDepth").innerHTML = depth[p.rung];
+
+    document.getElementById("envHist").innerHTML =
+      (p.needs && p.needs.count)
+        ? '<div class="h-item">' + esc(p.note || "A run is waiting on you here.") + ' <span class="h-when">· open it in Now</span></div>'
+        : '<div class="h-item" style="color:var(--muted)">Nothing has been done to this place through Nexus.</div>';
+
+    var isCopy = !!p.copy, procs = [];
+    if (isCopy) {
+      procs.push(pc("Open in Local", "", "This is your machine — Local’s own tools apply, ungated."));
+      procs.push(pc("Index content here", "rb.local-index 1.0.0", "Starts the site if it is stopped, indexes, stops it again."));
+    } else if (s.src === "external") {
+      procs.push(pc("Refresh what Nexus knows", "rb.host-refresh 1.0.0", "Reads over SSH in four batched round trips. Never writes to your server."));
+      procs.push(pc("Index content here", "rb.host-index 1.0.0", "Read-only. Raises this place to Searchable."));
+    } else if (p.rung === "nothing") {
+      procs.push(pc("Look inside for the first time", "rb.wpe-sync 1.0.0", "One sync fills the table above."));
+    } else if (auto) {
+      procs.push(pc("Refresh platform data", "rb.wpe-capi-refresh 1.0.0", "Reads what the account exposes without SSH."));
+      procs.push(bar("Index content here", "Needs SSH, and this account has no SSH gateway (WP Engine Autoscale). Not retryable from Nexus.", null));
+    } else {
+      procs.push(pc("Pull a copy from here", "rb.wpe-pull 1.0.0", "Reads only. Your machine changes; this place does not — and the pull records the lineage link."));
+      procs.push(pc("Re-check this place now", "rb.wpe-sync 1.0.0", "Refreshes every fact above with a new age."));
+      if (/live/.test(p.kind)) procs.push(bar("Update plugins here",
+        "rb.bulk-plugin-update declares local, staging and development only. Production needs its own grant.",
+        "Review what agents may do → plugin updates on production"));
+      else procs.push(pc("Update plugins here", "rb.bulk-plugin-update 1.2.0", "Runs under the staging grant you already hold."));
+    }
+    document.getElementById("envProcs").innerHTML = procs.join("");
+    go("env");
+  }
+  function pAge(p) { return p.checkedH == null ? "" : p.checkedH === 0 ? "live" : p.checkedH + "h ago"; }
+  function pc(label, rb, note) { return '<div class="proc"><span class="plabel">' + label + "</span>" + (rb ? '<span class="rb">' + rb + "</span>" : "") + '<div class="pnote">' + note + "</div></div>"; }
+  function bar(label, why, door) { return '<div class="proc barred"><span class="plabel">' + label + ' — barred</span><div class="pnote">' + why + (door ? ' <a class="doorlink">' + door + "</a>" : "") + "</div></div>"; }
+
+  /* ---------- events ---------- */
+  listEl.addEventListener("click", function (e) {
+    var pr = e.target.closest(".place-row");
+    if (pr) { var s = FLEET[+pr.dataset.i]; openEnv(s, s.places[+pr.dataset.j], "fleet-exp"); return; }
+    var row = e.target.closest(".row");
+    if (!row) return;
+    var site = FLEET[+row.dataset.i];
+    if (row.dataset.multi === "true") {
+      var wrap = row.closest(".rowwrap");
+      if (wrap.classList.contains("open")) { openSite(site); }  /* second click on an open row → property */
+      else wrap.classList.add("open");
+    } else if (site.places.length === 1 && site.src !== "wpe" ) {
+      openEnv(site, site.places[0], "fleet");
+    } else if (site.places.length === 1) {
+      openEnv(site, site.places[0], "fleet");
+    } else openSite(site);
+  });
+  document.getElementById("siteCards").addEventListener("click", function (e) {
+    var c = e.target.closest(".place-card"); if (!c) return;
+    openEnv(current.site, current.site.places[+c.dataset.j], "site");
+  });
+  document.getElementById("envBack").addEventListener("click", function () {
+    if (current.from === "site") openSite(current.site); else go("fleet");
+  });
+  document.querySelectorAll("[data-go=fleet]").forEach(function (b) { b.addEventListener("click", function () { go("fleet"); }); });
+
+  document.querySelectorAll(".chipbtn").forEach(function (b) {
+    b.addEventListener("click", function () {
+      activeFilter = b.dataset.f;
+      document.querySelectorAll(".chipbtn").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      render();
+    });
+  });
+  document.querySelectorAll(".segbtn").forEach(function (b) {
+    b.addEventListener("click", function () {
+      activeSource = b.dataset.s;
+      document.querySelectorAll(".segbtn").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      render();
+    });
+  });
+  document.getElementById("ctaNothing").addEventListener("click", function () {
+    activeFilter = "nothing"; activeSource = "all";   /* the count is fleet-wide, so the view it opens is too */
+    document.querySelectorAll(".chipbtn").forEach(function (x) { x.setAttribute("aria-pressed", String(x.dataset.f === "nothing")); });
+    document.querySelectorAll(".segbtn").forEach(function (x) { x.setAttribute("aria-pressed", String(x.dataset.s === "all")); });
+    render(); go("fleet");
+  });
+  document.getElementById("search").addEventListener("input", function (e) { query = e.target.value.trim().toLowerCase(); render(); });
+
+  var notesBtn = document.getElementById("notesBtn");
+  var notesOn = true;
+  try { notesOn = localStorage.getItem("mockNotes") !== "off"; } catch (err) {}
+  function applyNotes() {
+    document.body.classList.toggle("notes", notesOn);
+    notesBtn.textContent = "Rationale: " + (notesOn ? "on" : "off");
+    notesBtn.setAttribute("aria-pressed", String(notesOn));
+  }
+  notesBtn.addEventListener("click", function () {
+    notesOn = !notesOn; try { localStorage.setItem("mockNotes", notesOn ? "on" : "off"); } catch (err) {}
+    applyNotes();
+  });
+  applyNotes();
+  render();
+})();
+</script>

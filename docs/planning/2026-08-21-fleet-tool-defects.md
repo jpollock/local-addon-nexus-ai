@@ -912,3 +912,55 @@ cure if more sites surface.
 **Verification bookkeeping from the same 5-site run:** `andonovwoocstg`'s
 sweep failure was transient — re-indexed clean (27 docs). `qwerky` /
 `qwerkystg` see the D17 correction above.
+
+## D20 — OPEN — two producers mint phantom Site entities from graph row ids, and the split is still growing
+
+Measured 2026-08-23 against the live ledger: **692 Site entities for ~296 real
+properties**. 274 are the mirror family (`wpe.site_id`, carrying all 394
+`has_environment` links). The other 418 live under `local.site_id.logical`, have
+**zero** environment links, and 374 of them hold `wpe-…` graph row ids as their
+"local site id" — the namespace itself is polluted (374 aliases in
+`local.site_id` whose values are graph row ids, attached to the same env
+entities that carry `wpe.install_id`).
+
+Mechanism: `graphServiceTap.ts` (:60, :92, :125) and `graphBackfill.ts`
+(:109, :144, :178) pass the graph row id into `siteEntityId` /
+`environmentEntityId`, which alias unconditionally under `local.site_id[.logical]`.
+`wpEventProducer.ts:42` is **innocent** — its siteId is a real Local site id, and
+a local logical Site is correct usage.
+
+`sites-ia-readiness.md` §2 documents the split ("known and worked around") but
+measured 604 site entities; it is 692 now — the family accretes with new rows.
+Consequence recorded there stands: 93.8% of episodic events hang off entities
+with no environment links, so a property-level episodic thread reads a node the
+events don't carry.
+
+Fix shape (ratified in the fleet-collapse exploration, 2026-08-24): resolve the
+row's env entity via the mirror's `graph.site_row` alias, then
+`EntityService.siteOf(envId)` for the site stamp; when `siteOf` returns nothing,
+**omit the stamp rather than mint** — a wrong identity is worse than an absent
+one. No ledger migration (append-only invariant); old events stay reachable via
+`chatAssembly`'s documented workaround; the 418 phantom rows remain as inert
+history.
+
+## D21 — OPEN — WPE properties have no display name anywhere in our data
+
+The fleet collapse's core unit — the property (`wpe_site_id`, the CAPI Site) —
+has **no name in graph.db**. Only the UUID is persisted
+(`WPESyncService.ts:237`, `i.site?.id`); there is no `wpe_sites` table. The
+derivation heuristic dies on first contact: property `009f590e…` groups
+`b68c7f0b6038, wootestingsstg, wootestingsdev` — its production install's name
+is a hex blob, so "strip the stg/dev suffix" produces garbage exactly where a
+name is most needed.
+
+The name is one already-plumbed call away: `capiDirect('/sites')` is live today
+(`mcp/modules/wpe/get-sites.ts` renders `s.name` per Site), it has simply never
+been persisted. Fix: collect `wpe_sites(id, name, account_id)` during the CAPI
+sweep `WPESyncService.syncAllWPESites` already runs (L1 — no SSH involved), with
+the standard rules: parse-or-NULL, never a fabricated name; deleted sites
+handled by the same reconciliation discipline as installs. Until it lands, any
+surface grouping by property must show the grouped install names — never a
+derived guess (the designer's entity-id ruling applies to names too).
+
+Found 2026-08-24 while walking every fleet-collapse column back to a source;
+flagged by the owner as a distinct defect, not a design footnote.
