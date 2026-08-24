@@ -80,3 +80,54 @@ export function siteEntityId(entities: EntityEnsurer | undefined, siteId: string
   }
   return provisionalSiteId(siteId);
 }
+
+/** What `siteStampFor` needs beyond `ensure` — the mirror's containment read. */
+interface SiteResolver extends EntityEnsurer {
+  siteOf?(entityId: string): string | undefined;
+}
+
+/**
+ * D20 — the `site` stamp for an event about a graph row.
+ *
+ * A remote graph row (`wpe-<installId>` from WPESyncService, `ssh:<alias>/…`
+ * external) must NOT get a logical Site minted from its row id: those Sites
+ * have no environment links, and 93.8% of episodic events were hanging off
+ * them (sites-ia-readiness §2, register D20). Instead the stamp is the
+ * property Site the mirror linked — `siteOf()` over the row's env entity —
+ * and when no link exists (mirror not yet run, external rows the mirror
+ * excludes, registry down) the stamp is OMITTED. A wrong identity is worse
+ * than an absent one.
+ *
+ * A LOCAL site id keeps its logical Site, unchanged — that is correct usage
+ * and matches `wpEventProducer`.
+ *
+ * The env entity is deliberately resolved under `local.site_id` even for
+ * remote rows: `siteLinkMirror` ensures the SAME (namespace, value) pair and
+ * aliases it, so producer history and mirror links stay on one entity. Do not
+ * "fix" the namespace here — that would fork the env entity for any row the
+ * mirror has already adopted.
+ */
+export function siteStampFor(
+  entities: SiteResolver | undefined,
+  siteId: string,
+): string | undefined {
+  const isRemoteRow = siteId.startsWith('wpe-') || siteId.startsWith('ssh:');
+  if (!isRemoteRow) return siteEntityId(entities, siteId);
+  try {
+    if (entities?.siteOf) {
+      const envId = entities.ensure('env', 'local.site_id', siteId);
+      return entities.siteOf(envId) ?? undefined;
+    }
+  } catch {
+    /* a faulty entity service must never break a producer */
+  }
+  return undefined; // omit, never mint
+}
+
+/** Envelope `entity` block with the site key present only when there is one. */
+export function eventEntityStamp(
+  site: string | undefined,
+  environment: string,
+): { environment: string; site?: string } {
+  return site ? { site, environment } : { environment };
+}

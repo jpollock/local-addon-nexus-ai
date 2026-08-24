@@ -19,7 +19,7 @@
  * observers emit their own heartbeats.
  */
 import { IntelligenceCore } from './bootstrap';
-import { environmentEntityId, siteEntityId } from './provisionalEntity';
+import { environmentEntityId, siteStampFor, eventEntityStamp } from './provisionalEntity';
 import { createChangeGate, rowTimeToIso as toIso } from './changeGate';
 
 interface MinimalLogger {
@@ -57,7 +57,7 @@ export function tapGraphService(
             observed_at: toIso(plugin.updated_at),
             topic: 'state.plugin.observed',
             schema: 'plugin.observed/1',
-            entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
+            entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
             actor: { id: 'act_graph_sync', kind: 'system' },
             source: { class: 'platform', system: 'graph-sync', trust: 'observed' },
             payload: { slug, version: value.version ?? '', active: value.active },
@@ -89,7 +89,7 @@ export function tapGraphService(
               observed_at: toIso(theme.updated_at),
               topic: 'state.theme.observed',
               schema: 'theme.observed/1',
-              entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
+              entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
               actor: { id: 'act_graph_sync', kind: 'system' },
               source: { class: 'platform', system: 'graph-sync', trust: 'observed' },
               payload: { slug, version: value.version ?? '', active: value.active },
@@ -122,7 +122,7 @@ export function tapGraphService(
             observed_at: toIso(site.updated_at),
             topic: 'state.site.observed',
             schema: 'site.observed/1',
-            entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
+            entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
             actor: { id: 'act_graph_sync', kind: 'system' },
             source: {
               class: 'platform',

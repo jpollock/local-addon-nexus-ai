@@ -936,7 +936,19 @@ cure if more sites surface.
 sweep failure was transient — re-indexed clean (27 docs). `qwerky` /
 `qwerkystg` see the D17 correction above.
 
-## D20 — OPEN — two producers mint phantom Site entities from graph row ids, and the split is still growing
+## D20 — FIXED 2026-08-24 — two producers mint phantom Site entities from graph row ids, and the split is still growing
+
+> **FIXED (the minting), with one reclassification.** Investigation for the fix
+> found the env-side "namespace pollution" is DELIBERATE: `siteLinkMirror`
+> itself ensures envs under (`local.site_id`, row-id) as its adoption bridge —
+> "all existing ledger history stays attached." The env stamps are therefore
+> unchanged. The defect was the SITE stamps only. `siteStampFor`
+> (`provisionalEntity.ts`) now gives remote rows (`wpe-…`, `ssh:…`) the
+> mirror's property Site via `siteOf()` — or OMITS the stamp when no link
+> exists — and local ids keep their logical Site (matches `wpEventProducer`).
+> Six call sites across `graphServiceTap` and `graphBackfill`; mint-restoration
+> mutation killed. The 418 existing phantoms remain as inert history (no ledger
+> migration, by invariant); new episodic events route to real property Sites.
 
 Measured 2026-08-23 against the live ledger: **692 Site entities for ~296 real
 properties**. 274 are the mirror family (`wpe.site_id`, carrying all 394
@@ -1010,7 +1022,12 @@ run against Nexus's own tools. Full context in the Meridian agent's
 `docs/planning/2026-08-21-meridian-m3-acceptance.md` / `…-m4-acceptance.md`.
 None of these throws; each returns a confident wrong-shaped answer.
 
-## D22 — OPEN — `get_all_site_documents` advertises link-graph analysis and strips the links
+## D22 — CLAIM RETRACTED 2026-08-24; capability OPEN — `get_all_site_documents` advertises link-graph analysis and strips the links
+
+> **The false advertising is gone:** the `full_content` description now states
+> that chunk text is HTML-stripped and cannot support link-graph analysis.
+> The capability itself (an edge list extracted at index time) remains OPEN,
+> roadmapped as spine-shaped work — see the fleet-collapse plan's queue.
 
 **Verified 2026-08-24:** the `full_content` description at
 `src/main/mcp/modules/content/get-all-documents.ts:35` says "Use for

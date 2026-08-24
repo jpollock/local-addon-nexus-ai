@@ -16,7 +16,7 @@
  * Non-fatal by construction, like everything else on this seam.
  */
 import { IntelligenceCore } from './bootstrap';
-import { environmentEntityId, siteEntityId } from './provisionalEntity';
+import { environmentEntityId, siteStampFor, eventEntityStamp } from './provisionalEntity';
 import { createChangeGate, rowTimeToIso } from './changeGate';
 
 // v2: adds themes. Bumping the marker re-runs the whole pass; the change gate
@@ -106,7 +106,7 @@ export function runGraphBackfill(
         observed_at: rowTimeToIso(site.updated_at),
         topic: 'state.site.observed',
         schema: 'site.observed/1',
-        entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
+        entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
         actor: { id: 'act_graph_backfill', kind: 'system' },
         source: {
           class: 'platform',
@@ -141,7 +141,7 @@ export function runGraphBackfill(
         observed_at: rowTimeToIso(plugin.updated_at),
         topic: 'state.plugin.observed',
         schema: 'plugin.observed/1',
-        entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
+        entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
         actor: { id: 'act_graph_backfill', kind: 'system' },
         source: { class: 'platform', system: 'graph-backfill', trust: 'observed' },
         payload: { slug, version: value.version ?? '', active: value.active },
@@ -175,7 +175,7 @@ export function runGraphBackfill(
           observed_at: rowTimeToIso(theme.updated_at),
           topic: 'state.theme.observed',
           schema: 'theme.observed/1',
-          entity: { site: siteEntityId(core.entities, siteId), environment: entityId },
+          entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
           actor: { id: 'act_graph_backfill', kind: 'system' },
           source: { class: 'platform', system: 'graph-backfill', trust: 'observed' },
           payload: { slug, version: value.version ?? '', active: value.active },
