@@ -103,6 +103,20 @@ export interface PropertyView {
   lineage: string[];
 }
 
+/**
+ * One account-level ceiling, COALESCED (round-3 finding 1): the fact belongs
+ * to the account, so it is stated once as a verdict about the whole — never
+ * amplified into one alarm per install. Rows carry at most a quiet marker.
+ */
+export interface CeilingVerdict {
+  accountId: string;
+  accountName: string | null;
+  /** The whole sentence, composed here: subject, cause, scope. */
+  statement: string;
+  placeCount: number;
+  propertyKeys: string[];
+}
+
 export interface FleetCollapse {
   properties: PropertyView[];
   header: {
@@ -114,6 +128,8 @@ export interface FleetCollapse {
     neverLookedInside: number;
     /** Local-only properties plus WPE properties with a copy here (the sidebar-shaped count). */
     onThisMachine: number;
+    /** Account-level ceilings, one verdict each. */
+    ceilings: CeilingVerdict[];
   };
 }
 
@@ -393,6 +409,33 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
   const allPlaces = properties.flatMap((p) => p.places);
   const byOrigin = { local: 0, wpe: 0, external: 0 };
   for (const p of properties) byOrigin[p.origin]++;
+
+  // Account-level ceilings, coalesced to one verdict each (round-3 finding 1):
+  // the fact is the account's, so it is said once about the whole — the rows
+  // carry a quiet marker, and the screen must not read as hundreds of alarms.
+  const ceilingsByAccount = new Map<string, CeilingVerdict>();
+  for (const p of properties) {
+    for (const pl of p.places) {
+      if (!pl.ceiling) continue;
+      const g = graphById.get(pl.rowId);
+      const accountId = g?.account_id ?? 'unknown';
+      let v = ceilingsByAccount.get(accountId);
+      if (!v) {
+        const account = accountById.get(accountId);
+        v = { accountId, accountName: account ? account.nickname ?? account.name : null, statement: '', placeCount: 0, propertyKeys: [] };
+        ceilingsByAccount.set(accountId, v);
+      }
+      v.placeCount++;
+      if (!v.propertyKeys.includes(p.key)) v.propertyKeys.push(p.key);
+    }
+  }
+  for (const v of ceilingsByAccount.values()) {
+    const who = v.accountName ?? v.accountId;
+    v.statement =
+      `${who} has no SSH gateway, so Nexus cannot index its ` +
+      `${v.placeCount} install${v.placeCount === 1 ? '' : 's'} over SSH.`;
+  }
+
   return {
     properties,
     header: {
@@ -401,6 +444,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       placesTotal: allPlaces.length,
       neverLookedInside: allPlaces.filter((pl) => pl.knowledge === 'nothing').length,
       onThisMachine: properties.filter((p) => p.origin === 'local' || p.hasCopy).length,
+      ceilings: [...ceilingsByAccount.values()].sort((a, b) => b.placeCount - a.placeCount),
     },
   };
 }

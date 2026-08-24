@@ -95,7 +95,7 @@ describe('SitesTab', () => {
         row({ id: 'D', knowledge: 'searchable' }),
       ],
     });
-    expect(t).toContain('Nothing yet');
+    expect(t).toContain('Never looked inside');
     expect(t).toContain('Basic');
     expect(t).toContain('Detailed');
     expect(t).toContain('Searchable');

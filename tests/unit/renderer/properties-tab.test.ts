@@ -45,6 +45,7 @@ function collapse(properties: PropertyView[], headerOver: any = {}): FleetCollap
       placesTotal: places.length,
       neverLookedInside: places.filter((pl) => pl.knowledge === 'nothing').length,
       onThisMachine: properties.filter((p) => p.origin === 'local' || p.hasCopy).length,
+      ceilings: [],
       ...headerOver,
     },
   };
@@ -118,7 +119,8 @@ describe('PropertiesTab', () => {
       rungs: ['basic'],
     });
     const t1 = rendered(collapse([auto]));
-    expect(t1).toContain('no SSH gateway');
+    expect(t1).toContain('cannot go deeper');          // the quiet marker
+    expect(t1).not.toContain('no SSH gateway');        // the verdict lives in the banner, once
 
     const t2 = rendered(collapse([property({ collision: true })]));
     expect(t2).toContain('kept separate');
@@ -192,7 +194,7 @@ describe('drill-ins (Phase 2)', () => {
     const t = rendered(collapse([p]), (inst) => { inst.state.view = { screen: 'place', key: 'wpe:au', rowId: 'wpe-au' }; });
     expect(t).toContain('cannot go deeper');
     expect(t).toContain('AutoscaleAlpha has no SSH gateway');
-    expect(t).toContain('never checked');                       // L3 never ran
+    expect(t).toContain('not yet checked');                     // L3 never ran
     expect(t).toContain('Index content here — barred');         // barred with the reason visible
     expect(t).toContain('Nothing on this screen edits anything');
   });
@@ -259,7 +261,7 @@ describe('designer round-2 findings', () => {
     const t = rendered(collapse([fine, dark, failing]));
     expect(t.indexOf('zzz-failing')).toBeLessThan(t.indexOf('yyy-dark'));   // fail before nothing
     expect(t.indexOf('yyy-dark')).toBeLessThan(t.indexOf('aaa-fine'));     // nothing before A–Z rest
-    expect(t).toContain('failures first, then never looked inside, then A–Z');
+    expect(t).toContain('order: failures · never looked inside · A–Z');
   });
 
   test('finding 1: no rationale leaks into product copy', () => {
@@ -268,5 +270,78 @@ describe('designer round-2 findings', () => {
     expect(t).not.toContain('register D20');
     expect(t).toContain('Search every property');
     expect(t).not.toContain('filters never hide');
+  });
+});
+
+describe('designer round-3 findings', () => {
+  const capped = () => property({
+    key: 'wpe:au', name: 'jpmeautoscale', accountId: 'acct-auto',
+    places: [place({ ceiling: 'no SSH gateway on account "AutoscaleAlpha" — Nexus cannot index its installs over SSH', knowledge: 'basic' })],
+    rungs: ['basic'],
+  });
+  const cappedHeader = {
+    ceilings: [{ accountId: 'acct-auto', accountName: 'AutoscaleAlpha',
+      statement: 'AutoscaleAlpha has no SSH gateway, so Nexus cannot index its 73 installs over SSH.',
+      placeCount: 73, propertyKeys: ['wpe:au'] }],
+  };
+
+  test('finding 1: the ceiling is ONE verdict with a door — never one alarm per row', () => {
+    const t = rendered(collapse([capped(), property()], cappedHeader));
+    expect(t.split('has no SSH gateway, so Nexus cannot index').length - 1).toBe(1); // said once
+    expect(t).toContain('Show the 1 properties');
+    expect(t).not.toContain('⛔');
+    expect(t).not.toContain('🚫');
+  });
+
+  test('finding 1: the banner door filters to the capped set, with a clear chip', () => {
+    const t = rendered(collapse([capped(), property({ name: 'uncapped-prop' })], cappedHeader), (inst) => {
+      inst.state.ceilingAccount = 'acct-auto';
+    });
+    expect(t).toContain('jpmeautoscale');
+    expect(t).not.toContain('uncapped-prop'); // the uncapped property is out of view
+    expect(t).toContain('capped installs ×');
+  });
+
+  test('finding 2: one sentence for the fourth rung — rung cell says it, age cell stays silent', () => {
+    const dark = property({
+      places: [place({ knowledge: 'nothing', checked: { state: 'never', finishedAt: null, reason: null }, checkedL3: { state: 'never', finishedAt: null, reason: null } })],
+      rungs: ['nothing'],
+      oldest: { state: 'never', finishedAt: null, reason: null },
+    });
+    const t = rendered(collapse([dark]));
+    expect(t).toContain('Never looked inside');
+    expect(t).not.toContain('Nothing yet');
+    expect(t).not.toContain('never checked');
+  });
+
+  test('finding 4: the absence callout is not the danger register', () => {
+    const dark = property({ rungs: ['nothing'],
+      places: [place({ knowledge: 'nothing', checked: { state: 'never', finishedAt: null, reason: null } })],
+      oldest: { state: 'never', finishedAt: null, reason: null } });
+    const t = rendered(collapse([dark]));
+    const callout = t.slice(t.indexOf('places Nexus has never looked inside') - 600, t.indexOf('places Nexus has never looked inside'));
+    expect(callout).not.toContain('danger');
+  });
+
+  test('finding 5: an open row states the failure once — short on the group, full on the place', () => {
+    const failing = property({
+      key: 'wpe:q', name: 'QWERKY',
+      places: [
+        place({ rowId: 'wpe-q1', checked: { state: 'fail', finishedAt: iso(6), reason: 'NOT NULL constraint failed: users.username' } }),
+        place({ rowId: 'wpe-q2', kind: 'staging' }),
+      ],
+      oldest: { state: 'fail', finishedAt: iso(6), reason: 'NOT NULL constraint failed: users.username' },
+    });
+    const t = rendered(collapse([failing]), (inst) => { inst.state.open = { 'wpe:q': true }; });
+    expect(t.split('NOT NULL constraint failed: users.username').length - 1).toBe(1); // once, on the place row
+    expect(t).toContain('record failed 6h ago');                                       // the short group form
+  });
+
+  test('finding 6: no register references reach the screen', () => {
+    const t = rendered(collapse([capped()], cappedHeader), (inst) => {
+      inst.state.view = { screen: 'place', key: 'wpe:au', rowId: 'wpe-1' };
+    });
+    expect(t).not.toContain('(D15)');
+    expect(t).not.toContain('(D20)');
   });
 });

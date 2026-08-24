@@ -14,7 +14,7 @@
 export type KnowledgeRung = 'nothing' | 'basic' | 'detailed' | 'searchable';
 
 export const KNOWLEDGE_LABELS: Record<KnowledgeRung, string> = {
-  nothing: 'Nothing yet',
+  nothing: 'Never looked inside',  // one sentence for the fourth rung, everywhere (round-3 finding 2)
   basic: 'Basic',
   detailed: 'Detailed',
   searchable: 'Searchable',

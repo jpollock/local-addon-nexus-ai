@@ -95,7 +95,7 @@ describe('buildSiteRows', () => {
     // `filesystem` rung. `nothing` means "we have never looked inside", which
     // cannot be true of a site Local is running from a directory on this Mac.
     // ~113 rows on a real machine, so this is the difference between the table
-    // reading "Nothing yet" for most of the fleet and reading honestly.
+    // reading "Never looked inside" for most of the fleet and reading honestly.
     const out = buildSiteRows({
       localSites: [{ id: 'L8', name: 'Bare', wpVersion: null, phpVersion: null }],
       graphRows: [], indexedSiteIds: new Set(),
@@ -194,7 +194,7 @@ describe('buildSiteRows', () => {
   });
 
   test('a local site Local knows the WP version of is detailed, not nothing', () => {
-    // ~113 sites on a real machine. Reporting "Nothing yet" for a site we have
+    // ~113 sites on a real machine. Reporting "Never looked inside" for a site we have
     // the WP version of understates what we know — the same defect as the
     // external cap, with the sign flipped.
     const out = buildSiteRows({

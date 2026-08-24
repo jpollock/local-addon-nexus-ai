@@ -41,6 +41,8 @@ interface PropertiesTabState {
   open: Record<string, boolean>;
   /** Drill-in: null = the fleet list. */
   view: null | { screen: 'property'; key: string } | { screen: 'place'; key: string; rowId: string };
+  /** The ceiling banner's door: show only this account's capped properties. */
+  ceilingAccount: string | null;
 }
 
 const ORIGIN_LABELS: Array<{ key: OriginFilter; label: string }> = [
@@ -60,21 +62,22 @@ const STATE_LABELS: Array<{ key: StateFilter; label: string }> = [
 const h = React.createElement;
 
 function ageOf(c: CheckedView): string {
-  if (c.state === 'never' || !c.finishedAt) return 'never checked';
+  if (c.state === 'never' || !c.finishedAt) return 'not yet checked';
   const hrs = (Date.now() - Date.parse(c.finishedAt)) / 3600_000;
   const a = !Number.isFinite(hrs) ? '?' : hrs < 1 ? `${Math.max(0, Math.round(hrs * 60))}m ago` : hrs < 48 ? `${Math.round(hrs)}h ago` : `${Math.round(hrs / 24)}d ago`;
   return a;
 }
 
-function checkedText(c: CheckedView, labelOldest: boolean): string {
+function checkedText(c: CheckedView, labelOldest: boolean, short = false): string {
   if (c.state === 'fail') {
     const detail = c.reason ?? 'no reason recorded';
     // A storage fault of OURS must not read as the site failing (finding 3).
+    if (short) return reasonBlame(c.reason) === 'nexus' ? `record failed ${ageOf(c)}` : `failed ${ageOf(c)}`;
     return reasonBlame(c.reason) === 'nexus'
       ? `record failed ${ageOf(c)} — a Nexus storage error, not the site: ${detail}`
       : `failed ${ageOf(c)} — ${detail}`;
   }
-  if (c.state === 'never' || !c.finishedAt) return 'never checked';
+  if (c.state === 'never' || !c.finishedAt) return 'not yet checked';
   const prefix = labelOldest ? 'oldest ' : '';
   return `${prefix}${ageOf(c)}`;
 }
@@ -90,7 +93,7 @@ function matchesState(p: PropertyView, state: StateFilter): boolean {
 export class PropertiesTab extends React.Component<PropertiesTabProps, PropertiesTabState> {
   constructor(props: PropertiesTabProps) {
     super(props);
-    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null };
+    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, ceilingAccount: null };
   }
 
   /**
@@ -246,13 +249,13 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     },
       h('span', { style: { minWidth: 90, color: 'var(--nxai-card-text)' } }, pl.kind),
       h('span', { style: { minWidth: 170 } }, pl.name),
-      h('span', { style: { minWidth: 90 } }, KNOWLEDGE_LABELS[pl.knowledge]),
-      h('span', {
-        style: pl.checked.state === 'fail' ? { color: 'var(--nxai-danger-text)' } : undefined,
-      }, checkedText(pl.checked, false)),
-      pl.ceiling
-        ? h('span', { style: { color: 'var(--nxai-card-sub)' } }, `⛔ ${pl.ceiling}`)
-        : null,
+      h('span', { style: { minWidth: 90 } },
+        `${KNOWLEDGE_LABELS[pl.knowledge]}${pl.ceiling ? ' · cannot go deeper' : ''}`),
+      pl.knowledge === 'nothing'
+        ? null // the rung already says it — one sentence per state (finding 2)
+        : h('span', {
+            style: pl.checked.state === 'fail' ? { color: 'var(--nxai-danger-text)' } : undefined,
+          }, checkedText(pl.checked, false)),
     );
   }
 
@@ -288,13 +291,18 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           : `${p.places.length} places${p.hasCopy ? ' incl. your copy' : ''}`,
       ),
       h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
-        p.rungs.map((r) => KNOWLEDGE_LABELS[r]).join(' / ')),
-      h('span', {
-        style: {
-          fontSize: 12,
-          color: p.oldest.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)',
-        },
-      }, checkedText(p.oldest, multi && p.oldest.state !== 'fail' && p.oldest.state !== 'never')),
+        p.rungs.map((r) => KNOWLEDGE_LABELS[r]).join(' / ') +
+          (p.places.some((pl) => pl.ceiling) ? ' · cannot go deeper' : '')),
+      p.rungs.includes('nothing') && p.oldest.state === 'never'
+        ? null // the rung already says it (finding 2)
+        : h('span', {
+            style: {
+              fontSize: 12,
+              color: p.oldest.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)',
+            },
+            // Finding 5: when the row is OPEN the failing place row carries the
+            // reason — the group row states it once, short.
+          }, checkedText(p.oldest, multi && p.oldest.state !== 'fail' && p.oldest.state !== 'never', multi && open)),
       p.accountName ? h('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)' } }, p.accountName) : null,
     );
 
@@ -307,9 +315,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         ? h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', paddingLeft: 26 } }, flags.join(' · '))
         : null,
       multi && open ? p.places.map((pl) => this.renderPlace(p, pl)) : null,
-      !multi && p.places[0].ceiling
-        ? h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', paddingLeft: 26 } }, `⛔ ${p.places[0].ceiling}`)
-        : null,
+
     );
   }
 
@@ -345,7 +351,9 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       const matchesQ =
         !q || p.name.toLowerCase().includes(q) || p.places.some((pl) => pl.name.toLowerCase().includes(q));
       if (!matchesQ) continue;
-      const inFilter = (origin === 'all' || p.origin === origin) && matchesState(p, state);
+      const inCeiling = !this.state.ceilingAccount ||
+        (p.accountId === this.state.ceilingAccount && p.places.some((pl) => pl.ceiling !== null));
+      const inFilter = inCeiling && (origin === 'all' || p.origin === origin) && matchesState(p, state);
       // Search never hides a hit: filters hide only when not searching.
       if (!inFilter && !q) continue;
       inView.push({ p, outside: !inFilter });
@@ -371,9 +379,21 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         `${header.byOrigin.local} only on your machine, ${header.byOrigin.wpe} WP Engine, ${header.byOrigin.external} external · ` +
         `${header.onThisMachine} live on this machine`,
       ),
+      ...header.ceilings.map((v) =>
+        h('div', {
+          key: `ceil-${v.accountId}`,
+          style: { margin: '0 12px 10px', padding: '8px 12px', fontSize: 13, border: '1px solid var(--nxai-card-border)', borderRadius: 6, color: 'var(--nxai-card-text)' },
+        },
+          v.statement, ' ',
+          h('a', {
+            style: { cursor: 'pointer', color: 'var(--nxai-accent)' },
+            onClick: () => this.setState({ ceilingAccount: v.accountId, origin: 'all', state: 'all', query: '' }),
+          }, `Show the ${v.propertyKeys.length} properties`),
+        ),
+      ),
       header.neverLookedInside > 0
         ? h('div', {
-            style: { margin: '0 12px 10px', padding: '8px 12px', fontSize: 13, border: '1px solid var(--nxai-danger-text)', borderRadius: 6, color: 'var(--nxai-card-text)' },
+            style: { margin: '0 12px 10px', padding: '8px 12px', fontSize: 13, border: '1px solid var(--nxai-card-border)', borderRadius: 6, color: 'var(--nxai-card-text)' },
           },
             h('strong', null, String(header.neverLookedInside)),
             ' places Nexus has never looked inside. ',
@@ -398,6 +418,14 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             onClick: () => this.setState({ state: s.key }),
           }, s.label),
         ),
+        this.state.ceilingAccount
+          ? h('span', {
+              style: chip(true),
+              onClick: () => this.setState({ ceilingAccount: null }),
+            }, 'capped installs ×')
+          : null,
+        h('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', marginLeft: 4 } },
+          'order: failures · never looked inside · A–Z'),
         h('input', {
           placeholder: 'Search every property',
           value: query,
@@ -418,7 +446,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           : inView.map(({ p, outside }) => this.renderProperty(p, outside)),
       ),
       h('div', { style: { padding: '8px 12px', color: 'var(--nxai-card-sub)', fontSize: 12 } },
-        `${inView.length} of ${header.total} properties shown · failures first, then never looked inside, then A–Z · one scroll, no pagination`),
+        `${inView.length} of ${header.total} properties shown · one scroll, no pagination`),
     );
   }
 }

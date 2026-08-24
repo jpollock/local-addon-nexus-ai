@@ -151,7 +151,7 @@ export function sshGatewayUnavailableReason(
       .get(accountId) as { name: string; nickname?: string | null } | undefined;
     if (!row) return null;
     const label = row.nickname || row.name;
-    return `no SSH gateway on account "${label}" — SSH indexing is unavailable for its installs (D15)`;
+    return `no SSH gateway on account "${label}" — Nexus cannot index its installs over SSH`;
   } catch {
     return null;
   }
