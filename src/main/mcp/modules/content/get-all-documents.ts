@@ -32,7 +32,7 @@ export const getAllDocumentsHandler: McpToolHandler = {
         },
         full_content: {
           type: 'boolean',
-          description: 'Return full chunk text instead of 200-char preview. Use for link-graph analysis. Ignored when include_embeddings is true.',
+          description: 'Return full chunk text instead of 200-char preview. Note: chunk text has HTML stripped at index time — anchors and hrefs are not present, so this cannot support link-graph analysis. Ignored when include_embeddings is true.',
           default: false,
         },
       },
@@ -73,7 +73,9 @@ export const getAllDocumentsHandler: McpToolHandler = {
         postId: doc.postId,
         postType: doc.postType,
         title: doc.title,
-        // full_content=true: return full chunk text for link-graph analysis (no maxBuffer risk)
+        // full_content=true: full chunk text (no maxBuffer risk). D22: the text
+        // was HTML-stripped at index time, so it carries no anchors — do not
+        // advertise link-graph analysis unless an edge list is indexed someday.
         // full_content=false: 200-char preview sufficient for display
         content: fullContent ? doc.content : doc.content.slice(0, 200),
         metadata: doc.metadata,
