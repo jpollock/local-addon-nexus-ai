@@ -999,3 +999,89 @@ derived guess (the designer's entity-id ruling applies to names too).
 
 Found 2026-08-24 while walking every fleet-collapse column back to a source;
 flagged by the owner as a distinct defect, not a design footnote.
+
+---
+
+# Meridian acceptance-gate findings (filed 2026-08-24, found by the Meridian agent 2026-08-21/22)
+
+Source: the Meridian Data acceptance gate — a purpose-built corpus (site
+`meridian`, 5,694 items) with planted defects and exactly-known ground truth,
+run against Nexus's own tools. Full context in the Meridian agent's
+`docs/planning/2026-08-21-meridian-m3-acceptance.md` / `…-m4-acceptance.md`.
+None of these throws; each returns a confident wrong-shaped answer.
+
+## D22 — OPEN — `get_all_site_documents` advertises link-graph analysis and strips the links
+
+**Verified 2026-08-24:** the `full_content` description at
+`src/main/mcp/modules/content/get-all-documents.ts:35` says "Use for
+link-graph analysis"; the chunk text it returns had its HTML stripped at index
+time, so zero of the corpus's 4,771 internal anchors survive, and no slug is
+exposed to resolve them against. No alternative path exists: `get_graph_content`
+is metadata-only and the graph `content` table has no body column.
+Consequence: orphan pages and broken internal links — two of the most standard
+content-intelligence questions — are unreachable through the product (the
+Meridian corpus's MD-ORPH-01 and MD-LINK-01 are both undetectable).
+Fix direction: persist an extracted edge list (or raw `post_content`) per
+document plus its slug at index time — or delete the claim from the tool
+description so nobody builds against it. Note the honest-advertising rule:
+a capability description is a contract, and this one is false today.
+
+## D23 — OPEN — `metadataFilters` is retrieve-then-filter, so structured counts under-report
+
+**Verified 2026-08-24 (architecture):** `applyMetadataFilters`
+(`src/main/vector-store/metadata-filters.ts`) runs per-document over the
+retrieval candidate set — `searchBM25`'s own comment says callers "widen
+fetchLimit when post-fetch metadata filtering will discard many". Membership in
+a structured-filter result is therefore decided by semantic similarity to the
+query string: the Meridian gate measured 9 vs 20 results for the same filter
+under two different query strings at `min_score: 0` (200 true matches). No
+threshold setting fixes this; `min_score: 0` is NOT a workaround.
+A census question ("how many docs are behind the current release") cannot be
+answered through search. Fix direction: when `metadataFilters` are present and
+the caller wants a count, evaluate the filter over the site's full document
+metadata (a SQL walk over the docs table), not over retrieval candidates — or
+at minimum report how many candidates were examined so the caller can tell
+"6 matched" from "6 of the 40 examined matched".
+
+## D24 — OPEN — semver-shaped fields are typed numeric, so `2.10` sorts below `2.9`
+
+**Verified 2026-08-24:** `applyMetadataFilters` compares numerically whenever
+both sides parse as numbers (`metadata-filters.ts:20`), and
+`describe_site_fields` infers `applies_to_version: number`. `"2.10"` becomes
+2.1 and sorts below 2.9 — a `>= 2.9` filter wrongly excludes it. Silently
+correct at some thresholds, silently wrong at others. Fix direction: detect
+semver-shaped values (two-plus dot segments where a segment has a leading-zero
+or multi-digit minor) and compare segment-wise, or decline to offer numeric
+operators on them.
+
+## D25 — OPEN — ISO-date fields are typed text, so ordering filters silently match nothing
+
+**Verified 2026-08-24:** the ordering ops in `applyMetadataFilters` require
+`bothNumeric` (`metadata-filters.ts:29-40`) — on a non-numeric value like
+`"2025-05-15"` every `lt`/`gte` evaluates false for every document, so the
+filter returns an empty set indistinguishable from "nothing is stale". 1,400
+of Meridian's 5,000 posts satisfied the filter that returned zero. The bitter
+irony: ISO dates order correctly under plain string comparison, which the code
+never falls back to for ordering ops. Fix direction: detect ISO-8601-shaped
+values and compare lexicographically (correct for ISO), and refuse ordering
+ops on genuinely un-ordered text with an error — a filter that cannot work
+must say so, not match nothing. Same family as D24: type inference producing
+a query surface that does not fit the data, failing silently both ways.
+
+## O2 — Observation — `local_start_site` reports failure after a successful slow start
+
+Twice reproduced by the Meridian agent: no response for 1801s, reported as a
+hard failure, while the site had started and was serving throughout. The tool
+(`site-management/start-site.ts`) awaits `startSite` with no completion
+polling; somewhere a ~1800s transport timeout converts a slow success into a
+reported failure. Needs its own investigation — the 1801s figure points at a
+30-minute timeout one layer above the tool.
+
+## O3 — Observation — `wpe_get_account_usage_summary` returns `NaN`; `wpe_get_account_limits` returns nothing
+
+On account `w7579`: NaN for visits, bandwidth and both storage figures. NaN is
+worse than an explicit null — it looks numeric to any caller that does not
+check, and this register's own rule (D21, the `'8.0'` lesson) is that an
+unknown value must be NULL/absent, never a plausible-looking figure. Likely
+arithmetic over missing CAPI fields; fix at the formatting site with the
+honest-NULL rule.
