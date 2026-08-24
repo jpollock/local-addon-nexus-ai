@@ -299,11 +299,11 @@ describe('designer round-3 findings', () => {
 
   test('finding 1: the banner door filters to the capped set, with a clear chip', () => {
     const t = rendered(collapse([capped(), property({ name: 'uncapped-prop' })], cappedHeader), (inst) => {
-      inst.state.ceilingAccount = 'acct-auto';
+      inst.state.state = 'ceiling';   // the At-its-ceiling predicate — the banner's door
     });
     expect(t).toContain('jpmeautoscale');
     expect(t).not.toContain('uncapped-prop'); // the uncapped property is out of view
-    expect(t).toContain('capped installs ×');
+    expect(t).toContain('At its ceiling');
   });
 
   test('finding 2: one sentence for the fourth rung — rung cell says it, age cell stays silent', () => {

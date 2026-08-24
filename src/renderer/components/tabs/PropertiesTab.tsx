@@ -24,7 +24,7 @@ import { reasonBlame } from '../../../main/fleet/fleetCollapse';
 const h = React.createElement;
 
 type OriginFilter = 'all' | 'local' | 'wpe' | 'external';
-type StateFilter = 'all' | 'nothing' | 'copy' | 'attention';
+type StateFilter = 'all' | 'nothing' | 'copy' | 'attention' | 'ceiling';
 
 interface PropertiesTabProps {
   /** False until the first GET_FLEET_COLLAPSE response has landed. */
@@ -45,8 +45,6 @@ interface PropertiesTabState {
   open: Record<string, boolean>;
   /** Drill-in: null = the fleet list. */
   view: null | { screen: 'property'; key: string } | { screen: 'place'; key: string; rowId: string };
-  /** The ceiling banner's door: show only this account's capped properties. */
-  ceilingAccount: string | null;
   sortBy: SortBy;
 }
 
@@ -62,6 +60,7 @@ const STATE_LABELS: Array<{ key: StateFilter; label: string }> = [
   { key: 'attention', label: 'Needs you' },
   { key: 'nothing', label: STATE_SENTENCES.neverLookedInside },
   { key: 'copy', label: 'Has a copy here' },
+  { key: 'ceiling', label: 'At its ceiling' },
 ];
 
 type SortBy = 'consequence' | 'name' | 'checked';
@@ -119,6 +118,7 @@ function checkedText(c: CheckedView, labelOldest: boolean, short = false): strin
 }
 
 function matchesState(p: PropertyView, state: StateFilter): boolean {
+  if (state === 'ceiling') return p.places.some((pl) => pl.ceiling !== null);
   if (state === 'nothing') return p.rungs.includes('nothing');
   if (state === 'copy') return p.hasCopy || p.origin === 'local';
   if (state === 'attention')
@@ -129,7 +129,7 @@ function matchesState(p: PropertyView, state: StateFilter): boolean {
 export class PropertiesTab extends React.Component<PropertiesTabProps, PropertiesTabState> {
   constructor(props: PropertiesTabProps) {
     super(props);
-    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, ceilingAccount: null, sortBy: 'consequence' };
+    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, sortBy: 'consequence' };
   }
 
   /**
@@ -451,9 +451,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         p.name.toLowerCase().includes(q) ||
         p.places.some((pl) => pl.name.toLowerCase().includes(q) || (pl.address ?? '').toLowerCase().includes(q));
       if (!matchesQ) continue;
-      const inCeiling = !this.state.ceilingAccount ||
-        (p.accountId === this.state.ceilingAccount && p.places.some((pl) => pl.ceiling !== null));
-      const inFilter = inCeiling && (origin === 'all' || p.origin === origin) && matchesState(p, state);
+      const inFilter = (origin === 'all' || p.origin === origin) && matchesState(p, state);
       if (!inFilter && !q) continue;
       inView.push({ p, outside: !inFilter });
     }
@@ -525,7 +523,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           v.statement, ' ',
           h('a', {
             style: { cursor: 'pointer', color: 'var(--nxai-accent)' },
-            onClick: () => this.setState({ ceilingAccount: v.accountId, origin: 'all', state: 'all', query: '' }),
+            onClick: () => this.setState({ state: 'ceiling', origin: 'all', query: '' }),
           }, 'Show them'),
         ),
       ),
@@ -558,12 +556,6 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             onClick: () => this.setState({ state: sl.key }),
           }, sl.label),
         ),
-        this.state.ceilingAccount
-          ? h('span', {
-              style: stateBtn(true),
-              onClick: () => this.setState({ ceilingAccount: null }),
-            }, 'capped installs ×')
-          : null,
         h('span', {
           style: { fontSize: 11, color: 'var(--nxai-card-sub)', marginLeft: 'auto', cursor: 'pointer' },
           onClick: () => this.setState({ sortBy: 'consequence' }),
