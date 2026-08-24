@@ -547,7 +547,19 @@ space, needs a live reproduction rather than more log reading.
 
 ---
 
-## D11 — OPEN — a WP Engine metadata sync writes the site row, then fails on `users.username`
+## D11 — FIXED 2026-08-24 — a WP Engine metadata sync writes the site row, then fails on `users.username`
+
+> **FIXED, root cause measured.** qwerky's `wp user list` returns 5,004 users
+> and 5,003 carry `user_login: null` — the `wp_users` rows are intact
+> (verified by direct `$wpdb` query: `user_1_10`,
+> `michaela.monaghan@wpengine.com`…); the seeded users lack capabilities
+> meta, so WordPress half-loads them and wp-cli emits ID-only rows with null
+> fields and `roles: ''`. One null into the NOT NULL `username` column
+> aborted the ENTIRE metadata sync, every sweep, forever. The users write is
+> now honest per row: a no-username row is skipped and COUNTED
+> ("5,003 of 5,004 users unreadable — skipped, stated, never fabricated"),
+> and the site keeps its wp_version, plugins and themes. Guard-removal
+> mutation killed. acfprod almost certainly shares the seeded-user shape.
 
 **Found 2026-08-22, in the WP-68 exhibit.** Pre-existing; unrelated to WP-68's
 change, and now visible because the outcome is reported honestly.

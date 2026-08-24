@@ -524,8 +524,19 @@ export class WPESyncService {
       }
     }
 
-    // Write users
+    // Write users — honest per ROW (D11). qwerky's 5,003 seeded users come
+    // back from `wp user list` with user_login null (the wp_users rows are
+    // fine; the seeding left no capabilities meta, so WordPress half-loads
+    // them and wp-cli emits ID-only rows). One null username used to abort
+    // the ENTIRE metadata sync on every sweep, forever — the partial-write
+    // signature the register records. A row with no username is skipped and
+    // COUNTED; it is never fabricated and never allowed to kill the sync.
+    let unreadableUsers = 0;
     for (const user of userRows) {
+      if (!user?.user_login) {
+        unreadableUsers++;
+        continue;
+      }
       await this.graphService.upsertUser({
         site_id: siteId,
         user_id: user.ID,
@@ -537,6 +548,12 @@ export class WPESyncService {
         created_at: now,
         updated_at: now,
       });
+    }
+    if (unreadableUsers > 0) {
+      this.logger.warn(
+        `[WPESyncService] ${install.install_name}: ${unreadableUsers} of ${(userRows as any[]).length} ` +
+        `users unreadable (no username in WP-CLI output) — skipped, stated, never fabricated (D11)`,
+      );
     }
 
     // Content indexing does NOT run here.
